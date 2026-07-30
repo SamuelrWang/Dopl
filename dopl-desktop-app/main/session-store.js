@@ -100,12 +100,73 @@ function durableSessionRecord(rec) {
   };
 }
 
+// ── Record pruning (AUDIT D5, closes FOLLOW-UP F8) ───────────────────────────
+// Records used to live forever, so ANY thread that ever ran on this machine stayed
+// peer-resurrectable: the inbound gate creates a shell from an inbound message alone
+// (recreateParkedShell reads the record), which made the durable set an unbounded, growing
+// list of windows a peer could pop. This is the bound.
+//
+// POLICY — deliberately conservative. Two rules, age and count, and a protection list that
+// is checked FIRST, so nothing an operator might still want is dropped:
+//   PROTECTED  (1) a key with a LIVE session on this machine (`keep`, the engine's registry):
+//                  the held/queued inbound cards live only on that in-memory object, so this
+//                  is also what protects an unanswered message;
+//              (2) a key with a RETAINED sdkSessionId — that is a conversation the operator
+//                  can still reopen and resume (the resume map is cleared only when the
+//                  thread closes completed/failed);
+//              (3) any phase that is neither 'ended' nor 'parked', i.e. a record that still
+//                  looks live (launching / running / awaiting_*). Belt for (1).
+//   RULE 1     drop an unprotected record whose session last STARTED more than
+//              RECORD_TTL_MS ago. startedAt is restamped by every startSession for the
+//              thread (launch, resume, recreate), so it reads as last-touched.
+//   RULE 2     if more than MAX_RECORDS survive, drop the oldest unprotected ones (LRU by
+//              startedAt) until the TOTAL is back at MAX_RECORDS. Protected records are
+//              counted, never dropped, so a machine with 200 live threads simply prunes
+//              nothing rather than evicting something reopenable.
+// Pruning a record NEVER touches the resume map: a dropped record's sdkSessionId (if any)
+// would have protected it, so there is nothing to clear.
+const RECORD_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_RECORDS = 200;
+
+function protectedRecord(key, rec, keep, hasSdkId) {
+  if (keep && keep.has && keep.has(key)) return true;
+  if (hasSdkId(key)) return true;
+  return rec.phase !== 'ended' && rec.phase !== 'parked';
+}
+
+// PURE: which keys of `all` may be dropped, given the clock, the live-session keys, and a
+// resume-map probe. Returns [] when nothing qualifies.
+function prunableKeys(all, opts) {
+  const o = opts || {};
+  const now = Number(o.now) || 0;
+  const keep = o.keep || null;
+  const hasSdkId = typeof o.hasSdkId === 'function' ? o.hasSdkId : function () { return false; };
+  const records = all || {};
+  const keys = Object.keys(records);
+  const drop = [];
+  const survivors = [];
+  for (const key of keys) {
+    const rec = records[key];
+    // Garbage (a null / non-object entry) is never a real record, so it is never protected
+    // by the unknown-phase rule below — it just goes.
+    if (!rec || typeof rec !== 'object') { drop.push(key); continue; }
+    if (protectedRecord(key, rec, keep, hasSdkId)) continue;
+    if (now - (Number(rec.startedAt) || 0) > RECORD_TTL_MS) drop.push(key);
+    else survivors.push(key);
+  }
+  const excess = keys.length - drop.length - MAX_RECORDS;
+  if (excess > 0) {
+    survivors.sort(function (a, b) {
+      return (Number(records[a].startedAt) || 0) - (Number(records[b].startedAt) || 0);
+    });
+    for (const key of survivors.slice(0, excess)) drop.push(key);
+  }
+  return drop;
+}
+
 // ─── END SESSION-STORE-PURE ──────────────────────────────────────────────────
 
 // ── Records ──────────────────────────────────────────────────────────────────
-// FOLLOW-UP F8: records are never pruned, so ANY task that ever ran on this machine stays
-// peer-resurrectable through the inbound gate (recreateParkedShell reads them forever).
-// Wants a pruning policy (age / count bound, or drop on a completed close_task).
 function loadRecords() {
   return store.get(RECORDS_KEY) || {};
 }
@@ -135,6 +196,24 @@ function removeRecord(key) {
     delete all[key];
     store.set(RECORDS_KEY, all);
   }
+}
+
+// AUDIT D5: apply the policy above. Called ONCE per app start (session-engine.init, AFTER the
+// interrupted-record scan, so a crashed session still gets its echo + resume offer before it can
+// ever age out). `keep` is the live registry's key set. Returns how many were dropped; a store
+// with nothing prunable is not rewritten.
+function pruneRecords(opts) {
+  const all = loadRecords();
+  const ids = store.get(SDK_IDS_KEY) || {};
+  const keys = prunableKeys(all, {
+    now: Date.now(),
+    keep: (opts && opts.keep) || null,
+    hasSdkId: (key) => !!ids[key],
+  });
+  if (!keys.length) return 0;
+  for (const key of keys) delete all[key];
+  store.set(RECORDS_KEY, all);
+  return keys.length;
 }
 
 // ── Resume map (sdkSessionId per (channelId,taskId)) ─────────────────────────
@@ -168,12 +247,14 @@ module.exports = {
   reloadDisposition,
   durableName,
   durableSessionRecord,
+  prunableKeys, // AUDIT D5: the pure record-retention policy
   // records
   loadRecords,
   saveRecord,
   setRecordPhase,
   getRecord,
   removeRecord,
+  pruneRecords, // AUDIT D5: bound the durable set (called from session-engine.init)
   // resume map
   getSdkSessionId,
   setSdkSessionId,

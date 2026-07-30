@@ -7,7 +7,7 @@ import { Avatar } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { isUuid } from "@/shared/lib/id/uuid";
 import type { ChannelMessage, ChannelThread } from "../types";
-import { groupThread, type TaskOverlay } from "../lib/group-thread";
+import { groupThread, type ThreadOverlay } from "../lib/group-thread";
 import {
   deriveMessageReceipt,
   RECEIPT_LABEL,
@@ -21,7 +21,7 @@ import { SessionCard } from "./session-card";
  * open thread is `active`, a closed one is `done` (completed) or `failed` —
  * status the lifecycle-only heuristic can't derive on its own.
  */
-function threadOverlayFrom(thread: ChannelThread): TaskOverlay {
+function threadOverlayFrom(thread: ChannelThread): ThreadOverlay {
   const status =
     thread.status === "open"
       ? "active"
@@ -54,7 +54,7 @@ function threadOverlayFrom(thread: ChannelThread): TaskOverlay {
  * lines, and the pending-request cards below the transcript stay full width,
  * because they are shared state rather than someone's turn in the conversation.
  */
-export function MessageThread({
+export function ChannelTranscript({
   messages,
   memberNames,
   threads,

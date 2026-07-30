@@ -72,7 +72,8 @@ function contextFromRecord(rec) {
 // effect the reducer queues right after this one lands on the FRESH iterator (a push
 // queues until the async consumer attaches). resumeSdkId feeds options.resume, so the
 // run continues the SAME sdk session; lastTotalCost resets to 0 because the resumed
-// query counts its own cost from 0 (state.costUsd carries the running cap total).
+// query counts its own cost from 0 (state.costUsd carries the running cap total, which
+// startSession now rehydrates from the durable record on a crash/resume too — AUDIT D3).
 function resumeParked(s) {
   if (!deps || !s || s.settled || s.resuming) return;
   s.resuming = true;
@@ -90,8 +91,9 @@ function resumeParked(s) {
   s.query = null;
   // FIX #10: ASSUMPTION — the SDK restarts total_cost_usd from 0 on a resumed query, so
   // resetting the delta baseline here preserves the running cap total carried in
-  // state.costUsd (the cap keeps enforcing across park cycles). Revisit if the SDK ever
-  // continues the cumulative total across a resume.
+  // state.costUsd (the cap keeps enforcing across park AND crash/resume cycles — AUDIT D3
+  // made startResume carry the counters too). Revisit if the SDK ever continues the
+  // cumulative total across a resume.
   s.lastTotalCost = 0;
   startResumedConsumer(s);
 }
@@ -145,17 +147,8 @@ async function recreateParkedShell(a) {
   if (!rec) return { ok: false };
   // FIX #4: apply the SAME shared window budget launch()/openConsentWindow() enforce
   // (sessions + open consent windows vs MAX_WINDOWS) — a reopen must not blow the cap.
-  // FIX #7: at the cap, try to FREE one slot first. A recreated shell never leaves the
-  // registry on its own (only settle / a window-factory failure delete it) and the gate
-  // now creates shells from an inbound message alone, so six peer replies to six old
-  // tasks used to own the whole budget permanently — after which launches and consent
-  // windows degraded to cap-skips. evictIdleShell settles the oldest dormant shell the
-  // operator never touched (LRU by creation, never one holding a card). FAIL RESTRICTIVE:
-  // if nothing is evictable, or the cap still holds after it, the reopen is refused.
-  if (deps.atWindowCap && deps.atWindowCap()) {
-    if (!evictIdleShell()) return { ok: false };
-    if (deps.atWindowCap()) return { ok: false };
-  }
+  // FIX #7 (see atCapAfterEvict): at the cap, try to free one slot first, fail-restrictive.
+  if (atCapAfterEvict()) return { ok: false };
   const s = await deps.startSession({
     key, channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
     // FIX #8: a shell recreated purely from a persisted record must FAIL RESTRICTIVE —
@@ -186,6 +179,22 @@ async function recreateParkedShell(a) {
     try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
   }
   return { ok: true };
+}
+
+// FIX #7 — the shared cap-relief check: TRUE when the window budget is still spent after an
+// eviction attempt, so every caller keeps its existing fail-restrictive skip. A recreated shell
+// never leaves the registry on its own (only settle / a window-factory failure delete it) and the
+// gate now creates shells from an inbound message alone, so six peer replies to six old tasks
+// used to own the whole budget permanently — after which launches and consent windows degraded to
+// cap-skips. AUDIT D4: that degradation was the whole point of FIX #7, yet eviction was wired ONLY
+// into recreateParkedShell (the path that CREATES the starvation). The engine's launch() and
+// openConsentWindow() — a real inbound trigger and its pre-consent window, the two paths the
+// comment named — call this too, so a genuine trigger no longer falls back to headless.
+// Not at the cap -> no eviction is attempted at all.
+function atCapAfterEvict() {
+  if (!deps || !deps.atWindowCap || !deps.atWindowCap()) return false;
+  if (!evictIdleShell()) return true;
+  return deps.atWindowCap() === true;
 }
 
 // FIX #7 — free ONE window slot by settling the least-recently-created PARKED shell the
@@ -274,6 +283,12 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
     counterpartyId: rec.counterpartyId || null, // FIX L1: restore the counterparty binding
     context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId, // D1: restore the header identity
+    // AUDIT D3: rehydrate the running cap budget, exactly like recreateParkedShell. This path
+    // passed NEITHER counter, so a session that burned 23 of its 24 turns, crashed, and was
+    // resumed from the startup interrupted-notice started again at zero: every crash then
+    // opt-in resume minted a fresh turn AND cost budget. The durable record already held the
+    // real totals. (startSession applies these on every shape now, not only a parked shell.)
+    turns: rec.turns, costUsd: rec.costUsd,
   }, sdk);
   return !!s;
 }
@@ -296,6 +311,7 @@ module.exports = {
   resumeParked,
   recreateParkedShell,
   evictIdleShell, // FIX #7: LRU relief for the shared window budget
+  atCapAfterEvict, // AUDIT D4: the engine's launch / openConsentWindow cap branches use it too
   emitParkedShell,
   offerResume,
   startResume,

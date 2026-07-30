@@ -4,8 +4,8 @@ import {
   isCalmTerminalStatus,
   splitSessionEntries,
   truncateSummary,
-  type TaskOverlay,
   type ThreadItem,
+  type ThreadOverlay,
 } from "./group-thread";
 import type { ChannelMessage, ChannelMessageKind, MessageAuthorKind } from "../types";
 
@@ -296,7 +296,7 @@ describe("groupThread", () => {
     // The task row is still OPEN (capped/ended never close it) -> overlay status
     // "active", but calmEndStatus stays "capped" so the card stops saying Working.
     const t = "11111111-1111-4111-8111-111111111111";
-    const overlays = new Map<string, TaskOverlay>([
+    const overlays = new Map<string, ThreadOverlay>([
       [t, { status: "active", title: "Do the thing", mode: null, outcomeSummary: null }],
     ]);
     const items = groupThread(
@@ -541,7 +541,7 @@ describe("groupThread", () => {
     // The task row is still open (mid-flight), so it must read 'active' even
     // though a delivered reply would derive 'done' on its own.
     const t = "8c2d1e90-4a5b-4f3c-9e1d-7b6a5c4d3e2f";
-    const overlays = new Map<string, TaskOverlay>([
+    const overlays = new Map<string, ThreadOverlay>([
       [t, { status: "active", title: "Ship the report", mode: "interactive" }],
     ]);
     const items = groupThread(
@@ -564,7 +564,7 @@ describe("groupThread", () => {
     // surfaces it on the session; a legacy session with no overlay stays null.
     const withRow = "8c2d1e90-4a5b-4f3c-9e1d-7b6a5c4d3e2f";
     const legacy = "task-c1-500";
-    const overlays = new Map<string, TaskOverlay>([
+    const overlays = new Map<string, ThreadOverlay>([
       [
         withRow,
         {

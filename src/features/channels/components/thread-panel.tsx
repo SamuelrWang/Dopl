@@ -14,7 +14,7 @@ import type {
   ThreadOutcome,
 } from "../types";
 
-/** The three rendered thread states, mirroring `message-thread.tsx threadOverlayFrom`. */
+/** The three rendered thread states, mirroring `channel-transcript.tsx threadOverlayFrom`. */
 type ThreadDisplayStatus = "active" | "done" | "failed";
 
 const STATUS_LABEL: Record<ThreadDisplayStatus, string> = {

@@ -68,14 +68,12 @@
     },
     // v2.5 D1: the inbound gate decision. Main is authoritative (it re-validates and fails
     // closed); the stamp here only locks the card so a second click cannot double-answer it.
-    // `decline` is LOCAL: nothing is sent to the peer.
-    //
-    // FIX F10 / FOLLOW-UP F12 (verified): the stamp WAITS for the invoke to resolve, so a missing
-    // bridge method (an older preload), a rejected invoke or an {ok:false} all leave the card
-    // ANSWERABLE instead of dead. Main's own `inbound_resolved` echo applies the same stamp a
-    // moment later and markInboundDecided is idempotent, so the two never disagree. Known gap: the
-    // buttons stay live for one IPC round trip, so a very fast double-click sends two decisions
-    // (the second is refused by main's head check).
+    // `decline` is LOCAL: nothing is sent to the peer. FIX F10 / FOLLOW-UP F12 (verified): the
+    // stamp WAITS for the invoke to resolve, so a missing bridge method (an older preload), a
+    // rejected invoke or an {ok:false} all leave the card ANSWERABLE instead of dead. Main's own
+    // `inbound_resolved` echo applies the same stamp a moment later and markInboundDecided is
+    // idempotent, so the two never disagree. Known gap: the buttons stay live for one IPC round
+    // trip, so a fast double-click sends two (the second is refused by main's head check).
     onInboundDecide(pendingId, decision) {
       const send = bridge.inboundDecision;
       if (typeof send !== "function") return;
@@ -297,10 +295,9 @@
     }
   }
 
-  // The DOCK decision (Bash / Write / a CROSS-channel post). FIX F9 (v2.7): the old
-  // markOutboundNotSent call is GONE — an own-channel post decides on its own inline card
-  // (onOutboundDecide) and never enters this queue, and a cross-channel post is not an
-  // outbound item at all, so there was never a bubble here to correct.
+  // The DOCK decision (Bash / Write / a CROSS-channel post). FIX F9 (v2.7): markOutboundNotSent
+  // is GONE — an own-channel post decides on its own inline card (onOutboundDecide) and never
+  // enters this queue, and a cross-channel post is not an outbound item, so there is no bubble.
   function decide(decision) {
     const p = vm.nextPermission(state);
     if (!p) return;
@@ -358,10 +355,9 @@
   // turn), and interrupting is the pause button's job. v2.8: ONE composer, TWO addressees. A
   // leading `@my-agent` (or no tag) is today's steer; a leading `@their-agent` posts the operator's
   // OWN words into the channel addressed to the peer — never a steer (no session:send, no turn, no
-  // permission, no grant). The tag is stripped either way, so the delivered text is unchanged.
-  // FIX F8: a preload with no sendToPeer (a version-skewed install) returned SILENTLY here. The
-  // draft survived, but the glyph already read Send and the click did nothing, so the operator
-  // had no way to know the message was still in their hands. Say it in the stream.
+  // permission). The tag is stripped either way, so the delivered text is unchanged. FIX F8: a
+  // preload with no sendToPeer (a version-skewed install) returned SILENTLY here — the draft
+  // survived, but the glyph read Send and the click did nothing. Say it in the stream.
   const NO_PEER_BRIDGE = "Could not send that message to the peer. Restart Dopl and try again.";
   function sendSteer() {
     const { to, text } = composer.address(els.steerInput.value.trim());
@@ -429,9 +425,13 @@
 
   function wire() {
     els.send.addEventListener("click", onSendClick);
-    // Enter still SENDS (the steer queues while a turn runs — unchanged main
-    // behavior); Shift+Enter is a newline and grows the field.
+    // Enter still SENDS (the steer queues while a turn runs); Shift+Enter is a newline.
     els.steerInput.addEventListener("keydown", (e) => {
+      // R1: an IME COMMIT fires keydown with key "Enter" and isComposing true (keyCode 229 on
+      // older Chromium): sending there ships a half-composed draft, and a peer-tagged one leaves
+      // this machine and cannot be recalled. FIRST line, ahead of the popup delegation, so
+      // neither the send nor a tag-accept can run mid-composition.
+      if (e.isComposing || e.keyCode === 229) return;
       if (composer.handleKey(e)) return; // the @-popup takes Arrow / Tab / Enter-accept first
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();

@@ -17,6 +17,7 @@ import {
   type ChannelRow,
 } from "./dto";
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
 import type { DerivedPresence } from "./repository-collab";
@@ -124,7 +125,7 @@ export async function listChannels(
   const ids = rows.map((r) => r.id);
   const [counts, lasts, memberIds, presence] = await Promise.all([
     repo.memberCounts(ids),
-    repo.lastMessages(ids),
+    repoMessages.lastMessages(ids),
     collab.channelMemberUserIds(ids),
     collab.presenceForWorkspace(ctx.workspaceId),
   ]);
@@ -147,7 +148,7 @@ export async function getChannel(
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   const [counts, lasts, memberIds, presence] = await Promise.all([
     repo.memberCounts([channel.id]),
-    repo.lastMessages([channel.id]),
+    repoMessages.lastMessages([channel.id]),
     collab.channelMemberUserIds([channel.id]),
     collab.presenceForWorkspace(ctx.workspaceId),
   ]);
@@ -182,7 +183,7 @@ export async function listChannelMembers(
 }
 
 async function hydrateMessages(
-  rows: Awaited<ReturnType<typeof repo.listMessages>>
+  rows: Awaited<ReturnType<typeof repoMessages.listMessages>>
 ): Promise<ChannelMessage[]> {
   const authorIds = rows
     .map((r) => r.author_user_id)
@@ -207,7 +208,7 @@ export async function readMessages(
   query: MessageReadQuery
 ): Promise<ChannelMessage[]> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  const rows = await repo.listMessages(channel.id, {
+  const rows = await repoMessages.listMessages(channel.id, {
     since: query.since,
     limit: query.limit,
   });
@@ -281,7 +282,7 @@ export async function pollChannelMessages(
   channelId: string,
   since: number | undefined
 ): Promise<ChannelMessage[]> {
-  const rows = await repo.listMessages(channelId, { since, limit: 200 });
+  const rows = await repoMessages.listMessages(channelId, { since, limit: 200 });
   return hydrateMessages(rows);
 }
 

@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { orderOf, declsOf, hasRule, fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.url));
@@ -366,28 +367,27 @@ test("the dock has a dedicated node for the drafted post body, hidden by default
   assert.match(HTML, /class="perm-post concave-field hidden" id="permPost"/, "starts hidden, reuses the kit field");
   assert.match(JS, /vm\.permissionPostBody\(p\)/, "the controller asks the pure helper");
   assert.match(JS, /els\.permPost\.textContent = postBody/, "textContent only");
-  assert.match(CSS, /\.perm-post \{/);
+  assert.ok(hasRule(CSS, ".perm-post"));
 });
 
 test("FIX #9: the dock has a destination node, hidden by default, marked when cross-channel", () => {
   assert.match(HTML, /class="perm-post-to text-caption hidden" id="permPostTo"/, "starts hidden");
-  assert.ok(HTML.indexOf('id="permPostTo"') < HTML.indexOf('id="permPost"'),
+  assert.ok(orderOf(HTML, 'id="permPostTo"', 'id="permPost"', "dock order"),
     "the destination reads BEFORE the body, so the operator sees where it is going first");
   assert.match(JS, /els\.permPostTo\.textContent = postBody \? vm\.postDestinationText\(p\) : ""/, "textContent only");
   assert.match(JS, /els\.permPostTo\.classList\.toggle\("is-cross", !!postBody && vm\.isCrossChannelPost\(p\)\)/);
-  assert.match(CSS, /\.perm-post-to \{/);
-  assert.match(CSS, /\.perm-post-to\.is-cross \{/, "a cross-channel post is visually marked");
+  assert.ok(hasRule(CSS, ".perm-post-to"));
+  assert.equal(declsOf(CSS, ".perm-post-to.is-cross").color, "var(--danger)", "a cross-channel post is visually marked");
 });
 
 test("the gate + history recipes exist and keep the established stream language", () => {
-  assert.match(CSS, /\.inbound-pending \{\n\s*align-self: stretch;/, "the gate card stays full width");
-  assert.match(CSS, /\.inbound-pending \.row \{[\s\S]*?flex-wrap: wrap;/, "three buttons wrap, never shrink-clip");
-  assert.match(CSS, /\.history-entry \{/);
-  assert.match(CSS, /\.history-divider \{/);
+  assert.equal(declsOf(CSS, ".inbound-pending")["align-self"], "stretch", "the gate card stays full width");
+  assert.equal(declsOf(CSS, ".inbound-pending .row")["flex-wrap"], "wrap", "three buttons wrap, never shrink-clip");
+  assert.ok(hasRule(CSS, ".history-entry"));
+  assert.ok(hasRule(CSS, ".history-divider"));
   // The lane classes own alignment, so .history-entry must NOT re-declare align-self
   // (a 2-class selector would outrank the single-class lane recipe).
-  const entry = CSS.slice(CSS.indexOf(".history-entry {"), CSS.indexOf(".history-divider {"));
-  assert.ok(!/align-self/.test(entry), "the history bubble carries the surface only");
+  assert.ok(!("align-self" in declsOf(CSS, ".history-entry")), "the history bubble carries the surface only");
 });
 
 test("the renderer stays textContent-only and the CSP is untouched", () => {
@@ -396,7 +396,7 @@ test("the renderer stays textContent-only and the CSP is untouched", () => {
   }
   assert.match(HTML, /default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:/);
   assert.match(HTML, /<script src="session-labels\.js"><\/script>/, "the label split loads before the view-model");
-  assert.ok(HTML.indexOf("session-labels.js") < HTML.indexOf("session-viewmodel.js"), "load order matters in the sandbox");
+  assert.ok(orderOf(HTML, "session-labels.js", "session-viewmodel.js", "script order"), "load order matters in the sandbox");
 });
 
 test("the preload coerces the gate decision FAIL-CLOSED before it crosses the bridge", () => {
@@ -419,15 +419,19 @@ test("the preload coerces the gate decision FAIL-CLOSED before it crosses the br
 // on the dock's Deny path. That call is deliberately gone (see above), so what is pinned now is
 // the path that replaced it: the card's own by-requestId resolution.
 test("FIX F3/F10: the CSS carries the not-sent recipe and the gate stamp waits on main", () => {
-  assert.match(CSS, /\.outbound\.is-not-sent \{/);
+  assert.ok(hasRule(CSS, ".outbound.is-not-sent"));
   assert.match(JS, /if \(typeof send !== "function"\) return;/, "an older preload leaves the card live");
   assert.match(JS, /res && res\.ok === false/, "a rejected decision does not lock the card");
   assert.match(JS, /vm\.markOutboundDecided\(state, requestId, decision\)/, "the card resolves itself");
   assert.ok(!/markOutboundNotSent\(/.test(JS), "and the dock never reaches into the outbound lane");
 });
 
+// AUDIT R3(a): the old marker slice would have read "" (and passed every assertion below
+// vacuously) if makeHistoryDivider were ever declared above makeHistory. fnOf brace-matches
+// makeHistory's own body, so neither declaration order nor a rename can empty it silently.
 test("no absolute path or id leaks into the history surface (label-only rule, §H-9)", () => {
-  const history = readFileSync(R("session-render.js"), "utf8");
-  const factory = history.slice(history.indexOf("function makeHistory("), history.indexOf("function makeHistoryDivider("));
+  const factory = fnOf(readFileSync(R("session-render.js"), "utf8"), "makeHistory");
+  assert.ok(factory.startsWith("function makeHistory("), "a REAL block, never an empty slice");
+  assert.ok(factory.includes("history-entry"), "and the whole body, not a prefix of it");
   assert.ok(!/pendingId|toolUseId|sessionId|channelId|authorUserId/.test(factory), "no ids in the read-only bubble");
 });

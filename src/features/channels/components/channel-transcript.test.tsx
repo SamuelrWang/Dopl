@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MessageThread } from "./message-thread";
+import { ChannelTranscript } from "./channel-transcript";
 import type { ChannelMessage } from "../types";
 
 const CHANNEL_ID = "33333333-3333-4333-8333-333333333333";
@@ -50,7 +50,7 @@ function theirs(over: Partial<ChannelMessage> = {}): ChannelMessage {
 
 function render(messages: ChannelMessage[]): string {
   return renderToStaticMarkup(
-    <MessageThread
+    <ChannelTranscript
       messages={messages}
       memberNames={MEMBER_NAMES}
       threads={[]}
@@ -81,7 +81,7 @@ function enclosingDivClass(markup: string, text: string): string {
   return /class="([^"]*)"/.exec(markup.slice(openedAt, at))?.[1] ?? "";
 }
 
-describe("MessageThread chat-style alignment", () => {
+describe("ChannelTranscript chat-style alignment", () => {
   it("right-aligns my own message at the ~2/3 cap", () => {
     const [bubble] = bubbleClasses(render([mine()]));
     expect(bubble).toContain("self-end");
@@ -139,7 +139,7 @@ describe("MessageThread chat-style alignment", () => {
   });
 });
 
-describe("MessageThread full-width rows (not chat bubbles)", () => {
+describe("ChannelTranscript full-width rows (not chat bubbles)", () => {
   it("keeps a session card full width", () => {
     const markup = render([
       message({

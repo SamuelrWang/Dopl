@@ -13,26 +13,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
-import { closeTask, reopenTask } from "./service-tasks";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
   ChannelTaskNotInChannelError,
   TaskForbiddenError,
-  TaskNotFoundError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type {
-  ChannelMemberRow,
-  ChannelMessageRow,
-  ChannelRow,
-  ChannelTaskRow,
-} from "./dto";
+import type { ChannelMemberRow, ChannelMessageRow, ChannelRow } from "./dto";
 
 const WS = "ws-1";
 const USER = "user-1";
@@ -81,7 +76,7 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
 }
 
 /** Echo the insert back as a stored row so `hydrateOne` can map it. */
-function insertedRow(row: Parameters<typeof repo.insertMessage>[0]): ChannelMessageRow {
+function insertedRow(row: Parameters<typeof repoMessages.insertMessage>[0]): ChannelMessageRow {
   return {
     id: "msg-1",
     seq: 1,
@@ -109,16 +104,16 @@ function wireMembership(addresseeIsMember: boolean) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
-  vi.mocked(repo.findMessageByClientId).mockResolvedValue(null);
+  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  vi.mocked(repo.insertMessage).mockImplementation(async (row) => insertedRow(row));
+  vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
   wireMembership(true);
 });
 
-/** The metadata object handed to `repo.insertMessage`. */
+/** The metadata object handed to `repoMessages.insertMessage`. */
 function capturedMetadata(): Record<string, unknown> {
-  const call = vi.mocked(repo.insertMessage).mock.calls[0];
+  const call = vi.mocked(repoMessages.insertMessage).mock.calls[0];
   return call[0].metadata;
 }
 
@@ -164,7 +159,7 @@ describe("postMessage — reserved metadata keys", () => {
     });
 
     // No ChannelAddresseeNotMemberError — the top-level addressee is absent.
-    expect(repo.insertMessage).toHaveBeenCalledTimes(1);
+    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
     const meta = capturedMetadata();
     expect(Object.prototype.hasOwnProperty.call(meta, "to_user_id")).toBe(false);
     expect(meta.other).toBe("x");
@@ -199,7 +194,9 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
       status: "open",
       outcome: null,
       mode: "autonomous",
-      created_by: "creator-x",
+      // The poster is the thread's creator — the legitimate case. A caller who
+      // is neither creator nor target is refused outright (see the B3 test).
+      created_by: USER,
       target_user_id: null,
       created_at: "2026-07-20T00:00:00Z",
       updated_at: "2026-07-20T00:00:00Z",
@@ -226,7 +223,7 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     expect(meta.taskId).toBe(TASK_ID);
     // Server stamp wins over the caller's spoofed reserved keys.
     expect(meta.taskMode).toBe("autonomous");
-    expect(meta.taskCreatedBy).toBe("creator-x");
+    expect(meta.taskCreatedBy).toBe(USER);
     expect(meta.taskTitle).toBe("Real title");
     expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
   });
@@ -245,7 +242,7 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
 
     expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
     // Rejected before insert — nothing lands.
-    expect(repo.insertMessage).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("a non-UUID taskId never hits the DB and stamps nothing (old task-<uuid>-<seq> ids)", async () => {
@@ -258,6 +255,38 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     const meta = capturedMetadata();
     expect(meta.taskId).toBe("task-chan-1-7");
     expect(Object.prototype.hasOwnProperty.call(meta, "taskMode")).toBe(false);
+  });
+
+  it("SECURITY (B3): a member who is neither creator nor target cannot post into the thread", async () => {
+    // Channel membership is not thread membership: in a 3+ member channel every
+    // member can read every thread id, and a stamped taskId is what lands the
+    // message inside that thread's card and routes it to the responder's
+    // session window. Refused outright rather than silently un-threaded.
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRowFor({ created_by: "creator-x", target_user_id: "responder-y" })
+    );
+
+    await expect(
+      postMessage(ctx, "general", {
+        body: "landing in someone else's thread",
+        metadata: { taskId: TASK_ID },
+      })
+    ).rejects.toBeInstanceOf(TaskForbiddenError);
+
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("allows the thread's TARGET to post into it (the responder's own replies)", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRowFor({ created_by: "creator-x", target_user_id: USER })
+    );
+
+    await postMessage(ctx, "general", {
+      body: "here is the answer",
+      metadata: { taskId: TASK_ID },
+    });
+
+    expect(capturedMetadata().taskId).toBe(TASK_ID);
   });
 
   it("stamps taskTarget from the task's target_user_id, stripping the caller copy", async () => {
@@ -297,7 +326,7 @@ describe("postMessage — addressing + author derivation", () => {
     await expect(
       postMessage(ctx, "general", { body: "hi", toUserId: ADDRESSEE })
     ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
-    expect(repo.insertMessage).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("refuses a non-member posting to a PUBLIC channel (forbidden, not not-found)", async () => {
@@ -313,22 +342,22 @@ describe("postMessage — addressing + author derivation", () => {
     await expect(
       postMessage(ctx, "general", { body: "hi" })
     ).rejects.toBeInstanceOf(ChannelForbiddenError);
-    expect(repo.insertMessage).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("derives author_kind='agent' for an agent-source ctx, 'user' otherwise", async () => {
     await postMessage(agentCtx, "general", { body: "hi" });
-    expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
 
-    vi.mocked(repo.insertMessage).mockClear();
+    vi.mocked(repoMessages.insertMessage).mockClear();
     await postMessage(ctx, "general", { body: "hi" });
-    expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("user");
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("user");
   });
 
   it("an explicit authorKind wins over the ctx-derived default", async () => {
     // A cookie-session desktop app posts an agent thread result over a user ctx.
     await postMessage(ctx, "general", { body: "done", authorKind: "agent" });
-    expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
   });
 
   it("an explicit authorKind wins in BOTH directions (it is a claim, not a derivation)", async () => {
@@ -338,7 +367,7 @@ describe("postMessage — addressing + author derivation", () => {
     // directions stops a future "harden this" edit from turning the `??` into a
     // hard derive and silently breaking that path (F-082).
     await postMessage(agentCtx, "general", { body: "hi", authorKind: "user" });
-    expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("user");
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("user");
   });
 
   it("never lets the caller move authorship off ctx.userId", async () => {
@@ -346,158 +375,7 @@ describe("postMessage — addressing + author derivation", () => {
     // is always the acting user, so an `agent` claim can never impersonate a
     // different member.
     await postMessage(ctx, "general", { body: "hi", authorKind: "agent" });
-    const row = vi.mocked(repo.insertMessage).mock.calls[0][0];
+    const row = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
     expect(row.author_user_id).toBe(ctx.userId);
-  });
-});
-
-describe("closeTask — outcome summary (v1.7)", () => {
-  const CLOSE_TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
-
-  /** A task USER (the caller) is allowed to close (creator), open + untargeted. */
-  function closableTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-    return {
-      id: CLOSE_TASK_ID,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      title: "Ship it",
-      status: "open",
-      outcome: null,
-      mode: "interactive",
-      created_by: USER,
-      target_user_id: null,
-      created_at: "2026-07-20T00:00:00Z",
-      updated_at: "2026-07-20T00:00:00Z",
-      closed_at: null,
-      outcome_summary: null,
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    // Resolves for BOTH the closeTask authz lookup and postMessage's re-stamp.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
-    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
-      closableTask({ ...patch, status: "closed" })
-    );
-  });
-
-  /** The lifecycle echo `postMessage` wrote (the only insertMessage call). */
-  function echoInsert() {
-    return vi.mocked(repo.insertMessage).mock.calls[0][0];
-  }
-
-  it("persists outcome_summary and echoes the summary as the close body", async () => {
-    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed", "Shipped v2 to prod");
-
-    const patch = vi.mocked(repoTasks.updateTask).mock.calls[0][1];
-    expect(patch.outcome_summary).toBe("Shipped v2 to prod");
-
-    const echo = echoInsert();
-    expect(echo.kind).toBe("task_finished");
-    expect(echo.body).toBe("Shipped v2 to prod");
-  });
-
-  it("without a summary persists null and keeps the calm default body", async () => {
-    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
-
-    const patch = vi.mocked(repoTasks.updateTask).mock.calls[0][1];
-    expect(patch.outcome_summary).toBeNull();
-    expect(echoInsert().body).toBe("Task completed");
-  });
-
-  it("a failed close with a blank summary falls back to the default body", async () => {
-    await closeTask(ctx, "general", CLOSE_TASK_ID, "failed", "   ");
-
-    const echo = echoInsert();
-    expect(echo.kind).toBe("task_failed");
-    expect(echo.body).toBe("Task failed");
-  });
-});
-
-describe("reopenTask — authz + no-echo (v1.9, web-only)", () => {
-  const REOPEN_TASK_ID = "770e8400-e29b-41d4-a716-446655440222";
-  const OTHER = "990e8400-e29b-41d4-a716-446655440999";
-
-  /** A CLOSED task with a stored outcome + summary, ready to be reopened. */
-  function closedTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-    return {
-      id: REOPEN_TASK_ID,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      title: "Ship it",
-      status: "closed",
-      outcome: "completed",
-      mode: "interactive",
-      created_by: USER,
-      target_user_id: null,
-      created_at: "2026-07-20T00:00:00Z",
-      updated_at: "2026-07-20T00:00:00Z",
-      closed_at: "2026-07-21T00:00:00Z",
-      outcome_summary: "Shipped v2",
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    // Echo the patch back as the reopened (open) row so mapTaskRow can map it.
-    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
-      closedTask({ ...patch } as Partial<ChannelTaskRow>)
-    );
-  });
-
-  it("404s an unknown task (nothing updated)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
-    await expect(
-      reopenTask(ctx, "general", REOPEN_TASK_ID)
-    ).rejects.toBeInstanceOf(TaskNotFoundError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
-  });
-
-  it("forbids a member who is neither creator nor target", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: OTHER, target_user_id: OTHER })
-    );
-    await expect(
-      reopenTask(ctx, "general", REOPEN_TASK_ID)
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
-  });
-
-  it("creator reopen clears the closed state in one CHECK-satisfying update", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: USER })
-    );
-
-    const task = await reopenTask(ctx, "general", REOPEN_TASK_ID);
-
-    // status back to open with outcome / closed_at / outcome_summary nulled —
-    // keeps (status='closed') = (outcome IS NOT NULL) satisfied.
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toEqual({
-      status: "open",
-      outcome: null,
-      closed_at: null,
-      outcome_summary: null,
-    });
-    expect(task.status).toBe("open");
-    expect(task.outcome).toBeNull();
-  });
-
-  it("the target may also reopen", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: OTHER, target_user_id: USER })
-    );
-    await expect(
-      reopenTask(ctx, "general", REOPEN_TASK_ID)
-    ).resolves.toBeDefined();
-    expect(repoTasks.updateTask).toHaveBeenCalledTimes(1);
-  });
-
-  it("posts NO lifecycle echo (the card flips back on refetch, not a marker)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: USER })
-    );
-    await reopenTask(ctx, "general", REOPEN_TASK_ID);
-    expect(repo.insertMessage).not.toHaveBeenCalled();
   });
 });

@@ -33,6 +33,56 @@ import {
  */
 
 /**
+ * The initiating request's idempotency key, derived from the task id. The task
+ * row and its opening message are two writes with no transaction around them,
+ * so the key is what makes the PAIR converge: whichever attempt gets there
+ * posts, every later one dedups on `channel_messages_client_msg_key`. See
+ * {@link postOpeningMessage}.
+ */
+function openingMessageClientId(taskId: string): string {
+  return `task-open-${taskId}`;
+}
+
+/**
+ * Post (or re-post) a task's initiating request — EXACTLY ONCE per task, on
+ * every path that returns that task.
+ *
+ * Why this exists: `create_task` used to insert the row and then post the
+ * request as a separate, unguarded step. If the insert landed and the post
+ * threw (a transient DB error, an addressee removed mid-flight, a CHECK
+ * failure), the retry hit the `client_msg_id` short-circuit, returned the
+ * stored task and NEVER posted — leaving a thread that exists in the panel
+ * with no message for the responder's desktop to route, so no session ever
+ * spawned. The idempotency key permanently swallowed the request.
+ *
+ * The fix keeps both writes in the SAME idempotency envelope instead of
+ * moving them into one RPC: `postMessage` owns the addressee check, the DM
+ * auto-address, the reserved-key strip and the task-key stamping, and forking
+ * that logic into PL/pgSQL would give the metadata contract two homes. So the
+ * message gets its own deterministic key (`task-open-<taskId>`), the post is
+ * re-driven on every create path, and `postMessage`'s own idempotency
+ * (findMessageByClientId → the unique index) collapses the repeats.
+ *
+ * Fields come from the STORED task row, never the retry's input, so a re-send
+ * cannot rewrite the title or re-address the request.
+ */
+async function postOpeningMessage(
+  ctx: ChannelContext,
+  channelId: string,
+  task: { id: string; title: string; target_user_id: string | null },
+  body: string
+): Promise<void> {
+  await postMessage(ctx, channelId, {
+    body,
+    kind: "message",
+    toUserId: task.target_user_id ?? undefined,
+    summary: task.title,
+    metadata: { taskId: task.id },
+    clientMsgId: openingMessageClientId(task.id),
+  });
+}
+
+/**
  * Create a first-class task in a channel. The caller must be a channel member
  * and `toUserId` (the responder the task is addressed to) must be an active
  * member of THAT channel. The requester's initial request (`body`) is posted
@@ -54,15 +104,23 @@ export async function createTask(
   }
 
   // Idempotency: a re-sent client_msg_id returns the already-created task
-  // WITHOUT inserting a second row or re-posting the initial request (which
-  // would double-spawn the responder's session window). Mirrors the message
-  // post's idempotency (findMessageByClientId → return the stored row).
+  // WITHOUT inserting a second row. It still re-drives the initiating post —
+  // which is a no-op when that message already landed (its own key dedups) and
+  // the repair when it did not, so a retry can never leave a thread with no
+  // request in it. Restricted to the task's own creator: a colliding key from
+  // another member must not put a message into their thread (the post would be
+  // refused anyway, turning a benign dedup into a 403).
   if (input.clientMsgId) {
     const existing = await repoTasks.findTaskByClientId(
       channel.id,
       input.clientMsgId
     );
-    if (existing) return mapTaskRow(existing);
+    if (existing) {
+      if (existing.created_by === ctx.userId) {
+        await postOpeningMessage(ctx, channel.id, existing, input.body);
+      }
+      return mapTaskRow(existing);
+    }
   }
 
   let task;
@@ -77,25 +135,25 @@ export async function createTask(
       client_msg_id: input.clientMsgId ?? null,
     });
   } catch (err) {
-    // Lost an idempotency race — converge on the stored winner (again, no
-    // re-post: the winning insert's own call posts the initial request).
+    // Lost an idempotency race — converge on the stored winner. Re-driving the
+    // post here is safe (same derived key as the winner's own call, so at most
+    // one message lands) and covers the winner having crashed before posting.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
       const raced = await repoTasks.findTaskByClientId(
         channel.id,
         input.clientMsgId
       );
-      if (raced) return mapTaskRow(raced);
+      if (raced) {
+        if (raced.created_by === ctx.userId) {
+          await postOpeningMessage(ctx, channel.id, raced, input.body);
+        }
+        return mapTaskRow(raced);
+      }
     }
     throw err;
   }
 
-  await postMessage(ctx, channel.id, {
-    body: input.body,
-    kind: "message",
-    toUserId: input.toUserId,
-    summary: input.title,
-    metadata: { taskId: task.id },
-  });
+  await postOpeningMessage(ctx, channel.id, task, input.body);
 
   return mapTaskRow(task);
 }

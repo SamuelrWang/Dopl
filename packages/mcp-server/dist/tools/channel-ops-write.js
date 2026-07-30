@@ -136,6 +136,12 @@ async function opPost(client, channelRef, body, opts = {}) {
                 return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or post without \`thread\`.`);
             }
         }
+        // v3.1 B3: the route now 403s a post into a thread the caller is not a party
+        // to (only its creator or its target may write into one). Without this the
+        // agent sees a raw error string and cannot tell it from a transport failure.
+        if (isForbidden(e) && opts.thread) {
+            return (0, respond_1.err)(`That thread belongs to two other members, so you can't post into it. Post without \`thread\`, or open your own with op="create_thread".`);
+        }
         throw e;
     }
     const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";

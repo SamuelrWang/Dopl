@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { ruleOf, declsOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const vm = require(fileURLToPath(new URL("../renderer/session/session-viewmodel.js", import.meta.url)));
@@ -113,16 +114,23 @@ test("FIX F3: the initiating-request item is styled, so the opener is not just a
   const JS = readFileSync(R("session-render.js"), "utf8");
   const CSS = readFileSync(R("session.css"), "utf8");
   assert.match(JS, /rec\.el\.classList\.add\("is-request"\)/, "makeRequest still marks the opener");
-  const rule = /\.bubble\.is-request\s*\{([^}]*)\}/.exec(CSS);
+  const rule = ruleOf(CSS, ".bubble.is-request");
   assert.ok(rule, "`is-request` must have a CSS rule (it had none at all: an invisible marker)");
-  const body = rule[1];
-  assert.match(body, /background|border/, "the distinction is a surface / hairline one");
+  const decls = declsOf(CSS, ".bubble.is-request");
+  const props = Object.keys(decls);
+  assert.ok(props.some((p) => /^(background|border)/.test(p)), "the distinction is a surface / hairline one");
   // SURFACE ONLY, like .bubble.role-operator: a 2-class selector outranks .lane-me, so this
-  // recipe must never take over the lane's alignment or width.
-  assert.ok(!/align-self|width|max-width|margin-left|margin-right/.test(body), body);
+  // recipe must never take over the lane's alignment or width. Asked property by property, so
+  // a `border-width` can never be mistaken for the banned `width`.
+  for (const banned of ["align-self", "width", "max-width", "margin-left", "margin-right"]) {
+    assert.ok(!(banned in decls), `${banned} belongs to the lane, not the surface`);
+  }
   // Tokens only: no raw hex, no rgba() recipe of its own.
-  assert.ok(!/#[0-9a-fA-F]{3,8}|rgba?\(/.test(body), body);
-  assert.match(body, /var\(--/, "and it reaches for a token");
+  const values = Object.values(decls).join(" ");
+  assert.ok(!/#[0-9a-fA-F]{3,8}|rgba?\(/.test(values), values);
+  assert.match(values, /var\(--/, "and it reaches for a token");
   // It must come AFTER the role surfaces (same specificity: source order is what makes it win).
-  assert.ok(CSS.indexOf(".bubble.is-request") > CSS.indexOf(".bubble.role-operator"), "declared last");
+  const operator = ruleOf(CSS, ".bubble.role-operator");
+  assert.ok(operator, ".bubble.role-operator must exist for the ordering to mean anything");
+  assert.ok(rule.open > operator.open, "declared last");
 });

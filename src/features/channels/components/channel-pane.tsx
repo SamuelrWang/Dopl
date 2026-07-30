@@ -24,7 +24,7 @@ import {
   channelDisplayName,
   channelDisplayPeerPerson,
 } from "../lib/channel-display";
-import { MessageThread } from "./message-thread";
+import { ChannelTranscript } from "./channel-transcript";
 import { MessageComposer, type SendOptions } from "./message-composer";
 import { ConsentCard } from "./consent-card";
 import { ChannelActionsMenu } from "./channel-actions-menu";
@@ -391,7 +391,7 @@ export function ChannelPane({
               </p>
             ) : null
           ) : (
-            <MessageThread
+            <ChannelTranscript
               messages={messages}
               memberNames={memberNames}
               threads={threads}

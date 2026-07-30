@@ -74,14 +74,15 @@ export function isCalmTerminalStatus(status: SessionStatus): boolean {
 }
 
 /**
- * The authoritative overlay for a first-class task (from `channel_tasks`),
- * keyed by task id. When a group's `taskId` resolves to one of these, its
- * `status` and `title` win over the message-derived values — a mid-flight task
- * with delivered replies still reads "active" until the task row is closed,
- * which the lifecycle-only heuristic could never know. Old
- * `task-{channel}-{seq}` sessions have no row and keep the derived render.
+ * The authoritative overlay for a first-class THREAD (the `channel_tasks` row —
+ * storage keeps the `task` spelling), keyed by the wire `metadata.taskId`. When
+ * a group's `taskId` resolves to one of these, its `status` and `title` win over
+ * the message-derived values — a mid-flight thread with delivered replies still
+ * reads "active" until the row is closed, which the lifecycle-only heuristic
+ * could never know. Old `task-{channel}-{seq}` sessions have no row and keep the
+ * derived render.
  */
-export interface TaskOverlay {
+export interface ThreadOverlay {
   status: SessionStatus;
   title: string | null;
   mode: ThreadMode | null;
@@ -95,7 +96,13 @@ export interface TaskOverlay {
 
 /** One grouped agent session, ready to render as a card. */
 export interface SessionGroup {
-  /** The shared `metadata.taskId` that binds the session together. */
+  /**
+   * The shared `metadata.taskId` that binds the session together. BOUNDARY: this
+   * is the WIRE value verbatim, so it deliberately keeps the `task` spelling per
+   * the v3.0 vocabulary contract (storage stays `channel_tasks` /
+   * `metadata.task*`); in domain terms it is the thread id. It renames only when
+   * storage migrates (F-081).
+   */
   taskId: string;
   status: SessionStatus;
   /**
@@ -322,7 +329,7 @@ function computeSummary(draft: Draft): string | null {
  */
 export function groupThread(
   messages: ChannelMessage[],
-  taskOverlays?: Map<string, TaskOverlay>
+  taskOverlays?: Map<string, ThreadOverlay>
 ): ThreadItem[] {
   const items: ThreadItem[] = [];
   const drafts = new Map<string, Draft>();

@@ -1,19 +1,18 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type {
-  ChannelMemberRow,
-  ChannelMessageRow,
-  ChannelRow,
-  ProfileRef,
-} from "./dto";
+import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
 
 /**
- * Pure data access for the channels tables. Every function takes the
- * service-role admin client (RLS-bypassing) — visibility + authz are
- * enforced in the service layer. The generated `Database` type does not
- * yet carry the channels tables, so `supabaseAdmin()` (an untyped
- * `SupabaseClient`) accepts the table names and results are cast to the
- * hand-written row types in `dto.ts`.
+ * Pure data access for the channels tables — channels, members, workspace
+ * membership + profiles. Every function takes the service-role admin client
+ * (RLS-bypassing); visibility + authz are enforced in the service layer. The
+ * generated `Database` type does not yet carry the channels tables, so
+ * `supabaseAdmin()` (an untyped `SupabaseClient`) accepts the table names and
+ * results are cast to the hand-written row types in `dto.ts`.
+ *
+ * Siblings (§2 500-line cap): `repository-messages.ts` (the transcript),
+ * `repository-tasks.ts` (`channel_tasks`), `repository-collab.ts` (consent +
+ * trust + presence).
  */
 
 export function pgErrorCode(err: unknown): string | null {
@@ -90,15 +89,28 @@ export async function findChannelBySlug(
   return (data as ChannelRow | null) ?? null;
 }
 
+/**
+ * Every slug already taken in the workspace — INCLUDING soft-deleted channels.
+ * `channels_workspace_slug_key` is a plain (non-partial) unique index on
+ * (workspace_id, lower(slug)), so a soft-deleted row keeps owning its slug: a
+ * read that hid deleted rows handed `slugify` a name the index would reject,
+ * turning "delete #design, create #design again" into a 409 naming a channel
+ * the user can no longer see (and, on the DM path, a generic 500). The index
+ * stays non-partial on purpose — a soft-deleted DM is REVIVED by name
+ * (`findDirectChannelAnyStatus` → `reviveChannel`), which would break if
+ * another channel could take its slug while it was hidden.
+ */
 export async function existingSlugs(workspaceId: string): Promise<string[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channels")
     .select("slug")
-    .eq("workspace_id", workspaceId)
-    .is("deleted_at", null);
+    .eq("workspace_id", workspaceId);
   if (error) throw error;
-  return ((data ?? []) as Array<{ slug: string }>).map((r) => r.slug);
+  // The index is on lower(slug); compare in the same case-folded space.
+  return ((data ?? []) as Array<{ slug: string }>).map((r) =>
+    r.slug.toLowerCase()
+  );
 }
 
 type ChannelInsert = {
@@ -113,34 +125,14 @@ type ChannelInsert = {
 };
 
 /**
- * The direct channel for a member-pair (`direct_key`) in a workspace, or null.
- * Backs the DM dedup: a repeat "open direct message" returns the existing
- * channel idempotently instead of inserting a second one. Excludes
- * soft-deleted rows (the normal read model); the partial unique index still
- * fences a concurrent insert race.
- */
-export async function findDirectChannel(
-  workspaceId: string,
-  directKey: string
-): Promise<ChannelRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channels")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("is_direct", true)
-    .eq("direct_key", directKey)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as ChannelRow | null) ?? null;
-}
-
-/**
- * The direct channel for a member-pair (`direct_key`) INCLUDING a soft-deleted
- * one. Backs DM revive: the partial unique index counts the soft-deleted row,
- * so a repeat open must find and revive it rather than insert a second (which
- * would 23505). {@link findDirectChannel} is the normal read (live rows only).
+ * The direct channel for a member-pair (`direct_key`) in a workspace INCLUDING
+ * a soft-deleted one, or null. Backs both the DM dedup (a repeat "open direct
+ * message" returns the existing channel instead of inserting a second) and the
+ * DM revive: the partial unique index counts the soft-deleted row, so a repeat
+ * open must find and revive it rather than insert a second (which would
+ * 23505). There is deliberately no live-rows-only variant — every caller that
+ * converges on a DM has to see the hidden row, or it 500s on a slug/direct_key
+ * collision with a channel it cannot read.
  */
 export async function findDirectChannelAnyStatus(
   workspaceId: string,
@@ -384,123 +376,6 @@ export async function updateMemberPrefs(
     .single();
   if (error) throw error;
   return data as ChannelMemberRow;
-}
-
-// ─── Messages ───────────────────────────────────────────────────────
-
-interface MessageReadOpts {
-  since?: number;
-  limit: number;
-}
-
-/**
- * With a `since` cursor: messages with `seq > since`, ascending, capped at
- * `limit` — the incremental read for MCP / desktop consumers and the await
- * poll. WITHOUT a cursor: the LATEST `limit` messages, returned ascending —
- * so a channel with more than `limit` messages still surfaces its newest
- * posts. The former unconditional oldest-`limit` read silently hid every
- * message past the first page once a channel grew beyond `limit`.
- */
-export async function listMessages(
-  channelId: string,
-  opts: MessageReadOpts
-): Promise<ChannelMessageRow[]> {
-  const db = supabaseAdmin();
-  if (opts.since !== undefined) {
-    const { data, error } = await db
-      .from("channel_messages")
-      .select("*")
-      .eq("channel_id", channelId)
-      .gt("seq", opts.since)
-      .order("seq", { ascending: true })
-      .limit(opts.limit);
-    if (error) throw error;
-    return (data ?? []) as ChannelMessageRow[];
-  }
-  // Newest `limit`, then flip to ascending for display / cursor semantics.
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .order("seq", { ascending: false })
-    .limit(opts.limit);
-  if (error) throw error;
-  return ((data ?? []) as ChannelMessageRow[]).reverse();
-}
-
-export async function findMessageByClientId(
-  channelId: string,
-  clientMsgId: string
-): Promise<ChannelMessageRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .eq("client_msg_id", clientMsgId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as ChannelMessageRow | null) ?? null;
-}
-
-type MessageInsert = {
-  channel_id: string;
-  workspace_id: string;
-  author_user_id: string | null;
-  author_kind: string;
-  kind: string;
-  body: string;
-  metadata: Record<string, unknown>;
-  client_msg_id: string | null;
-};
-
-/**
- * Insert a message through the `channel_message_insert` RPC, which takes a
- * per-channel advisory xact lock BEFORE the IDENTITY `seq` is assigned. That
- * serializes seq assignment + commit per channel, so seq commit order is
- * monotonic per channel and an await/read cursor can't advance past a
- * not-yet-visible lower seq and permanently miss it. A unique-violation on
- * `client_msg_id` still surfaces as 23505 for the service layer's idempotency
- * convergence.
- */
-export async function insertMessage(
-  row: MessageInsert
-): Promise<ChannelMessageRow> {
-  const db = supabaseAdmin();
-  const { data, error } = await db.rpc("channel_message_insert", {
-    p_channel_id: row.channel_id,
-    p_workspace_id: row.workspace_id,
-    p_author_user_id: row.author_user_id,
-    p_author_kind: row.author_kind,
-    p_kind: row.kind,
-    p_body: row.body,
-    p_metadata: row.metadata,
-    p_client_msg_id: row.client_msg_id,
-  });
-  if (error) throw error;
-  // A single-composite RETURNS comes back as an object; normalize defensively.
-  const out = Array.isArray(data) ? data[0] : data;
-  return out as ChannelMessageRow;
-}
-
-/** Per-channel latest message (seq + created_at) via the bounded RPC. */
-export async function lastMessages(
-  channelIds: string[]
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (channelIds.length === 0) return out;
-  const db = supabaseAdmin();
-  const { data, error } = await db.rpc("channels_last_message", {
-    p_channel_ids: channelIds,
-  });
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    channel_id: string;
-    last_at: string;
-  }>) {
-    out.set(row.channel_id, row.last_at);
-  }
-  return out;
 }
 
 // ─── Workspace membership + profiles ────────────────────────────────

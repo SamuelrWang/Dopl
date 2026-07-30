@@ -1,38 +1,42 @@
 /**
- * Unit tests for the channels v15 write service — direct channels + tasks.
- * The repository + task repository are mocked; `service-shared` runs for real.
- * `service-reads.getChannel` is mocked (the create paths return it) so these
- * tests don't drag in the whole read hydration.
+ * Unit tests for the thread (task) lane of the channels write service. The
+ * repositories are mocked; `service-shared` runs for real. `service-reads` is
+ * mocked so these tests don't drag in the whole read hydration. Direct-channel
+ * creation moved to `service-direct.test.ts` (§2 cap).
  *
- * Focus (the load-bearing new rules):
- *   - direct channels: self-DM rejected, dedup returns the existing channel,
- *     a new DM inserts exactly two members with a sorted direct_key;
- *   - task authorization: createTask (member + addressee-member), closeTask
- *     (creator OR target), setTaskMode (creator only).
+ * Focus (the load-bearing rules):
+ *   - authorization: createTask (member + addressee-member), closeTask
+ *     (creator OR target), setTaskMode (creator only);
+ *   - create_task ATOMICITY: the thread row and its initiating message are one
+ *     idempotency envelope, so a failed post is repaired by the retry instead
+ *     of being swallowed forever by the `client_msg_id` short-circuit.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 vi.mock("./service-reads");
 
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as reads from "./service-reads";
-import { addMember, createChannel } from "./service-writes";
 import { createTask, closeTask, setTaskMode } from "./service-tasks";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
-  ChannelInviteeNotMemberError,
-  DirectChannelImmutableError,
-  DirectSelfTargetError,
   TaskForbiddenError,
   TaskNotFoundError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
+import type {
+  ChannelMemberRow,
+  ChannelMessageRow,
+  ChannelRow,
+  ChannelTaskRow,
+} from "./dto";
 
 const WS = "ws-1";
 const USER = "aaaaaaaa-e29b-41d4-a716-446655440000";
@@ -107,10 +111,10 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
     uid === USER ? memberRow(USER, "owner") : null
   );
-  vi.mocked(repo.findMessageByClientId).mockResolvedValue(null);
+  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  vi.mocked(repo.insertMessage).mockImplementation(async (row) => ({
+  vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
     id: "msg-1",
     seq: 1,
     channel_id: row.channel_id,
@@ -127,111 +131,6 @@ beforeEach(() => {
   vi.mocked(reads.getChannel).mockResolvedValue(
     {} as Awaited<ReturnType<typeof reads.getChannel>>
   );
-});
-
-describe("createChannel — direct branch", () => {
-  it("rejects a self-DM (DirectSelfTargetError)", async () => {
-    await expect(
-      createChannel(ctx, { direct: true, memberUserId: USER })
-    ).rejects.toBeInstanceOf(DirectSelfTargetError);
-    expect(repo.insertChannel).not.toHaveBeenCalled();
-  });
-
-  it("rejects a peer who is not an active workspace member", async () => {
-    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false);
-    await expect(
-      createChannel(ctx, { direct: true, memberUserId: PEER })
-    ).rejects.toBeInstanceOf(ChannelInviteeNotMemberError);
-    expect(repo.insertChannel).not.toHaveBeenCalled();
-  });
-
-  it("dedups: returns the existing (live) DM without inserting or reviving", async () => {
-    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-    vi.mocked(repo.findDirectChannelAnyStatus).mockResolvedValue(
-      channelRow({ id: "dm-existing", is_direct: true })
-    );
-
-    await createChannel(ctx, { direct: true, memberUserId: PEER });
-
-    expect(repo.insertChannel).not.toHaveBeenCalled();
-    // A live row (deleted_at null) is never revived and never re-adds members.
-    expect(repo.reviveChannel).not.toHaveBeenCalled();
-    expect(repo.insertMember).not.toHaveBeenCalled();
-    expect(reads.getChannel).toHaveBeenCalledWith(ctx, "dm-existing");
-  });
-
-  it("revives a soft-deleted DM (same id) and restores missing member rows", async () => {
-    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-    vi.mocked(repo.findDirectChannelAnyStatus).mockResolvedValue(
-      channelRow({
-        id: "dm-deleted",
-        is_direct: true,
-        direct_key: [USER, PEER].sort().join(":"),
-        deleted_at: "2026-07-27T01:00:00Z",
-      })
-    );
-    vi.mocked(repo.reviveChannel).mockResolvedValue(undefined);
-    // Both member rows were torn down — findMembership misses for both, so each
-    // is re-inserted with its original role.
-    vi.mocked(repo.findMembership).mockResolvedValue(null);
-    vi.mocked(repo.insertMember).mockResolvedValue(memberRow(USER, "owner"));
-
-    await createChannel(ctx, { direct: true, memberUserId: PEER });
-
-    expect(repo.insertChannel).not.toHaveBeenCalled();
-    expect(repo.reviveChannel).toHaveBeenCalledWith(WS, "dm-deleted");
-    expect(repo.insertMember).toHaveBeenCalledTimes(2);
-    const roles = vi
-      .mocked(repo.insertMember)
-      .mock.calls.map((c) => [c[0].user_id, c[0].role]);
-    expect(roles).toContainEqual([USER, "owner"]);
-    expect(roles).toContainEqual([PEER, "member"]);
-    expect(reads.getChannel).toHaveBeenCalledWith(ctx, "dm-deleted");
-  });
-
-  it("revive leaves existing member rows untouched (no duplicate inserts)", async () => {
-    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-    vi.mocked(repo.findDirectChannelAnyStatus).mockResolvedValue(
-      channelRow({
-        id: "dm-deleted",
-        is_direct: true,
-        deleted_at: "2026-07-27T01:00:00Z",
-      })
-    );
-    vi.mocked(repo.reviveChannel).mockResolvedValue(undefined);
-    // Both member rows survived the soft-delete — nothing to re-insert.
-    vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER, "owner"));
-
-    await createChannel(ctx, { direct: true, memberUserId: PEER });
-
-    expect(repo.reviveChannel).toHaveBeenCalledWith(WS, "dm-deleted");
-    expect(repo.insertMember).not.toHaveBeenCalled();
-  });
-
-  it("creates a new DM with a sorted direct_key + exactly two members", async () => {
-    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-    vi.mocked(repo.findDirectChannelAnyStatus).mockResolvedValue(null);
-    vi.mocked(repo.existingSlugs).mockResolvedValue([]);
-    vi.mocked(repo.insertChannel).mockResolvedValue(
-      channelRow({ id: "dm-new", is_direct: true })
-    );
-    vi.mocked(repo.insertMember).mockResolvedValue(memberRow(USER, "owner"));
-
-    await createChannel(ctx, { direct: true, memberUserId: PEER });
-
-    const insertArg = vi.mocked(repo.insertChannel).mock.calls[0][0];
-    expect(insertArg.is_direct).toBe(true);
-    expect(insertArg.visibility).toBe("private");
-    // direct_key is the two ids sorted, joined ':'.
-    expect(insertArg.direct_key).toBe([USER, PEER].sort().join(":"));
-    // Membership-of-2: creator (owner) + peer (member).
-    expect(repo.insertMember).toHaveBeenCalledTimes(2);
-    const roles = vi
-      .mocked(repo.insertMember)
-      .mock.calls.map((c) => [c[0].user_id, c[0].role]);
-    expect(roles).toContainEqual([USER, "owner"]);
-    expect(roles).toContainEqual([PEER, "member"]);
-  });
 });
 
 describe("createTask — authorization", () => {
@@ -286,22 +185,45 @@ describe("createTask — authorization", () => {
       created_by: USER,
       target_user_id: PEER,
     });
-    const msgMeta = vi.mocked(repo.insertMessage).mock.calls[0][0].metadata;
+    const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
     expect(msgMeta.taskId).toBe(TASK_ID);
   });
 });
 
 describe("createTask — idempotency (client_msg_id)", () => {
+  /** The task's own thread row, as the metadata stamping re-reads it. */
+  const ownTask = () => taskRow({ created_by: USER, target_user_id: PEER });
+
+  /** The stored initiating message, as `postMessage`'s dedup finds it. */
+  function storedOpening(): ChannelMessageRow {
+    return {
+      id: "msg-open",
+      seq: 1,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      author_user_id: USER,
+      author_kind: "user",
+      kind: "message",
+      body: "please do X",
+      metadata: { taskId: TASK_ID },
+      client_msg_id: `task-open-${TASK_ID}`,
+      created_at: "2026-07-27T00:00:00Z",
+    };
+  }
+
   beforeEach(() => {
     // PEER is a channel member so the addressee check passes.
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(ownTask());
   });
 
   it("returns the already-created task and does NOT re-insert or re-post", async () => {
-    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
+    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
+    // The initiating message already landed on the first send.
+    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+      storedOpening()
     );
 
     const task = await createTask(ctx, "general", {
@@ -315,7 +237,11 @@ describe("createTask — idempotency (client_msg_id)", () => {
     expect(task.id).toBe(TASK_ID);
     // No second task row and no second initial message (→ no double spawn).
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
-    expect(repo.insertMessage).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+    expect(repoMessages.findMessageByClientId).toHaveBeenCalledWith(
+      "chan-1",
+      `task-open-${TASK_ID}`
+    );
   });
 
   it("inserts (threading client_msg_id) + posts once on the first send", async () => {
@@ -338,16 +264,24 @@ describe("createTask — idempotency (client_msg_id)", () => {
     expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0]).toMatchObject({
       client_msg_id: "dedupe-2",
     });
-    // The initial request is posted exactly once.
-    expect(repo.insertMessage).toHaveBeenCalledTimes(1);
+    // The initial request is posted exactly once, under its own derived key —
+    // that key is what makes the create+post pair convergent.
+    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].client_msg_id).toBe(
+      `task-open-${TASK_ID}`
+    );
   });
 
   it("converges on the winner when the insert loses the unique race", async () => {
     vi.mocked(repoTasks.findTaskByClientId)
       .mockResolvedValueOnce(null) // pre-insert lookup misses
-      .mockResolvedValueOnce(taskRow({ created_by: USER, target_user_id: PEER })); // post-race winner
+      .mockResolvedValueOnce(ownTask()); // post-race winner
     vi.mocked(repoTasks.insertTask).mockRejectedValue({ code: "23505" });
     vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
+    // The winner already posted the request under the derived key.
+    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+      storedOpening()
+    );
 
     const task = await createTask(ctx, "general", {
       title: "Ship it",
@@ -357,8 +291,73 @@ describe("createTask — idempotency (client_msg_id)", () => {
     });
 
     expect(task.id).toBe(TASK_ID);
-    // The losing insert never posts — the winner's own call did.
-    expect(repo.insertMessage).not.toHaveBeenCalled();
+    // The loser re-drives the post but nothing lands twice.
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("REGRESSION (B1): a post that fails is repaired by the retry — the request exists exactly once", async () => {
+    // The row-then-post pair has no transaction around it. Before the fix, an
+    // insert that landed followed by a post that threw left a thread with NO
+    // message: the retry hit the client_msg_id short-circuit, returned the
+    // stored task and never posted, so the responder's desktop had nothing to
+    // route and no session ever spawned (there is a live example of this in
+    // prod). Now the initiating post is re-driven on the short-circuit path.
+    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValueOnce(null);
+    vi.mocked(repoTasks.insertTask).mockResolvedValue(ownTask());
+    vi.mocked(repoMessages.insertMessage).mockRejectedValueOnce(
+      new Error("connection reset")
+    );
+
+    const send = () =>
+      createTask(ctx, "general", {
+        title: "Ship it",
+        body: "please do X",
+        toUserId: PEER,
+        clientMsgId: "dedupe-4",
+      });
+
+    // First send: the thread row lands, the request post blows up.
+    await expect(send()).rejects.toThrow("connection reset");
+    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
+
+    // Retry with the SAME key: the task short-circuits, the missing request is
+    // posted. The stored message is still absent, so this is a real insert.
+    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
+    const task = await send();
+
+    expect(task.id).toBe(TASK_ID);
+    // Exactly one task row, and exactly one initiating message across both
+    // attempts (the failed one never landed).
+    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
+    const posts = vi
+      .mocked(repoMessages.insertMessage)
+      .mock.calls.filter((c) => c[0].client_msg_id === `task-open-${TASK_ID}`);
+    expect(posts).toHaveLength(2); // one rejected, one stored
+    expect(posts[1][0].metadata.taskId).toBe(TASK_ID);
+    // A third send finds the stored message and inserts nothing more.
+    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+      storedOpening()
+    );
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    await send();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not post into a thread the colliding key belongs to someone else", async () => {
+    // A client_msg_id collision from another member returns their task (the
+    // pre-existing dedup), but must not put a message into their thread.
+    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(
+      taskRow({ created_by: PEER, target_user_id: PEER })
+    );
+
+    await createTask(ctx, "general", {
+      title: "Ship it",
+      body: "please do X",
+      toUserId: PEER,
+      clientMsgId: "dedupe-5",
+    });
+
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -425,7 +424,7 @@ describe("setTaskMode — authorization", () => {
       mode: "autonomous",
     });
     // set_task_mode is realtime-invisible — it must not post a message.
-    expect(repo.insertMessage).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("forbids a non-creator (even the target)", async () => {
@@ -436,22 +435,5 @@ describe("setTaskMode — authorization", () => {
       setTaskMode(ctx, "general", TASK_ID, "interactive")
     ).rejects.toBeInstanceOf(TaskForbiddenError);
     expect(repoTasks.updateTask).not.toHaveBeenCalled();
-  });
-});
-
-describe("addMember — direct channel is immutable", () => {
-  it("rejects adding a third member to a DM (before any membership check)", async () => {
-    // A DM resolves as a private, is_direct channel the caller owns.
-    vi.mocked(repo.findChannelBySlug).mockResolvedValue(
-      channelRow({ id: "dm-1", is_direct: true, direct_key: `${USER}:${PEER}` })
-    );
-
-    await expect(addMember(ctx, "dm-1", TARGET)).rejects.toBeInstanceOf(
-      DirectChannelImmutableError
-    );
-    // Fails fast on the shape guard — never reaches the workspace-member or
-    // insert path.
-    expect(repo.isActiveWorkspaceMember).not.toHaveBeenCalled();
-    expect(repo.insertMember).not.toHaveBeenCalled();
   });
 });

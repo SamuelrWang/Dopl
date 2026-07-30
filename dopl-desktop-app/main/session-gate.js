@@ -127,14 +127,21 @@ function surface(s, item, hadFocus) {
 function enqueue(s, a) {
   const auto = autoInbound(s);
   const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName };
+  const disp = io.queueInbound(s, item, !auto);
+  // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this
+  // early return, so a reply that overflowed the queue (MAX_PENDING_INBOUND) fell through to
+  // the caller's passive notice AND had its body recorded in s.gatedBodies — which
+  // session-history and session-seed both filter out. The message existed on the server and
+  // was invisible in the window and to the agent forever. Nothing was gated here, so nothing
+  // is recorded; the passive notice is the only trace, exactly as intended.
+  if (disp === 'full') return false;
   // FIX F1: record the body BEFORE anything else can consume it. A recreated shell loads
   // the channel history in parallel with this hold, and the listener already advanced its
   // cursor past this message, so the fetched window contains it. Recording it here keeps
   // it out of the fresh session's seed: accepted, it rides its own fenced continuation;
-  // declined, it never reaches the agent at all.
+  // declined, it never reaches the agent at all. Still ahead of every consumer: queueInbound
+  // above only appends to the in-memory FIFO, and the dispatch that feeds it is below.
   io.noteGatedBody(s, a.message);
-  const disp = io.queueInbound(s, item, !auto);
-  if (disp === 'full') return false;
   if (disp === 'dispatch') {
     // FIX #8: read the window's visibility BEFORE the dispatch, which reshows + focuses a
     // hidden window on `inbound_pending`.

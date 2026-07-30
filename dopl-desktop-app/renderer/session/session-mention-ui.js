@@ -142,6 +142,10 @@
     // TRUE means "consumed": session.js returns immediately and its Enter-sends branch is
     // never reached. Shift+Enter is NEVER consumed (it stays a newline).
     function handleKey(e) {
+      // R1: the Enter that COMMITS an IME candidate is not a decision about this popup.
+      // session.js already drops it before delegating; this second guard keeps `attach()`
+      // safe for any other caller, so accepting a tag can never happen mid-composition.
+      if (e && (e.isComposing || e.keyCode === 229)) return false;
       const key = e && e.key;
       if (key === "Escape" && pop.open) {
         close();

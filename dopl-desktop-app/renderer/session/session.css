@@ -234,6 +234,24 @@ html, body {
    natural height; the stream itself (overflow-y:auto) scrolls. */
 .stream > * { flex: 0 0 auto; }
 
+/* ── R2 BUG: the transcript could be read but not copied ───────────────────
+   html/body set `user-select: none` so the app chrome does not select like a web page,
+   and only seven descendants opted back in. Everything the operator actually needs to
+   quote was on the wrong side of that line: what their agent said, what the peer replied,
+   a tool result, a system notice. The sharpest tell was a PENDING outbound draft, which
+   WAS selectable and stopped being so the instant the operator approved it (the pending
+   class drops in makeOutbound.update). This hands back the stream's TEXT CONTENT and
+   nothing else: buttons, the header, the status strip and the selects stay unselectable,
+   so a drag across the window still cannot smear-select the chrome. */
+.stream .body,
+.stream .outbound__body,
+.stream .tool-result,
+.stream .notice,
+.stream .history-divider {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Turn bubbles */
 .bubble {
   max-width: 100%; /* the lane class owns the 66% cap; this is the item-4 upper bound */

@@ -1,16 +1,14 @@
 // Session lifecycle state machine (v1.9 Session Window, Track T1).
 //
-// PURE module: no electron / SDK / fs / path / crypto references anywhere in the extracted block
-// below, so test/session-reducer.test.mjs slices the sentinel block and evaluates it verbatim in
-// a plain Node context (same idiom as classify / tool-profiles).
+// PURE module: no electron / SDK / fs / path / crypto references anywhere in the extracted block below, so
+// test/session-reducer.test.mjs slices the sentinel block and evaluates it verbatim in a plain Node context
+// (same idiom as classify / tool-profiles).
 //
-// `sessionReducer(state, event) -> { state, effects }` is the single decision point for the
-// imperative shell (session-engine.js), which EXECUTES the returned effects — every effect is a
-// side-effect-FREE descriptor ({ type, ... }), never a callback or a live handle. It NEVER holds
-// message/prompt text longer than one event and NEVER builds a prompt string (framing lives in
-// prompt-framing / session-io, applied by the shell), so it stays a pure function of (state,
-// event). The conceptual pendingPermissions / allowForTask Sets (§A.3) are dedup ARRAYS so the
-// state deep-equals cleanly in the extraction test; membership semantics are identical.
+// `sessionReducer(state, event) -> { state, effects }` is the single decision point for the imperative shell
+// (session-engine.js), which EXECUTES the returned effects — every effect is a side-effect-FREE descriptor
+// ({ type, ... }), never a callback or a live handle. It NEVER holds message/prompt text longer than one event
+// and NEVER builds a prompt string (framing lives in prompt-framing / session-io, applied by the shell), so it
+// stays a pure function of (state, event). The conceptual pendingPermissions / allowForTask Sets (§A.3) are dedup ARRAYS so the state deep-equals cleanly in the extraction test; membership semantics are identical.
 
 // ─── BEGIN SESSION-REDUCER (pure; unit-tested via source extraction) ─────────
 
@@ -98,10 +96,9 @@ function gatePhase(state, phase) {
   return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
 }
 
-// The effect set shared by every non-close_task end (operator End, turn/cost cap): abort the query,
-// tell the renderer, settle the record. These leave the channel TASK open (resumable) — no
-// task_finished. P3: a real end ALSO posts a CALM lifecycle so the web card stops pulsing
-// "Working…". Idle never reaches here; it PARKS instead.
+// The effect set shared by every non-close_task end (operator End, turn/cost cap): abort the query, tell the
+// renderer, settle the record. These leave the channel TASK open (resumable) — no task_finished. P3: a real end
+// ALSO posts a CALM lifecycle so the web card stops pulsing "Working…". Idle never reaches here; it PARKS instead.
 function endedEmit(state, outcome, reason, summary) {
   const payload = { type: 'ended', outcome: outcome, totalCostUsd: state.costUsd, reason: reason };
   if (summary !== undefined) payload.summary = summary;
@@ -128,10 +125,9 @@ function modesEmit(state) {
   return { type: 'emit', payload: { type: 'modes', tool: state.toolMode, message: state.messageMode } };
 }
 
-// P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise
-// fail-closed, tear down the live query, clear (never re-arm) the idle timer, persist phase
-// 'parked', tell the renderer. NOT settled: no `settle`, no `win.destroy`, no registry removal, and
-// sdkSessionId is retained, so a lazy wake can resume it.
+// P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise fail-closed, tear down
+// the live query, clear (never re-arm) the idle timer, persist phase 'parked', tell the renderer. NOT settled: no
+// `settle`, no `win.destroy`, no registry removal, and sdkSessionId is retained, so a lazy wake can resume it.
 function parkEffects(state) {
   const effects = [
     { type: 'denyPending' },
@@ -212,10 +208,14 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'launched') {
+    // AUDIT F8: gatePhase, like every other phase flip. This branch set 'running' flat, so a
+    // resumed SDK booting under a HELD inbound card clobbered the "Message waiting" pill to
+    // "Working" while the card was still unanswered (the persist effect wrote it to disk too).
+    const phase = gatePhase(state, 'running');
     return {
-      state: clone(state, { phase: 'running' }),
+      state: clone(state, { phase: phase }),
       effects: [
-        { type: 'persist', phase: 'running' },
+        { type: 'persist', phase: phase },
         { type: 'emit', payload: event.payload },
         { type: 'lifecycle', kind: 'task_started', extra: {} },
         { type: 'scheduleIdle' },

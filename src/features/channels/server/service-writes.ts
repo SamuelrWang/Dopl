@@ -19,6 +19,7 @@ import {
 import type { AgentToolProfile, NotifyScope } from "../types";
 import { mapMemberRow, mapMessageRow } from "./dto";
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
 import { resolvePostMetadata } from "./service-writes-metadata";
 import {
@@ -109,14 +110,7 @@ async function createDirectChannel(
     ctx.workspaceId,
     directKey
   );
-  if (existing) {
-    if (existing.deleted_at) {
-      await repo.reviveChannel(ctx.workspaceId, existing.id);
-      await ensureDirectMember(ctx, existing.id, ctx.userId, "owner");
-      await ensureDirectMember(ctx, existing.id, memberUserId, "member");
-    }
-    return getChannel(ctx, existing.id);
-  }
+  if (existing) return reopenDirectChannel(ctx, existing, memberUserId);
 
   const taken = await repo.existingSlugs(ctx.workspaceId);
   const slug = slugify("direct-message", "dm", taken);
@@ -136,11 +130,20 @@ async function createDirectChannel(
       direct_key: directKey,
     });
   } catch (err) {
-    // A concurrent open collides on the partial unique index — converge on the
-    // existing row instead of surfacing the race.
+    // A 23505 here is either the direct_key index (a concurrent open of the
+    // SAME pair) or the workspace slug index (a concurrent create that took
+    // the slug this call had already picked). Look the pair up INCLUDING
+    // soft-deleted rows — the same reason the pre-insert lookup does — and
+    // converge on it; a slug race resolves to nothing and surfaces as a clean
+    // 409 instead of the raw 23505 becoming a generic 500 on "open direct
+    // message".
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
-      const raced = await repo.findDirectChannel(ctx.workspaceId, directKey);
-      if (raced) return getChannel(ctx, raced.id);
+      const raced = await repo.findDirectChannelAnyStatus(
+        ctx.workspaceId,
+        directKey
+      );
+      if (raced) return reopenDirectChannel(ctx, raced, memberUserId);
+      throw new ChannelSlugConflictError(slug);
     }
     throw err;
   }
@@ -161,6 +164,24 @@ async function createDirectChannel(
   });
 
   return getChannel(ctx, channel.id);
+}
+
+/**
+ * Return an existing direct channel, reviving it first when it was
+ * soft-deleted (un-hidden, both member rows restored) so the same conversation
+ * — and its history — reopens. A live row is returned as-is.
+ */
+async function reopenDirectChannel(
+  ctx: ChannelContext,
+  existing: { id: string; deleted_at: string | null },
+  memberUserId: string
+): Promise<Channel> {
+  if (existing.deleted_at) {
+    await repo.reviveChannel(ctx.workspaceId, existing.id);
+    await ensureDirectMember(ctx, existing.id, ctx.userId, "owner");
+    await ensureDirectMember(ctx, existing.id, memberUserId, "member");
+  }
+  return getChannel(ctx, existing.id);
 }
 
 /**
@@ -245,7 +266,7 @@ export async function postMessage(
 
   // Idempotency: a re-sent client_msg_id returns the stored message.
   if (input.clientMsgId) {
-    const existing = await repo.findMessageByClientId(channel.id, input.clientMsgId);
+    const existing = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
     if (existing) return hydrateOne(existing);
   }
 
@@ -263,7 +284,7 @@ export async function postMessage(
 
   let row;
   try {
-    row = await repo.insertMessage({
+    row = await repoMessages.insertMessage({
       channel_id: channel.id,
       workspace_id: ctx.workspaceId,
       author_user_id: ctx.userId,
@@ -276,7 +297,7 @@ export async function postMessage(
   } catch (err) {
     // Lost an idempotency race — converge on the stored winner.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
-      const raced = await repo.findMessageByClientId(channel.id, input.clientMsgId);
+      const raced = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
       if (raced) return hydrateOne(raced);
     }
     throw err;
@@ -288,7 +309,7 @@ export async function postMessage(
 }
 
 async function hydrateOne(
-  row: Awaited<ReturnType<typeof repo.insertMessage>>
+  row: Awaited<ReturnType<typeof repoMessages.insertMessage>>
 ): Promise<ChannelMessage> {
   if (!row.author_user_id) return mapMessageRow(row, undefined);
   const profiles = await profilesById([row.author_user_id]);

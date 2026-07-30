@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { declsOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -448,20 +449,32 @@ test("a hidden window RESHOWS for an outbound decision (it needs the operator)",
 });
 
 test("the card's recipe is a full-width sibling of the inbound gate card, distinctly accented", () => {
-  assert.match(CSS, /\.outbound-pending \{ border-color: var\(--warning\); \}/, "its own accent");
-  assert.match(CSS, /\.outbound-pending \.outbound__banner \{[\s\S]*?background: var\(--bg-elevated\)/,
+  assert.deepEqual(declsOf(CSS, ".outbound-pending"), { "border-color": "var(--warning)" }, "its own accent");
+  assert.equal(declsOf(CSS, ".outbound-pending .outbound__banner").background, "var(--bg-elevated)",
     "the delivered CTA band only appears once it has actually left");
-  assert.match(CSS, /\.outbound-pending__to\.is-cross \{[\s\S]*?color: var\(--danger\)/, "cross-channel is marked");
-  assert.match(CSS, /\.outbound-pending \.outbound__body \{\n\s*max-height: 200px; overflow: auto;/, "a long draft scrolls");
-  assert.match(CSS, /\.outbound-pending \.row \{[\s\S]*?flex-wrap: wrap;/, "the buttons wrap, never shrink-clip");
+  assert.equal(declsOf(CSS, ".outbound-pending__to.is-cross").color, "var(--danger)", "cross-channel is marked");
+  const draft = declsOf(CSS, ".outbound-pending .outbound__body");
+  assert.equal(draft["max-height"], "200px", "a long draft scrolls");
+  assert.equal(draft.overflow, "auto");
+  assert.equal(declsOf(CSS, ".outbound-pending .row")["flex-wrap"], "wrap", "the buttons wrap, never shrink-clip");
   // The delivered / not-sent recipes it morphs into are untouched.
-  assert.match(CSS, /\.outbound \{\n\s*align-self: stretch;\n\s*max-width: 100%;/);
-  assert.match(CSS, /\.outbound\.is-not-sent \{ border-color: var\(--border-strong\); \}/);
+  const delivered = declsOf(CSS, ".outbound");
+  assert.equal(delivered["align-self"], "stretch");
+  assert.equal(delivered["max-width"], "100%");
+  assert.deepEqual(declsOf(CSS, ".outbound.is-not-sent"), { "border-color": "var(--border-strong)" });
 });
 
+// AUDIT R3(a) — THE FAIL-OPEN THIS FILE SHIPPED. The factory used to be extracted with
+// `src.slice(src.indexOf("function makeOutbound("), src.indexOf("function makeNotice("))`,
+// which is "" whenever makeNotice is declared ABOVE makeOutbound — and every negative
+// assertion below then passes VACUOUSLY, i.e. moving one function silently disarmed an XSS
+// guard while the suite stayed green. fnOf() brace-matches makeOutbound's REAL body, so
+// there is no marker order left to invert.
 test("no id or absolute path leaks into the card beyond the requestId it must answer with", () => {
   const src = readFileSync(R("session-render.js"), "utf8");
-  const factory = src.slice(src.indexOf("function makeOutbound("), src.indexOf("function makeNotice("));
+  const factory = fnOf(src, "makeOutbound");
+  assert.ok(factory.startsWith("function makeOutbound("), "a REAL block, never an empty slice");
+  assert.ok(factory.includes("outbound__body"), "and the whole body, not a prefix of it");
   assert.ok(!/toolUseId|sessionId|channelId|pendingId/.test(factory), "no ids are printed on the card");
   assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML/.test(factory), "textContent only");
 });

@@ -77,7 +77,17 @@ function classify(m, entry, myId) {
   // addressed-to-me + authored-by-the-target (autonomous mode, an old message
   // with no taskMode, a non-message kind rejected by the guards above) falls
   // through UNCHANGED.
+  //
+  // AUDIT D1: the suppression is AGENT-ONLY. The predicate below is EXACTLY the shape of
+  // a human responder @-tagging the requester back (the 1.7.9 peer-post path posts
+  // authorKind 'user' with the same server-stamped task keys), and a passive notice has no
+  // consent row, no gate and no Accept, so a person's addressed message could be swallowed
+  // into a banner whenever the pre-classify routes missed it (no live session AND no
+  // durable record or no window budget). A HUMAN addressing me always gates: a 'user'
+  // author falls through to the addressed rule below and returns 'trigger'. Only the
+  // AGENT reply this branch was designed for stays passive news.
   if (
+    m.authorKind === 'agent' &&
     metaStr(m, 'taskId') &&
     metaStr(m, 'taskMode') === 'interactive' &&
     toUserId === myId &&

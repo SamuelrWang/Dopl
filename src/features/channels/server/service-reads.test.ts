@@ -10,10 +10,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-messages");
 vi.mock("./repository-collab");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
 import {
@@ -145,7 +147,7 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
   }
 
   it("skips the watermark write when the thread is empty", async () => {
-    vi.mocked(repo.listMessages).mockResolvedValue([]);
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([]);
     await readMessages(ctx, "general", { limit: 50 });
     expect(repo.updateLastRead).not.toHaveBeenCalled();
   });
@@ -155,7 +157,7 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
       ...memberRow(USER, "all"),
       last_read_at: "2026-07-27T12:00:00.000Z",
     });
-    vi.mocked(repo.listMessages).mockResolvedValue([
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
       messageRow(1, "2026-07-27T11:00:00.000Z"),
       messageRow(2, "2026-07-27T12:00:00.000Z"),
     ]);
@@ -168,7 +170,7 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
       ...memberRow(USER, "all"),
       last_read_at: "2026-07-27T12:00:00.000Z",
     });
-    vi.mocked(repo.listMessages).mockResolvedValue([
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
       messageRow(3, "2026-07-27T12:30:00.000Z"),
       messageRow(4, "2026-07-27T13:00:00.000Z"),
     ]);
@@ -182,7 +184,7 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
   });
 
   it("writes on first read (null watermark) with the newest message time", async () => {
-    vi.mocked(repo.listMessages).mockResolvedValue([
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
       messageRow(1, "2026-07-27T10:00:00.000Z"),
     ]);
     await readMessages(ctx, "general", { limit: 50 });
@@ -261,7 +263,7 @@ describe("listChannels — direct peer resolution", () => {
       { ...channelRow(), id: "dm-1", is_direct: true, direct_key: directKey },
     ]);
     vi.mocked(repo.memberCounts).mockResolvedValue(new Map());
-    vi.mocked(repo.lastMessages).mockResolvedValue(new Map());
+    vi.mocked(repoMessages.lastMessages).mockResolvedValue(new Map());
     vi.mocked(collab.channelMemberUserIds).mockResolvedValue(
       new Map([
         ["chan-1", [USER]],

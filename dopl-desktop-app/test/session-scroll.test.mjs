@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { declsOf, declaredProps } from "./helpers/source-probe.mjs";
 
 const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.url));
 const JS = readFileSync(R("session.js"), "utf8");
@@ -33,8 +34,21 @@ assert.notEqual(to, -1, "END SESSION-SCROLL-PURE sentinel missing");
 assert.ok(to > from, "SESSION-SCROLL-PURE sentinels out of order");
 const BLOCK = JS.slice(from, to);
 
-for (const banned of ["document", "window", "els.", "addEventListener", "state.", "require("]) {
-  assert.ok(!BLOCK.includes(banned), `SESSION-SCROLL-PURE block must not reference ${banned}`);
+// The purity check, WORD-BOUNDED and comment-blind. It used to be a raw substring ban, so a
+// perfectly pure local named `lastState.` — or the word "document" inside the block's own
+// explanatory comment — would have red-lined it. Comments are stripped first (a comment
+// cannot reference anything at runtime), then each ban is anchored to a real identifier.
+const CODE = BLOCK.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+const BANNED = [
+  [/(?<![\w$.])document\b/, "document"],
+  [/(?<![\w$.])window\b/, "window"],
+  [/(?<![\w$.])els\s*\./, "els."],
+  [/(?<![\w$.])addEventListener\s*\(/, "addEventListener("],
+  [/(?<![\w$.])state\s*\./, "state."],
+  [/(?<![\w$.])require\s*\(/, "require("],
+];
+for (const [pattern, label] of BANNED) {
+  assert.ok(!pattern.test(CODE), `SESSION-SCROLL-PURE block must not reference ${label}`);
 }
 
 const { shouldPinStream, streamTail, forwardedWheelDelta } = new Function(
@@ -190,24 +204,26 @@ test("wiring: the stream listens for its own scroll and forwards the wheel", () 
 });
 
 test("CSS: the tool card's OUTPUT block has no scroller of its own any more", () => {
-  const result = CSS.slice(CSS.indexOf(".tool-result {"), CSS.indexOf(".tool-result {") + 400);
-  const rule = result.slice(0, result.indexOf("}"));
-  // Declarations only — the rule still CARRIES a comment saying why the cap is gone.
-  assert.ok(!/^\s*max-height\s*:/m.test(rule), "the 240px cap is GONE (main caps the string at 240 chars)");
-  assert.ok(!/^\s*overflow\s*:\s*auto/m.test(rule), "and with it the wheel trap");
-  assert.match(rule, /white-space: pre-wrap;/, "wrapping is what actually contained it");
-  assert.match(rule, /overflow-wrap: anywhere;/);
+  // Parsed as {prop: value}: the rule still CARRIES a comment saying why the cap is gone, and
+  // the old `indexOf(x) + 400` window would have silently swallowed the next rule if this one
+  // ever grew past 400 characters.
+  const rule = declsOf(CSS, ".tool-result");
+  assert.ok(!("max-height" in rule), "the 240px cap is GONE (main caps the string at 240 chars)");
+  assert.ok(!("overflow" in rule), "and with it the wheel trap");
+  assert.equal(rule["white-space"], "pre-wrap", "wrapping is what actually contained it");
+  assert.equal(rule["overflow-wrap"], "anywhere");
 });
 
 test("CSS: the one genuinely unbounded block keeps a LARGE cap, not a 240px one", () => {
-  const pre = CSS.slice(CSS.indexOf(".tool-card__body pre {"), CSS.indexOf(".tool-result {"));
-  assert.match(pre, /max-height: 60vh;/, "60vh: pretty(inputFull) can be a whole file");
-  assert.match(pre, /overflow: auto;/, "so it still scrolls — the wheel forwarding is what unsticks it");
+  const pre = declsOf(CSS, ".tool-card__body pre");
+  assert.equal(pre["max-height"], "60vh", "60vh: pretty(inputFull) can be a whole file");
+  assert.equal(pre.overflow, "auto", "so it still scrolls — the wheel forwarding is what unsticks it");
 });
 
 test("CSS: overscroll-behavior is NOT the fix (it blocks chaining, the opposite)", () => {
-  // The stylesheet EXPLAINS why it is absent; what must never appear is the declaration.
-  assert.ok(!/^\s*overscroll-behavior\s*:/m.test(CSS), "chaining is wanted here, not suppressed");
+  // The stylesheet EXPLAINS why it is absent, so this is asked of the DECLARED properties
+  // rather than of the raw text: the prose may name it, no rule may set it.
+  assert.ok(!declaredProps(CSS).has("overscroll-behavior"), "chaining is wanted here, not suppressed");
 });
 
 // ── BOOT: the same two decisions through the REAL wiring ─────────────────────
@@ -325,10 +341,41 @@ test("boot: a wheel over the stream itself is never intercepted", () => {
 });
 
 test("CSS: the outer scroll chain and the item pins are untouched", () => {
-  assert.match(CSS, /\.stream-wrap \{ flex: 1; min-height: 0; display: flex; \}/);
-  assert.match(CSS, /\.stream \{\n\s*flex: 1; min-height: 0; overflow-y: auto;/);
-  assert.match(CSS, /\.stream > \* \{ flex: 0 0 auto; \}/);
+  assert.deepEqual(declsOf(CSS, ".stream-wrap"), { flex: "1", "min-height": "0", display: "flex" });
+  const stream = declsOf(CSS, ".stream");
+  assert.equal(stream.flex, "1");
+  assert.equal(stream["min-height"], "0");
+  assert.equal(stream["overflow-y"], "auto");
+  assert.deepEqual(declsOf(CSS, ".stream > *"), { flex: "0 0 auto" });
   // The pending-draft cap STAYS: it is what keeps Send / Deny reachable. It is unstuck by
   // the wheel forwarding above instead of by removing the cap.
-  assert.match(CSS, /\.outbound-pending \.outbound__body \{\n\s*max-height: 200px; overflow: auto;/);
+  const draft = declsOf(CSS, ".outbound-pending .outbound__body");
+  assert.equal(draft["max-height"], "200px");
+  assert.equal(draft.overflow, "auto");
+});
+
+// ── R2: the transcript is selectable, the chrome is not ───────────────────────
+// The stream's own text was collateral damage of the app-wide `user-select: none`: a
+// PENDING outbound draft opted back in and lost it again the moment it was approved, so
+// the operator could copy a draft but not the message that was actually delivered.
+
+test("CSS: every text surface in the stream is selectable, and only those", () => {
+  const readable = [
+    ".stream .body", // agent / operator / counterparty / history / gate-card bodies
+    ".stream .outbound__body", // the DELIVERED record, not just the pending draft
+    ".stream .tool-result",
+    ".stream .notice",
+    ".stream .history-divider",
+  ];
+  for (const sel of readable) {
+    const rule = declsOf(CSS, readable.join(", "));
+    assert.equal(rule["user-select"], "text", `${sel} must be copyable`);
+    assert.equal(rule["-webkit-user-select"], "text", "and on the prefixed property Chromium reads");
+  }
+  // The app-wide reset is still what the chrome inherits: buttons, the header, the status
+  // strip and the selects must not smear-select when a drag crosses them.
+  const body = declsOf(CSS, "html, body");
+  assert.equal(body["user-select"], "none", "the chrome default is unchanged");
+  // The rule is scoped INSIDE the stream, so nothing outside the transcript is loosened.
+  for (const sel of readable) assert.ok(sel.startsWith(".stream "), `${sel} is stream-scoped`);
 });

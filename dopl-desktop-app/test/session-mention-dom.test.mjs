@@ -92,6 +92,48 @@ const rows = () => pop.children.filter((c) => c.className.includes("mention-opt"
 const rowText = (r) => r.children.map((c) => c.textContent);
 const selected = () => rows().findIndex((r) => r.classList.contains("is-sel"));
 
+// ── THE GAP (audit R3): a renderer state with init === null AND a populated stream ────
+// Nothing anywhere constructed one, which is exactly the H1 failure the last round fixed: a
+// dropped `init` leaves the composer with no peer name, and an @-tag then mis-delivers. These
+// two run FIRST, against the virgin controller, so `state.init` is genuinely null while the
+// stream fills — the shape a window really has when events arrive before (or instead of) the
+// init payload.
+
+test("GAP init===null: a full stream still renders, and no identity is invented", () => {
+  feed({ type: "turn", role: "assistant", text: "on it", streaming: false });
+  feed({ type: "counterparty", from: "David", text: "thanks" });
+  feed({ type: "tool_use", toolUseId: "t1", name: "Bash", inputFull: { command: "ls" } });
+  feed({ type: "outbound_post", toolUseId: "t2", to: "David", text: "sent" });
+  feed({ type: "error", message: "boom" });
+  const kids = $("stream").children;
+  assert.equal(kids.length, 5, "every item renders with no init to key off");
+  assert.deepEqual(
+    kids.map((n) => (n.classList.contains("lane-me") ? "me" : n.classList.contains("lane-them") ? "them" : null)),
+    ["me", "them", "me", null, null],
+    "the lane mapping keys on the item KIND, never on init"
+  );
+  // renderInit() returns early rather than painting a header out of nothing.
+  assert.equal($("channelName").textContent, "", "no header identity is invented");
+  assert.equal(document.title, "", "and the native window title is left alone");
+});
+
+test("GAP init===null: a peer tag is UNDELIVERABLE, never silently mis-addressed", () => {
+  type("@");
+  assert.ok(!pop.classList.contains("hidden"), "the popup still works without an init");
+  assert.equal(rows().length, 1, "the self row only: there is no peer name to derive a slug from");
+  assert.deepEqual(rowText(rows()[0]), ["@my-agent", "Your agent"]);
+  // `@their-agent` is a permanent alias, but only ALONGSIDE a real peer. With no init it has
+  // to fall through to a literal steer; the H1 symptom was a draft leaving as a peer post.
+  const before = sent.length;
+  type("@their-agent ship it");
+  assert.ok(pop.classList.contains("hidden"), "no peer row to offer");
+  key("Enter");
+  assert.deepEqual(sent.slice(before), [["send", "@their-agent ship it"]], "one steer, nothing to the peer");
+  assert.ok(!sent.some((call) => call[0] === "sendToPeer"), "sendToPeer was never reached");
+  assert.equal(steer.value, "");
+  type(""); // leave the composer as the tests below expect to find it
+});
+
 test("boot: the session knows its peer (the peer row is derived from the init name)", () => {
   feed({ type: "init", sessionId: "s1", side: "requester", channelName: "Ops", from: "David" });
   assert.ok(pop.classList.contains("hidden"), "the popup starts hidden and empty");
@@ -314,4 +356,64 @@ test("auto-grow still tracks the content and caps at 3 line-heights", () => {
   steer.scrollHeight = 33;
   steer.fire("input");
   assert.equal(steer.style.height, "33px");
+});
+
+// ── R1: an IME candidate commit must never send, and must never accept a tag ──
+// Chromium fires keydown with key "Enter" and `isComposing: true` when a CJK candidate is
+// COMMITTED (older builds only set keyCode 229). The handler used to preventDefault and then
+// either accept the highlighted @-row or call sendSteer(), so confirming a candidate shipped a
+// half-composed message — and a peer-tagged one leaves this machine into the peer's channel,
+// where it cannot be recalled. The guard is the FIRST line of the keydown handler, ahead of
+// the popup delegation, which is why the popup-open case below is the load-bearing one.
+
+test("R1: a COMPOSING Enter with the popup OPEN accepts nothing and sends nothing", () => {
+  for (const [label, ev] of [
+    ["isComposing", { key: "Enter", shiftKey: false, isComposing: true }],
+    ["keyCode 229", { key: "Enter", shiftKey: false, keyCode: 229 }], // older Chromium
+  ]) {
+    const before = sent.length;
+    type("@d");
+    assert.ok(!pop.classList.contains("hidden"), `${label}: the popup is open`);
+    let prevented = false;
+    steer.fire("keydown", { ...ev, preventDefault: () => { prevented = true; } });
+    assert.equal(steer.value, "@d", `${label}: no tag was accepted`);
+    assert.equal(sent.length, before, `${label}: nothing crossed the bridge`);
+    assert.equal(prevented, false, `${label}: the IME keeps its own keystroke`);
+    assert.ok(!pop.classList.contains("hidden"), `${label}: and the popup is still open`);
+  }
+});
+
+test("R1: a COMPOSING Enter with the popup CLOSED does not send the draft either", () => {
+  const before = sent.length;
+  type("にほんご");
+  assert.ok(pop.classList.contains("hidden"), "no leading @, so no popup to consume it");
+  steer.fire("keydown", { key: "Enter", shiftKey: false, isComposing: true, preventDefault() {} });
+  assert.equal(sent.length, before, "the half-composed draft stays in the operator's hands");
+  assert.equal(steer.value, "にほんご", "and the field is not cleared");
+  steer.fire("keydown"); // the harness idiom is `ev || {}`: the absent properties must not throw
+  assert.equal(sent.length, before, "an event with no key is not an Enter");
+});
+
+test("R1: the Enter AFTER the composition ends still sends, exactly once", () => {
+  const ev = key("Enter");
+  assert.deepEqual(sent.at(-1), ["send", "にほんご"], "the committed text is delivered");
+  assert.ok(ev.prevented, "and the newline is suppressed as before");
+  assert.equal(steer.value, "");
+});
+
+test("R1: the popup's own handleKey refuses a composing Enter (attach() is public API)", () => {
+  // session.js returns before delegating, so this second guard only matters for another
+  // caller of attach() — which is exactly why it is worth pinning rather than assuming.
+  const input = makeEl("textarea");
+  const host = makeEl("div");
+  const options = [{ slug: "my-agent", kind: "self", label: "Your agent", aliases: [] }];
+  const popup = globalThis.DoplSessionMentionUI.attach({ input, host, getOptions: () => options });
+  input.value = "@my";
+  input.fire("input");
+  assert.ok(popup.isOpen(), "the popup is showing the self row");
+  assert.equal(popup.handleKey({ key: "Enter", isComposing: true }), false, "not consumed");
+  assert.equal(popup.handleKey({ key: "Enter", keyCode: 229 }), false);
+  assert.equal(input.value, "@my", "and nothing was accepted");
+  assert.equal(popup.handleKey({ key: "Enter" }), true, "a real Enter still accepts");
+  assert.equal(input.value, "@my-agent ");
 });
