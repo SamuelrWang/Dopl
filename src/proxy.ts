@@ -58,6 +58,76 @@ const SELF_AUTH_ROUTES = [
   "/api/cron/",
 ];
 
+// Q4 (2026-07-31) — THE LOOP BREAKER for the `/login → /canvas` bounce below.
+//
+// This middleware decides "who is signed in" from LOCALLY verified claims
+// (`getClaims()`), but every server component still asks GoTrue over the network
+// (`shared/supabase/server.ts` → `getUser()`). Those two can DISAGREE, and
+// supabase-js does not throw when they do: a GoTrue outage, a 503, or an account
+// disabled server-side all come back as `{ data: { user: null }, error }`, so the
+// page's `if (!user) redirect("/login")` fires while the middleware still reads
+// the request as authenticated. The result was a hard cycle —
+//   /login → 307 /canvas → page redirects → /login → 307 /canvas → …
+// → ERR_TOO_MANY_REDIRECTS, no error page, during EXACTLY the GoTrue degradation
+// the local-claims swap exists to survive. Before that swap the operator simply
+// landed on the login screen.
+//
+// The breaker restores that outcome without needing the two layers to agree:
+// count the bounces we hand out per browser, and once a browser has been bounced
+// off `/login` LIMIT times inside the TTL, SERVE `/login` instead of bouncing
+// again. Worst case is 2 extra hops; the cycle cannot be unbounded. It is
+// deliberately a dumb counter — no shared state, no network, nothing that can
+// itself fail during an auth incident.
+//
+// A claims fallback inside the server-side `getUser()` helper would be a
+// complement, not a substitute: it can only cover the RETRYABLE network shape.
+// A disabled or deleted account returns an authoritative 403 with a still-valid
+// unexpired token (up to ~1h), and that must keep reading as "signed out" — so
+// the disagreement, and therefore the loop, survives any such fallback. The
+// breaker is the only stop that covers both.
+const LOGIN_BOUNCE_COOKIE = "dopl-login-bounce";
+const LOGIN_BOUNCE_LIMIT = 2;
+/**
+ * Long enough that a loop whose hops are SLOW (a degraded GoTrue makes every
+ * page render wait on a doomed `/auth/v1/user` call) still reaches the limit
+ * before the counter expires; short enough that it is gone by the next visit.
+ * It is also cleared eagerly on the first healthy authenticated page view.
+ */
+const LOGIN_BOUNCE_TTL_SECONDS = 30;
+
+/**
+ * Redirect while KEEPING whatever cookies `getClaims()` rotated onto
+ * `supabaseResponse`. `getSession()` refreshes the session ~90s before expiry and
+ * writes the new tokens through the storage adapter onto that response object —
+ * returning a bare `NextResponse.redirect()` drops them, so the rotated refresh
+ * token is never persisted and the NEXT request retries the refresh with a token
+ * the server already consumed. That is a spurious sign-out, i.e. another way into
+ * the login bounce this file is trying to make safe.
+ */
+function redirectPreservingSession(
+  url: URL,
+  supabaseResponse: NextResponse,
+  status?: number
+): NextResponse {
+  const response =
+    status === undefined
+      ? NextResponse.redirect(url)
+      : NextResponse.redirect(url, status);
+  for (const cookie of supabaseResponse.cookies.getAll()) {
+    response.cookies.set(cookie);
+  }
+  return response;
+}
+
+function readLoginBounces(request: NextRequest): number {
+  const raw = Number(request.cookies.get(LOGIN_BOUNCE_COOKIE)?.value);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+}
+
+function clearLoginBounces(response: NextResponse): void {
+  response.cookies.set(LOGIN_BOUNCE_COOKIE, "", { path: "/", maxAge: 0 });
+}
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -151,7 +221,7 @@ export async function proxy(request: NextRequest) {
   ) {
     const url = request.nextUrl.clone();
     url.pathname = pathname.toLowerCase();
-    return NextResponse.redirect(url, 308);
+    return redirectPreservingSession(url, supabaseResponse, 308);
   }
 
   // Allow OG / Twitter image routes through for social crawlers that
@@ -168,9 +238,50 @@ export async function proxy(request: NextRequest) {
 
   // If authenticated, redirect landing page and login to /canvas
   if (userId && (pathname === "/" || pathname === "/login")) {
+    // Q4: only `/login` can loop — it is the only path a server component
+    // redirects to (`if (!user) redirect("/login")`, 19 call sites), and
+    // nothing redirects to `/`.
+    const bounces = pathname === "/login" ? readLoginBounces(request) : 0;
+    if (bounces >= LOGIN_BOUNCE_LIMIT) {
+      // Break the cycle: serve the login screen (what this request would get if
+      // it were signed out) rather than bouncing into a page that will send it
+      // straight back. `/login` is a PUBLIC_ROUTE, so passing through here is
+      // the same response the branch further down would return.
+      clearLoginBounces(supabaseResponse);
+      return supabaseResponse;
+    }
+
     const url = request.nextUrl.clone();
     url.pathname = "/canvas";
-    return NextResponse.redirect(url);
+    const response = redirectPreservingSession(url, supabaseResponse);
+    if (pathname === "/login") {
+      response.cookies.set(LOGIN_BOUNCE_COOKIE, String(bounces + 1), {
+        path: "/",
+        maxAge: LOGIN_BOUNCE_TTL_SECONDS,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: request.nextUrl.protocol === "https:",
+      });
+    }
+    return response;
+  }
+
+  // Q4: a healthy authenticated page view means the browser is NOT in the
+  // bounce cycle, so retire the counter — otherwise a single legitimate
+  // `/login` visit would leave it armed for the rest of the TTL and a later
+  // visit could land on the login screen for no reason. Written only when the
+  // cookie actually exists (no `Set-Cookie` on the hot path), and NEVER for
+  // `/canvas`, which is the cycle's own midpoint — clearing there would reset
+  // the counter on every lap and the loop would never terminate. `/api/*` is
+  // excluded for the same reason: a background poll in another tab must not
+  // disarm the breaker for the tab that is looping.
+  if (
+    userId &&
+    pathname !== "/canvas" &&
+    !pathname.startsWith("/api/") &&
+    request.cookies.has(LOGIN_BOUNCE_COOKIE)
+  ) {
+    clearLoginBounces(supabaseResponse);
   }
 
   // Allow the landing page (exact match)
@@ -206,7 +317,12 @@ export async function proxy(request: NextRequest) {
     if (pathname !== "/" && pathname !== "/canvas") {
       url.searchParams.set("redirectTo", pathname);
     }
-    return NextResponse.redirect(url);
+    // Preserve the cookie writes: a REFUSED refresh clears the session through
+    // the storage adapter, and that clearing must reach the browser or the dead
+    // cookie survives and every later request retries the same doomed refresh.
+    // Server components cannot do this (their cookie writes are swallowed), so
+    // the middleware is the only layer that can make the state self-heal.
+    return redirectPreservingSession(url, supabaseResponse);
   }
 
   return supabaseResponse;

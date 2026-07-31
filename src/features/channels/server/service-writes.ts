@@ -168,8 +168,18 @@ async function createDirectChannel(
 
 /**
  * Return an existing direct channel, reviving it first when it was
- * soft-deleted (un-hidden, both member rows restored) so the same conversation
- * — and its history — reopens. A live row is returned as-is.
+ * soft-deleted (un-hidden) so the same conversation — and its history —
+ * reopens. A live row is returned as-is.
+ *
+ * The two member rows are re-asserted on EVERY open, not only on the revive
+ * branch (Q2). A live DM with a torn roster is otherwise a dead end: the
+ * missing side reads the channel as not-found (`getChannel` →
+ * `loadVisibleChannel`), and the partial unique index on `direct_key` keeps
+ * the live row reserving the pair, so a fresh DM can't be created either.
+ * `removeMember` now refuses to tear a DM at all, but pairs damaged before
+ * that guard existed are unreachable by any other repair path — re-asserting
+ * here makes them self-heal on the next open, from EITHER side. Two membership
+ * reads on a dedup path (not a hot one) is the whole cost.
  */
 async function reopenDirectChannel(
   ctx: ChannelContext,
@@ -178,16 +188,17 @@ async function reopenDirectChannel(
 ): Promise<Channel> {
   if (existing.deleted_at) {
     await repo.reviveChannel(ctx.workspaceId, existing.id);
-    await ensureDirectMember(ctx, existing.id, ctx.userId, "owner");
-    await ensureDirectMember(ctx, existing.id, memberUserId, "member");
   }
+  await ensureDirectMember(ctx, existing.id, ctx.userId, "owner");
+  await ensureDirectMember(ctx, existing.id, memberUserId, "member");
   return getChannel(ctx, existing.id);
 }
 
 /**
- * Restore one member of a revived direct channel. A soft-delete leaves the
- * `channel_members` rows in place, but be robust to a partially torn-down DM:
- * re-insert only the row that went missing, with its original role.
+ * Restore one member of a reopened direct channel. A soft-delete leaves the
+ * `channel_members` rows in place, so this is normally a no-op: re-insert only
+ * the row that went missing. The caller takes `owner` and the peer `member`,
+ * so a pair healed from the evicted side still has someone who can manage it.
  */
 async function ensureDirectMember(
   ctx: ChannelContext,
@@ -233,13 +244,26 @@ export async function updateChannel(
   return getChannel(ctx, channel.id);
 }
 
-/** Soft-delete: hide from active reads, keep the row (`deleted_at`). */
+/**
+ * Soft-delete: hide from active reads, keep the row (`deleted_at`).
+ *
+ * A DM is the one case where BOTH members may do this. It has no real manage
+ * hierarchy — one side holds the `owner` row only because they happened to
+ * open the conversation — and on a DM the delete is the reversible op: either
+ * side's next open revives the same row WITH its history
+ * (`reopenDirectChannel`). Since a DM's membership is immutable (leaving is
+ * refused, see `removeMember`), this is also the only exit the non-creator
+ * has. Every other channel still requires owner / workspace-admin.
+ */
 export async function deleteChannel(
   ctx: ChannelContext,
   ref: string
 ): Promise<void> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!canManageChannel(ctx, membership)) {
+  const allowed = channel.is_direct
+    ? membership !== null
+    : canManageChannel(ctx, membership);
+  if (!allowed) {
     throw new ChannelForbiddenError("delete this channel");
   }
   await repo.softDeleteChannel(ctx.workspaceId, channel.id);
@@ -376,6 +400,9 @@ export async function addMember(
  * admin can remove anyone. Removing the caller's own row is always allowed —
  * except the LAST owner can neither leave nor be removed (that would orphan
  * the channel with no one able to manage it); transfer ownership first.
+ *
+ * A DM is exempt entirely: its 1:1 membership is immutable in BOTH directions
+ * (`addMember` already refused to add a third).
  */
 export async function removeMember(
   ctx: ChannelContext,
@@ -383,6 +410,15 @@ export async function removeMember(
   targetUserId: string
 ): Promise<void> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
+  // Q2 — deleting one of a DM's two rows is PERMANENT: `reopenDirectChannel`
+  // can revive a soft-deleted pair, but a torn LIVE pair reads as not-found to
+  // the missing side, and the partial unique index on `direct_key` keeps the
+  // live row reserving the pair so a fresh DM can't be opened either. The
+  // supported exit is deleting the CONVERSATION (soft-delete, reversible,
+  // available to both members) — never dropping a membership row.
+  if (channel.is_direct) {
+    throw new DirectChannelImmutableError("membership");
+  }
   const isSelf = targetUserId === ctx.userId;
   if (!isSelf && !canManageChannel(ctx, membership)) {
     throw new ChannelForbiddenError("remove this member");

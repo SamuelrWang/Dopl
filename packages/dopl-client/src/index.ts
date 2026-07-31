@@ -2,6 +2,7 @@ export { DoplClient } from "./client.js";
 export type { DoplClientOptions } from "./client.js";
 export { workspaceContext } from "./transport.js";
 export {
+  DoplAbortError,
   DoplApiError,
   DoplAuthError,
   DoplNetworkError,

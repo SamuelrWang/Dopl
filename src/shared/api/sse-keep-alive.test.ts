@@ -145,14 +145,14 @@ describe("withSseKeepAlive", () => {
 
 // ── the route this exists for ───────────────────────────────────────────────
 
-describe("/api/mcp transport shape", () => {
-  const routeSrc = readFileSync(
-    path.resolve(process.cwd(), "src", "app", "api", "mcp", "route.ts"),
-    "utf8"
-  );
-  /** Comments stripped — the file EXPLAINS the flag at length; only code counts. */
-  const routeCode = routeSrc.replace(/^\s*\/\/.*$/gm, "");
+const routeSrc = readFileSync(
+  path.resolve(process.cwd(), "src", "app", "api", "mcp", "route.ts"),
+  "utf8"
+);
+/** Comments stripped — the file EXPLAINS the flag at length; only code counts. */
+const routeCode = routeSrc.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
+describe("/api/mcp transport shape", () => {
   it("never re-enables JSON-response mode", () => {
     // Re-adding this flag restores the 60s time-to-headers abort for every
     // client, and no test that mocks the SDK would notice.
@@ -172,5 +172,71 @@ describe("/api/mcp transport shape", () => {
     // mirrored into the MCP package's deadline chain and pinned from there too.
     expect(routeSrc).toMatch(/export const runtime = "nodejs"/);
     expect(routeSrc).toMatch(/export const maxDuration = 300/);
+  });
+
+  it("hands the caller's abort signal to the loopback client (Q14)", () => {
+    // Without this the MCP handler never learns the client hung up, so an
+    // `op="await"` hold keeps re-issuing loopback polls for its whole budget.
+    // Source-level because the behavioural path needs a full authenticated
+    // transport boot; the wiring is one argument and losing it is silent.
+    expect(routeCode).toMatch(/signal: request\.signal/);
+  });
+});
+
+// ── FIX Q6: GET is 405, and is NOT the JSON-RPC handler ─────────────────────
+//
+// Routing GET to `handle` did not fail loudly, it failed by SUCCEEDING: the
+// stateless SDK transport answers a GET with 200 `text/event-stream` carrying a
+// stream nothing can ever write to or close (the transport is a per-request
+// local, so no POST invocation can reach it). While that stream was byte-silent
+// an intermediary reaped it in ~30-60s. `withSseKeepAlive` then started feeding
+// it a comment every 15s — exactly what stops it being reaped — so it survived
+// to `maxDuration`. Every SDK client opens it right after
+// `notifications/initialized` and reconnects when it ends, so the steady state
+// was one 300s function per connected client, renewed ~12x/hour, forever.
+//
+// These tests exist because nothing about that is visible from a passing suite:
+// the failure mode is a 200.
+
+describe("/api/mcp GET", () => {
+  it("answers 405 with an Allow header, and no event stream", async () => {
+    const { GET } = await import("@/app/api/mcp/route");
+    const response = GET();
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST, DELETE");
+    // The content type is the load-bearing half: a `text/event-stream` here is
+    // a stream that lives to maxDuration.
+    expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("is a DIFFERENT export from POST/DELETE", async () => {
+    // The exact regression: `export const GET = handle` makes these identical.
+    const { GET, POST, DELETE } = await import("@/app/api/mcp/route");
+    expect(GET).not.toBe(POST);
+    expect(GET).not.toBe(DELETE);
+    // …while POST and DELETE do still share the one JSON-RPC handler.
+    expect(POST).toBe(DELETE);
+  });
+
+  it("needs no request argument — it authenticates nothing", async () => {
+    // A method-level refusal that reveals nothing and costs nothing. If this
+    // ever grows a parameter it has started doing work on an unauthenticated
+    // GET, which is how the eternal stream got opened in the first place.
+    const { GET } = await import("@/app/api/mcp/route");
+    expect(GET.length).toBe(0);
+  });
+
+  it("cannot be picked up by the keep-alive wrapper", async () => {
+    // Belt and braces on the interaction that made this expensive: the wrapper
+    // must pass a 405 straight through, identity-equal, feeding it nothing.
+    const { GET } = await import("@/app/api/mcp/route");
+    const response = GET();
+    expect(withSseKeepAlive(response)).toBe(response);
+  });
+
+  it("never routes GET back to the JSON-RPC handler in source", () => {
+    expect(routeCode).not.toMatch(/export const GET = handle/);
+    expect(routeCode).toMatch(/export const POST = handle/);
+    expect(routeCode).toMatch(/export const DELETE = handle/);
   });
 });

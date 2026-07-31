@@ -32,7 +32,22 @@ vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() 
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
-    auth: { getUser: async () => ({ data: { user: state.sessionUser } }) },
+    auth: {
+      // Q11: the session branch of `withUserAuth` resolves the caller from
+      // LOCALLY verified claims, not a network `getUser()`. `getUser` stays on
+      // the stub for the auth-js legacy/HS256 fallback path only.
+      getClaims: async () => ({
+        data: state.sessionUser
+          ? {
+              claims: { sub: state.sessionUser.id },
+              header: { alg: "ES256", typ: "JWT", kid: "kid-1" },
+              signature: new Uint8Array(64),
+            }
+          : null,
+        error: null,
+      }),
+      getUser: async () => ({ data: { user: state.sessionUser } }),
+    },
   }),
 }));
 vi.mock("@/shared/auth/mcp-oauth", () => ({

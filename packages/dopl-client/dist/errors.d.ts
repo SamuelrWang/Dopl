@@ -30,3 +30,17 @@ export declare class DoplNetworkError extends Error {
 export declare class DoplTimeoutError extends DoplNetworkError {
     constructor(method: string, path: string, timeoutMs: number);
 }
+/**
+ * The CALLER went away (Q14) — an external `AbortSignal` handed to the
+ * transport fired, so the request was cancelled from our side rather than
+ * timing out on the server's.
+ *
+ * Distinct from {@link DoplTimeoutError} on purpose: both arrive as an
+ * `AbortError` from `fetch`, and reporting a client disconnect as "timed out
+ * after 55000ms" sends whoever reads the log looking for a slow route that was
+ * never slow. Still a `DoplNetworkError`, so every existing `catch` keeps
+ * working unchanged.
+ */
+export declare class DoplAbortError extends DoplNetworkError {
+    constructor(method: string, path: string);
+}

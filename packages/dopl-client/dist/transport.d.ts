@@ -40,6 +40,22 @@ export interface DoplTransportOptions {
      * unset means "external" and stamps nothing.
      */
     runtime?: string;
+    /**
+     * CALLER-LIFETIME cancellation (Q14). The in-app MCP route passes the
+     * incoming `Request.signal` here, so an MCP client hanging up mid-call (an
+     * ESC during a `dopl_channel(op="await")` hold) stops the work instead of
+     * leaving the hold re-polling for its remaining budget against a client that
+     * is gone.
+     *
+     * Once it fires: NO further request is started, and no retry is attempted,
+     * whatever the method. An IN-FLIGHT request is aborted only when the method
+     * is idempotent — see the note in `request()` for why a mutation on the wire
+     * is left alone.
+     *
+     * Combined with — not replaced by — a per-call `RequestOptions.signal`;
+     * whichever fires first wins.
+     */
+    signal?: AbortSignal;
 }
 export interface RequestOptions {
     method?: string;
@@ -62,6 +78,15 @@ export interface RequestOptions {
      * overridden.
      */
     customHeaders?: Record<string, string>;
+    /**
+     * Per-call cancellation (Q14). Combined with the transport-level
+     * `DoplTransportOptions.signal` and, on idempotent methods, with this call's
+     * own `timeoutMs` controller — whichever fires first aborts the fetch.
+     *
+     * An abort raises {@link DoplAbortError}, never a retry: retrying a request
+     * whose caller has gone away is the exact waste this exists to stop.
+     */
+    signal?: AbortSignal;
 }
 export declare class DoplTransport {
     private readonly baseUrl;
@@ -69,6 +94,7 @@ export declare class DoplTransport {
     private readonly toolHeaderName;
     private readonly clientIdentifier;
     private readonly runtime;
+    private readonly signal;
     private workspaceId;
     constructor(baseUrl: string, apiKey: string, opts?: DoplTransportOptions);
     /**

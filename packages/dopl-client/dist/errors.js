@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DoplTimeoutError = exports.DoplNetworkError = exports.DoplAuthError = exports.DoplApiError = void 0;
+exports.DoplAbortError = exports.DoplTimeoutError = exports.DoplNetworkError = exports.DoplAuthError = exports.DoplApiError = void 0;
 exports.parseApiErrorBody = parseApiErrorBody;
 const EMPTY = {
     code: null,
@@ -99,3 +99,21 @@ class DoplTimeoutError extends DoplNetworkError {
     }
 }
 exports.DoplTimeoutError = DoplTimeoutError;
+/**
+ * The CALLER went away (Q14) — an external `AbortSignal` handed to the
+ * transport fired, so the request was cancelled from our side rather than
+ * timing out on the server's.
+ *
+ * Distinct from {@link DoplTimeoutError} on purpose: both arrive as an
+ * `AbortError` from `fetch`, and reporting a client disconnect as "timed out
+ * after 55000ms" sends whoever reads the log looking for a slow route that was
+ * never slow. Still a `DoplNetworkError`, so every existing `catch` keeps
+ * working unchanged.
+ */
+class DoplAbortError extends DoplNetworkError {
+    constructor(method, path) {
+        super(`Dopl API request aborted by the caller: ${method} ${path}`);
+        this.name = "DoplAbortError";
+    }
+}
+exports.DoplAbortError = DoplAbortError;

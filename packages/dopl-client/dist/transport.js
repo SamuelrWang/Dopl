@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoplTransport = exports.workspaceContext = void 0;
 const debug_1 = __importDefault(require("debug"));
 const node_async_hooks_1 = require("node:async_hooks");
+const abort_js_1 = require("./abort.js");
 const errors_js_1 = require("./errors.js");
 const retry_js_1 = require("./retry.js");
 const log = (0, debug_1.default)("dopl:client");
@@ -36,6 +37,7 @@ class DoplTransport {
     toolHeaderName;
     clientIdentifier;
     runtime;
+    signal;
     workspaceId;
     constructor(baseUrl, apiKey, opts = {}) {
         this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -43,6 +45,7 @@ class DoplTransport {
         this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
         this.clientIdentifier = opts.clientIdentifier ?? null;
         this.runtime = opts.runtime ?? null;
+        this.signal = opts.signal;
         this.workspaceId = opts.workspaceId ?? null;
     }
     /**
@@ -59,14 +62,35 @@ class DoplTransport {
         return this.baseUrl;
     }
     async request(path, options = {}) {
-        const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, toolName, retries, workspaceIdOverride, customHeaders, } = options;
+        const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, toolName, retries, workspaceIdOverride, customHeaders, signal, } = options;
         const maxAttempts = 1 +
             (retries ?? (retry_js_1.IDEMPOTENT_METHODS.has(method) ? retry_js_1.DEFAULT_GET_RETRIES : 0));
+        // Q14 — per-call signal + the transport's caller-lifetime one.
+        //
+        // WHAT CANCELLATION MAY AND MAY NOT INTERRUPT, and why the split:
+        //
+        //  • NEVER START a request once the caller is gone. Checked at the top of
+        //    every attempt, so this also covers a signal that fires during a
+        //    backoff sleep. Nothing has been sent, so nothing can be half-applied
+        //    — this is free, and it applies to every method.
+        //
+        //  • ONLY ABORT AN IN-FLIGHT request when the method is idempotent. That
+        //    is the whole of the cost this exists to stop: the `op="await"` hold is
+        //    GETs, and it is the only call that keeps working for minutes after its
+        //    client hangs up. A mutation already on the wire is left to finish,
+        //    because killing the loopback also kills the inner route mid-write, and
+        //    the thread-create path is NOT yet atomic — cancelling it there is how
+        //    you mint a half-built thread. Losing at most one short in-flight POST
+        //    per cancelled call is not worth that.
+        const externals = [signal, this.signal];
+        const interruptible = retry_js_1.IDEMPOTENT_METHODS.has(method);
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if ((0, abort_js_1.anyAborted)(externals))
+                throw new errors_js_1.DoplAbortError(method, path);
             const started = Date.now();
             try {
-                const res = await this.doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride, customHeaders);
+                const res = await this.doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride, customHeaders, interruptible ? externals : undefined);
                 const duration = Date.now() - started;
                 if (res.ok) {
                     log("%s %s → %d in %dms", method, path, res.status, duration);
@@ -97,8 +121,11 @@ class DoplTransport {
             catch (error) {
                 if (error instanceof errors_js_1.DoplApiError)
                     throw error;
-                const networkError = wrapNetworkError(method, path, timeoutMs, error);
+                const networkError = wrapNetworkError(method, path, timeoutMs, error, interruptible && (0, abort_js_1.anyAborted)(externals));
                 log("%s %s network error: %s (attempt %d/%d)", method, path, networkError.message, attempt + 1, maxAttempts);
+                // Never retry a caller-cancelled request.
+                if (networkError instanceof errors_js_1.DoplAbortError)
+                    throw networkError;
                 if (attempt < maxAttempts - 1) {
                     const waitMs = (0, retry_js_1.computeBackoff)(attempt);
                     log("retrying after %dms", waitMs);
@@ -121,8 +148,16 @@ class DoplTransport {
      */
     async requestNoContent(path, method, toolName, body, workspaceIdOverride) {
         const maxAttempts = 1 + (retry_js_1.IDEMPOTENT_METHODS.has(method) ? retry_js_1.DEFAULT_GET_RETRIES : 0);
+        // Q14: this path carries DELETE/PATCH — mutations — so the caller's signal
+        // gates whether a request is STARTED and never interrupts one in flight
+        // (see the long note in `request`). No per-call signal here: the argument
+        // list is positional, and the transport-level one is what the MCP route
+        // sets.
+        const externals = [this.signal];
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if ((0, abort_js_1.anyAborted)(externals))
+                throw new errors_js_1.DoplAbortError(method, path);
             try {
                 const res = await this.doFetch(path, method, body, DEFAULT_TIMEOUT_MS, toolName, workspaceIdOverride);
                 if (res.ok || res.status === 204) {
@@ -201,9 +236,14 @@ class DoplTransport {
         }
         return headers;
     }
-    async doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride, customHeaders) {
+    async doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride, customHeaders, externalSignals = []) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        // Q14: the caller's signal(s) fold into THIS request's timeout controller,
+        // so a disconnect tears the socket down now instead of at `timeoutMs`.
+        // `detach()` in the finally is not optional — the external signal outlives
+        // the request, and a 215s await hold links it once per poll.
+        const detach = (0, abort_js_1.linkAbort)(controller, externalSignals);
         try {
             return await fetch(`${this.baseUrl}${path}`, {
                 method,
@@ -214,13 +254,18 @@ class DoplTransport {
         }
         finally {
             clearTimeout(timeout);
+            detach();
         }
     }
 }
 exports.DoplTransport = DoplTransport;
-function wrapNetworkError(method, path, timeoutMs, error) {
+function wrapNetworkError(method, path, timeoutMs, error, externalAborted = false) {
     if (error instanceof DOMException && error.name === "AbortError") {
-        return new errors_js_1.DoplTimeoutError(method, path, timeoutMs);
+        // Both cases arrive here as an AbortError; only the caller's signal being
+        // aborted tells them apart, and the distinction is the whole point (Q14).
+        return externalAborted
+            ? new errors_js_1.DoplAbortError(method, path)
+            : new errors_js_1.DoplTimeoutError(method, path, timeoutMs);
     }
     return new errors_js_1.DoplNetworkError(error instanceof Error ? error.message : String(error), error);
 }

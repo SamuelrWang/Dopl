@@ -336,6 +336,114 @@ describe("deriveMessageReceipt", () => {
     expect(deriveMessageReceipt(askY, thread, ME)).toBe("replied");
   });
 
+  // Q10 (web-render half) — the legacy `task-{channelId}-{seq}` id is DERIVABLE
+  // by any channel member (the DTO exposes `seq`), and the server does not gate
+  // a non-UUID taskId on participation (F-083 / P2). Linking on string equality
+  // alone therefore let any third member stamp a chip on someone else's request.
+  // Every fixture below is a 3-party channel: ME, PEER, and THIRD.
+  const THIRD = "third";
+
+  it("ignores a THIRD member's task_failed carrying my legacy id (no forged 'Failed')", () => {
+    const mine = msg({
+      seq: 500,
+      kind: "message",
+      authorKind: "user",
+      authorUserId: ME,
+      body: "the proposal",
+      metadata: { to_user_id: PEER },
+    });
+    const forged = msg({
+      seq: 501,
+      kind: "task_failed",
+      authorKind: "agent",
+      authorUserId: THIRD,
+      body: "Crashed.",
+      metadata: { taskId: "task-c1-500" },
+    });
+    expect(deriveMessageReceipt(mine, [mine, forged], ME)).toBe("sent");
+  });
+
+  it("ignores a THIRD member's forged 'replied' and 'working' on my legacy id", () => {
+    const mine = msg({
+      seq: 600,
+      kind: "message",
+      authorKind: "user",
+      authorUserId: ME,
+      body: "the proposal",
+      metadata: { to_user_id: PEER },
+    });
+    const legacyId = "task-c1-600";
+    const forgedStart = msg({
+      seq: 601,
+      kind: "task_started",
+      authorKind: "agent",
+      authorUserId: THIRD,
+      metadata: { taskId: legacyId },
+    });
+    const forgedReply = msg({
+      seq: 602,
+      kind: "message",
+      authorKind: "agent",
+      authorUserId: THIRD,
+      body: "All done!",
+      metadata: { taskId: legacyId },
+    });
+    expect(deriveMessageReceipt(mine, [mine, forgedStart], ME)).toBe("sent");
+    expect(
+      deriveMessageReceipt(mine, [mine, forgedStart, forgedReply], ME),
+    ).toBe("sent");
+  });
+
+  it("still reports the addressee's own legacy-linked lifecycle (gate is party-scoped, not a blanket drop)", () => {
+    // Same 3-party channel, but the events come from PEER — the addressee whose
+    // desktop mints that id. These must keep working exactly as before.
+    const mine = msg({
+      seq: 700,
+      kind: "message",
+      authorKind: "user",
+      authorUserId: ME,
+      body: "the proposal",
+      metadata: { to_user_id: PEER },
+    });
+    const legacyId = "task-c1-700";
+    const noise = msg({
+      seq: 701,
+      kind: "message",
+      authorKind: "agent",
+      authorUserId: THIRD,
+      body: "unrelated",
+      metadata: { taskId: legacyId },
+    });
+    const failed = msg({
+      seq: 702,
+      kind: "task_failed",
+      authorKind: "agent",
+      authorUserId: PEER,
+      body: "Crashed.",
+      metadata: { taskId: legacyId },
+    });
+    expect(deriveMessageReceipt(mine, [mine, noise, failed], ME)).toBe("failed");
+  });
+
+  it("accepts my OWN legacy-linked event (I am a party to my own exchange)", () => {
+    const mine = msg({
+      seq: 800,
+      kind: "message",
+      authorKind: "user",
+      authorUserId: ME,
+      body: "the proposal",
+      metadata: { to_user_id: PEER },
+    });
+    const dropped = msg({
+      seq: 801,
+      kind: "task_failed",
+      authorKind: "agent",
+      authorUserId: ME,
+      metadata: { taskId: "task-c1-800", dropped: true },
+    });
+    expect(deriveMessageReceipt(mine, [mine, dropped], ME)).toBe("dropped");
+  });
+
   it("has a label and calm classification for every status", () => {
     expect(RECEIPT_LABEL.working).toBe("Accepted, agent working");
     expect(RECEIPT_LABEL.dropped).toBe("Reply not sent");

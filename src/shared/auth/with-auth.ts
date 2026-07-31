@@ -349,9 +349,36 @@ if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
 }
 
 /**
- * Extract the authenticated user from Supabase session cookies.
+ * Extract the authenticated user id from Supabase session cookies.
+ *
+ * Q11 (2026-07-31) — this used to call `supabase.auth.getUser()`, a NETWORK
+ * round-trip to GoTrue (≈5 Postgres queries) on EVERY cookie-authenticated API
+ * request, uncached. `proxy.ts` removed that cost from the middleware; this is
+ * the HOTTER copy — one idle focused channels tab polls the consent inbox every
+ * few seconds, so a browser sitting untouched was worth thousands of GoTrue-side
+ * queries an hour before any real work happened. It is the same amplifier that
+ * starved GoTrue on 2026-07-31 until OAuth code-exchange started failing.
+ *
+ * `getClaims()` verifies the access token LOCALLY against the ES256 JWKS (fetched
+ * once, cached process-wide for 10 min) — see the long note in `proxy.ts` and the
+ * signature-verification proof in `proxy-claims.test.ts`. Nothing is trusted on
+ * decode alone: a tampered signature returns an error, and an HS256 / kid-less
+ * legacy token degrades to a network `getUser()` inside auth-js itself.
+ *
+ * THE try/catch IS LOAD-BEARING, and more so here than in the middleware.
+ * `getClaims()` only converts `AuthError`s into `{ data: null, error }`; auth-js
+ * `validateExp` throws a PLAIN `Error` ("JWT has expired" / "Missing exp claim")
+ * which `getClaims()` RE-THROWS at the caller. `getUser()` could never do that.
+ * This wrapper is composed by every `/api/channels/**` route (via
+ * `withWorkspaceAuth`), so an uncaught throw here is a 500 on every API route
+ * instead of the 401 an expired session must produce. Every road — thrown,
+ * errored, or no session — ends at `null`, i.e. the same 401 branch a failed
+ * `getUser()` landed in. This layer and the middleware now read the SAME
+ * authority, which is what Q4 is about.
+ *
+ * Returns only what the caller uses: the user id (`claims.sub`).
  */
-async function getSessionUser(request: NextRequest) {
+async function getSessionUser(request: NextRequest): Promise<{ id: string } | null> {
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -368,10 +395,9 @@ async function getSessionUser(request: NextRequest) {
       }
     );
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user;
+    const { data } = await supabase.auth.getClaims();
+    const sub = data?.claims?.sub;
+    return typeof sub === "string" && sub.length > 0 ? { id: sub } : null;
   } catch {
     return null;
   }

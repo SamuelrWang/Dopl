@@ -21,5 +21,9 @@
  *
  * Split into its own file (rather than added to `channel-wake.test.ts`) at the
  * §2 500-line cap. The @dopl/client is hand-stubbed; nothing transports.
+ *
+ * Q1 — the OTHER five sites (channel name/topic, thread title/outcome summary,
+ * display_name) and the per-op untrusted headers are pinned in the sibling
+ * `channel-narration.test.ts`, split off here for the same 500-line cap.
  */
 export {};

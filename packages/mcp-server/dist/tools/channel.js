@@ -50,7 +50,7 @@ Every message has a monotonic \`seq\` cursor: \`read\`/\`await\` take \`since\`=
 - "await" — LONG-POLL for new messages, and the ONLY thing that brings a reply back to you when nothing else feeds you: it blocks up to ~3.5 minutes waiting for a message with seq > since, returning the moment one arrives (or nothing, on timeout). Requires: channel + since (the last seq you've processed). Optional: timeout_ms (total hold in milliseconds, <=${channel_await_budget_1.AWAIT_HOLD_CAP_MS}, default ${channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS}). CALL IT BEFORE YOU END YOUR TURN whenever you are waiting on a reply — a call this long keeps running in the background after your turn ends, and its result WAKES you with the reply. On wake: handle what arrived, then call "await" again with the new highest seq to keep listening. On a timeout with no messages: call "await" again with the SAME since — a peer agent doing real work is often quiet for a long stretch, so a timeout is not an answer. Every ~3 empty holds in a row, check before re-arming ("get_thread" for status, "read" for new task_progress milestones): keep waiting while the thread is OPEN and the peer showed activity in roughly the last 30 minutes; STOP and report to your operator when the thread is closed or failed, or when nothing has come from them for ~30+ minutes. Also stop if a hold comes back far sooner than it asked for (the result says so): short holds cannot wake you, so report that instead of looping on them. (Not for a desktop session window — see the listener note below.)
 - "list_threads" — list a channel's threads (id, title, status, mode, outcome, outcome summary, created-by, addressed-to). Requires: channel. Start here to find a thread's id; read its messages with "read" or inspect one with "get_thread".
 - "get_thread" — inspect one thread by id (its status, mode, outcome, outcome summary, who it is addressed to, and timestamps). Requires: channel + thread (the thread id).
-- "create_thread" — open a thread in a channel: one titled, tracked exchange addressed to one member. Requires: channel + title + body (the request, posted as the thread's first message) + to (the member the thread is for). Optional: mode ("interactive" default, or "autonomous"); client_msg_id (idempotency key — retrying create_thread with the same id returns the existing thread instead of opening a second). Returns the thread id; the responder's replies stream back via "await". Then thread every related post with \`thread=<id>\` and log each concrete accomplishment as a milestone (kind="task_progress", thread=<id>) the moment it lands; the requester closes the thread with "close_thread" (optionally a \`summary\`) when the GOAL is done — not per hop.
+- "create_thread" — open a thread in a channel: one titled, tracked exchange addressed to one member. Requires: channel + title (<=200 chars — a short header, not a description) + body (the request, posted as the thread's first message, <=16000 chars) + to (the member the thread is for). Optional: mode ("interactive" default, or "autonomous"); client_msg_id (idempotency key — retrying create_thread with the same id returns the existing thread instead of opening a second). Returns the thread id; the responder's replies stream back via "await". Then thread every related post with \`thread=<id>\` and log each concrete accomplishment as a milestone (kind="task_progress", thread=<id>) the moment it lands; the requester closes the thread with "close_thread" (optionally a \`summary\`) when the GOAL is done — not per hop.
 - "close_thread" — close a thread. Requires: channel + thread (the thread id) + outcome ("completed" or "failed"). Optional: summary (a one-line outcome, <=2000 chars) shown on the thread card and carried in the close echo. Allowed for the thread's creator or the member it is addressed to. Close when the multi-step GOAL completes, not per hop.
 - "set_thread_mode" — change a thread's execution mode. Requires: channel + thread + mode ("interactive" or "autonomous"). Creator only — the mode governs the creator's own machine.
 
@@ -100,18 +100,36 @@ function registerChannelTool(register, client) {
             .string()
             .optional()
             .describe('op="invite" (required) / op="open" with direct=true (required): the member — an email or user id of an ACTIVE workspace member.'),
+        // Q9 — the caps below MIRROR the routes' own zod schemas
+        // (src/features/channels/schema.ts): title 200, body 16000, summary 2000
+        // (the tighter 200 applies to a post's summary), client_msg_id 200. They
+        // lived only in `.describe()` prose, so an over-length field was rejected
+        // by the ROUTE, as an opaque 400 the write ops then mis-narrated. Declared
+        // here they are published in the tool's inputSchema (the model sees a
+        // maxLength) and enforced before the call is made at all.
+        //
+        // `.trim()` where — and only where — the route trims before measuring, so
+        // the two agree on what "200 characters" counts.
         body: zod_1.z
             .string()
+            .max(16000)
             .optional()
-            .describe('op="post" / op="create_thread" (required): the message text. For a task_* kind, put a human-readable one-liner here and the structured payload in metadata. For create_thread, this is the requester\'s initial request.'),
+            .describe('op="post" / op="create_thread" (required): the message text, <=16000 characters. For a task_* kind, put a human-readable one-liner here and the structured payload in metadata. For create_thread, this is the requester\'s initial request.'),
         to: zod_1.z
             .string()
             .optional()
             .describe('op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post, use it when the message is a request for that specific person\'s agent; omit for general chat / broadcasts. For create_thread, it is the member the thread is for.'),
+        // One param, two routes, two caps: a post's summary is capped at 200 and a
+        // close summary at 2000. The schema declares the LOOSER of the two so a
+        // legitimate close summary is never refused client-side; a 201-character
+        // POST summary is still the route's to reject, and Q9's code mapping now
+        // reports that honestly instead of blaming the addressee.
         summary: zod_1.z
             .string()
+            .trim()
+            .max(2000)
             .optional()
-            .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees. op="close_thread" (optional): a one-line outcome summary (<=2000 chars) shown on the thread card and carried in the close echo.'),
+            .describe('op="post": a short one-line intent (<=200 chars — the post route enforces 200, not 2000). ALWAYS set it — it becomes the notification the receiving member sees. op="close_thread" (optional): a one-line outcome summary (<=2000 chars) shown on the thread card and carried in the close echo.'),
         kind: zod_1.z
             .enum([
             "message",
@@ -128,12 +146,15 @@ function registerChannelTool(register, client) {
             .describe('op="post": optional JSON object of structured fields for task_* events (e.g. {taskId, status, durationMs, refs}).'),
         client_msg_id: zod_1.z
             .string()
+            .max(200)
             .optional()
             .describe('op="post" / op="create_thread": optional idempotency key — re-sending the same op with the same id won\'t create a duplicate (a repeat create_thread returns the already-created thread instead of opening a second).'),
         title: zod_1.z
             .string()
+            .trim()
+            .max(200)
             .optional()
-            .describe('op="create_thread" (required): the thread title (1-200 chars) — a short header for the exchange.'),
+            .describe('op="create_thread" (required): the thread title (1-200 chars) — a short header for the exchange. A longer title is rejected here, before the call is made; shorten it rather than retrying.'),
         mode: zod_1.z
             .enum(["interactive", "autonomous"])
             .optional()

@@ -1,7 +1,8 @@
 /**
- * Unit tests for channel + direct-channel CREATION — slug allocation, the DM
- * dedup/revive path, and the DM's fixed two-member shape. Split out of
- * `service-tasks.test.ts` (§2 cap): channel creation is its own lane.
+ * Unit tests for channel + direct-channel CREATION and the DM's fixed 1:1
+ * shape — slug allocation, the dedup/revive/self-heal path, the immutable
+ * roster, and who may delete. Split out of `service-tasks.test.ts` (§2 cap):
+ * channel creation is its own lane.
  *
  * Focus (the load-bearing rules):
  *   - slug allocation must agree with `channels_workspace_slug_key`, which is
@@ -10,7 +11,13 @@
  *     DM path, 500-ing) against a channel the user can no longer see;
  *   - direct channels: self-DM rejected, dedup returns the existing channel, a
  *     soft-deleted DM is revived, a new DM inserts exactly two members with a
- *     sorted direct_key.
+ *     sorted direct_key;
+ *   - a DM's roster is IMMUTABLE in both directions (Q2). `addMember` refuses a
+ *     third; `removeMember` refuses to drop either row, because a torn live
+ *     pair is unrecoverable — nothing revives a row that was never
+ *     soft-deleted, and the partial unique index on `direct_key` keeps the live
+ *     row reserving the pair. Both sides exit by DELETING the conversation
+ *     (reversible), and an already-torn pair self-heals on the next open.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,9 +29,16 @@ vi.mock("./service-reads");
 
 import * as repo from "./repository";
 import * as reads from "./service-reads";
-import { addMember, createChannel } from "./service-writes";
 import {
+  addMember,
+  createChannel,
+  deleteChannel,
+  removeMember,
+} from "./service-writes";
+import {
+  ChannelForbiddenError,
   ChannelInviteeNotMemberError,
+  ChannelNotFoundError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
@@ -134,16 +148,21 @@ describe("createChannel — direct branch", () => {
     expect(repo.insertChannel).not.toHaveBeenCalled();
   });
 
-  it("dedups: returns the existing (live) DM without inserting or reviving", async () => {
+  it("dedups: returns an INTACT live DM without inserting or reviving", async () => {
     vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
     vi.mocked(repo.findDirectChannelAnyStatus).mockResolvedValue(
       channelRow({ id: "dm-existing", is_direct: true })
+    );
+    // Both rows present — the re-assert on every open (Q2) is a pure no-op.
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      memberRow(uid, uid === USER ? "owner" : "member")
     );
 
     await createChannel(ctx, { direct: true, memberUserId: PEER });
 
     expect(repo.insertChannel).not.toHaveBeenCalled();
-    // A live row (deleted_at null) is never revived and never re-adds members.
+    // A live row (deleted_at null) is never revived; an intact roster is never
+    // touched.
     expect(repo.reviveChannel).not.toHaveBeenCalled();
     expect(repo.insertMember).not.toHaveBeenCalled();
     expect(reads.getChannel).toHaveBeenCalledWith(ctx, "dm-existing");
@@ -278,5 +297,140 @@ describe("addMember — direct channel is immutable", () => {
     // insert path.
     expect(repo.isActiveWorkspaceMember).not.toHaveBeenCalled();
     expect(repo.insertMember).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Q2. `removeMember` had NO `is_direct` guard and no test file imported it,
+ * which is how it shipped. Dropping one of a DM's two rows is permanent: the
+ * live row keeps the pair's `direct_key` reserved (partial unique index) so a
+ * fresh DM can never be opened, and the evicted side reads the existing one as
+ * not-found. Both directions are refused; the roster is immutable, period.
+ */
+describe("removeMember — direct channel is immutable", () => {
+  const dm = () =>
+    channelRow({
+      id: "dm-1",
+      is_direct: true,
+      direct_key: [USER, PEER].sort().join(":"),
+    });
+
+  it("rejects an owner removing the peer from a DM", async () => {
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(dm());
+
+    await expect(removeMember(ctx, "dm-1", PEER)).rejects.toBeInstanceOf(
+      DirectChannelImmutableError
+    );
+    // Fails fast on the shape guard, exactly like addMember — the row is never
+    // looked up and never deleted.
+    expect(repo.countOwners).not.toHaveBeenCalled();
+    expect(repo.deleteMember).not.toHaveBeenCalled();
+  });
+
+  it("rejects the peer LEAVING a DM (the one-click destroy path)", async () => {
+    // Bob is the non-creator, so `canManage` is false and the header menu used
+    // to offer him "Leave channel" with no confirmation.
+    const peerCtx: ChannelContext = { ...ctx, userId: PEER };
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(dm());
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === PEER ? memberRow(PEER, "member") : memberRow(USER, "owner")
+    );
+
+    await expect(removeMember(peerCtx, "dm-1", PEER)).rejects.toBeInstanceOf(
+      DirectChannelImmutableError
+    );
+    expect(repo.deleteMember).not.toHaveBeenCalled();
+  });
+
+  it("still removes a member from a NON-direct channel", async () => {
+    // Control: the guard is scoped to DMs and nothing else regressed.
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow({ id: "c-1" }));
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === USER ? memberRow(USER, "owner") : memberRow(uid, "member")
+    );
+
+    await removeMember(ctx, "c-1", TARGET);
+
+    expect(repo.deleteMember).toHaveBeenCalledWith("c-1", TARGET);
+  });
+});
+
+/**
+ * Q2, part 3 — the self-heal. Pairs torn before the guard above existed are
+ * reachable by no other repair path: `reopenDirectChannel` used to restore the
+ * member rows only on the revive branch, and a torn pair's row is LIVE
+ * (`deleted_at` null), so control fell through to `getChannel` →
+ * `ChannelNotFoundError` for the missing side, forever.
+ */
+describe("reopenDirectChannel — an already-torn LIVE pair self-heals", () => {
+  it("lets the evicted side re-open the DM instead of 404-ing forever", async () => {
+    // Roster as the DB holds it: USER's row was deleted, PEER's survived.
+    const roster = new Set<string>([PEER]);
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      roster.has(uid) ? memberRow(uid, uid === PEER ? "owner" : "member") : null
+    );
+    vi.mocked(repo.insertMember).mockImplementation(async (row) => {
+      roster.add(row.user_id);
+      return memberRow(row.user_id, row.role);
+    });
+    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
+    vi.mocked(repo.findDirectChannelAnyStatus).mockResolvedValue(
+      channelRow({
+        id: "dm-torn",
+        is_direct: true,
+        direct_key: [USER, PEER].sort().join(":"),
+        deleted_at: null,
+      })
+    );
+    // Stand-in for the real read's visibility gate: a private channel with no
+    // membership row for the caller reads as not-found. Without the fix the
+    // repair never runs and this is what the evicted side gets.
+    vi.mocked(reads.getChannel).mockImplementation(async (c, ref) => {
+      if (!(await repo.findMembership(ref, c.userId))) {
+        throw new ChannelNotFoundError(ref);
+      }
+      return {} as Awaited<ReturnType<typeof reads.getChannel>>;
+    });
+
+    await expect(
+      createChannel(ctx, { direct: true, memberUserId: PEER })
+    ).resolves.toBeDefined();
+
+    // Repaired in place: the pair keeps its id (and its history), no second
+    // channel is inserted, and only the missing row is re-added.
+    expect(repo.insertChannel).not.toHaveBeenCalled();
+    expect(repo.reviveChannel).not.toHaveBeenCalled();
+    expect(repo.insertMember).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(repo.insertMember).mock.calls[0][0].user_id).toBe(USER);
+  });
+});
+
+/**
+ * Q2, part 2 — the exit the UI now offers instead of "Leave channel". Deleting
+ * a DM is a soft-delete that either side's next open revives WITH its history,
+ * so both participants may do it; a DM's `owner` row only records who happened
+ * to open the conversation.
+ */
+describe("deleteChannel — a DM is deletable by BOTH participants", () => {
+  it("lets the non-owner peer delete the conversation", async () => {
+    const peerCtx: ChannelContext = { ...ctx, userId: PEER };
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(
+      channelRow({ id: "dm-1", is_direct: true })
+    );
+    vi.mocked(repo.findMembership).mockResolvedValue(memberRow(PEER, "member"));
+
+    await deleteChannel(peerCtx, "dm-1");
+
+    expect(repo.softDeleteChannel).toHaveBeenCalledWith(WS, "dm-1");
+  });
+
+  it("still refuses a non-owner deleting a NON-direct channel", async () => {
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow({ id: "c-1" }));
+    vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER, "member"));
+
+    await expect(deleteChannel(ctx, "c-1")).rejects.toBeInstanceOf(
+      ChannelForbiddenError
+    );
+    expect(repo.softDeleteChannel).not.toHaveBeenCalled();
   });
 });

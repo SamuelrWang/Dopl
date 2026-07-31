@@ -14,7 +14,9 @@
  * Pure + deterministic. Mirrors the terminal-wins precedence of
  * `group-thread.computeStatus`, and reuses {@link calmTerminalStatus} for the
  * strict (`=== true`) calm-flag checks so a truthy-not-true flag can never
- * disguise a real failure as a calm outcome.
+ * disguise a real failure as a calm outcome. Linkage by the DERIVABLE legacy
+ * `task-{channelId}-{seq}` id is additionally party-scoped, so only the two
+ * people actually in the exchange can move my receipt (see step 3).
  */
 
 import type { ChannelMessage } from "../types";
@@ -63,8 +65,22 @@ export function deriveMessageReceipt(
   if (toUser === null && taskId === null) return null;
 
   // 3. The deterministic legacy id the desktop spawner would mint for a task
-  //    opened by THIS message (`task-{channelId}-{seq}`).
+  //    opened by THIS message (`task-{channelId}-{seq}`), plus the check of who
+  //    is entitled to speak on it.
+  //
+  //    That id is DERIVABLE by any channel member — the message DTO exposes
+  //    `seq` — and the server does NOT gate a non-UUID `taskId` on participation
+  //    (F-083; closing it server-side is product decision P2). So matching on
+  //    string equality alone let any third member stamp a red "Failed", or a
+  //    fake "Replied"/"Accepted, agent working", onto someone else's request.
+  //    A legacy exchange has exactly two parties: me, and the addressee whose
+  //    desktop mints the id (`trigger.js:129`). Anyone else claiming it is not
+  //    in this exchange and is ignored here. Client-side render defense only —
+  //    the row is still stored, and the server-side gate is still P2.
   const legacyId = `task-${message.channelId}-${message.seq}`;
+  const isExchangeParty = (m: ChannelMessage): boolean =>
+    m.authorUserId !== null &&
+    (m.authorUserId === currentUserId || m.authorUserId === toUser);
 
   // 4. Later events linked to this message: by shared explicit task id, by the
   //    legacy deterministic id, or as an addressed agent reply back to me (the
@@ -77,7 +93,7 @@ export function deriveMessageReceipt(
     if (m.seq <= message.seq) return false;
     const mTask = metaTaskId(m);
     if (taskId !== null && mTask === taskId) return true;
-    if (mTask === legacyId) return true;
+    if (mTask === legacyId && isExchangeParty(m)) return true;
     return (
       toUser !== null &&
       m.kind === "message" &&

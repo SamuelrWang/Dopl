@@ -10,6 +10,11 @@
  * Every clock that bounds the `await` hold — the poll size, the assembled
  * hold, the env lever, and the deadlines they must fit under — lives in
  * `channel-await-budget.ts`. Read that file before retuning any of them.
+ *
+ * Every STRING these ops emit — the author labels, the thread renders, the
+ * channel lines, and the untrusted-content headers that frame them — lives in
+ * `channel-render.ts`. That split is where the peer-authored-text discipline is
+ * documented and enforced (Q1); this file is control flow.
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";

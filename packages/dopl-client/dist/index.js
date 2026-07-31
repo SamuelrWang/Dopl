@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DoplTimeoutError = exports.DoplNetworkError = exports.DoplAuthError = exports.DoplApiError = exports.workspaceContext = exports.DoplClient = void 0;
+exports.DoplTimeoutError = exports.DoplNetworkError = exports.DoplAuthError = exports.DoplApiError = exports.DoplAbortError = exports.workspaceContext = exports.DoplClient = void 0;
 var client_js_1 = require("./client.js");
 Object.defineProperty(exports, "DoplClient", { enumerable: true, get: function () { return client_js_1.DoplClient; } });
 var transport_js_1 = require("./transport.js");
 Object.defineProperty(exports, "workspaceContext", { enumerable: true, get: function () { return transport_js_1.workspaceContext; } });
 var errors_js_1 = require("./errors.js");
+Object.defineProperty(exports, "DoplAbortError", { enumerable: true, get: function () { return errors_js_1.DoplAbortError; } });
 Object.defineProperty(exports, "DoplApiError", { enumerable: true, get: function () { return errors_js_1.DoplApiError; } });
 Object.defineProperty(exports, "DoplAuthError", { enumerable: true, get: function () { return errors_js_1.DoplAuthError; } });
 Object.defineProperty(exports, "DoplNetworkError", { enumerable: true, get: function () { return errors_js_1.DoplNetworkError; } });

@@ -316,10 +316,53 @@ function computeSummary(draft: Draft): string | null {
 }
 
 /**
+ * Which session, if any, an untagged agent post may take from the open fallback
+ * window. The window is CHANNEL-WIDE but a session belongs to ONE operator: the
+ * responder whose agent runs it. In a DM those are the same thing; in a channel
+ * with a third member, or with two pairs working at once, they are not, so the
+ * author must be checked before the post is folded in.
+ *
+ * - `"join"`   — the post is the open session's own responder, or the session
+ *   has no known responder at all, which keeps an anonymous transcript
+ *   byte-for-byte unchanged. A null responder is a REAL shape, not just a test
+ *   fixture: `author_user_id` is `ON DELETE SET NULL`, so a departed member's
+ *   history loses its author. Such a session keeps the old ungated behavior on
+ *   purpose — there is no identity left to compare against.
+ * - `"close"`  — the post comes from OUTSIDE the open session's
+ *   {requester, responder} pair. It stands alone AND spends the window, exactly
+ *   as an addressed third party already does in the pair-join: a stranger's post
+ *   means the exchange moved on, so nothing after it folds in either.
+ * - `"stand-alone"` — inside the pair but not the responder (the requester's own
+ *   agent). It is not the session's answer so it does not join, but it is not a
+ *   stranger either, so the window stays open for the responder's real reply.
+ */
+type OpenWindowVerdict = "join" | "close" | "stand-alone";
+
+function classifyOpenWindowPost(
+  openDraft: Draft | undefined,
+  authorUserId: string | null
+): OpenWindowVerdict {
+  // No draft behind the open id (unreachable — the window is only opened right
+  // after its draft exists): fall back to the pre-gate behavior.
+  if (!openDraft) return "join";
+  if (openDraft.responder === null) return "join";
+  if (openDraft.responder === authorUserId) return "join";
+  if (authorUserId !== null && openDraft.requester === authorUserId) {
+    return "stand-alone";
+  }
+  return "close";
+}
+
+/**
  * Group a `seq`-ordered transcript into an ordered list of standalone messages
  * and session cards. A session card is emitted at the position of its first
- * event, so chronological order is preserved (sessions never interleave — one
- * runs per channel at a time).
+ * event, so chronological order is preserved; concurrent sessions each keep
+ * their own card and route later events by `taskId`.
+ *
+ * Sessions DO interleave. "One session runs per channel at a time" is a DM
+ * invariant — a three-member channel, or two pairs working at once, breaks it
+ * outright — which is why the single open fallback window below is author-gated
+ * rather than trusted (see {@link classifyOpenWindowPost}).
  *
  * `taskOverlays` (optional) carries the authoritative `channel_tasks` state
  * keyed by task id. When a group's `taskId` is present, its `status`/`title`
@@ -344,11 +387,19 @@ export function groupThread(
   // — it opens on `task_started` and closes on the FIRST of: a human/system row
   // (`authorKind !== 'agent'` or `kind === 'system'`); a NEW `task_started`
   // (a different session supersedes the prior open one); the matching
-  // `task_finished`/`task_failed`; or a no-taskId reply being folded in
-  // (terminal mode delivers one reply, then the window is spent). Once closed,
-  // an incidental no-taskId agent post is no longer contiguous with any open
-  // session and renders as a standalone plain agent bubble — a session card can
-  // never contain a message that follows an intervening boundary.
+  // `task_finished`/`task_failed`; an agent post from OUTSIDE the session's
+  // pair (see {@link classifyOpenWindowPost}); or a no-taskId reply being folded
+  // in (terminal mode delivers one reply, then the window is spent). Once
+  // closed, an incidental no-taskId agent post is no longer contiguous with any
+  // open session and renders as a standalone plain agent bubble — a session card
+  // can never contain a message that follows an intervening boundary.
+  //
+  // The window is channel-wide, so it is ALSO gated on authorship: only the open
+  // session's own responder may take it. Without that gate a third member's
+  // unrelated agent note becomes another pair's reply — retitling their card and
+  // flipping a still-running request to Done — and, with two concurrent
+  // exchanges, one pair's untagged reply lands in the other pair's card and
+  // suppresses its "Working…" line.
   let openTaskId: string | null = null;
 
   for (const message of messages) {
@@ -419,10 +470,19 @@ export function groupThread(
     //    message folds into the card alongside the answers.
     //  - With NO explicit id, only task events and agent replies fall back to
     //    the open window (legacy terminal-mode sessions that self-post without
-    //    an id). Human / system rows with no id always own themselves.
+    //    an id), and only when the author is that session's own responder —
+    //    the window is channel-wide, the session is not. Human / system rows
+    //    with no id always own themselves.
     let taskId: string | null = null;
     if (ownTaskId !== null) taskId = ownTaskId;
-    else if (isTaskEvent || isAgentReply) taskId = openTaskId;
+    else if ((isTaskEvent || isAgentReply) && openTaskId !== null) {
+      const verdict = classifyOpenWindowPost(
+        drafts.get(openTaskId),
+        message.authorUserId
+      );
+      if (verdict === "join") taskId = openTaskId;
+      else if (verdict === "close") openTaskId = null;
+    }
 
     if (taskId === null) {
       items.push({ type: "message", key: message.id, message });

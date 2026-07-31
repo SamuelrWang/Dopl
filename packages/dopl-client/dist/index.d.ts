@@ -1,7 +1,7 @@
 export { DoplClient } from "./client.js";
 export type { DoplClientOptions } from "./client.js";
 export { workspaceContext } from "./transport.js";
-export { DoplApiError, DoplAuthError, DoplNetworkError, DoplTimeoutError, } from "./errors.js";
+export { DoplAbortError, DoplApiError, DoplAuthError, DoplNetworkError, DoplTimeoutError, } from "./errors.js";
 export type { BuildResult, WorkspaceRole, WorkspaceSummary, WorkspaceListItem, ClusterAttachedKnowledgeBase, ClusterAttachedSkill, ClusterDetail, ClusterDetailEntry, ClusterKnowledgeEntry, ClusterQueryResult, ClusterRow, ClusterSkillFull, ClusterSummary, ClusterWorkflowSummary, WorkflowRow, WorkflowTrashRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, WorkflowReadRef, WorkflowActionRef, DoplEntry, ListResult, PendingIngestItem, PendingStatus, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult, } from "./types.js";
 export type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeEntryType, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteSource, } from "./knowledge-types.js";
 export type { ResolvedSkill, ResolvedSkillReference, Skill, SkillAccessMode, SkillConnector, SkillProvider, SkillStatus, SkillVisibility, SkillWriteSource, } from "./skill-types.js";

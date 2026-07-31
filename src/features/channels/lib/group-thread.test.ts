@@ -678,6 +678,152 @@ describe("groupThread", () => {
     expect(last.message.body).toBe("hello");
   });
 
+  // Q5 — the open fallback window is CHANNEL-WIDE, but a session belongs to one
+  // operator. Before the author gate, any untagged agent post fell into whatever
+  // window happened to be open, regardless of who wrote it.
+  it("keeps a THIRD member's untagged agent post OUT of an open pair session (3-member channel)", () => {
+    // A asks B; B's agent starts; C's agent posts an unrelated note with no
+    // taskId and no addressing (the default shape in a non-direct channel,
+    // where auto-addressing is off). It must not become the session's reply —
+    // which would both title the card with a stranger's text AND flip A's
+    // still-running request to Done.
+    const t = "task-c1-1";
+    const items = groupThread([
+      msg({ seq: 1, kind: "message", authorKind: "user", authorUserId: "u_a", body: "please do X", metadata: { to_user_id: "u_b" } }),
+      msg({ seq: 2, kind: "task_started", authorKind: "agent", authorUserId: "u_b", body: "Started working on this request.", metadata: { taskId: t } }),
+      msg({ seq: 3, kind: "message", authorKind: "agent", authorUserId: "u_c", body: "unrelated note from C" }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    // Only the backfilled opener — C's note is not an entry.
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["please do X"]);
+    // A's request is still in flight, and the card is NOT titled with C's text
+    // (the summary is A's own ask, via the backfilled opener).
+    expect(s[0].session.status).toBe("active");
+    expect(s[0].session.summary).toBe("please do X");
+    const last = items[items.length - 1];
+    if (last.type !== "message") throw new Error("expected standalone message");
+    expect(last.message.body).toBe("unrelated note from C");
+  });
+
+  it("does not let one pair's untagged reply land in another pair's concurrent session", () => {
+    // Two concurrent exchanges: T1 (A↔B) then T2 (C↔D). B's terminal-mode reply
+    // arrives untagged while T2 holds the channel-wide window. It must stand
+    // alone rather than becoming T2's reply (which would mark C-and-D's session
+    // Done and suppress its "Working…" line).
+    const t1 = "task-c1-10";
+    const t2 = "task-c1-12";
+    const items = groupThread([
+      msg({ seq: 10, kind: "message", authorKind: "user", authorUserId: "u_a", body: "A asks B", metadata: { to_user_id: "u_b" } }),
+      msg({ seq: 11, kind: "task_started", authorKind: "agent", authorUserId: "u_b", metadata: { taskId: t1 } }),
+      msg({ seq: 12, kind: "message", authorKind: "user", authorUserId: "u_c", body: "C asks D", metadata: { to_user_id: "u_d" } }),
+      msg({ seq: 13, kind: "task_started", authorKind: "agent", authorUserId: "u_d", metadata: { taskId: t2 } }),
+      msg({ seq: 14, kind: "message", authorKind: "agent", authorUserId: "u_b", body: "B's untagged answer" }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(2);
+    if (s[0].type !== "session" || s[1].type !== "session") throw new Error("expected sessions");
+    expect(s[1].session.taskId).toBe(t2);
+    // C↔D's card holds only its own backfilled opener and is still working.
+    expect(s[1].session.entries.map((e) => e.body)).toEqual(["C asks D"]);
+    expect(s[1].session.status).toBe("active");
+    expect(s[1].session.summary).toBe("C asks D");
+    const last = items[items.length - 1];
+    if (last.type !== "message") throw new Error("expected standalone message");
+    expect(last.message.body).toBe("B's untagged answer");
+  });
+
+  it("does not let the FIRST responder's untagged reply join a SECOND responder's session", () => {
+    // Two task_started from different responders; the untagged reply belongs to
+    // the first. The window is held by the second — the reply must not join it.
+    const t1 = "task-c1-20";
+    const t2 = "task-c1-21";
+    const items = groupThread([
+      msg({ seq: 20, kind: "task_started", authorKind: "agent", authorUserId: "u_b", metadata: { taskId: t1 } }),
+      msg({ seq: 21, kind: "task_started", authorKind: "agent", authorUserId: "u_d", metadata: { taskId: t2 } }),
+      msg({ seq: 22, kind: "message", authorKind: "agent", authorUserId: "u_b", body: "B answers late" }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(2);
+    if (s[0].type !== "session" || s[1].type !== "session") throw new Error("expected sessions");
+    expect(s[0].session.entries).toHaveLength(0);
+    expect(s[1].session.taskId).toBe(t2);
+    expect(s[1].session.entries).toHaveLength(0);
+    expect(s[1].session.status).toBe("active");
+    const last = items[items.length - 1];
+    if (last.type !== "message") throw new Error("expected standalone message");
+    expect(last.message.body).toBe("B answers late");
+  });
+
+  it("still folds the open session's OWN responder's untagged reply in (author gate is not a blanket close)", () => {
+    // The gate must not break the case the window exists for: the responder's
+    // own terminal-mode reply, posted with no taskId, in a 3-member channel.
+    const t = "task-c1-30";
+    const items = groupThread([
+      msg({ seq: 30, kind: "message", authorKind: "user", authorUserId: "u_a", body: "please do X", metadata: { to_user_id: "u_b" } }),
+      msg({ seq: 31, kind: "task_started", authorKind: "agent", authorUserId: "u_b", metadata: { taskId: t } }),
+      msg({ seq: 32, kind: "message", authorKind: "agent", authorUserId: "u_b", body: "Here is the answer." }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["please do X", "Here is the answer."]);
+    expect(s[0].session.status).toBe("done");
+  });
+
+  it("closes the window on a third member's untagged agent post, so a LATER responder reply stands alone", () => {
+    // Mirrors the addressed-third-party path: a stranger's post means the
+    // exchange moved on, so nothing after it folds in either.
+    const t = "task-c1-40";
+    const items = groupThread([
+      msg({ seq: 40, kind: "task_started", authorKind: "agent", authorUserId: "u_b", metadata: { taskId: t } }),
+      msg({ seq: 41, kind: "message", authorKind: "agent", authorUserId: "u_c", body: "stranger" }),
+      msg({ seq: 42, kind: "message", authorKind: "agent", authorUserId: "u_b", body: "responder, too late" }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.entries).toHaveLength(0);
+    expect(items.map((i) => i.type)).toEqual(["session", "message", "message"]);
+  });
+
+  it("lets the REQUESTER's untagged agent post stand alone without spending the window", () => {
+    // Inside the pair but not the responder: it is not the session's answer, so
+    // it does not join — but it is not a stranger either, so the responder's
+    // real reply that follows still lands in the card.
+    const t = "task-c1-45";
+    const items = groupThread([
+      msg({ seq: 45, kind: "message", authorKind: "user", authorUserId: "u_a", body: "please do X", metadata: { to_user_id: "u_b" } }),
+      msg({ seq: 46, kind: "task_started", authorKind: "agent", authorUserId: "u_b", metadata: { taskId: t } }),
+      msg({ seq: 47, kind: "message", authorKind: "agent", authorUserId: "u_a", body: "A's own agent muses" }),
+      msg({ seq: 48, kind: "message", authorKind: "agent", authorUserId: "u_b", body: "Here is the answer." }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["please do X", "Here is the answer."]);
+    const standalone = items.filter((i) => i.type === "message");
+    expect(standalone).toHaveLength(1);
+    if (standalone[0].type !== "message") throw new Error("expected message");
+    expect(standalone[0].message.body).toBe("A's own agent muses");
+  });
+
+  it("keeps the anonymous-author transcript byte-for-byte (responder unknown -> fallback unchanged)", () => {
+    // A transcript with no author ids at all (the legacy/anonymous shape) has no
+    // responder to compare against, so the window behaves exactly as before.
+    const t = "task-c1-50";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", authorUserId: null, metadata: { taskId: t } }),
+      msg({ kind: "message", authorKind: "agent", authorUserId: null, body: "anonymous reply" }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["anonymous reply"]);
+    expect(s[0].session.status).toBe("done");
+  });
+
   it("leaves a lone decision-echo card untouched by the seq-N backfill", () => {
     // A denied request never started: a lone task_failed decision echo carrying
     // the deterministic id, with no task_started. The seq-N opener must NOT be

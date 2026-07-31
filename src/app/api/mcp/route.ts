@@ -78,10 +78,33 @@ async function handle(request: Request): Promise<Response> {
   // it. Only the recognized value survives `readRuntimeHeader`, so an
   // arbitrary caller-set header cannot be laundered through this hop.
   const callerRuntime = readRuntimeHeader(request);
+  // FIX Q14 (2026-07-31) — HAND THE CALLER'S DISCONNECT TO THE LOOPBACK.
+  // Without this, nothing downstream ever learns the client hung up: neither
+  // `withSseKeepAlive`'s `cancel` nor the SDK's stream teardown aborts the
+  // running tool handler. A `dopl_channel(op="await")` hold that has lost its
+  // client kept re-issuing its ~50s loopback poll for the rest of its ~215s
+  // budget — ~4 more `/api/channels/[id]/await` invocations, each a fresh 60s
+  // function doing its own Supabase work, all of it for nobody. Worse, the
+  // timed-out result tells the agent to re-arm immediately, so the orphan ran
+  // alongside a live hold.
+  //
+  // With the signal threaded through, an ESC aborts the in-flight poll (a GET);
+  // the await loop's own mid-hold catch then breaks out rather than opening the
+  // next one. The `op="await"` poll loop does not yet check `signal.aborted`
+  // BETWEEN polls, so at most one already-doomed poll is still opened — a
+  // one-line follow-up in `packages/mcp-server` (`opAwait`), tracked with Q14.
+  //
+  // SCOPE, deliberately narrower than "cancel everything": the client honours
+  // this by refusing to START any further request, but it only interrupts one
+  // already on the wire when the method is idempotent. A mutation in flight is
+  // left to finish, because aborting the loopback also aborts the inner route
+  // mid-write and the thread-create path is not yet atomic. See the note on
+  // `DoplTransport.request` in packages/dopl-client.
   const client = new DoplClient(appBaseUrl(request), credential, {
     clientIdentifier,
     workspaceId,
     runtime: callerRuntime,
+    signal: request.signal,
   });
 
   // 3. Build the MCP server: status ping (admin flag) + workspace handshake +
@@ -149,5 +172,63 @@ async function handle(request: Request): Promise<Response> {
 }
 
 export const POST = handle;
-export const GET = handle;
 export const DELETE = handle;
+
+/**
+ * FIX Q6 (2026-07-31) — GET IS 405 HERE, DELIBERATELY, AND MUST NOT GO TO
+ * `handle`.
+ *
+ * GET on a Streamable HTTP endpoint asks for the STANDALONE SSE stream: the
+ * server-initiated channel a stateful server uses to push notifications
+ * between requests. We are STATELESS (`sessionIdGenerator: undefined`), and
+ * that mode can never use it — the transport and its `_streamMapping` are
+ * per-request locals, so the POST invocations that do the real work have no
+ * way to reach a stream another invocation opened.
+ *
+ * Routing GET to `handle` did not fail loudly; it failed by SUCCEEDING. The
+ * SDK's `handleGetRequest` skips session validation in stateless mode
+ * (`validateSession` returns undefined when there is no generator) and answers
+ * 200 `text/event-stream` with a stream nothing will ever write to or close.
+ * While that response was byte-silent an intermediary reaped it in ~30-60s and
+ * the waste stayed invisible. Then `withSseKeepAlive` landed and started
+ * feeding it a comment every 15s — which is precisely what stops anything from
+ * reaping it, so it now survives to `maxDuration` (300s).
+ *
+ * Every SDK client opens this stream right after `notifications/initialized`,
+ * and on a graceful end of a GET stream the client reconnects. Net effect:
+ * one continuously-running 300s function per connected MCP client, renewed
+ * ~12x/hour, indefinitely, carrying zero events — burning the same concurrency
+ * the 215s `op="await"` holds need.
+ *
+ * 405 is the honest answer and the specified one: the MCP spec has the server
+ * return 405 when it offers no SSE stream at GET, and the SDK client treats it
+ * as an expected outcome — `_startOrAuthSse` returns on 405 without raising an
+ * error and without scheduling a reconnect. Nothing else in the product GETs
+ * this route (the OAuth surfaces are separate paths).
+ *
+ * No auth runs first, on purpose: this is a method-level refusal that reveals
+ * nothing, and making it cheap is half the fix.
+ */
+export function GET(): Response {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message:
+          "Method Not Allowed: this MCP endpoint is stateless and offers no standalone SSE stream at GET. Send JSON-RPC over POST.",
+      },
+      id: null,
+    }),
+    {
+      status: 405,
+      headers: {
+        // RFC 9110 requires Allow on a 405, and it names the two methods that
+        // really are served here.
+        Allow: "POST, DELETE",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
+    }
+  );
+}

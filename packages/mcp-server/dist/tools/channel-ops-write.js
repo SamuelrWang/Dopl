@@ -19,14 +19,10 @@ exports.opCloseThread = opCloseThread;
 exports.opSetThreadMode = opSetThreadMode;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
-/** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
-function isBadRequest(e) {
-    return (typeof e === "object" && e !== null && e.status === 400);
-}
-/** Duck-typed HTTP 403 from the Dopl API (thread authorization refusals). */
-function isForbidden(e) {
-    return (typeof e === "object" && e !== null && e.status === 403);
-}
+// Q9 — a 400's MEANING is read off its code, not guessed from its status. See
+// channel-errors.ts for why the old status-only branch answered every failure
+// with "invite them first".
+const channel_errors_1 = require("./channel-errors");
 async function opOpen(client, opts) {
     // Direct branch: open (or dedup-return) a 1:1 channel with `member`. The
     // server dedups a repeat DM to the same peer, so this is idempotent.
@@ -110,9 +106,11 @@ const OPEN_THREAD_WARN_MAX = 5;
  *
  * Three shapes, in descending urgency:
  *   1. asked for a thread and got none  — the 1.7.14 tag-drop signature;
- *   2. no thread, but the channel has open ones — will read as a NEW request;
+ *   2. no thread, but the caller has open ones — will read as a NEW request;
  *   3. threaded — name the thread so the sender can check it is the right one.
- * A channel with no open threads and an unthreaded post says nothing at all.
+ * A channel with no open threads and an unthreaded post says nothing at all;
+ * one whose only open threads belong to OTHER pairs says so without offering
+ * them (Q13).
  */
 async function threadLinkageNote(client, channelId, channelName, message, askedThread) {
     const landedThread = (0, channel_shared_1.metaString)(message, "taskId");
@@ -134,8 +132,16 @@ async function threadLinkageNote(client, channelId, channelName, message, askedT
         return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}`;
     }
     if (askedThread) {
-        // Belt-and-braces: the route validates `thread` and 400s an unresolvable
-        // one, so reaching here means the tag was dropped between ask and store.
+        // The old comment here claimed "the route validates `thread` and 400s an
+        // unresolvable one". FALSE for every NON-UUID id: `resolvePostMetadata`
+        // runs its lookup + participation gate only inside `if (isUuid(taskId))`
+        // (service-writes-metadata.ts:236-245), so a legacy `task-<uuid>-<seq>` id
+        // — or a plain typo — is never checked and is stored VERBATIM, which means
+        // it comes back as `landedThread` above and never reaches this branch at
+        // all. What actually lands here is a tag the server dropped (e.g. a
+        // whitespace-only `thread`, which the route treats as absent), so the
+        // advice below — re-post with a real id — is right; the reason given for it
+        // was not.
         return `NOT THREADED — you passed thread="${askedThread}" but the stored message carries no thread, so this reads as a NEW request on the other side. Re-post with a thread id from dopl_channel(op="list_threads", channel="${channelId}").`;
     }
     // Best-effort: the warning is worth one read, but a listing failure must not
@@ -149,13 +155,35 @@ async function threadLinkageNote(client, channelId, channelName, message, askedT
     }
     if (open.length === 0)
         return null;
+    // Q13 — RECOMMEND ONLY WHAT THE CALLER CAN ACTUALLY WRITE INTO. `open` is the
+    // channel's threads, and thread reads are channel-transparent by design
+    // (`listChannelTasks` is unfiltered) while thread WRITES are pair-only:
+    // `resolvePostMetadata` 403s any post into a thread whose creator or target
+    // the caller is not. So this line used to name other pairs' threads and then
+    // instruct "re-post it with thread=<that id>" — an action the tool knew would
+    // be refused, at the cost of a burned operator approval and two agent turns
+    // per unthreaded post, plus every other pair's thread titles landing in the
+    // caller's context as apparent suggestions. Invisible at N=2; constant at N=5.
+    //
+    // The caller's own id comes free: the message we just posted is theirs, and
+    // the route stamps `author_user_id = ctx.userId` — the SAME id the
+    // participation gate compares against. No extra round-trip, and no way for it
+    // to disagree with the gate. (Whether `list_threads` should still SHOW others'
+    // threads read-only is a product decision, P1 — untouched here.)
+    const me = message.authorUserId;
+    const mine = me
+        ? open.filter((t) => t.createdBy === me || t.targetUserId === me)
+        : [];
+    if (mine.length === 0) {
+        return `NOT THREADED — this reads as a NEW request on the other side, not a continuation. **${channelName}** has ${open.length} open thread${open.length === 1 ? "" : "s"}, but ${open.length === 1 ? "it belongs" : "they belong"} to other members — a thread accepts posts only from its creator or the member it is addressed to, so re-posting into one would be refused. Leave this standalone, or open your own with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="...").`;
+    }
     // M2 again: same peer-typed title, same unframed narration line.
-    const shown = open.slice(0, OPEN_THREAD_WARN_MAX).map((t) => {
+    const shown = mine.slice(0, OPEN_THREAD_WARN_MAX).map((t) => {
         const named = (0, channel_shared_1.neutralizeInline)(t.title);
         return named ? `\`${t.id}\` (${named})` : `\`${t.id}\``;
     });
-    const more = open.length > shown.length ? `; +${open.length - shown.length} more` : "";
-    return `NOT THREADED — this reads as a NEW request on the other side, not a continuation, and **${channelName}** has ${open.length} open thread${open.length === 1 ? "" : "s"}: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
+    const more = mine.length > shown.length ? `; +${mine.length - shown.length} more` : "";
+    return `NOT THREADED — this reads as a NEW request on the other side, not a continuation, and you have ${mine.length} open thread${mine.length === 1 ? "" : "s"} in **${channelName}** you can post into: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
 }
 async function opPost(client, channelRef, body, opts = {}) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
@@ -191,23 +219,30 @@ async function opPost(client, channelRef, body, opts = {}) {
         });
     }
     catch (e) {
-        // Map the route's 400s to actionable messages. Two independent causes:
-        // a non-member addressee (only when `to` is set) and an unresolvable
-        // first-class `thread` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
-        // even with NO `to`, so catch isBadRequest regardless of `to` instead of
-        // rethrowing the raw 400 uncaught (the bug this closes).
-        if (isBadRequest(e)) {
-            if (toUserId) {
-                return (0, respond_1.err)(`Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`);
-            }
-            if (opts.thread) {
-                return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or post without \`thread\`.`);
+        // Q9 — map the route's 400s off the CODE, not off which params happened to
+        // be set. The old branch guessed: `to` set → blame the addressee, else
+        // `thread` set → blame the thread, else fall through and rethrow a raw 400.
+        // That is wrong whenever the route rejected the BODY (a >16000-char body, a
+        // >200-char summary) — the commonest 400 of the three, and the one where
+        // "invite them first" sends the agent to a contradictory second error.
+        if ((0, channel_errors_1.isBadRequest)(e)) {
+            switch ((0, channel_errors_1.classifyBadRequest)(e)) {
+                case "addressee_not_member":
+                    return (0, respond_1.err)(`Couldn't address the message to ${toLabel ?? "that member"} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`);
+                case "thread_not_in_channel":
+                    return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or post without \`thread\`.`);
+                case "invalid_request":
+                    return (0, respond_1.err)(`That post was rejected as INVALID before it reached **${ch.name}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and post again.`);
+                case "workspace":
+                    return (0, respond_1.err)(`The post was rejected because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
+                case "unknown":
+                    return (0, respond_1.err)(`The post to **${ch.name}** was rejected (HTTP 400) and the server did not name a cause this tool recognizes.${(0, channel_errors_1.serverDetail)(e)} Nothing was sent.`);
             }
         }
         // v3.1 B3: the route now 403s a post into a thread the caller is not a party
         // to (only its creator or its target may write into one). Without this the
         // agent sees a raw error string and cannot tell it from a transport failure.
-        if (isForbidden(e) && opts.thread) {
+        if ((0, channel_errors_1.isForbidden)(e) && opts.thread) {
             return (0, respond_1.err)(`That thread belongs to two other members, so you can't post into it. Post without \`thread\`, or open your own with op="create_thread".`);
         }
         throw e;
@@ -251,9 +286,23 @@ async function opCreateThread(client, channelRef, title, body, to, mode, clientM
         });
     }
     catch (e) {
-        // The route rejects an addressee who isn't a channel member (400).
-        if (isBadRequest(e)) {
-            return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), then open the thread.`);
+        // Q9 — `to` is REQUIRED for create_thread, so the old bare `isBadRequest`
+        // branch answered every 400 with the addressee message and had no
+        // fall-through at all: a 240-character title (rejected by the route's own
+        // zod schema, before `createTask` ran) came back as "invite them first",
+        // and op="invite" then answered "already a member". Read the code.
+        if ((0, channel_errors_1.isBadRequest)(e)) {
+            switch ((0, channel_errors_1.classifyBadRequest)(e)) {
+                case "addressee_not_member":
+                    return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), then open the thread.`);
+                case "invalid_request":
+                    return (0, respond_1.err)(`That create_thread was rejected as INVALID before it reached **${ch.name}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and open the thread again.`);
+                case "workspace":
+                    return (0, respond_1.err)(`The thread was not opened because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
+                case "thread_not_in_channel":
+                case "unknown":
+                    return (0, respond_1.err)(`Opening the thread in **${ch.name}** was rejected (HTTP 400) and the server did not name a cause this tool recognizes.${(0, channel_errors_1.serverDetail)(e)} No thread was opened.`);
+            }
         }
         throw e;
     }
@@ -286,7 +335,7 @@ async function opCloseThread(client, channelRef, threadId, outcome, summary) {
         if ((0, respond_1.isNotFound)(e)) {
             return (0, respond_1.err)(`No thread \`${threadId}\` in **${ch.name}**.`);
         }
-        if (isForbidden(e)) {
+        if ((0, channel_errors_1.isForbidden)(e)) {
             return (0, respond_1.err)(`You can't close thread \`${threadId}\` — only its creator or the member it's addressed to may close it.`);
         }
         throw e;
@@ -306,7 +355,7 @@ async function opSetThreadMode(client, channelRef, threadId, mode) {
         if ((0, respond_1.isNotFound)(e)) {
             return (0, respond_1.err)(`No thread \`${threadId}\` in **${ch.name}**.`);
         }
-        if (isForbidden(e)) {
+        if ((0, channel_errors_1.isForbidden)(e)) {
             return (0, respond_1.err)(`You can't change the mode of thread \`${threadId}\` — only its creator can.`);
         }
         throw e;

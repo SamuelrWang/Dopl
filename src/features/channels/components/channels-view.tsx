@@ -419,8 +419,13 @@ export function ChannelsView({
       }
     : null;
 
+  // Never leave a DM (Q2): dropping one of the pair's two membership rows
+  // destroys it permanently, so the server refuses and the menu offers the
+  // reversible "Delete conversation" instead. Guarded here too — nothing may
+  // send the destructive request for a direct channel.
   const handleLeave = () =>
     selected &&
+    !selected.isDirect &&
     void withChannelError(async () => {
       await removeChannelMember(selected.id, currentUserId, workspaceId);
       setSelectedId(null);
