@@ -121,16 +121,47 @@ html, body {
 .ctl-xs { padding: 3px 8px; font-size: var(--text-micro); }
 
 /* ── Status strip + cost meter ────────────────────────────────────────────── */
+/* ── v2.9 BUG: the 550px status strip ──────────────────────────────────────
+   The session window is 520px wide AND 520px MIN wide (main/session-window.js), so
+   this row has ~478px of content box. v2.9 added the two <select> axes to it, and the
+   row's natural width went to ~800px: pill + model meta + Tools + Messages + the
+   posture line + the working-directory pill. On ONE non-wrapping line that deficit had
+   to land somewhere, and flexbox put it on the only children that could take it:
+
+     - `.perm-posture` carried `min-width: 0`, so it had NO automatic minimum and
+       absorbed nearly the whole deficit. Crushed to a few px it still had ~140
+       characters to draw, and `white-space: normal` wraps at every space, so it drew
+       ONE WORD PER LINE and the row grew to hundreds of px.
+     - `.status-meta` clamped at min-content, which for `claude-opus-5[1m]` is a
+       post-hyphen fragment, so the model line broke into THREE.
+     - Everything else (`.mode-select`, `.folder-pill`, `.perm-warn`) is `flex: none`,
+       so what was left simply ran off the right edge: the Messages select clipped at
+       the window edge and the folder pill was not reachable at all.
+   `align-items: center` was not the cause; it is why the survivors floated in the
+   middle of the tall box, which is what made it read as a stretched container.
+
+   FIX: the row WRAPS. At 520px there is no honest way to fit ~800px of controls on one
+   line, and the single-line alternatives both hide a control the operator needs (the
+   folder pill, or half the posture). Wrapping is also the idiom this stylesheet already
+   uses for exactly this failure (see `.outbound-pending .row`). Every text child then
+   gets a floor + a one-line guarantee, so no child can ever grow the row by collapsing
+   again, and nothing needs to be clipped: there IS no horizontal overflow left to hide,
+   which is why NO `overflow: hidden` goes on the strip itself. */
 .status-strip {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  /* row-gap column-gap: the column gap is the original 12px; the row gap only ever
+     applies once the row has actually wrapped. */
+  gap: 6px 12px;
   padding: 7px 12px;
   border-radius: 10px;
   background: var(--card-surface-subtle);
   border: 1px solid var(--border-default);
 }
-.status-pill { display: inline-flex; align-items: center; gap: 6px; }
+/* min-width: 0 so the label's ellipsis below can actually engage — without it the
+   pill's automatic minimum is its own min-content and the child never gets to shrink. */
+.status-pill { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .status-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--text-muted);
@@ -150,23 +181,58 @@ html, body {
 .status-dot.act-awaiting_peer { background: var(--link); }
 .status-dot.act-awaiting_inbound { background: var(--link); }
 .status-dot.act-awaiting_permission { background: var(--warning); }
+/* The phase words come from a closed table (session-labels.js), the longest being
+   "Awaiting permission". nowrap keeps that on ONE line; the ellipsis trio is the floor
+   under it, so even an unexpected label degrades to "AWAITING…" instead of stacking. */
 .status-label {
   font-size: var(--text-label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
   color: var(--text-secondary);
+  min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.status-meta { color: var(--text-muted); font-size: var(--text-caption); }
+/* The model id. nowrap is the fix for the three-line `claude-opus-5[1m]`: a model id is
+   ONE token, and letting it break after its hyphens is what turned a 107px caption into
+   a three-line block. overflow/ellipsis bound a longer id to the same one line. */
+.status-meta {
+  color: var(--text-muted); font-size: var(--text-caption);
+  min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .status-spacer { flex: 1; }
 
 /* ── Permission posture (item 9 / v2.9): a muted caption chip in the status strip,
-   stating BOTH axes. It can wrap and shrink; the two selects never do. ─────── */
-.perm-posture { color: var(--text-secondary); font-size: var(--text-caption); min-width: 0; }
+   stating BOTH axes.
+
+   `min-width: 0` USED TO BE HERE and it is what let the row grow to 550px (see the
+   .status-strip note): it removed the only floor the text had. It is replaced by a
+   `flex-basis: 100%`, which takes the posture OFF the controls' line and gives it the
+   full strip width on its own.
+
+   Own line, not truncated, deliberately: the copy states BOTH axes plus the profile
+   (~140 chars), so at the 520px window there is no width where it fits beside the
+   selects, and ellipsising it would show the Tools axis while silently dropping the
+   Messages one. That is the exact failure the two-axis contract exists to prevent
+   ("one axis is never shown without the other", session-labels.js), so the posture
+   reflows inside its own full-width line instead. Its height is bounded by that width
+   and by the fixed copy table, never by a collapse.
+
+   min-width is a second floor under the basis: 200px is well inside the 478px content
+   box the 520px minWidth guarantees, so it can never itself force an overflow. */
+.perm-posture {
+  color: var(--text-secondary); font-size: var(--text-caption);
+  flex: 1 1 100%;
+  min-width: 200px;
+}
 
 /* ── v2.9 THE TWO AXES: the Tools / Messages selects. Token colours + the existing
    concave-field border recipe, no new hex, no `content` strings (every word is in
-   session.html or arrives via textContent). ───────────────────────────────── */
+   session.html or arrives via textContent).
+   `flex: none` is load-bearing and stays: a permission control that has been squeezed
+   until its current value is unreadable is worse than a strip that wrapped. The strip
+   now wraps around them instead, so neither select is ever clipped. ────────── */
 .mode-select {
   display: inline-flex; align-items: center; gap: 5px;
   color: var(--text-secondary); flex: none;
@@ -196,10 +262,16 @@ html, body {
 .perm-warn { color: var(--danger); font-weight: 600; flex: none; }
 
 /* ── Folder pill (item 5): ONE click-to-change control reading "Working
-   Directory: <label>". LABEL only — the abs path never reaches here. ───────── */
+   Directory: <label>". LABEL only — the abs path never reaches here.
+   `white-space: nowrap` closes the SAME trap the status strip had one level down: the
+   static "Working Directory:" text is an anonymous flex item, so once a long label
+   pushed the pill onto its 260px cap that text was free to break into two lines and
+   double the pill's height. It is now unbreakable and `.folder-pill__label` (already
+   ellipsised) is the one child that absorbs the cap. ───────────────────────── */
 .folder-pill {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
   max-width: 260px; min-width: 0;
+  white-space: nowrap;
   padding: 3px 10px;
   border-radius: 9999px;
   border: 1px solid var(--border-strong);
