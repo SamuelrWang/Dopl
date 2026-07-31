@@ -39,6 +39,25 @@ const PUBLIC_ROUTES = [
   "/api/mcp",
 ];
 
+// The subset of PUBLIC_ROUTES that is MACHINE-authenticated: no human session is
+// involved, so nothing below the auth call can change what these routes do. They
+// short-circuit BEFORE `getClaims()`, because even local verification can go to
+// the network once per process (the JWKS fetch) — and `/api/mcp` streams, with its
+// whole correctness resting on response headers reaching the client inside the
+// client's 60s time-to-headers budget. Spending any of that on authenticating a
+// route that self-authenticates is pure risk.
+//
+// The rest of PUBLIC_ROUTES stays BELOW the auth call on purpose: /login and the
+// marketing pages are public but session-AWARE (a signed-in visitor to /login is
+// bounced into the app), so they still need the claims read.
+const SELF_AUTH_ROUTES = [
+  "/api/mcp",
+  "/api/oauth",
+  "/.well-known/oauth-",
+  "/api/billing/webhook",
+  "/api/cron/",
+];
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -96,6 +115,13 @@ export async function proxy(request: NextRequest) {
   // `proxy-claims.test.ts`. Every other failure (JWKS unreachable, refresh
   // refused) already returns an error object; both roads end at `userId = null`,
   // i.e. the same "not authenticated" branches a failed `getUser()` landed in.
+  const { pathname } = request.nextUrl;
+
+  // Machine-authenticated routes never touch the auth call (see SELF_AUTH_ROUTES).
+  if (SELF_AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
+    return supabaseResponse;
+  }
+
   let userId: string | null = null;
   try {
     const { data } = await supabase.auth.getClaims();
@@ -103,8 +129,6 @@ export async function proxy(request: NextRequest) {
   } catch {
     userId = null;
   }
-
-  const { pathname } = request.nextUrl;
 
   // Audit fix S-8: redirect mixed-case URLs to lowercase. Slugs in this
   // app (workspaces, canvases, knowledge bases, entries, clusters) are
@@ -154,7 +178,7 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Allow public routes
+  // Allow public routes (session-aware: /login bounces a signed-in visitor).
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
     return supabaseResponse;
   }

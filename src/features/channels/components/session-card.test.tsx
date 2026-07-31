@@ -185,6 +185,17 @@ describe("OpenWindowControls", () => {
     expect(markup).not.toContain('disabled=""');
   });
 
+  it("renders the note it is GIVEN, not a hardcoded one", () => {
+    // The control was rewired from a boolean to a note string; rendering the
+    // constant instead of the prop made the budget refusal unreachable and told
+    // the operator to fix the wrong thing.
+    const markup = renderToStaticMarkup(
+      <OpenWindowControls busy={false} note={SESSION_BUDGET_NOTE} onOpen={noop} />
+    );
+    expect(markup).toContain("Close one and try again");
+    expect(markup).not.toContain("available on this machine");
+  });
+
   it("scopes the note to the CHANNEL, not to a missing local session", () => {
     // A thread with no local record now OPENS (the desktop resolves the channel
     // from the API and paints history read-only), so the old machine-scoped

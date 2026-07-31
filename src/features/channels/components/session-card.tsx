@@ -392,7 +392,7 @@ export function OpenWindowControls({
     <>
       {note && (
         <span className="shrink-0 truncate text-caption text-text-muted">
-          {NO_LOCAL_SESSION_NOTE}
+          {note}
         </span>
       )}
       <button
