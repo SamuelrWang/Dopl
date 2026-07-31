@@ -6,12 +6,16 @@
  */
 
 import type { DoplClient } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { ok, type ToolResponse } from "./respond";
 import {
   renderObject,
   resolveObjectRef,
   resolveResourceHandles,
 } from "./ontology-render";
+
+/** Same rule as ontology-render.ts: a graph name is a value. */
+const NO_NAME = "`(unnamed)`";
 
 export async function opMap(client: DoplClient): Promise<ToolResponse> {
   const snapshot = await client.getOntology();
@@ -22,14 +26,16 @@ export async function opMap(client: DoplClient): Promise<ToolResponse> {
   }
   const lines: string[] = [];
   for (const c of snapshot.clusters) {
-    lines.push(`## ${c.name} \`${c.slug}\`${c.purpose ? ` — ${c.purpose}` : ""}`);
+    const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
+    lines.push(`## ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}`);
     for (const columnId of c.columnIds) {
       const column = snapshot.objects[columnId];
       if (!column) continue;
       const members = column.childIds
         .map((id) => snapshot.objects[id]?.name)
-        .filter(Boolean);
-      lines.push(`- **${column.name}** (${members.length}): ${members.join(", ") || "empty"}`);
+        .filter((n): n is string => Boolean(n))
+        .map((n) => inlineOr(n, NO_NAME));
+      lines.push(`- ${inlineOr(column.name, NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
     }
     lines.push("");
   }
@@ -58,17 +64,24 @@ export async function opResolve(client: DoplClient, query: string): Promise<Tool
       o.name.toLowerCase().includes(needle) || o.subtitle.toLowerCase().includes(needle)
   );
   if (hits.length === 0) {
-    return ok(`No objects match "${query}". op="map" shows everything.`);
+    return ok(`No objects match ${inlineOr(query, "`(unreadable query)`")}. op="map" shows everything.`);
   }
-  const containerOf = (id: string) =>
-    Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
+  const containerOf = (id: string) => {
+    // The "kind" is the containing OBJECT'S NAME, member-typed like any other.
+    const name = Object.values(snapshot.objects).find((o) =>
+      o.childIds.includes(id),
+    )?.name;
+    return name ? inlineOr(name, NO_NAME) : "column";
+  };
   const lines = hits
     .slice(0, 20)
     .map((o) => {
-      const kind = containerOf(o.id) ?? "column";
-      return `- **${o.name}** (${kind} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`;
+      const subtitle = o.subtitle ? ` — ${inlineOr(o.subtitle, "")}` : "";
+      return `- ${inlineOr(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`;
     });
-  return ok(`Matches for "${query}":\n${lines.join("\n")}\n\nRead one with op="get".`);
+  return ok(
+    `Matches for ${inlineOr(query, "`(unreadable query)`")}:\n${lines.join("\n")}\n\nRead one with op="get".`,
+  );
 }
 
 export async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {

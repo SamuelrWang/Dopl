@@ -16,6 +16,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
 const zod_1 = require("zod");
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
 const ontology_ops_write_1 = require("./ontology-ops-write");
@@ -129,7 +130,7 @@ function registerOntologyTool(register, client) {
             if ("fail" in resolved)
                 return resolved.fail;
             await client.deleteOntologyObject(resolved.hit.id);
-            return (0, respond_1.ok)(`Deleted object **${resolved.hit.name}** (\`${resolved.hit.id}\`).`);
+            return (0, respond_1.ok)(`Deleted object ${(0, narration_1.inlineOr)(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.id}\`).`);
         }
         const miss = (0, respond_1.missingParams)("delete_cluster", args, ["cluster"]);
         if (miss)
@@ -139,7 +140,7 @@ function registerOntologyTool(register, client) {
             return resolved.fail;
         const count = countClusterObjects(snapshot, resolved.hit);
         await client.deleteOntologyCluster(resolved.hit.id);
-        return (0, respond_1.ok)(`Cascade soft-deleted cluster **${resolved.hit.name}** (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and its ${count} object${count === 1 ? "" : "s"}. Recoverable — restore with dopl_ontology(op="restore_cluster", cluster="${resolved.hit.id}").`);
+        return (0, respond_1.ok)(`Cascade soft-deleted cluster ${(0, narration_1.inlineOr)(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and its ${count} object${count === 1 ? "" : "s"}. Recoverable — restore with dopl_ontology(op="restore_cluster", cluster="${resolved.hit.id}").`);
     });
 }
 /**

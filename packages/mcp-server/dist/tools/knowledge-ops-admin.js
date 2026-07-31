@@ -9,8 +9,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opDeleteBase = opDeleteBase;
 exports.opDeleteFolder = opDeleteFolder;
 exports.opDeleteFile = opDeleteFile;
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+/** Same rule as the write ops: a stored name or a path is a value. */
+const NO_NAME = "`(unnamed)`";
+const NO_PATH = "`(unreadable path)`";
 async function opDeleteBase(client, ref) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
@@ -25,7 +29,7 @@ async function opDeleteBase(client, ref) {
             return denied;
         throw e;
     }
-    return (0, respond_1.ok)(`Deleted **${base.name}** (slug: \`${base.slug}\`). Restore with \`dopl_kb(op='restore_base')\`.`);
+    return (0, respond_1.ok)(`Deleted ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). Restore with \`dopl_kb(op='restore_base')\`.`);
 }
 async function opDeleteFolder(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -42,10 +46,10 @@ async function opDeleteFolder(client, ref, path) {
         throw e;
     }
     if (result.kind !== "folder") {
-        return (0, respond_1.err)(`Path "${path}" resolved to a ${result.kind}, not a folder. ` +
+        return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(path, NO_PATH)} resolved to a ${result.kind}, not a folder. ` +
             `Use \`dopl_kb_admin(op='delete_file')\` for entries.`);
     }
-    return (0, respond_1.ok)(`Folder deleted at \`${path}\`.`);
+    return (0, respond_1.ok)(`Folder deleted at ${(0, narration_1.inlineOr)(path, NO_PATH)}.`);
 }
 async function opDeleteFile(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -62,8 +66,8 @@ async function opDeleteFile(client, ref, path) {
         throw e;
     }
     if (result.kind !== "entry") {
-        return (0, respond_1.err)(`Path "${path}" resolved to a ${result.kind}, not an entry. ` +
+        return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(path, NO_PATH)} resolved to a ${result.kind}, not an entry. ` +
             `Use \`dopl_kb_admin(op='delete_folder')\` for folders.`);
     }
-    return (0, respond_1.ok)(`Entry deleted at \`${path}\`. Restore via \`dopl_kb(op='list_trash')\` + \`dopl_kb(op='restore_file')\`.`);
+    return (0, respond_1.ok)(`Entry deleted at ${(0, narration_1.inlineOr)(path, NO_PATH)}. Restore via \`dopl_kb(op='list_trash')\` + \`dopl_kb(op='restore_file')\`.`);
 }

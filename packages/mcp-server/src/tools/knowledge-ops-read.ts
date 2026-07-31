@@ -6,8 +6,29 @@
  */
 
 import type { DoplClient } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { ok, type ToolResponse } from "./respond";
 import { isErr, resolveBaseOr } from "./knowledge-shared";
+
+/**
+ * WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ.
+ *
+ * A published base is workspace-visible, so every name, description, title and
+ * excerpt below can have been typed by another member. The two halves get
+ * different treatment on purpose:
+ *
+ *   - NAMES, TITLES, DESCRIPTIONS, EXCERPTS are spliced into lines we wrote —
+ *     a `## ` heading, a `- **…**` row, a `📁 name/` tree row. They are values,
+ *     and they go through the neutralizer. Only folder names and entry titles
+ *     carry a charset rule today (`NAME_RE`, features/knowledge/schema.ts); base
+ *     names, base descriptions, folder descriptions and entry excerpts are
+ *     bounded by LENGTH ONLY, so a newline in any of them started a line.
+ *
+ *   - THE ENTRY BODY is not touched. It is the document the user wrote for the
+ *     agent to read and act on; stripping its markdown would break the product.
+ *     `read_file` renders it below a `---` rule, as itself.
+ */
+const NO_NAME = "`(unnamed)`";
 
 export async function opListBases(client: DoplClient): Promise<ToolResponse> {
   const bases = await client.listKbBases();
@@ -18,9 +39,9 @@ export async function opListBases(client: DoplClient): Promise<ToolResponse> {
     // Surface the immutable id alongside the slug (the slug changes on
     // rename; the id is a stable handle) plus the access signal.
     const vis = b.visibility === "private" ? "private" : "public";
-    const desc = b.description ? `\n  ${b.description}` : "";
+    const desc = b.description ? `\n  ${inlineOr(b.description, "")}` : "";
     lines.push(
-      `- **${b.name}** (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
+      `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
     );
   }
   return ok(lines.join("\n"));
@@ -48,9 +69,9 @@ export async function opGetTree(
   const entryTotal = tree.entryTotal ?? tree.entries.length;
   const vis = tree.base.visibility === "private" ? "private" : "public";
   const lines = [
-    `## ${tree.base.name} \`${tree.base.slug}\``,
+    `## ${inlineOr(tree.base.name, NO_NAME)} \`${tree.base.slug}\``,
     `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
-    ...(tree.base.description ? [tree.base.description] : []),
+    ...(tree.base.description ? [inlineOr(tree.base.description, "")] : []),
     `Folders: ${tree.folders.length} · Entries: ${entryTotal}${tree.entries.length < entryTotal ? ` (showing ${tree.entries.length})` : ""}`,
     "",
   ];
@@ -73,11 +94,11 @@ export async function opGetTree(
     arr.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
   function dump(parentId: string | null, prefix: string): void {
     for (const f of childFolders.get(parentId) ?? []) {
-      lines.push(`${prefix}📁 ${f.name}/${descSuffix(f.description)}`);
+      lines.push(`${prefix}📁 ${inlineOr(f.name, NO_NAME)}/${descSuffix(f.description)}`);
       dump(f.id, prefix + "  ");
     }
     for (const e of childEntries.get(parentId) ?? []) {
-      lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
+      lines.push(`${prefix}📄 ${inlineOr(e.title, NO_NAME)}${descSuffix(e.excerpt)}`);
     }
   }
   dump(null, "");
@@ -91,31 +112,23 @@ export async function opGetTree(
 }
 
 /**
- * Rendered-description cap for tree / dir rows. Folder descriptions and
- * entry excerpts are stored up to 300 chars, but a tree row only needs a
- * glance — truncate to keep the whole listing cheap. Agents read_file /
- * get the full text when they open the entry.
- */
-const DESC_RENDER_CAP = 120;
-
-/**
- * ` — description` suffix for tree / directory rows. Folder
- * `description` and entry `excerpt` are the user-curated, agent-facing
- * summaries (≤300 chars) — surfacing them here lets agents pick the
- * right file from a listing instead of read_file-ing everything.
- * Newlines are flattened so one row stays one line, and the rendered
- * text is truncated (~120 chars, ellipsis) so trees stay compact. Only
- * renders the separator when a description is present.
+ * ` — description` suffix for tree / directory rows. Folder `description` and
+ * entry `excerpt` are the user-curated, agent-facing summaries (≤300 chars) —
+ * surfacing them here lets agents pick the right file from a listing instead of
+ * read_file-ing everything.
+ *
+ * This used to hand-roll its own flatten-and-truncate: `\s*\n+\s*` → space,
+ * then a 120-char clip. That closed the obvious newline but not the rest —
+ * U+0085 (NEL) is not in JavaScript's `\s` class and survives it, and nothing
+ * touched backticks or `**`. It now defers to the shared neutralizer, which is
+ * the point of having one: the row is bounded, flattened, and rendered as a
+ * value, by the same rule as every other label in this tool set. Only renders
+ * the separator when something survives.
  */
 function descSuffix(text: string | null | undefined): string {
   if (!text) return "";
-  const flat = text.replace(/\s*\n+\s*/g, " ").trim();
-  if (!flat) return "";
-  const rendered =
-    flat.length > DESC_RENDER_CAP
-      ? `${flat.slice(0, DESC_RENDER_CAP - 1).trimEnd()}…`
-      : flat;
-  return ` — ${rendered}`;
+  const rendered = inlineOr(text, "");
+  return rendered ? ` — ${rendered}` : "";
 }
 
 export async function opListDir(client: DoplClient, ref: string, path?: string): Promise<ToolResponse> {
@@ -123,16 +136,16 @@ export async function opListDir(client: DoplClient, ref: string, path?: string):
   if (isErr(base)) return base;
   const listing = await client.listKbDirByPath(base.id, path ?? "");
   const lines: string[] = [];
-  const where = listing.folder ? listing.folder.name : "(root)";
-  lines.push(`## ${base.name} → ${where}`);
-  if (listing.folder?.description) lines.push(listing.folder.description);
+  const where = listing.folder ? inlineOr(listing.folder.name, NO_NAME) : "(root)";
+  lines.push(`## ${inlineOr(base.name, NO_NAME)} → ${where}`);
+  if (listing.folder?.description) lines.push(inlineOr(listing.folder.description, ""));
   if (listing.folders.length === 0 && listing.entries.length === 0) {
     lines.push("Empty.");
   } else {
     for (const f of listing.folders)
-      lines.push(`📁 ${f.name}/${descSuffix(f.description)}`);
+      lines.push(`📁 ${inlineOr(f.name, NO_NAME)}/${descSuffix(f.description)}`);
     for (const e of listing.entries)
-      lines.push(`📄 ${e.title}${descSuffix(e.excerpt)}`);
+      lines.push(`📄 ${inlineOr(e.title, NO_NAME)}${descSuffix(e.excerpt)}`);
   }
   return ok(lines.join("\n"));
 }
@@ -142,7 +155,9 @@ export async function opReadFile(client: DoplClient, ref: string, path: string):
   if (isErr(base)) return base;
   const entry = await client.readKbFileByPath(base.id, path);
   const lines = [
-    `# ${entry.title}`,
+    // The title is a heading; the BODY below the `---` is the document itself
+    // and is deliberately untouched.
+    `# ${inlineOr(entry.title, NO_NAME)}`,
     `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
     `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
     "",
@@ -168,19 +183,19 @@ export async function opListTrash(client: DoplClient, ref?: string): Promise<Too
   if (trash.bases.length > 0) {
     lines.push("### Bases");
     for (const b of trash.bases)
-      lines.push(`- **${b.name}** (slug: \`${b.slug}\`) — deleted ${b.deletedAt}`);
+      lines.push(`- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\`) — deleted ${b.deletedAt}`);
     lines.push("");
   }
   if (trash.folders.length > 0) {
     lines.push("### Folders");
     for (const f of trash.folders)
-      lines.push(`- ${f.name} (id: \`${f.id}\`) — deleted ${f.deletedAt}`);
+      lines.push(`- ${inlineOr(f.name, NO_NAME)} (id: \`${f.id}\`) — deleted ${f.deletedAt}`);
     lines.push("");
   }
   if (trash.entries.length > 0) {
     lines.push("### Entries");
     for (const e of trash.entries)
-      lines.push(`- ${e.title} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
+      lines.push(`- ${inlineOr(e.title, NO_NAME)} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
   }
   return ok(lines.join("\n"));
 }
@@ -197,15 +212,19 @@ export async function opSearch(client: DoplClient, query: string, base?: string,
     baseSlug = resolved.slug;
   }
   const hits = await client.searchKb(query, { baseSlug, limit });
+  const shownQuery = inlineOr(query, "`(unreadable query)`");
   if (hits.length === 0) {
-    return ok(`No matches for "${query}".`);
+    return ok(`No matches for ${shownQuery}.`);
   }
-  const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for "${query}"\n`];
+  const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for ${shownQuery}\n`];
   for (const h of hits) {
-    // Strip the highlight tags for plain-text agent consumption.
-    const cleanSnippet = h.snippet.replace(/<\/?b>/g, "**");
+    // The highlight tags used to become `**` — our own markdown, wrapped around
+    // an excerpt of a member-authored body and dropped onto an indented line
+    // with no framing. Drop the tags and render the excerpt as a value instead;
+    // the words are what make a hit pickable, the bold was a nicety.
+    const cleanSnippet = inlineOr(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`");
     lines.push(
-      `- **${h.title}** _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`
+      `- ${inlineOr(h.title, NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`
     );
   }
   return ok(lines.join("\n"));

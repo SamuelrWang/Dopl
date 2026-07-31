@@ -13,9 +13,17 @@ import type {
   OntologyObject,
   OntologySnapshot,
 } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { err, isConflict, missingParams, ok, type ToolResponse } from "./respond";
 import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
 import { opAnchor, opGet, opMap, opResolve } from "./ontology-ops-read";
+
+/**
+ * Write confirmations read the STORED name back — the server canonicalises it,
+ * and on `create_object` the fields listed are copied from the PARENT, which
+ * another member authored. Same rule as the read side: a name is a value.
+ */
+const NO_NAME = "`(unnamed)`";
 
 export interface OntologyArgs {
   op: string;
@@ -86,7 +94,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
         purpose: args.purpose,
       });
       return ok(
-        `Created cluster **${cluster.name}** (slug: \`${cluster.slug}\`). Add columns with op="create_column".`
+        `Created cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add columns with op="create_column".`
       );
     }
     case "update_cluster": {
@@ -97,7 +105,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
         name: args.name,
         purpose: args.purpose,
       });
-      return ok(`Updated cluster **${cluster.name}** (slug: \`${cluster.slug}\`).`);
+      return ok(`Updated cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
     }
     case "restore_cluster": {
       // A trashed cluster is absent from the snapshot (reads exclude
@@ -105,7 +113,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
       // through and let the server find the tombstone by id/slug.
       const cluster = await client.restoreOntologyCluster(args.cluster as string);
       return ok(
-        `Restored cluster **${cluster.name}** (slug: \`${cluster.slug}\`) and the objects its delete cascaded. Run op="map" to verify.`
+        `Restored cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`) and the objects its delete cascaded. Run op="map" to verify.`
       );
     }
     case "create_column": {
@@ -117,7 +125,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
         name: args.name as string,
       });
       return ok(
-        `Created column **${column.name}** (id: \`${column.id}\`) in ${resolved.hit.name}. Add objects with op="create_object" parent="${column.id}".`
+        `Created column ${inlineOr(column.name, NO_NAME)} (id: \`${column.id}\`) in ${inlineOr(resolved.hit.name, NO_NAME)}. Add objects with op="create_object" parent="${column.id}".`
       );
     }
     case "create_object": {
@@ -131,13 +139,15 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
       });
       const born: string[] = [];
       if (object.attributes.length) {
-        born.push(`fields ${object.attributes.map((a) => a.label).join(", ")}`);
+        born.push(
+          `fields ${object.attributes.map((a) => inlineOr(a.label, NO_NAME)).join(", ")}`,
+        );
       }
       if (object.relationships.length) born.push(`${object.relationships.length} relationship(s)`);
       if (object.methods.length) born.push(`${object.methods.length} action(s)`);
       const bornNote = born.length ? ` Born with ${born.join(" · ")}.` : "";
       return ok(
-        `Created **${object.name}** (id: \`${object.id}\`) inside ${resolved.hit.name}.${bornNote}`
+        `Created ${inlineOr(object.name, NO_NAME)} (id: \`${object.id}\`) inside ${inlineOr(resolved.hit.name, NO_NAME)}.${bornNote}`
       );
     }
     case "update_object":
@@ -147,7 +157,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
           { name: args.name, subtitle: args.subtitle },
           args.expected_version
         );
-        return ok(`Updated **${args.name ?? object.name}** (\`${object.id}\`).`);
+        return ok(`Updated ${inlineOr(args.name ?? object.name, NO_NAME)} (\`${object.id}\`).`);
       });
     case "set_template_field":
       return withObject(client, args.object as string, async (object) => {
@@ -167,7 +177,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
           : [...current, field];
         await client.updateOntologyObject(object.id, { template }, args.expected_version);
         return ok(
-          `Set default field **${label}** (${kind}) on **${object.name}** — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => f.label).join(", ")}.`
+          `Set default field ${inlineOr(label, NO_NAME)} (${kind}) on ${inlineOr(object.name, NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => inlineOr(f.label, NO_NAME)).join(", ")}.`
         );
       });
     case "remove_template_field":
@@ -176,10 +186,14 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
         const current = object.template ?? [];
         const template = current.filter((f) => f.label.toLowerCase() !== needle);
         if (template.length === current.length) {
-          return err(`**${object.name}** has no default field "${args.label}".`);
+          return err(
+            `${inlineOr(object.name, NO_NAME)} has no default field ${inlineOr(args.label, NO_NAME)}.`,
+          );
         }
         await client.updateOntologyObject(object.id, { template }, args.expected_version);
-        return ok(`Removed default field "${args.label}" from **${object.name}**.`);
+        return ok(
+          `Removed default field ${inlineOr(args.label, NO_NAME)} from ${inlineOr(object.name, NO_NAME)}.`,
+        );
       });
     case "set_attribute":
       return opSetAttribute(client, args);
@@ -190,10 +204,14 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
           (a) => a.label.toLowerCase() !== label
         );
         if (attributes.length === object.attributes.length) {
-          return err(`**${object.name}** has no attribute "${args.label}".`);
+          return err(
+            `${inlineOr(object.name, NO_NAME)} has no attribute ${inlineOr(args.label, NO_NAME)}.`,
+          );
         }
         await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
-        return ok(`Removed attribute "${args.label}" from **${object.name}**.`);
+        return ok(
+          `Removed attribute ${inlineOr(args.label, NO_NAME)} from ${inlineOr(object.name, NO_NAME)}.`,
+        );
       });
     case "set_relationship":
     case "remove_relationship":
@@ -213,27 +231,31 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
           ? object.methods.map((m) => (m === existing ? method : m))
           : [...object.methods, method];
         await client.updateOntologyObject(object.id, { methods }, args.expected_version);
-        return ok(`Set action **${name}** on **${object.name}**.`);
+        return ok(`Set action ${inlineOr(name, NO_NAME)} on ${inlineOr(object.name, NO_NAME)}.`);
       });
     case "remove_action":
       return withObject(client, args.object as string, async (object) => {
         const needle = (args.name as string).toLowerCase();
         const methods = object.methods.filter((m) => m.name.toLowerCase() !== needle);
         if (methods.length === object.methods.length) {
-          return err(`**${object.name}** has no action "${args.name}".`);
+          return err(
+            `${inlineOr(object.name, NO_NAME)} has no action ${inlineOr(args.name, NO_NAME)}.`,
+          );
         }
         await client.updateOntologyObject(object.id, { methods }, args.expected_version);
-        return ok(`Removed action "${args.name}" from **${object.name}**.`);
+        return ok(
+          `Removed action ${inlineOr(args.name, NO_NAME)} from ${inlineOr(object.name, NO_NAME)}.`,
+        );
       });
     case "claim_anchor":
       return withObject(client, args.object as string, async (object) => {
         await client.claimOntologyAnchor(object.id);
         return ok(
-          `Anchored the calling user to **${object.name}** (\`${object.id}\`). op="anchor" now resolves to it.`
+          `Anchored the calling user to ${inlineOr(object.name, NO_NAME)} (\`${object.id}\`). op="anchor" now resolves to it.`
         );
       });
     default:
-      return err(`Unknown op "${args.op}".`);
+      return err(`Unknown op ${inlineOr(args.op, "`(unreadable)`")}.`);
   }
 }
 
@@ -253,7 +275,7 @@ async function withObject(
     // guidance (mirrors dopl_kb write_file), not an opaque throw.
     if (isConflict(e)) {
       return err(
-        `**${resolved.hit.name}** (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`
+        `${inlineOr(resolved.hit.name, NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`
       );
     }
     throw e;
@@ -273,7 +295,7 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
       const cap = kind === "pill" ? PILL_VALUE_MAX : TEXT_VALUE_MAX;
       if (args.value.length > cap) {
         return err(
-          `set_attribute kind="${kind}" value for "${label}" is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`
+          `set_attribute kind="${kind}" value for ${inlineOr(label, NO_NAME)} is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`
         );
       }
       value = { kind, value: args.value };
@@ -303,7 +325,7 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
         ? object.attributes.map((a, i) => (i === existing ? attribute : a))
         : [...object.attributes, attribute];
     await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
-    return ok(`Set attribute "${label}" on **${object.name}**.`);
+    return ok(`Set attribute ${inlineOr(label, NO_NAME)} on ${inlineOr(object.name, NO_NAME)}.`);
   });
 }
 
@@ -315,14 +337,18 @@ async function opSetRelationship(client: DoplClient, args: OntologyArgs): Promis
 
     if (args.op === "remove_relationship") {
       if (kept.length === object.relationships.length) {
-        return err(`**${object.name}** has no relationship "${label}".`);
+        return err(
+          `${inlineOr(object.name, NO_NAME)} has no relationship ${inlineOr(label, NO_NAME)}.`,
+        );
       }
       await client.updateOntologyObject(
         object.id,
         { relationships: kept },
         args.expected_version
       );
-      return ok(`Removed relationship "${label}" from **${object.name}**.`);
+      return ok(
+        `Removed relationship ${inlineOr(label, NO_NAME)} from ${inlineOr(object.name, NO_NAME)}.`,
+      );
     }
 
     // F-19: an empty targets array slips past the required-param check (which
@@ -331,7 +357,7 @@ async function opSetRelationship(client: DoplClient, args: OntologyArgs): Promis
     // set_attribute kind="ref".
     if (!args.targets?.length) {
       return err(
-        `set_relationship needs \`targets\` (at least one object). To clear "${label}", use op="remove_relationship".`
+        `set_relationship needs \`targets\` (at least one object). To clear ${inlineOr(label, NO_NAME)}, use op="remove_relationship".`
       );
     }
 
@@ -344,8 +370,12 @@ async function opSetRelationship(client: DoplClient, args: OntologyArgs): Promis
     }
     const relationships = [...kept, { label, targetIds: resolved.ids }];
     await client.updateOntologyObject(object.id, { relationships }, args.expected_version);
-    const names = resolved.ids.map((id) => snapshot.objects[id]?.name ?? id);
-    return ok(`Set **${object.name}** —${label}→ ${names.join(", ")}.`);
+    const names = resolved.ids.map((id) =>
+      snapshot.objects[id] ? inlineOr(snapshot.objects[id].name, NO_NAME) : `\`${id}\``,
+    );
+    return ok(
+      `Set ${inlineOr(object.name, NO_NAME)} —${inlineOr(label, NO_NAME)}→ ${names.join(", ")}.`,
+    );
   });
 }
 
@@ -399,14 +429,14 @@ async function resolveResourceValues(
         continue;
       }
     }
-    const known = resources.map((r) => `\`${r.slug}\``).join(", ") || "none";
+    const known = resources.map((r) => inlineOr(r.slug, NO_NAME)).join(", ") || "none";
     const entryHint =
       kind === "knowledge"
         ? ` For a specific entry, pass \`<base>/<entry path>\` or the entry's uuid.`
         : "";
     return {
       fail: err(
-        `No ${kind === "knowledge" ? "knowledge base" : "skill"} \`${ref}\`. Available: ${known}.${entryHint}`
+        `No ${kind === "knowledge" ? "knowledge base" : "skill"} ${inlineOr(ref, NO_NAME)}. Available: ${known}.${entryHint}`
       ),
     };
   }
@@ -439,7 +469,7 @@ async function resolveKbEntryRef(
     } catch {
       return {
         fail: err(
-          `No entry at \`${path}\` in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`
+          `No entry at ${inlineOr(path, NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`
         ),
       };
     }

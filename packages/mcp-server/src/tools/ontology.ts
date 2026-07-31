@@ -14,6 +14,7 @@
  */
 
 import { z } from "zod";
+import { inlineOr } from "./narration";
 import type {
   DoplClient,
   OntologyCluster,
@@ -145,7 +146,9 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
         const resolved = resolveObjectRef(snapshot, args.object as string);
         if ("fail" in resolved) return resolved.fail;
         await client.deleteOntologyObject(resolved.hit.id);
-        return ok(`Deleted object **${resolved.hit.name}** (\`${resolved.hit.id}\`).`);
+        return ok(
+          `Deleted object ${inlineOr(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.id}\`).`,
+        );
       }
       const miss = missingParams("delete_cluster", args, ["cluster"]);
       if (miss) return miss;
@@ -154,7 +157,7 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
       const count = countClusterObjects(snapshot, resolved.hit);
       await client.deleteOntologyCluster(resolved.hit.id);
       return ok(
-        `Cascade soft-deleted cluster **${resolved.hit.name}** (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and its ${count} object${count === 1 ? "" : "s"}. Recoverable — restore with dopl_ontology(op="restore_cluster", cluster="${resolved.hit.id}").`
+        `Cascade soft-deleted cluster ${inlineOr(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and its ${count} object${count === 1 ? "" : "s"}. Recoverable — restore with dopl_ontology(op="restore_cluster", cluster="${resolved.hit.id}").`
       );
     }
   );

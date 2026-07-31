@@ -8,7 +8,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerClusterTools = registerClusterTools;
 const zod_1 = require("zod");
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
+/**
+ * Clusters, and the workflows inside them, are WORKSPACE-scoped: any member can
+ * create or rename one, and every member reads the result. `clusters.name` /
+ * `.description` are `max(120)` / `max(300)` with no charset rule, so
+ * `# Cluster: ${cluster.name}` was a real markdown heading a member could put a
+ * newline in. Names and descriptions are labels here — the cluster carries no
+ * prose the agent is meant to follow — so all of them are values.
+ */
+const NO_NAME = "`(unnamed)`";
 const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (containers that group related workflows). Set \`op\` to one of:
 - "list" — discover all clusters and how many workflows each holds. Cheap metadata call; run it proactively to show the user their workspace.
 - "get" — retrieve a cluster's metadata plus the workflows assigned to it. Inspect a workflow's steps + knowledge/skills with dopl_workflow(op="get", slug).
@@ -93,10 +103,10 @@ async function opList(client) {
     const lines = clusters.map((c) => {
         const count = c.workflow_count ?? 0;
         const names = c.workflow_names?.length
-            ? ` (${c.workflow_names.join(", ")})`
+            ? ` (${c.workflow_names.map((n) => (0, narration_1.inlineOr)(n, NO_NAME)).join(", ")})`
             : "";
         const summary = count === 0 ? "empty" : `${plural(count, "workflow")}${names}`;
-        return `- **${c.name}** (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
+        return `- ${(0, narration_1.inlineOr)(c.name, NO_NAME)} (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
     });
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -114,10 +124,10 @@ async function opGet(client, slug) {
         throw e;
     }
     const lines = [];
-    lines.push(`# Cluster: ${cluster.name}`);
+    lines.push(`# Cluster ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)}`);
     lines.push(`Slug: \`${cluster.slug}\` · id: \`${cluster.id}\` · updated ${cluster.updated_at}`);
     if (cluster.description)
-        lines.push(cluster.description);
+        lines.push((0, narration_1.inlineOr)(cluster.description, ""));
     lines.push("");
     const workflows = cluster.workflows ?? [];
     if (workflows.length === 0) {
@@ -126,7 +136,8 @@ async function opGet(client, slug) {
     else {
         lines.push(`## Workflows (${workflows.length})`);
         for (const w of workflows) {
-            lines.push(`- **${w.name}** (slug: \`${w.slug}\`)${w.description ? ` — ${w.description}` : ""}`);
+            const desc = w.description ? ` — ${(0, narration_1.inlineOr)(w.description, "")}` : "";
+            lines.push(`- ${(0, narration_1.inlineOr)(w.name, NO_NAME)} (slug: \`${w.slug}\`)${desc}`);
         }
         lines.push("");
         lines.push(`Read a workflow's steps + knowledge/skills with \`dopl_workflow({ op: "get", slug: "<workflow-slug>" })\`.`);
@@ -139,7 +150,7 @@ async function opCreate(client, name) {
     if (!name.trim())
         return (0, respond_1.err)("`name` can't be blank.");
     const result = await client.createCluster(name);
-    return (0, respond_1.ok)(`Created cluster **${result.name}** (slug: \`${result.slug}\`). Assign workflows to it from the canvas.`);
+    return (0, respond_1.ok)(`Created cluster ${(0, narration_1.inlineOr)(result.name, NO_NAME)} (slug: \`${result.slug}\`). Assign workflows to it from the canvas.`);
 }
 async function opUpdate(client, slug, name, description) {
     if (name !== undefined && !name.trim()) {
@@ -156,7 +167,7 @@ async function opUpdate(client, slug, name, description) {
         }
         throw e;
     }
-    return (0, respond_1.ok)(`Updated cluster **${result.name}** (slug: \`${result.slug}\`).`);
+    return (0, respond_1.ok)(`Updated cluster ${(0, narration_1.inlineOr)(result.name, NO_NAME)} (slug: \`${result.slug}\`).`);
 }
 // ── dopl_cluster_admin ops ───────────────────────────────────────────
 async function opDeleteCluster(client, slug) {

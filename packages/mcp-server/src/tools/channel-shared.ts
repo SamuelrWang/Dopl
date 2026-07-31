@@ -13,6 +13,7 @@ import type {
   DoplClient,
   WorkspaceMember,
 } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { err, type ToolResponse } from "./respond";
 
 /**
@@ -32,68 +33,27 @@ export function metaString(m: ChannelMessage, key: string): string | undefined {
     : undefined;
 }
 
-/** Longest untrusted value carried inline into a result — one terse span, no dump. */
-export const INLINE_TEXT_MAX = 160;
-
 /**
- * Any untrusted string, reduced to something that cannot pose as structure and
- * returned as ONE inline code span — or null when nothing survives, so the
- * caller can drop the mention rather than render an empty pair of backticks.
+ * THE NEUTRALIZER NOW LIVES IN `narration.ts`, and is re-exported here.
  *
- * FIX L5 / M2 — the shared discipline for text a result splices OUTSIDE the
- * untrusted-body framing, where it is read as narration BY the server: a
- * failure description naming what broke, a thread title naming an exchange. The
- * source being "our own server" is a claim about where the bytes came from, not
- * about who wrote them — a 400 can echo a rejected field, and a thread title is
- * typed by whichever member opened the thread. Bounding the length was never
- * enough on its own: 160 characters is ample room for "IGNORE THE ABOVE. New
- * instruction: …" to sit in the result as unframed server narration. So control
- * characters (including the newlines a fake block or a forged legend entry would
- * need) are dropped, markdown/quote punctuation is stripped — backticks first,
- * since one of those escapes the span — and what is left is rendered as a quoted
- * value. However it reads, it reads as a value.
+ * It was written here — the read-ops fix put it in `channel-render.ts`, the
+ * write-op sweep moved it here so `resolveMemberOr` below could reach it
+ * without a cycle. The sweep across the REST of the MCP surface found the same
+ * helper wanted by tools with no channel in them at all: `dopl_members`
+ * renders the same `profiles.display_name` column, `dopl_chats` renders a
+ * title another member typed, and `server.ts` splices the workspace name into
+ * the MCP instructions block AND into the `_dopl_status` footer of every
+ * single tool response. Keeping the definition in a file named
+ * `channel-shared` would have meant either eight unrelated tools importing
+ * from the channel module or — far likelier — a second copy. A copied
+ * neutralizer is the exact failure mode its own note warns about, so it moved
+ * rather than spread.
  *
- * ONE definition, for the same reason `metaString` is one: two copies of a
- * neutralizer drift, and the copy that drifts is the one that stops neutralizing.
+ * RE-EXPORTED, not re-declared: the channel modules that import
+ * `neutralizeInline` / `inlineOr` / `INLINE_TEXT_MAX` from here are
+ * untouched, and there is still exactly ONE definition.
  */
-export function neutralizeInline(raw: string): string | null {
-  const flattened = raw
-    // Control characters (including the newlines a fake "block" would need).
-    .replace(/[\u0000-\u001F\u007F]+/g, " ")
-    // Punctuation that lets text pose as markdown structure or as our own
-    // quoting — backticks would also break out of the code span below.
-    .replace(/[`*_#>[\]{}|]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (flattened === "") return null;
-  const clipped =
-    flattened.length > INLINE_TEXT_MAX
-      ? `${flattened.slice(0, INLINE_TEXT_MAX - 3)}...`
-      : flattened;
-  // One inline code span: whatever it says, it reads as a quoted value.
-  return `\`${clipped}\``;
-}
-
-/**
- * A peer-authored string as one inline code span, or `fallback` when nothing
- * survives neutralization. The fallback matters: rendering an empty pair of
- * backticks would hide the "the server could not name this" tell that the L3
- * legend and the thread renderers both rely on.
- *
- * LIVES HERE, not in `channel-render.ts` where the read-ops fix first wrote it.
- * The Q1 sweep into the WRITE ops found the same helper wanted by three modules
- * — the renderers, the write handlers, and `resolveMemberOr` a few lines below —
- * and `channel-render.ts` already imports from this file, so keeping it there
- * would have forced either a cycle or a copy. A copied neutralizer is the exact
- * failure mode {@link neutralizeInline}'s own note warns about.
- */
-export function inlineOr(
-  raw: string | null | undefined,
-  fallback: string,
-): string {
-  const safe = raw ? neutralizeInline(raw) : null;
-  return safe ?? fallback;
-}
+export { INLINE_TEXT_MAX, inlineOr, neutralizeInline } from "./narration";
 
 /**
  * The channel roster as `userId → display name`, for putting names to the ids

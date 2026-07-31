@@ -7,7 +7,18 @@
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { err, ok, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+
+/**
+ * Clusters, and the workflows inside them, are WORKSPACE-scoped: any member can
+ * create or rename one, and every member reads the result. `clusters.name` /
+ * `.description` are `max(120)` / `max(300)` with no charset rule, so
+ * `# Cluster: ${cluster.name}` was a real markdown heading a member could put a
+ * newline in. Names and descriptions are labels here — the cluster carries no
+ * prose the agent is meant to follow — so all of them are values.
+ */
+const NO_NAME = "`(unnamed)`";
 
 const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (containers that group related workflows). Set \`op\` to one of:
 - "list" — discover all clusters and how many workflows each holds. Cheap metadata call; run it proactively to show the user their workspace.
@@ -112,10 +123,10 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
   const lines = clusters.map((c) => {
     const count = c.workflow_count ?? 0;
     const names = c.workflow_names?.length
-      ? ` (${c.workflow_names.join(", ")})`
+      ? ` (${c.workflow_names.map((n) => inlineOr(n, NO_NAME)).join(", ")})`
       : "";
     const summary = count === 0 ? "empty" : `${plural(count, "workflow")}${names}`;
-    return `- **${c.name}** (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
+    return `- ${inlineOr(c.name, NO_NAME)} (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
   });
   return ok(lines.join("\n"));
 }
@@ -135,9 +146,9 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
     throw e;
   }
   const lines: string[] = [];
-  lines.push(`# Cluster: ${cluster.name}`);
+  lines.push(`# Cluster ${inlineOr(cluster.name, NO_NAME)}`);
   lines.push(`Slug: \`${cluster.slug}\` · id: \`${cluster.id}\` · updated ${cluster.updated_at}`);
-  if (cluster.description) lines.push(cluster.description);
+  if (cluster.description) lines.push(inlineOr(cluster.description, ""));
   lines.push("");
 
   const workflows = cluster.workflows ?? [];
@@ -146,7 +157,8 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   } else {
     lines.push(`## Workflows (${workflows.length})`);
     for (const w of workflows) {
-      lines.push(`- **${w.name}** (slug: \`${w.slug}\`)${w.description ? ` — ${w.description}` : ""}`);
+      const desc = w.description ? ` — ${inlineOr(w.description, "")}` : "";
+      lines.push(`- ${inlineOr(w.name, NO_NAME)} (slug: \`${w.slug}\`)${desc}`);
     }
     lines.push("");
     lines.push(
@@ -166,7 +178,7 @@ async function opCreate(
   if (!name.trim()) return err("`name` can't be blank.");
   const result = await client.createCluster(name);
   return ok(
-    `Created cluster **${result.name}** (slug: \`${result.slug}\`). Assign workflows to it from the canvas.`
+    `Created cluster ${inlineOr(result.name, NO_NAME)} (slug: \`${result.slug}\`). Assign workflows to it from the canvas.`
   );
 }
 
@@ -191,7 +203,7 @@ async function opUpdate(
     }
     throw e;
   }
-  return ok(`Updated cluster **${result.name}** (slug: \`${result.slug}\`).`);
+  return ok(`Updated cluster ${inlineOr(result.name, NO_NAME)} (slug: \`${result.slug}\`).`);
 }
 
 // ── dopl_cluster_admin ops ───────────────────────────────────────────

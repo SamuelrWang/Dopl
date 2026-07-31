@@ -7,9 +7,27 @@
 
 import { z } from "zod";
 import type { DoplClient, OntologySnapshot } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
 
 const EMPTY_ONTOLOGY: OntologySnapshot = { clusters: [], objects: {} };
+
+/** A result with nothing nameable left after neutralization. */
+const NO_NAME = "`(unnamed)`";
+
+/**
+ * A knowledge-entry search snippet, as a value.
+ *
+ * The `<b>` highlight tags the backend wraps matched terms in used to become
+ * `**` — our own markdown, added to text we do not control, on a bullet line
+ * with no framing. The tags are dropped instead and the snippet neutralized:
+ * losing the bold costs a nicety, and a snippet is an EXCERPT OF A BODY spliced
+ * into narration, which is exactly the shape this sweep exists to close. The
+ * words survive, which is the half that makes a hit pickable.
+ */
+function snippet(raw: string): string {
+  return inlineOr(raw.replace(/<\/?b>/g, ""), "`(no snippet)`");
+}
 
 const SEARCH_DESCRIPTION = `Search the whole workspace at once — knowledge entries (semantic + keyword), skills, workflows, and ontology objects. Returns grouped hits with the handle to read each: dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_workflow(op="get"), dopl_ontology(op="get"). Prefer this over per-domain listing when you don't already know where something lives. Params: query (required), limit (max hits per group, default 8).`;
 
@@ -48,13 +66,16 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
         client.getOntology().catch(() => EMPTY_ONTOLOGY),
       ]);
 
-      const lines: string[] = [`# Search: "${args.query}"`];
+      // The query echo is the caller's own argument, but a backtick in it would
+      // still escape this span and put the tail back into the heading.
+      const lines: string[] = [`# Search: ${inlineOr(args.query, "`(unreadable query)`")}`];
 
       lines.push("", "## Knowledge entries");
       if (entryHits.length === 0) lines.push("_No matches._");
       for (const h of entryHits.slice(0, limit)) {
-        const snippet = h.snippet.replace(/<\/?b>/g, "**");
-        lines.push(`- **${h.title}** (entry id: \`${h.entryId}\`) — ${snippet}`);
+        lines.push(
+          `- ${inlineOr(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${snippet(h.snippet)}`,
+        );
       }
 
       const skillHits = skills
@@ -63,7 +84,8 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
       lines.push("", "## Skills");
       if (skillHits.length === 0) lines.push("_No matches._");
       for (const s of skillHits) {
-        lines.push(`- **${s.name}** \`${s.slug}\` — ${s.whenToUse || s.description}`);
+        const trigger = inlineOr(s.whenToUse || s.description, "`(no trigger described)`");
+        lines.push(`- ${inlineOr(s.name, NO_NAME)} \`${s.slug}\` — ${trigger}`);
       }
 
       const workflowHits = workflows
@@ -72,7 +94,8 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
       lines.push("", "## Workflows");
       if (workflowHits.length === 0) lines.push("_No matches._");
       for (const w of workflowHits) {
-        lines.push(`- **${w.name}** \`${w.slug}\`${w.description ? ` — ${w.description}` : ""}`);
+        const desc = w.description ? ` — ${inlineOr(w.description, "")}` : "";
+        lines.push(`- ${inlineOr(w.name, NO_NAME)} \`${w.slug}\`${desc}`);
       }
 
       const objectHits = Object.values(ontology.objects)
@@ -80,11 +103,18 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
         .slice(0, limit);
       lines.push("", "## Ontology objects");
       if (objectHits.length === 0) lines.push("_No matches._");
-      const containerOf = (id: string) =>
-        Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name ?? "column";
+      const containerOf = (id: string) => {
+        const name = Object.values(ontology.objects).find((c) =>
+          c.childIds.includes(id),
+        )?.name;
+        // The container's name is another object's member-typed name, not a
+        // kind the server assigned — only the "column" fallback is ours.
+        return name ? inlineOr(name, NO_NAME) : "column";
+      };
       for (const o of objectHits) {
+        const subtitle = o.subtitle ? ` — ${inlineOr(o.subtitle, "")}` : "";
         lines.push(
-          `- **${o.name}** (${containerOf(o.id)} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`
+          `- ${inlineOr(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`
         );
       }
 

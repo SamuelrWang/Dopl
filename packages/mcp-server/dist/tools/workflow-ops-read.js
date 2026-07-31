@@ -10,6 +10,7 @@ exports.opList = opList;
 exports.opGet = opGet;
 exports.opStep = opStep;
 exports.opListTrash = opListTrash;
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const workflow_render_1 = require("./workflow-render");
 async function opList(client) {
@@ -26,7 +27,7 @@ async function opList(client) {
             skills > 0 ? (0, workflow_render_1.plural)(skills, "skill") : null,
         ].filter(Boolean);
         const summary = parts.length === 0 ? "empty" : parts.join(" · ");
-        return `- **${w.name}** (slug: \`${w.slug}\`) — ${summary}`;
+        return `- ${(0, narration_1.inlineOr)(w.name, workflow_render_1.NO_NAME)} (slug: \`${w.slug}\`) — ${summary}`;
     });
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -34,10 +35,10 @@ async function opGet(client, slug, detail) {
     const wf = await client.getWorkflow(slug);
     const summaryOnly = detail === "summary";
     const lines = [];
-    lines.push(`# Workflow: ${wf.name}`);
+    lines.push(`# Workflow ${(0, narration_1.inlineOr)(wf.name, workflow_render_1.NO_NAME)}`);
     lines.push(`Slug: \`${wf.slug}\` · id: \`${wf.id}\`${wf.cluster_id ? ` · cluster id: \`${wf.cluster_id}\`` : " · no cluster"} · updated ${wf.updated_at}`);
     if (wf.description)
-        lines.push(wf.description);
+        lines.push((0, narration_1.inlineOr)(wf.description, ""));
     lines.push("");
     const steps = wf.graph?.nodes ?? [];
     if (steps.length > 0) {
@@ -64,7 +65,7 @@ async function opGet(client, slug, detail) {
             lines.push(`## Steps (${steps.length}) — ${(0, workflow_render_1.plural)(stageCount, "stage")}`);
             for (let i = 0; i < steps.length; i++) {
                 const n = steps[i];
-                lines.push(`- Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1}`);
+                lines.push(`- Step ${i + 1}: ${(0, narration_1.inlineOr)(n.title, workflow_render_1.NO_TITLE)} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1}`);
             }
             lines.push("");
         }
@@ -74,7 +75,7 @@ async function opGet(client, slug, detail) {
             lines.push("");
             for (let i = 0; i < steps.length; i++) {
                 const n = steps[i];
-                lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` (ref: \`${n.ref}\`) — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
+                lines.push(`### Step ${i + 1}: ${(0, narration_1.inlineOr)(n.title, workflow_render_1.NO_TITLE)} \`${n.id}\` (ref: \`${n.ref}\`) — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
                 if (n.description)
                     lines.push(n.description);
                 const prev = prevOf(n.id);
@@ -110,22 +111,22 @@ async function opGet(client, slug, detail) {
     if (wf.knowledge_bases.length > 0) {
         if (summaryOnly) {
             lines.push(`## Knowledge Bases: ${wf.knowledge_bases
-                .map((kb) => `${kb.name} (\`${kb.slug}\`, ${kb.entries_index.length} entries)`)
+                .map((kb) => `${(0, narration_1.inlineOr)(kb.name, workflow_render_1.NO_NAME)} (\`${kb.slug}\`, ${kb.entries_index.length} entries)`)
                 .join(", ")}`);
             lines.push("");
         }
         else {
             lines.push(`## Knowledge Bases\n`);
             for (const kb of wf.knowledge_bases) {
-                lines.push(`### ${kb.name}`);
+                lines.push(`### Knowledge base ${(0, narration_1.inlineOr)(kb.name, workflow_render_1.NO_NAME)}`);
                 lines.push(`slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\``);
                 if (kb.description)
-                    lines.push(kb.description);
+                    lines.push((0, narration_1.inlineOr)(kb.description, ""));
                 if (kb.entries_index.length > 0) {
                     lines.push(`\nEntries (${kb.entries_index.length}):`);
                     for (const e of kb.entries_index.slice(0, 50)) {
                         const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
-                        lines.push(`- ${path}  \`(entry_id: ${e.entry_id})\``);
+                        lines.push(`- ${(0, narration_1.inlineOr)(path, workflow_render_1.NO_TITLE)}  \`(entry_id: ${e.entry_id})\``);
                     }
                 }
                 lines.push("");
@@ -135,14 +136,14 @@ async function opGet(client, slug, detail) {
     if (wf.skills.length > 0) {
         if (summaryOnly) {
             lines.push(`## Skills: ${wf.skills
-                .map((sk) => `${sk.name} (\`${sk.slug}\`, ${sk.status})`)
+                .map((sk) => `${(0, narration_1.inlineOr)(sk.name, workflow_render_1.NO_NAME)} (\`${sk.slug}\`, ${sk.status})`)
                 .join(", ")}`);
             lines.push("");
         }
         else {
             lines.push(`## Skills\n`);
             for (const sk of wf.skills) {
-                lines.push(`### ${sk.name}`);
+                lines.push(`### Skill ${(0, narration_1.inlineOr)(sk.name, workflow_render_1.NO_NAME)}`);
                 lines.push(`slug: \`${sk.slug}\` · id: \`${sk.skill_id}\` · status: ${sk.status}`);
                 if (sk.description)
                     lines.push(sk.description);
@@ -165,17 +166,17 @@ async function opStep(client, slug, stepRef) {
     const edges = wf.graph?.edges ?? [];
     const step = steps.find((s) => s.id === stepRef || s.ref === stepRef);
     if (!step) {
-        return (0, respond_1.err)(`Step \`${stepRef}\` not found in workflow \`${slug}\`. Run op="get" to list step ids/refs.`);
+        return (0, respond_1.err)(`Step ${(0, narration_1.inlineOr)(stepRef, "`(unreadable ref)`")} not found in workflow \`${slug}\`. Run op="get" to list step ids/refs.`);
     }
     const byId = new Map(steps.map((s) => [s.id, s]));
     const nameOf = (id) => {
         const s = byId.get(id);
-        return s ? `\`${s.ref}\`${s.title ? ` (${s.title})` : ""}` : `\`${id}\``;
+        return s ? `\`${s.ref}\`${s.title ? ` (${(0, narration_1.inlineOr)(s.title, workflow_render_1.NO_TITLE)})` : ""}` : `\`${id}\``;
     };
     const outgoing = edges.filter((e) => e.from === step.id);
     const incoming = edges.filter((e) => e.to === step.id).length;
     const lines = [];
-    lines.push(`# Step: ${step.title || "(untitled)"}`);
+    lines.push(`# Step ${(0, narration_1.inlineOr)(step.title, workflow_render_1.NO_TITLE)}`);
     lines.push(`Workflow: \`${wf.slug}\` · step id: \`${step.id}\` · ref: \`${step.ref}\``);
     if (step.description)
         lines.push("", step.description);
@@ -213,7 +214,7 @@ async function opListTrash(client) {
         `## Workflow trash (${(0, workflow_render_1.plural)(workflows.length, "workflow")})\n`,
     ];
     for (const w of workflows) {
-        lines.push(`- **${w.name}** (slug: \`${w.slug}\`) — deleted ${w.deleted_at}`);
+        lines.push(`- ${(0, narration_1.inlineOr)(w.name, workflow_render_1.NO_NAME)} (slug: \`${w.slug}\`) — deleted ${w.deleted_at}`);
     }
     lines.push("");
     lines.push(`Restore one with \`dopl_workflow(op='restore_workflow', slug='<slug or id>')\`.`);

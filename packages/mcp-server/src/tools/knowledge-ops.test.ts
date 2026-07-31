@@ -101,18 +101,22 @@ describe("get_tree renders folder descriptions + entry excerpts", () => {
 
     const out = textOf(await opGetTree(client, "my-base"));
 
-    // Long folder description truncated to 119 chars + ellipsis (cap 120).
-    expect(out).toContain(`📁 Deep/ — ${"a".repeat(119)}…`);
+    // `descSuffix` no longer hand-rolls its own flatten-and-clip: it defers to
+    // the shared neutralizer, so the bound is INLINE_TEXT_MAX (160, "..." tail)
+    // and the row renders as a value. The behaviour this test was written to
+    // pin — bounded, one line, separator only when there is something to show —
+    // is unchanged; the numbers and the quoting moved to the shared rule.
+    expect(out).toContain(`📁 \`Deep\`/ — \`${"a".repeat(157)}...\``);
     expect(out).not.toContain("a".repeat(200));
     // Newlines flattened to a single space.
-    expect(out).toContain("📁 Notes/ — line1 line2");
+    expect(out).toContain("📁 `Notes`/ — `line1 line2`");
     // Bare folder: name only, no separator.
-    expect(out).toContain("📁 Empty/");
-    expect(out).not.toContain("Empty/ —");
+    expect(out).toContain("📁 `Empty`/");
+    expect(out).not.toContain("Empty`/ —");
     // Entry excerpt surfaced; bare entry has no separator.
-    expect(out).toContain("📄 Guide — how to X");
-    expect(out).toContain("📄 Plain");
-    expect(out).not.toContain("Plain —");
+    expect(out).toContain("📄 `Guide` — `how to X`");
+    expect(out).toContain("📄 `Plain`");
+    expect(out).not.toContain("Plain` —");
   });
 });
 
@@ -129,8 +133,10 @@ describe("list_dir renders folder descriptions + entry excerpts", () => {
     } as unknown as DoplClient;
 
     const out = textOf(await opListDir(client, "my-base", ""));
-    expect(out).toContain(`📁 Deep/ — ${"b".repeat(119)}…`);
-    expect(out).toContain("📄 Guide — short");
+    // 150 chars is under INLINE_TEXT_MAX, so this one survives whole — the old
+    // 120-char cap was the thing that clipped it.
+    expect(out).toContain(`📁 \`Deep\`/ — \`${"b".repeat(150)}\``);
+    expect(out).toContain("📄 `Guide` — `short`");
   });
 });
 

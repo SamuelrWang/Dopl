@@ -86,7 +86,7 @@ const textOf = (res) => res.content.map((c) => c.text).join("");
         const out = (0, server_js_1.buildInstructions)([WS1, WS2], {
             pin: { name: "Beta", slug: "beta" },
         });
-        (0, vitest_1.expect)(out).toContain("pinned to **Beta**");
+        (0, vitest_1.expect)(out).toContain("pinned to `Beta`");
         (0, vitest_1.expect)(out).toContain("no-arg tool call targets it");
         (0, vitest_1.expect)(out).not.toContain("NO default");
     });
@@ -135,7 +135,7 @@ const textOf = (res) => res.content.map((c) => c.text).join("");
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         (0, vitest_1.expect)(client.listKbBases).toHaveBeenCalled();
         const text = textOf(res);
-        (0, vitest_1.expect)(text).toContain('active_workspace: "Alpha"');
+        (0, vitest_1.expect)(text).toContain("active_workspace: `Alpha`");
         (0, vitest_1.expect)(text).toContain("workspace_source: sole membership");
     });
     (0, vitest_1.it)("header pin → footers `header pin`", async () => {
@@ -147,7 +147,7 @@ const textOf = (res) => res.content.map((c) => c.text).join("");
         });
         const res = await map({});
         const text = textOf(res);
-        (0, vitest_1.expect)(text).toContain('active_workspace: "Beta"');
+        (0, vitest_1.expect)(text).toContain("active_workspace: `Beta`");
         (0, vitest_1.expect)(text).toContain("workspace_source: header pin");
     });
 });
@@ -162,7 +162,7 @@ const textOf = (res) => res.content.map((c) => c.text).join("");
         const res = await map({ workspace: "beta" });
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         const text = textOf(res);
-        (0, vitest_1.expect)(text).toContain('active_workspace: "Beta"');
+        (0, vitest_1.expect)(text).toContain("active_workspace: `Beta`");
         (0, vitest_1.expect)(text).toContain("workspace_source: per-call arg");
     });
     (0, vitest_1.it)("rejects a blank workspace= without running the handler", async () => {

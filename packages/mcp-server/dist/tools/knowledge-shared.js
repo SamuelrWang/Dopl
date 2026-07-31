@@ -12,6 +12,7 @@ exports.isErr = isErr;
 exports.agentWriteDenied = agentWriteDenied;
 exports.writeFileValidationError = writeFileValidationError;
 exports.updateBaseValidationError = updateBaseValidationError;
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 /**
  * Resolves a base reference (slug or UUID) to a `KnowledgeBase` row.
@@ -29,7 +30,7 @@ async function resolveBase(client, ref) {
 async function resolveBaseOr(client, ref) {
     const base = await resolveBase(client, ref);
     if (!base)
-        return (0, respond_1.err)(`Knowledge base not found: ${ref}. If you may have deleted it, check \`dopl_kb(op='list_trash')\` and restore with \`dopl_kb(op='restore_base')\`.`);
+        return (0, respond_1.err)(`Knowledge base not found: ${(0, narration_1.inlineOr)(ref, "`(unreadable ref)`")}. If you may have deleted it, check \`dopl_kb(op='list_trash')\` and restore with \`dopl_kb(op='restore_base')\`.`);
     return base;
 }
 function isErr(x) {

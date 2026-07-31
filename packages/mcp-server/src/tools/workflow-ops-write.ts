@@ -8,12 +8,13 @@
 
 import type { DoplClient } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
-import { workflowNotFound } from "./workflow-render";
+import { inlineOr } from "./narration";
+import { NO_NAME, workflowNotFound } from "./workflow-render";
 
 export async function opCreate(client: DoplClient, name: string): Promise<ToolResponse> {
   const wf = await client.createWorkflow(name);
   return ok(
-    `Created workflow **${wf.name}** (slug: \`${wf.slug}\`). Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`
+    `Created workflow ${inlineOr(wf.name, NO_NAME)} (slug: \`${wf.slug}\`). Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`
   );
 }
 
@@ -30,7 +31,7 @@ export async function opUpdate(
     if (isNotFound(e)) return workflowNotFound(slug);
     throw e;
   }
-  return ok(`Updated workflow **${wf.name}** (slug: \`${wf.slug}\`).`);
+  return ok(`Updated workflow ${inlineOr(wf.name, NO_NAME)} (slug: \`${wf.slug}\`).`);
 }
 
 export async function opSetGraph(
@@ -166,7 +167,7 @@ export async function opSetCluster(
       if (isNotFound(e)) return workflowNotFound(slug);
       throw e;
     }
-    return ok(`Workflow **${wf.name}** (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
+    return ok(`Workflow ${inlineOr(wf.name, NO_NAME)} (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
   }
   // The API takes a cluster UUID; agents hold slugs, so resolve slug-or-id
   // → id via the cluster list.
@@ -185,7 +186,7 @@ export async function opSetCluster(
     throw e;
   }
   return ok(
-    `Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`,
+    `Grouped workflow ${inlineOr(wf.name, NO_NAME)} (slug: \`${wf.slug}\`) under cluster ${inlineOr(match.name, NO_NAME)} (slug: \`${match.slug}\`).`,
   );
 }
 
@@ -207,6 +208,6 @@ export async function opRestoreWorkflow(
     throw e;
   }
   return ok(
-    `Restored workflow **${wf.name}** (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`,
+    `Restored workflow ${inlineOr(wf.name, NO_NAME)} (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`,
   );
 }

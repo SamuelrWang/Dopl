@@ -12,8 +12,28 @@ exports.opListDir = opListDir;
 exports.opReadFile = opReadFile;
 exports.opListTrash = opListTrash;
 exports.opSearch = opSearch;
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+/**
+ * WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ.
+ *
+ * A published base is workspace-visible, so every name, description, title and
+ * excerpt below can have been typed by another member. The two halves get
+ * different treatment on purpose:
+ *
+ *   - NAMES, TITLES, DESCRIPTIONS, EXCERPTS are spliced into lines we wrote —
+ *     a `## ` heading, a `- **…**` row, a `📁 name/` tree row. They are values,
+ *     and they go through the neutralizer. Only folder names and entry titles
+ *     carry a charset rule today (`NAME_RE`, features/knowledge/schema.ts); base
+ *     names, base descriptions, folder descriptions and entry excerpts are
+ *     bounded by LENGTH ONLY, so a newline in any of them started a line.
+ *
+ *   - THE ENTRY BODY is not touched. It is the document the user wrote for the
+ *     agent to read and act on; stripping its markdown would break the product.
+ *     `read_file` renders it below a `---` rule, as itself.
+ */
+const NO_NAME = "`(unnamed)`";
 async function opListBases(client) {
     const bases = await client.listKbBases();
     if (bases.length === 0)
@@ -23,8 +43,8 @@ async function opListBases(client) {
         // Surface the immutable id alongside the slug (the slug changes on
         // rename; the id is a stable handle) plus the access signal.
         const vis = b.visibility === "private" ? "private" : "public";
-        const desc = b.description ? `\n  ${b.description}` : "";
-        lines.push(`- **${b.name}** (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
+        const desc = b.description ? `\n  ${(0, narration_1.inlineOr)(b.description, "")}` : "";
+        lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -45,9 +65,9 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     const entryTotal = tree.entryTotal ?? tree.entries.length;
     const vis = tree.base.visibility === "private" ? "private" : "public";
     const lines = [
-        `## ${tree.base.name} \`${tree.base.slug}\``,
+        `## ${(0, narration_1.inlineOr)(tree.base.name, NO_NAME)} \`${tree.base.slug}\``,
         `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
-        ...(tree.base.description ? [tree.base.description] : []),
+        ...(tree.base.description ? [(0, narration_1.inlineOr)(tree.base.description, "")] : []),
         `Folders: ${tree.folders.length} · Entries: ${entryTotal}${tree.entries.length < entryTotal ? ` (showing ${tree.entries.length})` : ""}`,
         "",
     ];
@@ -70,11 +90,11 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
         arr.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
     function dump(parentId, prefix) {
         for (const f of childFolders.get(parentId) ?? []) {
-            lines.push(`${prefix}📁 ${f.name}/${descSuffix(f.description)}`);
+            lines.push(`${prefix}📁 ${(0, narration_1.inlineOr)(f.name, NO_NAME)}/${descSuffix(f.description)}`);
             dump(f.id, prefix + "  ");
         }
         for (const e of childEntries.get(parentId) ?? []) {
-            lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
+            lines.push(`${prefix}📄 ${(0, narration_1.inlineOr)(e.title, NO_NAME)}${descSuffix(e.excerpt)}`);
         }
     }
     dump(null, "");
@@ -84,31 +104,24 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
- * Rendered-description cap for tree / dir rows. Folder descriptions and
- * entry excerpts are stored up to 300 chars, but a tree row only needs a
- * glance — truncate to keep the whole listing cheap. Agents read_file /
- * get the full text when they open the entry.
- */
-const DESC_RENDER_CAP = 120;
-/**
- * ` — description` suffix for tree / directory rows. Folder
- * `description` and entry `excerpt` are the user-curated, agent-facing
- * summaries (≤300 chars) — surfacing them here lets agents pick the
- * right file from a listing instead of read_file-ing everything.
- * Newlines are flattened so one row stays one line, and the rendered
- * text is truncated (~120 chars, ellipsis) so trees stay compact. Only
- * renders the separator when a description is present.
+ * ` — description` suffix for tree / directory rows. Folder `description` and
+ * entry `excerpt` are the user-curated, agent-facing summaries (≤300 chars) —
+ * surfacing them here lets agents pick the right file from a listing instead of
+ * read_file-ing everything.
+ *
+ * This used to hand-roll its own flatten-and-truncate: `\s*\n+\s*` → space,
+ * then a 120-char clip. That closed the obvious newline but not the rest —
+ * U+0085 (NEL) is not in JavaScript's `\s` class and survives it, and nothing
+ * touched backticks or `**`. It now defers to the shared neutralizer, which is
+ * the point of having one: the row is bounded, flattened, and rendered as a
+ * value, by the same rule as every other label in this tool set. Only renders
+ * the separator when something survives.
  */
 function descSuffix(text) {
     if (!text)
         return "";
-    const flat = text.replace(/\s*\n+\s*/g, " ").trim();
-    if (!flat)
-        return "";
-    const rendered = flat.length > DESC_RENDER_CAP
-        ? `${flat.slice(0, DESC_RENDER_CAP - 1).trimEnd()}…`
-        : flat;
-    return ` — ${rendered}`;
+    const rendered = (0, narration_1.inlineOr)(text, "");
+    return rendered ? ` — ${rendered}` : "";
 }
 async function opListDir(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -116,18 +129,18 @@ async function opListDir(client, ref, path) {
         return base;
     const listing = await client.listKbDirByPath(base.id, path ?? "");
     const lines = [];
-    const where = listing.folder ? listing.folder.name : "(root)";
-    lines.push(`## ${base.name} → ${where}`);
+    const where = listing.folder ? (0, narration_1.inlineOr)(listing.folder.name, NO_NAME) : "(root)";
+    lines.push(`## ${(0, narration_1.inlineOr)(base.name, NO_NAME)} → ${where}`);
     if (listing.folder?.description)
-        lines.push(listing.folder.description);
+        lines.push((0, narration_1.inlineOr)(listing.folder.description, ""));
     if (listing.folders.length === 0 && listing.entries.length === 0) {
         lines.push("Empty.");
     }
     else {
         for (const f of listing.folders)
-            lines.push(`📁 ${f.name}/${descSuffix(f.description)}`);
+            lines.push(`📁 ${(0, narration_1.inlineOr)(f.name, NO_NAME)}/${descSuffix(f.description)}`);
         for (const e of listing.entries)
-            lines.push(`📄 ${e.title}${descSuffix(e.excerpt)}`);
+            lines.push(`📄 ${(0, narration_1.inlineOr)(e.title, NO_NAME)}${descSuffix(e.excerpt)}`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -137,7 +150,9 @@ async function opReadFile(client, ref, path) {
         return base;
     const entry = await client.readKbFileByPath(base.id, path);
     const lines = [
-        `# ${entry.title}`,
+        // The title is a heading; the BODY below the `---` is the document itself
+        // and is deliberately untouched.
+        `# ${(0, narration_1.inlineOr)(entry.title, NO_NAME)}`,
         `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
         `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
         "",
@@ -163,19 +178,19 @@ async function opListTrash(client, ref) {
     if (trash.bases.length > 0) {
         lines.push("### Bases");
         for (const b of trash.bases)
-            lines.push(`- **${b.name}** (slug: \`${b.slug}\`) — deleted ${b.deletedAt}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} (slug: \`${b.slug}\`) — deleted ${b.deletedAt}`);
         lines.push("");
     }
     if (trash.folders.length > 0) {
         lines.push("### Folders");
         for (const f of trash.folders)
-            lines.push(`- ${f.name} (id: \`${f.id}\`) — deleted ${f.deletedAt}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(f.name, NO_NAME)} (id: \`${f.id}\`) — deleted ${f.deletedAt}`);
         lines.push("");
     }
     if (trash.entries.length > 0) {
         lines.push("### Entries");
         for (const e of trash.entries)
-            lines.push(`- ${e.title} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(e.title, NO_NAME)} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -192,14 +207,18 @@ async function opSearch(client, query, base, limit) {
         baseSlug = resolved.slug;
     }
     const hits = await client.searchKb(query, { baseSlug, limit });
+    const shownQuery = (0, narration_1.inlineOr)(query, "`(unreadable query)`");
     if (hits.length === 0) {
-        return (0, respond_1.ok)(`No matches for "${query}".`);
+        return (0, respond_1.ok)(`No matches for ${shownQuery}.`);
     }
-    const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for "${query}"\n`];
+    const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for ${shownQuery}\n`];
     for (const h of hits) {
-        // Strip the highlight tags for plain-text agent consumption.
-        const cleanSnippet = h.snippet.replace(/<\/?b>/g, "**");
-        lines.push(`- **${h.title}** _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`);
+        // The highlight tags used to become `**` — our own markdown, wrapped around
+        // an excerpt of a member-authored body and dropped onto an indented line
+        // with no framing. Drop the tags and render the excerpt as a value instead;
+        // the words are what make a hit pickable, the bold was a nicety.
+        const cleanSnippet = (0, narration_1.inlineOr)(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`");
+        lines.push(`- ${(0, narration_1.inlineOr)(h.title, NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }

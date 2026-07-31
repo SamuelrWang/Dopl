@@ -8,8 +8,24 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSearchTool = registerSearchTool;
 const zod_1 = require("zod");
+const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
+/** A result with nothing nameable left after neutralization. */
+const NO_NAME = "`(unnamed)`";
+/**
+ * A knowledge-entry search snippet, as a value.
+ *
+ * The `<b>` highlight tags the backend wraps matched terms in used to become
+ * `**` — our own markdown, added to text we do not control, on a bullet line
+ * with no framing. The tags are dropped instead and the snippet neutralized:
+ * losing the bold costs a nicety, and a snippet is an EXCERPT OF A BODY spliced
+ * into narration, which is exactly the shape this sweep exists to close. The
+ * words survive, which is the half that makes a hit pickable.
+ */
+function snippet(raw) {
+    return (0, narration_1.inlineOr)(raw.replace(/<\/?b>/g, ""), "`(no snippet)`");
+}
 const SEARCH_DESCRIPTION = `Search the whole workspace at once — knowledge entries (semantic + keyword), skills, workflows, and ontology objects. Returns grouped hits with the handle to read each: dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_workflow(op="get"), dopl_ontology(op="get"). Prefer this over per-domain listing when you don't already know where something lives. Params: query (required), limit (max hits per group, default 8).`;
 function registerSearchTool(register, client) {
     register("dopl_search", SEARCH_DESCRIPTION, {
@@ -41,13 +57,14 @@ function registerSearchTool(register, client) {
             client.listWorkflows().then((r) => r.workflows).catch(() => []),
             client.getOntology().catch(() => EMPTY_ONTOLOGY),
         ]);
-        const lines = [`# Search: "${args.query}"`];
+        // The query echo is the caller's own argument, but a backtick in it would
+        // still escape this span and put the tail back into the heading.
+        const lines = [`# Search: ${(0, narration_1.inlineOr)(args.query, "`(unreadable query)`")}`];
         lines.push("", "## Knowledge entries");
         if (entryHits.length === 0)
             lines.push("_No matches._");
         for (const h of entryHits.slice(0, limit)) {
-            const snippet = h.snippet.replace(/<\/?b>/g, "**");
-            lines.push(`- **${h.title}** (entry id: \`${h.entryId}\`) — ${snippet}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${snippet(h.snippet)}`);
         }
         const skillHits = skills
             .filter((s) => s.status === "active" && matches(s.name, s.description, s.whenToUse))
@@ -56,7 +73,8 @@ function registerSearchTool(register, client) {
         if (skillHits.length === 0)
             lines.push("_No matches._");
         for (const s of skillHits) {
-            lines.push(`- **${s.name}** \`${s.slug}\` — ${s.whenToUse || s.description}`);
+            const trigger = (0, narration_1.inlineOr)(s.whenToUse || s.description, "`(no trigger described)`");
+            lines.push(`- ${(0, narration_1.inlineOr)(s.name, NO_NAME)} \`${s.slug}\` — ${trigger}`);
         }
         const workflowHits = workflows
             .filter((w) => matches(w.name, w.description))
@@ -65,7 +83,8 @@ function registerSearchTool(register, client) {
         if (workflowHits.length === 0)
             lines.push("_No matches._");
         for (const w of workflowHits) {
-            lines.push(`- **${w.name}** \`${w.slug}\`${w.description ? ` — ${w.description}` : ""}`);
+            const desc = w.description ? ` — ${(0, narration_1.inlineOr)(w.description, "")}` : "";
+            lines.push(`- ${(0, narration_1.inlineOr)(w.name, NO_NAME)} \`${w.slug}\`${desc}`);
         }
         const objectHits = Object.values(ontology.objects)
             .filter((o) => matches(o.name, o.subtitle))
@@ -73,9 +92,15 @@ function registerSearchTool(register, client) {
         lines.push("", "## Ontology objects");
         if (objectHits.length === 0)
             lines.push("_No matches._");
-        const containerOf = (id) => Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name ?? "column";
+        const containerOf = (id) => {
+            const name = Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name;
+            // The container's name is another object's member-typed name, not a
+            // kind the server assigned — only the "column" fallback is ours.
+            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "column";
+        };
         for (const o of objectHits) {
-            lines.push(`- **${o.name}** (${containerOf(o.id)} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`);
+            const subtitle = o.subtitle ? ` — ${(0, narration_1.inlineOr)(o.subtitle, "")}` : "";
+            lines.push(`- ${(0, narration_1.inlineOr)(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`);
         }
         return (0, respond_1.ok)(lines.join("\n"));
     });

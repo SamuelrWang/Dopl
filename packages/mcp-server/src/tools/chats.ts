@@ -10,15 +10,19 @@
  */
 
 import { z } from "zod";
-import type { Chat, ChatDetail, DoplClient } from "@dopl/client";
+import type { ChatDetail, DoplClient } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
-
-function errorMessage(e: unknown): string {
-  if (e && typeof e === "object" && "message" in e) {
-    return String((e as { message: unknown }).message);
-  }
-  return String(e);
-}
+import {
+  anyShared,
+  chatTitle,
+  failureDetail,
+  folderScopeLabel,
+  formatChatLine,
+  hiddenNote,
+  renderChatDetail,
+  UNTRUSTED_ARCHIVE_HEADER,
+} from "./chats-render";
 
 const EXPORT_GUIDE = `## Exporting conversations into Dopl — the rules
 
@@ -210,7 +214,7 @@ export function registerChatTools(
               `Soft-deleted chat \`${args.chat_id}\`. It's hidden from list/get but still restorable — recover with dopl_chats(op="restore", chat_id="${args.chat_id}"), or list recoverable chats with dopl_chats(op="list_trash").`,
             );
           } catch (e) {
-            return err(`Delete failed: ${errorMessage(e)}`);
+            return err(`Delete failed: ${failureDetail(e)}`);
           }
         }
         case "delete_folder": {
@@ -220,7 +224,7 @@ export function registerChatTools(
             await client.deleteChatFolder(args.folder_id as string);
             return ok(`Deleted folder \`${args.folder_id}\`. Its chats are now unfiled.`);
           } catch (e) {
-            return err(`Delete failed: ${errorMessage(e)}`);
+            return err(`Delete failed: ${failureDetail(e)}`);
           }
         }
       }
@@ -265,12 +269,12 @@ async function opExport(client: DoplClient, args: ExportArgs): Promise<ToolRespo
       : `No client_session_id passed — a re-export would create a duplicate. Pass one next time.`;
     return ok(
       [
-        `Exported **${chat.title}** (\`${chat.id}\`) — ${chat.messageCount} messages, ${chat.visibility}.`,
+        `Exported ${chatTitle(chat.title)} (\`${chat.id}\`) — ${chat.messageCount} messages, ${chat.visibility}.`,
         idempotency,
       ].join("\n"),
     );
   } catch (e) {
-    return err(`Export failed: ${errorMessage(e)}`);
+    return err(`Export failed: ${failureDetail(e)}`);
   }
 }
 
@@ -281,9 +285,9 @@ async function opAppend(
 ): Promise<ToolResponse> {
   try {
     const chat = await client.appendChatMessages(chatId, messages);
-    return ok(`Appended ${messages.length} message${messages.length === 1 ? "" : "s"} to **${chat.title}** — transcript is now ${chat.messageCount} messages.`);
+    return ok(`Appended ${messages.length} message${messages.length === 1 ? "" : "s"} to ${chatTitle(chat.title)} — transcript is now ${chat.messageCount} messages.`);
   } catch (e) {
-    return err(`Append failed: ${errorMessage(e)}`);
+    return err(`Append failed: ${failureDetail(e)}`);
   }
 }
 
@@ -314,19 +318,19 @@ async function opUpdate(
   }
   try {
     const chat = await client.updateChat(chatId, patch);
-    return ok(`Updated **${chat.title}** (\`${chat.id}\`) — ${chat.visibility}${chat.pinned ? ", pinned" : ""}.`);
+    return ok(`Updated ${chatTitle(chat.title)} (\`${chat.id}\`) — ${chat.visibility}${chat.pinned ? ", pinned" : ""}.`);
   } catch (e) {
-    return err(`Update failed: ${errorMessage(e)}`);
+    return err(`Update failed: ${failureDetail(e)}`);
   }
 }
 
 async function opRestore(client: DoplClient, chatId: string): Promise<ToolResponse> {
   try {
     const chat = await client.restoreChat(chatId);
-    return ok(`Restored **${chat.title}** (\`${chat.id}\`) — ${chat.visibility}.`);
+    return ok(`Restored ${chatTitle(chat.title)} (\`${chat.id}\`) — ${chat.visibility}.`);
   } catch (e) {
     return err(
-      `Restore failed: ${errorMessage(e)}. If nothing matches, the chat may already be active — check dopl_chats(op="list_trash").`,
+      `Restore failed: ${failureDetail(e)}. If nothing matches, the chat may already be active — check dopl_chats(op="list_trash").`,
     );
   }
 }
@@ -341,19 +345,11 @@ async function opListTrash(client: DoplClient): Promise<ToolResponse> {
   ];
   for (const c of chats) {
     lines.push(
-      `- **${c.title}** \`${c.id}\` — ${c.sessionDate} · ${c.source} · deleted ${c.deletedAt}`,
+      `- ${chatTitle(c.title)} \`${c.id}\` — ${c.sessionDate} · ${c.source} · deleted ${c.deletedAt}`,
     );
   }
   lines.push(`\nRestore one with dopl_chats(op="restore", chat_id=...).`);
   return ok(lines.join("\n"));
-}
-
-function hiddenNote(hiddenCount: number): string {
-  return (
-    `_${hiddenCount} older chat${hiddenCount === 1 ? " is" : "s are"} hidden by ` +
-    `this workspace's free-plan history window — nothing is deleted. ` +
-    `Upgrade to Pro to see full history._`
-  );
 }
 
 async function opList(
@@ -382,6 +378,10 @@ async function opList(
 
   const lines: string[] = [];
   lines.push(`## Chat archive — ${chats.length} chat${chats.length === 1 ? "" : "s"}\n`);
+  // Framing only when the listing actually carries someone else's chat — a
+  // listing of nothing but the caller's own private exports needs no warning
+  // about other members, and a header that cries wolf gets skimmed.
+  if (anyShared(chats)) lines.push(`${UNTRUSTED_ARCHIVE_HEADER}\n`);
   for (const c of chats) {
     lines.push(formatChatLine(c));
   }
@@ -397,45 +397,11 @@ async function opGet(client: DoplClient, chatId: string): Promise<ToolResponse> 
   try {
     chat = await client.getChat(chatId);
   } catch (e) {
-    return err(`Chat not found or failed to load: ${chatId}. ${errorMessage(e)}`);
+    return err(
+      `Chat not found or failed to load: \`${chatId}\`. ${failureDetail(e)}`,
+    );
   }
-
-  const lines: string[] = [];
-  lines.push(`# ${chat.title}`);
-  lines.push(``);
-  lines.push(chat.overview || "(no overview)");
-  lines.push(``);
-  lines.push(`- id: \`${chat.id}\``);
-  lines.push(`- session: ${chat.sessionDate} · ${chat.source}${chat.project ? ` · ${chat.project}` : ""}`);
-  lines.push(`- visibility: ${chat.visibility} · owner: ${chat.owner.name}`);
-  if (chat.deliverables.length > 0) {
-    lines.push(``);
-    lines.push(`## What was done`);
-    for (const d of chat.deliverables) {
-      lines.push(`- [${d.done ? "x" : " "}] ${d.label}`);
-    }
-  }
-  if (chat.learnings.length > 0) {
-    lines.push(``);
-    lines.push(`## Learnings`);
-    for (const l of chat.learnings) lines.push(`- ${l}`);
-  }
-  lines.push(``);
-  lines.push(`## Transcript — ${chat.messageCount} messages`);
-  for (const m of chat.messages) {
-    lines.push(``);
-    lines.push(`**${m.role === "user" ? "User" : "Agent"} #${m.index}** — ${m.summary}`);
-    if (m.verbatim) {
-      lines.push(`> verbatim:`);
-      for (const line of m.verbatim.split("\n")) lines.push(`> ${line}`);
-    }
-  }
-  return ok(lines.join("\n"));
-}
-
-function folderScopeLabel(f: { visibility: string; accessMode: string }): string {
-  if (f.visibility === "private") return "private";
-  return f.accessMode === "teams" ? "team-shared" : "workspace-shared";
+  return ok(renderChatDetail(chat));
 }
 
 async function opFolders(client: DoplClient): Promise<ToolResponse> {
@@ -444,7 +410,7 @@ async function opFolders(client: DoplClient): Promise<ToolResponse> {
     return ok(`No chat folders yet. Pass folder="<name>" on export (or op="create_folder") to create one.`);
   }
   const lines = folders.map(
-    (f) => `- **${f.name}** \`${f.id}\` — ${folderScopeLabel(f)}`,
+    (f) => `- ${inlineOr(f.name, "`(unnamed folder)`")} \`${f.id}\` — ${folderScopeLabel(f)}`,
   );
   return ok(
     `## Chat folders — ${folders.length}\n\n${lines.join("\n")}\n\nA folder's scope is authoritative: chats filed in it inherit its sharing.`,
@@ -454,9 +420,11 @@ async function opFolders(client: DoplClient): Promise<ToolResponse> {
 async function opCreateFolder(client: DoplClient, name: string): Promise<ToolResponse> {
   try {
     const folder = await client.createChatFolder(name);
-    return ok(`Created folder **${folder.name}** (\`${folder.id}\`) — private.`);
+    return ok(
+      `Created folder ${inlineOr(folder.name, "`(unnamed folder)`")} (\`${folder.id}\`) — private.`,
+    );
   } catch (e) {
-    return err(`Folder create failed: ${errorMessage(e)}`);
+    return err(`Folder create failed: ${failureDetail(e)}`);
   }
 }
 
@@ -472,20 +440,9 @@ async function opUpdateFolder(
         ? ` Every chat in the folder now inherits this scope.`
         : "";
     return ok(
-      `Updated folder **${folder.name}** (\`${folder.id}\`) — ${folderScopeLabel(folder)}.${scopeNote}`,
+      `Updated folder ${inlineOr(folder.name, "`(unnamed folder)`")} (\`${folder.id}\`) — ${folderScopeLabel(folder)}.${scopeNote}`,
     );
   } catch (e) {
-    return err(`Folder update failed: ${errorMessage(e)}`);
+    return err(`Folder update failed: ${failureDetail(e)}`);
   }
-}
-
-function formatChatLine(c: Chat): string {
-  const bits = [
-    c.sessionDate,
-    c.source,
-    `${c.messageCount} msgs`,
-    c.visibility === "public" ? `shared by ${c.owner.name}` : "private",
-  ];
-  if (c.project) bits.splice(2, 0, c.project);
-  return `- **${c.title}** \`${c.id}\` — ${bits.join(" · ")}${c.pinned ? " · 📌" : ""}`;
 }

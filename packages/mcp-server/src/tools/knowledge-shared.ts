@@ -7,6 +7,7 @@
  */
 
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { err, type ToolResponse } from "./respond";
 
 /**
@@ -26,7 +27,7 @@ async function resolveBase(client: DoplClient, ref: string): Promise<KnowledgeBa
 export async function resolveBaseOr(client: DoplClient, ref: string): Promise<KnowledgeBase | ToolResponse> {
   const base = await resolveBase(client, ref);
   if (!base)
-    return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`dopl_kb(op='list_trash')\` and restore with \`dopl_kb(op='restore_base')\`.`);
+    return err(`Knowledge base not found: ${inlineOr(ref, "`(unreadable ref)`")}. If you may have deleted it, check \`dopl_kb(op='list_trash')\` and restore with \`dopl_kb(op='restore_base')\`.`);
   return base;
 }
 

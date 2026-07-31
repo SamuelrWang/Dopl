@@ -6,8 +6,11 @@
  */
 
 import type { DoplClient, WorkflowDetail } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { err, ok, type ToolResponse } from "./respond";
 import {
+  NO_NAME,
+  NO_TITLE,
   plural,
   renderActions,
   renderReads,
@@ -27,7 +30,7 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
       skills > 0 ? plural(skills, "skill") : null,
     ].filter(Boolean);
     const summary = parts.length === 0 ? "empty" : parts.join(" · ");
-    return `- **${w.name}** (slug: \`${w.slug}\`) — ${summary}`;
+    return `- ${inlineOr(w.name, NO_NAME)} (slug: \`${w.slug}\`) — ${summary}`;
   });
   return ok(lines.join("\n"));
 }
@@ -40,11 +43,11 @@ export async function opGet(
   const wf: WorkflowDetail = await client.getWorkflow(slug);
   const summaryOnly = detail === "summary";
   const lines: string[] = [];
-  lines.push(`# Workflow: ${wf.name}`);
+  lines.push(`# Workflow ${inlineOr(wf.name, NO_NAME)}`);
   lines.push(
     `Slug: \`${wf.slug}\` · id: \`${wf.id}\`${wf.cluster_id ? ` · cluster id: \`${wf.cluster_id}\`` : " · no cluster"} · updated ${wf.updated_at}`,
   );
-  if (wf.description) lines.push(wf.description);
+  if (wf.description) lines.push(inlineOr(wf.description, ""));
   lines.push("");
 
   const steps = wf.graph?.nodes ?? [];
@@ -77,7 +80,7 @@ export async function opGet(
       for (let i = 0; i < steps.length; i++) {
         const n = steps[i];
         lines.push(
-          `- Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1}`
+          `- Step ${i + 1}: ${inlineOr(n.title, NO_TITLE)} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1}`
         );
       }
       lines.push("");
@@ -90,7 +93,7 @@ export async function opGet(
     for (let i = 0; i < steps.length; i++) {
       const n = steps[i];
       lines.push(
-        `### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` (ref: \`${n.ref}\`) — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`
+        `### Step ${i + 1}: ${inlineOr(n.title, NO_TITLE)} \`${n.id}\` (ref: \`${n.ref}\`) — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`
       );
       if (n.description) lines.push(n.description);
       const prev = prevOf(n.id);
@@ -128,21 +131,21 @@ export async function opGet(
     if (summaryOnly) {
       lines.push(
         `## Knowledge Bases: ${wf.knowledge_bases
-          .map((kb) => `${kb.name} (\`${kb.slug}\`, ${kb.entries_index.length} entries)`)
+          .map((kb) => `${inlineOr(kb.name, NO_NAME)} (\`${kb.slug}\`, ${kb.entries_index.length} entries)`)
           .join(", ")}`
       );
       lines.push("");
     } else {
     lines.push(`## Knowledge Bases\n`);
     for (const kb of wf.knowledge_bases) {
-      lines.push(`### ${kb.name}`);
+      lines.push(`### Knowledge base ${inlineOr(kb.name, NO_NAME)}`);
       lines.push(`slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\``);
-      if (kb.description) lines.push(kb.description);
+      if (kb.description) lines.push(inlineOr(kb.description, ""));
       if (kb.entries_index.length > 0) {
         lines.push(`\nEntries (${kb.entries_index.length}):`);
         for (const e of kb.entries_index.slice(0, 50)) {
           const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
-          lines.push(`- ${path}  \`(entry_id: ${e.entry_id})\``);
+          lines.push(`- ${inlineOr(path, NO_TITLE)}  \`(entry_id: ${e.entry_id})\``);
         }
       }
       lines.push("");
@@ -154,14 +157,14 @@ export async function opGet(
     if (summaryOnly) {
       lines.push(
         `## Skills: ${wf.skills
-          .map((sk) => `${sk.name} (\`${sk.slug}\`, ${sk.status})`)
+          .map((sk) => `${inlineOr(sk.name, NO_NAME)} (\`${sk.slug}\`, ${sk.status})`)
           .join(", ")}`
       );
       lines.push("");
     } else {
     lines.push(`## Skills\n`);
     for (const sk of wf.skills) {
-      lines.push(`### ${sk.name}`);
+      lines.push(`### Skill ${inlineOr(sk.name, NO_NAME)}`);
       lines.push(`slug: \`${sk.slug}\` · id: \`${sk.skill_id}\` · status: ${sk.status}`);
       if (sk.description) lines.push(sk.description);
       if (sk.when_to_use) lines.push(`\n**When to use:** ${sk.when_to_use}`);
@@ -191,19 +194,19 @@ export async function opStep(
   const step = steps.find((s) => s.id === stepRef || s.ref === stepRef);
   if (!step) {
     return err(
-      `Step \`${stepRef}\` not found in workflow \`${slug}\`. Run op="get" to list step ids/refs.`,
+      `Step ${inlineOr(stepRef, "`(unreadable ref)`")} not found in workflow \`${slug}\`. Run op="get" to list step ids/refs.`,
     );
   }
   const byId = new Map(steps.map((s) => [s.id, s]));
   const nameOf = (id: string) => {
     const s = byId.get(id);
-    return s ? `\`${s.ref}\`${s.title ? ` (${s.title})` : ""}` : `\`${id}\``;
+    return s ? `\`${s.ref}\`${s.title ? ` (${inlineOr(s.title, NO_TITLE)})` : ""}` : `\`${id}\``;
   };
   const outgoing = edges.filter((e) => e.from === step.id);
   const incoming = edges.filter((e) => e.to === step.id).length;
 
   const lines: string[] = [];
-  lines.push(`# Step: ${step.title || "(untitled)"}`);
+  lines.push(`# Step ${inlineOr(step.title, NO_TITLE)}`);
   lines.push(`Workflow: \`${wf.slug}\` · step id: \`${step.id}\` · ref: \`${step.ref}\``);
   if (step.description) lines.push("", step.description);
   lines.push("");
@@ -236,7 +239,7 @@ export async function opListTrash(client: DoplClient): Promise<ToolResponse> {
     `## Workflow trash (${plural(workflows.length, "workflow")})\n`,
   ];
   for (const w of workflows) {
-    lines.push(`- **${w.name}** (slug: \`${w.slug}\`) — deleted ${w.deleted_at}`);
+    lines.push(`- ${inlineOr(w.name, NO_NAME)} (slug: \`${w.slug}\`) — deleted ${w.deleted_at}`);
   }
   lines.push("");
   lines.push(

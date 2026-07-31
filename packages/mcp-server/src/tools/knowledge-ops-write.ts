@@ -7,6 +7,7 @@
  */
 
 import type { DoplClient } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { ok, err, isConflict, isAlreadyExists, type ToolResponse } from "./respond";
 import {
   agentWriteDenied,
@@ -16,6 +17,17 @@ import {
   writeFileValidationError,
 } from "./knowledge-shared";
 
+/**
+ * Write confirmations read back the STORED value, not the argument: a base
+ * name the server canonicalised, an entry title derived from a path. Every one
+ * of them is spliced into a line of our own narration, and a path can carry a
+ * backtick (`NAME_RE` bans control and zero-width characters, not markdown),
+ * which escapes the very code span we wrap it in. Same rule as everywhere else:
+ * a name is a value.
+ */
+const NO_NAME = "`(unnamed)`";
+const NO_PATH = "`(unreadable path)`";
+
 export async function opCreateBase(client: DoplClient, name: string, description?: string): Promise<ToolResponse> {
   const base = await client.createKbBase({ name, description });
   const visNote =
@@ -23,7 +35,7 @@ export async function opCreateBase(client: DoplClient, name: string, description
       ? "Private to you — only you and your agent can see it."
       : "Visible to the whole workspace.";
   return ok(
-    `Created knowledge base **${base.name}** (slug: \`${base.slug}\`). ${visNote}`
+    `Created knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`
   );
 }
 
@@ -49,7 +61,7 @@ export async function opUpdateBase(client: DoplClient, ref: string, name?: strin
     throw e;
   }
   return ok(
-    `Updated **${updated.name}** (slug: \`${updated.slug}\`).`
+    `Updated ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`).`
   );
 }
 
@@ -72,7 +84,7 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
     throw e;
   }
   return ok(
-    `Published knowledge base **${updated.name}** (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
+    `Published knowledge base ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
   );
 }
 
@@ -92,7 +104,7 @@ export async function opRestoreBase(client: DoplClient, ref: string): Promise<To
   );
   if (!trashed) {
     return err(
-      `No deleted base matches "${ref}". Use \`dopl_kb(op='list_trash')\` to see available restores; or the base may already be active.`
+      `No deleted base matches ${inlineOr(ref, NO_NAME)}. Use \`dopl_kb(op='list_trash')\` to see available restores; or the base may already be active.`
     );
   }
   let restored;
@@ -106,7 +118,7 @@ export async function opRestoreBase(client: DoplClient, ref: string): Promise<To
     throw e;
   }
   return ok(
-    `Restored **${restored.name}** (slug: \`${restored.slug}\`).`
+    `Restored ${inlineOr(restored.name, NO_NAME)} (slug: \`${restored.slug}\`).`
   );
 }
 
@@ -124,7 +136,7 @@ export async function opCreateFolder(client: DoplClient, ref: string, path: stri
     throw e;
   }
   const descNote = description !== undefined ? " Description set." : "";
-  return ok(`Folder ready at \`${path}\` (id: \`${folder.id}\`).${descNote}`);
+  return ok(`Folder ready at ${inlineOr(path, NO_PATH)} (id: \`${folder.id}\`).${descNote}`);
 }
 
 export async function opMoveFolder(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse> {
@@ -142,10 +154,10 @@ export async function opMoveFolder(client: DoplClient, ref: string, from_path: s
   }
   if (result.kind !== "folder") {
     return err(
-      `Path "${from_path}" resolved to a ${result.kind}, not a folder.`
+      `Path ${inlineOr(from_path, NO_PATH)} resolved to a ${result.kind}, not a folder.`
     );
   }
-  return ok(`Folder moved: \`${from_path}\` → \`${to_path}\`.`);
+  return ok(`Folder moved: ${inlineOr(from_path, NO_PATH)} → ${inlineOr(to_path, NO_PATH)}.`);
 }
 
 export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string): Promise<ToolResponse> {
@@ -165,12 +177,12 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
   } catch (e) {
     if (isConflict(e)) {
       return err(
-        `\`${path}\` changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`
+        `${inlineOr(path, NO_PATH)} changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`
       );
     }
     if (isAlreadyExists(e)) {
       return err(
-        `An entry titled "${title ?? path.split("/").filter(Boolean).pop()}" already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
+        `An entry titled ${inlineOr(title ?? path.split("/").filter(Boolean).pop(), NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
       );
     }
     // F-10b: read-only-to-agents base — clean message, not a raw dump.
@@ -191,10 +203,10 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
   const canonicalPath = [...parentSegments, entry.title].join("/");
   const note =
     canonicalPath !== path
-      ? ` Address future reads/moves with path \`${canonicalPath}\`.`
+      ? ` Address future reads/moves with path ${inlineOr(canonicalPath, NO_PATH)}.`
       : "";
   return ok(
-    `Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}\nView in Dopl: ${webUrl}`
+    `Wrote ${inlineOr(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}\nView in Dopl: ${webUrl}`
   );
 }
 
@@ -213,10 +225,10 @@ export async function opMoveFile(client: DoplClient, ref: string, from_path: str
   }
   if (result.kind !== "entry") {
     return err(
-      `Path "${from_path}" resolved to a ${result.kind}, not an entry.`
+      `Path ${inlineOr(from_path, NO_PATH)} resolved to a ${result.kind}, not an entry.`
     );
   }
-  return ok(`Entry moved: \`${from_path}\` → \`${to_path}\`.`);
+  return ok(`Entry moved: ${inlineOr(from_path, NO_PATH)} → ${inlineOr(to_path, NO_PATH)}.`);
 }
 
 export async function opRestoreFolder(client: DoplClient, folder_id: string): Promise<ToolResponse> {
@@ -231,7 +243,7 @@ export async function opRestoreFolder(client: DoplClient, folder_id: string): Pr
     }
     throw e;
   }
-  return ok(`Restored folder **${folder.name}** (id: \`${folder.id}\`).`);
+  return ok(`Restored folder ${inlineOr(folder.name, NO_NAME)} (id: \`${folder.id}\`).`);
 }
 
 export async function opRestoreFile(client: DoplClient, entry_id: string): Promise<ToolResponse> {
@@ -246,5 +258,5 @@ export async function opRestoreFile(client: DoplClient, entry_id: string): Promi
     }
     throw e;
   }
-  return ok(`Restored entry **${entry.title}** (id: \`${entry.id}\`).`);
+  return ok(`Restored entry ${inlineOr(entry.title, NO_NAME)} (id: \`${entry.id}\`).`);
 }

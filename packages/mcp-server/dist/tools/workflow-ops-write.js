@@ -18,10 +18,11 @@ exports.opDisconnect = opDisconnect;
 exports.opSetCluster = opSetCluster;
 exports.opRestoreWorkflow = opRestoreWorkflow;
 const respond_1 = require("./respond");
+const narration_1 = require("./narration");
 const workflow_render_1 = require("./workflow-render");
 async function opCreate(client, name) {
     const wf = await client.createWorkflow(name);
-    return (0, respond_1.ok)(`Created workflow **${wf.name}** (slug: \`${wf.slug}\`). Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`);
+    return (0, respond_1.ok)(`Created workflow ${(0, narration_1.inlineOr)(wf.name, workflow_render_1.NO_NAME)} (slug: \`${wf.slug}\`). Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`);
 }
 async function opUpdate(client, slug, name, description) {
     let wf;
@@ -33,7 +34,7 @@ async function opUpdate(client, slug, name, description) {
             return (0, workflow_render_1.workflowNotFound)(slug);
         throw e;
     }
-    return (0, respond_1.ok)(`Updated workflow **${wf.name}** (slug: \`${wf.slug}\`).`);
+    return (0, respond_1.ok)(`Updated workflow ${(0, narration_1.inlineOr)(wf.name, workflow_render_1.NO_NAME)} (slug: \`${wf.slug}\`).`);
 }
 async function opSetGraph(client, slug, graph) {
     // ref is required for every node in set_graph.
@@ -118,7 +119,7 @@ async function opSetCluster(client, slug, cluster) {
                 return (0, workflow_render_1.workflowNotFound)(slug);
             throw e;
         }
-        return (0, respond_1.ok)(`Workflow **${wf.name}** (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
+        return (0, respond_1.ok)(`Workflow ${(0, narration_1.inlineOr)(wf.name, workflow_render_1.NO_NAME)} (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
     }
     // The API takes a cluster UUID; agents hold slugs, so resolve slug-or-id
     // → id via the cluster list.
@@ -136,7 +137,7 @@ async function opSetCluster(client, slug, cluster) {
             return (0, workflow_render_1.workflowNotFound)(slug);
         throw e;
     }
-    return (0, respond_1.ok)(`Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`);
+    return (0, respond_1.ok)(`Grouped workflow ${(0, narration_1.inlineOr)(wf.name, workflow_render_1.NO_NAME)} (slug: \`${wf.slug}\`) under cluster ${(0, narration_1.inlineOr)(match.name, workflow_render_1.NO_NAME)} (slug: \`${match.slug}\`).`);
 }
 async function opRestoreWorkflow(client, slug) {
     let wf;
@@ -151,5 +152,5 @@ async function opRestoreWorkflow(client, slug) {
         }
         throw e;
     }
-    return (0, respond_1.ok)(`Restored workflow **${wf.name}** (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`);
+    return (0, respond_1.ok)(`Restored workflow ${(0, narration_1.inlineOr)(wf.name, workflow_render_1.NO_NAME)} (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`);
 }

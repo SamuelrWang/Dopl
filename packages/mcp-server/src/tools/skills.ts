@@ -15,8 +15,24 @@
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
+import { inlineOr } from "./narration";
 import { ok, err, isConflict, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
+
+/**
+ * A published skill is workspace-visible, so a skill's `name`, `folder`,
+ * `description` and `when_to_use` can all have been typed by another member —
+ * and none of them carries a charset rule (`min(1).max(120)` / `.max(2000)`,
+ * features/skills/schema.ts). Two different treatments, on purpose:
+ *
+ *   - The NAME and the FOLDER label are values: they were spliced into a `# `
+ *     heading, a `### 📁 ` heading, and a `- \`slug\` — name` row.
+ *   - `description` / `when_to_use` / SKILL.md are the skill's own prose — the
+ *     procedure the agent is meant to load and follow. They stay intact under
+ *     op="get", which renders them on their own lines as content. In op="list"
+ *     they are the triggers on a bullet row, so THAT rendering bounds them.
+ */
+const NO_NAME = "`(unnamed skill)`";
 
 function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) {
@@ -33,6 +49,11 @@ function errorMessage(e: unknown): string {
  * Returns null otherwise so the caller falls through. Duck-typed on
  * `.status` / `.code` to avoid importing the @dopl/client error class.
  */
+/** Upstream failure text as a value — same rule as the channel await's. */
+function failureDetail(e: unknown): string {
+  return inlineOr(errorMessage(e), "`no detail reported`");
+}
+
 function agentWriteDenied(e: unknown): ToolResponse | null {
   if (
     typeof e !== "object" ||
@@ -181,7 +202,7 @@ async function opList(
   if (active.length === 0) {
     return ok(
       folder !== undefined
-        ? `No active skills in folder "${folder}".`
+        ? `No active skills in folder ${inlineOr(folder, "`(unnamed folder)`")}.`
         : "No active skills in this workspace yet. Create one with `dopl_skill` op=\"create\" (requires the workspace to allow agent writes)."
     );
   }
@@ -198,7 +219,7 @@ async function opList(
   });
   const lines = ["## Skills\n"];
   for (const key of folders) {
-    lines.push(`### ${key === "" ? "Unfiled" : `📁 ${key}`}`);
+    lines.push(`### ${key === "" ? "Unfiled" : `📁 ${inlineOr(key, "`(unnamed folder)`")}`}`);
     lines.push("");
     for (const s of byFolder.get(key)!) {
       // Show sharing scope — that's the access signal that matters.
@@ -208,11 +229,11 @@ async function opList(
           : s.accessMode === "teams"
             ? " _(team-shared)_"
             : "";
-      lines.push(`- \`${s.slug}\` (id: \`${s.id}\`) — ${s.name}${visBadge}`);
-      lines.push(`  ${s.description}`);
-      lines.push(`  **When to use:** ${s.whenToUse}`);
+      lines.push(`- \`${s.slug}\` (id: \`${s.id}\`) — ${inlineOr(s.name, NO_NAME)}${visBadge}`);
+      lines.push(`  ${inlineOr(s.description, "`(no description)`")}`);
+      lines.push(`  **When to use:** ${inlineOr(s.whenToUse, "`(not described)`")}`);
       if (s.whenNotToUse) {
-        lines.push(`  **When NOT to use:** ${s.whenNotToUse}`);
+        lines.push(`  **When NOT to use:** ${inlineOr(s.whenNotToUse, "")}`);
       }
     }
     lines.push("");
@@ -232,7 +253,7 @@ async function opGet(
     const { skill, files, references } = await client.getSkill(slug);
     const body = files.find((f) => f.name === "SKILL.md")?.body ?? files[0]?.body ?? "";
     const lines: string[] = [];
-    lines.push(`# ${skill.name} \`${skill.slug}\``);
+    lines.push(`# Skill ${inlineOr(skill.name, NO_NAME)} \`${skill.slug}\``);
     const scope =
       skill.visibility === "private"
         ? "private"
@@ -240,7 +261,7 @@ async function opGet(
           ? "team-shared"
           : "workspace-shared";
     lines.push(
-      `id: \`${skill.id}\` · status: ${skill.status} · sharing: ${scope} · folder: ${skill.folder ?? "—"} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
+      `id: \`${skill.id}\` · status: ${skill.status} · sharing: ${scope} · folder: ${skill.folder ? inlineOr(skill.folder, "`(unnamed folder)`") : "—"} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
     );
     lines.push(
       `last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`,
@@ -257,7 +278,7 @@ async function opGet(
         const status = ref.available ? "✓" : "✗ (not available)";
         if (ref.kind === "kb") {
           lines.push(
-            `- KB \`${ref.slug}\` (${ref.label}) ${status}` +
+            `- KB \`${ref.slug}\` (${inlineOr(ref.label, "`(unlabelled)`")}) ${status}` +
               (ref.available
                 ? ""
                 : " — broken ref; the skill mentions this KB but it isn't in the workspace.")
@@ -265,7 +286,7 @@ async function opGet(
         } else {
           const fieldHint = ref.field ? `.${ref.field}` : "";
           lines.push(
-            `- Connector \`${ref.provider}${fieldHint}\` (${ref.label}) ${status}`
+            `- Connector \`${ref.provider}${fieldHint}\` (${inlineOr(ref.label, "`(unlabelled)`")}) ${status}`
           );
         }
       }
@@ -288,7 +309,7 @@ async function opGet(
     if (isNotFound(e)) {
       return err(`No skill \`${slug}\`. List skills with dopl_skill(op="list").`);
     }
-    return err(`Couldn't load skill \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't load skill \`${slug}\`: ${failureDetail(e)}`);
   }
 }
 
@@ -302,7 +323,7 @@ async function opRead(
       `# \`${slug}\` / SKILL.md\nVersion: \`${file.updatedAt}\` (pass as expected_version to write)\n\n${file.body}`
     );
   } catch (e) {
-    return err(`Couldn't read SKILL.md from \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't read SKILL.md from \`${slug}\`: ${failureDetail(e)}`);
   }
 }
 
@@ -331,7 +352,7 @@ async function opWrite(
     // F-10b: skill flagged read-only to agents — clean message, not a raw code.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
-    return err(`Couldn't write SKILL.md in \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't write SKILL.md in \`${slug}\`: ${failureDetail(e)}`);
   }
 }
 
@@ -366,12 +387,12 @@ async function opCreate(
         ? "Private to you — only you and your agent can see it."
         : "Visible to the whole workspace.";
     return ok(
-      `Created skill **${skill.name}** (slug: \`${skill.slug}\`). ` +
+      `Created skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`). ` +
         `Status: ${skill.status}. ${visNote} ` +
         `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".`
     );
   } catch (e) {
-    return err(`Couldn't create skill: ${errorMessage(e)}`);
+    return err(`Couldn't create skill: ${failureDetail(e)}`);
   }
 }
 
@@ -409,14 +430,14 @@ async function opUpdate(
       folder: params.folder,
     });
     return ok(
-      `Updated skill **${updated.name}** (slug: \`${updated.slug}\`). Status: ${updated.status}.` +
-        (updated.folder ? ` Folder: ${updated.folder}.` : "")
+      `Updated skill ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`). Status: ${updated.status}.` +
+        (updated.folder ? ` Folder: ${inlineOr(updated.folder, "`(unnamed folder)`")}.` : "")
     );
   } catch (e) {
     // F-10b: skill flagged read-only to agents — clean message, not a raw code.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
-    return err(`Couldn't update skill \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't update skill \`${slug}\`: ${failureDetail(e)}`);
   }
 }
 
@@ -432,11 +453,11 @@ async function opSetVisibility(
     const skill = await client.updateSkill(slug, { visibility });
     return ok(
       visibility === "public"
-        ? `Published skill **${skill.name}** (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`
-        : `Skill **${skill.name}** (slug: \`${skill.slug}\`) is now private — only its owner can see it.`,
+        ? `Published skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`
+        : `Skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it.`,
     );
   } catch (e) {
-    return err(`Couldn't change sharing on \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't change sharing on \`${slug}\`: ${failureDetail(e)}`);
   }
 }
 
@@ -448,6 +469,6 @@ async function opDelete(client: DoplClient, slug: string): Promise<ToolResponse>
     // F-10: a skill flagged read-only to agents rejects agent deletes.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
-    return err(`Couldn't delete skill \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't delete skill \`${slug}\`: ${failureDetail(e)}`);
   }
 }

@@ -110,7 +110,7 @@ describe("buildInstructions (M-2)", () => {
     const out = buildInstructions([WS1, WS2], {
       pin: { name: "Beta", slug: "beta" },
     });
-    expect(out).toContain("pinned to **Beta**");
+    expect(out).toContain("pinned to `Beta`");
     expect(out).toContain("no-arg tool call targets it");
     expect(out).not.toContain("NO default");
   });
@@ -163,7 +163,7 @@ describe("no-arg call (M-3 wrapper enforcement)", () => {
     expect(res.isError).toBeFalsy();
     expect(client.listKbBases).toHaveBeenCalled();
     const text = textOf(res);
-    expect(text).toContain('active_workspace: "Alpha"');
+    expect(text).toContain("active_workspace: `Alpha`");
     expect(text).toContain("workspace_source: sole membership");
   });
 
@@ -176,7 +176,7 @@ describe("no-arg call (M-3 wrapper enforcement)", () => {
     });
     const res = await map({});
     const text = textOf(res);
-    expect(text).toContain('active_workspace: "Beta"');
+    expect(text).toContain("active_workspace: `Beta`");
     expect(text).toContain("workspace_source: header pin");
   });
 });
@@ -192,7 +192,7 @@ describe("per-call workspace= (M-4 footer)", () => {
     const res = await map({ workspace: "beta" });
     expect(res.isError).toBeFalsy();
     const text = textOf(res);
-    expect(text).toContain('active_workspace: "Beta"');
+    expect(text).toContain("active_workspace: `Beta`");
     expect(text).toContain("workspace_source: per-call arg");
   });
 
