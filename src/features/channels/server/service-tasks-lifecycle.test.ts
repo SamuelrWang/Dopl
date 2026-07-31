@@ -1,8 +1,9 @@
 /**
  * Unit tests for the thread lifecycle ECHO — the `task_finished` / `task_failed`
- * marker `closeTask` posts, and `reopenTask`'s deliberate silence. Split out of
- * `service-writes.test.ts` (§2 cap): the echo is the thread lane's contract with
- * the transcript, not part of `postMessage`'s metadata folds.
+ * marker `closeTask` posts, the SEQ that marker rides back out on, and
+ * `reopenTask`'s deliberate silence. Split out of `service-writes.test.ts`
+ * (§2 cap): the echo is the thread lane's contract with the transcript, not
+ * part of `postMessage`'s metadata folds.
  *
  * The repositories are mocked; `service-shared` runs for real.
  */
@@ -155,6 +156,101 @@ describe("closeTask — outcome summary (v1.7)", () => {
     const echo = echoInsert();
     expect(echo.kind).toBe("task_failed");
     expect(echo.body).toBe("Task failed");
+  });
+});
+
+/**
+ * The close's counterpart to `createTask`'s `openingSeq`. A close WRITES to the
+ * transcript, so it moves the cursor; a requester that then arms `await` has to
+ * know where the channel now ends. Guessing it (last known seq + 1) put the
+ * cursor past a peer's already-delivered reply and the hold waited forever —
+ * the seq is only knowable here, so it rides back out.
+ */
+describe("closeTask — lifecycle echo seq", () => {
+  const CLOSE_TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+
+  function closableTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+    return {
+      id: CLOSE_TASK_ID,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      title: "Ship it",
+      status: "open",
+      outcome: null,
+      mode: "interactive",
+      created_by: USER,
+      target_user_id: null,
+      created_at: "2026-07-20T00:00:00Z",
+      updated_at: "2026-07-20T00:00:00Z",
+      closed_at: null,
+      outcome_summary: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
+    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
+      closableTask({ ...patch, status: "closed" })
+    );
+  });
+
+  it("returns the echo's seq alongside the closed thread", async () => {
+    vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
+      ...insertedRow(row),
+      seq: 137,
+    }));
+
+    const { thread, echoSeq } = await closeTask(
+      ctx,
+      "general",
+      CLOSE_TASK_ID,
+      "completed"
+    );
+
+    expect(echoSeq).toBe(137);
+    expect(thread.status).toBe("closed");
+    expect(thread.outcome).toBe("completed");
+  });
+
+  it("still closes — with a NULL seq — when only the echo post fails", async () => {
+    // The row is already closed by the time the marker is written. Throwing
+    // here would report a close that did happen as a failure, and the caller's
+    // retry would re-close. "Closed, no echo" is what `echoSeq: null` says.
+    vi.mocked(repoMessages.insertMessage).mockRejectedValue(
+      new Error("transient insert failure")
+    );
+
+    const { thread, echoSeq } = await closeTask(
+      ctx,
+      "general",
+      CLOSE_TASK_ID,
+      "failed",
+      "Gave up"
+    );
+
+    expect(echoSeq).toBeNull();
+    expect(thread.status).toBe("closed");
+    // The close itself still landed on the row, summary and all.
+    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toMatchObject({
+      status: "closed",
+      outcome: "failed",
+      outcome_summary: "Gave up",
+    });
+  });
+
+  it("does not swallow the close's OWN errors (authz is unchanged)", async () => {
+    // Only the echo is tolerated. A caller who may not close still gets 403,
+    // and nothing is written.
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closableTask({ created_by: "someone-else", target_user_id: "another" })
+    );
+
+    await expect(
+      closeTask(ctx, "general", CLOSE_TASK_ID, "completed")
+    ).rejects.toBeInstanceOf(TaskForbiddenError);
+    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 });
 

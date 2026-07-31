@@ -62,6 +62,10 @@ async function readMessages(t, channelId, opts = {}) {
         params.set("since", String(opts.since));
     if (opts.limit !== undefined)
         params.set("limit", String(opts.limit));
+    // Thread scope (optional): the server filters on `metadata.taskId`. Omitted
+    // entirely when unset, so an older deployment sees the read it always saw.
+    if (opts.thread !== undefined)
+        params.set("thread", opts.thread);
     const qs = params.toString();
     const data = await t.request(`/api/channels/${enc(channelId)}/messages${qs ? `?${qs}` : ""}`, { toolName: "channel_read" });
     return data.messages;
@@ -140,7 +144,13 @@ async function closeChannelThread(t, channelId, threadId, input) {
         body: { op: "close", outcome: input.outcome, summary: input.summary },
         toolName: "channel_close_thread",
     });
-    return data.task;
+    // `echoSeq` is additive on the route, exactly like `openingSeq` on create —
+    // an older deployment omits it, which reads as null and tells the caller to
+    // look its cursor up rather than arm `await` on a guess.
+    return {
+        thread: data.task,
+        echoSeq: typeof data.echoSeq === "number" ? data.echoSeq : null,
+    };
 }
 async function setChannelThreadMode(t, channelId, threadId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {

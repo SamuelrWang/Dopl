@@ -110,6 +110,7 @@ export type {
   ChannelMessageInput,
   ChannelMessageKind,
   ChannelThread,
+  ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
   ChannelVisibility,

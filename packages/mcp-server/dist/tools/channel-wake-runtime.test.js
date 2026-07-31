@@ -28,7 +28,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const identity_1 = require("./identity");
-const channel_ops_read_1 = require("./channel-ops-read");
+const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_1 = require("./channel");
@@ -140,7 +140,7 @@ function arrivingClient() {
         (0, vitest_1.expect)(text).toContain('thread="thread-1"');
     });
     (0, vitest_1.it)("a timed-out await tells it to stop, not to re-arm", async () => {
-        const text = (await (0, channel_ops_read_1.opAwait)(quietClient(), "general", 7, undefined, "u-me", identity_1.DESKTOP_SESSION_RUNTIME)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(quietClient(), "general", 7, undefined, "u-me", identity_1.DESKTOP_SESSION_RUNTIME)).content[0].text;
         expectNoFalsePromise(text);
         (0, vitest_1.expect)(text).toContain("Do NOT re-arm");
         (0, vitest_1.expect)(text).not.toContain("re-arm the wait NOW");
@@ -148,7 +148,7 @@ function arrivingClient() {
         (0, vitest_1.expect)(text).toContain("report that to your operator");
     });
     (0, vitest_1.it)("an await that RETURNED messages still advances the cursor and stops", async () => {
-        const text = (await (0, channel_ops_read_1.opAwait)(arrivingClient(), "general", 7, undefined, "u-me", identity_1.DESKTOP_SESSION_RUNTIME)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(arrivingClient(), "general", 7, undefined, "u-me", identity_1.DESKTOP_SESSION_RUNTIME)).content[0].text;
         expectNoFalsePromise(text);
         (0, vitest_1.expect)(text).toContain("Advance your cursor to seq 42");
         (0, vitest_1.expect)(text).toContain("Do NOT re-arm");
@@ -185,7 +185,7 @@ function arrivingClient() {
         (0, vitest_1.expect)(text).toContain("STOP and report to your operator");
     });
     (0, vitest_1.it)("a timed-out await re-arms, with the hold described and nothing promised", async () => {
-        const text = (await (0, channel_ops_read_1.opAwait)(quietClient(), "general", 7, undefined, "u-me"))
+        const text = (await (0, channel_ops_await_1.opAwait)(quietClient(), "general", 7, undefined, "u-me"))
             .content[0].text;
         expectNoFalsePromise(text);
         (0, vitest_1.expect)(text).toContain("re-arm the wait NOW");
@@ -197,7 +197,7 @@ function arrivingClient() {
         (0, vitest_1.expect)(text).toContain("closed or failed");
     });
     (0, vitest_1.it)("an await that RETURNED messages re-arms on the new cursor", async () => {
-        const text = (await (0, channel_ops_read_1.opAwait)(arrivingClient(), "general", 7, undefined, "u-me"))
+        const text = (await (0, channel_ops_await_1.opAwait)(arrivingClient(), "general", 7, undefined, "u-me"))
             .content[0].text;
         expectNoFalsePromise(text);
         (0, vitest_1.expect)(text).toContain("Advance your cursor to seq 42");
@@ -205,10 +205,39 @@ function arrivingClient() {
         (0, vitest_1.expect)(text).toContain("RETURNS INSIDE your current turn");
         (0, vitest_1.expect)(text).toContain("STOP and report");
     });
+    // TIER 1 — the wake an external session can build for itself. `await`
+    // returns inside the turn that armed it, so being woken depends on a client
+    // behaviour this server cannot see; a harness that runs background shell
+    // tasks already delivers task completion as a wake, so the poll can move out
+    // of the MCP call entirely. Stated ONCE, conditionally, and only where we
+    // cannot see the caller — a desktop session is fed replies and must not be
+    // sent off to build a second delivery path for them.
+    (0, vitest_1.it)("offers the background-task poll to every unstamped surface", async () => {
+        const surfaces = [
+            (await (0, channel_ops_write_1.opPost)(stubClient(), "general", "please do X", { to: "bob@x.com" }))
+                .content[0].text,
+            (await (0, channel_ops_threads_1.opCreateThread)(stubClient(), "general", "Ship it", "please do X", "bob@x.com")).content[0].text,
+            (await (0, channel_ops_await_1.opAwait)(quietClient(), "general", 7, undefined, "u-me")).content[0].text,
+            (await (0, channel_ops_await_1.opAwait)(arrivingClient(), "general", 7, undefined, "u-me")).content[0].text,
+        ];
+        for (const text of surfaces) {
+            expectNoFalsePromise(text);
+            // CONDITIONAL on a capability we cannot observe — never a promise.
+            (0, vitest_1.expect)(text).toContain("If your harness can run background shell tasks");
+            (0, vitest_1.expect)(text).toContain("scripts/dopl-channel-wait.sh");
+            (0, vitest_1.expect)(text).toContain("END your turn");
+            (0, vitest_1.expect)(text).toContain("a wake your client already delivers");
+        }
+    });
+    (0, vitest_1.it)("does NOT offer it to a desktop session, which is already fed replies", async () => {
+        const text = (await (0, channel_ops_await_1.opAwait)(quietClient(), "general", 7, undefined, "u-me", identity_1.DESKTOP_SESSION_RUNTIME)).content[0].text;
+        (0, vitest_1.expect)(text).not.toContain("background shell tasks");
+        (0, vitest_1.expect)(text).not.toContain("dopl-channel-wait.sh");
+    });
     (0, vitest_1.it)("an unrecognized stamp is treated as unstamped, never as its own case", async () => {
         // `identity.ts`: only the exact recognized value counts. A near-miss must
         // fall to the honest branch, not to the desktop one.
-        const text = (await (0, channel_ops_read_1.opAwait)(quietClient(), "general", 7, undefined, "u-me", "desktop_session")).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(quietClient(), "general", 7, undefined, "u-me", "desktop_session")).content[0].text;
         (0, vitest_1.expect)(text).toContain("re-arm the wait NOW");
         (0, vitest_1.expect)(text).not.toContain("Do NOT re-arm");
     });

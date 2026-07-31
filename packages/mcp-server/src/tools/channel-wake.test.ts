@@ -29,7 +29,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
 import { opCreateThread } from "./channel-ops-threads";
-import { opAwait } from "./channel-ops-read";
+import { opAwait } from "./channel-ops-await";
 
 const CHANNEL = {
   id: "chan-1",

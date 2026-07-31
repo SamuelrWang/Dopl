@@ -258,10 +258,11 @@ describe("Q1-B/C write · close_thread — a title the PEER typed", () => {
   function closingClient(title: string): DoplClient {
     return stubClient({
       listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
+      // `{ thread, echoSeq }` — the close writes a marker message, so the
+      // client hands back where it landed alongside the closed thread.
       closeChannelThread: vi.fn(async () => ({
-        ...THREAD,
-        title,
-        outcome: "completed",
+        thread: { ...THREAD, title, outcome: "completed" },
+        echoSeq: null,
       })),
     });
   }

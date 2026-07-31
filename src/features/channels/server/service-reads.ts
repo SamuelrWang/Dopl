@@ -195,12 +195,20 @@ async function hydrateMessages(
 }
 
 /**
- * Cursor-based message read (`seq > since`, ascending, capped at `limit`).
+ * Cursor-based message read (`seq > since`, ascending, capped at `limit`),
+ * optionally scoped to ONE thread (`query.thread` -> `metadata.taskId`).
  * A member's read advances their `last_read_at` watermark as a
  * best-effort side-effect (the chosen read-tracking mechanism), so viewing
  * the thread — including a realtime-triggered refetch — clears its unread
  * state. Non-members reading a public channel don't have a watermark to
  * move.
+ *
+ * A THREAD-SCOPED read moves NO watermark. The watermark is content-derived
+ * (the newest message SHOWN) and monotonic, so a filtered read would jump it
+ * over every unrelated message older than the thread's latest post and mark
+ * those read without anyone having seen them. Reading one exchange is not
+ * viewing the channel; the unfiltered read is still the only thing that
+ * clears the channel's unread state.
  */
 export async function readMessages(
   ctx: ChannelContext,
@@ -211,9 +219,10 @@ export async function readMessages(
   const rows = await repoMessages.listMessages(channel.id, {
     since: query.since,
     limit: query.limit,
+    threadId: query.thread,
   });
   const messages = await hydrateMessages(rows);
-  if (membership && messages.length > 0) {
+  if (membership && query.thread === undefined && messages.length > 0) {
     // Watermark = newest message SHOWN, written only when it advances.
     // Writing now() on every read made each realtime-triggered refetch emit
     // a channel_members UPDATE, which is itself a subscribed realtime event:

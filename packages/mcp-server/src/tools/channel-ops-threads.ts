@@ -169,9 +169,12 @@ export async function opCloseThread(
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
   const chName = inlineOr(ch.name, NO_NAME);
-  let thread;
+  // `{ thread, echoSeq }` — closing WRITES a message (the task_finished /
+  // task_failed marker), so it moves the channel's cursor. `echoSeq` is where
+  // it landed, and it is `openingSeq`'s mirror at the other end of a thread.
+  let closed;
   try {
-    thread = await client.closeChannelThread(ch.id, threadId, { outcome, summary });
+    closed = await client.closeChannelThread(ch.id, threadId, { outcome, summary });
   } catch (e) {
     // `threadId` is the caller's own argument, but it round-trips: an agent
     // copies a thread id out of a `read` legend, and a legend id is
@@ -196,11 +199,25 @@ export async function opCloseThread(
   // Neutralizing it would clip and de-punctuate the operator-facing outcome for
   // no threat — an agent cannot inject itself.
   const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
+  // THE CURSOR, STATED — never derived. Live incident: a requester closed a
+  // thread, GUESSED the echo's seq (last known + 1), armed `await` one past it,
+  // and silently skipped the peer's main deliverable, which was already in the
+  // channel below that guess. So the seq is either reported as the number the
+  // server actually returned, or not mentioned at all: `echoSeq` is null when
+  // the server sent no field (an older deployment) or the marker post failed,
+  // and in both cases a guess here would be the same bug with our name on it.
+  const echo =
+    closed.echoSeq === null
+      ? []
+      : [
+          `Close echo posted at seq ${closed.echoSeq} — if you re-arm a wait, use since=${closed.echoSeq} (or your last READ seq), never a guessed seq.`,
+        ];
   return ok(
     [
       UNTRUSTED_THREAD_HEADER,
       ``,
-      `Closed thread **${inlineOr(thread.title, NO_TITLE)}** in **${chName}** as ${thread.outcome}${summaryNote}.`,
+      `Closed thread **${inlineOr(closed.thread.title, NO_TITLE)}** in **${chName}** as ${closed.thread.outcome}${summaryNote}.`,
+      ...echo,
     ].join("\n"),
   );
 }

@@ -19,9 +19,13 @@ import {
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const params = request.nextUrl.searchParams;
+    // `thread` scopes the read to one exchange (metadata.taskId). It is a
+    // filter, not a lookup: an id nothing carries returns []. The await path
+    // deliberately has no counterpart — a thread-scoped hold is its own design.
     const parsed = MessageReadQuerySchema.safeParse({
       since: params.get("since") ?? undefined,
       limit: params.get("limit") ?? undefined,
+      thread: params.get("thread") ?? undefined,
     });
     if (!parsed.success) {
       throw new HttpError(400, "VALIDATION_FAILED", "Invalid query", parsed.error.issues);

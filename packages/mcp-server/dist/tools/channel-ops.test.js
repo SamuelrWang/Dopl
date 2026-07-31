@@ -172,7 +172,10 @@ function stubClient(overrides) {
 (0, vitest_1.describe)("opCloseThread — summary (Feature 3c)", () => {
     (0, vitest_1.it)("forwards `summary` to the client and surfaces it in the confirmation", async () => {
         const closeChannelThread = vitest_1.vi.fn();
-        closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "completed" });
+        closeChannelThread.mockResolvedValue({
+            thread: { title: "Ship it", outcome: "completed" },
+            echoSeq: null,
+        });
         const client = stubClient({ closeChannelThread });
         const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
         const [channelId, threadId, input] = closeChannelThread.mock.calls[0];
@@ -183,7 +186,10 @@ function stubClient(overrides) {
     });
     (0, vitest_1.it)("omits the summary note when none is given", async () => {
         const closeChannelThread = vitest_1.vi.fn();
-        closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "failed" });
+        closeChannelThread.mockResolvedValue({
+            thread: { title: "Ship it", outcome: "failed" },
+            echoSeq: null,
+        });
         const client = stubClient({ closeChannelThread });
         const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "failed");
         const [, , input] = closeChannelThread.mock.calls[0];

@@ -20,6 +20,18 @@ interface MessageReadOpts {
    * query is the one that always ran.
    */
   excludeAuthor?: string;
+  /**
+   * Keep only the rows tagged for this thread (`metadata->>'taskId'`). A
+   * FILTER, not a lookup: an id no message carries yields `[]`, never an
+   * error, and nothing is validated against `channel_tasks` — legacy
+   * `task-<channelId>-<seq>` ids are real `metadata.taskId` values too.
+   *
+   * Reconstructing one exchange used to mean paging the whole channel and
+   * filtering client-side; a peer agent burned five paged reads over ~135
+   * messages to isolate 14 of them, and the one-shot `limit=200` read that
+   * would have avoided the paging blew its own output ceiling.
+   */
+  threadId?: string;
 }
 
 /**
@@ -29,40 +41,40 @@ interface MessageReadOpts {
  * so a channel with more than `limit` messages still surfaces its newest
  * posts. The former unconditional oldest-`limit` read silently hid every
  * message past the first page once a channel grew beyond `limit`.
+ *
+ * The two cursor modes differ ONLY in the `seq > since` predicate and which
+ * end of the ordering the `limit` bites: the optional filters (author
+ * exclusion, thread scope) are identical either way, so they are applied once
+ * to one builder rather than duplicated per branch — a filter added to only
+ * one of two near-identical queries is exactly the bug shape this avoids.
  */
 export async function listMessages(
   channelId: string,
   opts: MessageReadOpts
 ): Promise<ChannelMessageRow[]> {
   const db = supabaseAdmin();
-  if (opts.since !== undefined) {
-    let query = db
-      .from("channel_messages")
-      .select("*")
-      .eq("channel_id", channelId)
-      .gt("seq", opts.since);
-    if (opts.excludeAuthor !== undefined) {
-      query = query.neq("author_user_id", opts.excludeAuthor);
-    }
-    const { data, error } = await query
-      .order("seq", { ascending: true })
-      .limit(opts.limit);
-    if (error) throw error;
-    return (data ?? []) as ChannelMessageRow[];
-  }
-  // Newest `limit`, then flip to ascending for display / cursor semantics.
   let query = db
     .from("channel_messages")
     .select("*")
     .eq("channel_id", channelId);
+  if (opts.since !== undefined) query = query.gt("seq", opts.since);
   if (opts.excludeAuthor !== undefined) {
     query = query.neq("author_user_id", opts.excludeAuthor);
   }
+  // PostgREST's jsonb accessor: `metadata->>taskId` compares the key as TEXT,
+  // so the stored value is matched verbatim (uuid or legacy string alike).
+  if (opts.threadId !== undefined) {
+    query = query.eq("metadata->>taskId", opts.threadId);
+  }
+  // Cursor read: oldest-first from the cursor. Cursorless: newest `limit`,
+  // then flipped to ascending for display / cursor semantics.
+  const cursored = opts.since !== undefined;
   const { data, error } = await query
-    .order("seq", { ascending: false })
+    .order("seq", { ascending: cursored })
     .limit(opts.limit);
   if (error) throw error;
-  return ((data ?? []) as ChannelMessageRow[]).reverse();
+  const rows = (data ?? []) as ChannelMessageRow[];
+  return cursored ? rows : rows.reverse();
 }
 
 /**

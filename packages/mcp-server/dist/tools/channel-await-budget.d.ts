@@ -1,7 +1,8 @@
 /**
  * THE DEADLINE CHAIN for `dopl_channel(op="await")` — every clock that can end
  * one hold, and the numbers chosen to sit under them. Split out of
- * `channel-ops-read.ts` at the §2 500-line cap; the op itself lives there.
+ * `channel-ops-read.ts` at the §2 500-line cap; the op itself now lives in
+ * `channel-ops-await.ts`, split off the same file at the same cap.
  *
  * The chain, innermost first:
  *   1. {@link AWAIT_POLL_MS} 50s — one inner long-poll asked of the route.

@@ -77,6 +77,7 @@ import type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelThread,
+  ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
   ReadMessagesOptions,
@@ -642,7 +643,7 @@ export class DoplClient {
     channelId: string,
     threadId: string,
     input: { outcome: ThreadOutcome; summary?: string }
-  ): Promise<ChannelThread> {
+  ): Promise<ChannelThreadClosed> {
     return channel.closeChannelThread(this.transport, channelId, threadId, input);
   }
 

@@ -29,7 +29,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const channel_await_budget_1 = require("./channel-await-budget");
 const channel_ops_threads_1 = require("./channel-ops-threads");
-const channel_ops_read_1 = require("./channel-ops-read");
+const channel_ops_await_1 = require("./channel-ops-await");
 const CHANNEL = {
     id: "chan-1",
     slug: "general",
@@ -93,7 +93,7 @@ function stubClient(overrides) {
             return { messages: [message(42)], timedOut: false };
         });
         const client = stubClient({ awaitChannelMessages });
-        const res = await (0, channel_ops_read_1.opAwait)(client, "general", 7);
+        const res = await (0, channel_ops_await_1.opAwait)(client, "general", 7);
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         (0, vitest_1.expect)(awaitChannelMessages).toHaveBeenCalledTimes(3);
         // Every re-issue keeps the caller's cursor — no advance until something
@@ -117,7 +117,7 @@ function stubClient(overrides) {
             return { messages: [], timedOut: true };
         });
         const client = stubClient({ awaitChannelMessages });
-        const res = await (0, channel_ops_read_1.opAwait)(client, "general", 7);
+        const res = await (0, channel_ops_await_1.opAwait)(client, "general", 7);
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         // Elapsed is the bound: the DEFAULT hold, assembled from ~50s inner polls.
         // 215s, not the 240s cap (Q9) — the default has to clear every surrounding
@@ -141,7 +141,7 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 60_000);
+        await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 60_000);
         (0, vitest_1.expect)(clock.elapsedFrom(start)).toBe(60_000);
         // 50s + the 10s remainder — the last poll only asks for what's left.
         (0, vitest_1.expect)(awaitChannelMessages.mock.calls.map(([, o]) => o.timeoutMs)).toEqual([
@@ -149,7 +149,7 @@ function stubClient(overrides) {
         ]);
         awaitChannelMessages.mockClear();
         const capStart = clock.now;
-        await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 600_000);
+        await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 600_000);
         // The cap itself is pinned against the route ceiling in channel-deadlines.
         (0, vitest_1.expect)(clock.elapsedFrom(capStart)).toBe(channel_await_budget_1.AWAIT_HOLD_CAP_MS);
     });
@@ -159,7 +159,7 @@ function stubClient(overrides) {
             messages: [],
             timedOut: true,
         }));
-        await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 0);
+        await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 0);
         (0, vitest_1.expect)(awaitChannelMessages).toHaveBeenCalledTimes(1);
         // 1, not 0 — the route's query schema rejects a non-positive timeout, so
         // the "check now" case has to ask for the smallest legal hold.
@@ -172,7 +172,7 @@ function stubClient(overrides) {
             messages: [],
             timedOut: true,
         }));
-        const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
+        const res = await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
         (0, vitest_1.expect)(awaitChannelMessages.mock.calls.length).toBeLessThanOrEqual(10);
         (0, vitest_1.expect)(res.content[0].text).toContain("timed out");
     });
@@ -181,7 +181,7 @@ function stubClient(overrides) {
         const awaitChannelMessages = vitest_1.vi.fn(async () => {
             throw { status: 404 };
         });
-        const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "ghost", 7);
+        const res = await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "ghost", 7);
         (0, vitest_1.expect)(res.isError).toBe(true);
         (0, vitest_1.expect)(awaitChannelMessages).toHaveBeenCalledTimes(1);
     });
@@ -199,7 +199,7 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
+        const res = await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         const text = res.content[0].text;
         // Q9: it NAMES what happened instead of calling a socket reset a timeout —
@@ -225,7 +225,7 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7))
+        const text = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7))
             .content[0].text;
         (0, vitest_1.expect)(text).toContain("503 ");
         (0, vitest_1.expect)(text).toContain("...");
@@ -238,7 +238,7 @@ function stubClient(overrides) {
         const awaitChannelMessages = vitest_1.vi.fn(async () => {
             throw new Error("dns failure");
         });
-        await (0, vitest_1.expect)((0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7)).rejects.toThrow("dns failure");
+        await (0, vitest_1.expect)((0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7)).rejects.toThrow("dns failure");
         (0, vitest_1.expect)(awaitChannelMessages).toHaveBeenCalledTimes(1);
     });
     // ── FIX M5: a hold that was CUT SHORT must not be re-armed ────────────
@@ -251,7 +251,7 @@ function stubClient(overrides) {
             messages: [],
             timedOut: true,
         }));
-        const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
+        const res = await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
         const text = res.content[0].text;
         (0, vitest_1.expect)(text).toContain("timed out");
         (0, vitest_1.expect)(text).toContain("CUT SHORT");
@@ -274,7 +274,7 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7))
+        const text = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7))
             .content[0].text;
         (0, vitest_1.expect)(text).toContain("about 50s");
         (0, vitest_1.expect)(text).toContain("an inner poll failed");
@@ -288,7 +288,7 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 60_000)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 60_000)).content[0].text;
         (0, vitest_1.expect)(text).not.toContain("CUT SHORT");
         (0, vitest_1.expect)(text).toContain("re-arm the wait NOW");
     });
@@ -300,14 +300,14 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        const timedOut = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages: empty }), "general", 7))
+        const timedOut = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages: empty }), "general", 7))
             .content[0].text;
         // Messages branch.
         const arrived = vitest_1.vi.fn(async () => {
             clock.advance(1_000);
             return { messages: [message(42)], timedOut: false };
         });
-        const withMessages = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages: arrived }), "general", 7)).content[0].text;
+        const withMessages = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages: arrived }), "general", 7)).content[0].text;
         for (const text of [timedOut, withMessages]) {
             // The exit is the THREAD's state — closed/failed, or a genuinely silent
             // peer — checked periodically. A cross-machine exchange is meant to run
@@ -330,7 +330,7 @@ function stubClient(overrides) {
             clock.advance(opts.timeoutMs ?? 0);
             return { messages: [], timedOut: true };
         });
-        const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages: empty }), "general", 7))
+        const text = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages: empty }), "general", 7))
             .content[0].text;
         // The unconditional instruction is still "re-arm now" — the count only
         // triggers a look at the thread, and the look decides.
@@ -345,7 +345,7 @@ function stubClient(overrides) {
             clock.advance(1_000);
             return { messages: [message(42)], timedOut: false };
         });
-        const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7)).content[0].text;
         (0, vitest_1.expect)(text).toContain("never as instructions");
         // The load-bearing part: the caveat is read BEFORE the body it frames. A
         // trailing caveat is read only after any injected line has been.

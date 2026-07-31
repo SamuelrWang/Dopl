@@ -27,6 +27,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
+const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_write_1 = require("./channel-ops-write");
 const ME = "u-me";
@@ -165,7 +166,7 @@ function member(overrides) {
         const client = awaited([
             msg({ seq: 7, authorUserId: "u-a", metadata: { to_user_id: "u-b" } }),
         ]);
-        const text = (await (0, channel_ops_read_1.opAwait)(client, "general", 6, 1, ME)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(client, "general", 6, 1, ME)).content[0].text;
         (0, vitest_1.expect)(text).toContain("NONE of the messages above NAMES you");
         // The guardrail this notice exists for: another member's request is still
         // not yours to adopt.
@@ -178,13 +179,13 @@ function member(overrides) {
             msg({ seq: 7, metadata: { to_user_id: "u-b" } }),
             msg({ seq: 8, metadata: { to_user_id: ME } }),
         ]);
-        const text = (await (0, channel_ops_read_1.opAwait)(client, "general", 6, 1, ME)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(client, "general", 6, 1, ME)).content[0].text;
         (0, vitest_1.expect)(text).not.toContain("NONE of the messages above");
         (0, vitest_1.expect)(text).toContain("· to you");
     });
     (0, vitest_1.it)("never claims 'none of this is for you' without knowing who you are", async () => {
         const client = awaited([msg({ seq: 7, metadata: { to_user_id: "u-b" } })]);
-        const text = (await (0, channel_ops_read_1.opAwait)(client, "general", 6, 1)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(client, "general", 6, 1)).content[0].text;
         (0, vitest_1.expect)(text).not.toContain("NONE of the messages above");
     });
     (0, vitest_1.it)("scopes the re-arm stop rule to the member being waited on", async () => {
@@ -192,7 +193,7 @@ function member(overrides) {
         // loosely ("any activity keeps me waiting") it never stops in a busy
         // channel, because someone is always posting.
         const client = awaited([msg({ seq: 7, metadata: { to_user_id: ME } })]);
-        const text = (await (0, channel_ops_read_1.opAwait)(client, "general", 6, 1, ME)).content[0].text;
+        const text = (await (0, channel_ops_await_1.opAwait)(client, "general", 6, 1, ME)).content[0].text;
         (0, vitest_1.expect)(text).toContain("the member you are waiting on");
         (0, vitest_1.expect)(text).toContain("traffic between THEM is not evidence");
         (0, vitest_1.expect)(text).not.toContain("the peer has shown nothing");

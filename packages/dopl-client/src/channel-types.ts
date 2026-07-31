@@ -181,6 +181,25 @@ export interface ChannelThreadCreated {
   openingSeq: number | null;
 }
 
+/**
+ * What `closeChannelThread` returns: the closed thread plus `echoSeq`, the seq
+ * of the `task_finished` / `task_failed` marker the close posted.
+ *
+ * WHY: closing writes a message, so it moves the channel's cursor. A requester
+ * that closes and then arms `await` has to know where the transcript now ends;
+ * guessing it (last known seq + 1) once landed the cursor PAST a peer's reply
+ * that was already in the channel, and the hold waited forever for a message it
+ * had skipped. This is `openingSeq`'s mirror at the other end of a thread.
+ *
+ * `null` when the server reported no echo — either an older deployment that
+ * does not send the field, or a close whose marker post failed. Both mean the
+ * same thing to a caller: do NOT derive a cursor from it, look it up.
+ */
+export interface ChannelThreadClosed {
+  thread: ChannelThread;
+  echoSeq: number | null;
+}
+
 export interface ChannelMessageInput {
   body: string;
   kind?: ChannelMessageKind;
@@ -203,6 +222,18 @@ export interface ReadMessagesOptions {
   since?: number;
   /** Max messages to return (server caps at 200). */
   limit?: number;
+  /**
+   * Scope the read to ONE thread: only messages tagged with this thread id
+   * (`metadata.taskId`) come back. Reconstructing an exchange otherwise means
+   * paging the whole channel and filtering locally — five paged reads to
+   * isolate fourteen messages, or one `limit=200` read that overruns the
+   * caller's own output budget.
+   *
+   * A FILTER, not a lookup: a thread id nothing carries returns `[]` rather
+   * than 404, and legacy `task-<channelId>-<seq>` ids work as well as uuids.
+   * Composes with `since` / `limit` (same cursor and cap, fewer rows).
+   */
+  thread?: string;
 }
 
 export interface AwaitMessagesOptions {

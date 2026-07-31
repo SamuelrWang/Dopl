@@ -201,6 +201,27 @@ export async function createTask(
 }
 
 /**
+ * What `closeTask` hands back: the closed thread, plus the seq of the lifecycle
+ * echo it posted — the mirror of {@link TaskCreateResult}'s `openingSeq`.
+ *
+ * WHY THE SEQ RIDES ALONG: a close writes a message into the transcript, so
+ * every seq the requester knew is now one short. Live incident: a requester
+ * closed a thread, GUESSED the echo's seq, armed `await` one past that guess,
+ * and silently skipped the peer's actual deliverable — the reply was already
+ * below the cursor, so the hold waited for something that had arrived. The
+ * echo's seq is only known here; returning it removes the guess.
+ *
+ * `null` when no echo landed — the close itself succeeded but the marker post
+ * did not (see {@link closeTask}). Never a fabricated number: a caller that
+ * gets null must find its cursor another way rather than arm one on a guess,
+ * which is the failure this field exists to prevent.
+ */
+export interface TaskCloseResult {
+  thread: ChannelThread;
+  echoSeq: number | null;
+}
+
+/**
  * Close a task with an outcome. Permitted for the task's creator OR its target
  * (`created_by` / `target_user_id`). Posts a lifecycle marker so the other
  * member's thread updates live: completed -> `task_finished` (calm "done");
@@ -212,7 +233,7 @@ export async function closeTask(
   taskId: string,
   outcome: ThreadOutcome,
   summary?: string
-): Promise<ChannelThread> {
+): Promise<TaskCloseResult> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("close a task in this channel");
@@ -234,16 +255,29 @@ export async function closeTask(
     outcome_summary: summary && summary.trim().length > 0 ? summary.trim() : null,
   });
 
-  await postMessage(ctx, channel.id, {
-    body:
-      (summary && summary.trim()) ||
-      (outcome === "completed" ? "Task completed" : "Task failed"),
-    kind: outcome === "completed" ? "task_finished" : "task_failed",
-    summary: task.title,
-    metadata: { taskId: task.id },
-  });
+  // THE CLOSE HAS ALREADY LANDED by the time the echo is written — the row is
+  // closed whether or not the marker posts. Letting the echo's failure throw
+  // would report a close that did not happen, and the caller's retry would
+  // re-close an already-closed thread; the honest report is "closed, no echo",
+  // which `echoSeq: null` says exactly. Every error the close ITSELF can raise
+  // (not a member, not creator/target, unknown task) is untouched above.
+  let echoSeq: number | null = null;
+  try {
+    const echo = await postMessage(ctx, channel.id, {
+      body:
+        (summary && summary.trim()) ||
+        (outcome === "completed" ? "Task completed" : "Task failed"),
+      kind: outcome === "completed" ? "task_finished" : "task_failed",
+      summary: task.title,
+      metadata: { taskId: task.id },
+    });
+    echoSeq = echo.seq;
+  } catch {
+    // Marker lost. The thread is closed; the peer's panel catches up on its
+    // next tasks refetch instead of on a realtime marker.
+  }
 
-  return mapTaskRow(updated);
+  return { thread: mapTaskRow(updated), echoSeq };
 }
 
 /**

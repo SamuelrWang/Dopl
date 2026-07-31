@@ -29,7 +29,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond";
 import { DESKTOP_SESSION_RUNTIME } from "./identity";
-import { opAwait } from "./channel-ops-read";
+import { opAwait } from "./channel-ops-await";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread } from "./channel-ops-threads";
 import { registerChannelTool } from "./channel";
@@ -268,6 +268,43 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).toContain("since=42");
     expect(text).toContain("RETURNS INSIDE your current turn");
     expect(text).toContain("STOP and report");
+  });
+
+  // TIER 1 — the wake an external session can build for itself. `await`
+  // returns inside the turn that armed it, so being woken depends on a client
+  // behaviour this server cannot see; a harness that runs background shell
+  // tasks already delivers task completion as a wake, so the poll can move out
+  // of the MCP call entirely. Stated ONCE, conditionally, and only where we
+  // cannot see the caller — a desktop session is fed replies and must not be
+  // sent off to build a second delivery path for them.
+  it("offers the background-task poll to every unstamped surface", async () => {
+    const surfaces = [
+      (await opPost(stubClient(), "general", "please do X", { to: "bob@x.com" }))
+        .content[0].text,
+      (
+        await opCreateThread(stubClient(), "general", "Ship it", "please do X", "bob@x.com")
+      ).content[0].text,
+      (await opAwait(quietClient(), "general", 7, undefined, "u-me")).content[0].text,
+      (await opAwait(arrivingClient(), "general", 7, undefined, "u-me")).content[0].text,
+    ];
+
+    for (const text of surfaces) {
+      expectNoFalsePromise(text);
+      // CONDITIONAL on a capability we cannot observe — never a promise.
+      expect(text).toContain("If your harness can run background shell tasks");
+      expect(text).toContain("scripts/dopl-channel-wait.sh");
+      expect(text).toContain("END your turn");
+      expect(text).toContain("a wake your client already delivers");
+    }
+  });
+
+  it("does NOT offer it to a desktop session, which is already fed replies", async () => {
+    const text = (
+      await opAwait(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
+    ).content[0].text;
+
+    expect(text).not.toContain("background shell tasks");
+    expect(text).not.toContain("dopl-channel-wait.sh");
   });
 
   it("an unrecognized stamp is treated as unstamped, never as its own case", async () => {

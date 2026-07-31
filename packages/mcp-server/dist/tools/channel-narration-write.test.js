@@ -217,10 +217,11 @@ const THREAD = {
     function closingClient(title) {
         return stubClient({
             listChannels: vitest_1.vi.fn(async () => [CLEAN_CHANNEL]),
+            // `{ thread, echoSeq }` — the close writes a marker message, so the
+            // client hands back where it landed alongside the closed thread.
             closeChannelThread: vitest_1.vi.fn(async () => ({
-                ...THREAD,
-                title,
-                outcome: "completed",
+                thread: { ...THREAD, title, outcome: "completed" },
+                echoSeq: null,
             })),
         });
     }

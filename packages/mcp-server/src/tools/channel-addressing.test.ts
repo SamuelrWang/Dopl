@@ -27,7 +27,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opAwait, opGetThread, opListThreads, opMembers, opRead } from "./channel-ops-read";
+import { opAwait } from "./channel-ops-await";
+import { opGetThread, opListThreads, opMembers, opRead } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
 const ME = "u-me";

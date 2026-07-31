@@ -12,7 +12,9 @@
  *   - `channel-shared.ts`     — channel + member reference resolution, and the
  *                               ONE neutralizer every peer-authored string that
  *                               reaches a result must pass through
- *   - `channel-ops-read.ts`   — list / read / await / list_threads / get_thread
+ *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
+ *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
+ *                               §2 cap — it is the only op here that loops)
  *   - `channel-ops-write.ts`  — open / invite / post
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
  *   - `channel-render.ts`     — the read renderers + the untrusted-content

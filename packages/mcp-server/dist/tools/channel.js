@@ -13,7 +13,9 @@
  *   - `channel-shared.ts`     — channel + member reference resolution, and the
  *                               ONE neutralizer every peer-authored string that
  *                               reaches a result must pass through
- *   - `channel-ops-read.ts`   — list / read / await / list_threads / get_thread
+ *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
+ *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
+ *                               §2 cap — it is the only op here that loops)
  *   - `channel-ops-write.ts`  — open / invite / post
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
@@ -36,6 +38,7 @@ const respond_1 = require("./respond");
 // margin is exactly the route's 300s ceiling, i.e. no margin at all).
 const channel_await_budget_1 = require("./channel-await-budget");
 const channel_ops_read_1 = require("./channel-ops-read");
+const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const identity_1 = require("./identity");
@@ -49,12 +52,17 @@ WHO A MESSAGE IS FOR: every message line in "read" / "await" ends with "· to yo
 
 THE PROTOCOL: open a thread with "create_thread", or find an existing one with "list_threads". Post into the channel threading every message with that thread id (\`thread=<id>\`) so both sides read one exchange. Post progress as it lands, not in one dump at the end. Close the thread with "close_thread" when the GOAL is done, not per hop.
 
+CONVENTIONS:
+LARGE DELIVERABLES: a body is capped at 16000 characters. Anything bigger belongs in a shared knowledge base (dopl_kb) — write it there and post the entry reference into the thread. Do not chunk one artifact across many messages.
+BEFORE A FINAL DELIVERABLE: check for inbound turns you have not read yet — "read" with since=<your cursor> — and only then post. A scope correction can race your work: one landed 14 seconds after a deliverable went out, and ~250 words of it were already wrong.
+SEQ NUMBERS are workspace-global, not per-channel. Consecutive messages in one channel routinely jump several seqs — that is other channels' traffic, not messages you missed. Never read a seq range as a message count.
+
 Every message has a monotonic \`seq\` cursor: \`read\`/\`await\` take \`since\`=a seq and return messages with a HIGHER seq, in order. Set \`op\` to one of:
 - "list" — list the channels you can see in the active workspace (name, slug, id, visibility, member count, last activity). Start here to find a channel's slug or id.
 - "open" — create a channel, OR open a direct (1:1) message. For a channel: requires name; optional topic, visibility ("private" default = invite-only, or "public" = visible to the whole workspace); you become its owner. For a direct message: pass \`direct\`=true + \`member\` (an email or user id of an active workspace member) and no name — it opens, or reuses, a private 1:1 channel with that member.
 - "invite" — add a workspace member to a channel. Requires: channel (slug or id) + member (an email or user id — must be an ACTIVE member of this workspace; invites are in-workspace only). You must already belong to the channel.
 - "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member — "members" lists them) when your message is a request aimed at one specific person's agent: that member's listener is then the only one triggered. Leave it off only for chat nobody has to act on. In a DIRECT (1:1) channel you do not need \`to\`: your post is addressed to the other member automatically, so a reply always reaches them. In every OTHER channel nothing is addressed for you and there is no broadcast: a post of YOURS with no \`to\` reaches no one's agent — every member can read it, but no one's agent wakes for it, at two members as at ten (the receiving side treats an unaddressed message from a PERSON as meant for the only other member when a channel has exactly two, but never one from an agent, and yours are). The one thing that does carry an unaddressed post to an agent is a THREAD tag: \`thread=<id>\` on an existing thread routes it into the session already working that thread. Otherwise, addressing one member at a time is how you ask for work; to ask two people, post twice. Pass \`thread\` (a thread id) to thread this post into that thread's card; a \`kind="task_progress"\` post with \`thread=<id>\` logs one concrete milestone (an accomplishment that just landed) on the thread. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events, which keep the older \`task_\` storage names — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the exchange stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate). The result tells you how the post LANDED — "THREADED into <title>", or "NOT THREADED" plus the channel's open thread ids; read that line, because an untagged post reads as a brand-new request on the other side.
-- "read" — read a channel's recent messages, ascending by seq. Requires: channel. Optional: since (return only messages after this seq), limit (max 200). Note the highest seq to use as your next \`since\`. Each line shows its thread linkage ("· thread <short id>", or "· no thread"), with the short tags expanded to full ids underneath — that is how you tell a continuation from a new request — and who it is addressed to ("· to you" / "· to <member>" / "· unaddressed").
+- "read" — read a channel's recent messages, ascending by seq. Requires: channel. Optional: since (return only messages after this seq), limit (max 200), thread (a thread id — filter the transcript to that ONE exchange, instead of paging the whole channel and sorting it yourself; it filters, so an id nothing carries returns nothing rather than an error, and "await" has no such filter). Note the highest seq to use as your next \`since\`. Each line shows its thread linkage ("· thread <short id>", or "· no thread"), with the short tags expanded to full ids underneath — that is how you tell a continuation from a new request — and who it is addressed to ("· to you" / "· to <member>" / "· unaddressed").
 - "await" — LONG-POLL for new messages, and the ONLY thing that brings a reply back to you when nothing else feeds you: it blocks up to ~3.5 minutes waiting for a message with seq > since, returning the moment one arrives (or nothing, on timeout). Requires: channel + since (the last seq you've processed). Optional: timeout_ms (total hold in milliseconds, <=${channel_await_budget_1.AWAIT_HOLD_CAP_MS}, default ${channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS}). CALL IT BEFORE YOU END YOUR TURN whenever you are waiting on a reply. The hold returns INSIDE your turn — a pending call keeps a turn alive rather than ending one — and some MCP clients also background a call still pending past ~2 minutes and deliver its result as a wake, so an armed await is what brings a reply back either way. It is CHANNEL-WIDE, not filtered to you: ANY new message ends the hold, including one addressed to another member or to nobody. So on wake, read the "· to ..." and "· thread ..." tags on each line first. Handle what is addressed to you, and anything threaded into an exchange you are a party to — a reply to you is normally posted UNADDRESSED, so "not addressed to me" is not the same as "not mine". A message aimed at ANOTHER member is context: do not answer it. Then call "await" again with the new highest seq — but only if YOU are still waiting on someone; other members' traffic is not a reason to keep holding, and re-arming out of habit is how an agent waits forever on an exchange that already ended. On a timeout with no messages: call "await" again with the SAME since — an agent doing real work is often quiet for a long stretch, so a timeout is not an answer. Every ~3 empty holds in a row, check before re-arming ("get_thread" for status, "read" for new task_progress milestones): keep waiting while the thread is OPEN and the member YOU ADDRESSED showed activity in roughly the last 30 minutes — judge that on them alone, since in a busy channel other members' messages are not evidence your exchange is alive; STOP and report to your operator when the thread is closed or failed, or when nothing has come from that member for ~30+ minutes. Also stop if a hold comes back far sooner than it asked for (the result says so): short holds cannot wake you, so report that instead of looping on them. (Not for a desktop session window — see the listener note below.)
 - "members" — list a channel's members (name, user id, role; your own row is marked "you"). Requires: channel. This is how you learn WHO you can address: \`to\` and create_thread's \`to\` both take one of these members. "list" tells you a channel has five members; this tells you which five.
 - "list_threads" — list a channel's threads (id, title, status, mode, outcome, outcome summary, who opened it, who it is addressed to). Requires: channel. You see every thread in the channel, including exchanges between two OTHER members — those are readable but not writable by you, so check the two names before you reply into one. Start here to find a thread's id; read its messages with "read" or inspect one with "get_thread".
@@ -197,7 +205,7 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
         thread: zod_1.z
             .string()
             .optional()
-            .describe('op="get_thread" / op="close_thread" / op="set_thread_mode" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread — logs a milestone when combined with kind="task_progress".'),
+            .describe('op="get_thread" / op="close_thread" / op="set_thread_mode" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread — logs a milestone when combined with kind="task_progress". op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is always channel-wide).'),
         outcome: zod_1.z
             .enum(["completed", "failed"])
             .optional()
@@ -268,13 +276,17 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 const miss = (0, respond_1.missingParams)("read", args, ["channel"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId);
+                return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
+                // Any non-empty string is legal — legacy `task-<channelId>-<seq>`
+                // ids are real `metadata.taskId` values and must stay filterable.
+                // `opRead` treats blank/whitespace as unset.
+                args.thread);
             }
             case "await": {
                 const miss = (0, respond_1.missingParams)("await", args, ["channel", "since"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_read_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime);
+                return (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime);
             }
             case "members": {
                 const miss = (0, respond_1.missingParams)("members", args, ["channel"]);

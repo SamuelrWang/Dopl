@@ -1,10 +1,15 @@
 /**
- * Unit tests for the channels read service — the `listChannelMembers`
- * notify-scope privacy rule. Repository mocked; service-shared runs for real.
+ * Unit tests for the channels read service. Repository mocked; service-shared
+ * runs for real.
  *
- * Invariant: `notify_scope` is a private per-member preference. The roster
- * exposes it ONLY on the caller's OWN row; every other member's `notifyScope`
- * is nulled so no one can see who muted the channel.
+ * Covers:
+ *   - `listChannelMembers` notify-scope privacy — `notify_scope` is a private
+ *     per-member preference, exposed ONLY on the caller's OWN row so no one can
+ *     see who muted the channel;
+ *   - the read-watermark loop guard (content-derived + monotonic);
+ *   - the THREAD SCOPE on `readMessages` — the `metadata.taskId` filter that
+ *     isolates one exchange, its legacy-id tolerance, and the two things it must
+ *     NOT do: move the watermark, or soften the read-visibility gate.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -25,7 +30,7 @@ import {
   listChannels,
   readMessages,
 } from "./service-reads";
-import { TaskNotFoundError } from "./errors";
+import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type {
   ChannelMemberRow,
@@ -37,6 +42,8 @@ import type {
 const WS = "ws-1";
 const USER = "user-1";
 const OTHER = "user-2";
+/** A first-class thread id (`metadata.taskId`), as the read scope receives it. */
+const TASK_THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 const ctx: ChannelContext = {
   workspaceId: WS,
@@ -193,6 +200,95 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
       USER,
       "2026-07-27T10:00:00.000Z"
     );
+  });
+
+  // A thread-scoped read shows a SUBSET, so its newest row can be newer than
+  // unrelated messages the member has never seen. The watermark is monotonic,
+  // so advancing it here would mark those read. Reading one exchange is not
+  // viewing the channel.
+  it("moves NO watermark when the read is scoped to one thread", async () => {
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
+      messageRow(9, "2026-07-27T18:00:00.000Z"),
+    ]);
+    await readMessages(ctx, "general", { limit: 50, thread: TASK_THREAD_ID });
+    expect(repo.updateLastRead).not.toHaveBeenCalled();
+  });
+});
+
+describe("readMessages — thread scope", () => {
+  function threadRow(seq: number, taskId: string): ChannelMessageRow {
+    return {
+      id: `msg-${seq}`,
+      seq,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      author_user_id: OTHER,
+      author_kind: "user",
+      kind: "message",
+      body: "hi",
+      metadata: { taskId },
+      client_msg_id: null,
+      created_at: "2026-07-31T00:00:00Z",
+    };
+  }
+
+  it("passes the thread id down to the repository as threadId", async () => {
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
+      threadRow(4, TASK_THREAD_ID),
+    ]);
+
+    const messages = await readMessages(ctx, "general", {
+      limit: 50,
+      thread: TASK_THREAD_ID,
+    });
+
+    expect(repoMessages.listMessages).toHaveBeenCalledWith("chan-1", {
+      since: undefined,
+      limit: 50,
+      threadId: TASK_THREAD_ID,
+    });
+    expect(messages.map((m) => m.seq)).toEqual([4]);
+  });
+
+  it("accepts a legacy task-<channelId>-<seq> id unchanged", async () => {
+    const legacy = "task-chan-1-42";
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([threadRow(6, legacy)]);
+
+    await readMessages(ctx, "general", { limit: 50, thread: legacy });
+
+    expect(
+      vi.mocked(repoMessages.listMessages).mock.calls[0][1].threadId
+    ).toBe(legacy);
+  });
+
+  it("returns [] when the thread id matches nothing (a filter, not a lookup)", async () => {
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([]);
+
+    await expect(
+      readMessages(ctx, "general", { limit: 50, thread: "task-nothing-0" })
+    ).resolves.toEqual([]);
+  });
+
+  it("leaves the unfiltered read untouched (threadId undefined)", async () => {
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([]);
+
+    await readMessages(ctx, "general", { since: 3, limit: 50 });
+
+    expect(repoMessages.listMessages).toHaveBeenCalledWith("chan-1", {
+      since: 3,
+      limit: 50,
+      threadId: undefined,
+    });
+  });
+
+  it("still enforces the read-visibility gate (non-member, private channel)", async () => {
+    // The scope is a filter on top of the gate, never a way around it.
+    vi.mocked(repo.findMembership).mockResolvedValue(null);
+
+    await expect(
+      readMessages(ctx, "general", { limit: 50, thread: TASK_THREAD_ID })
+    ).rejects.toBeInstanceOf(ChannelNotFoundError);
+    expect(repoMessages.listMessages).not.toHaveBeenCalled();
   });
 });
 

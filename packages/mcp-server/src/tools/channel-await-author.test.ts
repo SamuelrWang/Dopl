@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opAwait } from "./channel-ops-read";
+import { opAwait } from "./channel-ops-await";
 
 const ME = "user-me";
 

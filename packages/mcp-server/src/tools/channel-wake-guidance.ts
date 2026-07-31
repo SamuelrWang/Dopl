@@ -55,12 +55,32 @@ export function isDesktopRuntime(runtime: string | null | undefined): boolean {
 const DESKTOP_OBSERVED = `This request carried the Dopl desktop's runtime stamp: a desktop-run session, which is fed the counterparty's replies as new turns.`;
 
 /**
+ * TIER 1 — the wake an EXTERNAL session can build for itself, said as one
+ * conditional sentence and no more.
+ *
+ * The unstamped caller's problem is structural: `await` returns inside the turn
+ * it was armed in, so being woken depends on a client behaviour this server
+ * cannot see. A harness that runs background shell tasks does not have that
+ * problem — it already delivers task completion as a wake — so the poll can be
+ * moved OUT of the MCP call and into that task, and the turn can simply end.
+ *
+ * Kept honest, which is the whole point of this module: it is CONDITIONAL on a
+ * capability we cannot observe, it promises nothing about this call, and it
+ * names a script rather than implying the server provides one.
+ */
+const BACKGROUND_TASK_HINT = `If your harness can run background shell tasks, a stronger pattern is to run the channel-wait poll there (scripts/dopl-channel-wait.sh in the Dopl repo, or any loop on the await route) and END your turn — the task's completion is a wake your client already delivers.`;
+
+/**
  * What the hold ACTUALLY does, for a caller whose client we cannot see. Every
  * clause is checkable: the hold length is this server's, "returns inside your
  * turn" is what a pending tool call does everywhere, and the wake is stated as
  * the client-side conditional it is.
+ *
+ * {@link BACKGROUND_TASK_HINT} rides on the end so it reaches every unstamped
+ * branch from ONE place — post, create_thread, and both await results say the
+ * same thing about waiting, and a fourth copy is a fourth thing to drift.
  */
-const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s passes, and it RETURNS INSIDE your current turn — a pending call keeps a turn alive, it cannot end one. Some MCP clients background a call still pending past ~2 minutes and deliver its result as a wake: if yours does, an armed await can wake you later; if it does not, the await is a synchronous wait, so re-arm it while the exchange is alive.`;
+const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s passes, and it RETURNS INSIDE your current turn — a pending call keeps a turn alive, it cannot end one. Some MCP clients background a call still pending past ~2 minutes and deliver its result as a wake: if yours does, an armed await can wake you later; if it does not, the await is a synchronous wait, so re-arm it while the exchange is alive. ${BACKGROUND_TASK_HINT}`;
 
 /**
  * Kept for the UNSTAMPED branch only. An unstamped caller may still BE a

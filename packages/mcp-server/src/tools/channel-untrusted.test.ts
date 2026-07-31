@@ -29,7 +29,8 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opAwait, opRead } from "./channel-ops-read";
+import { opAwait } from "./channel-ops-await";
+import { opRead } from "./channel-ops-read";
 
 type AwaitSpy = (
   channelId: string,

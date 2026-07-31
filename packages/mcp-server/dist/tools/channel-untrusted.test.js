@@ -29,6 +29,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
+const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_read_1 = require("./channel-ops-read");
 function stubClient(overrides) {
     return {
@@ -60,7 +61,7 @@ async function failMidHold(message) {
         clock.advance(opts.timeoutMs ?? 0);
         return { messages: [], timedOut: true };
     });
-    const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
+    const res = await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
     return res.content[0].text;
 }
 /** The code span the failure description is rendered as, or null. */

@@ -216,7 +216,20 @@ export type ChannelMemberRemoveInput = z.infer<
   typeof ChannelMemberRemoveSchema
 >;
 
-/** `?since=<seq>&limit=<n<=200>` for a message read. */
+/**
+ * `?since=<seq>&limit=<n<=200>&thread=<taskId>` for a message read.
+ *
+ * `thread` is a FILTER, not a lookup: it keeps only the rows whose
+ * `metadata.taskId` equals it. Deliberately ANY non-empty string — a thread id
+ * is a `channel_tasks` uuid today, but the transcript still carries LEGACY
+ * `task-<channelId>-<seq>` ids from before threads were a table, and those are
+ * real `metadata.taskId` values a reader must be able to isolate. A `.uuid()`
+ * here would 400 exactly the exchanges that are hardest to reconstruct by hand.
+ *
+ * Nothing is checked against `channel_tasks`: an id that matches no row is not
+ * an error, it returns `[]`. Length is bounded like `clientMsgId` (the other
+ * caller-supplied opaque key) so a filter value can't be unbounded.
+ */
 export const MessageReadQuerySchema = z.object({
   since: z.coerce.number().int().nonnegative().optional(),
   limit: z.coerce
@@ -226,6 +239,7 @@ export const MessageReadQuerySchema = z.object({
     .max(MAX_MESSAGE_LIMIT)
     .optional()
     .default(DEFAULT_MESSAGE_LIMIT),
+  thread: z.string().trim().min(1).max(200).optional(),
 });
 export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
 

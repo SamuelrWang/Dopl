@@ -40,6 +40,7 @@ const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 const claudeAuth = require('./claude-auth');
 const { postTaskEvent, postResult, notifyLocal } = require('./channel-post');
+const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
 const { diag } = require('./diag');
 
 const RESEND =
@@ -336,6 +337,9 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
   }
   if (res && res.skipped === 'busy') {
     diag('responder session: skipped=busy');
+    // RESEND is an untagged bubble by design, so the requester watching THIS thread sees
+    // nothing there. One milestone inside the thread says queued rather than ignored.
+    await queued.announce(entry, m, rec.taskId || taskId, 'session');
     await postResult(entry, m, RESEND);
     watcher.settle(rec.key, 'busy');
     return true; // handled — do NOT also run headless
@@ -365,6 +369,7 @@ async function runHeadlessApproved(entry, m, rec, { taskId, startedAt, requester
   });
 
   if (result.skipped === 'busy') {
+    await queued.announce(entry, m, taskId, 'headless'); // same notice; this defer is per-CHANNEL
     await postResult(entry, m, RESEND);
     watcher.settle(rec.key, 'busy');
     return;

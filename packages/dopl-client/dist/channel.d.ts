@@ -16,7 +16,7 @@
  * deliberate, cursor-preserving one, never a blind transport retry.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -33,7 +33,7 @@ export declare function createChannelThread(t: DoplTransport, channelId: string,
 export declare function closeChannelThread(t: DoplTransport, channelId: string, threadId: string, input: {
     outcome: ThreadOutcome;
     summary?: string;
-}): Promise<ChannelThread>;
+}): Promise<ChannelThreadClosed>;
 export declare function setChannelThreadMode(t: DoplTransport, channelId: string, threadId: string, input: {
     mode: ThreadMode;
 }): Promise<ChannelThread>;

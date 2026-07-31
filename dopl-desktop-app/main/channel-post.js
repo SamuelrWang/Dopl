@@ -30,7 +30,17 @@ const { diag } = require('./diag');
 // decision echo). `bodyText` overrides the generic body when the three kinds
 // don't describe the outcome well on their own. Local-only fields (mode /
 // toolProfile) stay in diag(), never in the shared metadata.
-async function postTaskEvent(entry, m, kind, taskId, extra, bodyText) {
+//
+// `opts` (optional) carries the two wire fields the per-(kind,channel,seq) default
+// cannot express: `clientMsgId` for a caller whose idempotency unit is NOT the
+// message (queued-notice.js keys on the THREAD, so a peer's resend under a new seq
+// dedupes against the first notice instead of posting a second copy), and `summary`
+// — a TOP-LEVEL schema field, not a metadata key, which the server persists into
+// metadata itself and the receiver's notification reads.
+//
+// Returns true only on a confirmed post, so a caller that reports its own outcome
+// can say "posted" or "post failed" honestly. Still best-effort: it never throws.
+async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
   const bodies = {
     task_started: 'Started working on this request.',
     task_finished: 'Finished this request.',
@@ -42,7 +52,8 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText) {
     kind,
     authorKind: 'agent',
     metadata,
-    clientMsgId: `${kind}-${entry.channel.id}-${m.seq}`,
+    clientMsgId: (opts && opts.clientMsgId) || `${kind}-${entry.channel.id}-${m.seq}`,
+    ...(opts && opts.summary ? { summary: opts.summary } : {}),
   };
   try {
     const res = await io.apiFetch(`/api/channels/${entry.channel.id}/messages`, {
@@ -52,8 +63,10 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText) {
       timeoutMs: 15000,
     });
     diag('task event', kind, res.ok ? 'ok' : `failed ${res.status}`, entry.channel.id.slice(0, 8));
+    return res.ok === true;
   } catch (err) {
     diag('task event', kind, 'error', err && err.message);
+    return false;
   }
 }
 

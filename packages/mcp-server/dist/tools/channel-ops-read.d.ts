@@ -1,15 +1,18 @@
 /**
- * `dopl_channel` READ op handlers: list (channels), read (messages), await
- * (long-poll for new messages), list_threads / get_thread. All non-mutating.
- * Routed from the registrar in channel.ts.
+ * `dopl_channel` READ op handlers: list (channels), read (messages),
+ * list_threads / get_thread, members. All non-mutating, and all of them ONE
+ * round-trip rendered.
+ *
+ * `await` used to live here and now has its own module,
+ * `channel-ops-await.ts` — split at the §2 500-line cap when `read` gained its
+ * `thread` filter, on the seam this file had already drawn twice
+ * (`channel-await-budget.ts` took the clocks, `channel-wake-guidance.ts` the
+ * wake claims). It is the only op here that loops, and nothing in it was shared
+ * with these beyond the renderers.
  *
  * BOUNDARY: the wire/storage name `task` == the domain name `thread` — the
  * `thread` op param still resolves against `channel_tasks` rows and the
  * `/tasks` routes underneath `@dopl/client`.
- *
- * Every clock that bounds the `await` hold — the poll size, the assembled
- * hold, the env lever, and the deadlines they must fit under — lives in
- * `channel-await-budget.ts`. Read that file before retuning any of them.
  *
  * Every STRING these ops emit — the author labels, the thread renders, the
  * channel lines, and the untrusted-content headers that frame them — lives in
@@ -19,25 +22,26 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
-export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null): Promise<ToolResponse>;
 /**
- * LONG-HOLD await. One call holds up to `timeoutMs` (capped at
- * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll with the same
- * `since` cursor until messages land or the budget runs out. Returning the
- * moment anything arrives is what keeps a reply fast; holding past ~2 minutes
- * when nothing does is what makes the pending call a wake primitive.
+ * Read a channel's transcript, optionally SCOPED TO ONE THREAD.
  *
- * Four results, never a thrown error once the hold is underway: new messages, a
- * timed-out note that tells the caller to re-arm (with a stop condition), a
- * FAILED-MID-HOLD note that names what broke and re-arms on the same cursor,
- * or — when the hold ended far under what was asked for with no error at all —
- * a CUT SHORT note that tells the caller NOT to re-arm and to report it.
+ * `thread` is a FILTER, not a lookup, and every string below is written from
+ * that fact: the route keeps only the rows whose `metadata.taskId` equals it,
+ * an id nothing carries returns `[]` rather than a 404, and any non-empty
+ * string is legal — a thread id is a `channel_tasks` uuid today, but the
+ * transcript still carries legacy `task-<channelId>-<seq>` ids and those are
+ * the exchanges hardest to reconstruct by hand. Blank/whitespace is treated as
+ * unset rather than sent, so a caller that passes `thread=""` gets the channel
+ * read it meant instead of a 400 from the route's `min(1)`.
  *
- * `runtime` is the caller's OBSERVED runtime stamp (`CallerIdentity.runtime`,
- * threaded from the registrar). It changes nothing this op DOES — only what it
- * is willing to claim about the hold. See `channel-wake-guidance.ts`.
+ * WHAT THE FILTERED RESULT MAY NOT SAY: `await` has no thread parameter and
+ * never will have one silently (a filtered hold would miss the messages an
+ * agent must follow — see `channel-ops-await.ts`). So the seq this reports is
+ * this THREAD's high-water mark, not the channel's, and the watch hint it hands
+ * back is a plain channel-wide await. Suggesting a thread-scoped wait here is
+ * how an agent ends up armed on a call that cannot exist.
  */
-export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null): Promise<ToolResponse>;
+export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
 export declare function opGetThread(client: DoplClient, ref: string, threadId: string, selfUserId?: string | null): Promise<ToolResponse>;
 /**

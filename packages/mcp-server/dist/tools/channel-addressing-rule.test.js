@@ -35,6 +35,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const node_fs_1 = require("node:fs");
 const vitest_1 = require("vitest");
 const channel_addressing_1 = require("./channel-addressing");
+const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_write_1 = require("./channel-ops-write");
 const ME = "u-me";
@@ -263,7 +264,7 @@ function rosterClient(userIds) {
         };
     }
     async function noticeFor(messages, selfUserId = ME) {
-        const res = await (0, channel_ops_read_1.opAwait)(awaitClient(messages), "general", 7, undefined, selfUserId);
+        const res = await (0, channel_ops_await_1.opAwait)(awaitClient(messages), "general", 7, undefined, selfUserId);
         return res.content[0].text;
     }
     (0, vitest_1.afterEach)(() => {

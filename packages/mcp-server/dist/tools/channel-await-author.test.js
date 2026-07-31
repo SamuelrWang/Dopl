@@ -17,7 +17,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
-const channel_ops_read_1 = require("./channel-ops-read");
+const channel_ops_await_1 = require("./channel-ops-await");
 const ME = "user-me";
 function stubClient(overrides) {
     return {
@@ -51,7 +51,7 @@ function quietHold() {
 (0, vitest_1.describe)("opAwait — the caller's own posts are excluded", () => {
     (0, vitest_1.it)("passes excludeAuthor = selfUserId on EVERY inner poll", async () => {
         const awaitChannelMessages = quietHold();
-        await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, undefined, ME);
+        await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, undefined, ME);
         (0, vitest_1.expect)(awaitChannelMessages.mock.calls.length).toBeGreaterThan(1);
         for (const [, opts] of awaitChannelMessages.mock.calls) {
             // Re-issued with the same cursor AND the same filter: a hold that
@@ -79,20 +79,20 @@ function quietHold() {
             ],
             timedOut: false,
         }));
-        const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, undefined, ME);
+        const res = await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, undefined, ME);
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         (0, vitest_1.expect)(awaitChannelMessages.mock.calls[0][1].excludeAuthor).toBe(ME);
     });
     (0, vitest_1.it)("passes NOTHING when selfUserId is null (boot handshake could not name the caller)", async () => {
         const awaitChannelMessages = quietHold();
-        await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, undefined, null);
+        await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, undefined, null);
         for (const [, opts] of awaitChannelMessages.mock.calls) {
             (0, vitest_1.expect)(opts).not.toHaveProperty("excludeAuthor");
         }
     });
     (0, vitest_1.it)("passes NOTHING when selfUserId is omitted entirely", async () => {
         const awaitChannelMessages = quietHold();
-        await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
+        await (0, channel_ops_await_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
         for (const [, opts] of awaitChannelMessages.mock.calls) {
             (0, vitest_1.expect)(opts).not.toHaveProperty("excludeAuthor");
         }

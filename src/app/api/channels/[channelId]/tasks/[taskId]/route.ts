@@ -16,7 +16,6 @@ import {
   reopenTask,
   setTaskMode,
 } from "@/features/channels/server/service";
-import type { ChannelThread } from "@/features/channels/types";
 import { TaskUpdateSchema } from "@/features/channels/schema";
 
 // GET one task by id (get_task, read). Same visibility rule as the transcript;
@@ -46,19 +45,32 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildChannelContext(auth);
     const channelId = requireChannelId(auth.params);
     const taskId = requireTaskId(auth.params);
-    let task: ChannelThread;
     switch (input.op) {
-      case "close":
-        task = await closeTask(ctx, channelId, taskId, input.outcome, input.summary);
-        break;
+      case "close": {
+        const { thread, echoSeq } = await closeTask(
+          ctx,
+          channelId,
+          taskId,
+          input.outcome,
+          input.summary
+        );
+        // `task` keeps the storage name (the web + @dopl/client both read it).
+        // `echoSeq` is additive, mirroring `openingSeq` on thread create: the
+        // seq of the lifecycle marker this close posted, so a requester can arm
+        // `await` past it instead of guessing (a guess once skipped a peer's
+        // deliverable outright). Null when the close landed but the echo did
+        // not — a caller must never treat that as "one past the last seq".
+        return NextResponse.json({ task: thread, echoSeq });
+      }
       case "set_mode":
-        task = await setTaskMode(ctx, channelId, taskId, input.mode);
-        break;
+        return NextResponse.json({
+          task: await setTaskMode(ctx, channelId, taskId, input.mode),
+        });
       case "reopen":
-        task = await reopenTask(ctx, channelId, taskId);
-        break;
+        return NextResponse.json({
+          task: await reopenTask(ctx, channelId, taskId),
+        });
     }
-    return NextResponse.json({ task });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

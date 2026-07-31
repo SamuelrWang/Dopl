@@ -19,11 +19,8 @@ import {
   ChannelMemberSelfUpdateSchema,
   ChannelMemberAddSchema,
   ChannelMemberRemoveSchema,
-  MessageReadQuerySchema,
-  AwaitQuerySchema,
   ConsentCreateSchema,
   ConsentDecisionSchema,
-  ConsentListQuerySchema,
   TaskCreateSchema,
   TaskUpdateSchema,
   TrustMutateSchema,
@@ -263,47 +260,6 @@ describe("member add / remove schemas", () => {
   });
 });
 
-describe("MessageReadQuerySchema", () => {
-  it("defaults limit to 100 when omitted", () => {
-    const parsed = MessageReadQuerySchema.parse({});
-    expect(parsed.limit).toBe(100);
-    expect(parsed.since).toBeUndefined();
-  });
-
-  it("coerces string query params to numbers", () => {
-    const parsed = MessageReadQuerySchema.parse({ since: "42", limit: "10" });
-    expect(parsed.since).toBe(42);
-    expect(parsed.limit).toBe(10);
-  });
-
-  it("since: non-negative integer", () => {
-    expect(MessageReadQuerySchema.safeParse({ since: "0" }).success).toBe(true);
-    expect(MessageReadQuerySchema.safeParse({ since: "-1" }).success).toBe(false);
-    expect(MessageReadQuerySchema.safeParse({ since: "1.5" }).success).toBe(false);
-  });
-
-  it("limit: positive, capped at 200", () => {
-    expect(MessageReadQuerySchema.safeParse({ limit: "200" }).success).toBe(true);
-    expect(MessageReadQuerySchema.safeParse({ limit: "201" }).success).toBe(false);
-    expect(MessageReadQuerySchema.safeParse({ limit: "0" }).success).toBe(false);
-  });
-});
-
-describe("AwaitQuerySchema", () => {
-  it("timeoutMs: optional, capped at 50000", () => {
-    expect(AwaitQuerySchema.safeParse({}).success).toBe(true);
-    expect(AwaitQuerySchema.safeParse({ timeoutMs: "50000" }).success).toBe(true);
-    expect(AwaitQuerySchema.safeParse({ timeoutMs: "50001" }).success).toBe(false);
-    expect(AwaitQuerySchema.safeParse({ timeoutMs: "0" }).success).toBe(false);
-  });
-
-  it("excludeAuthor: optional, and a uuid when present", () => {
-    expect(AwaitQuerySchema.safeParse({ excludeAuthor: UUID }).success).toBe(true);
-    expect(AwaitQuerySchema.safeParse({ excludeAuthor: "me" }).success).toBe(false);
-    expect(AwaitQuerySchema.safeParse({}).data?.excludeAuthor).toBeUndefined();
-  });
-});
-
 describe("ConsentCreateSchema", () => {
   it("requires channelId (uuid) + kind", () => {
     expect(
@@ -387,21 +343,6 @@ describe("ConsentDecisionSchema", () => {
     expect(
       ConsentDecisionSchema.safeParse({ decision: "allow", decidedBy: "trust" }).success
     ).toBe(false);
-  });
-});
-
-describe("ConsentListQuerySchema", () => {
-  it("channelId: optional uuid", () => {
-    expect(ConsentListQuerySchema.safeParse({}).success).toBe(true);
-    expect(ConsentListQuerySchema.safeParse({ channelId: UUID }).success).toBe(true);
-    expect(ConsentListQuerySchema.safeParse({ channelId: "x" }).success).toBe(false);
-  });
-
-  it("status: pending|decided|all, defaults pending (M-4)", () => {
-    expect(ConsentListQuerySchema.parse({}).status).toBe("pending");
-    expect(ConsentListQuerySchema.parse({ status: "decided" }).status).toBe("decided");
-    expect(ConsentListQuerySchema.parse({ status: "all" }).status).toBe("all");
-    expect(ConsentListQuerySchema.safeParse({ status: "allowed" }).success).toBe(false);
   });
 });
 

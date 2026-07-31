@@ -41,7 +41,8 @@ import {
   rosterAddressingRule,
   unaddressedPostNote,
 } from "./channel-addressing";
-import { opAwait, opMembers } from "./channel-ops-read";
+import { opAwait } from "./channel-ops-await";
+import { opMembers } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
 const ME = "u-me";

@@ -43,12 +43,23 @@ type PostSpy = (
   input: Record<string, unknown>,
 ) => Promise<{ id: string; seq: number; kind: string }>;
 
-/** A typed close spy — the generic types `.mock.calls` for arg assertions. */
+/**
+ * A typed close spy — the generic types `.mock.calls` for arg assertions.
+ *
+ * `closeChannelThread` resolves `{ thread, echoSeq }`, not the thread: closing
+ * WRITES the task_finished / task_failed marker, so it moves the channel's
+ * cursor and the caller has to be told where. The echo line itself is pinned in
+ * `channel-thread-scope.test.ts`; here `echoSeq` stays null so the exact-text
+ * assertion below keeps pinning the confirmation on its own.
+ */
 type CloseSpy = (
   channelId: string,
   threadId: string,
   input: Record<string, unknown>,
-) => Promise<{ title: string; outcome: string }>;
+) => Promise<{
+  thread: { title: string; outcome: string };
+  echoSeq: number | null;
+}>;
 
 describe("opPost — thread threading (Feature 2a)", () => {
   it("folds `thread` into metadata.taskId", async () => {
@@ -222,7 +233,10 @@ describe("opPost — threading self-verification (Q7)", () => {
 describe("opCloseThread — summary (Feature 3c)", () => {
   it("forwards `summary` to the client and surfaces it in the confirmation", async () => {
     const closeChannelThread = vi.fn<CloseSpy>();
-    closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "completed" });
+    closeChannelThread.mockResolvedValue({
+      thread: { title: "Ship it", outcome: "completed" },
+      echoSeq: null,
+    });
     const client = stubClient({ closeChannelThread });
 
     const res = await opCloseThread(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
@@ -236,7 +250,10 @@ describe("opCloseThread — summary (Feature 3c)", () => {
 
   it("omits the summary note when none is given", async () => {
     const closeChannelThread = vi.fn<CloseSpy>();
-    closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "failed" });
+    closeChannelThread.mockResolvedValue({
+      thread: { title: "Ship it", outcome: "failed" },
+      echoSeq: null,
+    });
     const client = stubClient({ closeChannelThread });
 
     const res = await opCloseThread(client, "general", "thread-uuid", "failed");

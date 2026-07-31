@@ -26,6 +26,7 @@ import type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelThread,
+  ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
   ReadMessagesOptions,
@@ -91,6 +92,9 @@ export async function readMessages(
   const params = new URLSearchParams();
   if (opts.since !== undefined) params.set("since", String(opts.since));
   if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  // Thread scope (optional): the server filters on `metadata.taskId`. Omitted
+  // entirely when unset, so an older deployment sees the read it always saw.
+  if (opts.thread !== undefined) params.set("thread", opts.thread);
   const qs = params.toString();
   const data = await t.request<{ messages: ChannelMessage[] }>(
     `/api/channels/${enc(channelId)}/messages${qs ? `?${qs}` : ""}`,
@@ -228,8 +232,8 @@ export async function closeChannelThread(
   channelId: string,
   threadId: string,
   input: { outcome: ThreadOutcome; summary?: string }
-): Promise<ChannelThread> {
-  const data = await t.request<{ task: ChannelThread }>(
+): Promise<ChannelThreadClosed> {
+  const data = await t.request<{ task: ChannelThread; echoSeq?: number | null }>(
     `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
     {
       method: "PATCH",
@@ -237,7 +241,13 @@ export async function closeChannelThread(
       toolName: "channel_close_thread",
     }
   );
-  return data.task;
+  // `echoSeq` is additive on the route, exactly like `openingSeq` on create —
+  // an older deployment omits it, which reads as null and tells the caller to
+  // look its cursor up rather than arm `await` on a guess.
+  return {
+    thread: data.task,
+    echoSeq: typeof data.echoSeq === "number" ? data.echoSeq : null,
+  };
 }
 
 export async function setChannelThreadMode(
