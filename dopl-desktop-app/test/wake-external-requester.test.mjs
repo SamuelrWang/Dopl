@@ -11,28 +11,32 @@
 // closes: a reply that is no longer claimed by a window and is ALSO swallowed by one of
 // the other two pre-classify routes would reach neither agent nor operator — silently
 // lost, with the listener's cursor already advanced past it. So both halves are pinned:
-// the ORDER (statically, against channel-listener.js) and the OUTCOME (behaviorally,
+// the ORDER (statically, against listener-messages.js) and the OUTCOME (behaviorally,
 // through the real routing + the real classify).
 //
+// SPLIT NOTE (Q10): the dispatch body moved out of channel-listener.js into
+// listener-messages.js when that file hit the 500-line cap, and the `continue`s became
+// `return`s. Same order, same short-circuits; the pins below were repointed with it.
+//
 // THE TRACE this file locks in, for a thread an EXTERNAL session created:
-//   channel-listener.js:152 feedLiveSession        -> false (no window was ever spawned,
+//   listener-messages.js feedLiveSession           -> false (no window was ever spawned,
 //                                                     so no live session for this task)
-//   channel-listener.js:153 maybeOpenRequesterSession -> false (requesterTaskOpen refuses
+//   listener-messages.js maybeOpenRequesterSession -> false (requesterTaskOpen refuses
 //                                                     the unstamped create, and the reply
 //                                                     is not my own message anyway)
-//   channel-listener.js:154 maybeSurfaceRequesterReply -> false (the engine finds NO
+//   listener-messages.js maybeSurfaceRequesterReply -> false (the engine finds NO
 //                                                     durable record on this machine:
 //                                                     session-park recreateParkedShell
 //                                                     returns {ok:false}, session-gate
 //                                                     feedInboundForTask returns false)
-//   channel-listener.js:155 classify               -> 'task-reply'
-//   channel-listener.js:168 taskNotify.notifyTaskReply — the passive silent banner.
+//   listener-messages.js classify                  -> 'task-reply'
+//   listener-messages.js taskNotify.notifyTaskReply — the passive silent banner.
 //
 // METHOD: the repo's source-extraction idiom. targeting.js is dependency-free so it is
 // required for real (the runtime gate must be the REAL one here, not a fake); the
 // SESSION-DISPATCH-PURE block is sliced and driven with fakes standing in for the
-// electron-bound engine; the listener's loop body is mirrored and the mirror is pinned
-// against the real source below, so a reordering of channel-listener.js fails here.
+// electron-bound engine; the dispatch body is mirrored and the mirror is pinned
+// against the real source below, so a reordering of listener-messages.js fails here.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -43,7 +47,8 @@ import { createRequire } from "node:module";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const LISTENER = M("channel-listener.js");
+const LISTENER = M("listener-messages.js");
+const LOOP = M("channel-listener.js");
 const DISPATCH = M("session-dispatch.js");
 const TARGETING = M("targeting.js");
 const GATE = M("session-gate.js");
@@ -60,16 +65,22 @@ const targeting = require("../main/targeting.js"); // dependency-free; the REAL 
 test("the listener runs the three routes, in order, BEFORE classify", () => {
   const at = (needle) => {
     const i = LISTENER.indexOf(needle);
-    assert.notEqual(i, -1, `dispatch site missing from channel-listener.js: ${needle}`);
+    assert.notEqual(i, -1, `dispatch site missing from listener-messages.js: ${needle}`);
     return i;
   };
-  const feed = at("if (sessionDispatch.feedLiveSession(entry, m, myUserId)) continue;");
-  const open = at("if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) continue;");
-  const surface = at("if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) continue;");
+  const feed = at("if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;");
+  const open = at("if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;");
+  const surface = at("if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;");
   const classify = at("const verdict = targeting.classify(m, entry, myUserId);");
   assert.ok(feed < open, "feedLiveSession runs first");
   assert.ok(open < surface, "then maybeOpenRequesterSession");
   assert.ok(surface < classify, "then maybeSurfaceRequesterReply, and classify LAST");
+  // …and the loop still AWAITS that dispatch, so a trigger's consent + spawn keeps
+  // serializing ahead of the next message in the page (it used to be inline).
+  assert.match(LOOP, /await messages\.dispatchMessage\(entry, m, myUserId\);/);
+  // Q10's skew read happens BEFORE any route can claim the message — a reply consumed
+  // by a live window is exactly the one whose sender's version explains a gap.
+  assert.ok(at("versionSkew.observe(entry, m, myUserId);") < feed, "skew is observed first");
 });
 
 test("a 'task-reply' verdict reaches the passive notifier, with no consent or spawn", () => {

@@ -45,7 +45,9 @@ function slice(src, name) {
 
 const REOPEN = slice(read("session-reopen.js"), "SESSION-REOPEN-PURE");
 const PARK = slice(read("session-park.js"), "SESSION-PARK-PURE");
-const REDUCER = slice(read("session-reducer.js"), "SESSION-REDUCER");
+// §2 SPLIT: the effect builders moved to session-effects.js; the reducer block calls them
+// as free vars, so the two slices must be evaluated together (effects FIRST).
+const REDUCER = slice(read("session-effects.js"), "SESSION-EFFECTS") + "\n" + slice(read("session-reducer.js"), "SESSION-REDUCER");
 const ENGINE = read("session-engine.js");
 
 // ── the reopen bridge: a LIVE window is SHOWN, never driven ───────────────────────
@@ -85,7 +87,9 @@ test("A5: Open session on a LIVE session ONLY shows the window (no query, no tur
 test("A5: Open session with no live session recreates a PARKED shell, never a running one", async () => {
   const h = reopenHarness(() => ({ ok: true }));
   assert.deepEqual(await h.reopenByTask({ channelId: "c1", taskId: "t1" }), { ok: true });
-  assert.deepEqual(h.calls.recreate, [{ channelId: "c1", taskId: "t1" }],
+  // Q6b: `fromChannel` marks this as an operator CLICK, which is the ONLY caller allowed to open
+  // a shell for a thread with no durable record here. The inbound gate never sets it.
+  assert.deepEqual(h.calls.recreate, [{ channelId: "c1", taskId: "t1", fromChannel: true }],
     "the ONLY fallback is the parked-shell builder — there is no 'reopen and resume' path");
 });
 

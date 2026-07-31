@@ -44,6 +44,7 @@ const IPC = readFileSync(M("session-ipc.js"), "utf8");
 const GATE = readFileSync(M("session-gate.js"), "utf8");
 const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
+const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: buildSdkOptions lives here
 
 const { grantDecision, grantKeyFor, TOOL_MODES, MESSAGE_MODES } = profiles;
 // Source pins run against CODE, not the prose above it: a comment may name the thing it replaced
@@ -404,7 +405,7 @@ test("A: the SDK is still driven at permissionMode 'default' with settingSources
   // The load-bearing pin: `bypassPermissions` would stop the SDK calling canUseTool at all,
   // which would kill the outbound message card AND the hard-deny path. All four tool modes
   // resolve in OUR gate, so the SDK options must never learn about them.
-  const opts = ENGINE.slice(ENGINE.indexOf("function buildSdkOptions(s) {"), ENGINE.indexOf("async function startQuery("));
+  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("// H1 — SUPERSEDE"));
   assert.match(opts, /permissionMode: 'default'/);
   assert.match(opts, /settingSources: \[\]/);
   assert.ok(!/acceptEdits|bypassPermissions|toolMode|messageMode/.test(stripComments(opts)),
@@ -478,7 +479,7 @@ test("permissionPostureText states BOTH axes, in the contract's exact words", ()
   );
   assert.equal(
     labels.permissionPostureText("bypass", "auto_both", null),
-    "Tools: Auto approving every command on this machine · Messages: Messages flow automatically"
+    "Tools: Auto approving every command the tool profile allows · Messages: Messages flow automatically"
   );
   // A junk mode reads as the most restrictive line, never a more permissive one.
   assert.equal(labels.permissionPostureText("nonsense", "nonsense", null), labels.permissionPostureText("manual", "ask", null));

@@ -132,6 +132,10 @@ test("boot: D2 — no badge chips are built for side / profile / mode", () => {
 
 test("boot: an idle click sends the trimmed steer with NO priority argument", () => {
   feed({ type: "init", from: "David" });
+  // v3.1: `init` alone no longer reads as idle. With the header Stop button deleted, the pause
+  // morph had to widen to cover the FIRST turn (which emits no status until it ends), so an
+  // idle click is one taken after main says the agent is resting.
+  feed({ type: "status", phase: "running", activity: "idle" });
   steer.value = "  go on  ";
   send.fire("click");
   assert.deepEqual(sent.at(-1), ["send", "go on"], "priority plumb dropped from the renderer");

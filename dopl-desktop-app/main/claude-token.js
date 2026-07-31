@@ -49,9 +49,35 @@ function getStoredOAuthToken() {
   return null;
 }
 
+// SIGN-OUT TEARDOWN (2026-07-31). Called by auth-state.signOut(); it had no
+// caller at all before, so a Dopl sign-out left this credential fully live and
+// the NEXT operator to sign in on the same Mac ran their agent sessions on the
+// FIRST operator's Anthropic account — their bill, their rate limits, their
+// inference. Both the headless spawn env (claude-resolve.spawnEnv) and the
+// session path (session-auth.withStoredCredential) inject it unconditionally.
+//
+// WHY CLEARING IT IS UNAMBIGUOUS. The ONLY writer of this store is
+// claude-auth.js's tier-2 flow: Dopl drives `claude setup-token` under a pty
+// from a Dopl dialog and captures the token the child PRINTS. Nothing else can
+// put a value here — a `claude setup-token` the operator ran in their own
+// terminal prints to their terminal, and an interactive `claude /login` stores
+// in the CLI's own keychain/credentials file, which we never touch. So this key
+// can only ever hold a credential Dopl itself created, and a Dopl sign-out is
+// the right moment to drop it.
+//
+// It is our COPY that dies, not the credential: `setup-token` mints a
+// long-lived OAuth token on Anthropic's side, and deleting our copy does not
+// revoke it there. signOut()'s log line says so.
+//
+// Returns true when nothing usable is left behind.
 function clearStoredOAuthToken() {
-  store.delete(KEY);
-  store.delete(KEY_PLAIN);
+  try {
+    store.delete(KEY);
+    store.delete(KEY_PLAIN);
+  } catch (_) {
+    return false;
+  }
+  return !getStoredOAuthToken();
 }
 
 module.exports = { setStoredOAuthToken, getStoredOAuthToken, clearStoredOAuthToken };

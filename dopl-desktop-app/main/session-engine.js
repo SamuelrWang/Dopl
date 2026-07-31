@@ -7,7 +7,7 @@
 // IPC lives in session-ipc.js (§O-8). SEAM: never imports electron.BrowserWindow (an injected factory
 // creates windows); reads electron only for Notification. SECURITY: settingSources:[] always, so the
 // global allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
-// object (never logged, never on argv, and since C1 never on disk either).
+// object (never logged, never on argv, never on disk since C1).
 
 const crypto = require('crypto');
 const { Notification } = require('electron');
@@ -18,11 +18,12 @@ const avatarCache = require('./avatar-cache');
 const sessionReopen = require('./session-reopen');
 const sessionPark = require('./session-park');
 const framing = require('./prompt-framing');
-const { apiFetch } = require('./api');
+const { closeTask } = require('./session-close-task'); // §2 split: the engine holds no HTTP dep
+const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-in
 const { initialSessionState, sessionReducer, nextIdleMs } = require('./session-reducer');
-const { buildSessionToolConfig } = require('./session-profiles');
-const { getSdk, resolveClaudeExecutable, buildMcpServers, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
-const sessionOutbound = require('./session-outbound'); // C6: resolve an auto-allowed post's card
+const { getSdk } = require('./sdk-loader');
+const sessionQuery = require('./session-query'); // §3 split: SDK options + the query lifecycle (H1)
+const { buildSdkOptions, startQuery, consume } = sessionQuery;
 const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
 const channelDirs = require('./channel-dirs');
@@ -44,14 +45,11 @@ function setSelfIdentity(id) { selfUserId = id || null; }
 
 function windowModeEnabled() { return settings ? settings.getWindowMode() : true; }
 function readCaps() {
-  if (!settings) return {};
-  return { turnCap: settings.getTurnCap(), idleMs: settings.getIdleTtlMs(), costCapUsd: settings.getCostCapUsd() };
+  return settings ? { turnCap: settings.getTurnCap(), idleMs: settings.getIdleTtlMs(), costCapUsd: settings.getCostCapUsd() } : {};
 }
 
 // Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).
-function refreshTray() {
-  try { require('./tray').refresh(); } catch (_) { /* tray optional */ }
-}
+function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tray optional */ } }
 
 // Park + resume machinery (session-park.js) is fed the engine handles it can't require: the registry, SDK loader,
 // buildSdkOptions (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession/settle. Hoisted, so bind order does not matter.
@@ -61,13 +59,19 @@ sessionPark.bind({
   atWindowCap: () => sessions.size + sessionConsent.count() >= MAX_WINDOWS, // FIX #4: shared window budget for recreateParkedShell
   loadHistory: sessionHistory.load, // D3: a recreated shell paints the channel history
   settleSession: settle, // FIX #7: LRU eviction of an untouched parked shell at the cap
+  resolveChannelContext: require('./channel-context').resolve, // Q6b: a shell for a thread with NO local record
 });
-
+// §3 split: session-query owns the option assembly + the consume loop, but needs the engine's
+// dispatch and the replay-aware quiet emit (neither module requires back into the engine).
+sessionQuery.bind({ dispatch, emitQuiet });
+// Q6: same injection for the preflight + in-window sign-in. `startQuery` is the SHARED deferred
+// launch (session-query), so an auth hold never assembles a second query and inherits H1's
+// supersede-before-relaunch; `denyPending` fail-closes before it parks.
+sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions, getSessionBySender });
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 sessionHistory.bind({ emit });
-// Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 parked-shell fallback for
-// a task with no live session (item 2).
+// Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
 sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell });
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
@@ -117,7 +121,7 @@ function runEffect(s, eff) {
     case 'clearIdle': if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; } break;
     case 'resumeQuery': sessionPark.resumeParked(s); break; // P1 lazy resume: the SAME object
     case 'lifecycle': runLifecycle(s, eff.kind, eff.extra, eff.body); break;
-    case 'closeTask': closeChannelTask(s, eff.outcome, eff.summary); break;
+    case 'closeTask': closeTask(s, eff.outcome, eff.summary); break;
     case 'settle': settle(s, eff.outcome); break;
     default: diag('session-engine: unknown effect', eff && eff.type);
   }
@@ -193,20 +197,7 @@ function runLifecycle(s, kind, extra, body) {
   } catch (err) { diag('session-engine: lifecycle handler error', err && err.message); }
 }
 
-// The DB status flip for a first-class task (op:"close"); the task_finished/failed echo is separate (runLifecycle). No-op when there is no task id.
-async function closeChannelTask(s, outcome, summary) {
-  if (!s.taskId) return;
-  try {
-    const res = await apiFetch(`/api/channels/${s.channelId}/tasks/${encodeURIComponent(s.taskId)}`, {
-      method: 'PATCH',
-      workspaceId: s.workspaceId,
-      body: { op: 'close', outcome, summary },
-      timeoutMs: 15000,
-    });
-    diag('session-engine: close_task', res.ok ? 'ok' : `failed ${res.status}`);
-  } catch (err) { diag('session-engine: close_task error', err && err.message); }
-}
-
+// The task status flip (op:"close") lives in session-close-task.js (§2 split); the lifecycle echo stays here.
 // Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it), free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
 function settle(s, outcome) {
   if (s.settled) return;
@@ -247,61 +238,6 @@ function bindWindow(s) {
   wc.on('render-process-gone', () => { if (!s.settled) dispatch(s, { type: 'crash' }); });
 }
 
-function buildSdkOptions(s) {
-  const cfg = buildSessionToolConfig(s.profile);
-  const options = {
-    // Item 7: the per-channel folder (else ~/Downloads) as the SDK cwd. Context (§H-9), not a fence.
-    cwd: channelDirs.sessionSpawnDir(s.channelId),
-    allowedTools: cfg.preApproved, // pre-approved => SHADOWED, no button (§A.5)
-    // C1: the profile's hard-deny PLUS the credential-path rules — a pre-approved read is SHADOWED
-    // and never reaches canUseTool, so only this tool-bound layer can fence userData / ~/.claude*.
-    disallowedTools: cfg.disallowedTools.concat(buildSecretPathDenyRules()),
-    // v2.x: buildMcpServers PINS this session's workspace (X-Workspace-Id), so a call that omits
-    // `workspace=` auto-targets instead of being refused; a per-call `workspace=` still wins.
-    mcpServers: buildMcpServers(cfg.doplToolsPolicy, s.workspaceId),
-    settingSources: [], // ALWAYS — the global allow-list can never shadow a gate
-    permissionMode: 'default', // FIX M2: pin — bypass/acceptEdits/dontAsk short-circuit canUseTool
-    env: buildScrubbedEnv(), // FIX M2: strip permission-mode env knobs, keep auth (sdk-loader)
-    // C6: the gate is unchanged; the wrapper only resolves the card an ALLOWED post painted.
-    canUseTool: sessionOutbound.wrapCanUseTool(s, io.makeCanUseTool(s, dispatch, diag), emitQuiet), // diag: the forced-thread-tag conflict log (session-io stays electron-free)
-    abortController: s.abortController,
-    // LOAD-BEARING for v2.7 L3 (FIX F4): the outbound card shows the operator the bytes a post will
-    // send, so the streamed tool_use input must be the WHOLE, FINAL input. No fragments (below) and NO
-    // `hooks` option is ever set — a PreToolUse hook could rewrite the input the card already painted.
-    includePartialMessages: false,
-  };
-  if (cfg.builtinTools.length) options.tools = cfg.builtinTools; // positive bound; [] => full offers all, gated
-  const bin = resolveClaudeExecutable();
-  if (bin) options.pathToClaudeCodeExecutable = bin;
-  if (s.resumeSdkId) options.resume = s.resumeSdkId;
-  return options;
-}
-
-async function startQuery(s, sdk) {
-  s.abortController = new AbortController();
-  s.pushIterator = io.makePushIterator();
-  const q = sdk.query({ prompt: s.pushIterator, options: buildSdkOptions(s) });
-  s.query = q;
-  s.pushIterator.push(io.userMessage(s.firstTurn));
-  consume(s, q); // fire-and-forget consumer loop
-}
-
-async function consume(s, q) {
-  try {
-    // FIX #1b: `q` tags this loop; a park->resume swaps s.query, so s.query !== q => SUPERSEDED (ignore its tail + late rejection).
-    for await (const msg of q) { if (s.query !== q) return; io.handleSdkMessage(s, msg, dispatch, store); }
-  } catch (err) {
-    if (s.query !== q) return;
-    if (!isAbortError(err)) {
-      diag('session-engine: query error', err && err.message);
-      if (!s.settled) dispatch(s, { type: 'crash' });
-    }
-  }
-}
-function isAbortError(err) {
-  return !!err && (err.name === 'AbortError' || /abort/i.test(String(err.message || '')));
-}
-
 function getSessionBySender(sender) { // renderer->main resolution for session-ipc
   if (!sender) return null;
   for (const s of sessions.values()) { if (s.win && !s.win.isDestroyed() && s.win.webContents.id === sender.id) return s; }
@@ -322,7 +258,24 @@ function setLifecycleHandlers(h) {
 async function startSession(spec, sdk) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
-  const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps() });
+  // H2 — THE ONLY WAY A STORED POSTURE REACHES A SPAWN. This used to call
+  // channel-context.startingModes(spec.channelId), an AMBIENT read of a durable, channel-wide
+  // preference. startSession is the single construction site for EVERY spawn shape, so that read
+  // re-armed the posture on shapes that involve no human decision at all — a recreated parked
+  // shell woken by a peer reply, a crash resume, a requester auto-open — and a bypass/auto_both
+  // picked once on one consent card became a standing, cardless, clickless grant for the channel.
+  //
+  // Now the posture must be HANDED IN, per launch, by a caller that is executing a decision a
+  // human is making right now (trigger.js, which CONSUMES a single-use arm at the consent-approved
+  // launch). Anything that passes nothing — every other shape, and any future one — inherits
+  // session-reducer's own hard-coded manual/ask, which is the safe default by construction rather
+  // than by remembering to opt out. A parked shell is refused explicitly even if a caller did pass
+  // modes: it starts dormant and is woken later by something that is NOT the approving human, so
+  // it must never carry a posture forward into that wake.
+  const startModes = spec.startModes && !spec.parkedShell
+    ? { toolMode: spec.startModes.tools, messageMode: spec.startModes.messages }
+    : {};
+  const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(), ...startModes });
   // P2: a reopen fallback opens a PARKED SHELL — a live window, NO SDK query yet. It boots
   // parked so a lazy wake (P1) resumes it; baseRecord persists s.state.phase = 'parked'.
   // FIX #9 / AUDIT D3: the running cap budget rehydrates on EVERY resume shape. It used to sit
@@ -383,6 +336,7 @@ async function startSession(spec, sdk) {
   }
   bindWindow(s);
   emitFolder(s);
+  emit(s, { type: 'modes', tool: state.toolMode, message: state.messageMode }); // v3.1: the header must state the PRESET posture, not the defaults
   // Item 1/5/6 + C5: avatars reach the renderer ONLY as `avatars` events (the replay ring splits a warm one off `init`).
   s.selfAvatar = avatarCache.cachedForUser(selfUserId);
   s.peerAvatar = avatarCache.cachedForUser(s.counterpartyId);
@@ -393,6 +347,10 @@ async function startSession(spec, sdk) {
   if (reqItem) emit(s, reqItem);
   // P2: a parked shell starts NO query (session-park paints the header/note; it waits for a lazy wake). Everything else launches now.
   if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }
+  // Q6 PREFLIGHT: a machine with no Claude Code sign-in can only produce a dead session, so HOLD the
+  // launch on the sign-in action instead. Nothing is settled, echoed, or thrown away; the request runs
+  // the moment sign-in succeeds.
+  if (sessionAuth.holdIfNoCredential(s)) return s;
   await startQuery(s, sdk);
   return s;
 }
@@ -400,6 +358,10 @@ async function startSession(spec, sdk) {
 async function launch(a) {
   if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
   const key = store.sessionKey(a.channelId, a.taskId);
+  // H1 (LOW): distinguish "a session is working here" from "a session is HELD here waiting for
+  // a sign-in" so the caller can post the truth instead of asking the peer to resend into a
+  // slot nothing will ever free on its own.
+  if (isAuthHeldSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'auth-hold' };
   if (hasLiveSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'busy' };
   // Adopting a pre-consent window is net-zero on the budget; only a FRESH window counts against the shared cap.
   // AUDIT D4: at the cap, free an untouched parked shell first (sessionPark.atCapAfterEvict) instead of
@@ -423,6 +385,10 @@ async function launch(a) {
     context: a.context,
     counterpartyId: a.counterpartyId, // FIX L1: bind the feed to the task's other party
     firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence
+    // H2: present ONLY on a consent-approved responder launch, where trigger.js consumed
+    // the operator's single-use arm. launchRequesterSession never sets it (no card was
+    // shown for the operator's own goal), so a requester window starts at manual/ask.
+    startModes: a.startModes,
   }, sdk);
   if (!s) return { skipped: 'disabled' };
   return { sessionId: s.sessionId };
@@ -438,6 +404,15 @@ function launchRequesterSession(a) {
 function hasLiveSession(a) {
   const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
   return !!(s && !s.settled);
+}
+
+// H1 (LOW) — is the session occupying this (channel, task) slot HELD on the sign-in action
+// rather than actually working? The registry cannot tell the difference on its own, and the
+// caller's "busy" copy ("I'm still finishing a previous request") is a lie when the truth is
+// "nothing is running and nobody can start it until someone signs in on that Mac".
+function isAuthHeldSession(a) {
+  const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
+  return !!(s && !s.settled && s.state && s.state.authHeld === true);
 }
 
 // FIX L1: the counterparty whose replies this session may consume; the listener checks it

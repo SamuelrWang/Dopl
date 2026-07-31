@@ -3,12 +3,14 @@
 
 const { Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
+const appVersion = require('./app-version');
 
 let tray = null;
 let currentStatus = 'Listener: starting…';
 let signedOutNow = false; // the listener's own signed-out fact (never parsed from the string)
 let handlers = {};
-let updateReadyVersion = null;
+let updateReadyVersion = null; // staged-update version; see refreshUpdateReady()
+let peerSkew = null; // Q10: the newest older-build peer seen this run ({ peer, mine, who })
 let windowMode = true; // v1.9: reflect the "Run sessions in a window" setting (default ON)
 let pendingCount = 0; // Round B: number of pending consent requests (inbound + review)
 
@@ -107,7 +109,67 @@ function authMenuState(signedOut) {
 }
 // ─── END TRAY-AUTH ───────────────────────────────────────────────────────────
 
+// ─── BEGIN TRAY-UPDATE (pure; unit-tested via source extraction) ─────────────
+// Q10(c): electron-updater downloads in the background and installs ON QUIT, and
+// a background listener app is quit approximately never. So a Mac can sit on a
+// stale build for days while its operator believes it is current — which is what
+// cost a full debugging round on 2026-07-31, with a shipped fix reading as broken
+// because it was not running. The staged install has to become VISIBLE.
+//
+// It never restarts on its own: a restart would kill a live spawned session
+// mid-turn, so the operator decides when. The affordance is therefore a click,
+// plus the tooltip so the menu does not have to be opened to find out.
+function updateMenuState(readyVersion) {
+  const v = typeof readyVersion === 'string' && readyVersion.trim() ? readyVersion.trim() : '';
+  return v
+    ? { ready: true, version: v, label: 'Update ready — restart to install v' + v }
+    : { ready: false, version: '', label: '' };
+}
+
+// The hover text. The tray icon is the ONLY always-visible surface this app has,
+// so a staged update says so there rather than only inside the menu.
+function trayTooltip(status, readyVersion) {
+  const head = status || 'Dopl';
+  const u = updateMenuState(readyVersion);
+  return u.ready ? head + '\n' + u.label : head;
+}
+
+// Q10(b): the other half of a version mismatch, stated as a fact and nothing
+// more. Disabled (no click, no action) because the fix is on the PEER's machine;
+// this line exists so "why is their side behaving like the old build" has an
+// answer on screen. '' when there is nothing to say.
+function skewMenuLabel(skew) {
+  if (!skew || !skew.peer) return '';
+  const who = skew.who ? String(skew.who) : 'A peer';
+  return who + ' is on v' + skew.peer + ', you are on v' + (skew.mine || '?');
+}
+// ─── END TRAY-UPDATE ─────────────────────────────────────────────────────────
+
+// WHERE "an update is staged" IS READ FROM (2026-07-31). The tray used to keep
+// ONLY its own copy, fed exclusively by updater's `onReady` event — so the menu
+// could answer the question only for a tray that already existed when the
+// download finished. updater.isUpdateReady() / updateReadyVersion() were added
+// for exactly that gap and then never called by anyone: two dead exports next to
+// the bug they were written for. index.js happens to call tray.create() BEFORE
+// updater.init(), which is the one ordering under which the event-only path
+// works, and nothing pins it — reorder those two lines, or rebuild the tray
+// after a download, and the restart item silently vanishes while a staged build
+// sits there. That is precisely the Q10 failure (a Mac running a build nobody
+// believes it is running), so the menu now asks the module that OWNS the fact
+// and keeps the event echo as the fallback.
+//
+// Lazily required so tray.js holds no top-level updater dependency and still
+// loads in a harness where the module is absent. Refreshed on every rebuild
+// rather than read once: `readyVersion` is set by an event we do not control.
+function refreshUpdateReady() {
+  try {
+    const updater = require('./updater');
+    if (updater.isUpdateReady()) updateReadyVersion = updater.updateReadyVersion();
+  } catch (_) { /* no updater here — keep whatever setUpdateReady last echoed */ }
+}
+
 function buildMenu() {
+  refreshUpdateReady(); // Q10: the updater owns the fact; the local is a cache
   const template = [
     { label: 'Open Dopl', click: () => handlers.onOpen && handlers.onOpen() },
   ];
@@ -125,19 +187,27 @@ function buildMenu() {
       click: () => handlers.onPending && handlers.onPending(),
     });
   }
+  // A staged update sits with the other CALLS TO ACTION at the top, not buried
+  // under the submenus where it lived before: it is the item that explains a
+  // whole class of "the fix does not work" (Q10c).
+  const updateItem = updateMenuState(updateReadyVersion);
+  if (updateItem.ready) {
+    template.push({ label: updateItem.label, click: () => handlers.onUpdate && handlers.onUpdate() });
+  }
   template.push(
     { type: 'separator' },
     { label: currentStatus, enabled: false },
-    { label: 'Sessions', submenu: sessionsSubmenu() },
-    { label: 'Channel folders', submenu: channelFoldersSubmenu() }
+    // This build, so the operator can answer "what am I on?" without the About
+    // box — the other half of every version-skew conversation (Q10).
+    { label: `Dopl v${appVersion.appVersion() || '?'}`, enabled: false }
   );
-  if (updateReadyVersion) {
-    template.push({
-      label: `Restart to install v${updateReadyVersion}`,
-      click: () => handlers.onUpdate && handlers.onUpdate(),
-    });
-  }
-  template.push({ type: 'separator' });
+  const skewLabel = skewMenuLabel(peerSkew);
+  if (skewLabel) template.push({ label: skewLabel, enabled: false });
+  template.push(
+    { label: 'Sessions', submenu: sessionsSubmenu() },
+    { label: 'Channel folders', submenu: channelFoldersSubmenu() },
+    { type: 'separator' }
+  );
   // The escape hatch. Present whenever we are NOT already signed out, so a wedged
   // session can always be dropped from here instead of by deleting the Cookies
   // store; when signed out the "Sign in…" item above is the affordance instead.
@@ -147,7 +217,7 @@ function buildMenu() {
   template.push({ label: 'Quit Dopl', click: () => handlers.onQuit && handlers.onQuit() });
   const menu = Menu.buildFromTemplate(template);
   tray.setContextMenu(menu);
-  tray.setToolTip(currentStatus);
+  tray.setToolTip(trayTooltip(currentStatus, updateReadyVersion));
 }
 
 function create(opts) {
@@ -170,8 +240,23 @@ function update(status, meta) {
   if (tray) buildMenu();
 }
 
+// The `onReady` echo. Still wired (index.js): the EVENT is what makes the menu
+// redraw the moment a download lands. The value it stores is now the FALLBACK —
+// refreshUpdateReady() overrides it from the updater on every rebuild.
 function setUpdateReady(version) {
   updateReadyVersion = version || null;
+  if (tray) buildMenu();
+}
+
+// Q10: the newest peer seen running an older build than this one. Latest wins
+// (one line, not a growing list) and a falsy value clears it. Rebuilds only on a
+// real change, so a repeated observation never redraws the menu.
+function setPeerSkew(skew) {
+  const next = skew && skew.peer ? skew : null;
+  const same = (peerSkew && peerSkew.peer) === (next && next.peer) &&
+    (peerSkew && peerSkew.who) === (next && next.who);
+  if (same) return;
+  peerSkew = next;
   if (tray) buildMenu();
 }
 
@@ -200,5 +285,5 @@ function destroy() {
 }
 
 module.exports = {
-  create, update, setUpdateReady, setWindowMode, setPendingCount, refresh, destroy,
+  create, update, setUpdateReady, setPeerSkew, setWindowMode, setPendingCount, refresh, destroy,
 };

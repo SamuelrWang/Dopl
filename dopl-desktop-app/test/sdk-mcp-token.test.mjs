@@ -21,15 +21,20 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => join(HERE, "..", "main", p);
 const LOADER = readFileSync(M("sdk-loader.js"), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
+// §3 split: the SDK option assembly + the query lifecycle live in session-query.js;
+// session-engine.js still binds them (asserted below), which is what makes the park /
+// reopen paths share the one assembly.
+const QUERY = readFileSync(M("session-query.js"), "utf8");
 
 const slice = (src, from, to, what) => {
   const a = src.indexOf(from);
@@ -45,9 +50,9 @@ const MCP_URL = "https://dopl.test/api/mcp";
 
 function buildServers(token, policy = null, workspaceId = "") {
   return new Function(
-    "doplBearer", "MCP_URL", "policy", "workspaceId",
+    "doplBearer", "clientTimeoutMs", "MCP_URL", "policy", "workspaceId",
     `${MCP_BLOCK}\n return buildMcpServers(policy, workspaceId);`
-  )(() => token, MCP_URL, policy, workspaceId);
+  )(() => token, () => SHIPPED_TIMEOUT_MS, MCP_URL, policy, workspaceId);
 }
 
 test("C1: the bearer is the safeStorage-held token, injected in memory", () => {
@@ -106,7 +111,7 @@ test("C1: an unavailable userData path still leaves the home rules in force (fai
 });
 
 test("C1: buildSdkOptions really concatenates them onto the profile's hard-deny", () => {
-  const opts = slice(ENGINE, "function buildSdkOptions(s) {", "async function startQuery(", "buildSdkOptions");
+  const opts = slice(QUERY, "function buildSdkOptions(s) {", "async function startQuery(", "buildSdkOptions");
   assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(buildSecretPathDenyRules\(\)\),/);
   // ...and that every profile therefore gets them: buildSdkOptions is the ONE assembly path
   // (session-park resumes and recreated shells call deps.buildSdkOptions).
@@ -132,11 +137,20 @@ function spawnHarness(initial) {
     },
   };
   const api = new Function(
-    "fs", "spawnConfigPath", "MCP_URL", "diag",
+    "fs", "spawnConfigPath", "MCP_URL", "diag", "MCP_CLIENT_TIMEOUT_MS",
     `${WRITE_BLOCK}\n return { writeSpawnConfig, spawnConfigBody };`
-  )(fs, () => "/userData/mcp-spawn.json", "https://dopl.test/api/mcp", () => {});
+  )(fs, () => "/userData/mcp-spawn.json", "https://dopl.test/api/mcp", () => {}, SHIPPED_TIMEOUT_MS);
   return { ...api, files, calls };
 }
+
+// The value the shipped module defines, read out of the source rather than
+// copied — a harness that hardcoded its own number would keep passing after the
+// constant was edited away.
+const SHIPPED_TIMEOUT_MS = (() => {
+  const m = /MCP_CLIENT_TIMEOUT_MS = ([\d_]+);/.exec(CONFIG);
+  assert.ok(m, "mcp-config.js must define MCP_CLIENT_TIMEOUT_MS");
+  return Number(m[1].replace(/_/g, ""));
+})();
 
 test("C2: a rewritten url is REPAIRED even though the token still matches", () => {
   const h = spawnHarness(JSON.stringify({
@@ -195,6 +209,64 @@ test("L4: a file written by an older build (no runtime header) is REPAIRED", () 
   assert.equal(h.writeSpawnConfig("t1"), true);
   assert.equal(h.calls.writes.length, 1, "the whole-config compare catches a missing header");
   assert.equal(h.files["/userData/mcp-spawn.json"], h.spawnConfigBody("t1"));
+});
+
+// ── L8 (Q9): the per-server call timeout is part of the config, not a comment ─────
+
+test("L8: the spawn config carries the per-server `timeout`, and it clears the 60s abort", () => {
+  // WITHOUT this key a Claude Code client aborts every call to `dopl` at 60s —
+  // `min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647)` in the
+  // 2.1.220 binary this app bundles. That is BEFORE the ~2min mark at which a
+  // pending MCP call is backgrounded, which is the entire mechanism that turns
+  // `dopl_channel(op="await")` into a wake. Deleting it would break the
+  // headless-spawn wake with every other assertion in this file still green.
+  const cfg = JSON.parse(spawnHarness(null).spawnConfigBody("t1"));
+  assert.equal(cfg.mcpServers.dopl.timeout, SHIPPED_TIMEOUT_MS);
+  assert.ok(SHIPPED_TIMEOUT_MS > 60_000, "or the client floor wins and nothing changed");
+  // The full arithmetic (cap + margin <= this) lives in mcp-client-timeout.test.mjs,
+  // which reads the server's own constants instead of restating a literal here.
+});
+
+test("L8: ONE definition feeds BOTH entries this app owns", () => {
+  // The spawn-config file (CLI path) and sdk-loader's in-memory server (session
+  // path) must not drift: same client, same endpoint. sdk-loader used to restate
+  // the literal, which is exactly how they drifted (280_000 vs a moved server cap).
+  assert.match(CONFIG, /timeout: MCP_CLIENT_TIMEOUT_MS,/, "the spawn file uses the constant");
+  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "…and it is exported for sdk-loader");
+  assert.match(LOADER, /timeout: clientTimeoutMs\(\),/, "sdk-loader reads it, never a literal");
+  assert.match(
+    fnOf(LOADER, "clientTimeoutMs"),
+    /require\('\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
+    "…from mcp-config, the one owner"
+  );
+  assert.ok(
+    !/timeout: \d[\d_]*,/.test(LOADER),
+    "no numeric timeout literal may reappear in sdk-loader"
+  );
+});
+
+// ── TASK 4: the operator's own ~/.claude.json is NOT ours to rewrite ──────────
+
+test("nothing in this app patches the CLI's user-scope config in place", () => {
+  // main/mcp-cli-entry.js rewrote ~/.claude.json — a file that holds the operator's
+  // `oauthAccount` block — to inject a per-server `timeout`. It is DELETED: the
+  // streaming fix (c2f6a7e) removed the reason, and `timeout` also lowers the hard
+  // tool-call ceiling for the operator's OWN terminal sessions. The in-app entries
+  // above are where the fix belongs, and they stay.
+  assert.ok(!/patchCliEntryTimeout/.test(CONFIG), "the call sites are gone");
+  assert.ok(!/require\('\.\/mcp-cli-entry'\)/.test(CONFIG), "…and so is the require");
+  // The removal REASONS stay in the source, or the next round re-adds it.
+  const prose = CONFIG.replace(/\n\/\/ ?/g, " ");
+  assert.match(prose, /mcp-cli-entry\.js REMOVED/);
+  assert.match(prose, /oauthAccount/, "reason 1: the file holds a credential block");
+  assert.match(prose, /streams \(c2f6a7e\)/, "reason 2: the 60s silence is gone");
+  assert.match(prose, /hard tool-call ceiling/, "reason 3: the second, unasked-for effect");
+  assert.ok(!existsSync(M("mcp-cli-entry.js")), "the module itself is deleted");
+  const cliAdd = readFileSync(M("mcp-cli-add.js"), "utf8");
+  assert.ok(
+    !/writeFileSync|renameSync/.test(cliAdd),
+    "the CLI half shells out to `claude mcp …` and writes no config file of its own"
+  );
 });
 
 // ── C1: the token accessor itself ─────────────────────────────────────────────────

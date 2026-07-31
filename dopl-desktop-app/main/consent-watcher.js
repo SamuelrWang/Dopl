@@ -30,15 +30,36 @@
 const Store = require('electron-store');
 const auth = require('./auth');
 const consent = require('./consent');
+const {
+  MAX_POLLS_PER_WINDOW,
+  POLL_WINDOW_MS,
+  nextPollDelay,
+  nextScanDelay,
+  recentPolls,
+  pollAllowed,
+  createScheduler,
+} = require('./consent-cadence');
 const { diag } = require('./diag');
 
 const store = new Store();
 const WATCHED_KEY = 'channelWatched'; // { [requestKey]: record }
 const SETTLED_KEY = 'channelSettled'; // { [requestKey]: { outcome, at } }
 
-// One tick scans all records; each record self-throttles via nextPollDelay so the
-// scan interval can stay short (fast reaction) without hammering the server.
-const TICK_MS = 2000;
+// SCAN CADENCE (Q12 — request-volume diet, 2026-07-31). This used to be a flat
+// `setInterval(tick, 2000)`: 1,800 wakeups/hour forever, each one decrypting the
+// auth blob via `auth.isSignedIn()`, even with zero records to poll. The watcher
+// is a FALLBACK — realtime wakes and the explicit `poke()`s from trigger.js /
+// session-consent.js are the primary signal — so the steady state should be slow
+// and the fast cadence should be earned by recent activity.
+//
+// The scan is now self-scheduling and adaptive (see nextScanDelay): 3s for a short
+// window after a wake / registration / decision, then it drifts out to the next
+// record's own due time, capped at 30s. With no records it sits at 30s doing
+// nothing. `poke()` snaps it back to fast, so nothing waits on the ladder.
+//
+// All of that lives in `./consent-cadence.js` — pure, no electron, and therefore
+// directly `require`-able by test/consent-cadence.test.mjs.
+//
 // Settled keys are pruned after this so the record never grows without bound; far
 // longer than any request lives, so it cannot cause a re-spawn in practice.
 const SETTLED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -67,14 +88,16 @@ function mapStatus(status) {
   return 'unknown'; // transient / unrecognized → keep waiting
 }
 
-// Poll cadence backs off the longer a request sits unanswered — every GET also
-// runs the server's expire-stale sweep, so a tight loop is not free, and a human
-// who has not answered in ten minutes is not answering in the next five seconds.
-function nextPollDelay(elapsedMs) {
-  if (elapsedMs < 60_000) return 5_000;
-  if (elapsedMs < 5 * 60_000) return 10_000;
-  if (elapsedMs < 30 * 60_000) return 20_000;
-  return 60_000;
+// H2 — the two allows are the SAME action but NOT the same authority, and one thing
+// depends on the difference: a stored permission arm may only be consumed by a human
+// deciding right now. `allowed` is exactly that — a person clicked Allow on the web
+// card or the native notification. `auto_allowed` is the server's STANDING trust for
+// the channel, decided at some earlier time by rules, with no card in front of anyone.
+// mapStatus deliberately keeps collapsing them (the spawn is identical); this is the
+// one seam that must tell them apart, so it fails closed on anything it does not
+// recognize as a live human decision.
+function isHumanAllow(status) {
+  return String(status || '') === 'allowed';
 }
 
 // A settled request key must never be re-acted on (the replay-respawn fix).
@@ -119,8 +142,28 @@ const inFlight = new Set(); // requestKey currently being polled/resolved
 let settled = {}; // requestKey -> { outcome, at }
 let resolvers = {}; // injected by start(): { inboundApproved, inboundDenied, ... }
 let onCount = null; // ({ count, segment }) => void — tray pending count
-let timer = null;
+let scheduler = null;
 let started = false;
+// Timestamps of the consent GETs in the trailing POLL_WINDOW_MS (the rate cap).
+let pollTimes = [];
+let cappedAt = 0; // last time the cap bound, so the diag line is not spammed
+// Last wake / registration / decision. Drives the fast cadence.
+let lastActivityAt = 0;
+// Injectable clock (Q12). Real timers by default; tests hand in a fake one.
+let clock = {
+  now: () => Date.now(),
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+  clearTimer: (h) => clearTimeout(h),
+};
+
+// Every path that makes a decision imminent calls this: a new record, a poke from
+// trigger.js / session-consent.js, or a phase move. It arms the fast cadence AND
+// re-arms an already-running scheduler so the change takes effect now, not after
+// the currently-armed idle timer expires.
+function markActivity() {
+  lastActivityAt = clock.now();
+  if (scheduler) scheduler.bump();
+}
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 function durable(rec) {
@@ -167,6 +210,7 @@ function register(rec) {
   records.set(record.key, record);
   persistRecords();
   emitCount();
+  markActivity(); // a brand-new ask: arm the fast cadence
   return record;
 }
 
@@ -207,6 +251,7 @@ function toOutbound(key, { rowId, taskId, startedAt, proposedReply }) {
   rec.lastPolledAt = 0; // poll the new row promptly
   persistRecords();
   emitCount();
+  markActivity(); // a review is now waiting on the operator: fast cadence
 }
 
 // Terminal: record the outcome durably (so the request is never re-handled) and
@@ -219,7 +264,9 @@ function settleRequest(key, outcome) {
   diag('watcher settle', key.split(':')[0].slice(0, 8), 'seq', key.split(':')[1], '->', outcome);
 }
 
-// Force the given key (or all records) to be due, and run a scan now.
+// Force the given key (or all records) to be due, and run a scan now. This is the
+// primary reaction path — every in-app decision routes through here — so the
+// polling ladder below is genuinely a fallback, not the mechanism.
 function poke(key) {
   if (key) {
     const rec = records.get(key);
@@ -227,12 +274,29 @@ function poke(key) {
   } else {
     for (const rec of records.values()) rec.lastPolledAt = 0;
   }
+  markActivity();
   tick();
 }
 
 // ── Poll loop ────────────────────────────────────────────────────────────────
 function isDue(rec, now) {
-  return now - rec.lastPolledAt >= nextPollDelay(now - rec.createdAt);
+  return now - rec.lastPolledAt >= nextPollDelay(now - rec.createdAt, now - lastActivityAt);
+}
+
+// When each pollable record next comes due — the input to the adaptive scan
+// cadence. Session-phase records are engine-owned and never polled, so they must
+// not hold the scheduler at a fast cadence.
+function dueAts(now) {
+  const out = [];
+  for (const rec of records.values()) {
+    if (isSessionPhase(rec.phase)) continue;
+    out.push(rec.lastPolledAt + nextPollDelay(now - rec.createdAt, now - lastActivityAt));
+  }
+  return out;
+}
+
+function scanDelay(now) {
+  return nextScanDelay(now, dueAts(now), lastActivityAt);
 }
 
 async function processRecord(key) {
@@ -241,23 +305,43 @@ async function processRecord(key) {
   if (!rec) return;
   // A record handed to a live session window is engine-owned — never poll it.
   if (isSessionPhase(rec.phase)) return;
-  const now = Date.now();
+  const now = clock.now();
   if (!isDue(rec, now)) return;
 
   // Local expiry for a long-parked request (server may keep it pending forever).
+  // Checked BEFORE the rate cap: it costs no request, and a capped watcher must
+  // still be able to retire dead records.
   if (now - rec.createdAt > MAX_WATCH_MS) {
     settleRequest(key, 'expired');
     return;
   }
 
+  // Global rate ceiling. Skipping is safe: the record keeps its phase and its
+  // lastPolledAt, so the next scan retries it — nothing is settled or lost.
+  if (!pollAllowed(pollTimes, now)) {
+    if (now - cappedAt > POLL_WINDOW_MS) {
+      cappedAt = now;
+      diag('watcher: poll rate cap hit —', MAX_POLLS_PER_WINDOW, 'polls/min; deferring', records.size, 'record(s)');
+    }
+    return;
+  }
+  pollTimes = recentPolls(pollTimes, now);
+  pollTimes.push(now);
+
   inFlight.add(key);
   try {
-    rec.lastPolledAt = Date.now();
-    const decision = mapStatus(await consent.pollStatus(rec.workspaceId, rec.rowId));
+    rec.lastPolledAt = clock.now();
+    const status = await consent.pollStatus(rec.workspaceId, rec.rowId);
+    const decision = mapStatus(status);
     if (decision === 'pending' || decision === 'unknown') return; // keep waiting
 
     if (rec.phase === 'await-inbound') {
-      if (decision === 'allow') await safeResolve('inboundApproved', rec);
+      // H2: the resolver is told WHO allowed this — a live human, or the server's
+      // standing trust — because only the former may consume a permission arm. Passed
+      // as a call argument, never stamped on `rec`: the record is persisted, and an
+      // authority verdict must not be able to survive a restart and re-authorize a
+      // later launch from disk.
+      if (decision === 'allow') await safeResolve('inboundApproved', rec, { humanAllowed: isHumanAllow(status) });
       else if (decision === 'deny') await safeResolve('inboundDenied', rec);
       else if (decision === 'expire') await safeResolve('inboundExpired', rec);
     } else if (rec.phase === 'await-outbound') {
@@ -271,13 +355,13 @@ async function processRecord(key) {
   }
 }
 
-async function safeResolve(name, rec) {
+async function safeResolve(name, rec, meta) {
   const fn = resolvers && resolvers[name];
   if (typeof fn !== 'function') {
     diag('watcher: no resolver for', name);
     return;
   }
-  await fn(rec);
+  await fn(rec, meta || {});
 }
 
 function tick() {
@@ -337,22 +421,35 @@ function resume() {
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
+// `opts.clock` (Q12) injects { now, setTimer, clearTimer } for tests; production
+// callers pass only resolvers + onPendingCount and get real timers.
 function start(opts = {}) {
   if (opts.resolvers) resolvers = opts.resolvers;
   if (opts.onPendingCount) onCount = opts.onPendingCount;
+  if (opts.clock) clock = { ...clock, ...opts.clock };
   if (started) { emitCount(); return; }
   started = true;
   resume();
-  timer = setInterval(tick, TICK_MS);
-  if (timer.unref) timer.unref();
+  // A fresh start counts as activity: resume() may have reloaded parked records
+  // whose decisions landed while the app was closed.
+  lastActivityAt = clock.now();
+  scheduler = createScheduler({
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    delayFor: scanDelay,
+    onScan: tick,
+  });
+  scheduler.start();
   tick();
   diag('watcher started');
 }
 
 function stop() {
   started = false;
-  if (timer) { clearInterval(timer); timer = null; }
+  if (scheduler) { scheduler.stop(); scheduler = null; }
   inFlight.clear();
+  pollTimes = [];
 }
 
 // Sign-out reset (FIX 1). Drop the in-memory pending records and zero the tray
@@ -380,5 +477,6 @@ module.exports = {
   has,
   isSettled,
   get,
+  isHumanAllow, // H2: exported for the test; processRecord is the only production caller
   requestKey,
 };

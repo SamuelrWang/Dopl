@@ -135,8 +135,8 @@ async function startResumedConsumer(s) {
 // v2.5 D3 (ALWAYS-OPEN WINDOW): a retained sdkSessionId is NO LONGER required. A record
 // with no resumable sdk session still opens — it shows the channel history (deps.
 // loadHistory) and, when the operator types, starts a FRESH session for the task seeded
-// with that history as fenced context (session-history + io.withSeed). Only a task with
-// NO durable record at all returns {ok:false}: nothing about it lives on this machine.
+// with that history as fenced context (session-history + io.withSeed). Q6b finished that
+// intent: a thread with NO durable record here opens too, from the channel (openFromChannel).
 async function recreateParkedShell(a) {
   if (!deps || !deps.windowFactoryReady()) return { ok: false };
   const key = store.sessionKey(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
@@ -144,11 +144,16 @@ async function recreateParkedShell(a) {
   if (existing && !existing.settled) return { ok: true };
   const rec = store.getRecord(key);
   const sdkId = store.getSdkSessionId(key);
+  // Q6b (ALWAYS OPEN): for an operator CLICK (`fromChannel`), no durable record is no longer a
+  // dead end — this machine simply never worked this thread, and the operator still wants to READ
+  // it — so the shell is built from the CHANNEL instead. The INBOUND GATE deliberately does NOT
+  // pass that flag: a peer whose thread has no record here must never pop a window on this Mac.
+  if (!rec && a && a.fromChannel === true) return openFromChannel(a, key);
   if (!rec) return { ok: false };
   // FIX #4: apply the SAME shared window budget launch()/openConsentWindow() enforce
   // (sessions + open consent windows vs MAX_WINDOWS) — a reopen must not blow the cap.
   // FIX #7 (see atCapAfterEvict): at the cap, try to free one slot first, fail-restrictive.
-  if (atCapAfterEvict()) return { ok: false };
+  if (atCapAfterEvict()) return { ok: false, reason: 'busy' };
   const s = await deps.startSession({
     key, channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
     // FIX #8: a shell recreated purely from a persisted record must FAIL RESTRICTIVE —
@@ -175,6 +180,40 @@ async function recreateParkedShell(a) {
   // the thread arrive as turn 2 BELOW their own bubble, and a fetch that resolved after a
   // racing system/init dropped the seed on the floor. A failed fetch still just shows one
   // calm notice. Guarded so a mid-wave engine that has not wired it opens the shell as before.
+  if (deps.loadHistory) {
+    try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
+  }
+  return { ok: true };
+}
+
+// Q6b — the RECORD-LESS shell. Everything a durable record would have carried is resolved from
+// the channel itself (channel-context.resolve, injected): the workspace the history read needs,
+// the header name, and — for a DIRECT channel only — the counterparty the FIX L1 binding and the
+// history lanes require. A group channel resolves no counterparty, so session-history paints its
+// existing calm pointer rather than guessing whose words are whose.
+//
+// FAIL RESTRICTIVE, deliberately: no record means no stored profile, so knownProfile(undefined)
+// resolves READ_ONLY (the same rule a corrupt record gets) and `side` is 'requester' — the
+// operator is the one opening this window, so anything they type is their own goal, addressed to
+// the peer. NO query runs here either (parkedShell), so opening still starts nothing and posts
+// nothing: no session record the peer can see, no lifecycle event, no task_started.
+async function openFromChannel(a, key) {
+  if (!deps.resolveChannelContext) return { ok: false }; // mid-wave engine: fail closed
+  if (atCapAfterEvict()) return { ok: false, reason: 'busy' }; // the SAME shared window budget
+  const channelId = String((a && a.channelId) || '');
+  const ctx = await deps.resolveChannelContext(channelId);
+  if (!ctx || !ctx.workspaceId) return { ok: false, reason: 'no-thread' };
+  if (deps.hasLiveSession({ channelId, taskId: String((a && a.taskId) || '') })) return { ok: true };
+  const s = await deps.startSession({
+    key, channelId, taskId: String((a && a.taskId) || ''), workspaceId: ctx.workspaceId,
+    side: 'requester', profile: knownProfile(undefined), mode: 'interactive',
+    counterpartyId: ctx.counterpartyId || null,
+    context: { channelName: ctx.channelName || null, taskTitle: null, authorName: ctx.counterpartyName || null,
+      channelId: channelId, workspaceId: ctx.workspaceId },
+    resumeSdkId: null, turns: 0, costUsd: 0,
+    parkedShell: true, // the window opens; the agent starts on the first turn the operator types
+  }, null);
+  if (!s) return { ok: false };
   if (deps.loadHistory) {
     try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
   }
@@ -310,6 +349,7 @@ module.exports = {
   bind,
   resumeParked,
   recreateParkedShell,
+  openFromChannel, // Q6b: the record-less shell (exported for the test; recreateParkedShell is the caller)
   evictIdleShell, // FIX #7: LRU relief for the shared window budget
   atCapAfterEvict, // AUDIT D4: the engine's launch / openConsentWindow cap branches use it too
   emitParkedShell,

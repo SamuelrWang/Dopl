@@ -96,8 +96,20 @@ describe("every option states, in plain words, what it does", () => {
 
   it("names the blast radius on the permissive tool modes", () => {
     const byValue = Object.fromEntries(TOOL_OPTIONS.map((o) => [o.value, o.description]));
-    expect(byValue.bypass).toContain("every command on this machine");
+    expect(byValue.bypass).toContain("every command the tool profile allows");
     expect(byValue.auto).toContain("asking for shell, web and workspace writes");
+  });
+
+  // The bypass line used to read "auto approving every command on this machine", which is
+  // simply FALSE under a read_only or dopl_only profile: the profile's `disallowedTools`
+  // (plus the credential-path deny rules) bound the session at the SDK's tool-binding layer,
+  // where no permission axis can reach them. Bypass auto-approves everything that reaches
+  // OUR gate — which is not everything on the machine. The card must not promise more reach
+  // than the profile grants, in either direction.
+  it("does not claim a reach the tool profile does not actually grant", () => {
+    const byValue = Object.fromEntries(TOOL_OPTIONS.map((o) => [o.value, o.description]));
+    expect(byValue.bypass).not.toContain("on this machine");
+    expect(byValue.bypass).toMatch(/tool profile/);
   });
 });
 
@@ -117,7 +129,7 @@ describe("RequestPermissionRowView (both dropdowns, kit-only)", () => {
     expect(markup).toContain("Automatic");
     // The selected option's plain-words line rides on the trigger too, so the
     // posture is readable without opening the menu.
-    expect(markup).toContain('title="Auto approving every command on this machine"');
+    expect(markup).toContain('title="Auto approving every command the tool profile allows"');
     expect(markup).toContain('title="Messages flow automatically"');
   });
 

@@ -117,8 +117,17 @@ const OPEN_THREAD_WARN_MAX = 5;
 async function threadLinkageNote(client, channelId, channelName, message, askedThread) {
     const landedThread = (0, channel_shared_1.metaString)(message, "taskId");
     if (landedThread) {
+        // FIX M2 — the title is server-STAMPED, not server-AUTHORED: whichever
+        // member opened the thread typed it, up to 200 chars with newlines allowed,
+        // and this confirmation line is our own narration with no untrusted framing
+        // around it. Rendered as one inline code span (same discipline as the read
+        // side's legend) so it can only read as the thread's name, never as
+        // structure or as instructions from the tool.
         const title = (0, channel_shared_1.metaString)(message, "taskTitle");
-        const named = title ? `**${title}** (thread \`${landedThread}\`)` : `thread \`${landedThread}\``;
+        const safeTitle = title ? (0, channel_shared_1.neutralizeInline)(title) : null;
+        const named = safeTitle
+            ? `${safeTitle} (thread \`${landedThread}\`)`
+            : `thread \`${landedThread}\``;
         const mismatch = askedThread && askedThread !== landedThread
             ? ` NOTE: you asked for thread \`${askedThread}\` — it resolved to a different one.`
             : "";
@@ -140,9 +149,11 @@ async function threadLinkageNote(client, channelId, channelName, message, askedT
     }
     if (open.length === 0)
         return null;
-    const shown = open
-        .slice(0, OPEN_THREAD_WARN_MAX)
-        .map((t) => `\`${t.id}\` (${t.title})`);
+    // M2 again: same peer-typed title, same unframed narration line.
+    const shown = open.slice(0, OPEN_THREAD_WARN_MAX).map((t) => {
+        const named = (0, channel_shared_1.neutralizeInline)(t.title);
+        return named ? `\`${t.id}\` (${named})` : `\`${t.id}\``;
+    });
     const more = open.length > shown.length ? `; +${open.length - shown.length} more` : "";
     return `NOT THREADED — this reads as a NEW request on the other side, not a continuation, and **${channelName}** has ${open.length} open thread${open.length === 1 ? "" : "s"}: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
 }

@@ -170,12 +170,19 @@ test("trigger.js: every headless outbound tag reads taskIdFor(rec), never the ra
   const src = M("trigger.js");
   // rec.taskId is unset for a LEGACY inbound until toOutbound backfills it, so reading it
   // directly is how a reply or a lifecycle event ends up untagged.
-  const outbound = src.slice(src.indexOf("async function outboundApproved"), src.indexOf("async function inboundDenied"));
+  // §2 SPLIT: the no-reply terminal echoes (inboundDenied / inboundExpired /
+  // outboundCancelled / onInterrupted) moved to trigger-outcomes.js, so the slice ends at the
+  // resolver table instead, and the fourth tag — outboundCancelled's dropped task_failed — is
+  // asserted in that file. The invariant is unchanged: NO tag anywhere reads rec.taskId raw.
+  const outbound = src.slice(src.indexOf("async function outboundApproved"), src.indexOf("const resolvers = {"));
   assert.match(outbound, /postResult\(entry, m, reply, \{ taskId: taskIdFor\(rec\) \}\)/);
   assert.equal(outbound.match(/rec\.taskId/g), null, `rec.taskId still read directly: ${outbound}`);
-  // The two outbound resolvers, four tags: the reply itself, task_finished, the
-  // post-failed task_failed, and the cancelled/dropped task_failed.
-  assert.equal((outbound.match(/taskIdFor\(rec\)/g) || []).length, 4);
+  // Three tags here: the reply itself, task_finished, and the post-failed task_failed.
+  assert.equal((outbound.match(/taskIdFor\(rec\)/g) || []).length, 3);
+  // The moved resolvers keep the same discipline through their injected helper.
+  const moved = M("trigger-outcomes.js");
+  assert.equal(moved.match(/rec\.taskId/g), null, "trigger-outcomes.js must not read rec.taskId either");
+  assert.equal((moved.match(/taskIdFor\(rec\)/g) || []).length, 3, "cancelled + denied + interrupted");
 });
 
 // ── the bound, and the direction it fails in ─────────────────────────────────────

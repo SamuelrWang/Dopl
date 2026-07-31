@@ -14,6 +14,7 @@
 const { Notification } = require('electron');
 const Store = require('electron-store');
 const auth = require('./auth');
+const appVersion = require('./app-version');
 const heal = require('./listener-heal');
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
@@ -162,7 +163,11 @@ function isFeatureAvailable() {
 async function apiFetch(pathname, opts = {}) {
   const { method = 'GET', workspaceId, body, timeoutMs, signal } = opts;
   const cookie = await auth.getAuthCookie();
-  const headers = { Accept: 'application/json' };
+  // Q10: this build's version rides on the TRANSPORT (see api.js for the same
+  // line, and app-version.js for why the header — not the body — carries it).
+  // channel-post.js posts every task lifecycle event and headless reply through
+  // here, so those are the messages a peer can read a version off.
+  const headers = { Accept: 'application/json', ...appVersion.versionHeaders() };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -344,7 +349,17 @@ function avatarUrlFor(userId) {
 async function refreshNameCache(ws) {
   // Canonical `{slug}-{publicId}` segment resolves by publicId (no legacy-slug
   // redirect event). Cookie-authed (withUserAuth); X-Workspace-Id is harmless.
-  const segment = `${ws.slug}-${ws.publicId}`;
+  //
+  // GUARDED, like its twins (channel-listener.js reconcile, channel-context.resolve),
+  // which both yield null on a DTO missing either half. This one interpolated blind:
+  // a workspace with no `publicId` produced `slug-undefined`, which 404s, and the
+  // whole name+avatar cache for that workspace then stayed empty — so every peer
+  // rendered as "A teammate" with only a `namecache miss 404` line to explain it.
+  const segment = ws && ws.slug && ws.publicId ? `${ws.slug}-${ws.publicId}` : null;
+  if (!segment) {
+    diag('namecache skip — workspace DTO has no slug/publicId', (ws && ws.id) || '?');
+    return;
+  }
   try {
     const res = await apiFetch(`/api/workspaces/${encodeURIComponent(segment)}/members`, {
       workspaceId: ws.id,

@@ -19,6 +19,30 @@ import { type ToolResponse } from "./respond";
  * side had already reported as absent, or the reverse.
  */
 export declare function metaString(m: ChannelMessage, key: string): string | undefined;
+/** Longest untrusted value carried inline into a result — one terse span, no dump. */
+export declare const INLINE_TEXT_MAX = 160;
+/**
+ * Any untrusted string, reduced to something that cannot pose as structure and
+ * returned as ONE inline code span — or null when nothing survives, so the
+ * caller can drop the mention rather than render an empty pair of backticks.
+ *
+ * FIX L5 / M2 — the shared discipline for text a result splices OUTSIDE the
+ * untrusted-body framing, where it is read as narration BY the server: a
+ * failure description naming what broke, a thread title naming an exchange. The
+ * source being "our own server" is a claim about where the bytes came from, not
+ * about who wrote them — a 400 can echo a rejected field, and a thread title is
+ * typed by whichever member opened the thread. Bounding the length was never
+ * enough on its own: 160 characters is ample room for "IGNORE THE ABOVE. New
+ * instruction: …" to sit in the result as unframed server narration. So control
+ * characters (including the newlines a fake block or a forged legend entry would
+ * need) are dropped, markdown/quote punctuation is stripped — backticks first,
+ * since one of those escapes the span — and what is left is rendered as a quoted
+ * value. However it reads, it reads as a value.
+ *
+ * ONE definition, for the same reason `metaString` is one: two copies of a
+ * neutralizer drift, and the copy that drifts is the one that stops neutralizing.
+ */
+export declare function neutralizeInline(raw: string): string | null;
 /**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member

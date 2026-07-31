@@ -32,16 +32,19 @@ assert.notEqual(to, -1, "END WATCHER-PURE sentinel missing");
 assert.ok(to > from, "watcher-pure sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
+// NOTE (Q12, 2026-07-31): the poll-cadence helpers moved OUT of this fence into
+// `main/consent-cadence.js` when the file hit the 500-line cap. They are pure and
+// electron-free, so that module is `require`d directly — see
+// test/consent-cadence.test.mjs for the cadence + scheduler + rate-cap coverage.
 const {
   requestKey,
   mapStatus,
-  nextPollDelay,
   isSettledIn,
   isInterruptedSpawn,
   isAwaiting,
   countAwaiting,
 } = new Function(
-  `${BLOCK}\n return { requestKey, mapStatus, nextPollDelay, isSettledIn, isInterruptedSpawn, isAwaiting, countAwaiting };`
+  `${BLOCK}\n return { requestKey, mapStatus, isSettledIn, isInterruptedSpawn, isAwaiting, countAwaiting };`
 )();
 
 // ── requestKey: the stable per-request identity (channel + seq) ──────────────
@@ -72,25 +75,6 @@ test("unknown / transient status -> unknown (keep waiting, never act)", () => {
   assert.equal(mapStatus(null), "unknown");
   assert.equal(mapStatus(undefined), "unknown");
   assert.equal(mapStatus("weird"), "unknown");
-});
-
-// ── nextPollDelay: cadence backs off as a request sits unanswered ────────────
-test("poll cadence steps down the longer a request is parked", () => {
-  assert.equal(nextPollDelay(0), 5_000); // first minute: snappy
-  assert.equal(nextPollDelay(59_000), 5_000);
-  assert.equal(nextPollDelay(61_000), 10_000); // 1–5 min
-  assert.equal(nextPollDelay(4 * 60_000), 10_000);
-  assert.equal(nextPollDelay(6 * 60_000), 20_000); // 5–30 min
-  assert.equal(nextPollDelay(45 * 60_000), 60_000); // parked long — gentle 60s
-});
-
-test("cadence is monotonic non-decreasing in elapsed time", () => {
-  let prev = 0;
-  for (const e of [0, 30_000, 61_000, 200_000, 6 * 60_000, 60 * 60_000]) {
-    const d = nextPollDelay(e);
-    assert.ok(d >= prev, `delay should not decrease at ${e}ms`);
-    prev = d;
-  }
 });
 
 // ── isSettledIn: THE replay-respawn guard ────────────────────────────────────

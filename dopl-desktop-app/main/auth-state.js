@@ -225,26 +225,84 @@ function invalidateCookieIdentity() {
 // person to use the machine and by anything that can read the app's data dir.
 // clearDeviceToken() removes both copies.
 //
-// WHAT THIS CANNOT DO: there is NO server-side revoke endpoint for a device token.
-// `/api/auth/mcp-device-token` is mint-only (POST), and issueDeviceToken revokes
-// prior tokens only for the SAME label on re-mint. So the token stays valid
-// server-side until it expires or the operator revokes it from the web "Connected
-// apps" list. The teardown here is local, and that gap is F-085.
+// F-085 — AND THE SERVER-SIDE REVOKE. Deleting our local copies is not revocation:
+// the token stayed valid for up to 90 days, so anything that had ALREADY read it (a
+// Time Machine backup, an earlier `claude mcp add`, a process that could read the app's
+// data dir) kept full API access to the account that just signed out. `DELETE
+// /api/auth/mcp-device-token` stamps revoked_at, and validateAccessToken checks
+// revoked_at before expiry, so the bearer dies on its next use.
+//
+// ORDER IS THE WHOLE POINT: the revoke route is sessionOnly — it authenticates on the
+// very cookie jar this function is about to clear — so it MUST run first, before the
+// blob, the jar or the local token copies are touched. It is bounded (3s) and
+// best-effort: offline / captive portal / 5xx all fall through to the local teardown,
+// because a sign-out that a bad network can block is worse than a residual token. When
+// the revoke does not land, the diag line says so in words the operator can act on.
+//
+// THE THIRD CREDENTIAL (2026-07-31) — THE OPERATOR'S CLAUDE INFERENCE TOKEN. The
+// enumeration above used to stop at the Dopl credentials and omit this one entirely:
+// claude-token.js holds an `sk-ant-*` OAuth token, and BOTH spawn paths inject it as
+// CLAUDE_CODE_OAUTH_TOKEN (claude-resolve.spawnEnv for headless, session-auth's
+// withStoredCredential for the session window). So: sign out, hand the Mac to someone
+// else, they sign in — and every agent session they run bills the FIRST operator's
+// Anthropic account, against their rate limits. clearStoredOAuthToken() had ZERO
+// callers; it does now. The decision is safe because that store has exactly one
+// writer — Dopl's own `claude setup-token` flow (claude-auth.js) — so it can never
+// hold a credential the operator made outside Dopl. What it CANNOT do is revoke the
+// token at Anthropic, and the log line says that rather than implying otherwise.
+//
+// STILL NOT COVERED: the user-scope `dopl` entry in the CLI's own config. See
+// mcp-config.clearDeviceToken's note — we cannot tell our entry from a hand-made one,
+// and after a successful revoke its bearer is dead anyway. Residual in F-085.
+//
+// FIX M4 — THE LINE MUST NEVER CLAIM A REVOKE THAT DID NOT HAPPEN. revokeDeviceToken
+// returns 'revoked' | 'none' | 'failed', and each gets its own words. 'none' (we hold
+// no local copy, so nothing was asked of the server) used to be reported as a success:
+// a live 90-day row could still exist — cleared by an earlier sign-out whose revoke
+// failed, or by a wiped store — and the log said it was dead. A THROW is treated as
+// 'failed', because a throw is the one case where we may have sent the DELETE and not
+// learned its answer, and over-warning is the safe direction.
 async function signOut() {
-  blob.clearSession();
-  invalidateCookieIdentity();
-  const cleared = await cookies.clearSessionCookies();
   // LAZY REQUIRE, deliberately: mcp-config requires ./auth, which requires this
   // module, so a top-level require would close a cycle. By the time anyone can sign
   // out, every module is loaded.
+  let revoked = 'failed';
+  try {
+    revoked = await require('./mcp-config').revokeDeviceToken();
+  } catch (err) {
+    diag('auth: device-token revoke failed —', (err && err.message) || String(err));
+  }
+  blob.clearSession();
+  invalidateCookieIdentity();
+  const cleared = await cookies.clearSessionCookies();
   let device = false;
   try {
     device = require('./mcp-config').clearDeviceToken();
   } catch (err) {
     diag('auth: device-token teardown failed —', (err && err.message) || String(err));
   }
+  // The Claude inference credential. Lazy-required like the others (claude-token pulls
+  // in electron's safeStorage) and unconditional: a failure here is the one residual
+  // that would let the NEXT operator spend the previous one's Anthropic quota.
+  let claudeCred = false;
+  try {
+    claudeCred = require('./claude-token').clearStoredOAuthToken();
+  } catch (err) {
+    diag('auth: claude-token teardown failed —', (err && err.message) || String(err));
+  }
+  const revokeNote =
+    revoked === 'revoked'
+      ? '+ revoked server-side'
+      : revoked === 'no-match'
+        ? '+ NOT revoked (the server matched no token for this machine\'s label — any token it minted is STILL VALID; revoke it in web Settings > Connected apps)'
+        : revoked === 'none'
+          ? '+ no local token to revoke (nothing was revoked server-side — if this machine ever minted one, revoke it in web Settings > Connected apps)'
+          : '+ NOT revoked server-side (still valid until it expires — revoke it in web Settings > Connected apps)';
   diag('auth: signed out — blob cleared, cookies', cleared ? 'cleared' : 'CLEAR FAILED',
-    '— MCP device token', device ? 'cleared' : 'CLEAR FAILED');
+    '— MCP device token', device ? 'cleared' : 'CLEAR FAILED', revokeNote,
+    '— Claude sign-in token', claudeCred
+      ? "cleared from this Mac (the token itself stays valid at Anthropic; revoke it there if you want it dead)"
+      : 'CLEAR FAILED — the next person to sign in on this Mac would run agents on YOUR Anthropic account');
   return cleared;
 }
 

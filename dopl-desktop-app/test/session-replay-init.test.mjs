@@ -35,7 +35,7 @@ assert.ok(from !== -1 && to > from, "SESSION-REPLAY-RING sentinels missing/out o
 const BLOCK = SRC.slice(from, to);
 
 const ring = new Function(
-  `${BLOCK}\n return { createRing, ringRecord, ringDrain, ringOnLoad, ringOnReload, stickyHead, splitInitAvatars };`
+  `${BLOCK}\n return { createRing, ringRecord, ringDrain, ringOnLoad, ringOnReload, oldestEvictable, splitInitAvatars };`
 )();
 
 const INIT = { type: "init", sessionId: "s1", from: "David", channelName: "Ops", taskTitle: "Ship it" };
@@ -55,7 +55,7 @@ test("C5: `init` survives a byte-cap eviction storm; the entries after it go ins
   assert.ok(r.bytes <= 4000 + JSON.stringify(INIT).length + 500, "and it still respects its bound");
 });
 
-test("C5: the ENTRY cap evicts around the sticky head too", () => {
+test("C5: the ENTRY cap evicts around the pinned identity too", () => {
   const r = ring.createRing(4, 1e9);
   ring.ringRecord(r, INIT);
   for (const t of ["a", "b", "c", "d", "e", "f"]) ring.ringRecord(r, { type: "turn", text: t });
@@ -64,11 +64,11 @@ test("C5: the ENTRY cap evicts around the sticky head too", () => {
   assert.deepEqual(r.entries.slice(1).map((e) => e.text), ["d", "e", "f"], "the newest turns survive");
 });
 
-test("C5: with NO init at the head, drop-oldest is unchanged (F-08a behavior)", () => {
+test("C5: with NO pinned entry in the ring, drop-oldest is unchanged (F-08a behavior)", () => {
   const r = ring.createRing(3, 1e9);
   for (const t of ["a", "b", "c", "d"]) ring.ringRecord(r, { type: "turn", text: t });
   assert.deepEqual(r.entries.map((e) => e.text), ["b", "c", "d"]);
-  assert.equal(ring.stickyHead(r), 0, "nothing is pinned when the head is not an init");
+  assert.equal(ring.oldestEvictable(r), 0, "entry 0 is fair game when no pinned type is present");
 });
 
 test("C5: the sent cursor still tracks the sent/unsent boundary across a pinned eviction", () => {

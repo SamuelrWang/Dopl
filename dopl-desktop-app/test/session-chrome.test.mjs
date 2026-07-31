@@ -108,24 +108,26 @@ test("headerIdentity reads a REAL init reduced by the view-model (end to end)", 
 
 // ── D5: the send/pause morph predicate ───────────────────────────────────────
 
-test("sendButtonMode is 'pause' ONLY while a turn is running and working", () => {
+// v3.1 — THE MORPH IS THE ONLY INTERRUPT CONTROL (the header Stop button is deleted), so it was
+// widened to cover every state Stop covered. The full truth table (and WHY each state moved)
+// lives in test/session-header-thinking.test.mjs; these pin the everyday shape.
+test("sendButtonMode is 'pause' whenever there is a live turn to interrupt", () => {
   assert.equal(sendButtonMode({ phase: "running", activity: "working" }), "pause");
   assert.equal(sendButtonMode({ phase: "running", activity: "idle" }), "send");
-  assert.equal(sendButtonMode({ phase: "running", activity: null }), "send");
   assert.equal(sendButtonMode({ phase: "running", activity: "awaiting_peer" }), "send");
-  // A non-running phase never pauses, even with a stale activity left on the state.
-  for (const phase of ["launching", "consent", "parked", "awaiting_permission", "interrupted", "ended"]) {
+  assert.equal(sendButtonMode({ phase: "running", activity: null }), "pause", "the FIRST turn emits no status");
+  for (const phase of ["launching", "consent", "parked", "interrupted", "ended"]) {
     assert.equal(sendButtonMode({ phase, activity: "working" }), "send", `${phase} keeps Send`);
   }
   assert.equal(sendButtonMode(null), "send");
-  assert.equal(sendButtonMode({}), "send");
+  assert.equal(sendButtonMode({}), "send", "an unknown phase can never offer to pause nothing");
 });
 
 test("sendButtonMode tracks the REAL viewmodel status events", () => {
   let s = vm.initialState();
-  assert.equal(sendButtonMode(s), "send", "a launching session shows Send");
-  s = vm.reduceEvent(s, { type: "status", phase: "running", activity: "working" });
-  assert.equal(sendButtonMode(s), "pause");
+  assert.equal(sendButtonMode(s), "send", "nothing has happened yet: Send");
+  s = vm.reduceEvent(s, { type: "init" });
+  assert.equal(sendButtonMode(s), "pause", "v3.1: the opening turn (no status yet) is interruptible");
   s = vm.reduceEvent(s, { type: "status", phase: "running", activity: "idle" });
   assert.equal(sendButtonMode(s), "send");
   s = vm.reduceEvent(s, { type: "status", phase: "parked" });
@@ -140,20 +142,23 @@ test("sendButtonMode tracks the REAL viewmodel status events", () => {
 
 test("FIX #6: a mid-flight turn is still pausable while a message waits at the gate", () => {
   assert.equal(sendButtonMode({ phase: "awaiting_inbound", activity: "working" }), "pause");
-  // Everything else under the gate phase keeps Send — nothing to pause.
-  for (const activity of ["idle", "awaiting_peer", "awaiting_permission", "awaiting_inbound", "parked", null]) {
+  // The RESTING activities keep Send under the gate phase too — there is nothing to pause.
+  for (const activity of ["idle", "awaiting_peer", "parked"]) {
     assert.equal(sendButtonMode({ phase: "awaiting_inbound", activity }), "send", `activity ${activity}`);
+  }
+  // v3.1: these are NOT resting (a turn is in flight) and Stop was their only interrupt path.
+  for (const activity of ["awaiting_permission", "awaiting_inbound", null]) {
+    assert.equal(sendButtonMode({ phase: "awaiting_inbound", activity }), "pause", `activity ${activity}`);
   }
 });
 
 test("FIX #6: the pill and the button stay truthful across a real gate sequence", () => {
   let s = vm.reduceEvent(vm.initialState(), { type: "status", phase: "running", activity: "working" });
   assert.equal(sendButtonMode(s), "pause");
-  // The gate holds a message mid-turn: the pill names the card, the button keeps Send
-  // because the reducer's hold reports the session as awaiting the operator.
+  // The gate holds a message mid-turn: the pill names the card, the button keeps offering Pause.
   s = vm.reduceEvent(s, { type: "status", phase: "awaiting_inbound", activity: "awaiting_inbound" });
   assert.equal(vm.statusText(s.phase, s.activity), "Message waiting");
-  assert.equal(sendButtonMode(s), "send");
+  assert.equal(sendButtonMode(s), "pause", "v3.1: the turn that was running is still interruptible");
   // The operator types instead of answering: the agent is working again, the card remains.
   s = vm.reduceEvent(s, { type: "status", phase: "awaiting_inbound", activity: "working" });
   assert.equal(vm.statusText(s.phase, s.activity), "Message waiting", "the card is still the headline");
@@ -453,11 +458,7 @@ test("D5: the Interrupt checkbox is gone and the renderer sends no priority", ()
   assert.match(JS, /bridge\.interrupt\(\)/, "the pause click uses the existing interrupt IPC");
 });
 
-test("D5: the header Stop / End session / Close thread buttons are unchanged", () => {
-  assert.match(HTML, /id="btnStop"[^>]*>Stop</);
-  assert.match(HTML, /id="btnEnd"[^>]*>End session</);
-  assert.match(HTML, /id="btnClose"[^>]*>Close thread</);
-});
+// The header control set (End session ALONE) is pinned in test/session-header-thinking.test.mjs.
 
 test("D6: the steer placeholder is deleted with no replacement text", () => {
   const ta = between(HTML, '<textarea class="steer-input"', "composer__controls", "steer field");

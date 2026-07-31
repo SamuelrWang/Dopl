@@ -31,6 +31,8 @@ const io = require('./listener-io');
 const targeting = require('./targeting');
 const consent = require('./consent');
 const watcher = require('./consent-watcher');
+const outcomes = require('./trigger-outcomes'); // §2 split: the no-reply terminal echoes
+const channelPrefs = require('./channel-prefs'); // H2: the single-use permission arm
 const spawner = require('./session-spawner');
 const sessionEngine = require('./session-engine');
 const settings = require('./settings');
@@ -42,6 +44,14 @@ const { diag } = require('./diag');
 
 const RESEND =
   "I'm still finishing a previous request in this channel — please resend in a moment.";
+
+// H1 (LOW): the HONEST version of the above for the one case where "still finishing" is false.
+// A session HELD on the sign-in action occupies the registry slot while running nothing, so the
+// old copy told the peer to resend into a slot that will not free itself — the operator has to
+// sign in on that Mac first, and nothing was saying so. No local detail leaks: it names the
+// state, not the machine, the account, or the error.
+const AUTH_HELD_REPLY =
+  "I can't run this right now — my Claude Code sign-in on this machine needs attention. I'll pick it up once that's sorted.";
 
 // Rebuild the minimal `entry` / `m` the post + spawn helpers need from a persisted
 // record, so those helpers work identically on the live path and the watcher path.
@@ -224,7 +234,11 @@ async function refetchMessage(rec) {
 }
 
 // ── Resolver: inbound ALLOWED → session (default) or headless (fallback) ──────
-async function inboundApproved(rec) {
+// H2: `meta.humanAllowed` says whether a PERSON just clicked Allow (server status
+// `allowed`) or whether the server's standing trust decided it with no card in front of
+// anyone (`auto_allowed`). This is THE seam where a stored permission arm may be
+// consumed, and only the human branch may consume it — see below.
+async function inboundApproved(rec, meta) {
   const fetched = await refetchMessage(rec);
   if (fetched.retry) return; // transient — stays await-inbound, retried next poll
   if (fetched.gone) { watcher.settle(rec.key, 'gone'); return; }
@@ -236,11 +250,26 @@ async function inboundApproved(rec) {
   const taskId = taskIdFor(rec);
   const startedAt = Date.now();
 
+  // H2 — CONSUME the channel's single-use permission arm, here and nowhere else.
+  // `consumePermissionPreset` returns the pair AND deletes it, so this exact approval
+  // is the only launch it can ever apply to; a peer reply days later finds nothing and
+  // the spawn inherits manual/ask. Standing trust (auto_allowed) consumes NOTHING and
+  // is not even offered the arm: the whole point of the arm is that a human chose that
+  // posture for a request they were looking at, which is not what standing trust is.
+  //
+  // Consumed BEFORE the launch shape is decided, deliberately: whether we end up in a
+  // session window or the headless fallback, the arm is spent either way, so a launch
+  // that skips to headless cannot leave a widened posture behind for the next one.
+  const startModes = meta && meta.humanAllowed === true
+    ? channelPrefs.consumePermissionPreset(entry.channel.id)
+    : null;
+  if (startModes) diag('inbound approved with an operator-chosen posture:', startModes.tools, '/', startModes.messages);
+
   // v1.9 DEFAULT EXECUTOR: a native session window (visible turns, live Allow/Deny
   // buttons, steering, cost) REPLACES headless + approve-out for session runs
   // (§G Q1). Window-mode OFF — or an engine skip (window cap / no SDK / disabled) —
   // falls back to today's headless + approve-out path, byte-for-byte.
-  if (settings.getWindowMode() && (await launchResponderSession(entry, m, rec, { taskId }))) {
+  if (settings.getWindowMode() && (await launchResponderSession(entry, m, rec, { taskId, startModes }))) {
     return; // a live session (or a busy→resend) now owns this request
   }
   await runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName: rec.requesterName });
@@ -254,7 +283,7 @@ async function inboundApproved(rec) {
 // engine's onLaunched (index.js), NOT here. Returns true when the request is handled
 // (a session launched, or a busy channel got the resend notice); false when the
 // caller should fall back to headless (window cap / no SDK / disabled).
-async function launchResponderSession(entry, m, rec, { taskId }) {
+async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
   // Loop-continuation knob: mirror the requester task's mode when the inbound
   // carries one (server-stamped), else autonomous — either way the session runs
   // under the turn / idle / cost caps, so it cannot self-sustain unbounded.
@@ -281,6 +310,10 @@ async function launchResponderSession(entry, m, rec, { taskId }) {
     },
     toolProfile: rec.toolProfile,
     mode,
+    // H2: the posture the operator picked on the card they just approved, or absent.
+    // startSession applies it ONLY when it is handed in like this; every other spawn
+    // shape passes nothing and starts at the reducer's own manual/ask.
+    startModes: startModes || undefined,
   });
   if (res && res.sessionId) {
     diag('responder session launched', String(res.sessionId).slice(0, 8), 'profile', rec.toolProfile);
@@ -289,6 +322,14 @@ async function launchResponderSession(entry, m, rec, { taskId }) {
     // is the consent-watcher 'session' settle phase.
     watcher.toSession(rec.key, { sessionId: res.sessionId });
     return true;
+  }
+  if (res && res.skipped === 'auth-hold') {
+    // H1: a held session owns this slot and is running nothing. Headless would fail on the
+    // same missing credential, so answer honestly and settle rather than falling through.
+    diag('responder session: skipped=auth-hold — the slot is held on the sign-in action');
+    await postResult(entry, m, AUTH_HELD_REPLY);
+    watcher.settle(rec.key, 'auth-hold');
+    return true; // handled — do NOT also run headless
   }
   if (res && res.skipped === 'busy') {
     diag('responder session: skipped=busy');
@@ -411,7 +452,7 @@ async function outboundApproved(rec) {
   diag('post reply:', posted ? 'ok' : 'FAILED');
   if (posted) {
     await postTaskEvent(entry, m, 'task_finished', taskIdFor(rec), { durationMs: Date.now() - rec.startedAt });
-    notifyReplied(entry, reply);
+    outcomes.notifyReplied(entry, reply);
     watcher.settle(rec.key, 'sent');
   } else {
     // An approved reply that never landed: say so, never claim the request finished.
@@ -424,77 +465,20 @@ async function outboundApproved(rec) {
   }
 }
 
-// ── Resolver: outbound CANCELLED (web Cancel / expiry) → drop, no re-spawn ────
-async function outboundCancelled(rec) {
-  const entry = entryFromRecord(rec);
-  const m = msgFromRecord(rec, '');
-  diag('outbound review: reply dropped (cancelled/expired)');
-  // M-4: a cancelled reply is NOT a finished request; do not tell teammates an
-  // answer was delivered. task_failed WITHOUT declined → this is a drop, not a deny.
-  await postTaskEvent(
-    entry, m, 'task_failed', taskIdFor(rec),
-    { durationMs: Date.now() - rec.startedAt, dropped: true },
-    'Reply was not sent.'
-  );
-  watcher.settle(rec.key, 'cancelled');
-}
-
-// ── Resolver: inbound DENIED → declined echo ─────────────────────────────────
-async function inboundDenied(rec) {
-  const entry = entryFromRecord(rec);
-  const m = msgFromRecord(rec, '');
-  // Decision echo: the web renders task_failed + { declined: true } as a calm
-  // "Declined", distinct from an error (which carries no declined flag).
-  await postTaskEvent(entry, m, 'task_failed', taskIdFor(rec), { declined: true }, 'Request declined');
-  // Item 8 step 5/6: close the pre-consent window (no-op if it was never opened,
-  // adopted, or parked). NO SDK ever ran for a denied request.
-  try { sessionEngine.closeConsentWindow(rec.key, 'denied'); } catch (_) { /* best effort */ }
-  watcher.settle(rec.key, 'denied');
-}
-
-// ── Resolver: inbound EXPIRED → silent drop ──────────────────────────────────
-async function inboundExpired(rec) {
-  diag('inbound expired (no decision) — dropping', rec.key);
-  // Item 8: close the pre-consent window if it is still open (no-op otherwise).
-  try { sessionEngine.closeConsentWindow(rec.key, 'expired'); } catch (_) { /* best effort */ }
-  watcher.settle(rec.key, 'expired');
-}
-
-// ── Resolver: interrupted spawn → terminal echo (FIX 2) ──────────────────────
-// The app died mid-spawn AFTER task_started was posted; on the next launch the
-// watcher settles that 'spawning' record 'interrupted' and calls this so the
-// requester's session card stops pulsing "active". We post the SAME deterministic
-// taskId as task_started so they group, with metadata { interrupted: true } — the
-// web renders that as a calm "Interrupted" (a bare task_failed = a real error).
-// Error-suppression semantics, like deny: no reply text, generic body only. The
-// record is already settled by the watcher, so there is nothing to settle here.
-async function onInterrupted(rec) {
-  const entry = entryFromRecord(rec);
-  const m = msgFromRecord(rec, '');
-  await postTaskEvent(entry, m, 'task_failed', taskIdFor(rec), { interrupted: true }, 'Request interrupted');
-}
-
-function notifyReplied(entry, reply) {
-  try {
-    if (Notification.isSupported()) {
-      new Notification({
-        title: `Dopl: replied in "${entry.channel.name}"`,
-        body: targeting.truncate(reply, 120),
-        silent: true,
-      }).show();
-    }
-  } catch (_) { /* best-effort */ }
-}
+// The terminal echoes for a request that produced NO reply (deny / expiry / cancel /
+// interrupt) live in trigger-outcomes.js (§2 split). They share the three record→shape
+// helpers above, which are injected rather than re-derived.
+outcomes.bind({ entryFromRecord, msgFromRecord, taskIdFor });
 
 // Injected into consent-watcher.start() by channel-listener.js. The watcher stays
 // decoupled from the channel-post path — it only ever calls these injected fns.
 const resolvers = {
   inboundApproved,
-  inboundDenied,
-  inboundExpired,
+  inboundDenied: outcomes.inboundDenied,
+  inboundExpired: outcomes.inboundExpired,
   outboundApproved,
-  outboundCancelled,
-  onInterrupted, // FIX 2: dispatched from resume() for a mid-spawn interrupt
+  outboundCancelled: outcomes.outboundCancelled,
+  onInterrupted: outcomes.onInterrupted, // FIX 2: dispatched from resume() for a mid-spawn interrupt
 };
 
 module.exports = { handleTrigger, sendFyi, resolvers };

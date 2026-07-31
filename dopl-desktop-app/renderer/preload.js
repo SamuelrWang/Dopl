@@ -20,6 +20,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 // a primitive (it rejects anything that isn't a UUID regardless).
 const asId = (channelId) => String(channelId == null ? '' : channelId);
 
+// Same idea for a permission-axis mode: coerce to a primitive string here, and let
+// main reject anything that is not one of its frozen enum members. The renderer is
+// never the validator.
+const asMode = (mode) => String(mode == null ? '' : mode);
+
 contextBridge.exposeInMainWorld('dopl', {
   isDesktop: true,
   platform: process.platform,
@@ -27,7 +32,8 @@ contextBridge.exposeInMainWorld('dopl', {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
   },
-  // Per-channel working-directory controls. LABEL-ONLY, three ops, nothing else.
+  // Per-channel controls: the working-directory ops (LABEL-ONLY, three of them)
+  // plus the two permission-preset ops. Nothing else.
   channels: {
     // → abbreviated label ("~/Downloads/repo") or null (sandbox default).
     getFolderLabel: (channelId) => ipcRenderer.invoke('channels:getFolderLabel', asId(channelId)),
@@ -36,6 +42,22 @@ contextBridge.exposeInMainWorld('dopl', {
     chooseFolder: (channelId) => ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
     // Resets to the sandbox default → null.
     clearFolder: (channelId) => ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
+    // Per-channel PERMISSION PRESET — the two axes the operator picks on the
+    // inbound consent card BEFORE Allow, so the session spawns on the posture
+    // they approved. Read → { tools, messages } | null (null = nothing stored;
+    // the card shows the restrictive defaults). Write → { ok: true } only when
+    // BOTH values are known enum members; main re-validates and a bad pair writes
+    // nothing. No delete op, and nothing but those two values is ever stored.
+    getPermissionPreset: (channelId) =>
+      ipcRenderer.invoke('channels:getPermissionPreset', asId(channelId)),
+    setPermissionPreset: (channelId, preset) =>
+      ipcRenderer.invoke('channels:setPermissionPreset', {
+        channelId: asId(channelId),
+        preset: {
+          tools: asMode(preset && preset.tools),
+          messages: asMode(preset && preset.messages),
+        },
+      }),
   },
   // Reopen (reveal a hidden / front a visible) LIVE session window for a
   // (channel, task) from the MAIN window — the web "Open session" button. One

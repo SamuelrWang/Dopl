@@ -12,33 +12,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { loadReducer, REDUCER_SRC } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "session-reducer.js"), "utf8");
-
-const BEGIN = "// ─── BEGIN SESSION-REDUCER";
-const END = "// ─── END SESSION-REDUCER";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN SESSION-REDUCER sentinel missing");
-assert.notEqual(to, -1, "END SESSION-REDUCER sentinel missing");
-assert.ok(to > from, "session-reducer sentinels out of order");
-const BLOCK = SRC.slice(from, to);
-
-const {
-  initialSessionState,
-  sessionReducer,
-  nextIdleMs,
-  turnCapReached,
-  costCapReached,
-  DEFAULT_TURN_CAP,
-  DEFAULT_IDLE_MS,
-  DEFAULT_COST_CAP_USD,
-} = new Function(
-  `${BLOCK}
-   return { initialSessionState, sessionReducer, nextIdleMs, turnCapReached,
-            costCapReached, DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD };`
-)();
+// §2 SPLIT (H1): the pure block now spans session-effects.js + session-reducer.js;
+// test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
+const { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
+        DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD } = loadReducer();
 
 // Convenience: a fresh running state, past `launched`.
 const running = (opts) => {

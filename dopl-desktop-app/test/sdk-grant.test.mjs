@@ -173,11 +173,23 @@ assert.ok(MCP_BLOCK.includes("return { dopl: server };"), "buildMcpServers slice
 
 const MCP_URL = "https://dopl.test/api/mcp";
 
+// `clientTimeoutMs` is injected for the same reason `doplBearer` is: it lives ABOVE
+// the slice in sdk-loader, and its body is `require('./mcp-config').…`, which cannot
+// run in a `new Function` program. The VALUE is read out of mcp-config's source so a
+// harness can never drift from the shipped constant (Q9 — the two used to be separate
+// literals in mcp-config and sdk-loader, and that is exactly how they drifted).
+const CONFIG_SRC = readFileSync(join(HERE, "..", "main", "mcp-config.js"), "utf8");
+const SHIPPED_TIMEOUT_MS = (() => {
+  const m = /MCP_CLIENT_TIMEOUT_MS = ([\d_]+);/.exec(CONFIG_SRC);
+  assert.ok(m, "mcp-config.js must define MCP_CLIENT_TIMEOUT_MS");
+  return Number(m[1].replace(/_/g, ""));
+})();
+
 function buildServers(policy, workspaceId, token = "secret-token") {
   return new Function(
-    "doplBearer", "MCP_URL", "policy", "workspaceId",
+    "doplBearer", "clientTimeoutMs", "MCP_URL", "policy", "workspaceId",
     `${MCP_BLOCK}\n return buildMcpServers(policy, workspaceId);`
-  )(() => token, MCP_URL, policy, workspaceId);
+  )(() => token, () => SHIPPED_TIMEOUT_MS, MCP_URL, policy, workspaceId);
 }
 
 const WS_UUID = "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee";
@@ -227,6 +239,25 @@ test("WAKE-V1: every spawned session's dopl entry sends X-Dopl-Runtime: desktop-
   assert.deepEqual(restricted.tools, ["mcp__dopl__dopl_kb"], "the tools allowlist is untouched");
 });
 
+test("FIX Q9: the dopl entry raises the per-call timeout past the 60s client abort", () => {
+  // Claude Code 2.1.220 (the version @anthropic-ai/claude-agent-sdk 0.3.220 bundles)
+  // aborts a call whose response headers have not arrived by
+  // min(max(server.timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647) ms;
+  // /api/mcp used to send no headers until the handler returned, so without this field
+  // EVERY await died at 60s — before the ~2min backgrounding mark that makes it a wake
+  // primitive. Must clear the LONGEST REACHABLE hold and stay under maxDuration 300.
+  for (const ws of [WS_UUID, "", undefined]) {
+    const t = buildServers(null, ws).dopl.timeout;
+    assert.ok(t > 215_000 && t < 300_000, `ws=${ws} timeout=${t} must clear the hold and the function ceiling`);
+  }
+  // Pinned as WIRING, not as a number: dropping the field silently disables the wake,
+  // while the VALUE and its arithmetic (AWAIT_HOLD_CAP_MS + AWAIT_HOLD_MARGIN_MS <=
+  // MCP_CLIENT_TIMEOUT_MS) are owned by test/mcp-client-timeout.test.mjs, which reads
+  // the server's own constants. A literal here would be a second place to maintain it.
+  assert.match(MCP_BLOCK, /timeout: clientTimeoutMs\(\),/, "the field is still set");
+  assert.ok(!/timeout: \d[\d_]*,/.test(MCP_BLOCK), "…and never from a literal of its own");
+});
+
 test("WAKE-V1: the header value is the literal the server matches, and it grants nothing", () => {
   // Pinned as a literal in the source: a typo here silently turns every desktop session
   // into an 'external' one (no requester windows at all), which no other test would catch.
@@ -247,8 +278,13 @@ test("the pin does not disturb the per-profile dopl tools allowlist (or the bear
 });
 
 test("buildSdkOptions passes the SESSION's workspace, so every session query is pinned", () => {
+  // §3 split: the option assembly + the query lifecycle moved out of session-engine.js
+  // into session-query.js. The engine still BINDS it (asserted below), which is what
+  // makes the park/reopen paths share this one assembly.
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-  const opts = ENGINE.slice(ENGINE.indexOf("function buildSdkOptions(s) {"), ENGINE.indexOf("async function startQuery("));
+  const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
+  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("async function startQuery("));
+  assert.ok(opts.length > 0, "buildSdkOptions slice not found in session-query.js");
   assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId\),/);
   // A parked resume and a recreated shell assemble options through this SAME function
   // (session-park calls deps.buildSdkOptions), so they are pinned by construction.

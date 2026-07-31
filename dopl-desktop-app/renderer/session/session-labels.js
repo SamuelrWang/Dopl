@@ -89,7 +89,7 @@
     manual: "Asking before each command",
     accept_edits: "Auto approving file edits",
     auto: "Auto approving local edits and lookups, asking for shell, web and workspace writes",
-    bypass: "Auto approving every command on this machine",
+    bypass: "Auto approving every command the tool profile allows",
   };
   const MESSAGE_POSTURE = {
     ask: "Asking before messages in and out",

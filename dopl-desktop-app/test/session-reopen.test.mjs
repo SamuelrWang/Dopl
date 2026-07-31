@@ -85,7 +85,8 @@ test("P2 fallback: no live session delegates to recreateParkedShell", async () =
   const r = await h.reopenByTask(task);
   assert.deepEqual(r, { ok: true });
   assert.equal(h.calls.recreate.length, 1);
-  assert.deepEqual(h.calls.recreate[0], { channelId: "chan-1", taskId: "task-9" });
+  // Q6b: the CLICK marker — only this caller may build a shell for a thread with no local record.
+  assert.deepEqual(h.calls.recreate[0], { channelId: "chan-1", taskId: "task-9", fromChannel: true });
 });
 
 test("P2 fallback: recreateParkedShell can return {ok:false} for a truly-closed task", async () => {

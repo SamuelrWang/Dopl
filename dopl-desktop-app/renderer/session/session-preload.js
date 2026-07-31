@@ -64,7 +64,25 @@ function deliver(payload) {
     /* never let a renderer callback throw back across the bridge */
   }
 }
+// Q6: the sign-in banner is owned by session-auth-ui.js, not the transcript controller, so the
+// SAME main->renderer stream fans out to a second, narrow sink. Only the two auth payload types
+// reach it; everything else is untouched, and the transcript view-model ignores them (its
+// `default` case), so neither surface can steal the other's events.
+const AUTH_TYPES = { auth_required: true, auth_cleared: true };
+let authHandler = null;
+let authBuffer = [];
+function deliverAuth(payload) {
+  try {
+    authHandler(payload);
+  } catch (_err) {
+    /* never let a renderer callback throw back across the bridge */
+  }
+}
 ipcRenderer.on('session:event', (_evt, payload) => {
+  if (payload && AUTH_TYPES[payload.type] === true) {
+    if (typeof authHandler === 'function') deliverAuth(payload);
+    else authBuffer.push(payload);
+  }
   if (typeof handler === 'function') deliver(payload);
   else buffer.push(payload);
 });
@@ -128,6 +146,28 @@ contextBridge.exposeInMainWorld('doplSession', {
   // only covers a post into this session's OWN channel: opening a DM stays a click.
   setMessageMode(mode) {
     ipcRenderer.invoke('session:set-message-mode', { mode: asMessageMode(mode) });
+  },
+  // Q6 — the Claude Code sign-in banner. THREE narrow members, no arguments in either
+  // direction: main re-derives the session from the window (event.sender) exactly like every
+  // other handler, so there is no id to forge, and the only thing that crosses back is the
+  // banner's own display payload (title / body / action / note — never a token or a path).
+  auth: {
+    onNotice(cb) {
+      authHandler = typeof cb === 'function' ? cb : null;
+      if (authHandler && authBuffer.length) {
+        const pending = authBuffer;
+        authBuffer = [];
+        for (const payload of pending) deliverAuth(payload);
+      }
+    },
+    // The click. Returns main's {ok} so the button can report a sign-in that did not finish.
+    signIn() {
+      return ipcRenderer.invoke('session:auth-signin', {});
+    },
+    // Reload / late-registration read of the CURRENT hold (null when there is none).
+    get() {
+      return ipcRenderer.invoke('session:auth-state', {});
+    },
   },
   // Folder display + change (item 7). LABEL only ever crosses back — the main
   // side resolves channelId from the session; the abs path never enters here.

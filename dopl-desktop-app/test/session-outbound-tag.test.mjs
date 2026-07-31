@@ -165,7 +165,7 @@ test("a conflicting thread id is logged, and the log is injected (session-io sta
   assert.match(fn, /function makeCanUseTool\(s, dispatch, log\)/);
   assert.match(fn, /tag\.action === 'conflict' && typeof log === 'function'/, "guarded, never assumed");
   assert.ok(!/require\('\.\/diag'\)/.test(IO), "diag requires electron; this file must not");
-  assert.match(M("session-engine.js"), /io\.makeCanUseTool\(s, dispatch, diag\)/, "the engine supplies it");
+  assert.match(M("session-query.js"), /io\.makeCanUseTool\(s, deps\.dispatch, diag\)/, "the option assembly supplies it");
 });
 
 test("the SDK really accepts updatedInput on an allow (pinned version, not assumed)", () => {

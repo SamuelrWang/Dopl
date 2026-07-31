@@ -83,6 +83,15 @@ function doplBearer() {
   }
 }
 
+// Q9 — ONE DEFINITION of the per-server call timeout. mcp-config owns the number
+// (it writes the same key into the spawn-config file) and derives it from the
+// server's own await budget; this module used to restate the literal, which is
+// exactly how the two drifted. Lazy for the same reason doplBearer is lazy, and
+// only ever reached AFTER doplBearer has already proven mcp-config loads.
+function clientTimeoutMs() {
+  return require('./mcp-config').MCP_CLIENT_TIMEOUT_MS;
+}
+
 // C1 — the tool-BOUND half of the same fix. A pre-approved tool never reaches our gate,
 // so this deny has to ride options.disallowedTools (the SDK's rule layer), not
 // grantDecision. It fences the two directories that hold credentials on this machine:
@@ -136,6 +145,22 @@ function buildMcpServers(doplToolsPolicy, workspaceId) {
   const server = {
     type: 'http',
     url: MCP_URL,
+    // FIX Q9. Claude Code 2.1.220 (bundled by @anthropic-ai/claude-agent-sdk 0.3.220,
+    // the version this app ships) HONOURS a per-server `timeout`: it aborts a tool call
+    // whose RESPONSE HEADERS have not arrived by
+    // min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647) ms, reporting
+    // the bare string "The operation timed out." Two nuances that make this a deliberate
+    // choice rather than a free knob: the key can only RAISE that abort above the 60s
+    // floor, never lower it; and it ALSO lowers the hard tool-call ceiling from ~1e8 ms
+    // to this value. Both are fine here — this entry is in-memory and ours alone.
+    // /api/mcp used to buffer (enableJsonResponse), so the 60s bound covered the WHOLE
+    // call and every op="await" died at exactly 60s — before the ~2min mark where the
+    // client backgrounds a pending call, the one thing that wakes an idle session. The
+    // route now STREAMS (headers flush at t≈0, F-092), which is the real fix for every
+    // client. This field stays as belt-and-braces: it protects spawns against a
+    // not-yet-deployed server or a buffering proxy, and costs nothing once headers
+    // stream. The VALUE is derived in mcp-config.js — never restate it here.
+    timeout: clientTimeoutMs(),
     headers: {
       Authorization: `Bearer ${token}`,
       // WAKE-V1 RUNTIME DISAMBIGUATION. Every MCP call a DESKTOP-SPAWNED session makes

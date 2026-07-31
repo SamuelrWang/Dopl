@@ -1,5 +1,8 @@
 /**
- * FIX L5 — UPSTREAM TEXT SPLICED INTO A RESULT A MODEL READS.
+ * FIX L5 / M2 — UNTRUSTED TEXT SPLICED INTO A RESULT A MODEL READS, outside the
+ * framing that disclaims message bodies. Two sites, one discipline: the await
+ * result's failure description (L5, below) and the read result's thread-legend
+ * title (M2, at the bottom of this file).
  *
  * `dopl_channel` results are careful about counterparty BODIES: `opRead` and
  * `opAwait` emit `UNTRUSTED_BODY_HEADER` above them, so the framing is read

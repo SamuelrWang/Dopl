@@ -68,18 +68,29 @@ function reopenWindow(sessionId) {
 }
 
 // Item 2 + P2: resolve the live session for (channel, task) and show its window (a pure
-// window show() — starts NO query, runs NO gated tool, §H-4). When there is no live
-// session — the old "No live session to reopen" dead end — fall back to
-// recreateParkedShell: a durable record with a retained sdkSessionId recreates a parked,
-// resumable shell (returns {ok:true}); a truly-closed task returns {ok:false}. May
-// return a Promise (the fallback is async); the IPC handler awaits it.
+// window show() — starts NO query, runs NO gated tool, §H-4). When there is no live session,
+// fall back to recreateParkedShell, which recreates a parked shell from the durable record —
+// and, since Q6b, opens one seeded from the CHANNEL when this machine has no record at all.
+// May return a Promise (the fallback is async); the IPC handler awaits it.
+//
+// THE VERDICT (read by the web thread card):
+//   { ok: true }                    a window is open for this thread. Live, recreated from a
+//                                   record, or built from the channel — all three are "opened",
+//                                   and the web card must show NO note for any of them.
+//   { ok: false, reason: 'no-thread' }  this operator cannot open this channel at all (not a
+//                                   member, gone, or signed out). THE one note case.
+//   { ok: false, reason: 'busy' }   the window budget is spent and nothing could be freed; a
+//                                   retry after closing a window will work.
+//   { ok: false }                   the window layer is not wired yet (mid-wave). Generic.
 function reopenByTask(a) {
   const channelId = String((a && a.channelId) || '');
   const taskId = String((a && a.taskId) || '');
   if (!deps.sessions) return { ok: false };
   const s = deps.sessions.get(store.sessionKey(channelId, taskId));
   if (s && !s.settled && s.win && !s.win.isDestroyed()) { showLive(s); return { ok: true }; }
-  if (deps.recreateParkedShell) return deps.recreateParkedShell({ channelId, taskId });
+  // `fromChannel` is what separates an operator CLICK from the inbound gate's own use of the same
+  // builder: only a click may open a shell for a thread this machine holds no record of.
+  if (deps.recreateParkedShell) return deps.recreateParkedShell({ channelId, taskId, fromChannel: true });
   return { ok: false };
 }
 

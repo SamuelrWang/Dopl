@@ -10,6 +10,12 @@
 // and NEVER builds a prompt string (framing lives in prompt-framing / session-io, applied by the shell), so it
 // stays a pure function of (state, event). The conceptual pendingPermissions / allowForTask Sets (§A.3) are dedup ARRAYS so the state deep-equals cleanly in the extraction test; membership semantics are identical.
 
+// §2 SPLIT: the pure EFFECT BUILDERS live in session-effects.js. They are required here at
+// module scope, ABOVE the sentinel, so inside the block below they are free vars — which is
+// what lets test/_reducer-block.mjs prepend that module's block and evaluate the pair with no
+// `require` in scope, exactly as before the split.
+const { gatePhase, endedEmit, endEffects, modesEmit, parkEffects } = require('./session-effects');
+
 // ─── BEGIN SESSION-REDUCER (pure; unit-tested via source extraction) ─────────
 
 // Loop-safety defaults (contract §A.2). turn cap bounds a two-agent exchange; idle TTL ends a
@@ -28,10 +34,10 @@ function without(arr, v) {
   return arr.filter(function (x) { return x !== v; });
 }
 
-// Fresh state for a launching session. `mode` is the task's declared engagement mode (display +
-// the durable record); as of v2.5 D1 it NO LONGER gates the inbound path — every counterparty
-// turn waits on an Accept unless AXIS B or the standing task grant says otherwise. Caps fall back
-// to the documented defaults on an invalid value.
+// Fresh state for a launching session. `mode` is the task's declared engagement mode (display + the
+// durable record); as of v2.5 D1 it NO LONGER gates the inbound path — every counterparty turn waits
+// on an Accept unless AXIS B or the standing grant says otherwise. Caps (and, v3.1, both axes) fall
+// back to the documented defaults on an absent or invalid value.
 function initialSessionState(opts) {
   const o = opts || {};
   const turnCap = Number.isFinite(o.turnCap) && o.turnCap > 0 ? o.turnCap : DEFAULT_TURN_CAP;
@@ -49,12 +55,12 @@ function initialSessionState(opts) {
     pendingPermissions: [], // requestIds awaiting a button (models a Set)
     allowForTask: [], // scoped grant KEYS granted for the task (models a Set); cleared on park
     // v2.9 THE TWO AXES (session-profiles owns the tables + the resolution). toolMode = AXIS A
-    // (manual|accept_edits|auto|bypass): what MY agent may do on THIS machine, and it NEVER
-    // auto-approves a message op. messageMode = AXIS B (ask|auto_inbound|auto_outbound|auto_both):
-    // what crosses between machines, and it NEVER auto-approves a work tool. Both are per-session,
-    // never persisted, start MOST RESTRICTIVE, and RESET on park (v2.3 FIX #3, extended to both).
-    toolMode: 'manual',
-    messageMode: 'ask',
+    // (manual|accept_edits|auto|bypass): what MY agent may do on THIS machine, NEVER a message op;
+    // messageMode = AXIS B (ask|auto_inbound|auto_outbound|auto_both): what crosses between machines,
+    // NEVER a work tool. Per-session, never persisted, RESET on park (v2.3 FIX #3). v3.1: the START
+    // may come from the channel preset (channel-context.startingModes), coerced fail-closed here.
+    toolMode: coerceMode(TOOL_MODES, o.toolMode),
+    messageMode: coerceMode(MESSAGE_MODES, o.messageMode),
     // v2.5 D1/D4: the standing INBOUND grant ("Accept for this session") — when true an inbound turn
     // is fed with no Accept. Like allowForTask it lives for the life of the in-memory session
     // object and is NEVER persisted. MEDIUM-3 (C9): it is now reset on park with the two axes, so
@@ -66,6 +72,13 @@ function initialSessionState(opts) {
     // (options.resume). Never persisted. Distinct from `phase` because a parked session HOLDING a
     // reply sits at phase 'awaiting_inbound' (FIX #6) yet still needs a resume on Accept.
     parked: false,
+    // H1: TRUE while this session is held on the "Sign in to Claude" action (the preflight
+    // found no Claude Code credential, or a live query failed auth-shaped). A held session is
+    // PARKED but, unlike an idle park, must NOT be woken by an inbound turn — there is no
+    // credential to spawn with. It lives HERE rather than on the session object because
+    // wakeEffects and inboundAutoAccepted, the two places that decide whether to spawn, can
+    // only see state. Never persisted: a credential is a fact about the machine, not a record.
+    authHeld: false,
     // Item 3: the coarse activity the status pill shows (working|idle|awaiting_peer|awaiting_
     // permission|awaiting_inbound). A launching/running session is `working`; `postedThisTurn`
     // records whether the agent posted this turn, so turn-end can pick `awaiting_peer` vs `idle`.
@@ -89,80 +102,26 @@ function costCapReached(state) {
   return state.costCapUsd > 0 && state.costUsd >= state.costCapUsd;
 }
 
-// FIX #6 — a PENDING inbound card WINS the displayed status: `phase` carries the gate (nothing below
-// clobbers it while a card waits, so the pill keeps reading "Message waiting") while `activity` tells
-// the truth, so the send button still morphs to Pause on a mid-flight turn.
-function gatePhase(state, phase) {
-  return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
-}
-
-// The effect set shared by every non-close_task end (operator End, turn/cost cap): abort the query, tell the
-// renderer, settle the record. These leave the channel TASK open (resumable) — no task_finished. P3: a real end
-// ALSO posts a CALM lifecycle so the web card stops pulsing "Working…". Idle never reaches here; it PARKS instead.
-function endedEmit(state, outcome, reason, summary) {
-  const payload = { type: 'ended', outcome: outcome, totalCostUsd: state.costUsd, reason: reason };
-  if (summary !== undefined) payload.summary = summary;
-  return { type: 'emit', payload: payload };
-}
-
-// P3: the calm lifecycle a real end posts. turn/cost caps ride extra:{capped:true} (the web renders
-// "Limit reached", task stays open); the operator End rides extra:{ended:true}. Both ride metadata
-// like `interrupted` — no server-stamped keys, no closeTask. Any other reason posts nothing.
-function endLifecycle(reason) {
-  if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
-  if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
-  if (reason === 'operator') return { type: 'lifecycle', kind: 'task_failed', extra: { ended: true }, body: 'Session ended' };
-  return null;
-}
-function endEffects(state, outcome, reason, summary) {
-  const lc = endLifecycle(reason);
-  return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
-    [endedEmit(state, outcome, reason, summary), { type: 'settle', outcome: outcome }]);
-}
-
-// v2.9 — the header posture echo: ONE shape for BOTH axes, so the renderer never sees half a one.
-function modesEmit(state) {
-  return { type: 'emit', payload: { type: 'modes', tool: state.toolMode, message: state.messageMode } };
-}
-
-// P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise fail-closed, tear down
-// the live query, clear (never re-arm) the idle timer, persist phase 'parked', tell the renderer. NOT settled: no
-// `settle`, no `win.destroy`, no registry removal, and sdkSessionId is retained, so a lazy wake can resume it.
-function parkEffects(state) {
-  const effects = [
-    { type: 'denyPending' },
-    { type: 'abortQuery' },
-    { type: 'clearIdle' },
-    { type: 'persist', phase: 'parked' },
-    // FIX #3 (v2.9): the park DISARMS both axes, so say so. The old toggle reset was silent and
-    // the checkbox went on reading "on" over a session that would ask again.
-    modesEmit({ toolMode: 'manual', messageMode: 'ask' }),
-    { type: 'emit', payload: { type: 'status', phase: gatePhase(state, 'parked') } },
-    // `paused` drops the one-line inline note (renderer owns the copy), distinct from the P2
-    // reopen shell's `notice`. FIX #17: a park that happens while a message is HELD says so —
-    // "wait for a reply" is wrong when the reply is already here, waiting.
-    { type: 'emit', payload: state && state.hasPendingInbound === true ? { type: 'paused', gated: true } : { type: 'paused' } },
-  ];
-  // FIX #6 (v2.3): clear the renderer's permission dock for anything awaiting a button. Main
-  // denies each fail-closed (denyPending) before the abort, so a parked, query-less session must
-  // not keep showing a live-looking prompt. Renderer drops each on resolve.
-  for (const id of (state && state.pendingPermissions) || []) {
-    effects.push({ type: 'emit', payload: { type: 'permission_resolved', requestId: id, decision: 'deny' } });
-  }
-  return effects;
-}
-
 // P1 LAZY RESUME: wake a PARKED session before a turn is pushed. resumeQuery rebuilds the SDK query
 // on the SAME session object through the SAME buildSdkOptions path (options.resume = sdkSessionId),
 // so the security model is byte-identical; a live session is a no-op here.
+//
+// H1 — AN AUTH-HELD SESSION IS NOT WAKE-RESUMABLE; the guard is explicit, not incidental. The
+// hold used to live ONLY as `s.authHold` in session-auth.js, invisible here, so this saw nothing
+// but `parked` and resumed sessions on a Mac with NO Claude Code credential: a peer follow-up
+// under an auto_both preset -> inboundAutoAccepted -> feedInboundEffects -> here -> resumeQuery
+// spawned the SDK with no credential re-check, and a later sign-in then started a SECOND query
+// beside it (two claude children for one request, the orphan still holding this session's
+// pre-approved dopl_channel access). Only the sign-in path may restart a held session, and it
+// dispatches `auth_release` first — the credential must be verified back BEFORE anything spawns.
 function wakeEffects(state) {
-  return state.parked ? [{ type: 'resumeQuery' }] : [];
+  return state.parked && state.authHeld !== true ? [{ type: 'resumeQuery' }] : [];
 }
 
 // v2.9 THE MODE TABLES, duplicated ON PURPOSE: session-profiles.js is canonical, but this block is
-// evaluated standalone (source extraction) and is the STATE OWNER, so it defends its own field
-// fail-closed. test/session-permission-axes pins the four copies (here, session-profiles, the
-// preload, the renderer) against each other so they cannot drift.
+// evaluated standalone (source extraction) and is the STATE OWNER, so it defends its own field fail-
+// closed — for a mid-session change AND for the v3.1 preset it starts from. test/session-permission-
+// axes pins the copies (here, session-profiles, the preload, the renderer).
 const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 function coerceMode(list, value) {
@@ -173,7 +132,13 @@ function coerceMode(list, value) {
 // two ways: AXIS B set to auto_inbound / auto_both, or the standing "Accept for this session" grant.
 // Default state is neither, so the gate holds. session-gate.autoInbound answers the same question
 // for the live queue and MUST agree (pinned by test).
+// H1: an AUTH-HELD session auto-accepts NOTHING, whatever the axes say. Auto-accept means "feed
+// this straight to the agent" and there is no agent — the push would land on a closed iterator
+// and vanish. HOLDING it is the honest answer: the card lands beside the sign-in button, so the
+// operator sees both what is waiting and what to do first, and the ordinary accept delivers it
+// once the credential is back. The peer's message is never eaten, it just waits for a human.
 function inboundAutoAccepted(state) {
+  if (state.authHeld === true) return false;
   const m = state.messageMode;
   return m === 'auto_inbound' || m === 'auto_both' || state.inboundForTask === true;
 }
@@ -369,7 +334,13 @@ function sessionReducer(state, event) {
     if (event.pendingId) {
       effects.push({ type: 'emit', payload: { type: 'inbound_resolved', pendingId: event.pendingId, decision: type === 'inbound_accept_for_task' ? 'accepted-task' : 'accepted' } });
     }
-    const patch = { phase: 'running', activity: 'working', hasPendingInbound: false, parked: false };
+    // H1 belt: session-gate.decideInbound refuses an ACCEPT on a held session before the head
+    // is shifted, so this is not normally reachable — but `inbound_released` is a legacy alias
+    // other callers may still dispatch, and a held session must never come out of this branch
+    // claiming to run. wakeEffects already declined to resume it; keep the state honest too.
+    const patch = state.authHeld === true
+      ? { hasPendingInbound: false }
+      : { phase: 'running', activity: 'working', hasPendingInbound: false, parked: false };
     if (type === 'inbound_accept_for_task') patch.inboundForTask = true;
     return { state: clone(state, patch), effects: effects };
   }
@@ -453,6 +424,35 @@ function sessionReducer(state, event) {
         pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects(state),
     };
+  }
+
+  if (type === 'auth_hold') {
+    // H1 — THE HOLD, AS REDUCER STATE. session-auth.js owns the DECISION (no Claude Code
+    // credential here, or an auth-shaped SDK failure) and the window painting; this records the
+    // one bit the rest of the machine must agree on. A hold IS a park — same effects, same
+    // durable phase — so it is dormant on restart, reopenable and LRU-evictable, and parkEffects
+    // fail-closes every awaited canUseTool promise before the abort. It resets both axes and
+    // every standing grant for idle_timeout's reason: consent was given to a WATCHED window, and
+    // one waiting on a sign-in button is not one (so the H2 arm cannot survive a hold either).
+    // IDEMPOTENT: a second hold changes nothing and emits nothing, so two failures cannot stack
+    // two banners, two parks or two denyPending sweeps.
+    if (state.authHeld === true) return { state: state, effects: [] };
+    return {
+      state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
+        authHeld: true, toolMode: 'manual', messageMode: 'ask', inboundForTask: false,
+        allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
+      effects: parkEffects(state),
+    };
+  }
+
+  if (type === 'auth_release') {
+    // The credential is back and session-auth is about to relaunch. This clears the hold and
+    // NOTHING else: the caller drives the restart (a preflight hold re-runs startQuery, an
+    // error hold takes the ordinary steer -> resume), and both go through the single
+    // supersede-first startQuery, so releasing can never itself spawn anything. Idempotent, so
+    // a double sign-in click releases once.
+    if (state.authHeld !== true) return { state: state, effects: [] };
+    return { state: clone(state, { authHeld: false }), effects: [] };
   }
 
   if (type === 'cost_cap') {

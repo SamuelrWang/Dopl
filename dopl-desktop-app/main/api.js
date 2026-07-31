@@ -7,12 +7,16 @@
 // a bearer). withUserAuth endpoints ({ sessionOnly: true } included) honor them.
 
 const auth = require('./auth');
+const appVersion = require('./app-version');
 const { API_BASE } = require('./config');
 
 async function apiFetch(pathname, opts = {}) {
   const { method = 'GET', workspaceId, body, headers: extra, timeoutMs, noStore } = opts;
   const cookie = await auth.getAuthCookie();
-  const headers = { Accept: 'application/json' };
+  // Q10: this build's version rides on the TRANSPORT, not on each post site, so a
+  // new caller cannot forget it. The server stamps it as the reserved
+  // metadata.appVersion (header-only, never from the body) — see app-version.js.
+  const headers = { Accept: 'application/json', ...appVersion.versionHeaders() };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';

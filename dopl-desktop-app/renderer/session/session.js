@@ -48,13 +48,11 @@
     stream: $("stream"), dock: $("permissionDock"), permTool: $("permTool"),
     permSummary: $("permSummary"), permPostLabel: $("permPostLabel"), permPostTo: $("permPostTo"),
     permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
-    consentView: $("consentView"), endedBanner: $("endedBanner"),
+    consentView: $("consentView"), endedBanner: $("endedBanner"), thinking: $("thinkingChip"),
     steerInput: $("steerInput"), mentionPop: $("mentionPop"), send: $("btnSend"),
-    closePanel: $("closePanel"), closeSummary: $("closeSummary"), outcomeSeg: $("outcomeSeg"),
   };
 
   let state = vm.initialState();
-  let closeOutcome = "completed";
 
   // Context handed to the DOM factories: pure vm helpers + the callbacks a factory needs to reach the bridge.
   const ctx = {
@@ -332,6 +330,13 @@
     els.send.setAttribute("aria-label", chromeVm.sendButtonLabel(mode));
   }
 
+  // The live "Thinking" affordance: shown while a turn is in flight and nothing has been
+  // rendered for it yet (chromeVm.thinkingVisible — pure, so the truth table is testable). It
+  // lives outside .stream, so it never enters the stream tail and never moves the scroll pin.
+  function renderThinking() {
+    els.thinking.classList.toggle("is-active", chromeVm.thinkingVisible(state));
+  }
+
   function renderAll() {
     renderInit();
     renderStatus();
@@ -340,6 +345,7 @@
     renderConsent();
     renderPermission();
     renderSend();
+    renderThinking();
     renderEnded();
   }
 
@@ -442,7 +448,8 @@
     els.steerInput.addEventListener("input", renderSend); // a peer tag flips the glyph to Send
     autoGrow();
 
-    $("btnStop").addEventListener("click", () => bridge.interrupt());
+    // The header's Stop button is gone (v3.1): the send button's pause morph is the ONE
+    // interrupt control, and sendButtonMode now covers every in-flight state it used to cover.
     $("btnEnd").addEventListener("click", () => bridge.end());
 
     $("btnAllowOnce").addEventListener("click", () => decide("allow-once"));
@@ -461,23 +468,11 @@
       if (typeof bridge.setMessageMode === "function") bridge.setMessageMode(els.messageMode.value);
     });
 
-    // Close-thread panel (`closeTask` is the wire name for it).
-    $("btnClose").addEventListener("click", () => els.closePanel.classList.toggle("is-open"));
-    $("btnCloseCancel").addEventListener("click", () => els.closePanel.classList.remove("is-open"));
-    $("btnCloseConfirm").addEventListener("click", () => {
-      bridge.closeTask(closeOutcome, els.closeSummary.value.trim());
-      els.closePanel.classList.remove("is-open");
-    });
-    els.outcomeSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      if (!btn) return;
-      closeOutcome = btn.getAttribute("data-outcome") || "completed";
-      for (const b of els.outcomeSeg.querySelectorAll(".seg-btn")) {
-        const on = b === btn;
-        b.classList.toggle("is-sel", on);
-        b.classList.toggle("raised-tab", on);
-      }
-    });
+    // The close-thread panel is gone (v3.1). Closing settles the SHARED thread for BOTH members,
+    // so it belongs to the thread (the web thread card, or an agent via dopl_channel), not to one
+    // member's window — whose own X hides/parks it. The `session:close-task` bridge + IPC + the
+    // reducer's close_task branch are deliberately left intact: they are the seam any future
+    // surface uses, and no renderer path can reach them now.
 
     wireFolder();
     wireStreamScroll();

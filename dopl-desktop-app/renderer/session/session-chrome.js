@@ -75,18 +75,49 @@
   }
 
   // ── D5: the send button morphs into a pause control while a turn runs ───────
-  // RUNNING means the agent is mid-turn: activity 'working'. Anything else (idle,
-  // awaiting a reply, awaiting a permission, parked, ended) keeps the send affordance,
-  // so a queued steer is always one click away.
-  //
-  // FIX #6: 'awaiting_inbound' counts as a work phase here. The gate carries on `phase`
-  // (a pending card pins it, so the pill keeps reading "Message waiting") while `activity`
-  // still says what the agent is doing — so a turn that is genuinely mid-flight can be
-  // paused even though a message is waiting. Pinning on phase alone made the button lie.
-  const WORK_PHASES = { running: true, awaiting_inbound: true };
+  // v3.1 — THIS IS NOW THE ONLY INTERRUPT CONTROL. The header "Stop" button is deleted, so the
+  // morph had to be widened from "phase running AND activity working" to every state in which
+  // there is something to interrupt. Three states used to have Stop as their ONLY path:
+  //   running with a NULL activity — the whole FIRST turn. Nothing emits a status until that
+  //                turn ENDS, so the old predicate showed Send for its entire duration.
+  //   awaiting_permission — a tool call is mid-flight, parked on the operator's button. Deny
+  //                releases that ONE call; interrupt stops the turn.
+  //   awaiting_inbound with a null/working activity — the same hole, under the gate.
+  // The rule is therefore inverted: a LIVE phase pauses unless the activity says the agent is
+  // resting. A resting phase (consent / parked / interrupted / ended) and an unknown phase keep
+  // Send, so the button can never offer to pause nothing. `launching` is deliberately NOT live:
+  // it is only ever the pre-`init` window, which has received no events at all — and the header's
+  // "End session" still aborts a query that is booting.
+  const LIVE_PHASES = { running: true, awaiting_inbound: true, awaiting_permission: true };
+  const RESTING_ACTIVITIES = { idle: true, awaiting_peer: true, parked: true };
   function sendButtonMode(state) {
     const s = state || {};
-    return WORK_PHASES[s.phase] === true && s.activity === "working" ? "pause" : "send";
+    if (LIVE_PHASES[s.phase] !== true) return "send";
+    return RESTING_ACTIVITIES[s.activity] === true ? "send" : "pause";
+  }
+
+  // ── v3.1: the "Thinking" chip ───────────────────────────────────────────────
+  // TRUE while a turn is in flight and the agent has produced NOTHING for it yet. The window
+  // runs with includePartialMessages:false (LOAD-BEARING for the outbound card, FIX F4), so the
+  // SDK emits no token stream to hang this on: the honest signal is the transcript itself —
+  // once the agent's first text, tool card or outbound message lands, it is no longer "nothing
+  // rendered". State only; thinking CONTENT is never displayed.
+  //   appears   — the turn was pushed (the operator's own bubble, an accepted inbound, or the
+  //               opening request) and the session is live.
+  //   clears    — the first agent artifact renders, the turn ends (`result` -> idle /
+  //               awaiting_peer), a card takes over, or the session parks / interrupts / ends.
+  const AGENT_ITEM_KINDS = { tool: true, outbound: true };
+  function isAgentOutput(item) {
+    const it = item || {};
+    if (it.kind === "turn") return it.role !== "operator" && it.role !== "user";
+    return AGENT_ITEM_KINDS[it.kind] === true;
+  }
+
+  function thinkingVisible(state) {
+    const s = state || {};
+    if (s.ended || sendButtonMode(s) !== "pause") return false; // nothing running -> nothing to say
+    const items = Array.isArray(s.items) ? s.items : [];
+    return !isAgentOutput(items[items.length - 1]);
   }
 
   const SEND_LABEL = { send: "Send", pause: "Pause the agent" };
@@ -164,5 +195,7 @@
     growHeight,
     streamLane,
     laneClass,
+    thinkingVisible,
+    isAgentOutput,
   };
 });

@@ -413,13 +413,24 @@ test("clearDeviceToken removes BOTH on-disk copies and the in-memory one", () =>
   assert.match(MCP, /clearDeviceToken, \/\/ S2/, "exported for auth-state.signOut");
 });
 
-test("the local-only limit is documented where the next reader will hit it", () => {
-  // There is no server-side revoke route for a device token (the endpoint is mint-only),
-  // so the token stays valid until it expires or is revoked from the web UI. A future
-  // session must not read this teardown as a revocation.
+// F-085 closed the server half: the endpoint is no longer mint-only, and signOut now calls
+// the revoke BEFORE the local teardown. The full contract lives in
+// test/device-token-revoke.test.mjs; what this file keeps is the pairing — a future reader
+// must not mistake the LOCAL teardown for a revocation on its own.
+test("the local teardown says out loud that it is only half the job", () => {
   const prose = MCP.replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /MINT-ONLY/i);
-  assert.match(prose, /F-085/, "the gap is tracked, not just noted");
+  assert.match(prose, /LOCAL HALF ONLY/i);
+  assert.match(prose, /Deleting our copies does not invalidate the credential/i);
+  assert.match(prose, /F-085/, "the remaining residual is tracked, not just noted");
+});
+
+test("signOut revokes server-side FIRST, while the cookie session still authenticates it", () => {
+  const fn = fnOf(STATE, "signOut");
+  const revokeAt = fn.indexOf("revokeDeviceToken()");
+  assert.notEqual(revokeAt, -1, "the server-side revoke must be part of sign-out");
+  assert.ok(revokeAt < fn.indexOf("blob.clearSession()"), "before the blob");
+  assert.ok(revokeAt < fn.indexOf("cookies.clearSessionCookies()"), "and before the jar it authenticates on");
+  assert.match(MCP, /revokeDeviceToken, \/\/ F-085/, "exported for auth-state.signOut");
 });
 
 // ── SMALL: A BROKEN KEYCHAIN MUST NOT DOWNGRADE A CREDENTIAL TO CLEARTEXT ───

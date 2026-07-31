@@ -46,36 +46,83 @@ function createRing(maxEntries, maxBytes) {
   };
 }
 
-// C5 (renderer H1) — `init` IS THE WINDOW'S IDENTITY and must never be evicted. It carries
-// the peer name, channel, task title and side; the renderer's fold has no other source for
-// them, and the composer's @-tag addresses `state.init.from`. Drop-oldest evicted it FIRST
-// (it is always entry 0), so after a reload the window came back identity-less and a tag
-// went to the operator's own agent instead of the peer. It is pinned as a STICKY HEAD here:
-// eviction starts at the entry after it. Returns the index eviction may start from.
-function stickyHead(ring) {
-  const first = ring.entries.length ? ring.entries[0] : null;
-  return first && first.type === 'init' ? 1 : 0;
+// PINNED — the session's IDENTITY + POSTURE, the two things a replay may never come back
+// without. Eviction skips them WHEREVER THEY SIT, because position is not a reliable proxy for
+// either one (M3): startSession emits `folder` FIRST, so entry 0 is display-only chrome and the
+// old position-based sticky head pinned nothing at all.
+//   `init`  (C5, renderer H1) is the window's identity — peer name, channel, task title, side.
+//           The renderer's fold has no other source for them and the composer's @-tag addresses
+//           `state.init.from`, so an evicted init came back identity-less and a tag silently
+//           went to the operator's own agent instead of the peer.
+//   `modes` (M3) is the ENFORCED permission posture, both axes. The renderer's initialState is
+//           the most restrictive pair (manual/ask) and its `modes` fold is the ONLY thing that
+//           moves it, while main keeps enforcing the real posture off `s.state` (session-io
+//           grantArgs). So an evicted `modes` made the header UNDERSTATE what is actually being
+//           allowed — a strictly worse failure than overstating it.
+// `folder` is display-only and is deliberately NOT pinned; so are the avatars (see below).
+const PINNED_TYPES = ['init', 'modes'];
+
+function isPinned(payload) {
+  return !!payload && PINNED_TYPES.indexOf(payload.type) !== -1;
 }
 
-// Append a payload; drop-oldest on overflow, never touching the sticky head. When a dropped
-// entry was already sent (sentIdx past it) the cursor decrements so it still points at the
-// sent/unsent boundary; dropping an UNSENT entry is the bounded data loss (F-08a).
+// Index of the OLDEST entry eviction may take: the first one that is not pinned, or -1 when
+// every entry is pinned (the ring then simply refuses to shrink — it is bounded at one entry
+// per pinned type, so this cannot run away).
+function oldestEvictable(ring) {
+  for (let i = 0; i < ring.entries.length; i += 1) {
+    if (!isPinned(ring.entries[i])) return i;
+  }
+  return -1;
+}
+
+// Remove entry `at`, keeping the byte tally and the sent cursor exact. Dropping an entry the
+// renderer ALREADY saw (at < sentIdx) shifts every later entry one place left, so the cursor
+// decrements to keep pointing at the same sent/unsent boundary; dropping an UNSENT one leaves
+// the cursor alone, and that is the bounded data loss (F-08a). This is the ONE place entries
+// leave the ring, so the arithmetic holds for arbitrary positions, not just the head.
+function ringDrop(ring, at) {
+  const dropped = ring.entries.splice(at, 1)[0];
+  ring.bytes -= entryBytes(dropped);
+  if (ring.sentIdx > at) ring.sentIdx -= 1;
+  return dropped;
+}
+
+// LAST-WINS, the half that keeps "pinned" from meaning "unbounded". `modes` is emitted
+// REPEATEDLY — every axis change, and a park that resets both axes — so pinning every one would
+// pack the ring with unevictable entries and starve the transcript. Only the NEWEST `modes` is
+// the live posture, so recording one first drops the older entry of that same type: AT MOST ONE
+// pinned entry per pinned type, always. That is fold-equivalent because the renderer's `modes`
+// case REPLACES both axes and no other case reads them, so replaying just the last one lands on
+// exactly the state replaying all of them would. `init` is emit-once so this is a no-op for it;
+// it runs anyway, which makes the invariant hold without any caller discipline (and the `init`
+// fold likewise replaces state.init wholesale). NOTE this collapses the REPLAY LOG only —
+// createReplay.deliver still sends every `modes` live, so a connected renderer misses nothing.
+function dropOlderPinned(ring, type) {
+  for (let i = ring.entries.length - 1; i >= 0; i -= 1) {
+    if (ring.entries[i] && ring.entries[i].type === type) ringDrop(ring, i);
+  }
+}
+
+// Append a payload; drop-oldest on overflow, never touching a pinned entry.
 function ringRecord(ring, payload) {
+  if (isPinned(payload)) dropOlderPinned(ring, payload.type);
   ring.entries.push(payload);
   ring.bytes += entryBytes(payload);
   for (;;) {
-    const head = stickyHead(ring);
     const over = ring.entries.length > ring.maxEntries || ring.bytes > ring.maxBytes;
-    if (!over || ring.entries.length <= head + 1) break; // only the head + newest remain
-    const dropped = ring.entries.splice(head, 1)[0];
-    ring.bytes -= entryBytes(dropped);
-    if (ring.sentIdx > head) ring.sentIdx -= 1;
+    if (!over) break;
+    const at = oldestEvictable(ring);
+    // -1 = all pinned; the last index = only the NEWEST entry is evictable and the ring always
+    // keeps that. Either way there is nothing left to give and the bound is exceeded knowingly.
+    if (at === -1 || at === ring.entries.length - 1) break;
+    ringDrop(ring, at);
   }
   return ring;
 }
 
 // C5, the other half — the two avatar `data:` URIs (up to ~350KB each) NEVER ride `init`.
-// One cold-cache fill used to blow the 1MB bound on its own and evict the sticky head, so
+// One cold-cache fill used to blow the 1MB bound on its own and evict the identity, so
 // pinning alone is not enough: an init that carries them is split into a small init plus the
 // `avatars` event the view-model already OR-merges. Everything else passes straight through.
 function splitInitAvatars(payload) {

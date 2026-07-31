@@ -242,7 +242,7 @@ test("FIX #7: a shell the OPERATOR touched, a LIVE session, and a HELD card are 
     const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1", capAt: 1 });
     h.sessions.set("keep:me", shell({ key: "keep:me", ...over }));
     // FAIL RESTRICTIVE: nothing evictable -> the reopen is refused, exactly as before.
-    assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false }, JSON.stringify(over));
+    assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false, reason: "busy" }, JSON.stringify(over));
     assert.deepEqual(h.calls.settled, [], "no window is taken from the operator");
     assert.equal(h.calls.startSession.length, 0);
   }
@@ -251,7 +251,9 @@ test("FIX #7: a shell the OPERATOR touched, a LIVE session, and a HELD card are 
 test("FIX #7: eviction that does not clear the cap still refuses (never over-budget)", async () => {
   const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1", atCap: true });
   h.sessions.set("old:a", shell({ key: "old:a" }));
-  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false });
+  // Q6b: a cap refusal now NAMES itself, so the web card can say "close a window" instead of
+  // "this thread has no session on this machine" (which would be a lie).
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false, reason: "busy" });
   assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "interrupted" }], "one was freed");
   assert.equal(h.calls.startSession.length, 0, "but the cap still holds, so no window opens");
 });
@@ -292,7 +294,7 @@ test("recreateParkedShell: window-mode off (no factory) -> {ok:false}", async ()
 test("FIX #4: recreateParkedShell is refused at the MAX_WINDOWS cap (no window created)", async () => {
   const h = harness({ record: { channelId: "c1", taskId: "t1" }, sdkId: "sdk-1", atCap: true });
   // Nothing evictable in the registry, so FIX #7 changes nothing here: still fail-restrictive.
-  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false });
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false, reason: "busy" });
   assert.equal(h.calls.startSession.length, 0, "a capped reopen never opens a window");
   assert.deepEqual(h.calls.settled, [], "and nothing is closed to make room out of nowhere");
 });

@@ -210,6 +210,13 @@ function decideInbound(s, pendingId, decision) {
   const id = pendingId == null ? '' : String(pendingId);
   if (!id || id !== String(head.pendingId)) return false;
   const d = decision === 'accept' || decision === 'accept-task' ? decision : 'decline';
+  // H1: while the session is HELD on the sign-in action there is no query to feed — the push
+  // would land on a null / closed iterator and the peer's message would simply vanish. Refuse
+  // the ACCEPT here, BEFORE the head is shifted, so the message stays queued and the card stays
+  // answerable; session-ipc turns the false into {ok:false} and the renderer leaves it live
+  // (the FIX F1 discipline: never stamp a card for something that did not happen). A DECLINE is
+  // still honoured — dropping a message needs no agent. Accept works the moment sign-in lands.
+  if (s.state && s.state.authHeld === true && d !== 'decline') return false;
   io.shiftInbound(s);
   if (d === 'decline') {
     // FIX F1 belt: a declined body must be absent from the fresh session's history seed

@@ -18,18 +18,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { loadReducer, BLOCK, REDUCER_SRC } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "session-reducer.js"), "utf8");
-
-const from = SRC.indexOf("// ─── BEGIN SESSION-REDUCER");
-const to = SRC.indexOf("// ─── END SESSION-REDUCER");
-assert.ok(from !== -1 && to > from, "SESSION-REDUCER sentinels missing or out of order");
-const BLOCK = SRC.slice(from, to);
-
-const { initialSessionState, sessionReducer } = new Function(
-  `${BLOCK}\n return { initialSessionState, sessionReducer };`
-)();
+// §2 SPLIT (H1): the pure block now spans session-effects.js + session-reducer.js;
+// test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
+const { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
+        DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD } = loadReducer();
 
 const launched = (state) => sessionReducer(state, { type: "launched", payload: { type: "init", model: "m" } });
 const findEff = (effects, type) => effects.find((e) => e.type === type);

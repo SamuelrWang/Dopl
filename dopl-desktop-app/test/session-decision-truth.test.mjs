@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -30,6 +31,8 @@ const M = (p) => join(HERE, "..", "main", p);
 const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.url));
 
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
+// §3 SPLIT: buildSdkOptions + the query lifecycle live in main/session-query.js now.
+const QUERY = readFileSync(M("session-query.js"), "utf8");
 const IPC = readFileSync(M("session-ipc.js"), "utf8");
 const REDUCER = readFileSync(M("session-reducer.js"), "utf8");
 const RENDER = readFileSync(R("session-render.js"), "utf8");
@@ -56,12 +59,9 @@ const cut = (from, to) => {
   return ENGINE.slice(a, b);
 };
 
-const RED = (() => {
-  const from = REDUCER.indexOf("// ─── BEGIN SESSION-REDUCER");
-  const to = REDUCER.indexOf("// ─── END SESSION-REDUCER");
-  assert.ok(from !== -1 && to > from, "session-reducer sentinels missing/out of order");
-  return new Function(`${REDUCER.slice(from, to)}\n return { initialSessionState, sessionReducer };`)();
-})();
+// §2 SPLIT: the pure block now spans session-effects.js + session-reducer.js; the shared
+// helper slices BOTH sentinel pairs and evaluates them as one program (require still absent).
+const RED = loadReducer();
 
 function harness() {
   const emitted = [];
@@ -240,7 +240,7 @@ test("F4: main really sends those bytes, and `to` is the peer NAME (never an id)
 const stripComments = (src) => src.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
 
 test("F4: includePartialMessages:false and NO hooks option are load-bearing for the card", () => {
-  const opts = ENGINE.slice(ENGINE.indexOf("function buildSdkOptions(s) {"), ENGINE.indexOf("async function startQuery("));
+  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("// H1 — SUPERSEDE"));
   assert.match(opts, /includePartialMessages: false,/, "a partial tool_use input must never paint the card");
   assert.ok(!/hooks/.test(stripComments(opts)), "no PreToolUse hook may rewrite the input the operator approved");
   assert.match(opts, /LOAD-BEARING for v2\.7 L3 \(FIX F4\)/, "and the option site says why");

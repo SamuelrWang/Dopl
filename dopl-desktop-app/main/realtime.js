@@ -32,129 +32,44 @@
 //
 // SECURITY: the token goes to setAuth() only, NEVER to the log — only its source
 // ('stored' / 'cookie' / 'refreshed') and remaining lifetime are logged.
+//
+// WAKE-ONLY TRUST MODEL (Q8, 2026-07-31). A push is a DOORBELL, never content.
+// The only field this module ever reads out of an INSERT payload is
+// `channel_id` — a routing key — and the woken loop then refetches over the
+// AUTHED long-poll, which re-runs the server-side visibility gate. Nothing
+// downstream may start trusting `payload.new.body` / `.metadata`: realtime
+// payloads are RLS-filtered but they are not the authorization path, and the
+// whole design bets that a wake carries no authority. `wakeChannelId()` (in
+// `realtime-core.js`) is the single extraction point, and it is deliberately
+// indifferent to which OTHER columns the payload happens to carry.
+//
+// EGRESS: because the payload is ignored, every byte past the routing key is
+// waste that Supabase meters — today ~1.6 KB per insert per subscriber (the
+// ~880-byte row plus Realtime's per-column type metadata) to deliver ~36 bytes
+// of signal. The fix is one publication statement on the SERVER (a column list
+// on `channel_messages`), NOT a client change; this module is already written
+// so that flipping it is a no-op here. `wakeBytes` in the state line is the
+// before/after measurement — OPT-IN since FIX L7, see MEASURE_WAKE_BYTES below.
+// See docs/REFACTOR-FINDINGS.md F-091 for the SQL (NOT applied — prod
+// publication changes are Samuel's to run).
 
 const { RealtimeClient } = require('@supabase/realtime-js');
 const WebSocket = require('ws');
 const { SUPABASE_URL, SUPABASE_ANON_KEY, REALTIME } = require('./config');
 const { diag } = require('./diag');
-
-// ─── BEGIN BREAKER (pure; unit-tested via source extraction) ─────────────────
-// Circuit-breaker state machine guarding Realtime reconnect churn. States:
-//   'closed'    — healthy; pushes are trusted, the loop uses the cheap path.
-//   'open'      — too many consecutive failures; unhealthy, cooling down.
-//   'half-open' — cooldown elapsed; ONE probe is allowed. Success → closed;
-//                 failure → open again with a fresh cooldown.
-// Pure: no electron / ws / network refs. `now` is injectable for tests.
-function createBreaker(opts) {
-  const threshold = (opts && opts.threshold) || 4;
-  const cooldownMs = (opts && opts.cooldownMs) || 30000;
-  const now = (opts && opts.now) || Date.now;
-  let state = 'closed';
-  let fails = 0;
-  let openedAt = 0;
-
-  function open(t) {
-    state = 'open';
-    openedAt = t;
-    fails = threshold;
-  }
-  // A successful subscribe: from any state, close and clear the failure count.
-  function onSuccess() {
-    state = 'closed';
-    fails = 0;
-  }
-  // A subscribe failure. In half-open a single failure re-opens immediately;
-  // in closed we open once the consecutive count crosses the threshold.
-  function onFailure() {
-    if (state === 'half-open') { open(now()); return; }
-    fails += 1;
-    if (fails >= threshold) open(now());
-  }
-  // Open → half-open once the cooldown has elapsed (call before a probe).
-  // Returns true when a probe should be attempted this tick.
-  function maybeHalfOpen() {
-    if (state === 'open' && now() - openedAt >= cooldownMs) {
-      state = 'half-open';
-      return true;
-    }
-    return state === 'half-open';
-  }
-  function isClosed() { return state === 'closed'; }
-  function getState() { return state; }
-  return { onSuccess, onFailure, maybeHalfOpen, isClosed, getState };
-}
-// ─── END BREAKER ─────────────────────────────────────────────────────────────
-
-// ─── BEGIN WAKE-COALESCE (pure; unit-tested via source extraction) ───────────
-// Batch a burst of INSERTs into at most ONE wake per channel per window: many
-// rows landing together must trigger a single cheap catch-up, not one fetch per
-// row. mark(id) adds to a Set and arms a single flush timer; flush() drains the
-// unique ids to onFlush and disarms. Pure: `timers` injectable for tests.
-function createWakeCoalescer(windowMs, onFlush, timers) {
-  const T = timers || { setTimeout, clearTimeout };
-  const pending = new Set();
-  let timer = null;
-  function flush() {
-    timer = null;
-    const ids = Array.from(pending);
-    pending.clear();
-    for (const id of ids) {
-      try { onFlush(id); } catch (_) { /* one bad wake must not drop the rest */ }
-    }
-  }
-  function mark(id) {
-    if (id == null) return;
-    pending.add(id);
-    if (!timer) timer = T.setTimeout(flush, windowMs);
-  }
-  function size() { return pending.size; }
-  return { mark, flush, size };
-}
-// ─── END WAKE-COALESCE ───────────────────────────────────────────────────────
-
-// ─── BEGIN SUB-ERROR (pure; unit-tested via source extraction) ────────────────
-// realtime-js calls `subscribe((status, err) => …)` with a SECOND argument on
-// failure: the server's join-error payload. v2.1 dropped it, so every failure
-// logged the bare word CHANNEL_ERROR and the field evidence could not tell
-// "expired JWT" from "joined as anon and RLS refused" from "table not in the
-// publication" — 1700 identical lines that named no cause. This normalizes
-// whatever realtime-js hands over (Error, {reason}, {message}, string, nested
-// cause) into ONE short reason string, and classifies whether it is a credential
-// refusal, which is the only class a token rotation can fix.
-// Pure: strings/objects in, string/boolean out. No ws/electron/network refs.
-
-// Belt-and-braces: a server message must never smuggle a credential into the
-// plaintext log, so strip anything JWT- or publishable-key-shaped first.
-function redactSecrets(s) {
-  return String(s)
-    .replace(/eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}/g, '<jwt>')
-    .replace(/sb_(?:publishable|secret)_[A-Za-z0-9_-]+/g, '<apikey>');
-}
-
-function describeSubscribeError(err) {
-  if (err == null) return 'no-payload';
-  if (typeof err === 'string') return redactSecrets(err).slice(0, 200) || 'empty';
-  const parts = [];
-  if (err.message) parts.push(String(err.message));
-  if (err.reason && String(err.reason) !== String(err.message)) parts.push(String(err.reason));
-  if (err.cause) {
-    const c = typeof err.cause === 'string' ? err.cause : err.cause.reason || err.cause.message || '';
-    if (c && !parts.includes(String(c))) parts.push(`cause=${c}`);
-  }
-  if (parts.length === 0) {
-    try { return redactSecrets(JSON.stringify(err)).slice(0, 200); } catch (_) { return 'unserializable'; }
-  }
-  return redactSecrets(parts.join(' | ')).slice(0, 200);
-}
-
-// Does this reason mean "your credential was refused"? Those are fixable by
-// rotating the token; a bad filter or an unpublished table is not.
-function isAuthFailure(reason) {
-  return /jwt|token|expired|unauthor|forbidden|not authorized|permission denied|40[13]/i.test(
-    String(reason || '')
-  );
-}
-// ─── END SUB-ERROR ───────────────────────────────────────────────────────────
+// The pure cores (breaker, wake coalescer, wake-payload extraction, subscribe-
+// error normalization, health + join gates) live in a sibling so they stay
+// importable by the node --test slicer and this file stays under the line cap.
+const {
+  createBreaker,
+  createWakeCoalescer,
+  wakeChannelId,
+  wakePayloadBytes,
+  describeSubscribeError,
+  isAuthFailure,
+  wsHealthy,
+  joinableSet,
+} = require('./realtime-core');
 
 // ── Live Realtime client (the electron/network boundary) ─────────────────────
 let client = null;
@@ -174,6 +89,21 @@ let lastBreakerState = 'closed';
 // The workspaces the listener WANTS subscribed, kept separate from the ones we
 // actually joined: with no credential we deliberately join none and retry later.
 let desiredWorkspaces = new Set();
+// Q8 measurement: how many wakes this process has taken and what they cost in
+// bytes off the Supabase egress meter. Read out of the state line, never used
+// for a decision.
+//
+// FIX L7 — THE BYTE COUNT IS OPT-IN. `wakePayloadBytes` JSON.stringify's the
+// WHOLE realtime payload on every insert, purely to feed a counter nothing
+// decides on. That is permanent CPU and garbage on the hot wake path, sized by
+// the very payload F-091 exists to shrink (today up to ~4.5 KB a row), for a
+// number that only matters while verifying that narrowing. `DOPL_WAKE_BYTES=1`
+// turns it on for that window; otherwise the wake path never serializes
+// anything and the state line reports `wakeBytes=off`. The wake COUNT is free
+// and stays unconditional.
+const MEASURE_WAKE_BYTES = process.env.DOPL_WAKE_BYTES === '1';
+let wakeCount = 0;
+let wakeBytes = 0;
 const breaker = createBreaker({
   threshold: REALTIME.BREAKER_FAIL_THRESHOLD,
   cooldownMs: REALTIME.BREAKER_COOLDOWN_MS,
@@ -193,19 +123,6 @@ function isHealthy() {
   return started && breaker.isClosed() && subscribedCount() > 0;
 }
 
-// ─── BEGIN WS-HEALTH (pure; unit-tested via source extraction) ───────────────
-// THE per-workspace health predicate. A channel loop must trust push for ITS
-// workspace ONLY when the transport is started, the breaker is closed, and THAT
-// ws's own sub is actually SUBSCRIBED — never merely because SOME OTHER ws is up.
-// Global isHealthy() (>=1 sub) would otherwise leave a loop whose own ws errored
-// stuck waiting on wakes that can never arrive (the ~3-min-to-consent bug): green
-// globally, silent for the ws that matters. Pure over its inputs so the test can
-// lock the "one ws errored while another is subscribed" case with no ws/electron.
-function wsHealthy(started_, breakerClosed, sub) {
-  return !!(started_ && breakerClosed && sub && sub.subscribed);
-}
-// ─── END WS-HEALTH ───────────────────────────────────────────────────────────
-
 // Per-workspace health the channel loop consults: only this ws's own sub counts.
 function isWorkspaceHealthy(wsId) {
   return wsHealthy(started, breaker.isClosed(), subs.get(wsId));
@@ -216,7 +133,8 @@ function isWorkspaceHealthy(wsId) {
 // why" answerable from listener.log alone.
 function describeState() {
   const parts = [`breaker=${breaker.getState()}`, `cred=${cred.kind}`, `fresh=${cred.fresh}`,
-    `subs=${subscribedCount()}/${subs.size}`, `want=${desiredWorkspaces.size}`];
+    `subs=${subscribedCount()}/${subs.size}`, `want=${desiredWorkspaces.size}`,
+    `wakes=${wakeCount}`, `wakeBytes=${MEASURE_WAKE_BYTES ? wakeBytes : 'off'}`];
   for (const [wsId, s] of subs) parts.push(`${String(wsId).slice(0, 8)}:${s.subscribed ? 'up' : 'down'}`);
   return parts.join(' ');
 }
@@ -314,11 +232,22 @@ function hasCredential() {
 }
 
 function onInsert(wsId, payload) {
-  const chId = payload && payload.new && payload.new.channel_id;
+  const chId = wakeChannelId(payload);
+  wakeCount += 1;
   // DIAG: every INSERT that actually reaches us, BEFORE coalesce — the ground
   // truth that push is delivering for this ws. Silence here + a healthy sub =
   // the break is upstream (RLS/filter), not in the wake wiring.
-  diag('realtime insert', String(wsId).slice(0, 8), 'ch', chId ? String(chId).slice(0, 8) : '-');
+  const parts = ['realtime insert', String(wsId).slice(0, 8), 'ch',
+    chId ? String(chId).slice(0, 8) : '-'];
+  // L7: the Q8 size measurement — a wake should cost a few hundred bytes, not a
+  // whole row — but only while someone is measuring (DOPL_WAKE_BYTES=1). It is
+  // the one thing on this path that touches the payload beyond the routing key.
+  if (MEASURE_WAKE_BYTES) {
+    const bytes = wakePayloadBytes(payload);
+    wakeBytes += bytes;
+    parts.push(`bytes=${bytes}`);
+  }
+  diag(...parts);
   if (chId && coalescer) coalescer.mark(chId);
 }
 
@@ -431,17 +360,6 @@ async function setWorkspaces(ids) {
   reconcileChannels();
 }
 
-// ─── BEGIN JOIN-GATE (pure; unit-tested via source extraction) ───────────────
-// Which workspaces may be JOINED right now. Absolute rule: with no user JWT we
-// join NOTHING, because realtime-js would join as `anon` and an anon subscriber
-// crashes the project's CDC pipeline for every client. Pure, so "fail closed" is
-// a truth table instead of a comment — and so the ordering contract (a join only
-// ever happens after applyAuth has produced a credential) is testable.
-function joinableSet(hasCred, desired) {
-  return hasCred ? new Set(desired || []) : new Set();
-}
-// ─── END JOIN-GATE ───────────────────────────────────────────────────────────
-
 // Bring the JOINED set in line with the DESIRED set, gated on the credential; we
 // wait for refreshAuth() to bring one rather than joining as `anon`.
 function reconcileChannels() {
@@ -481,6 +399,8 @@ function stop() {
   coalescer = null;
   desiredWorkspaces = new Set();
   cred = { kind: 'none', fresh: false, secondsLeft: null };
+  wakeCount = 0;
+  wakeBytes = 0;
   emitHealth();
 }
 

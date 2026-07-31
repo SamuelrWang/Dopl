@@ -91,6 +91,11 @@ const partsOf = (node) => {
 };
 
 feed({ type: "init", sessionId: "s1", side: "requester", channelName: "Ops", from: "David" });
+// v3.1: with the header Stop button deleted, the send button's pause morph widened to cover
+// the first turn (which emits no status until it ends), so a self-addressed steer is only a
+// SEND click once main says the agent is resting. A peer-tagged draft always shows Send, which
+// is why the routing tests below still pass either way — this pins the SELF-addressed half.
+feed({ type: "status", phase: "running", activity: "idle" });
 
 // ── the routing decision ──────────────────────────────────────────────────────
 

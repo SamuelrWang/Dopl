@@ -47,8 +47,7 @@ html, body {
 .app.is-ended .ended-banner { flex: 0 0 auto; }
 /* Docks that appear mid-run must not steal the stream's space: cap their own
    height and scroll internally. */
-.permission-dock.is-active,
-.close-panel.is-open { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; }
+.permission-dock.is-active { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 .session-header {
@@ -757,35 +756,57 @@ html, body {
 .perm-actions .ctl { flex: 0 0 auto; }
 .perm-queue-note { margin-top: 8px; color: var(--text-muted); font-size: var(--text-micro); }
 
-/* ── Close-thread panel ──────────────────────────────────────────────────── */
-.close-panel { display: none; }
-.close-panel.is-open { display: block; }
-.close-panel__inner { padding: 12px; }
-.close-panel .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.close-panel .seg { display: inline-flex; gap: 4px; }
-.close-panel .seg-btn {
-  padding: 5px 12px; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  font-size: var(--text-small); color: var(--text-secondary);
+/* ── v3.1: the "Thinking" chip ───────────────────────────────────────────────
+   A SIBLING of .stream-wrap, never a child of .stream: the stream owns its own scroll pin and
+   an element inside it would change the tail fingerprint every turn. Pinned to its natural
+   height like every other chrome row, so it cannot shrink the stream. The dots animate with
+   CSS keyframes only — no timer, no `content:` copy (all text is markup). */
+.thinking-chip { display: none; }
+.thinking-chip.is-active {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px 0;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
 }
-.close-panel .seg-btn.is-sel { color: var(--text-primary); }
-.close-field { border-radius: 8px; }
-.close-summary {
-  width: 100%;
-  min-height: 62px;
-  resize: vertical;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-family: var(--font-ui);
-  font-size: var(--text-body);
-  color: var(--text-primary);
-  background: transparent;
-  border: none;
-  outline: none;
-  user-select: text;
+.thinking-chip__dots { display: inline-flex; gap: 3px; align-items: center; }
+.thinking-chip__dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor;
+  opacity: 0.25;
+  animation: thinking-pulse 1.2s ease-in-out infinite;
 }
-.close-panel .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.thinking-chip__dot:nth-child(2) { animation-delay: 0.16s; }
+.thinking-chip__dot:nth-child(3) { animation-delay: 0.32s; }
+@keyframes thinking-pulse {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 0.9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-chip__dot { animation: none; opacity: 0.55; }
+}
+
+/* ── Q6: the Claude Code sign-in banner ──────────────────────────────────────
+   Hidden until main holds this session on a missing credential. It sits with the other
+   decision surfaces (above the composer, below the dock) and is pinned to its natural height
+   so it never competes with the stream for space. */
+.auth-notice { display: none; }
+.auth-notice.is-active {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+.auth-notice__text { flex: 1; min-width: 0; }
+.auth-notice__title { color: var(--text-primary); }
+.auth-notice__body { color: var(--text-secondary); margin-top: 2px; }
+.auth-notice__note { color: var(--text-muted); margin-top: 4px; }
+.auth-notice.is-error .auth-notice__title { color: var(--text-primary); }
+.auth-notice .ctl { flex: 0 0 auto; }
+.auth-notice .ctl[disabled] { opacity: 0.55; pointer-events: none; }
 
 /* ── Pre-consent request card (item 8) ───────────────────────────────────── */
 .consent-view { display: none; }
@@ -798,11 +819,13 @@ html, body {
   align-items: flex-start;
   justify-content: center;
 }
-/* While awaiting consent, NO agent surface renders (§H-1). */
+/* While awaiting consent, NO agent surface renders (§H-1). The sign-in banner and the thinking
+   chip join the list: a pre-consent window runs no query, so neither can have anything to say. */
 .app.is-consent .stream-wrap,
 .app.is-consent .composer,
 .app.is-consent .permission-dock,
-.app.is-consent .close-panel,
+.app.is-consent .thinking-chip,
+.app.is-consent .auth-notice,
 .app.is-consent .ended-banner { display: none !important; }
 
 .consent-card { width: 100%; max-width: 560px; overflow: hidden; }

@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { declsOf, fnOf } from "./helpers/source-probe.mjs";
+import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -157,15 +158,9 @@ test("L3 PARK: the reducer really does emit that echo for the post's own request
   // Source-extracted so this can never drift from the shipped reducer. A post gates through
   // the SAME `permission_request` event as any other tool, which is exactly why park,
   // denyPending and the auto-approve drain already cover it — no new event type was added.
-  const SRC = readFileSync(join(HERE, "..", "main", "session-reducer.js"), "utf8");
-  const BEGIN = "// ─── BEGIN SESSION-REDUCER";
-  const END = "// ─── END SESSION-REDUCER";
-  const from = SRC.indexOf(BEGIN);
-  const to = SRC.indexOf(END);
-  assert.ok(from !== -1 && to > from, "session-reducer sentinels missing/out of order");
-  const { initialSessionState, sessionReducer } = new Function(
-    `${SRC.slice(from, to)}\n return { initialSessionState, sessionReducer };`
-  )();
+  // §2 SPLIT: the pure block now spans session-effects.js + session-reducer.js; the shared
+  // helper slices BOTH sentinel pairs and evaluates them as one program.
+  const { initialSessionState, sessionReducer } = loadReducer();
   const running = sessionReducer(initialSessionState(), { type: "launched", payload: { type: "init" } }).state;
 
   // The stream-time artifact records the post for the turn-end status (trap (b), unchanged).

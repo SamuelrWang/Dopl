@@ -26,10 +26,15 @@
              wire field (from `metadata.taskTitle`); only the COPY moves to "thread". -->
         <div class="task-title text-caption" id="taskTitle"></div>
       </div>
+      <!-- ONE header control (v3.1). The Stop button is gone: pausing the agent is the send
+           button's pause morph (session-chrome.sendButtonMode), which now covers every in-flight
+           state, so a second control for the same act only competed with it. The thread-closing
+           button is gone too: closing settles the SHARED thread for BOTH members, which belongs
+           with the thread itself (the web thread card, or an agent via MCP) rather than on one
+           member's window; this window's traffic-light X hides/parks it, which is what
+           dismissing a window means. -->
       <div class="header-controls">
-        <button class="ctl btn-light ctl-sm" id="btnStop" type="button">Stop</button>
         <button class="ctl btn-light ctl-sm ctl-danger" id="btnEnd" type="button">End session</button>
-        <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnClose" type="button">Close thread</button>
       </div>
     </header>
 
@@ -78,31 +83,20 @@
     <!-- Pre-consent request card (item 8): shown BEFORE any SDK/agent work. -->
     <div class="consent-view" id="consentView"></div>
 
-    <!-- Close-thread panel (revealed by "Close thread"). Closing settles the SHARED
-         thread for both members; it is not the same act as ending this member's own
-         session, which is the "End session" control above. -->
-    <div class="close-panel bento" id="closePanel">
-      <div class="close-panel__inner">
-        <div class="row">
-          <span class="text-label ink-secondary">Close thread</span>
-          <span class="seg concave-track" id="outcomeSeg" role="group" aria-label="Outcome">
-            <button class="seg-btn raised-tab is-sel" data-outcome="completed" type="button">Completed</button>
-            <button class="seg-btn" data-outcome="failed" type="button">Failed</button>
-          </span>
-        </div>
-        <div class="concave-field close-field">
-          <textarea class="close-summary" id="closeSummary" placeholder="Summary of the outcome (optional)"></textarea>
-        </div>
-        <div class="actions">
-          <button class="ctl btn-light ctl-sm" id="btnCloseCancel" type="button">Cancel</button>
-          <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnCloseConfirm" type="button">Close thread</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Turn stream -->
+    <!-- Turn stream. The thinking chip sits OUTSIDE #stream on purpose: the stream owns its own
+         scroll pin (session.js SESSION-SCROLL-PURE), and an element inside it would change the
+         tail fingerprint on every turn and yank a reader out of the band they parked in. Static
+         markup, toggled by one class; the dots animate in CSS, no timer and no innerHTML. -->
     <div class="stream-wrap">
       <div class="stream" id="stream" aria-live="polite"></div>
+    </div>
+    <div class="thinking-chip" id="thinkingChip" aria-live="polite">
+      <span class="thinking-chip__label">Thinking</span>
+      <span class="thinking-chip__dots" aria-hidden="true">
+        <span class="thinking-chip__dot"></span>
+        <span class="thinking-chip__dot"></span>
+        <span class="thinking-chip__dot"></span>
+      </span>
     </div>
 
     <!-- Permission dock -->
@@ -140,6 +134,19 @@
           <div class="perm-queue-note hidden" id="permQueueNote"></div>
         </div>
       </div>
+    </div>
+
+    <!-- Q6: the Claude Code sign-in banner. Hidden until main holds this session on a missing
+         credential (preflight) or an auth-shaped SDK failure. Every string is filled by
+         session-auth-ui.js via textContent; the copy names WHICH credential is missing and
+         never mentions a terminal command (the `claude` binary ships inside the app). -->
+    <div class="auth-notice bento" id="authNotice" role="status">
+      <div class="auth-notice__text">
+        <div class="auth-notice__title text-label" id="authTitle"></div>
+        <div class="auth-notice__body text-caption" id="authBody"></div>
+        <div class="auth-notice__note text-caption hidden" id="authNote"></div>
+      </div>
+      <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnAuthSignIn" type="button">Sign in to Claude</button>
     </div>
 
     <!-- Ended banner -->
@@ -185,5 +192,8 @@
   <script src="session-mention.js"></script>
   <script src="session-mention-ui.js"></script>
   <script src="session.js"></script>
+  <!-- Q6: the sign-in banner owns its own element + its own narrow bridge sink, so it is
+       independent of the transcript controller above and loads after it. -->
+  <script src="session-auth-ui.js"></script>
 </body>
 </html>

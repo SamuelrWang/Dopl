@@ -697,3 +697,37 @@ SELECT entity::text, count(*) FROM realtime.subscription GROUP BY 1 ORDER BY 2 D
 ```
 Then open the Canvas / clusters UI and confirm it still loads and saves — it refetches through the service layer and never relied on a realtime event, so nothing should change. If anything in the cluster UI stops updating live, roll back with the one-liner above; no app deploy is involved either way.
 - Status: middleware CLOSED (shipped, uncommitted, 71 new tests). Residual 1 open (`with-auth.ts`, other owner). Residual 2 CLOSED. Residual 3 open (SQL not applied).
+
+### F-095
+
+**Peer-authored text is still interpolated RAW into MCP server NARRATION in ~8 remaining places.** M2 (2026-07-31) fixed the three worst — `channel-ops-read.threadLegend`, and `channel-ops-write.threadLinkageNote` + its open-threads warning — by extracting `describeFailure`'s neutralization core into the exported `neutralizeInline()` in `packages/mcp-server/src/tools/channel-shared.ts` (drops control chars, strips markdown, clips to 160, renders ONE inline code span, returns `null` when nothing survives so callers omit the mention). The same class remains, with a different value source (`ChannelThread` / `Channel` rows rather than message metadata), so it was left for a scoped round rather than widened mid-fix:
+
+- `channel-ops-read.ts` `formatThreadDetail` — `` `## Thread ${t.title}` ``. **Worst of the group**: a peer-typed title becomes a markdown HEADING in `get_thread` output, and that op emits no untrusted framing at all.
+- `channel-ops-read.ts` `formatThreadLine` — `**${t.title}**` and `— ${t.outcomeSummary}`; and the `- outcome summary: ${t.outcomeSummary}` line. `outcomeSummary` is written by whoever closed the thread. `opListThreads` has no untrusted header either.
+- `channel-ops-read.ts` `opList` — `${c.name}` / `${c.topic}`, settable by any member who opened the channel.
+- `channel-ops-read.ts` `formatAuthor` — `m.authorName` (a profile display name) interpolated into the `**#7** agent for <name> · …` head line, which is narration the body header does not disclaim.
+- `channel-ops-write.ts` — `**${thread.title}**` in the open / close / mode confirmations.
+
+Each is a one-line `neutralizeInline()` application now that the helper is shared; the cost is churn across `channel-ops.test.ts` assertions, not design. **Ships with the SERVER** — needs `npm run build:packages` and a server push.
+- Status: open.
+
+### F-096
+
+**Stale references to the deleted `main/mcp-cli-entry.js`.** That module rewrote the operator's own `~/.claude.json` (a file holding their `oauthAccount`) to add a per-server `timeout` to their user-scope `dopl` MCP entry. Deleted 2026-07-31 for four reasons, recorded in `docs/ENGINEERING.md`: it mutates a credential-bearing file the operator owns; the streaming fix (c2f6a7e) removed the client-side silence that made the 60s default bite; setting `timeout` ALSO lowers the hard tool-call ceiling from ~27.8h to that value, which we would be imposing on the operator's own terminal sessions unasked; and the in-app spawn already sets it via `--mcp-config`, inside our own process, where it belongs. Three places still describe it as live:
+
+- `docs/REFACTOR-FINDINGS.md` F-092 Residual 2 — still names `mcp-cli-entry.patchCliEntryTimeout` and quotes the superseded `280_000`.
+- `packages/mcp-server/src/tools/channel-await-budget.ts:69-70` and its committed `dist/` twins.
+- `src/app/api/mcp/route.ts:124`.
+
+F-092 Residual 2's own suggestion — "if the transport fix is confirmed in production, consider dropping the per-server timeouts entirely" — is now cheap to act on: it is one constant in one file (`MCP_CLIENT_TIMEOUT_MS`, derived as `AWAIT_HOLD_CAP_MS 230_000 + AWAIT_HOLD_MARGIN_MS 60_000 = 290_000`, pinned as an arithmetic relation in `dopl-desktop-app/test/mcp-client-timeout.test.mjs`).
+- Status: open (docs + two shipped surfaces).
+
+### F-097
+
+**`POST` and `DELETE` on `/api/auth/mcp-device-token` disagree about an invalid `label`.** `BodySchema`'s `readLabel` silently falls back to the default `"Dopl Desktop CLI"`, while `RevokeSchema` **400s** on the same input. So a label the mint quietly rewrote — e.g. a hostname pushing it past 120 chars — can never be revoked by the client that sent it. Found while fixing the revoke verdict (which now parses the server's `revoked` count and reports `no-match` instead of claiming a 0-row revoke succeeded). Reconcile the two schemas: either both coerce or both reject.
+- Status: open. **Server-side — needs a push.**
+
+### F-098
+
+**The web consent card cannot name the tool profile that actually bounds the session.** `src/features/channels/components/permission-preset-row.tsx` renders the two permission axes, but no `toolProfile` reaches `src/features/channels/` at all. Under a `read_only` or `dopl_only` profile the SDK's `disallowedTools` (plus the credential-path deny rules) fence the session at the tool-binding layer, where no permission axis can reach — so the bypass option's old copy, "Auto approving every command on this machine", was simply false. Fixed 2026-07-31 by making the copy honest on BOTH surfaces ("Auto approving every command the tool profile allows", carried verbatim between `permission-preset-row.tsx` and `renderer/session/session-labels.js`, pinned in both suites). The desktop status strip already appends the profile label via `permissionPostureText(toolMode, messageMode, profileLabel)`; the web card still cannot, because the data is not there. Plumb the profile onto the consent-request DTO so the card can state the real blast radius rather than gesturing at it.
+- Status: open. **Web change shipped as copy only; the profile plumbing needs a server push.**

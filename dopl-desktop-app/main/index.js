@@ -11,6 +11,8 @@ const appMenu = require('./app-menu');
 const tray = require('./tray');
 const updater = require('./updater');
 const listener = require('./channel-listener');
+const targeting = require('./targeting');
+const versionSkew = require('./version-skew');
 const channelDirs = require('./channel-dirs');
 const channelDirIpc = require('./channel-dir-ipc');
 const mcpConfig = require('./mcp-config');
@@ -332,11 +334,23 @@ if (!gotLock) {
     // webview) reaches the native folder picker through these three narrow,
     // label-only IPC handlers. onChanged refreshes the tray so its "Channel
     // folders" submenu stays in sync with a change made from the web control.
-    channelDirIpc.register({ onChanged: () => tray.refresh() });
+    // H3: `getMainWindow` BINDS every handler in that file to this window's own
+    // top frame — the remote page can no longer be spoken for by anything else
+    // (or by an iframe inside it). Lazy, because the window outlives register()
+    // and is rebuilt on reopen.
+    channelDirIpc.register({ onChanged: () => tray.refresh(), getMainWindow: () => mainWindow });
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download; the
-    // tray gains a "Restart to install" item when one is ready.
+    // tray gains an "Update ready — restart to install" item (plus the tooltip)
+    // when one is staged. Never auto-restarts: the operator decides, because a
+    // restart mid-turn kills a live spawned session (Q10c).
     updater.init({ onReady: (version) => tray.setUpdateReady(version) });
+
+    // Q10b: a peer running an OLDER build is the standing explanation for "the
+    // fix works here and not there". version-skew.js reads the server-stamped
+    // metadata.appVersion off their messages and reports each (peer, build) once;
+    // the tray keeps the latest as a quiet, disabled line.
+    versionSkew.setHandlers({ onSkew: (skew) => tray.setPeerSkew(skew) });
 
     createMainWindow();
     flushPendingDeepLink();
@@ -345,6 +359,19 @@ if (!gotLock) {
     sessionEngine.setWindowFactory(sessionWindow.createSessionWindow);
     sessionEngine.setLifecycleHandlers(sessionWindow.lifecycleHandlers);
     try { sessionEngine.init(); } catch (err) { diag('sessionEngine.init error', err && err.message); }
+
+    // Q11: the legacy-reply registry is durable now. targeting.js stays
+    // dependency-free (its truth tables slice the block into a bare `new
+    // Function` scope), so the store is INJECTED here, before any loop can
+    // classify a message. Expired and over-cap records are purged on load. A
+    // failure here leaves the old in-memory registry, whose only cost is one
+    // spurious consent prompt per restarted exchange.
+    try {
+      const adopted = targeting.useLegacyThreadStore(store);
+      diag('legacy-thread registry: adopted', adopted, 'record(s) from disk');
+    } catch (err) {
+      diag('legacy-thread registry load error', err && err.message);
+    }
 
     // Start the Channels listener; it drives the tray status label. The
     // openChannel handler lets a clicked notification open + navigate the window;

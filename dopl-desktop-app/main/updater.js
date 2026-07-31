@@ -2,10 +2,18 @@
 // mirroring the study-notes app's proven setup: zip + dmg + latest-mac.yml feed.
 //
 // Behavior: check at startup and every 4h; download silently; when an update is
-// downloaded, show one notification and add a "Restart to install" tray item.
-// Never force-restarts on its own — install happens on normal quit
-// (autoInstallOnAppQuit) or the explicit tray click. A background listener app
-// must not yank itself out from under an active spawned session.
+// downloaded, show one notification and add an "Update ready — restart to
+// install" tray item. Never force-restarts on its own — install happens on
+// normal quit (autoInstallOnAppQuit) or the explicit tray click. A background
+// listener app must not yank itself out from under an active spawned session.
+//
+// Q10: THE STAGED INSTALL IS THE FAILURE MODE. "Installs on quit" plus "never
+// quits" equals a Mac running a build nobody believes it is running — on
+// 2026-07-31 a peer sat on 1.7.14 all evening and the 1.7.15 fix read as broken.
+// So the download event has to reach a HUMAN surface, not just the log: the
+// notification names the action (restart), the tray item is the click that does
+// it, and the tray tooltip carries it without the menu being opened. The
+// operator still decides when — a restart mid-turn kills a live session.
 
 const { app, Notification } = require('electron');
 const { diag } = require('./diag');
@@ -61,7 +69,8 @@ function init(opts) {
         if (Notification.isSupported()) {
           new Notification({
             title: 'Dopl update ready',
-            body: `Version ${readyVersion} will install the next time Dopl restarts.`,
+            body: `Version ${readyVersion} is downloaded. It installs when you restart Dopl `
+              + `(menu bar icon, "Update ready"). Until then this Mac keeps running the old build.`,
             silent: true,
           }).show();
         }
@@ -97,8 +106,17 @@ function quitAndInstall() {
   }
 }
 
+// Q10 — THE STATE, ASKABLE WITHOUT THE EVENT. `onReady` fires exactly once, so
+// anything built after the download would otherwise never learn about it. These
+// two were added for that and sat with ZERO callers until 2026-07-31; tray.js
+// (refreshUpdateReady) now reads them on every menu rebuild, which is what makes
+// the restart item independent of index.js's create()-then-init() ordering.
 function updateReadyVersion() {
   return readyVersion;
 }
 
-module.exports = { init, quitAndInstall, updateReadyVersion };
+function isUpdateReady() {
+  return !!readyVersion;
+}
+
+module.exports = { init, quitAndInstall, updateReadyVersion, isUpdateReady };

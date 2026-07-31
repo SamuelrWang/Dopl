@@ -49,7 +49,7 @@ export const TOOL_OPTIONS: ReadonlyArray<SelectMenuOption<ToolMode>> = [
   {
     value: "bypass",
     label: "Bypass",
-    description: "Auto approving every command on this machine",
+    description: "Auto approving every command the tool profile allows",
   },
 ];
 

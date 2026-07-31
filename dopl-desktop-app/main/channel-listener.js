@@ -12,8 +12,11 @@
 //
 // SPLIT NOTE (§2 refactor): this file was 914 lines. The I/O layer moved to
 // listener-io.js, targeting/handoff to targeting.js, and the consent→spawn→reply
-// pipeline to trigger.js. This file keeps the long-poll loop, channel-set
-// reconciliation, and the public start/stop/restart/status/setHandlers surface.
+// pipeline to trigger.js; per-message dispatch (the session-window routes,
+// classify, and the verdict outcomes) moved to listener-messages.js when Q10
+// needed one more line and this file was sitting exactly on the cap. What is
+// left is the long-poll loop, channel-set reconciliation, and the public
+// start/stop/restart/status/setHandlers surface.
 
 const { Notification } = require('electron');
 const auth = require('./auth');
@@ -22,7 +25,9 @@ const presence = require('./presence');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const trigger = require('./trigger');
-const taskNotify = require('./task-notify');
+// Per-message dispatch (the three session-window routes, classify, and the three
+// verdict outcomes) lives in listener-messages.js — extracted at the 500-line cap.
+const messages = require('./listener-messages');
 const watcher = require('./consent-watcher');
 const sessionEngine = require('./session-engine');
 const realtime = require('./realtime');
@@ -50,13 +55,6 @@ let lastGoodWorkspaceIds = [];
 // Bounded, coalesced "re-ask later" scheduling for the two self-heal paths
 // (loop=miss re-enumeration, unenumerated-workspace retry). See listener-heal.js.
 const healer = heal.createReconcileHealer({ run: () => reconcile(), log: diag });
-
-// ── v2.2 session-window dispatch (checked BEFORE classify → consent, §A.2) ────
-// The three pre-classify routes (feedLiveSession, maybeOpenRequesterSession,
-// maybeSurfaceRequesterReply) live in session-dispatch.js — extracted to keep this
-// file ≤500 and to make room for item 3's secondary path. All SHORT-CIRCUIT when
-// window-mode is OFF, so the classify path below stays byte-for-byte legacy behavior.
-const sessionDispatch = require('./session-dispatch');
 
 // ── Per-channel long-poll loop ──────────────────────────────────────────────
 async function channelLoop(entry) {
@@ -152,27 +150,10 @@ async function channelLoop(entry) {
     } else {
       for (const m of msgs) {
         if ((m.seq || 0) > io.getCursor(entry.channel.id)) io.setCursor(entry.channel.id, m.seq);
-        // v2.2 session-window dispatch, checked BEFORE classify → consent (§A.2):
-        //   1. feed a LIVE session's next turn; 2. auto-open a REQUESTER window on my
-        //   own create_task; 3. reopen a SETTLED-yet-resumable requester on a peer reply.
-        //   All no-op when window-mode is OFF (byte-for-byte legacy classify below).
-        if (sessionDispatch.feedLiveSession(entry, m, myUserId)) continue;
-        if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) continue;
-        if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) continue;
-        const verdict = targeting.classify(m, entry, myUserId);
-        diag(
-          'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,
-          'authorKind', m.authorKind, 'author', String(m.authorUserId || '').slice(0, 8),
-          'me', myUserId ? String(myUserId).slice(0, 8) : 'NULL',
-          'members', Number(entry.channel && entry.channel.memberCount) || '?',
-          'to', targeting.metaStr(m, 'to_user_id') ? String(targeting.metaStr(m, 'to_user_id')).slice(0, 8) : '-',
-          'verdict', verdict
-        );
-        if (verdict === 'trigger') await trigger.handleTrigger(entry, m);
-        else if (verdict === 'fyi') trigger.sendFyi(entry, m);
-        // Feature 4 (requester side): a reply in one of MY interactive tasks —
-        // passive notify only. No consent row, no watcher record, no spawn.
-        else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m);
+        // One message, one outcome — the routes, classify, and the verdict
+        // outcomes are listener-messages.js. Awaited, so a trigger's consent +
+        // spawn still serializes ahead of the next message in this page.
+        await messages.dispatchMessage(entry, m, myUserId);
       }
       if (msgs.length === 0 && maxSeq > since) io.setCursor(entry.channel.id, maxSeq);
     }
@@ -438,7 +419,13 @@ function start(statusCb, h) {
 }
 
 // Re-run reconciliation now (e.g. right after a fresh sign-in).
+// Called on sign-in AND on sign-out (index.js `onSignedOut`), i.e. exactly when the
+// identity behind every cached lookup may have changed. channel-context caches a
+// channel's name + counterparty for a minute; without this, signing out and back in
+// as a DIFFERENT account could resolve the previous operator's channel identity for
+// up to that minute. Cheap, and the only caller `forget()` needs.
 function restart() {
+  try { require('./channel-context').forget(); } catch (_) { /* cache is optional */ }
   if (!running) { start(onStatus); return; }
   reconcile();
 }

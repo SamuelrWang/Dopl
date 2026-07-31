@@ -123,7 +123,8 @@ describe("opPost — threading self-verification (Q7)", () => {
       await opPost(client, "general", "on it", { thread: "thread-1" })
     ).content[0].text;
 
-    expect(text).toContain("THREADED into **Ship the listener fix**");
+    // M2: the peer-typed title rides in a code span, not raw bold narration.
+    expect(text).toContain("THREADED into `Ship the listener fix`");
     expect(text).toContain("`thread-1`");
     expect(text).toContain("continuation");
     // The reassuring case must not also carry the warning.
@@ -140,7 +141,7 @@ describe("opPost — threading self-verification (Q7)", () => {
     const text = (await opPost(client, "general", "and one more thing", {}))
       .content[0].text;
 
-    expect(text).toContain("THREADED into **Ship it**");
+    expect(text).toContain("THREADED into `Ship it`");
   });
 
   it("WARNS when nothing was threaded and the channel has open threads", async () => {
