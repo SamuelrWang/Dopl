@@ -69,6 +69,15 @@ export interface AwaitHoldOptions {
   since: number | undefined;
   /** Absolute epoch-ms deadline; the hold returns empty once it passes. */
   deadline: number;
+  /**
+   * When set, messages authored by this user id neither end the hold nor
+   * appear in its page. A caller that posts while its own await is armed
+   * (a `task_progress` milestone, a close echo) otherwise pops its own hold
+   * on its own echo, which defeats the wake primitive for exactly the
+   * multi-step work it exists for. Absent = every author ends the hold, which
+   * is what the desktop listener needs.
+   */
+  excludeAuthor?: string;
   /** Aborts the hold when the client disconnects. */
   signal?: { aborted: boolean };
   /** Tick interval. Overridable so tests don't sleep in real seconds. */
@@ -104,7 +113,7 @@ export async function awaitNewMessages(
   channelId: string,
   opts: AwaitHoldOptions
 ): Promise<AwaitHoldResult> {
-  const { since, deadline, signal } = opts;
+  const { since, deadline, signal, excludeAuthor } = opts;
   const intervalMs = opts.pollIntervalMs ?? AWAIT_POLL_INTERVAL_MS;
 
   // L6: the caller's object when it passed one, so a hold that ends in a throw
@@ -135,7 +144,7 @@ export async function awaitNewMessages(
   };
 
   counters.polls += 1;
-  let messages = await pollChannelMessages(channelId, since);
+  let messages = await pollChannelMessages(channelId, since, excludeAuthor);
 
   while (
     messages.length === 0 &&
@@ -149,12 +158,15 @@ export async function awaitNewMessages(
     // hold rather than leaving it listening to a channel it can no longer see.
     if ((ticks - 1) % AWAIT_REVALIDATE_EVERY_TICKS === 0) await verifyAccess();
     counters.polls += 1;
-    if (!(await hasNewMessages(channelId, since))) continue;
+    // The probe carries the SAME author filter as the row read: an existence
+    // hit on a message the page would then drop turns the hold into a
+    // fetch-empty-continue spin, one extra pair of queries every tick.
+    if (!(await hasNewMessages(channelId, since, excludeAuthor))) continue;
     // A hit: prove access BEFORE reading rows, so nothing is ever delivered to
     // a caller who lost it since the last recheck.
     await verifyAccess();
     counters.polls += 1;
-    const found = await pollChannelMessages(channelId, since);
+    const found = await pollChannelMessages(channelId, since, excludeAuthor);
     // Defensive: an existence hit that reads back empty (a row removed in
     // between) must keep holding, never return `{messages: [], timedOut:
     // false}` — that shape means "delivered nothing" to every caller.

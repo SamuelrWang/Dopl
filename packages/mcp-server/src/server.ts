@@ -901,7 +901,12 @@ export function createServer(
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   registerSearchTool(registerTool, client); // dopl_search — cross-domain search
   registerOntologyTool(registerTool, client, caller); // dopl_ontology — routing graph (read-only)
-  registerChannelTool(registerTool, client, options.userId ?? null); // dopl_channel — cross-user collaboration channels
+  // The FULL identity, not just the id: `caller.runtime` is what decides
+  // whether the wake teaching may claim a pending `await` outlives the turn.
+  // This line passed `options.userId` alone while `registerMembersTool` two
+  // lines up already took `caller`, so the one tool that needed the runtime
+  // was the one tool that never saw it.
+  registerChannelTool(registerTool, client, caller); // dopl_channel — cross-user collaboration channels
 
   return server;
 }

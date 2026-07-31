@@ -110,6 +110,9 @@ export async function awaitMessages(
     "timeoutMs",
     String(opts.timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS),
   );
+  if (opts.excludeAuthor !== undefined) {
+    params.set("excludeAuthor", opts.excludeAuthor);
+  }
   return t.request<AwaitResult>(
     `/api/channels/${enc(channelId)}/await?${params.toString()}`,
     {

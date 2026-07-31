@@ -123,6 +123,25 @@ export class ChannelTaskNotInChannelError extends ChannelError {
   }
 }
 
+/**
+ * A thread would be addressed to the caller themselves. Refused (400) rather
+ * than accepted silently: only the thread's creator and its target may post
+ * into it, so a self-addressed thread has exactly ONE party — the member who
+ * asked — and nobody's desktop ever routes it. It renders in the panel as a
+ * live request "addressed to <caller>", the peer's listener logs `verdict
+ * ignore`, and it can never be answered. Distinct from
+ * {@link DirectSelfTargetError} (a self-DM): different resource, different
+ * code. `post to=self` is deliberately NOT guarded — the desktop already
+ * classifies a self-addressed post as noise, and a post is not a thread.
+ */
+export class TaskSelfTargetError extends ChannelError {
+  constructor() {
+    super(
+      "Cannot open a thread addressed to yourself — a thread must be addressed to another member"
+    );
+  }
+}
+
 /** A direct channel would target the caller themselves — a self-DM is refused. */
 export class DirectSelfTargetError extends ChannelError {
   constructor() {

@@ -53,6 +53,11 @@ function messageRow(seq: number): ChannelMessageRow {
   };
 }
 
+/** Same shape as `messageRow`, but the author is the caller themselves. */
+function ownRow(seq: number): ChannelMessageRow {
+  return { ...messageRow(seq), author_user_id: USER };
+}
+
 function membership(): ChannelMemberRow {
   return {
     channel_id: CHAN,
@@ -213,7 +218,8 @@ describe("awaitNewMessages — caller contract is unchanged", () => {
       since: 42,
       limit: 200,
     });
-    expect(repoMessages.hasMessagesAfter).toHaveBeenCalledWith(CHAN, 42);
+    // Third arg is the (unset) author filter — see the exclusion suite below.
+    expect(repoMessages.hasMessagesAfter).toHaveBeenCalledWith(CHAN, 42, undefined);
   });
 
   it("returns empty (a timeout) when nothing arrives", async () => {
@@ -301,6 +307,111 @@ describe("awaitNewMessages — egress shape (Q8)", () => {
     expect(repo.findMembership).not.toHaveBeenCalled();
     expect(repo.findChannelAccess).toHaveBeenCalledWith(WS, CHAN);
     expect(repo.hasMembership).toHaveBeenCalledWith(CHAN, USER);
+  });
+});
+
+describe("awaitNewMessages — author exclusion (opt-in)", () => {
+  /**
+   * A caller that posts while its own await is armed used to wake itself on
+   * its own echo, which is exactly the multi-step case the hold exists for.
+   * These run BOTH repo mocks over one fake table that honours the filter, so
+   * they pin the forwarding and the loop's behaviour together — a filter
+   * threaded to the row read but not to the existence probe would show up
+   * here as a hold that spins instead of one that keeps waiting.
+   */
+  function holdOver(
+    rows: ChannelMessageRow[],
+    opts: {
+      since?: number;
+      excludeAuthor?: string;
+      ticks?: number;
+      onProbe?: (tick: number) => void;
+    } = {}
+  ) {
+    const signal = { aborted: false };
+    let probes = 0;
+    const visible = (excludeAuthor?: string, since?: number) =>
+      rows.filter(
+        (r) =>
+          (since === undefined || r.seq > since) &&
+          (excludeAuthor === undefined || r.author_user_id !== excludeAuthor)
+      );
+    vi.mocked(repoMessages.listMessages).mockImplementation(async (_c, o) =>
+      visible(o.excludeAuthor, o.since)
+    );
+    vi.mocked(repoMessages.hasMessagesAfter).mockImplementation(
+      async (_c, since, excludeAuthor) => {
+        probes += 1;
+        opts.onProbe?.(probes);
+        if (probes >= (opts.ticks ?? 4)) signal.aborted = true;
+        return visible(excludeAuthor, since).length > 0;
+      }
+    );
+    return awaitNewMessages(ctx, CHAN, {
+      since: opts.since ?? 10,
+      deadline: Date.now() + 60_000,
+      excludeAuthor: opts.excludeAuthor,
+      signal,
+      pollIntervalMs: 0,
+    });
+  }
+
+  it("does NOT end the hold on a message the caller authored itself", async () => {
+    const result = await holdOver([ownRow(11)], { excludeAuthor: USER });
+    expect(result.messages).toEqual([]);
+  });
+
+  it("still ends the hold on a foreign message", async () => {
+    const result = await holdOver([messageRow(11)], { excludeAuthor: USER });
+    expect(result.messages.map((m) => m.seq)).toEqual([11]);
+  });
+
+  it("returns ONLY the foreign messages out of a mixed page", async () => {
+    const result = await holdOver(
+      [ownRow(11), messageRow(12), ownRow(13), messageRow(14)],
+      { excludeAuthor: USER }
+    );
+    expect(result.messages.map((m) => m.seq)).toEqual([12, 14]);
+  });
+
+  it("an existence probe that sees only OWN messages never triggers a row fetch", async () => {
+    // The own message lands mid-hold. If the probe were unfiltered it would
+    // hit every tick and the hold would fetch, read back empty and continue —
+    // a two-query spin per tick for the rest of the hold.
+    const rows: ChannelMessageRow[] = [];
+    const result = await holdOver(rows, {
+      excludeAuthor: USER,
+      ticks: 6,
+      onProbe: (tick) => {
+        if (tick === 2) rows.push(ownRow(11));
+      },
+    });
+    expect(result.messages).toEqual([]);
+    // Tick 0's direct read is the only row read in the whole hold.
+    expect(repoMessages.listMessages).toHaveBeenCalledTimes(1);
+    expect(result.polls).toBe(7); // 1 read + 6 probes, no fetch-and-discard
+  });
+
+  it("threads the filter to BOTH the probe and the row read", async () => {
+    await holdOver([], { excludeAuthor: USER, since: 42, ticks: 2 });
+    expect(repoMessages.listMessages).toHaveBeenCalledWith(CHAN, {
+      since: 42,
+      limit: 200,
+      excludeAuthor: USER,
+    });
+    expect(repoMessages.hasMessagesAfter).toHaveBeenCalledWith(CHAN, 42, USER);
+  });
+
+  it("without the option, an own-authored message ends the hold exactly as before", async () => {
+    // The desktop listener depends on this: it NEEDS its own account's
+    // messages for thread targeting and requester-window routing.
+    const result = await holdOver([ownRow(11), messageRow(12)]);
+    expect(result.messages.map((m) => m.seq)).toEqual([11, 12]);
+    expect(repoMessages.listMessages).toHaveBeenCalledWith(CHAN, {
+      since: 10,
+      limit: 200,
+      excludeAuthor: undefined,
+    });
   });
 });
 

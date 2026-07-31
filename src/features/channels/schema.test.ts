@@ -296,6 +296,12 @@ describe("AwaitQuerySchema", () => {
     expect(AwaitQuerySchema.safeParse({ timeoutMs: "50001" }).success).toBe(false);
     expect(AwaitQuerySchema.safeParse({ timeoutMs: "0" }).success).toBe(false);
   });
+
+  it("excludeAuthor: optional, and a uuid when present", () => {
+    expect(AwaitQuerySchema.safeParse({ excludeAuthor: UUID }).success).toBe(true);
+    expect(AwaitQuerySchema.safeParse({ excludeAuthor: "me" }).success).toBe(false);
+    expect(AwaitQuerySchema.safeParse({}).data?.excludeAuthor).toBeUndefined();
+  });
 });
 
 describe("ConsentCreateSchema", () => {

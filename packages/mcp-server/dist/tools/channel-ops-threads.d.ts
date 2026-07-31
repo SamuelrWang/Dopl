@@ -26,7 +26,7 @@
  */
 import type { DoplClient, ThreadMode, ThreadOutcome } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string): Promise<ToolResponse>;
+export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null): Promise<ToolResponse>;
 /**
  * Close a thread — the write op the Q1 completeness review caught still raw.
  *

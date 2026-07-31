@@ -32,8 +32,12 @@ export declare function opRead(client: DoplClient, ref: string, since?: number, 
  * FAILED-MID-HOLD note that names what broke and re-arms on the same cursor,
  * or — when the hold ended far under what was asked for with no error at all —
  * a CUT SHORT note that tells the caller NOT to re-arm and to report it.
+ *
+ * `runtime` is the caller's OBSERVED runtime stamp (`CallerIdentity.runtime`,
+ * threaded from the registrar). It changes nothing this op DOES — only what it
+ * is willing to claim about the hold. See `channel-wake-guidance.ts`.
  */
-export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
 export declare function opGetThread(client: DoplClient, ref: string, threadId: string, selfUserId?: string | null): Promise<ToolResponse>;
 /**

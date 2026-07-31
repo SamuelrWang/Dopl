@@ -14,6 +14,12 @@ import type { ChannelMessageRow } from "./dto";
 interface MessageReadOpts {
   since?: number;
   limit: number;
+  /**
+   * Drop this author's rows. Only the await hold passes it (so a caller's own
+   * posts cannot end its own wait); every other read leaves it unset and the
+   * query is the one that always ran.
+   */
+  excludeAuthor?: string;
 }
 
 /**
@@ -30,21 +36,29 @@ export async function listMessages(
 ): Promise<ChannelMessageRow[]> {
   const db = supabaseAdmin();
   if (opts.since !== undefined) {
-    const { data, error } = await db
+    let query = db
       .from("channel_messages")
       .select("*")
       .eq("channel_id", channelId)
-      .gt("seq", opts.since)
+      .gt("seq", opts.since);
+    if (opts.excludeAuthor !== undefined) {
+      query = query.neq("author_user_id", opts.excludeAuthor);
+    }
+    const { data, error } = await query
       .order("seq", { ascending: true })
       .limit(opts.limit);
     if (error) throw error;
     return (data ?? []) as ChannelMessageRow[];
   }
   // Newest `limit`, then flip to ascending for display / cursor semantics.
-  const { data, error } = await db
+  let query = db
     .from("channel_messages")
     .select("*")
-    .eq("channel_id", channelId)
+    .eq("channel_id", channelId);
+  if (opts.excludeAuthor !== undefined) {
+    query = query.neq("author_user_id", opts.excludeAuthor);
+  }
+  const { data, error } = await query
     .order("seq", { ascending: false })
     .limit(opts.limit);
   if (error) throw error;
@@ -71,7 +85,8 @@ export async function listMessages(
  */
 export async function hasMessagesAfter(
   channelId: string,
-  since: number | undefined
+  since: number | undefined,
+  excludeAuthor?: string
 ): Promise<boolean> {
   const db = supabaseAdmin();
   let query = db
@@ -79,6 +94,11 @@ export async function hasMessagesAfter(
     .select("seq")
     .eq("channel_id", channelId);
   if (since !== undefined) query = query.gt("seq", since);
+  // Must mirror `listMessages`: a probe that hits on a row the row read then
+  // filters out spins the hold (fetch, empty, continue) once per tick.
+  if (excludeAuthor !== undefined) {
+    query = query.neq("author_user_id", excludeAuthor);
+  }
   const { data, error } = await query.limit(1);
   if (error) throw error;
   return (data ?? []).length > 0;

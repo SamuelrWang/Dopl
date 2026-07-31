@@ -210,6 +210,14 @@ export interface AwaitMessagesOptions {
   since: number;
   /** How long the server long-polls before returning `timedOut` (ms). */
   timeoutMs?: number;
+  /**
+   * Opt-in author exclusion: messages authored by this user id neither end
+   * the poll nor appear in its result. A caller that posts while its own
+   * await is armed otherwise wakes itself on its own echo. Leave unset to
+   * watch every author (what a listener that also tracks its own account
+   * needs).
+   */
+  excludeAuthor?: string;
 }
 
 /**

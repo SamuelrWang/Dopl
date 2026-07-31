@@ -6,6 +6,7 @@ import {
   ChannelForbiddenError,
   TaskForbiddenError,
   TaskNotFoundError,
+  TaskSelfTargetError,
 } from "./errors";
 import { mapTaskRow } from "./dto";
 import * as repo from "./repository";
@@ -123,6 +124,23 @@ export async function createTask(
   }
   if (!(await repo.findMembership(channel.id, input.toUserId))) {
     throw new ChannelAddresseeNotMemberError(input.toUserId);
+  }
+  // A thread addressed to its own creator is DEAD ON ARRIVAL: only the creator
+  // and the target may post into it, and here they are the same person, so the
+  // one member allowed to answer is the one who asked. It was accepted silently
+  // — the panel rendered a live request "addressed to <caller>", the peer's
+  // desktop logged `verdict ignore`, and nothing ever came. The web composer
+  // already filters the caller out of its address picker
+  // (`components/address-picker.tsx`), so this guard regresses no UI path; it
+  // closes the agent path, where `to` is whatever user id the model resolved
+  // (an agent on a session with two dopl connections self-addressed one live).
+  //
+  // IT SITS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT ON PURPOSE. Behind it, a retry
+  // carrying the same `client_msg_id` would find the stored dead thread and
+  // return it as a success, so the caller would be told the thread is fine
+  // exactly once it is unfixable. In front, every attempt errors identically.
+  if (input.toUserId === ctx.userId) {
+    throw new TaskSelfTargetError();
   }
 
   // Idempotency: a re-sent client_msg_id returns the already-created task

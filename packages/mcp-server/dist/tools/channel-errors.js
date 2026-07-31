@@ -50,6 +50,8 @@ function classifyBadRequest(e) {
             return "addressee_not_member";
         case "CHANNEL_TASK_NOT_IN_CHANNEL":
             return "thread_not_in_channel";
+        case "CHANNEL_TASK_SELF_TARGET":
+            return "self_target";
         case "VALIDATION_FAILED":
         case "INVALID_JSON":
         case "BAD_REQUEST":

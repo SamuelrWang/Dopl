@@ -285,9 +285,10 @@ export async function revalidateAwaitAccess(
  */
 export async function hasNewMessages(
   channelId: string,
-  since: number | undefined
+  since: number | undefined,
+  excludeAuthor?: string
 ): Promise<boolean> {
-  return repoMessages.hasMessagesAfter(channelId, since);
+  return repoMessages.hasMessagesAfter(channelId, since, excludeAuthor);
 }
 
 /**
@@ -299,9 +300,14 @@ export async function hasNewMessages(
  */
 export async function pollChannelMessages(
   channelId: string,
-  since: number | undefined
+  since: number | undefined,
+  excludeAuthor?: string
 ): Promise<ChannelMessage[]> {
-  const rows = await repoMessages.listMessages(channelId, { since, limit: 200 });
+  const rows = await repoMessages.listMessages(channelId, {
+    since,
+    limit: 200,
+    excludeAuthor,
+  });
   return hydrateMessages(rows);
 }
 

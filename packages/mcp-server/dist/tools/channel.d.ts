@@ -27,17 +27,28 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";
+import { type CallerIdentity } from "./identity";
 /**
- * `selfUserId` — the CALLER's own user id, resolved once at boot from the
- * status ping (`bootServer`) and handed down here. It is what lets a read
- * render "· to you" instead of a uuid the agent has no way to match against
- * itself: without it, an agent in a five-member channel can see that a message
- * is addressed to SOMEONE and still not know whether that someone is itself.
+ * `caller` — the session's ONE identity record (server.ts / `identity.ts`),
+ * resolved once at boot. Two fields matter here and they are used for two
+ * different things:
+ *
+ *   - `userId` lets a read render "· to you" instead of a uuid the agent has no
+ *     way to match against itself: without it, an agent in a five-member
+ *     channel can see a message is addressed to SOMEONE and still not know
+ *     whether that someone is itself. It also filters the caller's own posts
+ *     out of its own `await` hold.
+ *   - `runtime` decides what the wake teaching may CLAIM. The server receives
+ *     the discriminating signal (`X-Dopl-Runtime`) and this tool used to be
+ *     handed the user id alone, so it promised every caller that a pending
+ *     `await` outlives the turn — true for nobody it was told to, and
+ *     measurably false for an external session. See `channel-wake-guidance.ts`.
+ *     It is an OBSERVATION and gates nothing (`identity.ts`).
  *
  * Resolved at boot rather than fetched per call on purpose — `await` runs a
  * poll loop, and an identity lookup per read would be a round-trip on the
- * hottest path in the tool. Null when the boot ping failed (and in tests, which
- * call this registrar with two arguments): every id then renders as an id,
- * which is honest, and no line claims to know who "you" is.
+ * hottest path in the tool. Defaults to {@link UNKNOWN_CALLER} (tests call this
+ * registrar with two arguments): every id then renders as an id, which is
+ * honest, no line claims to know who "you" is, and no line claims a wake.
  */
-export declare function registerChannelTool(register: RegisterTool, client: DoplClient, selfUserId?: string | null): void;
+export declare function registerChannelTool(register: RegisterTool, client: DoplClient, caller?: CallerIdentity): void;

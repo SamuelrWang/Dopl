@@ -230,3 +230,62 @@ function rosterClient(userIds) {
         (0, vitest_1.expect)(channel_addressing_1.AWAIT_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
     });
 });
+// ── ...and WHEN it fires, which is a separate claim ───────────────────
+//
+// The notice's premise is "somebody ELSE wrote things and none of them names
+// you". The predicate ran over the whole page including the caller's OWN posts,
+// so it fired live on a page holding exactly one message — the caller's own
+// request, addressed to the peer — and told the agent "NONE of the messages
+// above NAMES you" about a message the agent had just written. `opAwait` also
+// passes `excludeAuthor` now, so own posts should not reach the render at all;
+// this is the second line of defence, because the notice must be false-free on
+// whatever it is handed.
+(0, vitest_1.describe)("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
+    function awaitClient(messages) {
+        vitest_1.vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+        return {
+            listChannels: vitest_1.vi.fn(async () => [CHANNEL]),
+            awaitChannelMessages: vitest_1.vi.fn(async () => ({ messages, timedOut: false })),
+        };
+    }
+    function message(seq, authorUserId, toUserId) {
+        return {
+            id: `m-${seq}`,
+            seq,
+            channelId: "chan-1",
+            authorUserId,
+            authorKind: "agent",
+            kind: "message",
+            body: "the body",
+            metadata: toUserId ? { to_user_id: toUserId } : {},
+            clientMsgId: null,
+            createdAt: "2026-07-31T00:00:00Z",
+        };
+    }
+    async function noticeFor(messages, selfUserId = ME) {
+        const res = await (0, channel_ops_read_1.opAwait)(awaitClient(messages), "general", 7, undefined, selfUserId);
+        return res.content[0].text;
+    }
+    (0, vitest_1.afterEach)(() => {
+        vitest_1.vi.restoreAllMocks();
+    });
+    (0, vitest_1.it)("says NOTHING when every message on the page is the caller's own", async () => {
+        // The observed live case: one message, mine, addressed to the peer.
+        const text = await noticeFor([message(8, ME, PEER)]);
+        (0, vitest_1.expect)(text).not.toContain("NONE of the messages above NAMES you");
+    });
+    (0, vitest_1.it)("still fires when a peer wrote something that names nobody", async () => {
+        (0, vitest_1.expect)(await noticeFor([message(8, PEER)])).toContain("NONE of the messages above NAMES you");
+    });
+    (0, vitest_1.it)("stays silent when a peer's message DOES name the caller", async () => {
+        (0, vitest_1.expect)(await noticeFor([message(8, PEER, ME)])).not.toContain("NONE of the messages above NAMES you");
+    });
+    (0, vitest_1.it)("judges the peer's messages alone — the caller's own can't suppress it", async () => {
+        // Mixed page: my own post naming the peer, plus their unaddressed reply.
+        // The notice is about theirs, and the presence of mine changes nothing.
+        (0, vitest_1.expect)(await noticeFor([message(8, ME, PEER), message(9, PEER)])).toContain("NONE of the messages above NAMES you");
+    });
+    (0, vitest_1.it)("says nothing at all when the caller's own id is unknown", async () => {
+        (0, vitest_1.expect)(await noticeFor([message(8, PEER)], null)).not.toContain("NONE of the messages above NAMES you");
+    });
+});

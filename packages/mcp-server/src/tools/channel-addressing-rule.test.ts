@@ -32,7 +32,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import {
   AWAIT_UNNAMED_NOTICE,
@@ -41,7 +41,7 @@ import {
   rosterAddressingRule,
   unaddressedPostNote,
 } from "./channel-addressing";
-import { opMembers } from "./channel-ops-read";
+import { opAwait, opMembers } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
 const ME = "u-me";
@@ -282,5 +282,89 @@ describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
   it("still refuses another member's request", () => {
     expect(AWAIT_UNNAMED_NOTICE).toContain("aimed at another member");
     expect(AWAIT_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
+  });
+});
+
+// ── ...and WHEN it fires, which is a separate claim ───────────────────
+//
+// The notice's premise is "somebody ELSE wrote things and none of them names
+// you". The predicate ran over the whole page including the caller's OWN posts,
+// so it fired live on a page holding exactly one message — the caller's own
+// request, addressed to the peer — and told the agent "NONE of the messages
+// above NAMES you" about a message the agent had just written. `opAwait` also
+// passes `excludeAuthor` now, so own posts should not reach the render at all;
+// this is the second line of defence, because the notice must be false-free on
+// whatever it is handed.
+
+describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
+  function awaitClient(messages: Array<Record<string, unknown>>): DoplClient {
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    return {
+      listChannels: vi.fn(async () => [CHANNEL]),
+      awaitChannelMessages: vi.fn(async () => ({ messages, timedOut: false })),
+    } as unknown as DoplClient;
+  }
+
+  function message(
+    seq: number,
+    authorUserId: string,
+    toUserId?: string,
+  ): Record<string, unknown> {
+    return {
+      id: `m-${seq}`,
+      seq,
+      channelId: "chan-1",
+      authorUserId,
+      authorKind: "agent",
+      kind: "message",
+      body: "the body",
+      metadata: toUserId ? { to_user_id: toUserId } : {},
+      clientMsgId: null,
+      createdAt: "2026-07-31T00:00:00Z",
+    };
+  }
+
+  async function noticeFor(
+    messages: Array<Record<string, unknown>>,
+    selfUserId: string | null = ME,
+  ): Promise<string> {
+    const res = await opAwait(awaitClient(messages), "general", 7, undefined, selfUserId);
+    return res.content[0].text;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("says NOTHING when every message on the page is the caller's own", async () => {
+    // The observed live case: one message, mine, addressed to the peer.
+    const text = await noticeFor([message(8, ME, PEER)]);
+    expect(text).not.toContain("NONE of the messages above NAMES you");
+  });
+
+  it("still fires when a peer wrote something that names nobody", async () => {
+    expect(await noticeFor([message(8, PEER)])).toContain(
+      "NONE of the messages above NAMES you",
+    );
+  });
+
+  it("stays silent when a peer's message DOES name the caller", async () => {
+    expect(await noticeFor([message(8, PEER, ME)])).not.toContain(
+      "NONE of the messages above NAMES you",
+    );
+  });
+
+  it("judges the peer's messages alone — the caller's own can't suppress it", async () => {
+    // Mixed page: my own post naming the peer, plus their unaddressed reply.
+    // The notice is about theirs, and the presence of mine changes nothing.
+    expect(await noticeFor([message(8, ME, PEER), message(9, PEER)])).toContain(
+      "NONE of the messages above NAMES you",
+    );
+  });
+
+  it("says nothing at all when the caller's own id is unknown", async () => {
+    expect(await noticeFor([message(8, PEER)], null)).not.toContain(
+      "NONE of the messages above NAMES you",
+    );
   });
 });

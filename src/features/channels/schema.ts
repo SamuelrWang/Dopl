@@ -229,7 +229,13 @@ export const MessageReadQuerySchema = z.object({
 });
 export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
 
-/** `?since=<seq>&timeoutMs<=50000` for the await long-poll. */
+/**
+ * `?since=<seq>&timeoutMs<=50000&excludeAuthor=<userId>` for the await
+ * long-poll. `excludeAuthor` is OPT-IN: the desktop listener omits it because
+ * it needs its own account's messages (thread targeting, requester-window
+ * routing, version-skew observation), while an MCP await passes the caller's
+ * own id so the caller's own posts cannot pop its own hold.
+ */
 export const AwaitQuerySchema = z.object({
   since: z.coerce.number().int().nonnegative().optional(),
   timeoutMs: z.coerce
@@ -238,6 +244,7 @@ export const AwaitQuerySchema = z.object({
     .positive()
     .max(MAX_AWAIT_TIMEOUT_MS)
     .optional(),
+  excludeAuthor: z.string().uuid().optional(),
 });
 export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
 

@@ -42,6 +42,12 @@ interface PostOptions {
     summary?: string;
     /** A thread id — threads this post under that thread's card (server-validated). */
     thread?: string;
+    /**
+     * The caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes
+     * nothing this op does — only what the result is willing to claim about
+     * waiting for the reply. See `channel-wake-guidance.ts`.
+     */
+    runtime?: string | null;
 }
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
 interface OpenOptions {

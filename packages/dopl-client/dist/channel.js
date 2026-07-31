@@ -70,6 +70,9 @@ async function awaitMessages(t, channelId, opts) {
     const params = new URLSearchParams();
     params.set("since", String(opts.since));
     params.set("timeoutMs", String(opts.timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS));
+    if (opts.excludeAuthor !== undefined) {
+        params.set("excludeAuthor", opts.excludeAuthor);
+    }
     return t.request(`/api/channels/${enc(channelId)}/await?${params.toString()}`, {
         method: "GET",
         timeoutMs: AWAIT_TIMEOUT_MS,

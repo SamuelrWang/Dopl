@@ -51,6 +51,12 @@ import {
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 import { AWAIT_UNNAMED_NOTICE, rosterAddressingRule } from "./channel-addressing";
+// Whether this tool may promise that a pending call outlives the turn is ONE
+// decision, made in ONE module, from the caller's observed runtime.
+import {
+  awaitArrivedLines,
+  awaitTimedOutLines,
+} from "./channel-wake-guidance";
 
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = resolveAwaitHoldMs(process.env.DOPL_AWAIT_HOLD_MS);
@@ -204,6 +210,10 @@ export async function opRead(
  * FAILED-MID-HOLD note that names what broke and re-arms on the same cursor,
  * or — when the hold ended far under what was asked for with no error at all —
  * a CUT SHORT note that tells the caller NOT to re-arm and to report it.
+ *
+ * `runtime` is the caller's OBSERVED runtime stamp (`CallerIdentity.runtime`,
+ * threaded from the registrar). It changes nothing this op DOES — only what it
+ * is willing to claim about the hold. See `channel-wake-guidance.ts`.
  */
 export async function opAwait(
   client: DoplClient,
@@ -211,6 +221,7 @@ export async function opAwait(
   since: number,
   timeoutMs?: number,
   selfUserId: string | null = null,
+  runtime: string | null = null,
 ): Promise<ToolResponse> {
   // Default = AWAIT_HOLD_MS; an EXPLICIT ask may go up to the ceiling (the cap,
   // or the env lever's value when the lever is set — see resolveAwaitHoldCeilingMs).
@@ -243,6 +254,14 @@ export async function opAwait(
         // timeout, so a `timeout_ms=0` caller (one immediate check) would
         // otherwise 400 instead of getting their check.
         timeoutMs: Math.max(1, Math.min(AWAIT_POLL_MS, remaining)),
+        // An MCP await waits for a COUNTERPARTY by definition, so the caller's
+        // own account is always excluded: without this, posting a
+        // `task_progress` milestone after arming pops the agent's own hold on
+        // its own echo. It also drops a SIBLING session on this account —
+        // intended, that traffic is "own" from the channel's point of view.
+        // Null id (the boot handshake could not name the caller) => no filter,
+        // i.e. the pre-fix behavior rather than a guessed one.
+        ...(selfUserId !== null ? { excludeAuthor: selfUserId } : {}),
       });
     } catch (e) {
       if (isNotFound(e)) return channelNotFound(ref);
@@ -297,8 +316,7 @@ export async function opAwait(
     return ok(
       [
         timedOut,
-        `If you are still expecting a reply, re-arm the wait NOW, before you end your turn: dopl_channel(op="await", channel="${ref}", since=${since}) with the SAME since. That call can keep running after your turn ends, and its result will wake you when the reply lands.`,
-        rearmStopRule(ref),
+        ...awaitTimedOutLines(ref, since, runtime, rearmStopRule(ref)),
       ].join("\n"),
     );
   }
@@ -320,13 +338,22 @@ export async function opAwait(
   // without a round-trip; what the notice SAYS no longer treats that as "none of
   // this is yours", because the canonical reply in this product is unaddressed.
   // See AWAIT_UNNAMED_NOTICE.
-  if (selfUserId !== null && !messages.some((m) => addresseeOf(m) === selfUserId)) {
-    lines.push(`\n${AWAIT_UNNAMED_NOTICE}`);
+  //
+  // ...over the messages SOMEONE ELSE wrote. The notice's premise is "other
+  // people wrote things, and none of them names you" — a page of the caller's
+  // OWN posts satisfies the old predicate while making the notice absurd, and
+  // that is what shipped: it fired on a page holding one message, the caller's
+  // own, addressed to the peer, and told the agent "NONE of the messages above
+  // NAMES you" about its own request. Defense in depth — `opAwait` already
+  // passes `excludeAuthor`, so own posts should not reach here at all — but the
+  // notice must be false-free on whatever it is handed.
+  if (selfUserId !== null) {
+    const foreign = messages.filter((m) => m.authorUserId !== selfUserId);
+    if (foreign.length > 0 && !foreign.some((m) => addresseeOf(m) === selfUserId)) {
+      lines.push(`\n${AWAIT_UNNAMED_NOTICE}`);
+    }
   }
-  lines.push(
-    `\nAdvance your cursor to seq ${lastSeq}. If the exchange is still open, re-arm before you end your turn: dopl_channel(op="await", channel="${ref}", since=${lastSeq}) — that pending call is what wakes you with the next message.`,
-    rearmStopRule(ref),
-  );
+  lines.push(...awaitArrivedLines(ref, lastSeq, runtime, rearmStopRule(ref)));
   return ok(lines.join("\n"));
 }
 

@@ -32,6 +32,10 @@ export declare function isForbidden(e: unknown): boolean;
  *     cause the old fixed message was ever right about.
  *   - `thread_not_in_channel` — a first-class `thread` id that does not resolve
  *     to a thread of this channel.
+ *   - `self_target`          — `create_thread` addressed to the CALLER. Only a
+ *     thread's creator and its target may post into it, so a self-addressed
+ *     thread has one party and can never be answered. `create_thread` only —
+ *     `post to=self` is not guarded server-side and never raises this.
  *   - `invalid_request`      — the route's own zod schema (or JSON parse)
  *     rejected the body BEFORE any channel logic ran. Almost always a field
  *     over its cap. Emphatically NOT a membership problem.
@@ -39,7 +43,7 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `unknown`              — a 400 with no code we recognize (or no code at
  *     all, e.g. an edge/proxy error page). Say so; do not invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "invalid_request" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * The server's own human message for an error, as a trailing clause — or "" when

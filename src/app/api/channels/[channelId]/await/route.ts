@@ -65,11 +65,12 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const parsed = AwaitQuerySchema.safeParse({
       since: search.get("since") ?? undefined,
       timeoutMs: search.get("timeoutMs") ?? undefined,
+      excludeAuthor: search.get("excludeAuthor") ?? undefined,
     });
     if (!parsed.success) {
       throw new HttpError(400, "VALIDATION_FAILED", "Invalid query", parsed.error.issues);
     }
-    const { since, timeoutMs } = parsed.data;
+    const { since, timeoutMs, excludeAuthor } = parsed.data;
     // Deadline is struck BEFORE the ref resolves, as it always has been: the
     // hold must stay bounded under `maxDuration` including that lookup.
     const deadline = Date.now() + (timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS);
@@ -80,6 +81,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const result = await awaitNewMessages(ctx, channelId, {
       since,
       deadline,
+      excludeAuthor,
       signal: request.signal,
       counters,
     });

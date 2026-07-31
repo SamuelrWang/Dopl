@@ -2,14 +2,16 @@
  * Unit tests for the thread (task) lane of the channels write service. The
  * repositories are mocked; `service-shared` runs for real. `service-reads` is
  * mocked so these tests don't drag in the whole read hydration. Direct-channel
- * creation moved to `service-direct.test.ts` (§2 cap).
+ * creation moved to `service-direct.test.ts` and the `client_msg_id` envelope
+ * to `service-tasks-idempotency.test.ts` (both §2 cap).
  *
  * Focus (the load-bearing rules):
  *   - authorization: createTask (member + addressee-member), closeTask
  *     (creator OR target), setTaskMode (creator only);
- *   - create_task ATOMICITY: the thread row and its initiating message are one
- *     idempotency envelope, so a failed post is repaired by the retry instead
- *     of being swallowed forever by the `client_msg_id` short-circuit.
+ *   - the SELF-TARGET guard: a thread addressed to its own creator has one
+ *     party and can never be answered, and the guard sits in FRONT of the
+ *     `client_msg_id` short-circuit so a retry cannot be handed the dead thread
+ *     back as a success.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,14 +31,10 @@ import {
   ChannelForbiddenError,
   TaskForbiddenError,
   TaskNotFoundError,
+  TaskSelfTargetError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type {
-  ChannelMemberRow,
-  ChannelMessageRow,
-  ChannelRow,
-  ChannelTaskRow,
-} from "./dto";
+import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
 
 const WS = "ws-1";
 const USER = "aaaaaaaa-e29b-41d4-a716-446655440000";
@@ -238,179 +236,67 @@ describe("createTask — authorization", () => {
   });
 });
 
-describe("createTask — idempotency (client_msg_id)", () => {
-  /** The task's own thread row, as the metadata stamping re-reads it. */
-  const ownTask = () => taskRow({ created_by: USER, target_user_id: PEER });
-
-  /** The stored initiating message, as `postMessage`'s dedup finds it. */
-  function storedOpening(): ChannelMessageRow {
-    return {
-      id: "msg-open",
-      seq: 1,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      author_user_id: USER,
-      author_kind: "user",
-      kind: "message",
-      body: "please do X",
-      metadata: { taskId: TASK_ID },
-      client_msg_id: `task-open-${TASK_ID}`,
-      created_at: "2026-07-27T00:00:00Z",
-    };
-  }
-
+describe("createTask — self-target guard", () => {
   beforeEach(() => {
-    // PEER is a channel member so the addressee check passes.
+    // Everyone (caller included) is a channel member, so the addressee-member
+    // check passes and the self-target guard is the only thing left to catch it.
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(ownTask());
   });
 
-  it("returns the already-created task and does NOT re-insert or re-post", async () => {
-    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
-    // The initiating message already landed on the first send.
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
-      storedOpening()
-    );
-
-    const { thread: task, openingSeq } = await createTask(ctx, "general", {
-      title: "Ship it",
-      body: "please do X",
-      toUserId: PEER,
-      clientMsgId: "dedupe-1",
-    });
-
-    expect(repoTasks.findTaskByClientId).toHaveBeenCalledWith("chan-1", "dedupe-1");
-    expect(task.id).toBe(TASK_ID);
-    // The re-driven post dedups to the STORED opening message, so the retry
-    // reports that message's seq — never a fresh one.
-    expect(openingSeq).toBe(1);
-    // No second task row and no second initial message (→ no double spawn).
+  it("rejects a thread the caller addressed to themselves, writing nothing", async () => {
+    // Only a thread's creator and its target may post into it. Self-addressed,
+    // those are one person, so the sole member allowed to answer is the one who
+    // asked — the thread was accepted silently and sat dead in the panel while
+    // the peer's desktop logged `verdict ignore`.
+    await expect(
+      createTask(ctx, "general", { title: "T", body: "b", toUserId: USER })
+    ).rejects.toBeInstanceOf(TaskSelfTargetError);
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    expect(repoMessages.findMessageByClientId).toHaveBeenCalledWith(
-      "chan-1",
-      `task-open-${TASK_ID}`
-    );
   });
 
-  it("inserts (threading client_msg_id) + posts once on the first send", async () => {
-    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(null);
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({
-        created_by: row.created_by,
-        target_user_id: row.target_user_id,
-        title: row.title,
-      })
-    );
-
-    await createTask(ctx, "general", {
-      title: "Ship it",
-      body: "please do X",
-      toUserId: PEER,
-      clientMsgId: "dedupe-2",
-    });
-
-    expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0]).toMatchObject({
-      client_msg_id: "dedupe-2",
-    });
-    // The initial request is posted exactly once, under its own derived key —
-    // that key is what makes the create+post pair convergent.
-    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].client_msg_id).toBe(
-      `task-open-${TASK_ID}`
-    );
-  });
-
-  it("converges on the winner when the insert loses the unique race", async () => {
-    vi.mocked(repoTasks.findTaskByClientId)
-      .mockResolvedValueOnce(null) // pre-insert lookup misses
-      .mockResolvedValueOnce(ownTask()); // post-race winner
-    vi.mocked(repoTasks.insertTask).mockRejectedValue({ code: "23505" });
-    vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
-    // The winner already posted the request under the derived key.
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
-      storedOpening()
-    );
-
-    const { thread: task } = await createTask(ctx, "general", {
-      title: "Ship it",
-      body: "please do X",
-      toUserId: PEER,
-      clientMsgId: "dedupe-3",
-    });
-
-    expect(task.id).toBe(TASK_ID);
-    // The loser re-drives the post but nothing lands twice.
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("REGRESSION (B1): a post that fails is repaired by the retry — the request exists exactly once", async () => {
-    // The row-then-post pair has no transaction around it. Before the fix, an
-    // insert that landed followed by a post that threw left a thread with NO
-    // message: the retry hit the client_msg_id short-circuit, returned the
-    // stored task and never posted, so the responder's desktop had nothing to
-    // route and no session ever spawned (there is a live example of this in
-    // prod). Now the initiating post is re-driven on the short-circuit path.
-    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValueOnce(null);
-    vi.mocked(repoTasks.insertTask).mockResolvedValue(ownTask());
-    vi.mocked(repoMessages.insertMessage).mockRejectedValueOnce(
-      new Error("connection reset")
-    );
-
-    const send = () =>
-      createTask(ctx, "general", {
-        title: "Ship it",
-        body: "please do X",
-        toUserId: PEER,
-        clientMsgId: "dedupe-4",
-      });
-
-    // First send: the thread row lands, the request post blows up.
-    await expect(send()).rejects.toThrow("connection reset");
-    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
-
-    // Retry with the SAME key: the task short-circuits, the missing request is
-    // posted. The stored message is still absent, so this is a real insert.
-    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
-    const { thread: task } = await send();
-
-    expect(task.id).toBe(TASK_ID);
-    // Exactly one task row, and exactly one initiating message across both
-    // attempts (the failed one never landed).
-    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
-    const posts = vi
-      .mocked(repoMessages.insertMessage)
-      .mock.calls.filter((c) => c[0].client_msg_id === `task-open-${TASK_ID}`);
-    expect(posts).toHaveLength(2); // one rejected, one stored
-    expect(posts[1][0].metadata.taskId).toBe(TASK_ID);
-    // A third send finds the stored message and inserts nothing more.
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
-      storedOpening()
-    );
-    vi.mocked(repoMessages.insertMessage).mockClear();
-    await send();
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("does not post into a thread the colliding key belongs to someone else", async () => {
-    // A client_msg_id collision from another member returns their task (the
-    // pre-existing dedup), but must not put a message into their thread.
+  it("still rejects on a retry whose client_msg_id matches a stored thread", async () => {
+    // ORDERING, not idempotency: the guard sits IN FRONT of the client_msg_id
+    // short-circuit, so a retry errors identically instead of being handed back
+    // the stored dead thread as a success.
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(
-      taskRow({ created_by: PEER, target_user_id: PEER })
+      taskRow({ created_by: USER, target_user_id: USER })
     );
 
-    const { openingSeq } = await createTask(ctx, "general", {
+    await expect(
+      createTask(ctx, "general", {
+        title: "T",
+        body: "b",
+        toUserId: USER,
+        clientMsgId: "dedupe-self",
+      })
+    ).rejects.toBeInstanceOf(TaskSelfTargetError);
+
+    // The short-circuit was never reached at all — no lookup, no re-driven post.
+    expect(repoTasks.findTaskByClientId).not.toHaveBeenCalled();
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("leaves a thread addressed to another member unaffected", async () => {
+    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
+      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    );
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRow({ created_by: USER, target_user_id: PEER })
+    );
+
+    const { thread } = await createTask(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
-      clientMsgId: "dedupe-5",
     });
 
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    // No post happened, so there is no cursor to report — null, never a guess.
-    expect(openingSeq).toBeNull();
+    expect(thread.targetUserId).toBe(PEER);
+    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
+    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 });
 

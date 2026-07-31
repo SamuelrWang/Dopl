@@ -16,6 +16,7 @@ import {
   DirectSelfTargetError,
   TaskForbiddenError,
   TaskNotFoundError,
+  TaskSelfTargetError,
   TrustedNotMemberError,
   TrustSelfError,
 } from "./errors";
@@ -61,6 +62,9 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof TaskForbiddenError) {
     return new HttpError(403, "TASK_FORBIDDEN", err.message);
+  }
+  if (err instanceof TaskSelfTargetError) {
+    return new HttpError(400, "CHANNEL_TASK_SELF_TARGET", err.message);
   }
   if (err instanceof DirectSelfTargetError) {
     return new HttpError(400, "DIRECT_SELF_TARGET", err.message);

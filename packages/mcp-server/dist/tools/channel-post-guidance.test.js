@@ -67,6 +67,21 @@ async function createThreadWith(thrown) {
         (0, vitest_1.expect)(text).toContain('op="invite"');
         (0, vitest_1.expect)(text).toContain("Bob");
     });
+    (0, vitest_1.it)("CHANNEL_TASK_SELF_TARGET tells the agent it addressed itself, not that Bob is missing", async () => {
+        // The server-side guard added after a live incident: an agent on a session
+        // holding two dopl connections opened a thread addressed to its OWN
+        // operator. Only a thread's creator and its target may post into it, so
+        // that thread had one party and sat unanswerable while the peer's desktop
+        // logged `verdict ignore`. The 400 must not read as a membership problem —
+        // inviting anyone is exactly the wrong next move here.
+        const text = await createThreadWith(apiError(400, "CHANNEL_TASK_SELF_TARGET"));
+        (0, vitest_1.expect)(text).toContain("can't be addressed to yourself");
+        (0, vitest_1.expect)(text).not.toContain("aren't a member");
+        (0, vitest_1.expect)(text).not.toContain('op="invite"');
+        // The recovery is the roster, and it is named with the channel to call it on.
+        (0, vitest_1.expect)(text).toContain('op="members"');
+        (0, vitest_1.expect)(text).toContain("No thread was opened");
+    });
     (0, vitest_1.it)("a 400 with NO code says so instead of inventing a cause", async () => {
         // An edge/proxy error page parses to code=null. The old branch answered it
         // with the addressee message all the same.
