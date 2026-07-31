@@ -164,6 +164,39 @@ test("C2: a token change rewrites, and a truncated / junk file is repaired", () 
   assert.equal(h.files["/userData/mcp-spawn.json"], h.spawnConfigBody("t2"));
 });
 
+// ── L4 (WAKE-V1): the CLI spawn path is desktop-owned too ─────────────────────────
+
+test("L4: the spawn config carries X-Dopl-Runtime alongside the bearer", () => {
+  // A headless spawn is a session THIS APP owns, but it reaches MCP through this
+  // file instead of sdk-loader's in-memory entry. Without the header the server read
+  // it as an EXTERNAL session, so the two spawn paths disagreed about the same
+  // machine (and a headless requester thread opened no window).
+  const h = spawnHarness(null);
+  const cfg = JSON.parse(h.spawnConfigBody("t1"));
+  assert.deepEqual(cfg.mcpServers.dopl.headers, {
+    Authorization: "Bearer t1",
+    "X-Dopl-Runtime": "desktop-session",
+  });
+  // The literal is what the server matches — pinned here as it is for sdk-loader.
+  assert.match(CONFIG, /'X-Dopl-Runtime': 'desktop-session',/);
+});
+
+test("L4: a file written by an older build (no runtime header) is REPAIRED", () => {
+  const stale = JSON.stringify({
+    mcpServers: {
+      dopl: {
+        type: "http",
+        url: "https://dopl.test/api/mcp",
+        headers: { Authorization: "Bearer t1" },
+      },
+    },
+  });
+  const h = spawnHarness(stale);
+  assert.equal(h.writeSpawnConfig("t1"), true);
+  assert.equal(h.calls.writes.length, 1, "the whole-config compare catches a missing header");
+  assert.equal(h.files["/userData/mcp-spawn.json"], h.spawnConfigBody("t1"));
+});
+
 // ── C1: the token accessor itself ─────────────────────────────────────────────────
 
 const TOKEN_BLOCK = slice(CONFIG, "let spawnToken = '';", "function parseExpiry(", "deviceTokenForSpawn");

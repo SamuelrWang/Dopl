@@ -52,6 +52,16 @@ export interface DoplTransportOptions {
    * auto-targets; 0 or 2+ → WORKSPACE_REQUIRED).
    */
   workspaceId?: string;
+  /**
+   * Runtime label for the process this client acts for, echoed on every
+   * request as `X-Dopl-Runtime`. The ONLY consumer is the server's reserved
+   * `metadata.runtime` stamp, which distinguishes a desktop-spawned session
+   * (`desktop-session`) from an external agent so the desktop does not open a
+   * competing requester window for a thread an external session already owns.
+   * Set by the in-app MCP route, which forwards the value it was called with;
+   * unset means "external" and stamps nothing.
+   */
+  runtime?: string;
 }
 
 export interface RequestOptions {
@@ -71,7 +81,8 @@ export interface RequestOptions {
   /**
    * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
    * concurrency). Reserved headers (Authorization, Content-Type, the
-   * tool header, X-Dopl-Client, X-Workspace-Id) cannot be overridden.
+   * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Workspace-Id) cannot be
+   * overridden.
    */
   customHeaders?: Record<string, string>;
 }
@@ -81,6 +92,7 @@ export class DoplTransport {
   private readonly apiKey: string;
   private readonly toolHeaderName: string;
   private readonly clientIdentifier: string | null;
+  private readonly runtime: string | null;
   private workspaceId: string | null;
 
   constructor(baseUrl: string, apiKey: string, opts: DoplTransportOptions = {}) {
@@ -88,6 +100,7 @@ export class DoplTransport {
     this.apiKey = apiKey;
     this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
     this.clientIdentifier = opts.clientIdentifier ?? null;
+    this.runtime = opts.runtime ?? null;
     this.workspaceId = opts.workspaceId ?? null;
   }
 
@@ -296,6 +309,9 @@ export class DoplTransport {
     if (withJsonBody) headers["Content-Type"] = "application/json";
     if (toolName) headers[this.toolHeaderName] = toolName;
     if (this.clientIdentifier) headers["X-Dopl-Client"] = this.clientIdentifier;
+    // Server-read, never caller-writable (it is on the reserved list below):
+    // the runtime label the server turns into `metadata.runtime`.
+    if (this.runtime) headers["X-Dopl-Runtime"] = this.runtime;
     // Resolution order: explicit per-call override > AsyncLocalStorage
     // (set by the MCP `registerTool` wrapper for one tool call) > the
     // transport's stored workspaceId (session default). Falling through
@@ -311,6 +327,7 @@ export class DoplTransport {
         "content-type",
         this.toolHeaderName.toLowerCase(),
         "x-dopl-client",
+        "x-dopl-runtime",
         "x-workspace-id",
       ]);
       for (const [key, value] of Object.entries(customHeaders)) {

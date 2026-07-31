@@ -7,6 +7,13 @@
  * ~50s) waiting for a message with seq > since. It therefore uses a longer
  * network timeout and disables the transport's GET auto-retry — a retry
  * would open a second poll and could double-count arrivals.
+ *
+ * ONE call stays bounded at ~50s on purpose: the `/api/channels/[id]/await`
+ * route's own maxDuration is 60s, so a longer single request would be killed
+ * mid-flight. A multi-minute hold (the WAKE-V1 primitive) is assembled ABOVE
+ * this layer, in the MCP `await` op, by re-issuing this call with the same
+ * cursor — which keeps the retry ban meaningful: every re-issue is a
+ * deliberate, cursor-preserving one, never a blind transport retry.
  */
 
 import type { DoplTransport } from "./transport.js";
@@ -19,6 +26,7 @@ import type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelThread,
+  ChannelThreadCreated,
   ChannelThreadCreateInput,
   ReadMessagesOptions,
   ThreadMode,
@@ -194,8 +202,8 @@ export async function createChannelThread(
   t: DoplTransport,
   channelId: string,
   input: ChannelThreadCreateInput
-): Promise<ChannelThread> {
-  const data = await t.request<{ task: ChannelThread }>(
+): Promise<ChannelThreadCreated> {
+  const data = await t.request<{ task: ChannelThread; openingSeq?: number | null }>(
     `/api/channels/${enc(channelId)}/tasks`,
     {
       method: "POST",
@@ -203,7 +211,13 @@ export async function createChannelThread(
       toolName: "channel_create_thread",
     }
   );
-  return data.task;
+  // `openingSeq` is additive on the route (WAKE-V1) — an older deployment
+  // simply omits it, which reads as null here and makes the caller fall back to
+  // looking the cursor up itself rather than arming `await` on `undefined`.
+  return {
+    thread: data.task,
+    openingSeq: typeof data.openingSeq === "number" ? data.openingSeq : null,
+  };
 }
 
 export async function closeChannelThread(

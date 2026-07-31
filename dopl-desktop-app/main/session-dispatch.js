@@ -56,9 +56,37 @@ function feedLiveSession(entry, m, myUserId) {
   });
 }
 
+// FIX L3 — the runtime conjunct is the ONE gate rejection with no other symptom.
+// Every other conjunct that refuses a window describes a message that was never
+// mine to drive; this one refuses MY OWN create of MY OWN thread, and the whole
+// visible effect is "no window opened", which is also exactly what an EXTERNAL
+// session's create is supposed to look like. If the server ever stops stamping
+// (a desktop shipped ahead of the server, a header renamed, a proxy dropping
+// X-Dopl-Runtime), desktop-spawned requester windows silently stop opening and
+// nothing in the logs says why. So when a message clears every conjunct EXCEPT
+// the stamp, name the stamp we actually saw.
+function diagRuntimeGateSkip(m, myUserId) {
+  if (!m || m.kind !== 'message' || !myUserId) return;
+  if (!targeting.firstClassTaskId(m)) return;
+  if (m.authorUserId !== myUserId) return;
+  if (targeting.metaStr(m, 'taskCreatedBy') !== myUserId) return;
+  const target = targeting.metaStr(m, 'taskTarget');
+  if (!target || target === myUserId) return;
+  const stamp = targeting.metaStr(m, 'runtime');
+  if (stamp === 'desktop-session') return; // not the runtime conjunct that refused
+  diag(
+    'requester window skipped: metadata.runtime',
+    stamp ? `'${stamp}'` : '(absent)',
+    "!== 'desktop-session' — expected for my EXTERNAL session (it awaits the reply itself); if this WAS a desktop-spawned session, the server is not stamping the X-Dopl-Runtime header (version skew)"
+  );
+}
+
 async function maybeOpenRequesterSession(entry, m, myUserId) {
   if (!settings.getWindowMode()) return false;
-  if (!targeting.requesterTaskOpen(m, myUserId)) return false;
+  if (!targeting.requesterTaskOpen(m, myUserId)) {
+    diagRuntimeGateSkip(m, myUserId);
+    return false;
+  }
   const taskId = targeting.firstClassTaskId(m);
   if (sessionEngine.hasLiveSession({ channelId: entry.channel.id, taskId })) return true;
   const res = await sessionEngine.launchRequesterSession({

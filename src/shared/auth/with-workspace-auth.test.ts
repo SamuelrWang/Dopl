@@ -301,6 +301,49 @@ describe("resolution outcomes surfaced by the wrapper", () => {
   });
 });
 
+describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
+  // The channels write path stamps `metadata.runtime` off `ctx.runtime` and
+  // nothing else, so the header has to arrive here — read once by the wrapper,
+  // never off the raw request in a feature. Exact match only: a near-miss is
+  // an external caller, which is the safe reading.
+  const echoRuntime = withWorkspaceAuth(async (_req, ctx) =>
+    NextResponse.json({ runtime: ctx.runtime ?? null })
+  );
+
+  it("passes the recognized value through", async () => {
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const res = await echoRuntime(
+      req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-session" })
+    );
+    expect(await res.json()).toEqual({ runtime: "desktop-session" });
+  });
+
+  it("is undefined with no header (an external agent / the web UI)", async () => {
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const res = await echoRuntime(req("/api/x", { "x-workspace-id": UUID_A }));
+    expect(await res.json()).toEqual({ runtime: null });
+  });
+
+  it("refuses anything but the exact value (cased, truncated, or invented)", async () => {
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    // Surrounding whitespace is not in this list on purpose: the Headers layer
+    // strips optional whitespace off a field value before we ever see it, so
+    // " desktop-session" arrives already trimmed and legitimately matches.
+    for (const value of [
+      "Desktop-Session",
+      "desktop",
+      "desktop-session-x",
+      "external",
+      "",
+    ]) {
+      const res = await echoRuntime(
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": value })
+      );
+      expect(await res.json()).toEqual({ runtime: null });
+    }
+  });
+});
+
 describe("H-3 gate options are forwarded into withUserAuth", () => {
   // withWorkspaceAuth composes withUserAuth and must hand it BOTH new option
   // flags (see the `{ writeScopeExempt, sessionOnly }` forwarding at the tail

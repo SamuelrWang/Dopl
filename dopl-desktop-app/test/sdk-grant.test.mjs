@@ -186,6 +186,7 @@ test("the session's workspace UUID rides as the X-Workspace-Id header, beside th
   const servers = buildServers(null, WS_UUID);
   assert.deepEqual(servers.dopl.headers, {
     Authorization: "Bearer secret-token",
+    "X-Dopl-Runtime": "desktop-session", // WAKE-V1, below
     "X-Workspace-Id": WS_UUID,
   }, "the header the MCP endpoint reads as its per-request pin");
   assert.equal(servers.dopl.type, "http");
@@ -195,8 +196,44 @@ test("the session's workspace UUID rides as the X-Workspace-Id header, beside th
 test("no session workspace -> NO pin header at all (today's behavior, unchanged)", () => {
   for (const missing of [undefined, null, "", "   ", 42, {}]) {
     const headers = buildServers(null, missing).dopl.headers;
-    assert.deepEqual(Object.keys(headers), ["Authorization"], JSON.stringify(missing));
+    // The runtime header is unconditional (it identifies the RUNTIME, not the
+    // workspace); the workspace PIN is still the only conditional one.
+    assert.deepEqual(Object.keys(headers), ["Authorization", "X-Dopl-Runtime"], JSON.stringify(missing));
   }
+});
+
+// ── WAKE-V1: the runtime header that makes a desktop-spawned session identifiable ──
+//
+// The server cannot otherwise tell a session THIS APP spawned from the operator's own
+// external `claude` process: both authenticate with the same device credential, as the
+// same user. This header is the discriminator. The server treats `runtime` as a RESERVED
+// metadata key — it strips any caller-supplied value and stamps
+// metadata.runtime='desktop-session' ONLY when this exact header value is present — so
+// a value smuggled in the message body cannot produce the stamp. It stays a ROUTING HINT
+// and never an authorization signal (any device-token holder can send the header), so
+// targeting.requesterTaskOpen gates on it only alongside its identity conjuncts and fails
+// CLOSED without it (a thread opened by an EXTERNAL session must NOT auto-open a desktop
+// requester window; that session awaits the reply itself). Absence is the external case,
+// which is why the header has to ride EVERY spawned-session call, pin or no pin.
+
+test("WAKE-V1: every spawned session's dopl entry sends X-Dopl-Runtime: desktop-session", () => {
+  // With a pin, without one, and under a restricted tools policy — the stamp is what
+  // marks the runtime, so no configuration may drop it.
+  for (const ws of [WS_UUID, "", undefined]) {
+    assert.equal(buildServers(null, ws).dopl.headers["X-Dopl-Runtime"], "desktop-session", `ws=${ws}`);
+  }
+  const restricted = buildServers(["mcp__dopl__dopl_kb"], WS_UUID).dopl;
+  assert.equal(restricted.headers["X-Dopl-Runtime"], "desktop-session");
+  assert.deepEqual(restricted.tools, ["mcp__dopl__dopl_kb"], "the tools allowlist is untouched");
+});
+
+test("WAKE-V1: the header value is the literal the server matches, and it grants nothing", () => {
+  // Pinned as a literal in the source: a typo here silently turns every desktop session
+  // into an 'external' one (no requester windows at all), which no other test would catch.
+  assert.match(MCP_BLOCK, /'X-Dopl-Runtime': 'desktop-session',/);
+  // No token -> no server entry at all, so the header can never ride an unauthenticated
+  // call: it only ever accompanies the device bearer.
+  assert.deepEqual(buildServers(null, WS_UUID, ""), {});
 });
 
 test("the pin does not disturb the per-profile dopl tools allowlist (or the bearer)", () => {

@@ -1,4 +1,5 @@
 import "server-only";
+import { DESKTOP_SESSION_RUNTIME } from "@/shared/auth/runtime-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { parseLegacyTaskSeq } from "../lib/group-thread";
 import type { ChannelMessageCreateInput } from "../schema";
@@ -16,11 +17,12 @@ import type { ChannelContext } from "./service-shared";
  * stamping all answer the same question — what may a caller put in metadata,
  * and what does the server stamp itself.
  *
- * Reserved keys (`to_user_id`, `summary`, `taskMode`, `taskCreatedBy`,
- * `taskTitle`, `taskTarget`, and the five calm-terminal flags) are ALWAYS
- * stripped from caller metadata and re-added only from server-validated
- * values. `taskId` stays caller-settable — but a first-class thread id now
- * also has to BELONG to the poster (see {@link resolvePostMetadata}).
+ * Reserved keys (`to_user_id`, `summary`, `runtime`, `taskMode`,
+ * `taskCreatedBy`, `taskTitle`, `taskTarget`, and the five calm-terminal
+ * flags) are ALWAYS stripped from caller metadata and re-added only from
+ * server-validated values. `taskId` stays caller-settable — but a first-class
+ * thread id now also has to BELONG to the poster (see
+ * {@link resolvePostMetadata}).
  */
 
 /**
@@ -173,7 +175,15 @@ async function isLegacyThreadParticipant(
  *    and reopening were already gated this way; writing into a thread now is
  *    too. Inherited ids need no check — inheritance only resolves a task whose
  *    participants are {author, peer} by construction.
- * 5. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
+ * 5. **Runtime stamp (WAKE-V1).** `runtime` is reserved: stripped from caller
+ *    metadata unconditionally, then re-stamped as `desktop-session` only when
+ *    the REQUEST carried `X-Dopl-Runtime: desktop-session` (resolved by the
+ *    auth layer into `ctx.runtime`). Absent header → no key at all, which is
+ *    what an external agent's message looks like. This is the single stamping
+ *    point precisely because the desktop reads the key to decide whether to
+ *    open a requester window: a caller that could set it in `metadata` could
+ *    make its own external post masquerade as a desktop session.
+ * 6. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
  *    re-stamped only for a thread participant: the first-class case is already
  *    covered by (4), and a legacy `task-{channel}-{seq}` id (no task row, but
  *    the shape the installed desktop still posts most of its lifecycle events
@@ -189,7 +199,13 @@ export async function resolvePostMetadata(
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
   delete metadata.to_user_id;
   delete metadata.summary;
+  delete metadata.runtime;
   const calmFlags = takeCalmFlags(metadata);
+
+  // Server-stamped from the request's own header, never from the payload.
+  if (ctx.runtime === DESKTOP_SESSION_RUNTIME) {
+    metadata.runtime = DESKTOP_SESSION_RUNTIME;
+  }
 
   const peerUserId = await resolveDirectPeer(channel, ctx.userId);
   const toUserId = input.toUserId ?? peerUserId;

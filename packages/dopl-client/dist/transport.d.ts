@@ -30,6 +30,16 @@ export interface DoplTransportOptions {
      * auto-targets; 0 or 2+ → WORKSPACE_REQUIRED).
      */
     workspaceId?: string;
+    /**
+     * Runtime label for the process this client acts for, echoed on every
+     * request as `X-Dopl-Runtime`. The ONLY consumer is the server's reserved
+     * `metadata.runtime` stamp, which distinguishes a desktop-spawned session
+     * (`desktop-session`) from an external agent so the desktop does not open a
+     * competing requester window for a thread an external session already owns.
+     * Set by the in-app MCP route, which forwards the value it was called with;
+     * unset means "external" and stamps nothing.
+     */
+    runtime?: string;
 }
 export interface RequestOptions {
     method?: string;
@@ -48,7 +58,8 @@ export interface RequestOptions {
     /**
      * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
      * concurrency). Reserved headers (Authorization, Content-Type, the
-     * tool header, X-Dopl-Client, X-Workspace-Id) cannot be overridden.
+     * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Workspace-Id) cannot be
+     * overridden.
      */
     customHeaders?: Record<string, string>;
 }
@@ -57,6 +68,7 @@ export declare class DoplTransport {
     private readonly apiKey;
     private readonly toolHeaderName;
     private readonly clientIdentifier;
+    private readonly runtime;
     private workspaceId;
     constructor(baseUrl: string, apiKey: string, opts?: DoplTransportOptions);
     /**

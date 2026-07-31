@@ -77,6 +77,7 @@ import type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelThread,
+  ChannelThreadCreated,
   ChannelThreadCreateInput,
   ReadMessagesOptions,
   ThreadMode,
@@ -633,7 +634,7 @@ export class DoplClient {
   createChannelThread(
     channelId: string,
     input: ChannelThreadCreateInput
-  ): Promise<ChannelThread> {
+  ): Promise<ChannelThreadCreated> {
     return channel.createChannelThread(this.transport, channelId, input);
   }
 

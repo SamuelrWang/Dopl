@@ -136,7 +136,25 @@ function buildMcpServers(doplToolsPolicy, workspaceId) {
   const server = {
     type: 'http',
     url: MCP_URL,
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      // WAKE-V1 RUNTIME DISAMBIGUATION. Every MCP call a DESKTOP-SPAWNED session makes
+      // carries this header; the operator's EXTERNAL Claude Code session (same device
+      // credential, its own `claude` process) does not send it. `runtime` is a RESERVED
+      // metadata key server-side — a caller-supplied value in the message body is
+      // stripped, and the stamp is written only for this exact header value — so
+      // metadata.runtime === 'desktop-session' says a desktop-shaped runtime posted it.
+      //
+      // A ROUTING HINT, NOT AN AUTHORIZATION SIGNAL (see src/shared/auth/runtime-header.ts).
+      // Anything holding this device token can set the header, so the stamp PROVES
+      // nothing about who is calling; it only labels the expected origin. What makes
+      // targeting.requesterTaskOpen safe is that it fails CLOSED (no stamp -> no window
+      // at all) on top of the conjunct that does carry identity: the message's
+      // authorUserId is the operator themselves, and the thread is one they created.
+      // Nothing may be GRANTED on this header. Unconditional: it identifies the RUNTIME,
+      // not the workspace, so it rides even without a pin.
+      'X-Dopl-Runtime': 'desktop-session',
+    },
   };
   const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
   if (pin) server.headers['X-Workspace-Id'] = pin;

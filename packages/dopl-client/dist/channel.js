@@ -8,6 +8,13 @@
  * ~50s) waiting for a message with seq > since. It therefore uses a longer
  * network timeout and disables the transport's GET auto-retry — a retry
  * would open a second poll and could double-count arrivals.
+ *
+ * ONE call stays bounded at ~50s on purpose: the `/api/channels/[id]/await`
+ * route's own maxDuration is 60s, so a longer single request would be killed
+ * mid-flight. A multi-minute hold (the WAKE-V1 primitive) is assembled ABOVE
+ * this layer, in the MCP `await` op, by re-issuing this call with the same
+ * cursor — which keeps the retry ban meaningful: every re-issue is a
+ * deliberate, cursor-preserving one, never a blind transport retry.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listChannels = listChannels;
@@ -116,7 +123,13 @@ async function createChannelThread(t, channelId, input) {
         body: input,
         toolName: "channel_create_thread",
     });
-    return data.task;
+    // `openingSeq` is additive on the route (WAKE-V1) — an older deployment
+    // simply omits it, which reads as null here and makes the caller fall back to
+    // looking the cursor up itself rather than arming `await` on `undefined`.
+    return {
+        thread: data.task,
+        openingSeq: typeof data.openingSeq === "number" ? data.openingSeq : null,
+    };
 }
 async function closeChannelThread(t, channelId, threadId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {

@@ -139,15 +139,39 @@ function firstClassTaskId(m) {
 //   - firstClassTaskId(m) present   → a real first-class (UUID) task, not legacy.
 //   - m.authorUserId === myId       → MY message (my agent posted the create_task).
 //   - taskCreatedBy === myId        → I created the task (the requester, not a peer).
+//   - runtime === 'desktop-session' → a session THIS APP spawned opened the thread
+//                                     (WAKE-V1; see below).
 //   - taskTarget present && !== me  → it is addressed to a PEER (a self-targeted
 //                                     task has no counterparty to drive against).
 // De-dupe (one window per taskId) + backlog suppression + the settled-set are the
 // listener's job; this helper is a pure predicate only.
+//
+// WAKE-V1 RUNTIME GATE. My own agent can open a thread from EITHER runtime: a window
+// this app spawned (sdk-loader sends `X-Dopl-Runtime: desktop-session`, and the server
+// stamps metadata.runtime off that header alone — `runtime` is RESERVED, so a value in
+// the caller's message body is stripped) or the operator's own EXTERNAL Claude Code
+// session, which sends no such header and therefore carries no runtime key at all. An
+// external session now WAITS on the reply itself (it arms a long-held MCP await that
+// wakes it when the peer answers), so auto-opening a desktop requester window for that
+// thread put two agents on one thread and let the window consume the reply the waiting
+// session was armed for. Unstamped (= external, or any non-desktop writer) therefore
+// never auto-opens; the reply reaches the external agent through its await, and this
+// machine's existing passive path (classify 'task-reply' → task-notify's silent banner)
+// is the fallback when nothing is listening.
+//
+// THE STAMP IS A ROUTING HINT, NOT AN AUTHORIZATION SIGNAL (src/shared/auth/
+// runtime-header.ts §"Header-only, deliberately"). Any holder of a device token can set
+// that header, so `runtime` cannot attest WHO called — it only labels the expected
+// origin. This gate is safe for two other reasons: it fails CLOSED (absence, a
+// near-miss, or a non-string → no window, never a window), and it is one conjunct of an
+// AND whose identity checks are the real bound — the message must be authored by ME and
+// belong to a thread I created. Read alone, the stamp decides nothing.
 function requesterTaskOpen(m, myId) {
   if (!m || m.kind !== 'message' || !myId) return false;
   if (!firstClassTaskId(m)) return false;
   if (m.authorUserId !== myId) return false;
   if (metaStr(m, 'taskCreatedBy') !== myId) return false;
+  if (metaStr(m, 'runtime') !== 'desktop-session') return false;
   const target = metaStr(m, 'taskTarget');
   return !!target && target !== myId;
 }

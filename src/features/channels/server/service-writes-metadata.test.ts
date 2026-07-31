@@ -442,3 +442,50 @@ describe("postMessage — calm-terminal flags (anti-spoof)", () => {
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * WAKE-V1 — `runtime` is a RESERVED key stamped from the request's own
+ * `X-Dopl-Runtime` header (resolved into `ctx.runtime` by the auth layer), so
+ * the desktop can tell a session it spawned from an external agent's post. A
+ * caller that could set it in `metadata` could make an external post
+ * masquerade as a desktop session and steal the reply routing, so the strip
+ * has to hold on BOTH sides of the stamp.
+ */
+describe("postMessage — runtime stamp (WAKE-V1)", () => {
+  const desktopCtx: ChannelContext = { ...ctx, runtime: "desktop-session" };
+
+  it("stamps runtime=desktop-session when the request carried the header", async () => {
+    const msg = await postMessage(desktopCtx, "dm", { body: "on it" });
+
+    expect(capturedMetadata().runtime).toBe("desktop-session");
+    expect(msg.metadata.runtime).toBe("desktop-session");
+  });
+
+  it("stamps NO runtime key when the header is absent (an external agent)", async () => {
+    await postMessage(ctx, "dm", { body: "on it" });
+
+    expect(has(capturedMetadata(), "runtime")).toBe(false);
+  });
+
+  it("SECURITY: a caller-supplied metadata.runtime is stripped, header or not", async () => {
+    await postMessage(ctx, "dm", {
+      body: "not really a desktop session",
+      metadata: { runtime: "desktop-session", keep: 1 },
+    });
+
+    const meta = capturedMetadata();
+    expect(has(meta, "runtime")).toBe(false);
+    // Only the reserved key is taken — unrelated caller metadata survives.
+    expect(meta.keep).toBe(1);
+  });
+
+  it("SECURITY: a spoofed value never survives a real desktop session either", async () => {
+    await postMessage(desktopCtx, "dm", {
+      body: "hi",
+      metadata: { runtime: "external-agent" },
+    });
+
+    expect(capturedMetadata().runtime).toBe("desktop-session");
+  });
+
+});

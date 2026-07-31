@@ -7,6 +7,7 @@ import {
 import type { Role } from "@/features/workspaces/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
+import { readRuntimeHeader, type DoplRuntime } from "./runtime-header";
 import { withUserAuth } from "./with-auth";
 
 export interface WorkspaceAuthContext {
@@ -26,6 +27,15 @@ export interface WorkspaceAuthContext {
   workspaceSlug: string;
   workspacePublicId: string;
   role: Role;
+  /**
+   * The recognized `X-Dopl-Runtime` this request carried (`desktop-session`),
+   * or undefined for every other caller. Reaches handlers the same way
+   * `X-Workspace-Id` does — read once here, never off the raw request in a
+   * feature — so the channels write path has ONE trusted source for the
+   * reserved `metadata.runtime` stamp. A routing hint, never an authz signal
+   * (see `runtime-header.ts`).
+   */
+  runtime?: DoplRuntime;
   params?: Record<string, string>;
 }
 
@@ -172,6 +182,7 @@ export function withWorkspaceAuth(
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,
         role: membership.role,
+        runtime: readRuntimeHeader(request),
         params: ctx.params,
       });
     } catch (err) {

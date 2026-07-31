@@ -142,6 +142,23 @@ export interface ChannelThreadCreateInput {
      */
     clientMsgId?: string;
 }
+/**
+ * What `createChannelThread` returns: the thread plus `openingSeq`, the seq of
+ * the message the server posted as that thread's opening request.
+ *
+ * WHY (WAKE-V1): `openingSeq` is exactly the cursor the requester arms its
+ * `await` on. Without it the caller had to follow up with `read limit=1` to
+ * guess that seq — an extra round-trip, and a race whenever the peer answers in
+ * between (the "newest message" would then be the reply, so the await would
+ * start one past it and never see what already arrived).
+ *
+ * `null` when the route produced no opening message — only the idempotent
+ * short-circuit that returns a thread created by SOMEONE ELSE.
+ */
+export interface ChannelThreadCreated {
+    thread: ChannelThread;
+    openingSeq: number | null;
+}
 export interface ChannelMessageInput {
     body: string;
     kind?: ChannelMessageKind;

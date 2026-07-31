@@ -3,12 +3,30 @@ import { DoplClient } from "@dopl/client";
 import { bootServer, clientIdentifier } from "@dopl/mcp-server/factory";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
+import { readRuntimeHeader } from "@/shared/auth/runtime-header";
 
 // Node runtime (SDK uses node:crypto); never Edge. Per-request auth ⇒ no
-// caching. 120s ceiling is ample — tool calls are short loopback round-trips.
+// caching.
+//
+// 300s, not the old 120s (WAKE-V1): every tool call but one is a short
+// loopback round-trip, and `dopl_channel(op="await")` is the exception — it
+// deliberately HOLDS for up to 240s so the pending call becomes a wake
+// primitive (a caller that backgrounds a >2min MCP call is woken by its
+// result). The function ceiling has to clear that hold, or the platform kills
+// the await mid-hold and the wake never fires.
+//
+// 300 is REQUIRED, not merely preferred, and a clamp does NOT degrade
+// gracefully. If the deployment plan (or a project setting) caps maxDuration
+// below the 240s hold, op="await" breaks outright: the platform kills the
+// function mid-hold, so every await returns an opaque transport error instead
+// of the timed-out RESULT — and none of the re-arm teaching lives in an error,
+// so the agent gets nothing to act on and cannot tell it from a network blip.
+// VERIFY ON DEPLOY that the plan actually supports 300s here. If it cannot,
+// shorten the hold to fit under the real ceiling first (DOPL_AWAIT_HOLD_MS,
+// read by the await op) rather than shipping a hold the platform will cut.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /**
  * Base URL the in-app MCP server calls for its `/api/*` tool requests (loopback,
@@ -50,9 +68,15 @@ async function handle(request: Request): Promise<Response> {
   //    empty X-Workspace-Id downstream (which would 400 every loopback call).
   const headerPin = request.headers.get("x-workspace-id")?.trim() || undefined;
   const workspaceId = headerPin ?? apiKeyWorkspaceId ?? undefined;
+  // WAKE-V1: forward the caller's runtime label onto the loopback so a
+  // desktop-spawned session's channel writes reach `resolvePostMetadata` with
+  // it. Only the recognized value survives `readRuntimeHeader`, so an
+  // arbitrary caller-set header cannot be laundered through this hop.
+  const callerRuntime = readRuntimeHeader(request);
   const client = new DoplClient(appBaseUrl(request), credential, {
     clientIdentifier,
     workspaceId,
+    runtime: callerRuntime,
   });
 
   // 3. Build the MCP server: status ping (admin flag) + workspace handshake +

@@ -169,7 +169,7 @@ describe("createTask — authorization", () => {
       taskRow({ created_by: USER, target_user_id: PEER })
     );
 
-    const task = await createTask(ctx, "general", {
+    const { thread: task, openingSeq } = await createTask(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
@@ -177,6 +177,9 @@ describe("createTask — authorization", () => {
 
     expect(task.createdBy).toBe(USER);
     expect(task.targetUserId).toBe(PEER);
+    // WAKE-V1: the opening message's seq rides back out — it is the requester's
+    // `await` cursor, and looking it up afterwards would race the peer's reply.
+    expect(openingSeq).toBe(1);
     const insertArg = vi.mocked(repoTasks.insertTask).mock.calls[0][0];
     expect(insertArg).toMatchObject({
       workspace_id: WS,
@@ -187,6 +190,51 @@ describe("createTask — authorization", () => {
     });
     const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
     expect(msgMeta.taskId).toBe(TASK_ID);
+  });
+
+  // WAKE-V1: the opening request is the message the responder's desktop routes
+  // on, so the runtime stamp has to reach it too — it rides `postMessage`, but
+  // only if createTask keeps handing its own ctx down.
+  it("carries the caller's runtime onto the opening request", async () => {
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
+    );
+    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
+      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    );
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRow({ created_by: USER, target_user_id: PEER })
+    );
+
+    await createTask(
+      { ...ctx, runtime: "desktop-session" },
+      "general",
+      { title: "Ship it", body: "please do X", toUserId: PEER }
+    );
+
+    const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
+    expect(msgMeta.runtime).toBe("desktop-session");
+  });
+
+  it("leaves the opening request unstamped for an external caller", async () => {
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
+    );
+    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
+      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    );
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRow({ created_by: USER, target_user_id: PEER })
+    );
+
+    await createTask(ctx, "general", {
+      title: "Ship it",
+      body: "please do X",
+      toUserId: PEER,
+    });
+
+    const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
+    expect(Object.prototype.hasOwnProperty.call(msgMeta, "runtime")).toBe(false);
   });
 });
 
@@ -226,7 +274,7 @@ describe("createTask — idempotency (client_msg_id)", () => {
       storedOpening()
     );
 
-    const task = await createTask(ctx, "general", {
+    const { thread: task, openingSeq } = await createTask(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
@@ -235,6 +283,9 @@ describe("createTask — idempotency (client_msg_id)", () => {
 
     expect(repoTasks.findTaskByClientId).toHaveBeenCalledWith("chan-1", "dedupe-1");
     expect(task.id).toBe(TASK_ID);
+    // The re-driven post dedups to the STORED opening message, so the retry
+    // reports that message's seq — never a fresh one.
+    expect(openingSeq).toBe(1);
     // No second task row and no second initial message (→ no double spawn).
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
@@ -283,7 +334,7 @@ describe("createTask — idempotency (client_msg_id)", () => {
       storedOpening()
     );
 
-    const task = await createTask(ctx, "general", {
+    const { thread: task } = await createTask(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
@@ -323,7 +374,7 @@ describe("createTask — idempotency (client_msg_id)", () => {
     // Retry with the SAME key: the task short-circuits, the missing request is
     // posted. The stored message is still absent, so this is a real insert.
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
-    const task = await send();
+    const { thread: task } = await send();
 
     expect(task.id).toBe(TASK_ID);
     // Exactly one task row, and exactly one initiating message across both
@@ -350,7 +401,7 @@ describe("createTask — idempotency (client_msg_id)", () => {
       taskRow({ created_by: PEER, target_user_id: PEER })
     );
 
-    await createTask(ctx, "general", {
+    const { openingSeq } = await createTask(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
@@ -358,6 +409,8 @@ describe("createTask — idempotency (client_msg_id)", () => {
     });
 
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+    // No post happened, so there is no cursor to report — null, never a guess.
+    expect(openingSeq).toBeNull();
   });
 });
 

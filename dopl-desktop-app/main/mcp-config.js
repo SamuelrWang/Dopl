@@ -44,10 +44,26 @@ function spawnConfigPath() {
 
 // The EXACT bytes this file must contain for a given token. Serialized once and
 // compared whole (C2), so every field is repaired, not just the bearer.
+//
+// FIX L4 (WAKE-V1): the CLI path carries `X-Dopl-Runtime: desktop-session` too.
+// A headless spawn IS a session this app owns — the same requester-window
+// routing should apply to it — but it reaches MCP through this file rather than
+// sdk-loader's in-memory entry, so without the header here the server read it
+// as an EXTERNAL session and the two spawn paths disagreed about the same
+// machine. It is a routing hint only (src/shared/auth/runtime-header.ts): it
+// grants nothing, and a caller who forges it still gets no window unless the
+// message is their own create of their own thread.
 function spawnConfigBody(token) {
   return JSON.stringify({
     mcpServers: {
-      dopl: { type: 'http', url: MCP_URL, headers: { Authorization: `Bearer ${token}` } },
+      dopl: {
+        type: 'http',
+        url: MCP_URL,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Dopl-Runtime': 'desktop-session',
+        },
+      },
     },
   });
 }

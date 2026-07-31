@@ -1,5 +1,9 @@
 import "server-only";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import {
+  DESKTOP_SESSION_RUNTIME,
+  type DoplRuntime,
+} from "@/shared/auth/runtime-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { ChannelNotFoundError } from "./errors";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
@@ -18,6 +22,14 @@ export interface ChannelContext {
   source: "user" | "agent";
   /** Caller's workspace role; null when the auth layer didn't resolve one. */
   role: Role | null;
+  /**
+   * Which agent runtime the request speaks for — `desktop-session` for a
+   * session the desktop app spawned, undefined for everything else (the web
+   * UI, an external Claude Code session, a script). Server-resolved from the
+   * `X-Dopl-Runtime` header by the auth layer; the write path stamps it onto
+   * a message as the reserved `metadata.runtime` key.
+   */
+  runtime?: DoplRuntime;
 }
 
 export interface AuthLike {
@@ -25,6 +37,7 @@ export interface AuthLike {
   workspaceId: string;
   role?: Role | null;
   agentTokenId?: string | null;
+  runtime?: string | null;
 }
 
 export function buildChannelContext(auth: AuthLike): ChannelContext {
@@ -33,6 +46,13 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
+    // Re-narrowed here rather than trusted as-is: the auth layer already
+    // exact-matches the header, and a second check means no other construction
+    // path can widen what counts as a desktop session.
+    runtime:
+      auth.runtime === DESKTOP_SESSION_RUNTIME
+        ? DESKTOP_SESSION_RUNTIME
+        : undefined,
   };
 }
 

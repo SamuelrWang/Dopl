@@ -71,8 +71,8 @@ async function postOpeningMessage(
   channelId: string,
   task: { id: string; title: string; target_user_id: string | null },
   body: string
-): Promise<void> {
-  await postMessage(ctx, channelId, {
+): Promise<number> {
+  const message = await postMessage(ctx, channelId, {
     body,
     kind: "message",
     toUserId: task.target_user_id ?? undefined,
@@ -80,6 +80,28 @@ async function postOpeningMessage(
     metadata: { taskId: task.id },
     clientMsgId: openingMessageClientId(task.id),
   });
+  // The seq travels back out (WAKE-V1): it is the requester's `await` cursor,
+  // and it is only known here. Every return path above is idempotent, so a
+  // dedup'd re-post yields the STORED message — the same seq, never a new one.
+  return message.seq;
+}
+
+/**
+ * What `createTask` hands back: the thread, plus the seq of its opening message
+ * — the cursor a requester passes straight to `dopl_channel(op="await")`.
+ *
+ * WHY THE SEQ RIDES ALONG (WAKE-V1): without it the requester had to call
+ * `read limit=1` to learn where to start watching, which is an extra round-trip
+ * AND a race — a peer that answers between the create and that read makes the
+ * "newest message" its reply, so the await starts one message too late and the
+ * requester waits forever for something already delivered.
+ *
+ * `null` only on the idempotent short-circuit that returns SOMEONE ELSE's
+ * thread (their opening message is not ours to re-post, so no seq is produced).
+ */
+export interface TaskCreateResult {
+  thread: ChannelThread;
+  openingSeq: number | null;
 }
 
 /**
@@ -93,7 +115,7 @@ export async function createTask(
   ctx: ChannelContext,
   ref: string,
   rawInput: TaskCreateInput
-): Promise<ChannelThread> {
+): Promise<TaskCreateResult> {
   const input = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
@@ -116,10 +138,11 @@ export async function createTask(
       input.clientMsgId
     );
     if (existing) {
-      if (existing.created_by === ctx.userId) {
-        await postOpeningMessage(ctx, channel.id, existing, input.body);
-      }
-      return mapTaskRow(existing);
+      const openingSeq =
+        existing.created_by === ctx.userId
+          ? await postOpeningMessage(ctx, channel.id, existing, input.body)
+          : null;
+      return { thread: mapTaskRow(existing), openingSeq };
     }
   }
 
@@ -144,18 +167,19 @@ export async function createTask(
         input.clientMsgId
       );
       if (raced) {
-        if (raced.created_by === ctx.userId) {
-          await postOpeningMessage(ctx, channel.id, raced, input.body);
-        }
-        return mapTaskRow(raced);
+        const openingSeq =
+          raced.created_by === ctx.userId
+            ? await postOpeningMessage(ctx, channel.id, raced, input.body)
+            : null;
+        return { thread: mapTaskRow(raced), openingSeq };
       }
     }
     throw err;
   }
 
-  await postOpeningMessage(ctx, channel.id, task, input.body);
+  const openingSeq = await postOpeningMessage(ctx, channel.id, task, input.body);
 
-  return mapTaskRow(task);
+  return { thread: mapTaskRow(task), openingSeq };
 }
 
 /**
