@@ -1,6 +1,6 @@
 {
   "name": "dopl-desktop",
-  "version": "1.7.15",
+  "version": "1.7.16",
   "description": "Dopl — desktop app",
   "main": "main/index.js",
   "scripts": {
