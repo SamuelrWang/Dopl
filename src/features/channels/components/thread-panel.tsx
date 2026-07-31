@@ -13,6 +13,7 @@ import type {
   ThreadMode,
   ThreadOutcome,
 } from "../types";
+import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
 
 /** The three rendered thread states, mirroring `channel-transcript.tsx threadOverlayFrom`. */
 type ThreadDisplayStatus = "active" | "done" | "failed";
@@ -65,10 +66,19 @@ interface Props {
 /**
  * The channel's thread list, shown in a header popover (the Bell-popover
  * sibling). Each row carries the thread title, its status chip (Thread active /
- * complete / failed), a mode badge, the creator and target as small avatars,
- * and the created (plus closed) time. Clicking a row scrolls its grouped card
- * into view and briefly rings it. Renders the shared {@link EmptyState} when
- * the channel has no threads yet.
+ * complete / failed), a mode badge, the pair the thread runs between as small
+ * avatars, and the created (plus closed) time. Clicking a row scrolls its
+ * grouped card into view and briefly rings it. Renders the shared
+ * {@link EmptyState} when the channel has no threads yet.
+ *
+ * A channel holds MANY threads, and from three members up they run between
+ * DIFFERENT pairs, so every row states whose exchange it is rather than leaving
+ * the reader to assume it is theirs: the viewer reads as "You" wherever they
+ * appear in the pair, a thread whose addressee is gone says so instead of
+ * rendering a lone creator, and a thread the viewer is not party to carries a
+ * read-only marker — reads are channel-transparent by design, but the server
+ * refuses that member's writes (see {@link isThreadParty}). Only a party gets
+ * the Close / Reopen strip, which was already true and is now stated.
  */
 export function ThreadPanel({
   threads,
@@ -95,8 +105,16 @@ export function ThreadPanel({
       avatarUrl: member?.avatarUrl ?? null,
     };
   };
-  const nameFor = (userId: string) =>
-    memberById.get(userId)?.displayName ?? memberNames.get(userId) ?? "teammate";
+  // The viewer reads as "You" wherever they appear in a pair. In a channel
+  // running several threads between different pairs, that is the fastest way to
+  // tell which rows are yours; it is also the only place the panel speaks about
+  // a specific person, so it never says "the peer" or "them".
+  const nameFor = (userId: string) => {
+    if (userId === currentUserId) return "You";
+    return (
+      memberById.get(userId)?.displayName ?? memberNames.get(userId) ?? "teammate"
+    );
+  };
 
   return (
     <div className="flex max-h-96 flex-col">
@@ -127,10 +145,14 @@ export function ThreadPanel({
           {threads.map((thread) => {
             const status = displayStatus(thread);
             const milestone = latestMilestone?.get(thread.id);
-            const canManageThread =
-              !!currentUserId &&
-              (currentUserId === thread.createdBy ||
-                currentUserId === thread.targetUserId);
+            // The thread's two parties are its creator and its addressee — the
+            // same pair the server's write gate enforces. A viewer outside that
+            // pair may read this row (reads are channel-transparent) and may
+            // not close, reopen, or post into it.
+            const isParty = isThreadParty(thread, currentUserId);
+            // "Not a party" is only sayable when we know who is looking; an
+            // absent `currentUserId` means unknown, and claims nothing.
+            const showReadOnly = !!currentUserId && !isParty;
             return (
               <div key={thread.id} className="flex flex-col">
                 <button
@@ -160,18 +182,27 @@ export function ThreadPanel({
                         {nameFor(thread.createdBy)}
                       </span>
                     </span>
-                    {thread.targetUserId && (
-                      <span className="flex items-center gap-1">
-                        <ArrowRight size={11} className="shrink-0" />
-                        <Avatar
-                          person={personFor(thread.targetUserId)}
-                          size="xs"
-                        />
-                        <span className="truncate">
-                          {nameFor(thread.targetUserId)}
-                        </span>
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1">
+                      <ArrowRight size={11} className="shrink-0" />
+                      {thread.targetUserId ? (
+                        <>
+                          <Avatar
+                            person={personFor(thread.targetUserId)}
+                            size="xs"
+                          />
+                          <span className="truncate">
+                            {nameFor(thread.targetUserId)}
+                          </span>
+                        </>
+                      ) : (
+                        // A thread always opens addressed; the addressee goes
+                        // null only when that account is deleted (the column is
+                        // ON DELETE SET NULL). Say so rather than render a lone
+                        // creator, which reads as a solo note.
+                        <span className="truncate">no addressee</span>
+                      )}
+                    </span>
+                    {showReadOnly && <ReadOnlyThreadBadge />}
                   </div>
 
                   <span className="text-micro text-text-muted">
@@ -193,7 +224,7 @@ export function ThreadPanel({
                     </span>
                   )}
                 </button>
-                {canManageThread && (
+                {isParty && (
                   <ThreadRowActions
                     thread={thread}
                     onCloseThread={onCloseThread}

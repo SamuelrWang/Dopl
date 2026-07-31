@@ -3,10 +3,10 @@
 // SOURCE EXTRACTION with INJECTION (the session-park idiom): the BEGIN/END
 // SESSION-HISTORY-PURE block references its leaf deps (apiFetch / listenerIo / diag) and
 // the bind()-set `emit` as free vars, so the shared harness slices the block, proves it holds
-// no electron require, injects fakes, and these two suites pin the behaviour. The task-WINDOW
-// truth table (FIX Q1: which rows belong to a task) is its own file,
-// test/session-history-window.test.mjs; this one keeps the read, the lanes, the copy and the
-// seed. What is pinned here:
+// no electron require, injects fakes, and three sibling suites pin the behaviour. The task-WINDOW
+// truth table (FIX Q1: which rows belong to a task) is test/session-history-window.test.mjs, and
+// what the author rule WITHHELD (FIX N1) is test/session-history-hidden.test.mjs; this one keeps
+// the read, the lanes, the copy and the seed. What is pinned here:
 //   the READ is cookie-authed via api.js and asks for the NEWEST rows (FIX F5: `since` is
 //   omitted — channel_messages.seq is a TABLE-WIDE identity, so a cursor-200 window held an
 //   arbitrary number of THIS channel's rows, sometimes none);
@@ -20,7 +20,9 @@
 //   baked, and a body the inbound gate is handling is dropped from the rendered ENTRIES as
 //   well, so a held reply shows once (as its card) and never rides the prompt;
 //   FIX F3 — whether a shell seeds a fresh run is decided at SHELL-CREATION time
-//   (s.freshRun), so a late fetch cannot lose the seed to a racing system/init.
+//   (s.freshRun), so a late fetch cannot lose the seed to a racing system/init;
+//   FIX N1 — a shell with NEITHER a counterparty NOR a resolvable operator id still paints
+//   nothing and reads nothing (the rest of that fix is the sibling suite's).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,8 +30,7 @@ import {
   BLOCK, BANNED, realIo, harness, msg, session, parties, PEER, ME,
 } from "./helpers/session-history.mjs";
 
-// The task-WINDOW truth table (FIX Q1) lives in test/session-history-window.test.mjs; both
-// suites drive the same sliced block through test/helpers/session-history.mjs.
+// All three suites drive the same sliced block through test/helpers/session-history.mjs.
 
 test("the SESSION-HISTORY-PURE block is really pure (no electron, no fs, no process)", () => {
   assert.ok(BLOCK.startsWith("// ─── BEGIN SESSION-HISTORY-PURE"), "a REAL slice, never empty");
@@ -209,17 +210,6 @@ test("FIX F4: load drops a third member's row from BOTH the entries and the seed
   assert.ok(turn.includes("peer says"));
 });
 
-test("FIX F4: a shell with NO counterparty paints no history at all and points at the thread", async () => {
-  const h = harness({ rows: [msg({ authorUserId: PEER, authorName: "David", body: "theirs" })] });
-  const s = session({ counterpartyId: null });
-  assert.equal(await h.load(s), false);
-  assert.equal(h.calls.fetch.length, 0, "no read either (nothing could be laned honestly)");
-  assert.deepEqual(h.calls.emit, [{ type: "notice", level: "info", text: h.NO_PEER_NOTE }]);
-  assert.equal(h.NO_PEER_NOTE, "Earlier messages are in the channel thread.");
-  assert.ok(!h.NO_PEER_NOTE.includes("—"), "no em dash in copy");
-  assert.equal(s.pendingHistory, undefined, "and nothing seeds the first turn");
-});
-
 test("FIX F4: an identity lookup that THROWS still paints (fail closed, no 'me' lane)", async () => {
   const h = harness({
     identityThrows: true,
@@ -228,15 +218,6 @@ test("FIX F4: an identity lookup that THROWS still paints (fail closed, no 'me' 
   assert.equal(await h.load(session()), true);
   assert.deepEqual(h.calls.emit[0].entries.map((e) => [e.lane, e.text]), [["them", "theirs"]]);
 });
-
-// "Empty" now means empty OF THIS PAIR's messages: lifecycle events and other members'
-// posts are all the channel holds, so NEITHER pass finds a turn to paint.
-test("load with an EMPTY thread stays silent (no divider, no notice)", async () => {
-  const h = harness({ rows: [msg({ kind: "task_started" }), msg({ authorUserId: "third", metadata: {} })] });
-  assert.equal(await h.load(session()), false);
-  assert.deepEqual(h.calls.emit, []);
-});
-
 
 // ── failure: one calm notice, then carry on ───────────────────────────────────────
 

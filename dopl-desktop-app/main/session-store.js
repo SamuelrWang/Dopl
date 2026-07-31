@@ -84,6 +84,11 @@ function durableSessionRecord(rec) {
     // requester -> the target I addressed). Persisted so a resumed session stays
     // counterparty-bound and only feeds on that member's replies.
     counterpartyId: r.counterpartyId || null,
+    // H2: whether that party's channel is a DIRECT one, i.e. whether the server addresses
+    // this session's unaddressed posts. Persisted with the binding because a recreated
+    // shell posts too, and its approval card must name the same recipient the live one did.
+    // Strict boolean: a hand-edited store can only ever make this FALSE, which understates.
+    direct: r.direct === true,
     // v1.7.5 D1: the header identity (peer display name, channel name, task title).
     // Whitelisted as PLAIN STRINGS so a recreated/resumed shell can rebuild the header
     // instead of falling back to a bare "Session". Coerced + bounded the same way the

@@ -11,7 +11,9 @@
 // (session-viewmodel.HISTORY_NOTE) — main sends data. When the shell has nothing to
 // resume (no retained sdkSessionId, the D3 always-open case) the same entries also seed
 // the FRESH run's first turn as fenced context, so typing into a reopened window is not
-// a cold start.
+// a cold start. (FIX N1: "the same entries", plus the one line that says how many were
+// withheld — the two surfaces state the same count or the seed would be the more complete
+// looking lie of the two.)
 //
 // MAIN-PROCESS ONLY. The fetch uses api.js (the Electron session's Supabase cookies —
 // see auth.js for why not a bearer); the renderer gets display strings only. Nothing
@@ -29,6 +31,23 @@
 // seed — one step around the FIX L1 counterparty binding. Rows are therefore kept only
 // when their authorUserId is the operator or the session's bound counterparty, and the
 // 'me' lane is reserved for rows the operator actually wrote.
+//
+// FIX N1 (N-party, 2026-07-31): that fence is correct and it was SILENT. A dropped row left no
+// trace in EITHER surface, and the same array is both rendered and stashed as the fresh run's
+// seed — so in a channel with more than two members the operator read a plausible-looking but
+// incomplete conversation and the agent was seeded with one. The fence is UNCHANGED (the
+// caller-settable thread id it exists for is still open, and widening it is a later wave with a
+// product decision attached). What changed is that the drops are COUNTED and stated: one calm
+// notice in the window, and one trailing line inside the seed's own fence.
+//
+// FIX N1 also stops the no-counterparty case opening an EMPTY BOX. A thread in a group channel
+// has no counterparty at all (channel-context resolves one for DIRECT channels only, by design),
+// and load() used to bail on that before it read anything, so "Open session" on a group thread
+// card painted nothing and said only "Earlier messages are in the channel thread." It now paints
+// what it can legitimately attribute — the rows the OPERATOR wrote — and says in the same breath
+// that it has no counterparty and how many other members' messages it is therefore not showing.
+// Nothing is inferred: a shell with NEITHER a counterparty nor a resolvable operator id still
+// paints nothing, because then no row can be laned honestly at all.
 //
 // FIX F17: filtering on the task id was also too NARROW to show anything for a real DM
 // exchange. Most of those rows carry no `metadata.taskId` at all (the request and the
@@ -59,6 +78,7 @@
 const { apiFetch } = require('./api');
 const listenerIo = require('./listener-io');
 const io = require('./session-io'); // FIX F4: the shared gate-body / seed-exclusion rule
+const copy = require('./session-history-copy'); // §2 split: every operator-facing string
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-HISTORY-PURE (injectable; unit-tested via source extraction) ──
@@ -75,10 +95,9 @@ const ENTRY_CAP = 50; // read-only entries rendered (contract cap ~50)
 const FETCH_LIMIT = 200; // the server's MAX_MESSAGE_LIMIT for one read
 const TEXT_CAP = 2000; // per-entry bound so one huge post cannot blow up the window
 const NAME_CAP = 80; // the same bound every counterparty display name gets
-const FETCH_FAILED_NOTE = 'Could not load earlier messages.';
-// FIX F4: a shell whose durable record kept no counterparty cannot tell the peer's words
-// from the operator's, so it paints NO history at all and says where to read it instead.
-const NO_PEER_NOTE = 'Earlier messages are in the channel thread.';
+// Every operator-facing string lives in `copy` (main/session-history-copy.js): the two calm
+// notices this file has always had, the FIX N1 one-sided-window lines, and the two count builders
+// the window and the seed share. Split out under §2; re-exported below unchanged.
 
 function clamp(value, cap) {
   if (value == null) return '';
@@ -198,19 +217,32 @@ function inTaskScope(r, taskId, span) {
 //   - lane 'me' ONLY when the author IS the operator; the bound counterparty is 'them'.
 //     Neither id known -> that side contributes nothing, so counterparty text can never
 //     be painted as the operator's own words (and a shell with no bound counterparty at
-//     all contributes nothing on either pass).
-function pairRows(rows, taskId, selfId, peerId, span) {
+//     all contributes only the operator's own rows — FIX N1).
+//   - FIX N1: `stats`, when passed, collects the `seq` of every row KEPT and of every row
+//     dropped for AUTHORSHIP, index-aligned with the returned array. That is the only drop the
+//     caller reports on: a lifecycle event is not a turn, another task's row is not this
+//     conversation, and an empty body has nothing to show. An UNATTRIBUTABLE row (author_user_id
+//     is nulled when the account is deleted) counts as hidden: it is still not this session's,
+//     and dropping it silently is the whole defect.
+function pairRows(rows, taskId, selfId, peerId, span, stats) {
   const out = [];
   for (const r of rows || []) {
     if (!r || r.kind !== 'message') continue;
     if (taskId && !inTaskScope(r, taskId, span)) continue;
-    const author = String(r.authorUserId == null ? '' : r.authorUserId);
-    if (!author) continue; // unattributable: never guess a lane for it
-    const isSelf = !!selfId && author === selfId;
-    const isPeer = !!peerId && author === peerId;
-    if (!isSelf && !isPeer) continue; // a third member is not part of this conversation
+    // FIX N1: the empty-body test moved AHEAD of the author test so the count means the same
+    // thing for everyone: a row with nothing in it was never a turn, so it is not "a message
+    // that is not shown" whoever wrote it.
     const text = clamp(r.body, TEXT_CAP);
     if (!text) continue;
+    const author = String(r.authorUserId == null ? '' : r.authorUserId);
+    // An empty author matches neither id, so an unattributable row still never guesses a lane.
+    const isSelf = !!author && !!selfId && author === selfId;
+    const isPeer = !!author && !!peerId && author === peerId;
+    if (!isSelf && !isPeer) { // a third member (or nobody we can name) is not this conversation
+      if (stats) stats.hidden.push(rowSeq(r));
+      continue;
+    }
+    if (stats) stats.kept.push(rowSeq(r));
     // `agent` is the AUTHOR KIND, not an identity: the renderer needs it to give a history
     // bubble the same surface its live twin has (an agent's own words look different from a
     // person's). Deliberately NOT an id — no author id crosses into the renderer (§H-9), and
@@ -239,18 +271,40 @@ function pairRows(rows, taskId, selfId, peerId, span) {
 //
 // The last `cap` of the chosen pass survive, so a long thread shows its most recent stretch.
 // Order and cap are identical on both paths.
-function historyEntries(rows, opts) {
+//
+// FIX N1: returns `{ entries, othersHidden }`. `othersHidden` counts the rows the FIX F4 author
+// rule dropped, SCOPED TO THE STRETCH ACTUALLY PAINTED — `stats.kept` is index-aligned with the
+// pass, so the oldest surviving entry names the seq the count speaks for, and a drop older than
+// that (outside the window the operator is looking at) is not claimed. With NOTHING painted
+// there is no stretch to scope to, so every drop in scope counts: that is the case where the
+// count is the only thing the operator gets, and it is what makes an empty window explain itself.
+// A row with no usable seq cannot be placed, so it counts either way (disclose, do not hide).
+function historyRead(rows, opts) {
   const o = opts || {};
   const taskId = String(o.taskId == null ? '' : o.taskId);
   const selfId = String(o.selfUserId == null ? '' : o.selfUserId);
   const peerId = String(o.peerUserId == null ? '' : o.peerUserId);
   const cap = Number.isFinite(o.cap) && o.cap > 0 ? o.cap : ENTRY_CAP;
+  const stats = { kept: [], hidden: [] };
+  let list;
   if (taskId) {
     const span = taskWindow(rows, taskId, o.channelId);
-    if (!span) return [];
-    return pairRows(rows, taskId, selfId, peerId, span).slice(-cap);
+    if (!span) return { entries: [], othersHidden: 0 };
+    list = pairRows(rows, taskId, selfId, peerId, span, stats);
+  } else {
+    list = pairRows(rows, '', selfId, peerId, null, stats);
   }
-  return pairRows(rows, '', selfId, peerId, null).slice(-cap);
+  const entries = list.slice(-cap);
+  const oldest = entries.length ? stats.kept[stats.kept.length - entries.length] : null;
+  const othersHidden = entries.length
+    ? stats.hidden.filter((q) => q === null || oldest === null || q >= oldest).length
+    : stats.hidden.length;
+  return { entries: entries, othersHidden: othersHidden };
+}
+
+// The entries alone (the shape every caller before FIX N1 wanted).
+function historyEntries(rows, opts) {
+  return historyRead(rows, opts).entries;
 }
 
 // The authenticated read: the NEWEST `FETCH_LIMIT` rows of the channel, ascending.
@@ -308,23 +362,29 @@ async function load(s) {
   // empty stream; the channel plus the bound counterparty are enough to read the pair's own
   // conversation. A channel id is still required — there is nothing to read without it.
   if (!deps || !s || !s.channelId) return false;
-  // FIX F4: no bound counterparty means no row can be laned honestly, so nothing is
-  // painted (and nothing is read) — one calm pointer at the channel thread instead of a
-  // window full of the peer's words wearing the operator's lane. No divider either: it
-  // would introduce a history that is not there.
-  if (!s.counterpartyId) {
-    deps.emit(s, { type: 'notice', level: 'info', text: NO_PEER_NOTE });
+  // The operator's own id: needed to lane a row 'me'. Unknown identity fails CLOSED — the peer's
+  // rows still render as 'them' and nothing claims to be the operator's. FIX N1 resolves it
+  // BEFORE the read, because it now decides whether there is anything readable at all (below)
+  // and because the read itself advances the human watermark (FOLLOW-UP F7): a window that can
+  // paint nothing should not spend that. It is tier-1 local in the normal case (listener-io
+  // reads the stored blob first), so this is not a second network hop.
+  let selfId = null;
+  try { selfId = await listenerIo.resolveIdentity(s.workspaceId); } catch (_) { selfId = null; }
+  // FIX F4 / FIX N1: with NEITHER a bound counterparty NOR a known operator id, no row can be
+  // laned honestly, so nothing is painted (and nothing is read) — one calm pointer at the
+  // channel thread instead of a window full of the peer's words wearing the operator's lane. No
+  // divider either: it would introduce a history that is not there. With ONE of the two known,
+  // the rows THAT side wrote are attributable, so the window paints those and states what it is
+  // not showing (the group-thread case, which used to open an empty box).
+  if (!s.counterpartyId && !selfId) {
+    deps.emit(s, { type: 'notice', level: 'info', text: copy.NO_PEER_NOTE });
     return false;
   }
   const rows = await fetchRows(s);
   if (!rows) {
-    deps.emit(s, { type: 'notice', level: 'info', text: FETCH_FAILED_NOTE });
+    deps.emit(s, { type: 'notice', level: 'info', text: copy.FETCH_FAILED_NOTE });
     return false;
   }
-  // The operator's own id: needed to lane a row 'me'. Unknown identity fails CLOSED —
-  // the peer's rows still render as 'them' and nothing claims to be the operator's.
-  let selfId = null;
-  try { selfId = await listenerIo.resolveIdentity(s.workspaceId); } catch (_) { selfId = null; }
   // FIX F4 (round 2): drop every row the inbound GATE is handling from the ENTRIES too,
   // not just from the seed. The fetch window always contains the message that popped the
   // gate (session-park records it on the shell before this read), so the held reply used
@@ -332,27 +392,50 @@ async function load(s) {
   // history bubble a few lines above it. Same predicate the seed uses, so the two agree.
   // FIX F17: this filter sits OUTSIDE historyEntries, so it covers the pair-scoped pass as
   // well — a held or declined body cannot walk back in through the widened taskId condition.
-  const entries = historyEntries(rows, {
+  const read = historyRead(rows, {
     taskId: s.taskId, channelId: s.channelId, peerUserId: s.counterpartyId,
     selfUserId: selfId, cap: ENTRY_CAP,
-  }).filter((e) => !io.isGatedEntry(e, (s && s.gatedBodies) || []));
+  });
+  const entries = read.entries.filter((e) => !io.isGatedEntry(e, (s && s.gatedBodies) || []));
+  // FIX N1: what the author rule hid. '' when it hid nothing, so a DM (where there IS no third
+  // member) reads exactly as it did before.
+  const hiddenText = copy.hiddenNote(read.othersHidden, !!s.counterpartyId, !!selfId);
   if (!entries.length) {
+    // FIX N1: an empty window that is empty BECAUSE of the fence says so, instead of opening
+    // as a blank box. This is the group-thread case: the operator can read the channel's
+    // threads, but this window will not attribute other members' words to a lane.
+    if (hiddenText) {
+      deps.emit(s, { type: 'notice', level: 'info', text: hiddenText });
+      return false;
+    }
     // FIX Q1: a thread that HAS rows but none of THIS task's — the task's span fell out of
     // the newest-200 window — gets the same calm pointer the no-counterparty case gets,
     // rather than a silent widening to the channel. Same wording on purpose: a second
     // string would only tell the operator which internal filter missed. A genuinely empty
     // thread still stays quiet (there is nothing in the channel to point at).
     if (rows.length && s.taskId && !taskWindow(rows, String(s.taskId), s.channelId)) {
-      deps.emit(s, { type: 'notice', level: 'info', text: NO_PEER_NOTE });
+      deps.emit(s, { type: 'notice', level: 'info', text: copy.NO_PEER_NOTE });
     }
     return false; // an empty thread stays quiet (no empty divider)
   }
   deps.emit(s, { type: 'history', entries: entries });
+  // FIX N1: the caveat lands AFTER the history block, not above it. The window scrolls to its
+  // newest item, so a line above the divider is the first thing scrolled out of sight — which
+  // would be a notice nobody reads, i.e. the silent drop again.
+  if (hiddenText) deps.emit(s, { type: 'notice', level: 'info', text: hiddenText });
   // D3: a shell with NOTHING to resume starts a fresh SDK session on the first turn, so
   // the thread rides that turn as fenced DATA. FIX F1: the seed is NOT built here — the
   // transcript is assembled at first-turn time (io.withSeed), minus every body the gate
   // has handled. Stash the entries only.
-  if (seedsFreshRun(s)) s.pendingHistory = entries;
+  //
+  // FIX N1: the SEED array is the rendered one plus the same count, so the agent is never
+  // handed a partial transcript as if it were whole. It is a separate array on purpose — the
+  // note must not become a history bubble.
+  if (seedsFreshRun(s)) {
+    s.pendingHistory = hiddenText
+      ? entries.concat([copy.hiddenSeedEntry(read.othersHidden, !!selfId)])
+      : entries;
+  }
   return true;
 }
 
@@ -362,9 +445,15 @@ module.exports = {
   bind,
   load,
   historyEntries,
+  historyRead, // FIX N1: entries + the count of what the author rule hid
   taskWindow, // FIX Q1
   parseLegacyTaskSeq, // FIX Q1
   ENTRY_CAP,
-  FETCH_FAILED_NOTE,
-  NO_PEER_NOTE, // FIX F4
+  // §2 split: the strings now live in session-history-copy.js and are re-exported verbatim, so
+  // nothing that imported them from here has to move.
+  FETCH_FAILED_NOTE: copy.FETCH_FAILED_NOTE,
+  NO_PEER_NOTE: copy.NO_PEER_NOTE, // FIX F4
+  NO_PEER_PARTIAL_NOTE: copy.NO_PEER_PARTIAL_NOTE, // FIX N1
+  NO_SELF_PARTIAL_NOTE: copy.NO_SELF_PARTIAL_NOTE, // FIX N1
+  hiddenNote: copy.hiddenNote, // FIX N1
 };

@@ -36,13 +36,18 @@ const io = require('./session-io');
 // call's REAL addressee and lifecycle kind instead of the session's assumed counterparty.
 // The helper adds those fields only when the call really carried them, so a plain reply's
 // payload is byte-identical to the one this function returned before.
-function outboundResolveEvents(requestId, toolUseId, input, counterpartyName) {
+// H2: `directChannel` rides here too, or an AUTO-ALLOWED DM post would paint the card the
+// gated one does not — "no recipient named" about a message the server addresses to the peer.
+// Stamped ONLY when true, like `addressed` and `postKind`: a non-direct post's payload stays
+// byte-identical to the one every existing surface already renders.
+function outboundResolveEvents(requestId, toolUseId, input, counterpartyName, directChannel) {
   return [
     io.withPostSurface({
       type: 'outbound_gate',
       requestId,
       toolUseId,
       ownChannel: true,
+      ...(directChannel === true ? { directChannel: true } : {}),
       text: input && input.body != null ? String(input.body) : '',
     }, input, counterpartyName),
     { type: 'permission_resolved', requestId, decision: 'allow-once' },
@@ -61,7 +66,7 @@ function wrapCanUseTool(s, inner, emit) {
     if (!toolUseId || !io.isOutboundPost(name, input, s.channelId)) return result;
     return Promise.resolve(result).then((verdict) => {
       if (verdict && verdict.behavior === 'allow') {
-        const events = outboundResolveEvents(crypto.randomUUID(), toolUseId, input, s.counterpartyName);
+        const events = outboundResolveEvents(crypto.randomUUID(), toolUseId, input, s.counterpartyName, s.direct === true);
         for (const ev of events) emit(s, ev);
       }
       return verdict;

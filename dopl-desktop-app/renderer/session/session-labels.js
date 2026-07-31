@@ -142,11 +142,24 @@
   // session's own channelId). FAIL-SUSPICIOUS: anything other than an explicit true reads
   // as another channel, so a missing marker can never make an exfil post look routine.
   //
-  // v2.x: an OWN-channel post now NAMES the recipient ("To: David's agent"). "To: this
-  // channel" read like a warning next to the cross-channel line it shares a slot with, so a
-  // legitimate reply looked as suspicious as an exfil attempt. The name is the peer display
-  // name main already puts on the payload (`to` on the outbound gate / the post item, the
-  // bound counterparty and never a third party); with no name it stays "To: this channel".
+  // v2.x named the recipient on EVERY own-channel post ("To: David's agent"), because
+  // "To: this channel" read like a warning next to the cross-channel line it shares a slot
+  // with. N-PARTY CORRECTION (2026-07-31): that name was only ever right in a 1:1. Main fills
+  // `to` with the session's BOUND COUNTERPARTY when the call named nobody
+  // (session-io.withPostSurface: "unaddressed -> the bound counterparty"), and in a GROUP
+  // channel an unaddressed post reaches no agent at all, so the card promised "To: David's
+  // agent" about a message no agent would read.
+  //
+  // BUT IT SWUNG TOO FAR (H2, same day). Dropping the name for EVERY unaddressed post
+  // understated the case that is all of today's live traffic: in a DIRECT channel the SERVER
+  // addresses the post — `resolveDirectPeer` stamps `to_user_id` with the other member — so
+  // the agent is correctly told it needs no `to`, and the operator was then shown "no
+  // recipient named" about a message that goes to David and wakes David's agent. An approval
+  // card that understates the blast radius is the same defect as one that overstates it.
+  // `directChannel` is the one bit that separates the two: main stamps it from the server's
+  // own `isDirect` flag (channel-context / the listener's channel DTO), and it is FAIL-QUIET
+  // — anything other than an explicit true leaves the channel-level wording, so a launch
+  // shape that does not carry the flag can never invent a recipient.
   // Whitespace-collapsed and capped: it is a label, not prose.
   const PEER_CAP = 60;
   function peerName(perm) {
@@ -165,11 +178,17 @@
   // MEDIUM-2 — `addressed` means the CALL named a recipient (`to:`), which may be a different
   // channel member from this session's counterparty. Main puts the real value on `to` and
   // flags it, so the card names who the message is really for instead of the peer it assumes.
+  // H2 — `directChannel` means the SERVER will name one: a DM post with no `to` is stamped to
+  // the other member before it lands. Two different ways of knowing, one true outcome.
+  const UNADDRESSED = "To: this channel, no recipient named";
+  function isNamedRecipient(perm) {
+    return !!perm && (perm.addressed === true || perm.directChannel === true);
+  }
   function postDestinationText(perm) {
     if (!perm || perm.ownChannel !== true) return "To: another channel" + postKindSuffix(perm);
     const who = peerName(perm);
-    if (perm.addressed === true && who) return "To: " + who + postKindSuffix(perm);
-    return (who ? "To: " + who + "'s agent" : "To: this channel") + postKindSuffix(perm);
+    if (isNamedRecipient(perm) && who) return "To: " + who + postKindSuffix(perm);
+    return UNADDRESSED + postKindSuffix(perm);
   }
 
   // Is this post leaving the session's own channel? Drives the dock's warning styling.

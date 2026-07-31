@@ -19,17 +19,26 @@
 
 import type {
   AwaitResult,
+  ChannelMember,
   ChannelMessage,
   ChannelThread,
   DoplClient,
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
-import { channelNotFound, inlineOr, neutralizeInline } from "./channel-shared";
+import {
+  channelNotFound,
+  inlineOr,
+  memberNames,
+  neutralizeInline,
+} from "./channel-shared";
 import {
   UNTRUSTED_BODY_HEADER,
   UNTRUSTED_LISTING_HEADER,
+  UNTRUSTED_ROSTER_HEADER,
   UNTRUSTED_THREAD_HEADER,
+  addresseeOf,
   formatChannelLine,
+  formatMemberLine,
   formatMessages,
   formatThreadDetail,
   formatThreadLine,
@@ -39,6 +48,9 @@ import {
   resolveAwaitHoldCeilingMs,
   resolveAwaitHoldMs,
 } from "./channel-await-budget";
+// The addressing rule has ONE statement, in one module — see
+// channel-addressing.ts for what each half of it is verified against.
+import { AWAIT_UNNAMED_NOTICE, rosterAddressingRule } from "./channel-addressing";
 
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = resolveAwaitHoldMs(process.env.DOPL_AWAIT_HOLD_MS);
@@ -106,8 +118,17 @@ function describeFailure(e: unknown): string {
   return neutralizeInline(raw) ?? "`no detail reported`";
 }
 
+/**
+ * N-PARTY — "the peer" was undefined and unevaluable in a channel with more
+ * than two members, and evaluating it loosely is worse than not stating it: a
+ * five-member channel always has SOMEONE posting, so "any activity in the last
+ * 30 minutes" keeps an agent re-arming forever over an exchange its own
+ * counterparty abandoned. The condition is therefore scoped to the member the
+ * caller is waiting on — the one it addressed, which it knows and this module
+ * does not.
+ */
 function rearmStopRule(ref: string): string {
-  return `Keep waiting while the exchange is alive — a peer agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="get_thread", channel="${ref}", thread=<id>) for its status, and dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (peers post task_progress milestones while they work). Keep re-arming while the thread is OPEN and something came from the peer in roughly the last 30 minutes. STOP and report to your operator when the thread is closed or failed, or when the peer has shown nothing at all for ~30+ minutes.`;
+  return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="get_thread", channel="${ref}", thread=<id>) for its status, and dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while the thread is OPEN and something came from that member in roughly the last 30 minutes. STOP and report to your operator when the thread is closed or failed, or when that member has shown nothing at all for ~30+ minutes.`;
 }
 
 export async function opList(client: DoplClient): Promise<ToolResponse> {
@@ -137,6 +158,7 @@ export async function opRead(
   ref: string,
   since?: number,
   limit?: number,
+  selfUserId: string | null = null,
 ): Promise<ToolResponse> {
   // Hot path — no pre-resolve. The route accepts slug-or-id in the
   // [channelId] segment and enforces visibility itself, so we hand it the
@@ -162,7 +184,7 @@ export async function opRead(
     // caveat placed under them is read after the injected line it warns about.
     `${UNTRUSTED_BODY_HEADER}\n`,
   ];
-  lines.push(...formatMessages(messages, ref));
+  lines.push(...formatMessages(messages, ref, selfUserId));
   const lastSeq = messages[messages.length - 1].seq;
   lines.push(
     `\nHighest seq shown: ${lastSeq}. Watch for newer messages with dopl_channel(op="await", channel="${ref}", since=${lastSeq}).`,
@@ -188,6 +210,7 @@ export async function opAwait(
   ref: string,
   since: number,
   timeoutMs?: number,
+  selfUserId: string | null = null,
 ): Promise<ToolResponse> {
   // Default = AWAIT_HOLD_MS; an EXPLICIT ask may go up to the ceiling (the cap,
   // or the env lever's value when the lever is set — see resolveAwaitHoldCeilingMs).
@@ -285,8 +308,21 @@ export async function opAwait(
     // has to be read BEFORE them, not as a footnote underneath.
     `${UNTRUSTED_BODY_HEADER}\n`,
   ];
-  lines.push(...formatMessages(messages, ref));
+  lines.push(...formatMessages(messages, ref, selfUserId));
   const lastSeq = messages[messages.length - 1].seq;
+  // N-PARTY — `await` is CHANNEL-WIDE and unfiltered: every message wakes every
+  // armed listener, including one addressed to a different member or to nobody.
+  // That is correct (a filtered await would miss the messages an agent needs to
+  // follow), but it means a wake is not by itself a reason to act. Said only
+  // when we can actually tell — with no `selfUserId` the claim would be a guess.
+  //
+  // The CONDITION is "nothing here names me", which is all this op can decide
+  // without a round-trip; what the notice SAYS no longer treats that as "none of
+  // this is yours", because the canonical reply in this product is unaddressed.
+  // See AWAIT_UNNAMED_NOTICE.
+  if (selfUserId !== null && !messages.some((m) => addresseeOf(m) === selfUserId)) {
+    lines.push(`\n${AWAIT_UNNAMED_NOTICE}`);
+  }
   lines.push(
     `\nAdvance your cursor to seq ${lastSeq}. If the exchange is still open, re-arm before you end your turn: dopl_channel(op="await", channel="${ref}", since=${lastSeq}) — that pending call is what wakes you with the next message.`,
     rearmStopRule(ref),
@@ -297,6 +333,7 @@ export async function opAwait(
 export async function opListThreads(
   client: DoplClient,
   ref: string,
+  selfUserId: string | null = null,
 ): Promise<ToolResponse> {
   // Hot-path parity with read/await: hand the ref straight to the route
   // (slug-or-id + visibility enforced there) and map a 404 to a clean
@@ -320,9 +357,12 @@ export async function opListThreads(
     // channel receives every thread's text, not just their own.
     `${UNTRUSTED_THREAD_HEADER}\n`,
   ];
-  for (const t of threads) lines.push(formatThreadLine(t));
+  // Names for the two ids on every thread line. One extra call, on a cold op
+  // (not the poll loop), and fail-soft — see `memberNames`.
+  const view = { selfUserId, names: await memberNames(client, ref) };
+  for (const t of threads) lines.push(formatThreadLine(t, view));
   lines.push(
-    `\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read".`,
+    `\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read". A thread accepts posts ONLY from the member who opened it and the member it is addressed to — everyone else in the channel can read it and is refused if they post into it.`,
   );
   return ok(lines.join("\n"));
 }
@@ -331,6 +371,7 @@ export async function opGetThread(
   client: DoplClient,
   ref: string,
   threadId: string,
+  selfUserId: string | null = null,
 ): Promise<ToolResponse> {
   let thread: ChannelThread;
   try {
@@ -356,5 +397,57 @@ export async function opGetThread(
   // Q1-C: framing FIRST, above the `## Thread <title>` heading rather than
   // under it. The product tells a waiting agent to call this op every ~3 empty
   // holds, so it is a peer-typed title an agent re-reads on a timer.
-  return ok(`${UNTRUSTED_THREAD_HEADER}\n\n${formatThreadDetail(thread)}`);
+  const view = { selfUserId, names: await memberNames(client, ref) };
+  return ok(`${UNTRUSTED_THREAD_HEADER}\n\n${formatThreadDetail(thread, view)}`);
+}
+
+/**
+ * The channel ROSTER — who is actually in here.
+ *
+ * The gap this closes: `op="list"` reported "5 members" and NOTHING in the tool
+ * said who they were, while `post` and `create_thread` both require addressing a
+ * specific member and an unaddressed ask in a 3+ member channel triggers nobody.
+ * An agent could see that a channel was a group, could be told to address one
+ * member, and had no op that would tell it which members existed.
+ *
+ * Read-only, and it renders exactly what the roster route returns — the private
+ * per-member preferences (notify scope, agent tool profile) are already scrubbed
+ * server-side for everyone but the caller, and none of them are rendered here.
+ */
+export async function opMembers(
+  client: DoplClient,
+  ref: string,
+  selfUserId: string | null = null,
+): Promise<ToolResponse> {
+  let members: ChannelMember[];
+  try {
+    members = await client.listChannelMembers(ref);
+  } catch (e) {
+    if (isNotFound(e)) return channelNotFound(ref);
+    throw e;
+  }
+  if (members.length === 0) {
+    return ok(`No members visible in **${ref}**.`);
+  }
+  const lines = [
+    `## ${ref} — ${members.length} member${members.length === 1 ? "" : "s"}\n`,
+    `${UNTRUSTED_ROSTER_HEADER}\n`,
+  ];
+  for (const m of members) lines.push(formatMemberLine(m, selfUserId));
+  if (selfUserId === null) {
+    // Never guess which row is the caller: the boot handshake is the only
+    // source of that id here, and when it failed the honest answer is to say so.
+    lines.push(
+      `\nNo row is marked "you" — this connection could not resolve your own user id at startup.`,
+    );
+  }
+  // TWO rules, and they are NOT the same rule. AUTO-ADDRESSING keys on
+  // `is_direct` (`resolveDirectPeer` stamps nothing without it), which this op
+  // cannot see. The IMPLICIT TRIGGER on the receiving machine keys on the MEMBER
+  // COUNT (`classify`, targeting.js:152) — which this op has just counted
+  // exactly. The first version of this line collapsed the two and told a
+  // two-member channel its unaddressed messages reach nobody; they reach the
+  // only other member. `rosterAddressingRule` states each from what it knows.
+  lines.push(rosterAddressingRule(ref, members.length));
+  return ok(lines.join("\n"));
 }

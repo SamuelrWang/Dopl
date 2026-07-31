@@ -110,7 +110,18 @@
       // of the accessibility tree so the row count a screen reader reports is the real one.
       const label = el("div", "mention-pop__label", pure.POPUP_LABEL);
       attr(label, "role", "presentation");
-      host.replaceChildren(label, ...rows);
+      // N-PARTY: a session with no bound counterparty offers ONE row, and a bare single row
+      // reads as a broken popup rather than as the fail-closed limit it is. The note says which.
+      // role=presentation for the same reason the label has it (a listbox owns options), and it
+      // is appended LAST so the option indices the ARIA bookkeeping uses are untouched.
+      const note = typeof pure.addressNote === "function" ? pure.addressNote(getOptions()) : "";
+      const tail = [];
+      if (note) {
+        const n = el("div", "mention-pop__note", note);
+        attr(n, "role", "presentation");
+        tail.push(n);
+      }
+      host.replaceChildren(label, ...rows, ...tail);
       host.classList.remove("hidden");
       attr(input, "aria-expanded", "true");
       attr(input, "aria-activedescendant", "mentionOpt" + pop.index);

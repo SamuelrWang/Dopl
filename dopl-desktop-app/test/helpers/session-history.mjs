@@ -5,10 +5,11 @@
 // listenerIo / io / diag) and the bind()-set `emit` as FREE variables, so both suites slice
 // that block, prove it holds no electron require, and drive it with fakes.
 //
-// Two suites share this because FIX Q1 split the truth table in two: session-history.test.mjs
-// keeps the read, the lanes, the failure copy and the seed; session-history-window.test.mjs
-// owns the task-window scoping. One harness keeps the fixtures identical between them (and
-// keeps each file under the §2 500-line cap).
+// THREE suites share this because the truth table outgrew one file: session-history.test.mjs
+// keeps the read, the lanes, the failure copy and the seed; session-history-window.test.mjs owns
+// the task-window scoping (FIX Q1); session-history-hidden.test.mjs owns what the author rule
+// withheld and how the window and the seed say so (FIX N1). One harness keeps the fixtures
+// identical between them (and keeps each file under the §2 500-line cap).
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -37,6 +38,9 @@ export const BANNED = ["require(", "electron", "fs.", "child_process", "@anthrop
 // + fence under test are the ones that ship. It is ALSO injected into the sliced block as
 // `io`, so the entry filter under test uses the same isGatedEntry the seed does.
 export const realIo = require(join(MAIN, "session-io.js"));
+// Likewise the REAL copy module (§2 split, no deps at all), injected as `copy`: the strings these
+// suites assert are the strings that ship, not a fixture that can drift from them.
+export const realCopy = require(join(MAIN, "session-history-copy.js"));
 
 export const CHANNEL = "c1";
 export const TASK = "task-9"; // a first-class id: nothing derives a seq from it
@@ -72,9 +76,10 @@ export function harness(over = {}) {
   const diag = (...a) => calls.diag.push(a.join(" "));
 
   const api = new Function(
-    "apiFetch", "listenerIo", "io", "diag",
-    `${BLOCK}\n return { bind, load, historyEntries, taskWindow, parseLegacyTaskSeq, seedsFreshRun, ENTRY_CAP, FETCH_FAILED_NOTE, NO_PEER_NOTE };`
-  )(apiFetch, listenerIo, realIo, diag);
+    "apiFetch", "listenerIo", "io", "copy", "diag",
+    `${BLOCK}\n return { bind, load, historyEntries, historyRead, taskWindow, parseLegacyTaskSeq,
+      seedsFreshRun, ENTRY_CAP, ...copy };`
+  )(apiFetch, listenerIo, realIo, realCopy, diag);
   api.bind({ emit: (s, payload) => calls.emit.push(payload) });
   return { ...api, calls, cfg };
 }

@@ -301,6 +301,11 @@ async function startSession(spec, sdk) {
     profileLabel: require('./tool-profiles').profileLabel(spec.profile),
     mode: state.mode,
     counterpartyId: spec.counterpartyId || null, // FIX L1: the task's other party
+    // H2: is this session's channel a DIRECT (1:1) one? The server addresses an
+    // unaddressed post there (`resolveDirectPeer`), so the outbound card names the
+    // recipient instead of saying none was named. `=== true` only — a launch shape that
+    // does not carry the flag degrades to the channel-level wording, never to a guess.
+    direct: spec.direct === true,
     // O-6: the counterparty display name labels the agent's op=post ("Sent to X").
     counterpartyName: (spec.context && (spec.context.authorName || spec.context.targetName)) || null,
     state,
@@ -384,6 +389,7 @@ async function launch(a) {
     mode: a.mode,
     context: a.context,
     counterpartyId: a.counterpartyId, // FIX L1: bind the feed to the task's other party
+    direct: a.direct, // H2: the server's is_direct flag, for the outbound card's recipient line
     firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence
     // H2: present ONLY on a consent-approved responder launch, where trigger.js consumed
     // the operator's single-use arm. launchRequesterSession never sets it (no card was

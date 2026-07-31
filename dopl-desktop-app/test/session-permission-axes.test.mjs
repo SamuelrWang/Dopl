@@ -273,7 +273,7 @@ test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the sessio
   assert.equal(evs[1].payload.postKind, "task_finished");
   for (const id of ["r1", "r2"]) s.pendingPermissions.get(id)({ behavior: "deny" });
   // ...and the renderer says both out loud on the decision surface.
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "David" }), "To: David's agent");
+  assert.equal(labels.postDestinationText({ ownChannel: true, to: "David" }), "To: this channel, no recipient named", "N-PARTY: an unaddressed `to` is main's bound-counterparty FILL, not an addressee (session-addressee-truth.test.mjs)");
   assert.equal(labels.postDestinationText({ ownChannel: true, to: "evil@x.com", addressed: true, postKind: "task_finished" }), "To: evil@x.com, marked task_finished");
   assert.equal(labels.postDestinationText({ ownChannel: false, postKind: "task_finished" }), "To: another channel, marked task_finished");
   // The item carries them through the view-model to that surface.

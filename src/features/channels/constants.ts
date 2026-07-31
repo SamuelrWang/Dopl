@@ -54,6 +54,26 @@ export const PRESENCE_TABLES = ["agent_presence"] as const;
 export const CONSENT_INBOX_POLL_MS = 30_000;
 
 /**
+ * The member count at which a channel stops behaving like a pair, and the ONE
+ * number the N-party copy is allowed to restate.
+ *
+ * Below it, an unaddressed message still has an implicit recipient: the desktop
+ * listener's `classify` fires its implicit trigger only on a known-exact
+ * `memberCount === 2` plus explicit membership (`dopl-desktop-app/main/targeting.js`).
+ * At three or more there is no implicit recipient, so an UNADDRESSED ask
+ * triggers NOBODY at all — it is delivered to the transcript and picked up by
+ * no agent. That is fail-closed BY DESIGN (a broadcast trigger would turn the
+ * loop brake into a storm) and it is exactly the fact the product used to keep
+ * to itself.
+ *
+ * Shared by the two surfaces that state it — the composer's unaddressed hint
+ * and the invite dialog's group-channel note — so the copy and the desktop rule
+ * cannot drift apart in one place and not the other. It is a COPY threshold,
+ * not a gate: nothing here decides whether a message routes.
+ */
+export const GROUP_CHANNEL_MIN_MEMBERS = 3;
+
+/**
  * A member's agent is "online / listening" when its last heartbeat is newer
  * than this window. Kept in sync with the desktop heartbeat cadence (~30s) —
  * three missed beats mark it offline.

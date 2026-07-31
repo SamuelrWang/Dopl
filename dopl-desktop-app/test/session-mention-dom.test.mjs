@@ -134,10 +134,39 @@ test("GAP init===null: a peer tag is UNDELIVERABLE, never silently mis-addressed
   type(""); // leave the composer as the tests below expect to find it
 });
 
+// ── N-PARTY: a popup that can only offer the self row SAYS SO ─────────────────
+// Still running against the virgin controller (init === null), which is the same shape a
+// GROUP channel opens with: channel-context.resolve binds a counterparty only for `isDirect`,
+// so "Open session" on a group thread card has none, and the peer row cannot be derived.
+// One bare row reads as a broken popup rather than as the fail-closed limit it is — and the
+// next keystroke is L4, which routes "@carol-agent do X" to the operator's own agent silently.
+
+test("N-PARTY: with no counterparty the popup STATES the limit under the one row", () => {
+  type("@");
+  assert.equal(rows().length, 1, "the self row only, unchanged");
+  const note = pop.children.find((c) => c.className === "mention-pop__note");
+  assert.ok(note, "the limit is on screen, not left to be inferred from a short list");
+  assert.equal(note.textContent, "Only your own agent can be addressed from this session.");
+  assert.equal(note.getAttribute("role"), "presentation", "it is not an option a reader can pick");
+  assert.equal(pop.children[0].className, "mention-pop__label", "the label is still first");
+  assert.equal(pop.children.at(-1), note, "and the note is LAST, so the option indices are untouched");
+  assert.equal(steer.getAttribute("aria-activedescendant"), "mentionOpt0", "which the ARIA pointer proves");
+  key("Escape");
+  assert.equal(pop.children.length, 0, "it goes away with the popup, like every other row");
+  type("");
+});
+
 test("boot: the session knows its peer (the peer row is derived from the init name)", () => {
   feed({ type: "init", sessionId: "s1", side: "requester", channelName: "Ops", from: "David" });
   assert.ok(pop.classList.contains("hidden"), "the popup starts hidden and empty");
   assert.equal(pop.children.length, 0);
+});
+
+test("N-PARTY: with a real peer the note is GONE (two real rows explain themselves)", () => {
+  type("@");
+  assert.equal(rows().length, 2);
+  assert.equal(pop.children.find((c) => c.className === "mention-pop__note"), undefined);
+  type("");
 });
 
 test("popup: a LEADING @ opens it with both rows, the label, and the ARIA bookkeeping", () => {

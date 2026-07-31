@@ -160,7 +160,7 @@ async function recreateParkedShell(a) {
     // a missing/unknown stored profile resumes as read_only, never the permissive
     // `full` that normalizeProfile would pick (its global fallback is unchanged).
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
-    counterpartyId: rec.counterpartyId || null, // FIX L1: keep the feed counterparty-bound
+    counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // FIX L1 binding + (H2) the DM flag the outbound card names from
     context: contextFromRecord(rec), resumeSdkId: sdkId || null, // D1: restore the header identity
     // FIX #9: rehydrate the running cap budget so a turn/cost-capped session reopened via
     // P2 continues from where it capped instead of getting a fresh budget.
@@ -189,8 +189,14 @@ async function recreateParkedShell(a) {
 // Q6b — the RECORD-LESS shell. Everything a durable record would have carried is resolved from
 // the channel itself (channel-context.resolve, injected): the workspace the history read needs,
 // the header name, and — for a DIRECT channel only — the counterparty the FIX L1 binding and the
-// history lanes require. A group channel resolves no counterparty, so session-history paints its
-// existing calm pointer rather than guessing whose words are whose.
+// history lanes require. A group channel resolves no counterparty, and this passes that null
+// through unchanged: the shell is never bound to a guessed peer.
+//
+// FIX N1 (2026-07-31): that null no longer means an EMPTY window. session-history reads the
+// channel either way and paints the side it can attribute (the operator's own rows), with copy
+// naming what it is not showing and why. Nothing changed on this path — the fix was entirely in
+// what the consumer does with `counterpartyId: null` — but the old comment here claimed the
+// opposite outcome, and a stale claim in the file the next agent reads is its own defect.
 //
 // FAIL RESTRICTIVE, deliberately: no record means no stored profile, so knownProfile(undefined)
 // resolves READ_ONLY (the same rule a corrupt record gets) and `side` is 'requester' — the
@@ -207,7 +213,7 @@ async function openFromChannel(a, key) {
   const s = await deps.startSession({
     key, channelId, taskId: String((a && a.taskId) || ''), workspaceId: ctx.workspaceId,
     side: 'requester', profile: knownProfile(undefined), mode: 'interactive',
-    counterpartyId: ctx.counterpartyId || null,
+    counterpartyId: ctx.counterpartyId || null, direct: ctx.direct === true, // H2: channel-context reads is_direct off the DTO
     context: { channelName: ctx.channelName || null, taskTitle: null, authorName: ctx.counterpartyName || null,
       channelId: channelId, workspaceId: ctx.workspaceId },
     resumeSdkId: null, turns: 0, costUsd: 0,
@@ -320,7 +326,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // normalizeProfile's global fallback and resumed the session at FULL access — the most
     // permissive profile, from the least trustworthy input (a durable record on disk).
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
-    counterpartyId: rec.counterpartyId || null, // FIX L1: restore the counterparty binding
+    counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // FIX L1 binding + (H2) the DM flag
     context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId, // D1: restore the header identity
     // AUDIT D3: rehydrate the running cap budget, exactly like recreateParkedShell. This path
     // passed NEITHER counter, so a session that burned 23 of its 24 turns, crashed, and was

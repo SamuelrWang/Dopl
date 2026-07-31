@@ -365,8 +365,11 @@ function gateOnce(input) {
 test("F9: ANY non-default kind is named on the card, not just the four known ones", () => {
   for (const kind of ["Task_Finished", "task_finished", "urgent", "system", "TASK_FAILED"]) {
     assert.equal(gateOnce(post({ kind })).postKind, kind, kind);
+    assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", addressed: true, postKind: kind }),
+      "To: David, marked " + kind);
+    // N-PARTY: the kind is named on an UNADDRESSED post too — it is the louder half of the line.
     assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", postKind: kind }),
-      "To: David's agent, marked " + kind);
+      "To: this channel, no recipient named, marked " + kind);
   }
   // The plain-chat default still adds nothing, so an ordinary reply's card is unchanged.
   for (const kind of [undefined, "", "message"]) {

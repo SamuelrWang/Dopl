@@ -611,6 +611,6 @@ function createServer(client, options = {}) {
     (0, map_js_1.registerMapTool)(registerTool, client); // dopl_map — compact workspace manifest
     (0, search_js_1.registerSearchTool)(registerTool, client); // dopl_search — cross-domain search
     (0, ontology_js_1.registerOntologyTool)(registerTool, client); // dopl_ontology — routing graph (read-only)
-    (0, channel_js_1.registerChannelTool)(registerTool, client); // dopl_channel — cross-user collaboration channels
+    (0, channel_js_1.registerChannelTool)(registerTool, client, options.userId ?? null); // dopl_channel — cross-user collaboration channels
     return server;
 }

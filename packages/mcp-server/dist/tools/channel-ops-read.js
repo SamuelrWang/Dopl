@@ -23,10 +23,14 @@ exports.opRead = opRead;
 exports.opAwait = opAwait;
 exports.opListThreads = opListThreads;
 exports.opGetThread = opGetThread;
+exports.opMembers = opMembers;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
 const channel_await_budget_1 = require("./channel-await-budget");
+// The addressing rule has ONE statement, in one module — see
+// channel-addressing.ts for what each half of it is verified against.
+const channel_addressing_1 = require("./channel-addressing");
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = (0, channel_await_budget_1.resolveAwaitHoldMs)(process.env.DOPL_AWAIT_HOLD_MS);
 const AWAIT_HOLD_CEILING_MS = (0, channel_await_budget_1.resolveAwaitHoldCeilingMs)(process.env.DOPL_AWAIT_HOLD_MS);
@@ -89,8 +93,17 @@ function describeFailure(e) {
     }
     return (0, channel_shared_1.neutralizeInline)(raw) ?? "`no detail reported`";
 }
+/**
+ * N-PARTY — "the peer" was undefined and unevaluable in a channel with more
+ * than two members, and evaluating it loosely is worse than not stating it: a
+ * five-member channel always has SOMEONE posting, so "any activity in the last
+ * 30 minutes" keeps an agent re-arming forever over an exchange its own
+ * counterparty abandoned. The condition is therefore scoped to the member the
+ * caller is waiting on — the one it addressed, which it knows and this module
+ * does not.
+ */
 function rearmStopRule(ref) {
-    return `Keep waiting while the exchange is alive — a peer agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="get_thread", channel="${ref}", thread=<id>) for its status, and dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (peers post task_progress milestones while they work). Keep re-arming while the thread is OPEN and something came from the peer in roughly the last 30 minutes. STOP and report to your operator when the thread is closed or failed, or when the peer has shown nothing at all for ~30+ minutes.`;
+    return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="get_thread", channel="${ref}", thread=<id>) for its status, and dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while the thread is OPEN and something came from that member in roughly the last 30 minutes. STOP and report to your operator when the thread is closed or failed, or when that member has shown nothing at all for ~30+ minutes.`;
 }
 async function opList(client) {
     const channels = await client.listChannels();
@@ -110,7 +123,7 @@ async function opList(client) {
     lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="post"; watch for new messages with op="await".');
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opRead(client, ref, since, limit) {
+async function opRead(client, ref, since, limit, selfUserId = null) {
     // Hot path — no pre-resolve. The route accepts slug-or-id in the
     // [channelId] segment and enforces visibility itself, so we hand it the
     // caller's ref directly and skip a per-call listChannels() round-trip. A
@@ -135,7 +148,7 @@ async function opRead(client, ref, since, limit) {
         // caveat placed under them is read after the injected line it warns about.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref));
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
     const lastSeq = messages[messages.length - 1].seq;
     lines.push(`\nHighest seq shown: ${lastSeq}. Watch for newer messages with dopl_channel(op="await", channel="${ref}", since=${lastSeq}).`);
     return (0, respond_1.ok)(lines.join("\n"));
@@ -153,7 +166,7 @@ async function opRead(client, ref, since, limit) {
  * or — when the hold ended far under what was asked for with no error at all —
  * a CUT SHORT note that tells the caller NOT to re-arm and to report it.
  */
-async function opAwait(client, ref, since, timeoutMs) {
+async function opAwait(client, ref, since, timeoutMs, selfUserId = null) {
     // Default = AWAIT_HOLD_MS; an EXPLICIT ask may go up to the ceiling (the cap,
     // or the env lever's value when the lever is set — see resolveAwaitHoldCeilingMs).
     const holdMs = Math.min(timeoutMs ?? AWAIT_HOLD_MS, AWAIT_HOLD_CEILING_MS);
@@ -245,12 +258,25 @@ async function opAwait(client, ref, since, timeoutMs) {
         // has to be read BEFORE them, not as a footnote underneath.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref));
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
     const lastSeq = messages[messages.length - 1].seq;
+    // N-PARTY — `await` is CHANNEL-WIDE and unfiltered: every message wakes every
+    // armed listener, including one addressed to a different member or to nobody.
+    // That is correct (a filtered await would miss the messages an agent needs to
+    // follow), but it means a wake is not by itself a reason to act. Said only
+    // when we can actually tell — with no `selfUserId` the claim would be a guess.
+    //
+    // The CONDITION is "nothing here names me", which is all this op can decide
+    // without a round-trip; what the notice SAYS no longer treats that as "none of
+    // this is yours", because the canonical reply in this product is unaddressed.
+    // See AWAIT_UNNAMED_NOTICE.
+    if (selfUserId !== null && !messages.some((m) => (0, channel_render_1.addresseeOf)(m) === selfUserId)) {
+        lines.push(`\n${channel_addressing_1.AWAIT_UNNAMED_NOTICE}`);
+    }
     lines.push(`\nAdvance your cursor to seq ${lastSeq}. If the exchange is still open, re-arm before you end your turn: dopl_channel(op="await", channel="${ref}", since=${lastSeq}) — that pending call is what wakes you with the next message.`, rearmStopRule(ref));
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opListThreads(client, ref) {
+async function opListThreads(client, ref, selfUserId = null) {
     // Hot-path parity with read/await: hand the ref straight to the route
     // (slug-or-id + visibility enforced there) and map a 404 to a clean
     // not-found, rather than pre-resolving via listChannels.
@@ -273,12 +299,15 @@ async function opListThreads(client, ref) {
         // channel receives every thread's text, not just their own.
         `${channel_render_1.UNTRUSTED_THREAD_HEADER}\n`,
     ];
+    // Names for the two ids on every thread line. One extra call, on a cold op
+    // (not the poll loop), and fail-soft — see `memberNames`.
+    const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
     for (const t of threads)
-        lines.push((0, channel_render_1.formatThreadLine)(t));
-    lines.push(`\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read".`);
+        lines.push((0, channel_render_1.formatThreadLine)(t, view));
+    lines.push(`\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read". A thread accepts posts ONLY from the member who opened it and the member it is addressed to — everyone else in the channel can read it and is refused if they post into it.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opGetThread(client, ref, threadId) {
+async function opGetThread(client, ref, threadId, selfUserId = null) {
     let thread;
     try {
         thread = await client.getChannelThread(ref, threadId);
@@ -302,5 +331,53 @@ async function opGetThread(client, ref, threadId) {
     // Q1-C: framing FIRST, above the `## Thread <title>` heading rather than
     // under it. The product tells a waiting agent to call this op every ~3 empty
     // holds, so it is a peer-typed title an agent re-reads on a timer.
-    return (0, respond_1.ok)(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\n${(0, channel_render_1.formatThreadDetail)(thread)}`);
+    const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
+    return (0, respond_1.ok)(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\n${(0, channel_render_1.formatThreadDetail)(thread, view)}`);
+}
+/**
+ * The channel ROSTER — who is actually in here.
+ *
+ * The gap this closes: `op="list"` reported "5 members" and NOTHING in the tool
+ * said who they were, while `post` and `create_thread` both require addressing a
+ * specific member and an unaddressed ask in a 3+ member channel triggers nobody.
+ * An agent could see that a channel was a group, could be told to address one
+ * member, and had no op that would tell it which members existed.
+ *
+ * Read-only, and it renders exactly what the roster route returns — the private
+ * per-member preferences (notify scope, agent tool profile) are already scrubbed
+ * server-side for everyone but the caller, and none of them are rendered here.
+ */
+async function opMembers(client, ref, selfUserId = null) {
+    let members;
+    try {
+        members = await client.listChannelMembers(ref);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e))
+            return (0, channel_shared_1.channelNotFound)(ref);
+        throw e;
+    }
+    if (members.length === 0) {
+        return (0, respond_1.ok)(`No members visible in **${ref}**.`);
+    }
+    const lines = [
+        `## ${ref} — ${members.length} member${members.length === 1 ? "" : "s"}\n`,
+        `${channel_render_1.UNTRUSTED_ROSTER_HEADER}\n`,
+    ];
+    for (const m of members)
+        lines.push((0, channel_render_1.formatMemberLine)(m, selfUserId));
+    if (selfUserId === null) {
+        // Never guess which row is the caller: the boot handshake is the only
+        // source of that id here, and when it failed the honest answer is to say so.
+        lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id at startup.`);
+    }
+    // TWO rules, and they are NOT the same rule. AUTO-ADDRESSING keys on
+    // `is_direct` (`resolveDirectPeer` stamps nothing without it), which this op
+    // cannot see. The IMPLICIT TRIGGER on the receiving machine keys on the MEMBER
+    // COUNT (`classify`, targeting.js:152) — which this op has just counted
+    // exactly. The first version of this line collapsed the two and told a
+    // two-member channel its unaddressed messages reach nobody; they reach the
+    // only other member. `rosterAddressingRule` states each from what it knows.
+    lines.push((0, channel_addressing_1.rosterAddressingRule)(ref, members.length));
+    return (0, respond_1.ok)(lines.join("\n"));
 }

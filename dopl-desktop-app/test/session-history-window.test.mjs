@@ -206,7 +206,10 @@ test("FIX Q1: load paints the legacy exchange, and a GATED body stays out of it"
   const h = harness({ rows: legacyThread() });
   const s = session({ taskId: LEGACY_TASK });
   assert.equal(await h.load(s), true, "the reported empty stream is still gone");
-  assert.equal(h.calls.emit.length, 1);
+  // FIX N1: the divider, then ONE caveat. legacyThread() carries a third member and an
+  // unattributable row INSIDE the window, and both are still dropped — they are now counted.
+  assert.deepEqual(h.calls.emit.map((e) => e.type), ["history", "notice"]);
+  assert.equal(h.calls.emit[1].text, "2 earlier messages from other channel members are not shown here.");
   assert.deepEqual(h.calls.emit[0].entries.map((e) => e.text), PAIR);
   const first = realIo.withSeed(s, "continue"); // the same entries seed the fresh run
   assert.ok(first.includes("David: can you check the deploy"));
@@ -236,10 +239,17 @@ test("FIX Q1: the SEED is scoped by the same window (one array, one rule)", asyn
   });
   const s = session({ taskId: LEGACY_TASK, nonce: "n0nce" });
   await h.load(s);
-  assert.deepEqual(s.pendingHistory.map((e) => e.text), PAIR, "stashed entries ARE the painted ones");
+  // FIX N1: the stashed array is the painted one PLUS the same count the window was given —
+  // the seed may not present a filtered transcript as a complete one. It goes LAST because
+  // historyTranscript truncates from the head, so a leading note is what a long thread loses.
+  assert.deepEqual(s.pendingHistory.map((e) => e.text),
+    PAIR.concat(["2 earlier messages from other channel members are not shown here."]),
+    "stashed entries ARE the painted ones, plus the caveat");
+  assert.deepEqual(h.calls.emit[0].entries.map((e) => e.text), PAIR, "and the note is NEVER a bubble");
   const first = realIo.withSeed(s, "continue");
   assert.ok(!first.includes("months ago"), "the fresh run is not seeded with the whole channel");
   assert.ok(first.includes("Sam: deploy is green"));
+  assert.ok(first.includes("Note: 2 earlier messages from other channel members are not shown here."));
 });
 
 // The calm-notice path, mirroring the no-counterparty case: the operator is told where the

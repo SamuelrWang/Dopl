@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, UserMinus } from "lucide-react";
+import { Check, Info, UserMinus } from "lucide-react";
 import { ModalShell } from "@/shared/layout/settings-modal";
 import { SearchField } from "@/shared/ui/search-field";
 import { Avatar } from "@/shared/ui/avatar";
@@ -10,6 +10,7 @@ import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { toast } from "@/shared/ui/toast";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceMemberView } from "@/features/members/types";
+import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
 import type { ChannelMember } from "../types";
 import {
   addChannelMember,
@@ -33,6 +34,43 @@ const selectWsMembers = (body: { members: WorkspaceMemberView[] }) =>
   body.members ?? [];
 const selectChannelMembers = (body: { members: ChannelMember[] }) =>
   body.members ?? [];
+
+/**
+ * The two rules a group channel runs on that a DM hides, stated where the
+ * member count is about to cross into them.
+ *
+ * This dialog is the only place a person changes how a channel routes, and
+ * until now it said nothing about it: adding one member to a pair silently
+ * retires the implicit recipient, so every unaddressed ask after that reaches
+ * nobody. An operator who believed otherwise was misled by the interface, not
+ * by the code. The composer repeats the addressing half at send time
+ * (`message-composer.tsx`); this is the half that explains WHY it appeared.
+ *
+ * Shown from one member below the threshold, so the person doing the adding
+ * reads it BEFORE the rule changes rather than after. Both sentences are
+ * present tense and conditional on the count, so the note is true whether the
+ * channel has two members or twenty. Pure and exported so it renders (and
+ * asserts) without the dialog's query provider.
+ */
+export function GroupChannelRoutingNote({
+  memberCount,
+}: {
+  /** Members the channel has RIGHT NOW, before any add in this dialog. */
+  memberCount: number;
+}) {
+  if (memberCount < GROUP_CHANNEL_MIN_MEMBERS - 1) return null;
+  return (
+    <div className="flex gap-1.5 rounded-[10px] border border-border-subtle bg-bg-inset px-3 py-2 text-caption text-text-secondary">
+      <Info size={13} className="mt-0.5 shrink-0 text-text-muted" />
+      <p>
+        In a channel of {GROUP_CHANNEL_MIN_MEMBERS} or more, a message reaches
+        an agent only if you address it to someone. Unaddressed messages reach
+        nobody. Threads stay between two people: everyone in the channel can
+        read one, only its two participants can post into it.
+      </p>
+    </div>
+  );
+}
 
 /**
  * Add / remove channel members. The picker sources ACTIVE workspace
@@ -132,6 +170,8 @@ export function InviteDialog({
             Add workspace members to this channel.
           </p>
         </div>
+
+        <GroupChannelRoutingNote memberCount={channelMembers?.length ?? 0} />
 
         <SearchField
           value={query}

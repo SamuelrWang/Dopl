@@ -957,6 +957,15 @@ html, body {
   min-width: 0; flex: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* N-PARTY: the limit line under a popup that can offer only the self row. It WRAPS (unlike the
+   option hint above, which ellipses): it is a sentence, and a truncated statement of a limit is
+   worse than none. Not an option, so it must never take the .is-sel surface or a pointer. */
+.mention-pop__note {
+  margin-top: 4px; padding: 4px 6px 2px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-caption); color: var(--text-muted);
+  white-space: normal; cursor: default;
+}
 /* SURFACE ONLY (like .bubble.role-operator): a 2-class selector would outrank .lane-me, so
    this recipe must never declare align-self or a width. The dashed border is what separates
    "I said this to the peer" from "I steered my agent" at a glance. */

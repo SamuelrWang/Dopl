@@ -1,6 +1,7 @@
 // Pure CHROME helpers for the Dopl session window (v1.7.5 D1/D5/D7):
 //
-//   - headerIdentity(init)   -> {title, subtitle, avatarName, hasPeer}
+//   - headerIdentity(init)   -> {title, subtitle, avatarName}   (there is NO `hasPeer` field:
+//                               this header said so for a year and nothing ever returned it)
 //   - windowTitle(init)      -> the native title-bar string
 //   - sendButtonMode(state)  -> 'send' | 'pause'
 //   - sendButtonLabel(mode)  -> the aria-label for that mode

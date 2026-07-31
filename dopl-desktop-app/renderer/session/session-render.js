@@ -143,20 +143,21 @@
     return { el: root, update: () => repaint() };
   }
 
-  // What MY agent SENT to the peer (op=post) — a distinct styled COMPONENT (item
-  // 4): a banner band (self avatar + an uppercase "SENT TO {peer}" label) over the
-  // posted body, clearly differentiated from narration. `to` absent → the
-  // "Posted to channel" label (resolved O-6). textContent-only; the avatar is a
-  // `data:` <img>.
-  // FIX F3: the bubble is painted while the tool_use streams, which is BEFORE the operator
-  // answers the permission dock, so its label is not final. A denied or failed post flips
-  // to "Not sent" (plus the muted `is-not-sent` surface) instead of standing there
-  // claiming the peer received something that never left this machine.
+  // The banner label of the outbound COMPONENT (item 4): a banner band (self avatar + an
+  // uppercase label) over the posted body. textContent-only; the avatar is a `data:` <img>.
+  // FIX F3: it is painted while the tool_use streams, which is BEFORE the operator answers, so
+  // a denied or failed post flips to "Not sent" instead of claiming the peer received it.
+  // N-PARTY / H2: a PERSON is named when the CALL addressed one, or when the SERVER will —
+  // `directChannel` is a DM, where resolveDirectPeer stamps the other member onto a post with
+  // no `to`. A bare `to` with neither flag is main's bound-counterparty fill, and in a group
+  // channel that post reaches no agent, so it names the CHANNEL. Same rule as the dest line.
   function outboundLabel(item) {
     if (item && item.status === "not_sent") return "Not sent";
+    const named = item && (item.addressed === true || item.directChannel === true);
+    const to = named && item.to != null ? String(item.to) : "";
     // v2.7 L3: a post still waiting on the operator has NOT been delivered, so it says so.
-    if (item && item.status === "pending") return item.to ? "Sending to " + item.to : "Sending to the channel";
-    return item && item.to ? "Sent to " + item.to : "Posted to channel";
+    if (item && item.status === "pending") return to ? "Sending to " + to : "Sending to the channel";
+    return to ? "Sent to " + to : "Posted to channel";
   }
 
   // v2.7 L3 — the destination of the drafted post ("To: this channel" / "To: another

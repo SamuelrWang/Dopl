@@ -87,6 +87,10 @@ async function bootServer(client, opts = {}) {
     client.setWorkspaceId(active ? active.id : null);
     const server = (0, server_js_1.createServer)(client, {
         isAdmin,
+        // The ping's user id is not just diagnostic: `dopl_channel` needs it to tell
+        // a reader that a message is addressed to IT rather than to some other
+        // member. It was already resolved here and thrown away.
+        userId,
         directory,
         directoryLoadFailed,
         workspace: active,

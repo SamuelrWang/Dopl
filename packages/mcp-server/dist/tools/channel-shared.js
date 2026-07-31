@@ -12,6 +12,7 @@ exports.INLINE_TEXT_MAX = void 0;
 exports.metaString = metaString;
 exports.neutralizeInline = neutralizeInline;
 exports.inlineOr = inlineOr;
+exports.memberNames = memberNames;
 exports.isErr = isErr;
 exports.channelNotFound = channelNotFound;
 exports.resolveChannelOr = resolveChannelOr;
@@ -89,6 +90,31 @@ function neutralizeInline(raw) {
 function inlineOr(raw, fallback) {
     const safe = raw ? neutralizeInline(raw) : null;
     return safe ?? fallback;
+}
+/**
+ * The channel roster as `userId → display name`, for putting names to the ids
+ * a thread row carries (`createdBy`, `targetUserId`). Raw names — the render
+ * side neutralizes them, exactly once, in {@link memberRef}.
+ *
+ * FAIL-SOFT ON PURPOSE. This is an enrichment: a roster that 404s, 403s, or
+ * times out must degrade to ids, never turn a successful thread read into an
+ * error the agent might retry. The ops that call it have ALREADY established
+ * the channel is visible (their own call would have 404'd first), so a failure
+ * here is a second-order one.
+ */
+async function memberNames(client, ref) {
+    const names = new Map();
+    try {
+        for (const m of await client.listChannelMembers(ref)) {
+            const name = m.displayName || m.email;
+            if (m.userId && name)
+                names.set(m.userId, name);
+        }
+    }
+    catch {
+        // Enrichment only — ids still render, and they are the half that matters.
+    }
+    return names;
 }
 /**
  * True when a resolver returned a ToolResponse error instead of the

@@ -96,33 +96,24 @@ test("FIX #9: the destination line names this channel vs another one", () => {
   // v2.x: an own-channel post NAMES the recipient. "To: this channel" sat in the same slot
   // as the cross-channel warning, so a legitimate reply read as suspicious as an exfil
   // attempt; a screenshot of a real reply showed the red "To: another channel" treatment.
-  assert.equal(vm.postDestinationText({ ownChannel: true, to: "David" }), "To: David's agent");
+  assert.equal(vm.postDestinationText({ ownChannel: true, to: "David", addressed: true }), "To: David");
   assert.equal(vm.postDestinationText({ ownChannel: false, to: "David" }), "To: another channel");
   assert.equal(vm.isCrossChannelPost({ ownChannel: true, to: "David" }), false);
   assert.equal(vm.isCrossChannelPost({ ownChannel: false }), true);
-  for (const s of [vm.postDestinationText({ ownChannel: true, to: "David" }), vm.postDestinationText({})]) {
+  for (const s of [vm.postDestinationText({ ownChannel: true, to: "David", addressed: true }), vm.postDestinationText({})]) {
     assert.ok(!s.includes("—"), "no em dash in copy");
   }
 });
 
-test("v2.x: an own-channel post with NO peer name falls back to 'To: this channel'", () => {
-  for (const perm of [{ ownChannel: true }, { ownChannel: true, to: null }, { ownChannel: true, to: "" },
-    { ownChannel: true, to: "   " }, { ownChannel: true, to: 7 }]) {
-    const out = vm.postDestinationText(perm);
-    const expected = typeof perm.to === "number" ? "To: 7's agent" : "To: this channel";
-    assert.equal(out, expected, JSON.stringify(perm));
-    assert.ok(!/undefined|null/.test(out), "never a placeholder");
-    // Naming the peer NEVER re-classifies the destination — that stays main's verdict.
-    assert.equal(vm.isCrossChannelPost(perm), false);
-  }
-});
+// N-PARTY: the UNADDRESSED case (main fills `to` with the bound counterparty, which reaches
+// nobody at 3+ members) is pinned in test/session-addressee-truth.test.mjs.
 
 test("v2.x: the peer name is collapsed and capped (it is a label, not prose)", () => {
-  assert.equal(vm.postDestinationText({ ownChannel: true, to: " David   Kim\n" }), "To: David Kim's agent");
+  assert.equal(vm.postDestinationText({ ownChannel: true, to: " David   Kim\n", addressed: true }), "To: David Kim");
   const long = "D".repeat(200);
-  const out = vm.postDestinationText({ ownChannel: true, to: long });
+  const out = vm.postDestinationText({ ownChannel: true, to: long, addressed: true });
   assert.ok(out.length < 80, `capped, got ${out.length}`);
-  assert.ok(out.startsWith("To: DDD") && out.endsWith("'s agent"));
+  assert.ok(out.startsWith("To: DDD") && out.endsWith("…"));
   assert.ok(!out.includes("\n"), "no newline can break the label out of its line");
 });
 
@@ -141,7 +132,7 @@ test("FIX #9: main stamps ownChannel and the reducer carries it onto the dock it
   assert.equal(vm.nextPermission(own).ownChannel, true);
   // The DOCK payload carries no peer name (main routes own-channel posts to the inline card,
   // which does carry `to`), so the dock keeps the id-free fallback.
-  assert.equal(vm.postDestinationText(vm.nextPermission(own)), "To: this channel");
+  assert.equal(vm.postDestinationText(vm.nextPermission(own)), "To: this channel, no recipient named");
   const cross = vm.reduceEvent(vm.initialState(), {
     type: "permission_request", requestId: "r2", name: "mcp__dopl__dopl_channel",
     inputFull: { op: "post", channel: "other-channel", body: "the file contents" }, ownChannel: false,
@@ -337,18 +328,18 @@ test("DOM: a declined card is visually settled, not pretending to be live", () =
 });
 
 test("DOM: FIX F3 — a not_sent outbound reads 'Not sent' on the muted surface", () => {
-  const rec = render.makeOutbound({ toolUseId: "t1", to: "David", text: "draft", avatarKey: "self" }, {});
+  const rec = render.makeOutbound({ toolUseId: "t1", to: "David", addressed: true, text: "draft", avatarKey: "self" }, {});
   const banner = rec.el.children.find((c) => c.classList.contains("outbound__banner"));
   const label = banner.children.find((c) => c.className.includes("outbound__label"));
   assert.equal(label.textContent, "Sent to David", "the streaming label is unchanged");
-  rec.update({ toolUseId: "t1", to: "David", text: "draft", status: "not_sent", avatarKey: "self" });
+  rec.update({ toolUseId: "t1", to: "David", addressed: true, text: "draft", status: "not_sent", avatarKey: "self" });
   assert.equal(label.textContent, "Not sent", "a denied post never claims delivery");
   assert.ok(rec.el.classList.contains("is-not-sent"));
   assert.equal(rec.el.children.find((c) => c.classList.contains("outbound__body")).textContent, "draft",
     "the drafted body stays visible, it just is not a delivery");
   // The pure label helper is the single source of the copy.
-  assert.equal(render.outboundLabel({ status: "not_sent", to: "David" }), "Not sent");
-  assert.equal(render.outboundLabel({ to: "David" }), "Sent to David");
+  assert.equal(render.outboundLabel({ status: "not_sent", to: "David", addressed: true }), "Not sent");
+  assert.equal(render.outboundLabel({ to: "David", addressed: true }), "Sent to David");
   assert.equal(render.outboundLabel({}), "Posted to channel");
   for (const s of ["Not sent", "Sent to David", "Posted to channel"]) assert.ok(!s.includes("—"), "no em dash in copy");
 });

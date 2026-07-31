@@ -296,6 +296,9 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     // FIX L1: the responder's counterparty is the requester who addressed me — the
     // inbound message's author. The listener only feeds this member's later replies.
     counterpartyId: m.authorUserId,
+    // H2: the server's own 1:1 flag off the channel DTO. In a DM the server addresses
+    // this session's unaddressed posts, so its outbound approval card names the peer.
+    direct: entry.channel.isDirect === true,
     // D1: taskTitle rides the responder context too (the SAME server-stamped meta the
     // consent payload above already reads), so the session header names the TASK
     // instead of falling back to the channel or a bare "Session".

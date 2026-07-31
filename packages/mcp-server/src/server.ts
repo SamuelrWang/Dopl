@@ -262,6 +262,16 @@ export function createServer(
   client: DoplClient,
   options: {
     isAdmin?: boolean;
+    /**
+     * The authenticated caller's own user id, from the boot status ping. Read
+     * by `dopl_channel` so a channel read can render "· to you" instead of a
+     * uuid the agent cannot match against itself — the difference between an
+     * agent knowing a message is FOR IT and only knowing it is for someone.
+     * Boot-resolved, never per call: `await` is a poll loop and an identity
+     * lookup per read would be a round-trip on the hottest path in the tool.
+     * Null when the ping failed; the tool then renders ids and claims nothing.
+     */
+    userId?: string | null;
     /** Session default workspace resolved at boot, or null (0/2+ memberships). */
     workspace?: WorkspaceSummary | null;
     role?: WorkspaceRole | null;
@@ -773,7 +783,7 @@ export function createServer(
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   registerSearchTool(registerTool, client); // dopl_search — cross-domain search
   registerOntologyTool(registerTool, client); // dopl_ontology — routing graph (read-only)
-  registerChannelTool(registerTool, client); // dopl_channel — cross-user collaboration channels
+  registerChannelTool(registerTool, client, options.userId ?? null); // dopl_channel — cross-user collaboration channels
 
   return server;
 }

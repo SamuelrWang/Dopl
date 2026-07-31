@@ -138,7 +138,10 @@ const READ_OPS = {
     dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
     dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
     dopl_ontology: ["map", "anchor", "resolve", "get"],
-    dopl_channel: ["list", "read", "await", "list_threads", "get_thread"],
+    // `members` is a roster READ: `opMembers` calls only `listChannelMembers`
+    // (GET /api/channels/[id]/members) and renders it. Channel membership is
+    // changed by op="invite" (a write, gated below) and in the web UI.
+    dopl_channel: ["list", "read", "await", "members", "list_threads", "get_thread"],
 };
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────
 // Write ops absent from server.ts WRITE_OPS (read-only-token write holes)

@@ -324,6 +324,55 @@ describe("SessionCard thread controls", () => {
 });
 
 /**
+ * Whose thread does this card show? A channel runs several threads at once
+ * between different pairs, so the footer must not offer the viewer a session on
+ * an exchange they are not in: "Open session" opens a window BOUND to this
+ * thread, and the desktop forces the thread tag onto whatever that session
+ * posts, so a non-party would only reach a server refusal.
+ */
+describe("SessionCard thread party", () => {
+  const OTHER_PAIR = { createdBy: "u-ada", targetUserId: "u-bo" };
+
+  it("marks the card read-only for a viewer outside the thread's pair", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard
+        session={session()}
+        thread={thread(OTHER_PAIR)}
+        currentUserId={ME}
+        onCloseThread={async () => {}}
+      />
+    );
+    expect(markup).toContain("Read-only");
+    expect(markup).toContain("only its two members can post into it");
+    // The close control was already party-gated; the marker states the rule.
+    expect(markup).not.toContain("Close thread");
+  });
+
+  it("leaves a party's own card unmarked", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session()} thread={thread()} currentUserId={ME} />
+    );
+    expect(markup).not.toContain("Read-only");
+  });
+
+  it("claims nothing for a legacy session with no thread row", () => {
+    // No `channel_tasks` row means the parties are unknown, so the card keeps
+    // its normal footer rather than guessing in either direction.
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session()} currentUserId={ME} />
+    );
+    expect(markup).not.toContain("Read-only");
+  });
+
+  it("claims nothing when the viewer is unknown", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session()} thread={thread(OTHER_PAIR)} />
+    );
+    expect(markup).not.toContain("Read-only");
+  });
+});
+
+/**
  * The card container is always neutral; status is the chip's job. The green
  * active treatment shipped in v2.4 and was removed same day by product call.
  */

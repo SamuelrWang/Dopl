@@ -202,7 +202,7 @@ test("a late `avatars` fill repaints an already-rendered bubble (initials → ph
 // ── item 4: the outbound post is a styled COMPONENT (banner + body) ───────────
 
 test("makeOutbound renders a banner component (banner node + body node), NOT raw text", () => {
-  const rec = render.makeOutbound({ to: "Alice", text: "on it", avatarKey: "self" }, ctxBoth);
+  const rec = render.makeOutbound({ to: "Alice", addressed: true, text: "on it", avatarKey: "self" }, ctxBoth);
   assert.ok(rec.el.classList.contains("outbound"));
   const banner = rec.el.children.find((c) => c.classList.contains("outbound__banner"));
   const body = rec.el.children.find((c) => c.classList.contains("outbound__body"));
@@ -217,11 +217,15 @@ test("makeOutbound renders a banner component (banner node + body node), NOT raw
   assert.equal(body.textContent, "on it");
 });
 
-test("makeOutbound with no `to` labels 'Posted to channel' (resolved O-6)", () => {
-  const rec = render.makeOutbound({ text: "fyi", avatarKey: "self" }, ctxBoth);
-  const banner = rec.el.children.find((c) => c.classList.contains("outbound__banner"));
-  const label = banner.children.find((c) => c.classList.contains("outbound__label"));
-  assert.equal(label.textContent, "Posted to channel");
+test("makeOutbound with no NAMED recipient labels 'Posted to channel' (resolved O-6)", () => {
+  // N-PARTY: `to` with no `addressed` is main's bound-counterparty fill, not an addressee, and
+  // at 3+ members an unaddressed post reaches no agent at all. Both shapes name the channel.
+  for (const item of [{ text: "fyi", avatarKey: "self" }, { to: "Alice", text: "fyi", avatarKey: "self" }]) {
+    const rec = render.makeOutbound(item, ctxBoth);
+    const banner = rec.el.children.find((c) => c.classList.contains("outbound__banner"));
+    const label = banner.children.find((c) => c.classList.contains("outbound__label"));
+    assert.equal(label.textContent, "Posted to channel", JSON.stringify(item));
+  }
 });
 
 // ── chat lanes: which factories stamp a lane class on their root ──────────────

@@ -46,6 +46,10 @@ import {
   resolveMemberOr,
 } from "./channel-shared";
 import { UNTRUSTED_THREAD_HEADER } from "./channel-render";
+// The addressing rule has ONE statement, in one module, because stating it per
+// site is how three files came to agree with each other and disagree with
+// `classify`. See channel-addressing.ts for what each fact is verified against.
+import { unaddressedPostNote } from "./channel-addressing";
 // Q9 — a 400's MEANING is read off its code, not guessed from its status. See
 // channel-errors.ts for why the old status-only branch answered every failure
 // with "invite them first".
@@ -378,6 +382,27 @@ export async function opPost(
 
   const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
   const toNote = toLabel ? `, addressed to ${toLabel}` : "";
+  // N-PARTY — the silent drop this feature exists to prevent, in its addressing
+  // form: an unaddressed post used to read exactly like an addressed one, so the
+  // sender walked away believing an agent had it.
+  //
+  // WHAT IT MAY NOT CLAIM (2026-07-31). The first version of this note asserted
+  // "nobody was woken by it" for every non-direct channel and offered a re-post
+  // with `to=` as the remedy. That is false whenever the post THREADED: the
+  // receiving desktop routes a first-class thread tag into a live session before
+  // `classify` ever sees the addressing, so the note rendered "nobody was woken"
+  // directly above `threadLinkageNote`'s "the other side reads this as a
+  // continuation", and its remedy manufactured a duplicate request. The rule and
+  // both of its shapes live in `channel-addressing.ts`; `landedThread` is read
+  // back off the STORED message for the same reason the linkage note is (what
+  // actually landed, not what was asked for).
+  const landedThread = metaString(message, "taskId");
+  const addressingNote = unaddressedPostNote({
+    ref: ch.id,
+    isDirect: ch.isDirect,
+    addressed: !!toLabel,
+    landedThread,
+  });
   // Q7: second line, right under the confirmation — a sender cannot otherwise
   // tell continuation from new request, and the tag drop it catches is silent.
   const linkage = await threadLinkageNote(
@@ -390,6 +415,7 @@ export async function opPost(
   return ok(
     [
       `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
+      ...(addressingNote ? [addressingNote] : []),
       ...(linkage ? [linkage] : []),
       // WAKE-V1 teaching: a posted request that no one is waiting on is where
       // the exchange dies. The await call below can outlive this turn and its
@@ -399,7 +425,7 @@ export async function opPost(
       // an abandoned exchange — but a plain timeout COUNTER would abandon a peer
       // that is legitimately heads-down for 20+ minutes. The exit is the
       // THREAD's state, checked periodically.
-      `Keep re-arming while the exchange is alive; a peer working a real task can be quiet for a long stretch. Every ~3 empty holds, check first (op="read" for new activity — peers post task_progress as they work; op="get_thread" for status). STOP and report to your operator when the thread is closed or failed, or when nothing at all has come from them for ~30+ minutes.`,
+      `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first (op="read" for new activity — a working agent posts task_progress as it goes; op="get_thread" for status). Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when the thread is closed or failed, or when nothing has come from that member for ~30+ minutes.`,
       `Skip the await if this session already receives the counterparty's replies as new turns (a desktop-run session window feeds them in) — then just keep responding.`,
     ].join("\n"),
   );

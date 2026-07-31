@@ -315,7 +315,9 @@ const parts = (rec) => {
   };
 };
 const card = (item, sent) => render.makeOutbound(item, { vm, onOutboundDecide: (id, d) => sent && sent.push([id, d]) });
-const PENDING = { toolUseId: "t1", to: "David", text: "the draft", status: "pending", requestId: "r1", ownChannel: true, avatarKey: "self" };
+// N-PARTY: `addressed` is what makes naming David true — it says the CALL set `to:`. Without it
+// `to` is main's bound-counterparty fill, which reaches nobody in a 3+ member channel.
+const PENDING = { toolUseId: "t1", to: "David", addressed: true, text: "the draft", status: "pending", requestId: "r1", ownChannel: true, avatarKey: "self" };
 
 test("DOM: the pending card shows the destination, the drafted body, and Send / Deny", () => {
   const rec = card(PENDING);
@@ -323,15 +325,16 @@ test("DOM: the pending card shows the destination, the drafted body, and Send / 
   assert.ok(rec.el.classList.contains("outbound-pending"), "plus the pending accent");
   const p = parts(rec);
   assert.equal(p.label.textContent, "Sending to David", "not a delivery claim");
-  // v2.x: an own-channel destination NAMES the peer, so a legitimate delivery no longer
-  // reads like the cross-channel warning it shares this slot with.
-  assert.equal(p.dest.textContent, "To: David's agent");
+  // v2.x: an own-channel destination NAMES the recipient, so a legitimate delivery no longer
+  // reads like the cross-channel warning it shares this slot with. N-PARTY: only when the CALL
+  // named one — see the unaddressed case pinned below.
+  assert.equal(p.dest.textContent, "To: David");
   assert.ok(!p.dest.classList.contains("hidden"));
   assert.ok(!p.dest.classList.contains("is-cross"));
   assert.equal(p.body.textContent, "the draft", "the operator approves WHAT is being said");
   assert.deepEqual(p.row.children.map((b) => b.textContent), ["Send", "Send for this session", "Deny"]);
   assert.ok(!p.row.classList.contains("hidden"));
-  for (const s of ["Sending to David", "To: David's agent", "Send", "Send for this session", "Deny"]) {
+  for (const s of ["Sending to David", "To: David", "Send", "Send for this session", "Deny"]) {
     assert.ok(!s.includes("—"), "no em dash in copy");
   }
 });
@@ -390,7 +393,7 @@ test("DOM (d): Deny resolves the same node to the muted 'Not sent' treatment", (
 });
 
 test("DOM: a DELIVERED post (auto-approved) shows no decision surface at all", () => {
-  const rec = card({ toolUseId: "t1", to: "David", text: "sent", avatarKey: "self" });
+  const rec = card({ toolUseId: "t1", to: "David", addressed: true, text: "sent", avatarKey: "self" });
   assert.ok(!rec.el.classList.contains("outbound-pending"));
   const p = parts(rec);
   assert.equal(p.label.textContent, "Sent to David", "exactly as it rendered before v2.7");
@@ -409,11 +412,23 @@ test("DOM: the card marks a CROSS-channel destination (fail-suspicious, like the
 });
 
 test("DOM: outboundLabel is the single source of the card's copy", () => {
-  assert.equal(render.outboundLabel({ status: "pending", to: "David" }), "Sending to David");
+  assert.equal(render.outboundLabel({ status: "pending", to: "David", addressed: true }), "Sending to David");
   assert.equal(render.outboundLabel({ status: "pending" }), "Sending to the channel");
-  assert.equal(render.outboundLabel({ status: "not_sent", to: "David" }), "Not sent");
-  assert.equal(render.outboundLabel({ to: "David" }), "Sent to David");
-  assert.ok(!render.outboundLabel({ status: "pending", to: "David" }).includes("—"));
+  assert.equal(render.outboundLabel({ status: "not_sent", to: "David", addressed: true }), "Not sent");
+  assert.equal(render.outboundLabel({ to: "David", addressed: true }), "Sent to David");
+  assert.ok(!render.outboundLabel({ status: "pending", to: "David", addressed: true }).includes("—"));
+});
+
+// N-PARTY: the pure rule behind these two surfaces (a person is named only when the CALL
+// addressed one) is pinned in test/session-addressee-truth.test.mjs. What stays HERE is the
+// DOM proof that an unaddressed card renders that way through the real factory.
+test("N-PARTY: an UNADDRESSED post names the CHANNEL on both card surfaces", () => {
+  for (const item of [{ ...PENDING, addressed: undefined }, { ...PENDING, addressed: "true" }, { ...PENDING, to: null }]) {
+    const p = parts(card(item));
+    assert.equal(p.label.textContent, "Sending to the channel", JSON.stringify(item.addressed));
+    assert.equal(p.dest.textContent, "To: this channel, no recipient named");
+    assert.ok(!p.dest.classList.contains("is-cross"), "un-addressed is not the exfil shape");
+  }
 });
 
 test("DOM: the un-laned card keeps the full stream width (v2.7 L1)", () => {

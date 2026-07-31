@@ -249,7 +249,7 @@ const bannerLabel = (node) => {
 // an outbound_post, so it has no bubble in the lane at all. What is pinned now is that a dock
 // click leaves the outbound lane untouched, and that the tool_result belt still corrects it.
 test("boot: FIX F9 — a DOCK deny leaves the outbound lane alone; the tool_result belt corrects it", () => {
-  feed({ type: "outbound_post", toolUseId: "t9", to: "David", text: "the draft" });
+  feed({ type: "outbound_post", toolUseId: "t9", to: "David", addressed: true, text: "the draft" });
   const node = outbounds().at(-1);
   assert.equal(bannerLabel(node).textContent, "Sent to David", "optimistic while streaming");
   feed({
@@ -273,7 +273,7 @@ test("boot: FIX F3 — main's failing tool_result corrects the bubble too (no cl
 });
 
 test("boot: FIX F3 — an ALLOWED post keeps reading 'Sent to David'", () => {
-  feed({ type: "outbound_post", toolUseId: "t11", to: "David", text: "third draft" });
+  feed({ type: "outbound_post", toolUseId: "t11", to: "David", addressed: true, text: "third draft" });
   const node = outbounds().at(-1);
   feed({ type: "tool_result", toolUseId: "t11", ok: true, resultSummary: "posted" });
   assert.equal(bannerLabel(node).textContent, "Sent to David");
@@ -292,12 +292,12 @@ const cardParts = (node) => ({
 
 test("boot L3: a gating post paints ONE inline card, and the dock stays closed", () => {
   const before = $("stream").children.length;
-  feed({ type: "outbound_post", toolUseId: "t20", to: "David", text: "the gated draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_post", toolUseId: "t20", to: "David", addressed: true, text: "the gated draft", pending: true, ownChannel: true });
   assert.equal($("stream").children.length, before + 1, "exactly one artifact for the post");
   const node = outbounds().at(-1);
   assert.ok(node.classList.contains("outbound-pending"));
   assert.equal(bannerLabel(node).textContent, "Sending to David", "it does not claim delivery yet");
-  assert.equal(cardParts(node).dest.textContent, "To: David's agent", "v2.x: the own-channel line names the peer");
+  assert.equal(cardParts(node).dest.textContent, "To: David", "an ADDRESSED own-channel post names the recipient the CALL named");
   assert.ok(!$("permissionDock").classList.contains("is-active"), "a post never uses the dock");
   // Not answerable until main mints the requestId (fail closed).
   assert.deepEqual(cardParts(node).row.children.map((b) => b.disabled), [true, true, true]);
@@ -329,7 +329,7 @@ test("boot L3 (c)/(d): Send decides by the CARD's requestId and resolves it in p
 });
 
 test("boot L3: Deny resolves a card to 'Not sent'; a PARK's deny echo does the same", async () => {
-  feed({ type: "outbound_post", toolUseId: "t22", to: "David", text: "denied draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_post", toolUseId: "t22", to: "David", addressed: true, text: "denied draft", pending: true, ownChannel: true });
   feed({ type: "outbound_gate", requestId: "r22", toolUseId: "t22" });
   const denied = outbounds().at(-1);
   cardParts(denied).row.children[2].fire("click"); // Deny
@@ -340,7 +340,7 @@ test("boot L3: Deny resolves a card to 'Not sent'; a PARK's deny echo does the s
 
   // A PARK deny-closes every awaited request and echoes permission_resolved{deny}. Before
   // v2.7 a parked pending post's record read "Sent to peer" forever.
-  feed({ type: "outbound_post", toolUseId: "t23", to: "David", text: "parked draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_post", toolUseId: "t23", to: "David", addressed: true, text: "parked draft", pending: true, ownChannel: true });
   feed({ type: "outbound_gate", requestId: "r23", toolUseId: "t23" });
   const stale = outbounds().at(-1);
   assert.equal(bannerLabel(stale).textContent, "Sending to David");
@@ -359,8 +359,8 @@ test("boot L3: Deny resolves a card to 'Not sent'; a PARK's deny echo does the s
 test("boot F1: an {ok:false} decision leaves the card answerable, then the deny echo resolves it", async () => {
   const real = globalThis.doplSession.permission;
   globalThis.doplSession.permission = (...a) => { sent.push(["permission", ...a]); return Promise.resolve({ ok: false }); };
-  feed({ type: "outbound_post", toolUseId: "t24", to: "David", text: "raced draft", pending: true, ownChannel: true });
-  feed({ type: "outbound_gate", requestId: "r24", toolUseId: "t24", text: "raced draft", to: "David" });
+  feed({ type: "outbound_post", toolUseId: "t24", to: "David", addressed: true, text: "raced draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_gate", requestId: "r24", toolUseId: "t24", text: "raced draft", to: "David", addressed: true });
   const raced = outbounds().at(-1);
   cardParts(raced).row.children[0].fire("click"); // Send
   // FIX F7: the click disabled all three buttons before the invoke resolved.
@@ -378,8 +378,8 @@ test("boot F1: an {ok:false} decision leaves the card answerable, then the deny 
 test("boot F7: a rejected invoke also hands the buttons back", async () => {
   const real = globalThis.doplSession.permission;
   globalThis.doplSession.permission = () => Promise.reject(new Error("bridge gone"));
-  feed({ type: "outbound_post", toolUseId: "t25", to: "David", text: "thrown draft", pending: true, ownChannel: true });
-  feed({ type: "outbound_gate", requestId: "r25", toolUseId: "t25", text: "thrown draft", to: "David" });
+  feed({ type: "outbound_post", toolUseId: "t25", to: "David", addressed: true, text: "thrown draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_gate", requestId: "r25", toolUseId: "t25", text: "thrown draft", to: "David", addressed: true });
   const node = outbounds().at(-1);
   cardParts(node).row.children[2].fire("click"); // Deny
   await new Promise((r) => setTimeout(r, 0));
@@ -394,17 +394,17 @@ test("boot F7: a rejected invoke also hands the buttons back", async () => {
 // used to sit there with three disabled buttons until the tool_result self-healed it.
 
 test("boot F3: an unanswerable pending card shows NO button row (and the result heals it)", () => {
-  feed({ type: "outbound_post", toolUseId: "t26", to: "David", text: "auto-allowed draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_post", toolUseId: "t26", to: "David", addressed: true, text: "auto-allowed draft", pending: true, ownChannel: true });
   const node = outbounds().at(-1);
   const row = cardParts(node).row;
   assert.ok(row.classList.contains("hidden"), "no dead controls while main is not awaiting");
   assert.ok(node.classList.contains("outbound-pending"), "it is still visibly a draft, not a delivery");
-  assert.equal(cardParts(node).dest.textContent, "To: David's agent", "the destination line still reads");
+  assert.equal(cardParts(node).dest.textContent, "To: David", "the destination line still reads");
   // The requestId arriving makes it answerable and the row appears.
-  feed({ type: "outbound_gate", requestId: "r26", toolUseId: "t26", text: "auto-allowed draft", to: "David" });
+  feed({ type: "outbound_gate", requestId: "r26", toolUseId: "t26", text: "auto-allowed draft", to: "David", addressed: true });
   assert.ok(!cardParts(node).row.classList.contains("hidden"));
   // And with no gate at all, the tool_result self-heal is what resolves it.
-  feed({ type: "outbound_post", toolUseId: "t27", to: "David", text: "healed draft", pending: true, ownChannel: true });
+  feed({ type: "outbound_post", toolUseId: "t27", to: "David", addressed: true, text: "healed draft", pending: true, ownChannel: true });
   const healed = outbounds().at(-1);
   assert.ok(cardParts(healed).row.classList.contains("hidden"));
   feed({ type: "tool_result", toolUseId: "t27", ok: true, resultSummary: "posted" });

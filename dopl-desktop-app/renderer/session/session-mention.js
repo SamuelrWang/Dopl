@@ -117,6 +117,28 @@
     return options;
   }
 
+  // N-PARTY (2026-07-31): the popup rows are ALREADY the real addressable set — they are just
+  // silent about it, and at N that silence reads as a broken popup.
+  //
+  // VERIFIED, and the reason this is a copy fix rather than a roster fix: an @-tag routes to
+  // main/session-peer-post.send, which addresses the post with the session's BOUND counterparty
+  // ID (postBody: `body.toUserId = s.counterpartyId`). The renderer never sends an addressee at
+  // all — session-preload's `sendToPeer(text)` carries text and nothing else. So the set a
+  // session can reach is exactly {my agent} ∪ {the bound counterparty}, whatever the channel's
+  // size, and a session with NO counterparty (a group channel opened from a thread card:
+  // channel-context.resolve yields one only for `isDirect`) can address nobody else. Adding
+  // roster rows without widening that IPC would deliver every pick to the bound counterparty —
+  // a worse lie than the silence.
+  //
+  // What the silence costs today: the popup CLOSES on a no-match query (reducePopup), and then
+  // L4 sends `@carol-agent do X` to the operator's OWN agent, verbatim, saying nothing. Naming
+  // the limit is the one honest thing available without new data.
+  const SOLO_NOTE = "Only your own agent can be addressed from this session.";
+  function addressNote(options) {
+    const list = Array.isArray(options) ? options : [];
+    return list.some((o) => o && o.kind === "peer") ? "" : SOLO_NOTE;
+  }
+
   // slug (lowercased) -> 'self' | 'peer'. The alias is added only alongside a real peer.
   function tagTable(options) {
     const table = {};
@@ -276,9 +298,9 @@
   return {
     POPUP_LABEL, SELF_HINT, PEER_HINT_UNKNOWN, PEER_MSG_WHO_UNKNOWN,
     STATUS_SENDING, STATUS_SENT, STATUS_FAILED,
-    SELF_SLUG, PEER_ALIAS,
+    SELF_SLUG, PEER_ALIAS, SOLO_NOTE,
     peerHint, peerMessageWho, statusText, peerSlug,
-    tagOptions, tagTable,
+    tagOptions, tagTable, addressNote,
     activeMention, matchOptions, applyMention,
     parseAddress, hasPeerTag,
     initialPopup, reducePopup, reducePeerMessage,

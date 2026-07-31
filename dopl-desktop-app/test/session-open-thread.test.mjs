@@ -39,17 +39,30 @@ test("a DIRECT channel yields the workspace, the name and the server-resolved pe
   assert.deepEqual(ctx, {
     channelId: "chan-1", workspaceId: "ws-1", workspaceSegment: "acme-ab12",
     channelName: "David", counterpartyId: "user-peer", counterpartyName: "David",
+    // H2: the server's own 1:1 flag, carried SEPARATELY from the peer it resolved. A session
+    // needs it to know that its unaddressed posts are addressed for it (resolveDirectPeer),
+    // which is what the outbound approval card names a recipient from.
+    direct: true,
   });
 });
 
 test("a GROUP channel yields NO counterparty — the shell never guesses one", () => {
   const group = { id: "chan-1", name: "Ops", isDirect: false, isMember: true, directPeer: null, memberCount: 5 };
   const ctx = channelContext.contextFromChannel(group, "ws-1", null);
-  assert.equal(ctx.counterpartyId, null, "session-history then paints its calm pointer, not a lane");
+  // FIX N1: the null is still a null (no peer is ever inferred). What it costs downstream is
+  // no longer the whole window: session-history opens on the operator's own rows and labels
+  // them as one-sided. Nothing about THIS rule changes for that.
+  assert.equal(ctx.counterpartyId, null, "no member of a group channel is promoted to 'them'");
   assert.equal(ctx.counterpartyName, null);
   // A direct flag with no resolved peer is equally not a counterparty.
   assert.equal(channelContext.contextFromChannel({ ...direct, directPeer: {} }, "ws-1").counterpartyId, null);
   assert.equal(channelContext.contextFromChannel({ ...direct, isDirect: false }, "ws-1").counterpartyId, null);
+  // H2: a group channel is NOT direct, so nothing downstream may name a recipient for an
+  // unaddressed post there. The flag is strict — only the server's own `true` sets it.
+  assert.equal(ctx.direct, false);
+  for (const junk of [undefined, null, "true", 1]) {
+    assert.equal(channelContext.contextFromChannel({ ...direct, isDirect: junk }, "ws-1").direct, false, JSON.stringify(junk));
+  }
 });
 
 test("a channel the caller is not a member of, or with no workspace, yields NOTHING", () => {

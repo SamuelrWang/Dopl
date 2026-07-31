@@ -5,6 +5,7 @@ import {
   resolveSendOptions,
   type SendOptions,
 } from "./message-composer";
+import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
 import type { ChannelMember } from "../types";
 
 const ME = "me";
@@ -102,7 +103,9 @@ describe("resolveSendOptions (unified composer send model)", () => {
         peerId: null,
         toUserId: null,
         summary: "",
-        body: "broadcast",
+        // NOT a broadcast: the desktop's `classify` gives a 3+ member channel no
+        // implicit recipient, so this message is picked up by no agent at all.
+        body: "unaddressed",
       })
     ).toBeUndefined();
   });
@@ -146,6 +149,55 @@ describe("MessageComposer render (one unified input, no mode slider)", () => {
     expect((markup.match(/<textarea/g) ?? []).length).toBe(1);
     expect(markup).not.toContain("Task");
     expect(markup).toContain("Ask a specific agent");
+  });
+});
+
+/**
+ * The unaddressed hint is the ONE web string that tells the truth about group
+ * routing, and it was unpinned: nothing asserted it rendered at all, so a
+ * refactor could have dropped it and left the surface silently teaching the DM
+ * model. These cases pin BOTH directions — it must appear exactly where the
+ * implicit recipient stops existing, and nowhere the implicit recipient still
+ * does, or it becomes a false warning instead of a true one.
+ */
+const UNADDRESSED_HINT = "No agent will pick this up unless you address it.";
+
+function channelMarkup(memberCount: number) {
+  const members = Array.from({ length: memberCount }, (_, i) =>
+    member({ userId: i === 0 ? ME : `u-${i}` })
+  );
+  return renderToStaticMarkup(
+    <MessageComposer onSend={noop} members={members} currentUserId={ME} />
+  );
+}
+
+describe("MessageComposer — the unaddressed-send hint (N-party honesty)", () => {
+  it("warns in a channel at the group threshold, where nothing picks it up", () => {
+    expect(channelMarkup(GROUP_CHANNEL_MIN_MEMBERS)).toContain(UNADDRESSED_HINT);
+  });
+
+  it("keeps warning above the threshold", () => {
+    expect(channelMarkup(GROUP_CHANNEL_MIN_MEMBERS + 3)).toContain(
+      UNADDRESSED_HINT
+    );
+  });
+
+  it("stays silent one member below it, where the peer IS the implicit target", () => {
+    // A two-member NON-direct channel still triggers on an unaddressed send
+    // (`classify`'s knownTwo branch), so the warning would be a lie here.
+    expect(channelMarkup(GROUP_CHANNEL_MIN_MEMBERS - 1)).not.toContain(
+      UNADDRESSED_HINT
+    );
+  });
+
+  it("never warns in a DM, which always has an implicit peer", () => {
+    expect(dmMarkup()).not.toContain(UNADDRESSED_HINT);
+  });
+
+  it("stays silent while the roster is still loading rather than guessing", () => {
+    // `useChannelMembers` yields [] before the first read resolves. Absent beats
+    // wrong: a hint that flashes on every channel open would train it away.
+    expect(channelMarkup(0)).not.toContain(UNADDRESSED_HINT);
   });
 });
 

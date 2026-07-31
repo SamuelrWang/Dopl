@@ -95,6 +95,7 @@ async function maybeOpenRequesterSession(entry, m, myUserId) {
     workspaceId: entry.workspaceId,
     goal: m.body,
     counterpartyId: targeting.metaStr(m, 'taskTarget'), // FIX L1: the member the task addresses
+    direct: entry.channel.isDirect === true, // H2: in a DM the server addresses this session's posts
     // v2.x: the CONCRETE ids ride the context as well — prompt-framing's delivery section
     // reads only the context, and a requester told just the channel's display name could
     // not fill dopl_channel's required `channel=` (nor the workspace a multi-workspace

@@ -96,6 +96,33 @@ export function inlineOr(
 }
 
 /**
+ * The channel roster as `userId → display name`, for putting names to the ids
+ * a thread row carries (`createdBy`, `targetUserId`). Raw names — the render
+ * side neutralizes them, exactly once, in {@link memberRef}.
+ *
+ * FAIL-SOFT ON PURPOSE. This is an enrichment: a roster that 404s, 403s, or
+ * times out must degrade to ids, never turn a successful thread read into an
+ * error the agent might retry. The ops that call it have ALREADY established
+ * the channel is visible (their own call would have 404'd first), so a failure
+ * here is a second-order one.
+ */
+export async function memberNames(
+  client: DoplClient,
+  ref: string,
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  try {
+    for (const m of await client.listChannelMembers(ref)) {
+      const name = m.displayName || m.email;
+      if (m.userId && name) names.set(m.userId, name);
+    }
+  } catch {
+    // Enrichment only — ids still render, and they are the half that matters.
+  }
+  return names;
+}
+
+/**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member
  * resolvers — the caller short-circuits on the error branch.

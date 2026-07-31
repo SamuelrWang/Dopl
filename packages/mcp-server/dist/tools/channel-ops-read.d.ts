@@ -19,7 +19,7 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
-export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number): Promise<ToolResponse>;
+export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null): Promise<ToolResponse>;
 /**
  * LONG-HOLD await. One call holds up to `timeoutMs` (capped at
  * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll with the same
@@ -33,6 +33,20 @@ export declare function opRead(client: DoplClient, ref: string, since?: number, 
  * or — when the hold ended far under what was asked for with no error at all —
  * a CUT SHORT note that tells the caller NOT to re-arm and to report it.
  */
-export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number): Promise<ToolResponse>;
-export declare function opListThreads(client: DoplClient, ref: string): Promise<ToolResponse>;
-export declare function opGetThread(client: DoplClient, ref: string, threadId: string): Promise<ToolResponse>;
+export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opGetThread(client: DoplClient, ref: string, threadId: string, selfUserId?: string | null): Promise<ToolResponse>;
+/**
+ * The channel ROSTER — who is actually in here.
+ *
+ * The gap this closes: `op="list"` reported "5 members" and NOTHING in the tool
+ * said who they were, while `post` and `create_thread` both require addressing a
+ * specific member and an unaddressed ask in a 3+ member channel triggers nobody.
+ * An agent could see that a channel was a group, could be told to address one
+ * member, and had no op that would tell it which members existed.
+ *
+ * Read-only, and it renders exactly what the roster route returns — the private
+ * per-member preferences (notify scope, agent tool profile) are already scrubbed
+ * server-side for everyone but the caller, and none of them are rendered here.
+ */
+export declare function opMembers(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;

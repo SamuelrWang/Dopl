@@ -37,6 +37,10 @@ test("tagOptions: no peer -> the SELF row only (so nothing can address a peer)",
   }
 });
 
+// N-PARTY: `addressNote` (the limit stated when there is no peer row) and its CSS recipe are
+// pinned in test/session-addressee-truth.test.mjs — this file is at the §2 500-line cap, and
+// that sibling owns every surface that names WHO a message reaches.
+
 test("tagOptions: a peer adds a SECOND row whose slug is derived from the display name", () => {
   assert.deepEqual(DAVID.map((o) => o.slug), ["my-agent", "david-agent"]);
   assert.deepEqual(DAVID.map((o) => o.kind), ["self", "peer"]);

@@ -6,6 +6,7 @@ import { cn } from "@/shared/lib/utils";
 import { useAutoGrowTextarea } from "@/shared/ui/auto-grow-textarea";
 import { SendButton } from "@/shared/ui/send-button";
 import { FIELD_WELL } from "@/shared/ui/wells";
+import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
 import type { ChannelMember } from "../types";
 import { AddressPicker } from "./address-picker";
 
@@ -83,10 +84,12 @@ export function resolveSendOptions(params: {
  * web still renders any resulting threads with their cards / milestones /
  * receipts.
  *
- * In a DM every human send auto-addresses the peer. In a channel of three or
- * more, an UNADDRESSED message triggers no agent at all (the targeting rule
- * only implies a recipient in a two-person channel), so the composer says so
- * rather than letting the message land silently.
+ * In a DM every human send auto-addresses the peer. In a channel of
+ * `GROUP_CHANNEL_MIN_MEMBERS` or more, an UNADDRESSED message triggers no agent
+ * at all (the targeting rule only implies a recipient in a two-person channel),
+ * so the composer says so rather than letting the message land silently. That
+ * hint is the ONE place the web surface tells the truth about group routing;
+ * the invite dialog states the same rule where the member count crosses it.
  */
 export function MessageComposer({
   onSend,
@@ -115,8 +118,9 @@ export function MessageComposer({
     [isDirect, members, currentUserId]
   );
 
-  // The agent a send actually reaches: the DM peer, else the picked addressee
-  // (null in a channel = an unaddressed broadcast).
+  // The agent a send actually reaches: the DM peer, else the picked addressee.
+  // Null in a channel is NOT a broadcast — an unaddressed message is delivered
+  // to the transcript and picked up by no agent (see the hint below).
   const resolvedTargetId = isDirect ? peerId : toUserId;
   const target = useMemo(
     () =>
@@ -130,8 +134,10 @@ export function MessageComposer({
 
   // Two members = the other one is the implicit target, so an unaddressed
   // message still reaches an agent. Three or more and it reaches none. A DM
-  // never shows this (it always has an implicit peer).
-  const showUnaddressedHint = !isDirect && !toUserId && members.length >= 3;
+  // never shows this (it always has an implicit peer). An unloaded roster is
+  // length 0, so the hint is absent rather than wrong while members resolve.
+  const showUnaddressedHint =
+    !isDirect && !toUserId && members.length >= GROUP_CHANNEL_MIN_MEMBERS;
 
   async function sendMessage() {
     if (!canSendMessage) return;

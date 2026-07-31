@@ -16,6 +16,7 @@ import {
   ModeBadge,
   StatusChip,
 } from "./session-card-status";
+import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
 
 /**
  * One THREAD as a single bordered card, rendering the session that worked it.
@@ -28,13 +29,22 @@ import {
  * — they become the status chip in the footer (Thread active / Thread complete
  * / Thread failed, or a calm terminal label for an operator-chosen ending).
  *
+ * A channel runs MANY threads at once, between different pairs, so the card
+ * never assumes the thread is the viewer's: when the authoritative thread row
+ * says they are neither its creator nor its addressee, the footer drops
+ * "Open session" for a read-only marker. That button opens a window bound to
+ * THIS thread and the desktop forces the thread tag onto whatever the session
+ * posts (`session-outbound-tag.js`), so for a non-party it leads only to a
+ * server refusal. A legacy session carries no thread row, so its parties are
+ * unknown and nothing is claimed either way.
+ *
  * Card geometry follows the message-bubble family (`rounded-[10px]` border,
  * `px-3.5` padding); the header + footer strips reuse the
- * `bg-card-surface-subtle` section-strip recipe. The container is
- * status-driven: an `active` thread carries the success-tinted surface (the
- * agent is working), every settled ending stays neutral. That pairs with the
- * warning-tinted consent card at the transcript bottom, so the channel reads on
- * one color rule: amber is waiting on a human, green is an agent at work.
+ * `bg-card-surface-subtle` section-strip recipe. The container is ALWAYS
+ * neutral — the status-tinted active surface shipped in v2.4 and was removed
+ * the same day by product call, so status is the chip's job alone (pinned by
+ * the container tests). Amber still means waiting on a human, but it lives only
+ * on the consent card at the transcript bottom.
  */
 export function SessionCard({
   session,
@@ -88,13 +98,14 @@ export function SessionCard({
   // the close callback is wired. Reopening a closed thread lives in the thread
   // panel (the header's thread list), never on the card.
   const [closing, setClosing] = useState(false);
-  const canManageThread =
-    !!thread &&
-    !!currentUserId &&
-    (currentUserId === thread.createdBy ||
-      currentUserId === thread.targetUserId);
+  const canManageThread = !!thread && isThreadParty(thread, currentUserId);
   const showClose =
     canManageThread && thread?.status === "open" && !!onCloseThread;
+  // Provably someone else's thread: a first-class row names both parties and we
+  // know who is looking. Without the row (a legacy session) or without a viewer
+  // id the parties are unknown, so the card keeps its normal footer rather than
+  // guessing.
+  const viewerIsOutsider = !!thread && !!currentUserId && !canManageThread;
 
   const openerName = session.head.authorName || "Agent";
   const title = session.title ?? session.summary ?? "Thread";
@@ -253,10 +264,14 @@ export function SessionCard({
             Close thread
           </button>
         )}
-        <ReopenWindowButton
-          channelId={session.head.channelId}
-          threadId={session.taskId}
-        />
+        {viewerIsOutsider ? (
+          <ReadOnlyThreadBadge />
+        ) : (
+          <ReopenWindowButton
+            channelId={session.head.channelId}
+            threadId={session.taskId}
+          />
+        )}
         <StatusChip status={session.status} />
       </footer>
       {showClose && closing && thread && onCloseThread && (

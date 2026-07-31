@@ -82,6 +82,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     phase: "running",
     startedAt: 123,
     counterpartyId: "u2", // FIX L1: the task's other party, persisted for resume
+    direct: true, // H2: whether the server addresses this session's posts (a DM), persisted with the binding
     counterpartyName: "David", // D1: the header identity, persisted for a reopen
     channelName: "Ops",
     taskTitle: "Ship the invoice import",
@@ -89,11 +90,17 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     costUsd: 0.42,
   });
   assert.deepEqual(Object.keys(rec).sort(), [
-    "channelId", "channelName", "costUsd", "counterpartyId", "counterpartyName", "key",
-    "mode", "phase", "profile", "sdkSessionId", "sessionId", "side", "startedAt",
+    "channelId", "channelName", "costUsd", "counterpartyId", "counterpartyName", "direct",
+    "key", "mode", "phase", "profile", "sdkSessionId", "sessionId", "side", "startedAt",
     "taskId", "taskTitle", "turns", "workspaceId",
   ]);
   assert.equal(rec.counterpartyId, "u2");
+  assert.equal(rec.direct, true);
+  // H2 fail-quiet: a hand-edited store can only ever turn this OFF, which understates the
+  // destination on the reopened shell's approval card. It can never invent an addressee.
+  for (const junk of [undefined, null, "true", 1, {}]) {
+    assert.equal(durableSessionRecord({ direct: junk }).direct, false, JSON.stringify(junk));
+  }
 });
 
 // ── D1: the header identity survives to a reopen ────────────────────────────────

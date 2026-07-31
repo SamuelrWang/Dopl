@@ -311,7 +311,7 @@ function baseRecord(s) {
     mode: s.mode,
     phase: s.state.phase,
     startedAt: s.startedAt,
-    counterpartyId: s.counterpartyId || null, // FIX L1: the task's other party
+    counterpartyId: s.counterpartyId || null, direct: s.direct === true, // FIX L1: the other party, and (H2) whether the server addresses posts for us
     // v1.7.5 D1: the HEADER IDENTITY, sourced from s.context/spec at startSession.
     // A parked record is the only thing a P2 recreate (or a post-restart resume) has
     // to rebuild the window from, so without these the reopened header lost the peer
@@ -387,7 +387,7 @@ function makeCanUseTool(s, dispatch, log) {
           type: 'outbound_gate',
           requestId,
           toolUseId: opts && opts.toolUseID,
-          ownChannel: true,
+          ownChannel: true, ...(s.direct === true ? { directChannel: true } : {}), // H2: in a DM the server addresses this post, so the card names who gets it
           text: input && input.body != null ? String(input.body) : '',
         }, input, s.counterpartyName)
         : {

@@ -58,6 +58,18 @@ export declare function neutralizeInline(raw: string): string | null;
  */
 export declare function inlineOr(raw: string | null | undefined, fallback: string): string;
 /**
+ * The channel roster as `userId → display name`, for putting names to the ids
+ * a thread row carries (`createdBy`, `targetUserId`). Raw names — the render
+ * side neutralizes them, exactly once, in {@link memberRef}.
+ *
+ * FAIL-SOFT ON PURPOSE. This is an enrichment: a roster that 404s, 403s, or
+ * times out must degrade to ids, never turn a successful thread read into an
+ * error the agent might retry. The ops that call it have ALREADY established
+ * the channel is visible (their own call would have 404'd first), so a failure
+ * here is a second-order one.
+ */
+export declare function memberNames(client: DoplClient, ref: string): Promise<Map<string, string>>;
+/**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member
  * resolvers — the caller short-circuits on the error branch.

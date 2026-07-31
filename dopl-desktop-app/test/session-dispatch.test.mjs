@@ -149,6 +149,23 @@ test("openRequester: v2.x — the launch context carries the channel + workspace
   assert.equal(h.calls.launch[0].channelId, "c1");
 });
 
+test("openRequester: H2 — the server's is_direct flag rides the launch, strictly", async () => {
+  // The session's outbound approval card names a recipient for an unaddressed post ONLY in a
+  // DIRECT channel, where the server addresses it (`resolveDirectPeer`). That flag has one
+  // source — the channel DTO — and it has to reach the session to be sayable. FAIL-QUIET:
+  // anything other than the server's own `true` leaves the card's channel-level wording.
+  const dm = { channel: { id: "c1", name: "David", isDirect: true }, workspaceId: "w1" };
+  const h = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
+  await h.maybeOpenRequesterSession(dm, peerMsg({ authorUserId: ME }), ME);
+  assert.equal(h.calls.launch[0].direct, true);
+  for (const isDirect of [false, undefined, "true", 1]) {
+    const g = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
+    await g.maybeOpenRequesterSession({ ...dm, channel: { ...dm.channel, isDirect } },
+      peerMsg({ authorUserId: ME }), ME);
+    assert.equal(g.calls.launch[0].direct, false, JSON.stringify(isDirect));
+  }
+});
+
 test("openRequester: an already-live task is deduped (true, no relaunch)", async () => {
   const h = harness({ requesterOpen: true, live: true });
   assert.equal(await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME), true);

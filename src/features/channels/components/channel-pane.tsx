@@ -96,10 +96,12 @@ interface Props {
 }
 
 /**
- * Channel detail pane (ChannelPane): a crumb bar (name, visibility, member count, presence)
- * with the notification / settings / invite / manage actions, a scrolling
- * transcript that auto-sticks to the bottom, and the pinned composer (or a
- * read-only / join affordance when the caller isn't a member).
+ * Channel detail pane (ChannelPane): a crumb bar (name, visibility, topic, and
+ * the presence strip — EVERY member in a stable order, ringed when their agent
+ * is online, so a channel never renders as a pair) with the notification /
+ * settings / invite / manage actions, a scrolling transcript that auto-sticks
+ * to the bottom, and the pinned composer (or a read-only / join affordance when
+ * the caller isn't a member).
  *
  * Pending consent decisions for this channel (inbound approvals + outbound
  * reviews) ride at the END of that transcript, after the last message, so a new
