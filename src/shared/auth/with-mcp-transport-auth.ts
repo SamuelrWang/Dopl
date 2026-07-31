@@ -1,6 +1,7 @@
 import "server-only";
 import { touchMcpStatus, checkAndRecordRateLimitSubject } from "./mcp-session";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
+import type { McpCredential } from "./mcp-credential";
 
 // Per-token request ceiling for OAuth callers at the /api/mcp boundary.
 // Generous by default — agents are bursty — but caps runaway abuse. The
@@ -39,6 +40,13 @@ export interface McpAuthContext {
    * into bootServer to gate write/admin tool registration.
    */
   scopes?: string[];
+  /**
+   * WHICH credential answered, for the agent's benefit only. `validateAccessToken`
+   * has always resolved this and the boundary has always discarded it, which is
+   * half of why an agent could not say what it was acting through. NOT an
+   * authorization input — nothing here may gate anything.
+   */
+  credential_info: McpCredential;
 }
 
 export type McpAuthResult =
@@ -70,6 +78,7 @@ export async function authenticateMcpRequest(
           userId: tok.userId,
           apiKeyWorkspaceId: null,
           scopes: tok.scopes,
+          credential_info: tok.credential,
         },
       };
     }

@@ -9,6 +9,8 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { createServer } from "./server.js";
+import { type CallerIdentity } from "./tools/identity.js";
+export type { CallerIdentity } from "./tools/identity.js";
 export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
 /** The concrete MCP server type, without importing the SDK type directly. */
@@ -32,6 +34,15 @@ export interface BootOptions {
      * route to its own logger) to avoid log spam on every request. Default: no-op.
      */
     onDiag?: (message: string) => void;
+    /**
+     * Who is calling and through what, as resolved by the TRANSPORT (the only
+     * layer that ever sees the credential and the request headers). The status
+     * ping below can also produce a user id, but it is a second round-trip
+     * against a second code path and it can fail on its own; when the transport
+     * supplies one it WINS, because it comes from the credential that is
+     * actually authorizing this request.
+     */
+    caller?: Partial<CallerIdentity>;
 }
 export interface BootResult {
     server: DoplMcpServer;

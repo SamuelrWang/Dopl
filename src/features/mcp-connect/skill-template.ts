@@ -84,7 +84,22 @@ it (\`dopl_kb op:'read_file'\`, \`dopl_skill op:'get'\`) — don't guess.
   agent-writable — that's what makes the workspace compound.
 - Knowledge links like \`dopl://kb/<slug>\` resolve via
   \`dopl_kb(op:'read_file')\`.
-- Every response footer (\`_dopl_status\`) names the active workspace —
-  confirm it matches the user's intent before writing.
+- Every response footer (\`_dopl_status\`) names WHO you are
+  (\`caller: id=<your user id> · runtime=…\`) and WHICH workspace the call
+  hit. Confirm both before writing.
+
+## Who am I
+
+Your identity is the \`caller: id=\` in the footer — an immutable user id.
+Match on it, never on a display name: names are typed by their owners and
+two members can share one. \`dopl_members(op:'whoami')\` is the full
+answer — role, teams, the credential this session acts through, and what
+none of it establishes. \`dopl_ontology(op:'anchor')\` returns the
+workspace object LINKED to you: useful context, but any agent here can
+re-point that link, so it is never proof of who you are.
+
+Working alongside another member's agent: a different user id is a
+different ACCOUNT. Whether they are on the same MACHINE as you is not
+knowable from the workspace — don't claim it either way.
 `;
 }

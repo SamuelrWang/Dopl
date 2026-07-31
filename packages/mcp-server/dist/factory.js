@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = exports.createServer = void 0;
 exports.bootServer = bootServer;
 const server_js_1 = require("./server.js");
+const identity_js_1 = require("./tools/identity.js");
 var server_js_2 = require("./server.js");
 Object.defineProperty(exports, "createServer", { enumerable: true, get: function () { return server_js_2.createServer; } });
 Object.defineProperty(exports, "buildInstructions", { enumerable: true, get: function () { return server_js_2.buildInstructions; } });
@@ -85,12 +86,24 @@ async function bootServer(client, opts = {}) {
     // Clear a stale/garbage constructor pin that didn't resolve so loopback
     // calls never carry a bogus X-Workspace-Id.
     client.setWorkspaceId(active ? active.id : null);
+    // ONE identity for the whole session. The transport's user id wins over the
+    // ping's — same fact, but that one is read off the credential doing the work
+    // rather than off a second loopback that fails independently. Until this
+    // existed, `dopl_channel` used the ping's id and `dopl_members(op="whoami")`
+    // used a third (`GET /api/workspaces/me`), so two tools on ONE connection
+    // could disagree about who was calling.
+    const caller = {
+        ...identity_js_1.UNKNOWN_CALLER,
+        ...opts.caller,
+        userId: opts.caller?.userId ?? userId,
+    };
     const server = (0, server_js_1.createServer)(client, {
         isAdmin,
+        caller,
         // The ping's user id is not just diagnostic: `dopl_channel` needs it to tell
         // a reader that a message is addressed to IT rather than to some other
         // member. It was already resolved here and thrown away.
-        userId,
+        userId: caller.userId,
         directory,
         directoryLoadFailed,
         workspace: active,
@@ -106,7 +119,13 @@ async function bootServer(client, opts = {}) {
             role: active.role,
         }
         : null;
-    return { server, userId, isAdmin, activeWorkspace, directoryLoadFailed };
+    return {
+        server,
+        userId: caller.userId,
+        isAdmin,
+        activeWorkspace,
+        directoryLoadFailed,
+    };
 }
 async function pingWithRetry(client, retries) {
     const delays = [1000, 2000, 4000].slice(0, Math.max(0, retries));

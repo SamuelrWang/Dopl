@@ -189,3 +189,142 @@ const textOf = (res) => res.content.map((c) => c.text).join("");
         (0, vitest_1.expect)(textOf(res)).toContain("Workspace not found");
     });
 });
+// ── Identity + locus: WHO is calling, not just WHERE it landed ──────────
+//
+// The footer is the one line that rides every successful response and that the
+// instructions tell the agent to read. It named the workspace and said nothing
+// about the caller, so an agent that needed to know which session it was had to
+// go looking — and the surfaces it would have found answered from three
+// different sources that could disagree inside one connection.
+const CALLER = {
+    userId: "u-me",
+    runtime: "desktop-session",
+    credentialKind: "device",
+    credentialLabel: "Dopl Desktop CLI (mbp.local)",
+};
+/** A tool captured from the registry by name (the meta-tools aren't in `build`). */
+function tool(name) {
+    const h = registry.tools.get(name);
+    if (!h)
+        throw new Error(`${name} was not registered`);
+    return h;
+}
+(0, vitest_1.describe)("_dopl_status — the caller line", () => {
+    (0, vitest_1.it)("carries the caller's immutable user id on every successful response", async () => {
+        const { map } = build({
+            directory: [WS1],
+            workspace: WS1,
+            role: "owner",
+            workspaceSource: "sole membership",
+            caller: CALLER,
+        });
+        (0, vitest_1.expect)(textOf(await map({}))).toContain("caller: id=`u-me` · runtime=desktop-session");
+    });
+    (0, vitest_1.it)("rides a per-call `workspace=` response too, not just the session default", async () => {
+        const { map } = build({
+            directory: [WS1, WS2],
+            workspace: null,
+            role: null,
+            workspaceSource: null,
+            caller: CALLER,
+        });
+        (0, vitest_1.expect)(textOf(await map({ workspace: "beta" }))).toContain("caller: id=`u-me`");
+    });
+    (0, vitest_1.it)("comes BEFORE the workspace, because who precedes where", async () => {
+        const { map } = build({
+            directory: [WS1],
+            workspace: WS1,
+            role: "owner",
+            workspaceSource: "sole membership",
+            caller: CALLER,
+        });
+        const text = textOf(await map({}));
+        (0, vitest_1.expect)(text.indexOf("caller:")).toBeLessThan(text.indexOf("active_workspace:"));
+    });
+    (0, vitest_1.it)("says unresolved rather than inventing an id when boot could not confirm one", async () => {
+        const { map } = build({
+            directory: [WS1],
+            workspace: WS1,
+            role: "owner",
+            workspaceSource: "sole membership",
+        });
+        (0, vitest_1.expect)(textOf(await map({}))).toContain("caller: id=(unresolved");
+    });
+    /** The hostname is a whoami answer, not a per-response tax on every result. */
+    (0, vitest_1.it)("keeps the credential label OUT of the footer", async () => {
+        const { map } = build({
+            directory: [WS1],
+            workspace: WS1,
+            role: "owner",
+            workspaceSource: "sole membership",
+            caller: CALLER,
+        });
+        (0, vitest_1.expect)(textOf(await map({}))).not.toContain("mbp.local");
+    });
+});
+(0, vitest_1.describe)("current_workspace — the tool an agent reaches for when it is lost", () => {
+    /**
+     * The 2+-membership branch is the one that needed this most and had it least:
+     * `appendDoplStatus` skips the footer entirely when there is no effective
+     * workspace, so this branch carried no identity AND printed slugs with no
+     * workspace ids beside them.
+     */
+    (0, vitest_1.it)("states the caller and the workspace IDS when there is no auto-target", async () => {
+        build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
+        const text = textOf(await tool("current_workspace")({}));
+        (0, vitest_1.expect)(text).toContain("caller: id=`u-me` · runtime=desktop-session");
+        (0, vitest_1.expect)(text).toContain("id: `id-1`");
+        (0, vitest_1.expect)(text).toContain("id: `id-2`");
+    });
+    (0, vitest_1.it)("names the credential this session acts through", async () => {
+        build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
+        const text = textOf(await tool("current_workspace")({}));
+        (0, vitest_1.expect)(text).toContain("a device token");
+        (0, vitest_1.expect)(text).toContain("mbp.local");
+    });
+    /**
+     * On the auto-target branch the footer fires and carries the caller, so the
+     * body must NOT restate it — one caller line per response, wherever it comes
+     * from.
+     */
+    (0, vitest_1.it)("states the caller exactly once on the auto-target branch", async () => {
+        build({
+            directory: [WS1],
+            workspace: WS1,
+            role: "owner",
+            workspaceSource: "sole membership",
+            caller: CALLER,
+        });
+        const text = textOf(await tool("current_workspace")({}));
+        (0, vitest_1.expect)(text).toContain("A no-`workspace=` call targets");
+        (0, vitest_1.expect)(text.split("\n").filter((l) => l.includes("caller: id="))).toHaveLength(1);
+    });
+    (0, vitest_1.it)("states the caller exactly once on the no-auto-target branch too", async () => {
+        build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
+        const text = textOf(await tool("current_workspace")({}));
+        (0, vitest_1.expect)(text.split("\n").filter((l) => l.includes("caller: id="))).toHaveLength(1);
+    });
+});
+(0, vitest_1.describe)("buildInstructions — identity is taught before the first tool call", () => {
+    (0, vitest_1.it)("names the footer's caller key as the agent's identity", () => {
+        (0, vitest_1.expect)((0, server_js_1.buildInstructions)([WS1])).toContain("caller: id=<your user id>");
+    });
+    (0, vitest_1.it)("tells the agent to match on the id, not the display name", () => {
+        (0, vitest_1.expect)((0, server_js_1.buildInstructions)([WS1])).toContain("a name alone never settles");
+    });
+    /**
+     * The line that pointed at the anchor for "who the caller is" is what made an
+     * agent read a member-typed object NAME as its own identity. It points at
+     * whoami now, and calls the anchor context.
+     */
+    (0, vitest_1.it)("reframes the ontology anchor as context, not identity", () => {
+        const text = (0, server_js_1.buildInstructions)([WS1]);
+        (0, vitest_1.expect)(text).toContain("CONTEXT about them, not their identity");
+        (0, vitest_1.expect)(text).not.toContain("to learn who the caller is in the workspace graph");
+    });
+    (0, vitest_1.it)("refuses the same-machine question up front", () => {
+        const text = (0, server_js_1.buildInstructions)([WS1]);
+        (0, vitest_1.expect)(text).toContain("a different user id is a different ACCOUNT");
+        (0, vitest_1.expect)(text).toContain("do not assert it either way");
+    });
+});

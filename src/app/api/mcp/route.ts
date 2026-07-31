@@ -61,7 +61,8 @@ async function handle(request: Request): Promise<Response> {
   //    Only headers are read here — the body stays intact for the transport.
   const authed = await authenticateMcpRequest(request);
   if (!authed.ok) return authed.response;
-  const { credential, apiKeyWorkspaceId, scopes } = authed.auth;
+  const { credential, apiKeyWorkspaceId, scopes, userId, credential_info } =
+    authed.auth;
 
   // 2. A DoplClient pointed at our own origin, carrying the caller's
   //    credential. Stateless HTTP can't persist a session default across
@@ -114,9 +115,23 @@ async function handle(request: Request): Promise<Response> {
   //    vanishing silently.
   //    (Optimization for later: cache this handshake by credential hash to
   //    avoid two loopback calls on every request.)
+  //    IDENTITY + LOCUS: this route is the ONLY layer that sees both the
+  //    credential and the request headers, so it is the only place that can
+  //    tell the agent who it is and what it is acting through. All three facts
+  //    were already resolved here and dropped on the floor — `userId` was even
+  //    re-fetched over a loopback by `bootServer` — which is why an agent could
+  //    not match an addressee uuid against itself or say which of two sessions
+  //    it was. Nothing here GATES anything: the runtime label is a routing hint
+  //    (`runtime-header.ts`) and the credential label is caller-supplied text.
   const { server } = await bootServer(client, {
     pingRetries: 0,
     scopes,
+    caller: {
+      userId,
+      runtime: callerRuntime ?? null,
+      credentialKind: credential_info.kind,
+      credentialLabel: credential_info.label,
+    },
     onDiag: (message) => console.error(message),
   });
 

@@ -10,6 +10,9 @@
 
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
+
+export type { CallerIdentity } from "./tools/identity.js";
 
 export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
@@ -36,6 +39,15 @@ export interface BootOptions {
    * route to its own logger) to avoid log spam on every request. Default: no-op.
    */
   onDiag?: (message: string) => void;
+  /**
+   * Who is calling and through what, as resolved by the TRANSPORT (the only
+   * layer that ever sees the credential and the request headers). The status
+   * ping below can also produce a user id, but it is a second round-trip
+   * against a second code path and it can fail on its own; when the transport
+   * supplies one it WINS, because it comes from the credential that is
+   * actually authorizing this request.
+   */
+  caller?: Partial<CallerIdentity>;
 }
 
 function errText(err: unknown): string {
@@ -140,12 +152,25 @@ export async function bootServer(
   // calls never carry a bogus X-Workspace-Id.
   client.setWorkspaceId(active ? active.id : null);
 
+  // ONE identity for the whole session. The transport's user id wins over the
+  // ping's — same fact, but that one is read off the credential doing the work
+  // rather than off a second loopback that fails independently. Until this
+  // existed, `dopl_channel` used the ping's id and `dopl_members(op="whoami")`
+  // used a third (`GET /api/workspaces/me`), so two tools on ONE connection
+  // could disagree about who was calling.
+  const caller: CallerIdentity = {
+    ...UNKNOWN_CALLER,
+    ...opts.caller,
+    userId: opts.caller?.userId ?? userId,
+  };
+
   const server = createServer(client, {
     isAdmin,
+    caller,
     // The ping's user id is not just diagnostic: `dopl_channel` needs it to tell
     // a reader that a message is addressed to IT rather than to some other
     // member. It was already resolved here and thrown away.
-    userId,
+    userId: caller.userId,
     directory,
     directoryLoadFailed,
     workspace: active,
@@ -163,7 +188,13 @@ export async function bootServer(
       }
     : null;
 
-  return { server, userId, isAdmin, activeWorkspace, directoryLoadFailed };
+  return {
+    server,
+    userId: caller.userId,
+    isAdmin,
+    activeWorkspace,
+    directoryLoadFailed,
+  };
 }
 
 async function pingWithRetry(

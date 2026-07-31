@@ -17,6 +17,7 @@ import { inlineOr } from "./narration";
 import { err, isConflict, missingParams, ok, type ToolResponse } from "./respond";
 import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
 import { opAnchor, opGet, opMap, opResolve } from "./ontology-ops-read";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
 /**
  * Write confirmations read the STORED name back — the server canonicalises it,
@@ -72,7 +73,12 @@ const REQUIRED: Record<string, string[]> = {
   claim_anchor: ["object"],
 };
 
-export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolResponse> {
+export async function dispatch(
+  client: DoplClient,
+  args: OntologyArgs,
+  /** The session identity record — only `op="anchor"` uses it (see `opAnchor`). */
+  caller: CallerIdentity = UNKNOWN_CALLER,
+): Promise<ToolResponse> {
   const required = REQUIRED[args.op];
   if (required) {
     const miss = missingParams(args.op, args as unknown as Record<string, unknown>, required);
@@ -83,7 +89,7 @@ export async function dispatch(client: DoplClient, args: OntologyArgs): Promise<
     case "map":
       return opMap(client);
     case "anchor":
-      return opAnchor(client);
+      return opAnchor(client, caller);
     case "resolve":
       return opResolve(client, args.query as string);
     case "get":

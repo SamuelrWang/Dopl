@@ -317,6 +317,54 @@ describe("validateAccessToken vs a revoked row", () => {
       userId: "user-9",
       scopes: ["dopl.read", "dopl.write"],
       tokenId: "tok-1",
+      credential: { kind: "oauth-app", label: null },
+    });
+  });
+
+  /**
+   * WHAT THE VALIDATOR NOW CARRIES OUT. These two columns were in the row all
+   * along and the select skipped them, which is why the transport boundary
+   * could not tell the agent what credential it was acting through. Both are
+   * descriptive: nothing in the codebase gates on either.
+   */
+  it("reports a device token as `device`, carrying its mint label verbatim", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read", "dopl.write"],
+        access_expires_at: future,
+        revoked_at: null,
+        client_id: DEVICE_CLIENT_ID,
+        client_name: "Dopl Desktop CLI (mbp.local)",
+      }) as never
+    );
+    expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
+      credential: { kind: "device", label: "Dopl Desktop CLI (mbp.local)" },
+    });
+  });
+
+  /**
+   * The DISCRIMINATOR IS `client_id`, NOT THE NAME. `client_name` is
+   * caller-supplied on both mint paths, so a DCR app that registers itself
+   * under the device client's display name must still classify as an OAuth
+   * grant — otherwise a remote app could dress itself up as the operator's own
+   * machine in the agent's own identity readout.
+   */
+  it("a DCR app impersonating the device client's NAME is still `oauth-app`", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read"],
+        access_expires_at: future,
+        revoked_at: null,
+        client_id: "dopl_client_someone_else",
+        client_name: "Dopl Desktop (device tokens)",
+      }) as never
+    );
+    expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
+      credential: { kind: "oauth-app", label: "Dopl Desktop (device tokens)" },
     });
   });
 });

@@ -15,6 +15,7 @@
 
 import { z } from "zod";
 import { inlineOr } from "./narration";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import type {
   DoplClient,
   OntologyCluster,
@@ -55,7 +56,12 @@ const ONTOLOGY_ADMIN_DESCRIPTION = `DESTRUCTIVE ontology operations — soft-del
 - "delete_object" — soft-delete an object (a column's cards survive but are orphaned until re-parented). Requires: object.
 - "delete_cluster" — CASCADE soft-delete: trashes the cluster AND every object it owns (its columns + all nested cards) under one timestamp, so the whole board disappears from map/resolve/get. Nothing is hard-deleted — it stays RECOVERABLE with \`dopl_ontology(op="restore_cluster")\`, which brings the cluster and exactly those cascaded objects back. Requires: cluster.`;
 
-export function registerOntologyTool(register: RegisterTool, client: DoplClient): void {
+export function registerOntologyTool(
+  register: RegisterTool,
+  client: DoplClient,
+  /** The session identity record — `op="anchor"` states it before the object. */
+  caller: CallerIdentity = UNKNOWN_CALLER,
+): void {
   register(
     "dopl_ontology",
     ONTOLOGY_DESCRIPTION,
@@ -127,7 +133,7 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
           "Optional optimistic-concurrency token for object-mutating ops: the object's Version from a prior op=\"get\". If the object changed since, the write is rejected so you can re-get, reconcile, and retry. Omit to overwrite blindly (last-writer-wins)."
         ),
     },
-    (args): Promise<ToolResponse> => dispatch(client, args)
+    (args): Promise<ToolResponse> => dispatch(client, args, caller)
   );
 
   register(

@@ -9,6 +9,7 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type CallerIdentity } from "./identity";
 export interface OntologyArgs {
     op: string;
     query?: string;
@@ -28,4 +29,6 @@ export interface OntologyArgs {
     tools?: string;
     expected_version?: string;
 }
-export declare function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolResponse>;
+export declare function dispatch(client: DoplClient, args: OntologyArgs, 
+/** The session identity record — only `op="anchor"` uses it (see `opAnchor`). */
+caller?: CallerIdentity): Promise<ToolResponse>;

@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME, describeCredential, type McpCredential } from "./mcp-credential";
 
 /**
  * mcp-oauth — core of Dopl's self-built OAuth 2.1 authorization server for the
@@ -33,16 +34,8 @@ const CODE_TTL_S = 5 * 60; // 5 minutes
  *  connected without a refresh round-trip. */
 export const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
 
-/**
- * The reserved first-party client every CLI device token is issued under.
- * The device flow mints a token directly from an authenticated Dopl session
- * (no redirect / auth-code round-trip), so — unlike DCR clients (one per MCP
- * app registration) — a single fixed client row backs them all.
- * `mcp_tokens.client_id` is a NOT NULL FK to `oauth_clients`, so this row
- * must exist before a device token can reference it (see `ensureDeviceClient`).
- */
-const DEVICE_CLIENT_ID = "dopl_client_device_cli";
-const DEVICE_CLIENT_NAME = "Dopl Desktop (device tokens)";
+// The reserved device client + the row classifier live in `mcp-credential.ts`.
+// ONE definition — do not restate the client id here.
 
 // Per-instance debounce so a hot token doesn't write last_used_at on every
 // request (mirrors touchMcpStatus). Serverless instances each keep their own
@@ -353,15 +346,19 @@ export async function revokeDeviceTokens(input: {
  * used by the MCP transport boundary AND the loopback /api/* guard. Returns
  * null for non-tokens, unknown/expired/revoked tokens. Touches last_used_at
  * fire-and-forget.
+ *
+ * `credential` describes WHICH credential answered — the two columns this
+ * select used to skip. Descriptive only: nothing gates on it, and the label
+ * inside it is caller-supplied text (see `mcp-credential.ts`).
  */
 export async function validateAccessToken(
   token: string,
-): Promise<{ userId: string; scopes: string[]; tokenId: string } | null> {
+): Promise<{ userId: string; scopes: string[]; tokenId: string; credential: McpCredential } | null> {
   if (!isOAuthAccessToken(token)) return null;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("mcp_tokens")
-    .select("id, user_id, scopes, access_expires_at, revoked_at")
+    .select("id, user_id, scopes, access_expires_at, revoked_at, client_id, client_name")
     .eq("access_token_hash", sha256(token))
     .maybeSingle();
   if (error || !data) return null;
@@ -382,7 +379,8 @@ export async function validateAccessToken(
       );
   }
 
-  return { userId: data.user_id, scopes: data.scopes, tokenId: data.id };
+  const credential = describeCredential(data.client_id, data.client_name);
+  return { userId: data.user_id, scopes: data.scopes, tokenId: data.id, credential };
 }
 
 /**

@@ -8,6 +8,7 @@
 import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
 import { ok, type ToolResponse } from "./respond";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import {
   renderObject,
   resolveObjectRef,
@@ -43,17 +44,43 @@ export async function opMap(client: DoplClient): Promise<ToolResponse> {
   return ok(lines.join("\n"));
 }
 
-export async function opAnchor(client: DoplClient): Promise<ToolResponse> {
+/**
+ * THE STRONGEST IDENTITY CLAIM IN THE PRODUCT, PREVIOUSLY WITH THE WEAKEST
+ * BACKING. The server instructions tell every agent to call this for any
+ * "my/me" request, and it answered `You are anchored to this object.` over an
+ * object whose NAME is member-typed text — no user id, no framing, nothing the
+ * reader could check. An agent that read a name here and reported it as its own
+ * identity was doing exactly what the surface invited.
+ *
+ * The anchor is CONTEXT, not identification: `op="claim_anchor"` lets any agent
+ * on this connection re-point it, so it can only ever say "this is the object
+ * the graph currently links to you". The caller's real identity — the immutable
+ * id — is stated first, from the same session record `whoami` and the footer
+ * use, so the two can never disagree.
+ */
+export async function opAnchor(
+  client: DoplClient,
+  caller: CallerIdentity = UNKNOWN_CALLER,
+): Promise<ToolResponse> {
   const [anchor, snapshot] = await Promise.all([
     client.getOntologyAnchor(),
     client.getOntology(),
   ]);
+  const who = caller.userId
+    ? `You are user \`${caller.userId}\`.`
+    : `This connection could not resolve your user id.`;
   if (!anchor) {
     return ok(
-      `No object is linked to the calling user yet. op="resolve" the user's name, then op="claim_anchor" to link it.`
+      `${who} No object is linked to you yet. op="resolve" the user's name, then op="claim_anchor" to link it.`
     );
   }
-  return ok(renderObject(anchor, snapshot, "You are anchored to this object."));
+  return ok(
+    renderObject(
+      anchor,
+      snapshot,
+      `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`
+    )
+  );
 }
 
 export async function opResolve(client: DoplClient, query: string): Promise<ToolResponse> {

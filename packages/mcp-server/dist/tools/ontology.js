@@ -17,6 +17,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
 const zod_1 = require("zod");
 const narration_1 = require("./narration");
+const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
 const ontology_ops_write_1 = require("./ontology-ops-write");
@@ -49,7 +50,9 @@ Object-mutating ops (update_object, set/remove_attribute, set/remove_template_fi
 const ONTOLOGY_ADMIN_DESCRIPTION = `DESTRUCTIVE ontology operations — soft-deletes (hidden from reads, but recoverable, not permanent). CONFIRM with the user before calling. Set \`op\` to one of:
 - "delete_object" — soft-delete an object (a column's cards survive but are orphaned until re-parented). Requires: object.
 - "delete_cluster" — CASCADE soft-delete: trashes the cluster AND every object it owns (its columns + all nested cards) under one timestamp, so the whole board disappears from map/resolve/get. Nothing is hard-deleted — it stays RECOVERABLE with \`dopl_ontology(op="restore_cluster")\`, which brings the cluster and exactly those cascaded objects back. Requires: cluster.`;
-function registerOntologyTool(register, client) {
+function registerOntologyTool(register, client, 
+/** The session identity record — `op="anchor"` states it before the object. */
+caller = identity_1.UNKNOWN_CALLER) {
     register("dopl_ontology", ONTOLOGY_DESCRIPTION, {
         op: zod_1.z
             .enum([
@@ -115,7 +118,7 @@ function registerOntologyTool(register, client) {
             .string()
             .optional()
             .describe("Optional optimistic-concurrency token for object-mutating ops: the object's Version from a prior op=\"get\". If the object changed since, the write is rejected so you can re-get, reconcile, and retry. Omit to overwrite blindly (last-writer-wins)."),
-    }, (args) => (0, ontology_ops_write_1.dispatch)(client, args));
+    }, (args) => (0, ontology_ops_write_1.dispatch)(client, args, caller));
     register("dopl_ontology_admin", ONTOLOGY_ADMIN_DESCRIPTION, {
         op: zod_1.z.enum(["delete_object", "delete_cluster"]).describe("Destructive operation."),
         object: zod_1.z.string().optional().describe("delete_object: id or exact name."),

@@ -12,6 +12,7 @@ exports.opResolve = opResolve;
 exports.opGet = opGet;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
+const identity_1 = require("./identity");
 const ontology_render_1 = require("./ontology-render");
 /** Same rule as ontology-render.ts: a graph name is a value. */
 const NO_NAME = "`(unnamed)`";
@@ -39,15 +40,32 @@ async function opMap(client) {
     lines.push(`Drill in with op="get" (object id or exact name).`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opAnchor(client) {
+/**
+ * THE STRONGEST IDENTITY CLAIM IN THE PRODUCT, PREVIOUSLY WITH THE WEAKEST
+ * BACKING. The server instructions tell every agent to call this for any
+ * "my/me" request, and it answered `You are anchored to this object.` over an
+ * object whose NAME is member-typed text — no user id, no framing, nothing the
+ * reader could check. An agent that read a name here and reported it as its own
+ * identity was doing exactly what the surface invited.
+ *
+ * The anchor is CONTEXT, not identification: `op="claim_anchor"` lets any agent
+ * on this connection re-point it, so it can only ever say "this is the object
+ * the graph currently links to you". The caller's real identity — the immutable
+ * id — is stated first, from the same session record `whoami` and the footer
+ * use, so the two can never disagree.
+ */
+async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER) {
     const [anchor, snapshot] = await Promise.all([
         client.getOntologyAnchor(),
         client.getOntology(),
     ]);
+    const who = caller.userId
+        ? `You are user \`${caller.userId}\`.`
+        : `This connection could not resolve your user id.`;
     if (!anchor) {
-        return (0, respond_1.ok)(`No object is linked to the calling user yet. op="resolve" the user's name, then op="claim_anchor" to link it.`);
+        return (0, respond_1.ok)(`${who} No object is linked to you yet. op="resolve" the user's name, then op="claim_anchor" to link it.`);
     }
-    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, "You are anchored to this object."));
+    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`));
 }
 async function opResolve(client, query) {
     const snapshot = await client.getOntology();

@@ -14,6 +14,7 @@ const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
 const ontology_ops_read_1 = require("./ontology-ops-read");
+const identity_1 = require("./identity");
 /**
  * Write confirmations read the STORED name back — the server canonicalises it,
  * and on `create_object` the fields listed are copied from the PARENT, which
@@ -45,7 +46,9 @@ const REQUIRED = {
     remove_action: ["object", "name"],
     claim_anchor: ["object"],
 };
-async function dispatch(client, args) {
+async function dispatch(client, args, 
+/** The session identity record — only `op="anchor"` uses it (see `opAnchor`). */
+caller = identity_1.UNKNOWN_CALLER) {
     const required = REQUIRED[args.op];
     if (required) {
         const miss = (0, respond_1.missingParams)(args.op, args, required);
@@ -56,7 +59,7 @@ async function dispatch(client, args) {
         case "map":
             return (0, ontology_ops_read_1.opMap)(client);
         case "anchor":
-            return (0, ontology_ops_read_1.opAnchor)(client);
+            return (0, ontology_ops_read_1.opAnchor)(client, caller);
         case "resolve":
             return (0, ontology_ops_read_1.opResolve)(client, args.query);
         case "get":

@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DoplClient } from "@dopl/client";
 import type { WorkspaceListItem, WorkspaceRole, WorkspaceSummary } from "@dopl/client";
+import { type CallerIdentity } from "./tools/identity.js";
 /** A resolved header pin (`X-Workspace-Id`) that becomes the no-arg default. */
 interface WorkspacePin {
     name: string;
@@ -22,6 +23,15 @@ export declare function createServer(client: DoplClient, options?: {
      * Null when the ping failed; the tool then renders ids and claims nothing.
      */
     userId?: string | null;
+    /**
+     * The caller's identity + locus, resolved once at boot (factory.ts). The
+     * `_dopl_status` footer, `current_workspace`, `dopl_members` and
+     * `dopl_ontology` all render FROM THIS ONE RECORD — that is the fix: three
+     * surfaces used to answer "who am I" from three sources that could
+     * disagree inside a single connection. Defaults to `UNKNOWN_CALLER`, which
+     * renders as "unresolved" everywhere rather than as a confident guess.
+     */
+    caller?: CallerIdentity;
     /** Session default workspace resolved at boot, or null (0/2+ memberships). */
     workspace?: WorkspaceSummary | null;
     role?: WorkspaceRole | null;

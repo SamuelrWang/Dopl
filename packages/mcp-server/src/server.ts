@@ -18,6 +18,12 @@ import { registerOntologyTool } from "./tools/ontology.js";
 import { registerChannelTool } from "./tools/channel.js";
 import { entitlementDenied } from "./tools/respond.js";
 import { inlineOr } from "./tools/narration.js";
+import {
+  callerStatusLine,
+  sessionLines,
+  UNKNOWN_CALLER,
+  type CallerIdentity,
+} from "./tools/identity.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
 
@@ -126,7 +132,15 @@ Use the Dopl tools to read and organize the user's workspace: their knowledge ba
 
 ## Session start — preload the user's workspace
 
-At the very start of every new session, before your first substantive reply, call dopl_map (one cheap call: every knowledge base, skill, workflow, and ontology cluster with one-liners). For "my/me" requests also call dopl_ontology(op='anchor') to learn who the caller is in the workspace graph. Ground answers in that real state, not stale local files.
+At the very start of every new session, before your first substantive reply, call dopl_map (one cheap call: every knowledge base, skill, workflow, and ontology cluster with one-liners). For "my/me" requests also call dopl_ontology(op='anchor') for the workspace object linked to the caller — CONTEXT about them, not their identity (any agent can re-point that link). Ground answers in that real state, not stale local files.
+
+## Who you are
+
+The \`_dopl_status\` footer on every successful response opens with \`caller: id=<your user id> · runtime=…\`. That id is your identity and it is the half to match on — a display name is typed by its owner and two members can share one, so a name alone never settles which member (or which agent) is which.
+
+- Full answer, including your role, teams, the credential this session acts through, and what none of it establishes → dopl_members(op='whoami').
+- \`runtime=desktop-session\` means the request carried the Dopl desktop's stamp; \`unstamped\` means it did not — usually an external client, but an older desktop build is unstamped too. It is a self-reported routing hint and grants nothing.
+- About another member's agent: a different user id is a different ACCOUNT, and the same user id is the same account. Whether they are on the same MACHINE as you is not knowable here — do not assert it either way.
 
 You do NOT need to re-run these on every turn. Once per session is enough, except:
 
@@ -211,6 +225,7 @@ interface EffectiveWorkspace extends ActiveWorkspaceState {
 async function appendDoplStatus(
   response: ToolResponse,
   effective: EffectiveWorkspace | null,
+  caller: CallerIdentity,
 ): Promise<ToolResponse> {
   if (response.isError) return response;
   if (!effective) return response;
@@ -222,11 +237,19 @@ async function appendDoplStatus(
   // a second, invented `_dopl_status` key. It reads as a value now, and the two
   // handles beside it — slug (kebab-regex enforced) and id (server-issued) — are
   // the halves an owner cannot type.
+  // WHO comes before WHERE, deliberately. This footer is the one line that
+  // rides every successful response and that the instructions tell the agent to
+  // read, and until now it answered only half the question — an agent that
+  // wanted to know which session it was had to go looking, and the surfaces it
+  // would have found disagreed with each other. Putting the immutable id here
+  // means it cannot be missed and never has to be hunted for. Terse on purpose:
+  // see `callerStatusLine` for what is left out and why.
   const footer = [
     "",
     "",
     "---",
     "_dopl_status:",
+    callerStatusLine(caller),
     `  active_workspace: ${inlineOr(effective.name, UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
     `  workspace_source: ${effective.source}`,
   ].join("\n");
@@ -273,10 +296,11 @@ async function runWithEntitlementGuard(
 function withDoplStatus<A extends object>(
   handler: (args: A) => Promise<ToolResponse>,
   getEffective: () => EffectiveWorkspace | null,
+  caller: CallerIdentity,
 ): (args: A) => Promise<ToolResponse> {
   return async (args: A) => {
     const result = await handler(args);
-    return appendDoplStatus(result, getEffective());
+    return appendDoplStatus(result, getEffective(), caller);
   };
 }
 
@@ -313,6 +337,15 @@ export function createServer(
      * Null when the ping failed; the tool then renders ids and claims nothing.
      */
     userId?: string | null;
+    /**
+     * The caller's identity + locus, resolved once at boot (factory.ts). The
+     * `_dopl_status` footer, `current_workspace`, `dopl_members` and
+     * `dopl_ontology` all render FROM THIS ONE RECORD — that is the fix: three
+     * surfaces used to answer "who am I" from three sources that could
+     * disagree inside a single connection. Defaults to `UNKNOWN_CALLER`, which
+     * renders as "unresolved" everywhere rather than as a confident guess.
+     */
+    caller?: CallerIdentity;
     /** Session default workspace resolved at boot, or null (0/2+ memberships). */
     workspace?: WorkspaceSummary | null;
     role?: WorkspaceRole | null;
@@ -432,6 +465,10 @@ export function createServer(
   // mutated (there is no `set_workspace`; per-call `workspace=` scopes a
   // single call via AsyncLocalStorage without touching this). Null when the
   // caller has 0 or 2+ memberships and sent no pin.
+  const caller: CallerIdentity = options.caller ?? {
+    ...UNKNOWN_CALLER,
+    userId: options.userId ?? null,
+  };
   const activeWorkspace: ActiveWorkspaceState | null = options.workspace
     ? {
         id: options.workspace.id,
@@ -445,6 +482,16 @@ export function createServer(
   // The session default rendered as a footer-ready effective workspace, or
   // null when there is no default. Used by the meta-tools and the no-arg
   // tool path so the footer always names where the response came from (M-4).
+  /**
+   * The caller's own identity as a standalone block, for the meta-tools whose
+   * answers can be read without a footer. Same record, same wording as the
+   * footer and as `whoami` — one definition, so two surfaces cannot drift into
+   * disagreeing about the same session.
+   */
+  function callerBlock(): string[] {
+    return [...sessionLines(caller), callerStatusLine(caller).trim(), ""];
+  }
+
   function sessionEffective(): EffectiveWorkspace | null {
     if (!activeWorkspace || !sessionSource) return null;
     return { ...activeWorkspace, source: sessionSource };
@@ -693,7 +740,7 @@ export function createServer(
         const result = await runWithEntitlementGuard(() =>
           workspaceContext.run(resolved.id, () => handler(innerArgs)),
         );
-        return appendDoplStatus(result, effective);
+        return appendDoplStatus(result, effective, caller);
       }
 
       // No `workspace=` arg. Auto-target the session default when there is
@@ -704,7 +751,7 @@ export function createServer(
         return noWorkspaceError();
       }
       const result = await runWithEntitlementGuard(() => handler(innerArgs));
-      return appendDoplStatus(result, sessionEffective());
+      return appendDoplStatus(result, sessionEffective(), caller);
     };
 
     server.tool(
@@ -731,7 +778,7 @@ export function createServer(
       description,
       schema,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      withDoplStatus(handler as any, sessionEffective) as any,
+      withDoplStatus(handler as any, sessionEffective, caller) as any,
     );
   }
 
@@ -786,9 +833,16 @@ export function createServer(
 
   registerMetaTool(
     "current_workspace",
-    "Report which workspace a no-`workspace=` tool call resolves to on this connection. Returns that workspace (id, slug, name, role) when the caller has exactly one membership (or a request pin); when the caller belongs to 2+ workspaces there is NO auto-target, and this lists them so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?'.",
+    "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one membership (or a request pin); when the caller belongs to 2+ workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').",
     {},
     async () => {
+      // WHERE THE CALLER LINE COMES FROM, per branch. With a session default
+      // the footer fires and already carries it, so rendering it here too would
+      // print the caller twice in one response. Without one — the 2+-membership
+      // branch below — `appendDoplStatus` returns early and the response would
+      // carry no identity at all, which is precisely the state an agent is in
+      // when it reaches for this tool. So: footer when there is one, rendered
+      // here when there is not, one definition either way.
       if (activeWorkspace) {
         const lines = [
           `A no-\`workspace=\` call targets ${inlineOr(activeWorkspace.name, UNNAMED_WORKSPACE)}:`,
@@ -813,13 +867,20 @@ export function createServer(
         };
       }
       const lines = [
+        ...callerBlock(),
         `You belong to ${list.length} workspaces and there is no auto-target — pass \`workspace=<slug_or_id>\` on every tool call. Choices:`,
         "",
         UNTRUSTED_DIRECTORY_NOTE,
         "",
       ];
       for (const w of list) {
-        lines.push(`- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\`, role: ${w.role})`);
+        // The id joins the slug here as it does everywhere else. This branch
+        // used to print the slug alone, so the one surface an agent reaches for
+        // when it does not know where it is was also the one that withheld the
+        // handle nobody can forge.
+        lines.push(
+          `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})`,
+        );
       }
       return {
         content: [{ type: "text" as const, text: lines.join("\n") }],
@@ -836,10 +897,10 @@ export function createServer(
   registerKnowledgeTools(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
   registerSkillTools(registerTool, client); // dopl_skill + dopl_skill_admin
   registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
-  registerMembersTool(registerTool, client); // dopl_members — membership/teams/access (read-only)
+  registerMembersTool(registerTool, client, caller); // dopl_members — membership/teams/access (read-only)
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   registerSearchTool(registerTool, client); // dopl_search — cross-domain search
-  registerOntologyTool(registerTool, client); // dopl_ontology — routing graph (read-only)
+  registerOntologyTool(registerTool, client, caller); // dopl_ontology — routing graph (read-only)
   registerChannelTool(registerTool, client, options.userId ?? null); // dopl_channel — cross-user collaboration channels
 
   return server;

@@ -113,3 +113,33 @@ describe("bootServer workspace resolution", () => {
     expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
   });
 });
+
+// ── Identity: ONE record for the whole session ─────────────────────────
+//
+// Two sources for the same fact is how two tools on one connection came to
+// disagree about who was calling. The transport's id is read off the credential
+// that is authorizing THIS request; the status ping's is a second loopback that
+// fails independently. When both exist, the credential wins.
+
+describe("bootServer caller identity", () => {
+  it("prefers the transport's user id over the status ping's", async () => {
+    const res = await bootServer(mockClient({ directory: [WS1] }), {
+      caller: { userId: "from-credential" },
+    });
+    expect(res.userId).toBe("from-credential");
+  });
+
+  it("falls back to the ping when the transport supplied none", async () => {
+    const res = await bootServer(mockClient({ directory: [WS1] }), {
+      caller: { runtime: "desktop-session" },
+    });
+    expect(res.userId).toBe("user-1");
+  });
+
+  it("reports no id at all when both sources are silent", async () => {
+    const client = mockClient({ directory: [WS1] });
+    vi.mocked(client.pingMcpStatus).mockRejectedValue(new Error("ping down"));
+    const res = await bootServer(client, { onDiag: () => {} });
+    expect(res.userId).toBeNull();
+  });
+});
