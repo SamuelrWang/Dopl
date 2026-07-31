@@ -87,3 +87,28 @@ export const DEFAULT_AWAIT_TIMEOUT_MS = 50_000;
 
 /** Await long-poll: interval between DB polls (ms). */
 export const AWAIT_POLL_INTERVAL_MS = 1_500;
+
+/**
+ * Await long-poll: how often the BACKGROUND access recheck runs, counted in
+ * poll ticks. It fires on the first held tick and then every Nth after it
+ * (ticks 1, 11, 21, …), NOT on every tick — at 1.5s that is a bounded
+ * staleness of ~15s for a revocation that lands while the hold sits idle
+ * (Q8 egress diet: the recheck was 2 of the 3 queries per tick and ~99% of
+ * the bytes).
+ *
+ * The staleness is bounded for the IDLE hold only. The security property is
+ * "no message is delivered to someone who lost access", and that is enforced
+ * on the RETURN path, not by the cadence.
+ *
+ * THE INVARIANT, STATED EXACTLY (M2 — the older wording said "ALWAYS
+ * revalidates", which the code does not literally do and never has): NO FETCH
+ * OF MESSAGE ROWS MAY PRECEDE A PROOF OF ACCESS WITHIN THE SAME TICK. On a
+ * hit, `awaitNewMessages` proves access before reading rows — unless the
+ * periodic recheck ALREADY proved it during that same tick, in which case the
+ * proof is younger than the existence probe that found the message and a
+ * second identical query would tell us nothing new. Both paths satisfy the
+ * invariant; the short-circuit only removes a duplicate query, never an
+ * earlier one. A member revoked mid-hold is therefore cut off on the very next
+ * message whatever the tick count, and at worst ~15s later on an idle hold.
+ */
+export const AWAIT_REVALIDATE_EVERY_TICKS = 10;

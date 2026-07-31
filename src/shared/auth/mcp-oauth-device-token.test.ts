@@ -1,6 +1,9 @@
 /**
- * Unit tests for `issueDeviceToken` — the revoke-and-replace invariant.
- * `supabaseAdmin` is mocked with a chainable builder that records every call.
+ * Unit tests for the device-token lifecycle — `issueDeviceToken`'s
+ * revoke-and-replace invariant and `revokeDeviceTokens` (F-085), plus the
+ * property that makes revocation mean anything: `validateAccessToken` refuses a
+ * revoked row. `supabaseAdmin` is mocked with a chainable builder that records
+ * every call.
  *
  * Contract: one active device token per (user, client, label). A fresh mint
  * MUST first revoke any prior un-revoked token for that exact triple (so a
@@ -13,7 +16,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { issueDeviceToken, MCP_SCOPES } from "./mcp-oauth";
+import {
+  issueDeviceToken,
+  revokeDeviceTokens,
+  validateAccessToken,
+  MCP_SCOPES,
+} from "./mcp-oauth";
 
 // The reserved first-party client every CLI device token is issued under
 // (private const in mcp-oauth.ts — pinned here as the contract value).
@@ -141,5 +149,174 @@ describe("issueDeviceToken", () => {
     expect(upsertIdx).toBeLessThan(opIndex(calls, "insert"));
     const upsertTarget = calls[opIndex(calls, "from")].args[0];
     expect(upsertTarget).toBe("oauth_clients");
+  });
+});
+
+// ── F-085: revokeDeviceTokens ──────────────────────────────────────────────
+//
+// The server half of desktop sign-out. Until this existed, sign-out could only
+// delete the app's local copies while the 90-day dopl.read+dopl.write bearer
+// stayed valid — so anything that had already read it kept full API access to
+// the account that just signed out.
+
+/**
+ * Like `makeAdmin`, but each awaited chain resolves to the next queued row set
+ * (what `.select("id")` returns after an UPDATE). Also records `.select`.
+ */
+function makeRevokeAdmin(results: { id: string }[][]) {
+  const calls: Call[] = [];
+  const queue = [...results];
+  const builder: Record<string, unknown> = {};
+  const rec = (op: string, args: unknown[]) => {
+    calls.push({ op, args });
+    return builder;
+  };
+  Object.assign(builder, {
+    from: (t: string) => rec("from", [t]),
+    update: (v: unknown) => rec("update", [v]),
+    eq: (c: string, v: unknown) => rec("eq", [c, v]),
+    is: (c: string, v: unknown) => rec("is", [c, v]),
+    select: (c: string) => rec("select", [c]),
+    then: (resolve: (r: { data: unknown; error: null }) => void) =>
+      resolve({ data: queue.shift() ?? [], error: null }),
+  });
+  return { builder, calls };
+}
+
+/** Every filter applied on the chain, as comparable tuples. */
+function filters(calls: Call[]): unknown[][] {
+  return calls
+    .filter((c) => c.op === "eq" || c.op === "is")
+    .map((c) => [c.op, ...c.args]);
+}
+
+describe("revokeDeviceTokens (F-085)", () => {
+  it("revokes by label, scoped to the owner AND the reserved device client", async () => {
+    const { builder, calls } = makeRevokeAdmin([[{ id: "tok-1" }]]);
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+
+    const revoked = await revokeDeviceTokens({
+      userId: "user-9",
+      label: "Dopl Desktop CLI (Sams-MBP)",
+    });
+
+    expect(revoked).toBe(1);
+    expect(calls[opIndex(calls, "from")].args[0]).toBe("mcp_tokens");
+    // Soft revoke: revoked_at is stamped, the row is NOT deleted (the settings
+    // list and the audit trail both read it).
+    const updateArg = calls[opIndex(calls, "update")].args[0] as Record<string, unknown>;
+    expect(Object.keys(updateArg)).toEqual(["revoked_at"]);
+    expect(typeof updateArg.revoked_at).toBe("string");
+
+    const f = filters(calls);
+    // OWNER SCOPE — without this, one user could revoke another's credential.
+    expect(f).toContainEqual(["eq", "user_id", "user-9"]);
+    // DEVICE-CLIENT SCOPE — this surface mints device tokens, so it revokes
+    // device tokens; an OAuth agent grant is revoked from Connected apps.
+    expect(f).toContainEqual(["eq", "client_id", DEVICE_CLIENT_ID]);
+    expect(f).toContainEqual(["eq", "client_name", "Dopl Desktop CLI (Sams-MBP)"]);
+    // Already-revoked rows keep their ORIGINAL timestamp.
+    expect(f).toContainEqual(["is", "revoked_at", null]);
+  });
+
+  it("revokes by token id, still scoped to the owner and the device client", async () => {
+    const { builder, calls } = makeRevokeAdmin([[{ id: "tok-7" }]]);
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+
+    const revoked = await revokeDeviceTokens({ userId: "user-9", tokenId: "tok-7" });
+
+    expect(revoked).toBe(1);
+    const f = filters(calls);
+    expect(f).toContainEqual(["eq", "id", "tok-7"]);
+    expect(f).toContainEqual(["eq", "user_id", "user-9"]);
+    expect(f).toContainEqual(["eq", "client_id", DEVICE_CLIENT_ID]);
+    expect(f).toContainEqual(["is", "revoked_at", null]);
+  });
+
+  it("IDEMPOTENT: an unknown or already-revoked token is a quiet 0, not a failure", async () => {
+    const { builder } = makeRevokeAdmin([[]]);
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+    await expect(
+      revokeDeviceTokens({ userId: "user-9", label: "nothing-here" })
+    ).resolves.toBe(0);
+  });
+
+  it("counts rows once when label and id select the SAME token", async () => {
+    const { builder } = makeRevokeAdmin([[{ id: "tok-1" }], [{ id: "tok-1" }]]);
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+    await expect(
+      revokeDeviceTokens({ userId: "user-9", label: "L", tokenId: "tok-1" })
+    ).resolves.toBe(1);
+  });
+
+  it("touches nothing when neither selector is supplied", async () => {
+    const { builder, calls } = makeRevokeAdmin([]);
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+    await expect(revokeDeviceTokens({ userId: "user-9" })).resolves.toBe(0);
+    expect(calls).toEqual([]); // no UPDATE was ever issued
+  });
+
+  it("propagates a DB error instead of reporting a revoke that never happened", async () => {
+    const builder: Record<string, unknown> = {};
+    const chain = () => builder;
+    Object.assign(builder, {
+      from: chain, update: chain, eq: chain, is: chain, select: chain,
+      then: (resolve: (r: { data: null; error: { message: string } }) => void) =>
+        resolve({ data: null, error: { message: "boom" } }),
+    });
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+    await expect(revokeDeviceTokens({ userId: "u", label: "L" })).rejects.toBeTruthy();
+  });
+});
+
+// ── What makes revocation MEAN something ───────────────────────────────────
+
+describe("validateAccessToken vs a revoked row", () => {
+  /** Single-row read builder: `.select(...).eq(...).maybeSingle()`. */
+  function makeReader(row: Record<string, unknown> | null) {
+    const builder: Record<string, unknown> = {};
+    const chain = () => builder;
+    Object.assign(builder, {
+      from: chain,
+      select: chain,
+      eq: chain,
+      update: chain,
+      maybeSingle: async () => ({ data: row, error: null }),
+      then: (resolve: (r: { data: null; error: null }) => void) =>
+        resolve({ data: null, error: null }),
+    });
+    return builder;
+  }
+
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+
+  it("a revoked device token is refused even though it has not expired", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read", "dopl.write"],
+        access_expires_at: future, // 90-day TTL still has ~89 days left
+        revoked_at: new Date().toISOString(),
+      }) as never
+    );
+    expect(await validateAccessToken("dopl_at_deadbeef")).toBeNull();
+  });
+
+  it("…and the same row un-revoked still validates (the test is not vacuous)", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read", "dopl.write"],
+        access_expires_at: future,
+        revoked_at: null,
+      }) as never
+    );
+    expect(await validateAccessToken("dopl_at_deadbeef")).toEqual({
+      userId: "user-9",
+      scopes: ["dopl.read", "dopl.write"],
+      tokenId: "tok-1",
+    });
   });
 });

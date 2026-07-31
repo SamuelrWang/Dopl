@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   NO_LOCAL_SESSION_NOTE,
+  SESSION_BUDGET_NOTE,
   OpenWindowControls,
   ReopenWindowButton,
   SessionCard,
@@ -116,18 +117,28 @@ describe("getDesktopSessions gate (the reopen button's visibility source)", () =
 });
 
 describe("reopenSessionWindow (the click action)", () => {
-  it("calls the bridge with exactly (channelId, threadId) and maps ok:true", async () => {
+  it("calls the bridge with exactly (channelId, threadId) and stays silent on ok", async () => {
     const reopen = vi.fn().mockResolvedValue({ ok: true });
-    const ok = await reopenSessionWindow({ reopen }, CHANNEL_ID, THREAD_ID);
+    const note = await reopenSessionWindow({ reopen }, CHANNEL_ID, THREAD_ID);
     expect(reopen).toHaveBeenCalledTimes(1);
     expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, THREAD_ID);
-    expect(ok).toBe(true);
+    expect(note).toBeNull();
   });
 
-  it("maps a genuine {ok:false} (no record on this machine) to the note path", async () => {
-    const reopen = vi.fn().mockResolvedValue({ ok: false });
-    const ok = await reopenSessionWindow({ reopen }, CHANNEL_ID, THREAD_ID);
-    expect(ok).toBe(false);
+  it("notes ONLY the refusals the operator can act on", async () => {
+    // An unreachable channel and a spent window budget each get their own line.
+    const unreachable = vi.fn().mockResolvedValue({ ok: false, reason: "no-thread" });
+    expect(await reopenSessionWindow({ reopen: unreachable }, CHANNEL_ID, THREAD_ID)).toBe(
+      NO_LOCAL_SESSION_NOTE
+    );
+    const budget = vi.fn().mockResolvedValue({ ok: false, reason: "busy" });
+    expect(await reopenSessionWindow({ reopen: budget }, CHANNEL_ID, THREAD_ID)).toBe(
+      SESSION_BUDGET_NOTE
+    );
+    // A bare {ok:false} (an older desktop with no reason) stays QUIET: on this
+    // build a thread with no local record opens, so it is not a refusal.
+    const bare = vi.fn().mockResolvedValue({ ok: false });
+    expect(await reopenSessionWindow({ reopen: bare }, CHANNEL_ID, THREAD_ID)).toBeNull();
   });
 });
 
@@ -149,7 +160,7 @@ describe("OpenWindowControls", () => {
 
   it("renders an ENABLED button with no note at rest", () => {
     const markup = renderToStaticMarkup(
-      <OpenWindowControls busy={false} noLocalSession={false} onOpen={noop} />
+      <OpenWindowControls busy={false} note={null} onOpen={noop} />
     );
     expect(markup).toContain("Open session");
     expect(markup).not.toContain('disabled=""');
@@ -158,26 +169,31 @@ describe("OpenWindowControls", () => {
 
   it("disables ONLY while an open call is in flight", () => {
     const markup = renderToStaticMarkup(
-      <OpenWindowControls busy noLocalSession={false} onOpen={noop} />
+      <OpenWindowControls busy note={null} onOpen={noop} />
     );
     expect(markup).toContain('disabled=""');
   });
 
-  it("shows the machine-scoped note after a genuine {ok:false}", () => {
+  it("shows a refusal note when the desktop gives one", () => {
     const markup = renderToStaticMarkup(
-      <OpenWindowControls busy={false} noLocalSession onOpen={noop} />
+      <OpenWindowControls busy={false} note={NO_LOCAL_SESSION_NOTE} onOpen={noop} />
     );
-    expect(markup).toContain("This thread has no session on this machine.");
+    // Apostrophe is HTML-escaped in static markup, so assert the stable half.
+    expect(markup).toContain("available on this machine");
     // The button stays clickable so the operator can retry.
     expect(markup).toContain("Open session");
     expect(markup).not.toContain('disabled=""');
   });
 
-  it("retires the old live-session-only copy", () => {
+  it("scopes the note to the CHANNEL, not to a missing local session", () => {
+    // A thread with no local record now OPENS (the desktop resolves the channel
+    // from the API and paints history read-only), so the old machine-scoped
+    // copy would be a lie. The note survives only for an unreachable channel.
     expect(NO_LOCAL_SESSION_NOTE).toBe(
-      "This thread has no session on this machine."
+      "This channel isn't available on this machine."
     );
     expect(NO_LOCAL_SESSION_NOTE).not.toContain("No live session");
+    expect(NO_LOCAL_SESSION_NOTE).not.toContain("no session on this machine");
   });
 });
 

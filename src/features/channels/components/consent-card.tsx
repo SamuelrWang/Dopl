@@ -12,14 +12,12 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { AGENT_TOOL_PROFILE_LABELS } from "../constants";
 import { useChannelFolder } from "../hooks/use-channel-folder";
-import type { AgentToolProfile, ChannelConsentRequest } from "../types";
+import { RequestPermissionRow } from "./permission-preset-row";
+import type { ChannelConsentRequest } from "../types";
 
 interface Props {
   request: ChannelConsentRequest;
-  /** The caller's own agent tool scope in this channel — what Allow runs with. */
-  toolProfile: AgentToolProfile;
   /** Allow (inbound) / Send (outbound). */
   onAllow: () => void;
   /** Deny (inbound) / Cancel (outbound). */
@@ -42,12 +40,14 @@ const UNKNOWN_REQUESTER = "A teammate";
  *
  * An inbound card also states WHERE the session would run (the channel's desktop
  * folder) and lets the operator change it before allowing — see
- * {@link RequestFolderRow}. That row is desktop-only; a plain browser shows no
- * folder line at all.
+ * {@link RequestFolderRow} — and WHAT it may do once it runs, via the two
+ * permission axes on {@link RequestPermissionRow}. Both are desktop-only; a plain
+ * browser shows neither control at all. The posture is chosen BEFORE Allow so the
+ * spawned session starts on it, instead of the operator only being able to
+ * correct it once the agent is already running.
  */
 export function ConsentCard({
   request,
-  toolProfile,
   onAllow,
   onDeny,
   busy,
@@ -102,15 +102,17 @@ export function ConsentCard({
         <>
           <p className="mb-2.5 flex items-start gap-1.5 text-caption leading-relaxed text-text-secondary">
             <TerminalSquare size={12} className="mt-0.5 shrink-0" />
-            <span>
-              Allowing runs a Claude session on this machine with your{" "}
-              <span className="font-medium text-text-primary">
-                {AGENT_TOOL_PROFILE_LABELS[toolProfile]}
-              </span>{" "}
-              tool scope for this channel.
-            </span>
+            <span>Allowing runs a Claude session on this machine.</span>
           </p>
-          <RequestFolderRow channelId={request.channelId} />
+          {/* The pre-approval settings row: WHERE the session runs and WHAT it
+              may do. Both are desktop-only and each renders nothing without its
+              bridge, so the wrapper collapses to an empty flex line in a plain
+              browser. `items-start` because each child carries its own bottom
+              margin — the pills top-align regardless. */}
+          <div className="flex flex-wrap items-start gap-x-2">
+            <RequestFolderRow channelId={request.channelId} />
+            <RequestPermissionRow channelId={request.channelId} />
+          </div>
         </>
       )}
 
@@ -168,10 +170,11 @@ export function RequestFolderRow({ channelId }: { channelId: string }) {
 }
 
 /**
- * The row's presentation, split from the bridge-gated wrapper so it renders (and
- * is tested) on its own. `label` null = the desktop default folder. Styling stays
- * inside the card's amber conventions: a quiet caption line, the folder itself
- * inked as primary, and a compact hover-only change affordance.
+ * The control's presentation, split from the bridge-gated wrapper so it renders
+ * (and is tested) on its own. `label` null = the desktop default folder. It is a
+ * PILL (kit recipe: rounded-full + border-border-strong + bg-bg-inset, flat on a
+ * card) so it reads as the same object as the other status pills instead of a
+ * caption with a separate "Change" link — the whole pill is the change affordance.
  */
 export function RequestFolderRowView({
   label,
@@ -185,26 +188,27 @@ export function RequestFolderRowView({
   onChange: () => void;
 }) {
   return (
-    <div className="mb-2.5 flex items-center gap-1.5 text-caption text-text-secondary">
-      {label ? (
-        <FolderOpen size={12} className="shrink-0" />
-      ) : (
-        <Folder size={12} className="shrink-0" />
-      )}
-      <span className="min-w-0 truncate">
-        Runs in:{" "}
-        <span className="font-medium text-text-primary">
-          {label ?? "Default folder"}
-        </span>
-      </span>
+    <div className="mb-2.5 flex">
       <button
         type="button"
         onClick={onChange}
         disabled={busy}
         aria-label="Change the folder this request runs in"
-        className="shrink-0 rounded-[8px] px-1.5 py-0.5 text-micro font-medium text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary disabled:opacity-60"
+        title="Change the folder this request runs in"
+        className={cn(
+          "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2.5 py-1",
+          "text-caption font-medium text-text-secondary transition-colors",
+          "hover:bg-surface-raised-2 hover:text-text-primary disabled:opacity-60"
+        )}
       >
-        {busy ? "Opening picker…" : "Change"}
+        {label ? (
+          <FolderOpen size={12} className="shrink-0" />
+        ) : (
+          <Folder size={12} className="shrink-0" />
+        )}
+        <span className="min-w-0 truncate">
+          {busy ? "Opening picker…" : label ?? "Default folder"}
+        </span>
       </button>
     </div>
   );

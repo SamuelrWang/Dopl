@@ -1,5 +1,6 @@
 import "server-only";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { narrowAppVersion } from "@/shared/auth/app-version-header";
 import {
   DESKTOP_SESSION_RUNTIME,
   type DoplRuntime,
@@ -30,6 +31,14 @@ export interface ChannelContext {
    * a message as the reserved `metadata.runtime` key.
    */
   runtime?: DoplRuntime;
+  /**
+   * Which BUILD of the desktop app the request speaks for (`1.7.15`), or
+   * undefined for everything else. Server-resolved from the
+   * `X-Dopl-App-Version` header by the auth layer; the write path stamps it
+   * onto a message as the reserved `metadata.appVersion` key so the OTHER
+   * machine can explain a behavior gap instead of guessing at one (Q10).
+   */
+  appVersion?: string;
 }
 
 export interface AuthLike {
@@ -38,6 +47,7 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   runtime?: string | null;
+  appVersion?: string | null;
 }
 
 export function buildChannelContext(auth: AuthLike): ChannelContext {
@@ -53,6 +63,9 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
       auth.runtime === DESKTOP_SESSION_RUNTIME
         ? DESKTOP_SESSION_RUNTIME
         : undefined,
+    // Same reason, same shape: re-run the header's own predicate so a version
+    // that reaches an operator's screen is a version, whatever built this ctx.
+    appVersion: narrowAppVersion(auth.appVersion),
   };
 }
 

@@ -238,8 +238,9 @@ export async function readMessages(
 
 /**
  * Resolve a channel ref to its id after validating the caller may read it.
- * The await route calls this once to resolve the ref, then re-checks access
- * cheaply each tick via `revalidateAwaitAccess` (a long poll must not keep
+ * The await hold calls this once to resolve the ref — it is a FULL access
+ * check, so the hold's tick-0 read is already covered — then re-checks
+ * periodically via `revalidateAwaitAccess` (a long poll must not keep
  * streaming a channel that was deleted or a membership that was revoked
  * mid-poll).
  */
@@ -252,23 +253,41 @@ export async function resolveReadableChannelId(
 }
 
 /**
- * Per-tick access recheck for the await long-poll. The channel must still
- * exist (a soft-delete stamps `deleted_at`, which `findChannelById` filters
- * out) and, for a PRIVATE channel, the caller must still be a member.
- * Either loss throws `ChannelNotFoundError` (-> 404) so the poll loop ends
- * instead of leaking a channel the caller can no longer see. Two indexed
- * lookups — cheap enough to run every ~1.5s tick.
+ * Access recheck for the await long-poll. The channel must still exist (a
+ * soft-delete stamps `deleted_at`, which the lookup filters out) and, for a
+ * PRIVATE channel, the caller must still be a member. Either loss throws
+ * `ChannelNotFoundError` (-> 404) so the hold ends instead of leaking a
+ * channel the caller can no longer see.
+ *
+ * Two indexed lookups, both projected to the columns the decision actually
+ * reads (`findChannelAccess` / `hasMembership`, ~120 bytes total instead of
+ * ~840): this is the hold's dominant egress line item, so it never pulls a
+ * row it will not look at. WHEN it runs is the caller's business — see
+ * `awaitNewMessages` (first held tick, every `AWAIT_REVALIDATE_EVERY_TICKS`
+ * after, and unconditionally before any message is returned).
  */
 export async function revalidateAwaitAccess(
   ctx: ChannelContext,
   channelId: string
 ): Promise<void> {
-  const channel = await repo.findChannelById(ctx.workspaceId, channelId);
+  const channel = await repo.findChannelAccess(ctx.workspaceId, channelId);
   if (!channel) throw new ChannelNotFoundError(channelId);
   if (channel.visibility !== "public") {
-    const membership = await repo.findMembership(channelId, ctx.userId);
-    if (!membership) throw new ChannelNotFoundError(channelId);
+    const isMember = await repo.hasMembership(channelId, ctx.userId);
+    if (!isMember) throw new ChannelNotFoundError(channelId);
   }
+}
+
+/**
+ * Existence probe behind one await tick: is anything past `since`? The hold
+ * runs this instead of a row read for every tick after the first, and only
+ * calls `pollChannelMessages` once it hits (Q8).
+ */
+export async function hasNewMessages(
+  channelId: string,
+  since: number | undefined
+): Promise<boolean> {
+  return repoMessages.hasMessagesAfter(channelId, since);
 }
 
 /**

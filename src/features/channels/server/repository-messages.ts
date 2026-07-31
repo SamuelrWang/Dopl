@@ -51,6 +51,39 @@ export async function listMessages(
   return ((data ?? []) as ChannelMessageRow[]).reverse();
 }
 
+/**
+ * EXISTENCE probe for the await hold (Q8 egress diet): is there any message
+ * past `since` in this channel? ONE row, ONE column, no ordering — this is
+ * the query that repeats every `AWAIT_POLL_INTERVAL_MS` for the whole hold,
+ * so it must never materialize a message body. The full rows are fetched by
+ * `listMessages` exactly once, after this hits, right before the hold
+ * returns them.
+ *
+ * Ordering is irrelevant to existence (we only ask "any?"), so this
+ * deliberately does NOT sort: the plain btree index
+ * `channel_messages_channel_seq_idx` on `(channel_id, seq)` answers it from
+ * the index alone. (L4: it is NOT a partial index — the only partial one on
+ * this table is `channel_messages_client_msg_key`, the idempotency unique on
+ * `client_msg_id IS NOT NULL`. The distinction matters if anyone reasons about
+ * which rows this probe can see: all of them.) With no cursor the question
+ * degenerates to "does this channel have any message at all", which mirrors
+ * the cursorless `listMessages` read that returns the newest page.
+ */
+export async function hasMessagesAfter(
+  channelId: string,
+  since: number | undefined
+): Promise<boolean> {
+  const db = supabaseAdmin();
+  let query = db
+    .from("channel_messages")
+    .select("seq")
+    .eq("channel_id", channelId);
+  if (since !== undefined) query = query.gt("seq", since);
+  const { data, error } = await query.limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 export async function findMessageByClientId(
   channelId: string,
   clientMsgId: string

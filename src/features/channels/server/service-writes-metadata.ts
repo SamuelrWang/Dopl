@@ -17,7 +17,7 @@ import type { ChannelContext } from "./service-shared";
  * stamping all answer the same question — what may a caller put in metadata,
  * and what does the server stamp itself.
  *
- * Reserved keys (`to_user_id`, `summary`, `runtime`, `taskMode`,
+ * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`, `taskMode`,
  * `taskCreatedBy`, `taskTitle`, `taskTarget`, and the five calm-terminal
  * flags) are ALWAYS stripped from caller metadata and re-added only from
  * server-validated values. `taskId` stays caller-settable — but a first-class
@@ -137,7 +137,7 @@ async function isLegacyThreadParticipant(
  * passed the addressee-is-a-channel-member check (the caller runs it, so a bad
  * addressee 400s before the idempotency short-circuit).
  *
- * Three server-owned folds, in order:
+ * The server-owned folds, in order:
  *
  * 1. **Anti-spoof strip (v1.1).** `to_user_id` / `summary` are settable ONLY
  *    via the validated top-level fields: a raw metadata copy would bypass both
@@ -183,7 +183,16 @@ async function isLegacyThreadParticipant(
  *    point precisely because the desktop reads the key to decide whether to
  *    open a requester window: a caller that could set it in `metadata` could
  *    make its own external post masquerade as a desktop session.
- * 6. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
+ * 6. **App-version stamp (Q10).** `appVersion` is reserved on exactly the same
+ *    terms as `runtime`: stripped from caller metadata unconditionally, then
+ *    re-stamped only from the REQUEST's `X-Dopl-App-Version` header (resolved
+ *    by the auth layer into `ctx.appVersion`, and shape-checked there). Absent
+ *    header → no key at all, which is what every non-desktop poster looks like.
+ *    It exists because electron-updater installs on QUIT and a background
+ *    listener never quits, so a peer can run a stale build indefinitely with
+ *    nothing on either machine saying so — a shipped fix then reads as broken.
+ *    Purely diagnostic: nothing may gate on it (see `app-version-header.ts`).
+ * 7. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
  *    re-stamped only for a thread participant: the first-class case is already
  *    covered by (4), and a legacy `task-{channel}-{seq}` id (no task row, but
  *    the shape the installed desktop still posts most of its lifecycle events
@@ -200,12 +209,14 @@ export async function resolvePostMetadata(
   delete metadata.to_user_id;
   delete metadata.summary;
   delete metadata.runtime;
+  delete metadata.appVersion;
   const calmFlags = takeCalmFlags(metadata);
 
   // Server-stamped from the request's own header, never from the payload.
   if (ctx.runtime === DESKTOP_SESSION_RUNTIME) {
     metadata.runtime = DESKTOP_SESSION_RUNTIME;
   }
+  if (ctx.appVersion) metadata.appVersion = ctx.appVersion;
 
   const peerUserId = await resolveDirectPeer(channel, ctx.userId);
   const toUserId = input.toUserId ?? peerUserId;

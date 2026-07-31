@@ -71,6 +71,29 @@ export async function findChannelById(
   return (data as ChannelRow | null) ?? null;
 }
 
+/**
+ * The two columns the await hold's per-tick access recheck actually reads —
+ * "does this channel still exist (not soft-deleted) and is it public?".
+ * Same filters as {@link findChannelById}; only the projection differs, so a
+ * recheck that repeats for the whole hold ships ~70 bytes instead of the
+ * ~460-byte row (Q8 egress diet). Never use it where the DTO is built.
+ */
+export async function findChannelAccess(
+  workspaceId: string,
+  channelId: string
+): Promise<Pick<ChannelRow, "id" | "visibility"> | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channels")
+    .select("id, visibility")
+    .eq("workspace_id", workspaceId)
+    .eq("id", channelId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Pick<ChannelRow, "id" | "visibility"> | null) ?? null;
+}
+
 export async function findChannelBySlug(
   workspaceId: string,
   slug: string
@@ -269,6 +292,28 @@ export async function findMembership(
     .maybeSingle();
   if (error) throw error;
   return (data as ChannelMemberRow | null) ?? null;
+}
+
+/**
+ * Membership EXISTENCE only — the await hold's per-tick "is this caller still
+ * a member" recheck. {@link findMembership} returns the whole row (~380 bytes)
+ * and the recheck reads none of it, so the hold uses this ~50-byte projection
+ * instead (Q8 egress diet). `maybeSingle()` is kept so a duplicate row still
+ * surfaces as an error exactly as it does on the full read.
+ */
+export async function hasMembership(
+  channelId: string,
+  userId: string
+): Promise<boolean> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_members")
+    .select("user_id")
+    .eq("channel_id", channelId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
 }
 
 /** Member counts for a set of channels, grouped in JS. */

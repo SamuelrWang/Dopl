@@ -6,8 +6,19 @@
  * internals. The `channel-` filename prefix is required by the parity
  * split-scan (parity.test.ts).
  */
-import type { Channel, DoplClient } from "@dopl/client";
+import type { Channel, ChannelMessage, DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+/**
+ * A non-empty string field of a message's metadata, or undefined.
+ *
+ * FIX L2 — ONE definition. This was copied byte-for-byte into
+ * `channel-ops-read.ts` and `channel-ops-write.ts`, and both callers key
+ * thread linkage off it (`taskId` / `taskTitle`). Two copies of the predicate
+ * that decides "is this post a continuation or a new request" is exactly the
+ * pair that drifts silently: the read side would render a thread tag the write
+ * side had already reported as absent, or the reverse.
+ */
+export declare function metaString(m: ChannelMessage, key: string): string | undefined;
 /**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member

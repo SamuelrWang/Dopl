@@ -66,6 +66,98 @@ function stubClient(overrides) {
         (0, vitest_1.expect)(input.metadata).toEqual({ foo: "bar" });
     });
 });
+// ── Q7: a sender can verify its own threading from the post result ──────
+(0, vitest_1.describe)("opPost — threading self-verification (Q7)", () => {
+    /** A post response that echoes what the server stored on the message. */
+    function posted(metadata) {
+        return vitest_1.vi.fn(async () => ({
+            id: "m1",
+            seq: 9,
+            kind: "message",
+            metadata,
+        }));
+    }
+    const OPEN_THREAD = {
+        id: "thread-1",
+        title: "Ship the listener fix",
+        status: "open",
+    };
+    (0, vitest_1.it)("names the thread a post landed in, with its server-stamped title", async () => {
+        const client = stubClient({
+            postChannelMessage: posted({
+                taskId: "thread-1",
+                taskTitle: "Ship the listener fix",
+            }),
+            listChannelThreads: vitest_1.vi.fn(async () => [OPEN_THREAD]),
+        });
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "on it", { thread: "thread-1" })).content[0].text;
+        (0, vitest_1.expect)(text).toContain("THREADED into **Ship the listener fix**");
+        (0, vitest_1.expect)(text).toContain("`thread-1`");
+        (0, vitest_1.expect)(text).toContain("continuation");
+        // The reassuring case must not also carry the warning.
+        (0, vitest_1.expect)(text).not.toContain("NOT THREADED");
+    });
+    (0, vitest_1.it)("reports an INHERITED thread the caller never asked for", async () => {
+        // A DM post with no `thread` still inherits the open exchange server-side.
+        // Without this line the sender believes it opened a new request.
+        const client = stubClient({
+            postChannelMessage: posted({ taskId: "thread-1", taskTitle: "Ship it" }),
+        });
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "and one more thing", {}))
+            .content[0].text;
+        (0, vitest_1.expect)(text).toContain("THREADED into **Ship it**");
+    });
+    (0, vitest_1.it)("WARNS when nothing was threaded and the channel has open threads", async () => {
+        // The line that would have let an agent self-catch the 1.7.14 tag drop.
+        const client = stubClient({
+            postChannelMessage: posted({}),
+            listChannelThreads: vitest_1.vi.fn(async () => [
+                OPEN_THREAD,
+                { id: "thread-2", title: "Older", status: "closed" },
+            ]),
+        });
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "here is the answer", {}))
+            .content[0].text;
+        (0, vitest_1.expect)(text).toContain("NOT THREADED");
+        (0, vitest_1.expect)(text).toContain("NEW request on the other side");
+        (0, vitest_1.expect)(text).toContain("`thread-1`");
+        (0, vitest_1.expect)(text).toContain("Ship the listener fix");
+        // Only OPEN threads are offered — re-posting into a closed one is not a fix.
+        (0, vitest_1.expect)(text).not.toContain("thread-2");
+        (0, vitest_1.expect)(text).toContain('re-post it with thread="<that id>"');
+    });
+    (0, vitest_1.it)("flags a thread that was ASKED for but did not land (the tag-drop shape)", async () => {
+        const client = stubClient({ postChannelMessage: posted({}) });
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "reply", { thread: "thread-1" })).content[0].text;
+        (0, vitest_1.expect)(text).toContain("NOT THREADED");
+        (0, vitest_1.expect)(text).toContain('you passed thread="thread-1"');
+        (0, vitest_1.expect)(text).toContain('op="list_threads"');
+    });
+    (0, vitest_1.it)("says nothing extra when there is no thread to be confused with", async () => {
+        const listChannelThreads = vitest_1.vi.fn(async () => []);
+        const client = stubClient({
+            postChannelMessage: posted({}),
+            listChannelThreads,
+        });
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "just chatting", {}))
+            .content[0].text;
+        (0, vitest_1.expect)(listChannelThreads).toHaveBeenCalledTimes(1);
+        (0, vitest_1.expect)(text).not.toContain("NOT THREADED");
+        (0, vitest_1.expect)(text).not.toContain("THREADED");
+    });
+    (0, vitest_1.it)("never turns a SUCCESSFUL post into an error when the lookup fails", async () => {
+        const client = stubClient({
+            postChannelMessage: posted({}),
+            listChannelThreads: vitest_1.vi.fn(async () => {
+                throw new Error("500 boom");
+            }),
+        });
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "posted fine", {});
+        (0, vitest_1.expect)(res.isError).toBeFalsy();
+        (0, vitest_1.expect)(res.content[0].text).toContain("Posted to **General**");
+        (0, vitest_1.expect)(res.content[0].text).not.toContain("boom");
+    });
+});
 (0, vitest_1.describe)("opCloseThread — summary (Feature 3c)", () => {
     (0, vitest_1.it)("forwards `summary` to the client and surfaces it in the confirmation", async () => {
         const closeChannelThread = vitest_1.vi.fn();
@@ -205,6 +297,45 @@ function stubClient(overrides) {
         // No authorName → fall back to the id, still marked as an agent.
         (0, vitest_1.expect)(text).toContain("agent for `u-x`");
         (0, vitest_1.expect)(text).toContain("system");
+    });
+    // ── Q7: continuation vs new request, visible without DB access ──────
+    (0, vitest_1.it)("tags each message with its thread and expands the tags to full ids", async () => {
+        const client = stubClient({
+            readChannelMessages: vitest_1.vi.fn(async () => [
+                msg({
+                    seq: 1,
+                    metadata: { taskId: "3f2a91c4-dead-beef-0000-000000000001", taskTitle: "Ship it" },
+                }),
+                msg({ seq: 2, metadata: {} }),
+            ]),
+        });
+        const text = (await (0, channel_ops_read_1.opRead)(client, "general")).content[0].text;
+        // Inline: a short tag per line, so a 200-message read does not carry 200 uuids.
+        (0, vitest_1.expect)(text).toContain("· thread 3f2a91c4");
+        // The un-threaded one is called out, because the listing DOES contain
+        // threaded messages — absence is only meaningful when the tag is in play.
+        (0, vitest_1.expect)(text).toContain("· no thread");
+        // The legend carries what a reply actually needs: the full id, once.
+        (0, vitest_1.expect)(text).toContain("`3f2a91c4-dead-beef-0000-000000000001`");
+        (0, vitest_1.expect)(text).toContain("Ship it");
+        (0, vitest_1.expect)(text).toContain('op="post"');
+    });
+    (0, vitest_1.it)("stays quiet about threads in a channel that uses none", async () => {
+        const client = stubClient({
+            readChannelMessages: vitest_1.vi.fn(async () => [msg({ seq: 1 }), msg({ seq: 2 })]),
+        });
+        const text = (await (0, channel_ops_read_1.opRead)(client, "general")).content[0].text;
+        (0, vitest_1.expect)(text).not.toContain("thread");
+        (0, vitest_1.expect)(text).not.toContain("Threads above");
+    });
+    (0, vitest_1.it)("leaves message bodies untouched by the thread tagging", async () => {
+        const client = stubClient({
+            readChannelMessages: vitest_1.vi.fn(async () => [
+                msg({ seq: 1, body: "line one\nline two", metadata: { taskId: "t-1" } }),
+            ]),
+        });
+        const text = (await (0, channel_ops_read_1.opRead)(client, "general")).content[0].text;
+        (0, vitest_1.expect)(text).toContain("line one\n  line two");
     });
     (0, vitest_1.it)("frames the listing as untrusted DATA before any body (FIX M1)", async () => {
         // `read` rendered counterparty bodies with NO framing at all — the one

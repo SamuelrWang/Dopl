@@ -7,6 +7,7 @@ import "server-only";
  * `service-shared.ts`.
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
  *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await poll
+ *   - `service-await.ts`   — the await long-poll HOLD loop (tick + recheck cadence)
  *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message, members
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
  *                            the server stamps (addressing, DM auto-address, task keys)
@@ -29,7 +30,11 @@ export {
   resolveReadableChannelId,
   revalidateAwaitAccess,
   pollChannelMessages,
+  hasNewMessages,
 } from "./service-reads";
+
+export { awaitNewMessages } from "./service-await";
+export type { AwaitHoldCounters, AwaitHoldResult } from "./service-await";
 
 export {
   createChannel,

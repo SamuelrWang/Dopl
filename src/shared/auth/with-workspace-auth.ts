@@ -7,6 +7,7 @@ import {
 import type { Role } from "@/features/workspaces/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
+import { readAppVersionHeader } from "./app-version-header";
 import { readRuntimeHeader, type DoplRuntime } from "./runtime-header";
 import { withUserAuth } from "./with-auth";
 
@@ -36,6 +37,14 @@ export interface WorkspaceAuthContext {
    * (see `runtime-header.ts`).
    */
   runtime?: DoplRuntime;
+  /**
+   * The `X-Dopl-App-Version` this request carried (a desktop build like
+   * `1.7.15`), or undefined for every other caller. Read once here — never off
+   * the raw request in a feature — so the channels write path has ONE source
+   * for the reserved `metadata.appVersion` stamp. A diagnostic hint, never an
+   * authz signal (see `app-version-header.ts`).
+   */
+  appVersion?: string;
   params?: Record<string, string>;
 }
 
@@ -183,6 +192,7 @@ export function withWorkspaceAuth(
         workspacePublicId: workspace.publicId,
         role: membership.role,
         runtime: readRuntimeHeader(request),
+        appVersion: readAppVersionHeader(request),
         params: ctx.params,
       });
     } catch (err) {

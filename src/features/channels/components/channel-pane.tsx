@@ -414,7 +414,7 @@ export function ChannelPane({
                 <ConsentCard
                   key={request.id}
                   request={request}
-                  toolProfile={channel.myAgentToolProfile ?? "full"}
+
                   busy={consentBusyIds.has(request.id)}
                   onAllow={() => onDecideConsent(request.id, "allow")}
                   onDeny={() => onDecideConsent(request.id, "deny")}

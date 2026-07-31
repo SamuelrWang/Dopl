@@ -1,11 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Info, SendHorizontal, WifiOff } from "lucide-react";
+import { Info, WifiOff } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { useAutoGrowTextarea } from "@/shared/ui/auto-grow-textarea";
+import { SendButton } from "@/shared/ui/send-button";
 import { FIELD_WELL } from "@/shared/ui/wells";
 import type { ChannelMember } from "../types";
 import { AddressPicker } from "./address-picker";
+
+/** Placeholder + accessible name for the optional one-liner that rides with an
+ *  addressed send (the wire field is still `summary`). */
+const SUBJECT_LABEL = "Subject";
 
 export interface SendOptions {
   toUserId?: string;
@@ -65,10 +71,12 @@ export function resolveSendOptions(params: {
 /**
  * Message composer pinned to the bottom of the thread. One unified input: a
  * concave-field well with an auto-submitting textarea (Enter sends, Shift+Enter
- * adds a newline) and a raised send button. Above the well, an optional
- * addressing row targets one teammate's agent (`toUserId`) with a one-line
- * intent (`summary`); in a DM the peer is implicit, so only the optional
- * one-liner shows.
+ * adds a newline) that AUTO-GROWS to three lines and then scrolls, exactly like
+ * the desktop session window's composer, plus the shared `SendButton` (the same
+ * raised black circle both surfaces use). Above the well, an optional addressing
+ * row targets one teammate's agent (`toUserId`) with an optional Subject
+ * (`summary` on the wire); in a DM the peer is implicit, so only the Subject
+ * field shows.
  *
  * A human send ALWAYS posts a message. Opening a thread is no longer a human
  * toggle — it is agent-driven (an agent calls `create_thread` over MCP), and the
@@ -92,6 +100,10 @@ export function MessageComposer({
   const [sending, setSending] = useState(false);
   const [toUserId, setToUserId] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
+  // Grows with the typed lines up to three, then scrolls (shared with the
+  // session window's D7 math). Keyed on `value`, so clearing after a send snaps
+  // the field back to one line.
+  const textareaRef = useAutoGrowTextarea(value);
 
   // The peer of a direct channel is the one other member; every DM send
   // auto-targets it, so a stale picked addressee can never color a direct send.
@@ -172,7 +184,8 @@ export function MessageComposer({
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 maxLength={200}
-                placeholder="One-line intent (optional)"
+                placeholder={SUBJECT_LABEL}
+                aria-label={SUBJECT_LABEL}
                 className={cn(
                   FIELD_WELL,
                   "min-w-0 flex-1 rounded-full px-3 py-1 text-caption text-text-primary placeholder:text-text-muted"
@@ -185,7 +198,8 @@ export function MessageComposer({
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             maxLength={200}
-            placeholder="One-line intent (optional)"
+            placeholder={SUBJECT_LABEL}
+            aria-label={SUBJECT_LABEL}
             className={cn(
               FIELD_WELL,
               "mb-2 w-full rounded-full px-3 py-1 text-caption text-text-primary placeholder:text-text-muted"
@@ -203,7 +217,12 @@ export function MessageComposer({
         )}
 
         <div className="concave-field flex items-end gap-2 rounded-[12px] px-3 py-2">
+          {/* rows=1 + the min/max heights keep CSS and the growHeight() math in
+              agreement: one line at rest, three lines then scroll. The inline
+              height the hook sets rides inside that clamp. leading-relaxed is
+              1.625em per line, py-1 is 8px of vertical padding. */}
           <textarea
+            ref={textareaRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
@@ -216,20 +235,13 @@ export function MessageComposer({
             disabled={disabled}
             placeholder={placeholder ?? "Message the channel"}
             spellCheck
-            className="max-h-40 min-h-[24px] flex-1 resize-none bg-transparent py-1 text-body leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
+            className="min-h-[calc(1.625em_+_8px)] max-h-[calc(4.875em_+_8px)] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-body leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
           />
-          <button
-            type="button"
+          <SendButton
             onClick={() => void sendMessage()}
             disabled={!canSendMessage}
-            aria-label="Send message"
-            className={cn(
-              "mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors",
-              canSendMessage ? "btn-light text-text-primary" : "text-text-disabled"
-            )}
-          >
-            <SendHorizontal size={15} />
-          </button>
+            label="Send message"
+          />
         </div>
       </div>
     </div>

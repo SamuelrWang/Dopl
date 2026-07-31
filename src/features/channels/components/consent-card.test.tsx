@@ -6,6 +6,7 @@ import {
   RequestFolderRow,
   RequestFolderRowView,
 } from "./consent-card";
+import { RequestPermissionRow } from "./permission-preset-row";
 import { getDesktopChannelFolders } from "@/shared/lib/desktop";
 import type { ChannelConsentRequest } from "../types";
 
@@ -42,7 +43,6 @@ function card(over: Partial<ChannelConsentRequest> = {}) {
   return (
     <ConsentCard
       request={request(over)}
-      toolProfile="read_only"
       onAllow={noop}
       onDeny={noop}
     />
@@ -54,7 +54,6 @@ function card(over: Partial<ChannelConsentRequest> = {}) {
 function cardTree(over: Partial<ChannelConsentRequest> = {}): ReactNode {
   return ConsentCard({
     request: request(over),
-    toolProfile: "read_only",
     onAllow: noop,
     onDeny: noop,
   });
@@ -98,8 +97,8 @@ describe("getDesktopChannelFolders gate (the folder row's visibility source)", (
   });
 });
 
-describe("the request card's Runs in row", () => {
-  it("names the folder the desktop bridge reports, with a change affordance", async () => {
+describe("the request card's folder pill", () => {
+  it("names the folder the desktop bridge reports, as a clickable pill", async () => {
     (globalThis as { window?: unknown }).window = {
       dopl: {
         channels: {
@@ -118,16 +117,19 @@ describe("the request card's Runs in row", () => {
         onChange={noop}
       />
     );
-    expect(markup).toContain("Runs in:");
     expect(markup).toContain(FOLDER);
-    expect(markup).toContain("Change");
+    // The PILL recipe (kit: rounded-full + border-border-strong + bg-bg-inset) and
+    // no separate "Change" link — the whole pill is the affordance.
+    expect(markup).toContain("rounded-full");
+    expect(markup).toContain("border-border-strong");
+    expect(markup).not.toContain("Change the folder this request runs in</");
+    expect(markup).toContain('aria-label="Change the folder this request runs in"');
   });
 
   it("says Default folder when the channel uses the desktop default", () => {
     const markup = renderToStaticMarkup(
       <RequestFolderRowView label={null} busy={false} onChange={noop} />
     );
-    expect(markup).toContain("Runs in:");
     expect(markup).toContain("Default folder");
   });
 
@@ -166,11 +168,39 @@ describe("ConsentCard folder-row wiring", () => {
     // The row is feature-detected after mount, so it is absent from the
     // server / first-paint markup and forever absent in a plain browser.
     const markup = renderToStaticMarkup(card());
-    expect(markup).not.toContain("Runs in:");
     expect(markup).not.toContain("Default folder");
+    // Same for the permission dropdowns — desktop-only, no dead controls.
+    expect(markup).not.toContain("aria-haspopup");
     // The rest of the inbound card is untouched.
     expect(markup).toContain("border-warning/25");
     expect(markup).toContain("Allow");
-    expect(markup).toContain("Read only");
+    // The tool-scope sentence was removed from this card by product decision; the
+    // machine-side warning stays.
+    expect(markup).toContain("Allowing runs a Claude session on this machine.");
+    expect(markup).not.toContain("tool scope for this channel");
+  });
+});
+
+describe("ConsentCard permission-preset wiring", () => {
+  it("mounts the two permission dropdowns on an inbound approval", () => {
+    // The posture must be settable BEFORE Allow — that is the whole point of
+    // putting it on the card rather than in the session window.
+    expect(containsType(cardTree(), RequestPermissionRow)).toBe(true);
+  });
+
+  it("never mounts them on an outbound review (nothing spawns locally)", () => {
+    const outbound = cardTree({
+      kind: "outbound",
+      requesterUserId: null,
+      requesterName: null,
+      proposedReply: "Here is the draft.",
+    });
+    expect(containsType(outbound, RequestPermissionRow)).toBe(false);
+  });
+
+  it("sits alongside the folder pill, in the same settings row", () => {
+    const tree = cardTree();
+    expect(containsType(tree, RequestFolderRow)).toBe(true);
+    expect(containsType(tree, RequestPermissionRow)).toBe(true);
   });
 });

@@ -63,10 +63,46 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Refresh the session — this is critical for keeping auth cookies alive
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Q12 (2026-07-31 self-DDoS incident) — this used to be `getUser()`, a NETWORK
+  // round-trip to GoTrue (≈5 Postgres queries) on EVERY matched request. At ~200k
+  // matched requests/day that is the single largest source of the auth-request
+  // storm that starved GoTrue until OAuth code-exchange started failing.
+  //
+  // `getClaims()` verifies the access token LOCALLY. This project's GoTrue signs
+  // with an ASYMMETRIC key — `/auth/v1/.well-known/jwks.json` publishes exactly one
+  // ES256 (EC P-256) key with a `kid`, and the anon key is the new `sb_publishable_`
+  // format, so there is no legacy HS256 shared secret left — which means auth-js
+  // takes the WebCrypto path: fetch the JWK once (cached process-wide in
+  // `GLOBAL_JWKS` for `JWKS_TTL` = 10 min), then `crypto.subtle.verify` the ES256
+  // signature in-process. Signatures ARE still checked; nothing is trusted on
+  // decode alone. If a token ever arrives with `alg: HS*` or no `kid` (a legacy
+  // pre-rotation token), auth-js falls back to a network `getUser()` on its own, so
+  // the swap degrades to today's behavior rather than skipping verification.
+  //
+  // COOKIE REFRESH IS PRESERVED, and this is the load-bearing part: `getClaims()`
+  // with no argument calls `getSession()` first, and `getSession()` still does the
+  // rotating-cookie refresh — when the stored session is within `EXPIRY_MARGIN_MS`
+  // (90s) of expiry it POSTs `token?grant_type=refresh_token`, the new session goes
+  // through the storage adapter, and the `setAll` callback above rebuilds
+  // `supabaseResponse` with the rotated cookies. So the network call now happens
+  // ONLY near expiry (~1/hour/session) instead of on every request.
+  //
+  // THE try/catch IS LOAD-BEARING — do not simplify it away. `getClaims()` only
+  // converts `AuthError`s into `{ data: null, error }`; auth-js `validateExp`
+  // throws a PLAIN `Error` ("JWT has expired" / "Missing exp claim") which
+  // `getClaims()` RE-THROWS at the caller. `getUser()` could never do that, and
+  // an uncaught throw here is a 500 on every server-rendered page — the exact
+  // shape of the incident this change exists to prevent. Pinned by
+  // `proxy-claims.test.ts`. Every other failure (JWKS unreachable, refresh
+  // refused) already returns an error object; both roads end at `userId = null`,
+  // i.e. the same "not authenticated" branches a failed `getUser()` landed in.
+  let userId: string | null = null;
+  try {
+    const { data } = await supabase.auth.getClaims();
+    userId = data?.claims.sub ?? null;
+  } catch {
+    userId = null;
+  }
 
   const { pathname } = request.nextUrl;
 
@@ -107,7 +143,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // If authenticated, redirect landing page and login to /canvas
-  if (user && (pathname === "/" || pathname === "/login")) {
+  if (userId && (pathname === "/" || pathname === "/login")) {
     const url = request.nextUrl.clone();
     url.pathname = "/canvas";
     return NextResponse.redirect(url);
@@ -132,7 +168,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // If not authenticated, redirect to login (for pages) or return 401 (for API)
-  if (!user) {
+  if (!userId) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: "Authentication required" },

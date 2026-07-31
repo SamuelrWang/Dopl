@@ -8,11 +8,28 @@
  * split-scan (parity.test.ts).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.metaString = metaString;
 exports.isErr = isErr;
 exports.channelNotFound = channelNotFound;
 exports.resolveChannelOr = resolveChannelOr;
 exports.resolveMemberOr = resolveMemberOr;
 const respond_1 = require("./respond");
+/**
+ * A non-empty string field of a message's metadata, or undefined.
+ *
+ * FIX L2 — ONE definition. This was copied byte-for-byte into
+ * `channel-ops-read.ts` and `channel-ops-write.ts`, and both callers key
+ * thread linkage off it (`taskId` / `taskTitle`). Two copies of the predicate
+ * that decides "is this post a continuation or a new request" is exactly the
+ * pair that drifts silently: the read side would render a thread tag the write
+ * side had already reported as absent, or the reverse.
+ */
+function metaString(m, key) {
+    const value = m.metadata?.[key];
+    return typeof value === "string" && value.trim().length > 0
+        ? value.trim()
+        : undefined;
+}
 /**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member

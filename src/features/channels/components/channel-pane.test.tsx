@@ -173,14 +173,13 @@ describe("ChannelPane pending requests placement", () => {
     expect(tail).not.toContain("self-start");
   });
 
-  it("passes the channel's own tool profile to the inbound card", () => {
+  it("no longer surfaces the tool-scope sentence on the inbound card", () => {
+    // Product decision (2026-07-31): the scope line was removed from the consent
+    // card; the desktop session window still shows the profile. The card must
+    // not render a stale scope regardless of the channel's profile row.
     const markup = render([consent()]);
-    expect(markup).toContain("Read only");
-  });
-
-  it("falls back to the full tool scope when the caller has no profile row", () => {
-    const markup = render([consent()], { myAgentToolProfile: null });
-    expect(markup).toContain("Full access");
+    expect(markup).not.toContain("tool scope for this channel");
+    expect(markup).toContain("Allowing runs a Claude session on this machine.");
   });
 
   it("renders nothing consent-shaped when the queue is empty", () => {

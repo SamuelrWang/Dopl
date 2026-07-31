@@ -11,6 +11,7 @@
  */
 
 import type {
+  ChannelMessage,
   ChannelMessageInput,
   ChannelVisibility,
   DoplClient,
@@ -18,7 +19,12 @@ import type {
   ThreadOutcome,
 } from "@dopl/client";
 import { ok, err, isAlreadyExists, isNotFound, type ToolResponse } from "./respond";
-import { isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
+import {
+  isErr,
+  metaString,
+  resolveChannelOr,
+  resolveMemberOr,
+} from "./channel-shared";
 
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 function isBadRequest(e: unknown): boolean {
@@ -130,6 +136,76 @@ export async function opInvite(
   return ok(`Added ${member.label} to **${ch.name}** as ${added.role}.`);
 }
 
+/** Open thread ids listed in the not-threaded warning before it truncates. */
+const OPEN_THREAD_WARN_MAX = 5;
+
+/**
+ * Q7 — the SELF-VERIFICATION line for a post: did this land as a continuation
+ * of an existing thread, or as a new request on the other side?
+ *
+ * Reported by the responder agent during live testing: it had no way to tell,
+ * and neither did the requester (await/read rendered bodies only, so confirming
+ * a thread tag meant raw SQL). The answer is read back off the STORED message,
+ * not off the request: `metadata.taskId` is what the receiving desktop routes
+ * on, so it reports what actually landed rather than what was asked for.
+ *
+ * FIX L3 — the id alone is NOT proof of a real thread. A first-class thread id
+ * is validated against `channel_tasks`, but a legacy `task-<uuid>-<seq>` id is
+ * still caller-settable with no participation check (F-083). `taskTitle` is the
+ * half that cannot be faked: the server stamps it from the thread row and
+ * strips any caller copy. So a THREADED note that names a title is backed by a
+ * real row, and one that can only show a bare id is the tell that it is not.
+ *
+ * Three shapes, in descending urgency:
+ *   1. asked for a thread and got none  — the 1.7.14 tag-drop signature;
+ *   2. no thread, but the channel has open ones — will read as a NEW request;
+ *   3. threaded — name the thread so the sender can check it is the right one.
+ * A channel with no open threads and an unthreaded post says nothing at all.
+ */
+async function threadLinkageNote(
+  client: DoplClient,
+  channelId: string,
+  channelName: string,
+  message: ChannelMessage,
+  askedThread: string | undefined,
+): Promise<string | null> {
+  const landedThread = metaString(message, "taskId");
+
+  if (landedThread) {
+    const title = metaString(message, "taskTitle");
+    const named = title ? `**${title}** (thread \`${landedThread}\`)` : `thread \`${landedThread}\``;
+    const mismatch =
+      askedThread && askedThread !== landedThread
+        ? ` NOTE: you asked for thread \`${askedThread}\` — it resolved to a different one.`
+        : "";
+    return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}`;
+  }
+
+  if (askedThread) {
+    // Belt-and-braces: the route validates `thread` and 400s an unresolvable
+    // one, so reaching here means the tag was dropped between ask and store.
+    return `NOT THREADED — you passed thread="${askedThread}" but the stored message carries no thread, so this reads as a NEW request on the other side. Re-post with a thread id from dopl_channel(op="list_threads", channel="${channelId}").`;
+  }
+
+  // Best-effort: the warning is worth one read, but a listing failure must not
+  // turn a SUCCESSFUL post into an error the agent might retry.
+  let open;
+  try {
+    open = (await client.listChannelThreads(channelId)).filter(
+      (t) => t.status === "open",
+    );
+  } catch {
+    return null;
+  }
+  if (open.length === 0) return null;
+  const shown = open
+    .slice(0, OPEN_THREAD_WARN_MAX)
+    .map((t) => `\`${t.id}\` (${t.title})`);
+  const more =
+    open.length > shown.length ? `; +${open.length - shown.length} more` : "";
+  return `NOT THREADED — this reads as a NEW request on the other side, not a continuation, and **${channelName}** has ${open.length} open thread${open.length === 1 ? "" : "s"}: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
+}
+
 export async function opPost(
   client: DoplClient,
   channelRef: string,
@@ -199,9 +275,19 @@ export async function opPost(
 
   const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
   const toNote = toLabel ? `, addressed to ${toLabel}` : "";
+  // Q7: second line, right under the confirmation — a sender cannot otherwise
+  // tell continuation from new request, and the tag drop it catches is silent.
+  const linkage = await threadLinkageNote(
+    client,
+    ch.id,
+    ch.name,
+    message,
+    opts.thread,
+  );
   return ok(
     [
       `Posted to **${ch.name}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
+      ...(linkage ? [linkage] : []),
       // WAKE-V1 teaching: a posted request that no one is waiting on is where
       // the exchange dies. The await call below can outlive this turn and its
       // result wakes the session with the reply.

@@ -285,6 +285,70 @@ export async function issueDeviceToken(input: {
 }
 
 /**
+ * F-085 — REVOKE a caller's device tokens. The server half of desktop
+ * sign-out: until this existed, signing out could only delete the app's local
+ * copies while the 90-day `dopl.read`+`dopl.write` bearer stayed valid until it
+ * expired or the operator found it in the web "Connected apps" list.
+ *
+ * Scoped three ways, and each one is load-bearing:
+ *   - `user_id` — a caller can only ever revoke their OWN tokens;
+ *   - `client_id` = the reserved device client — this surface mints device
+ *     tokens, so it revokes device tokens and nothing else; an OAuth agent
+ *     grant goes through `revokeGrant` (`DELETE /api/oauth/grants/[id]`);
+ *   - `revoked_at IS NULL` — an already-revoked row keeps its ORIGINAL
+ *     timestamp, so the record of when access actually ended survives.
+ *
+ * "Revoked" is a soft `revoked_at` stamp — the same representation
+ * `issueDeviceToken`, `rotateRefreshToken`, `revokeFamily` and `revokeGrant`
+ * all use — and `validateAccessToken` rejects on `revoked_at` BEFORE the expiry
+ * check, so a revoked token is dead on its very next call (nothing caches it;
+ * `lastUsedTouched` only debounces a write).
+ *
+ * IDEMPOTENT by construction: an unknown label/id, or one already revoked,
+ * matches no row and returns 0 rather than failing. Both selectors may be given
+ * at once; the returned count is de-duplicated over row ids, and counting the
+ * caller's OWN rows leaks nothing across users (contrast RFC 7009's always-200
+ * rule, which exists because that endpoint is unauthenticated).
+ */
+export async function revokeDeviceTokens(input: {
+  userId: string;
+  label?: string | null;
+  tokenId?: string | null;
+}): Promise<number> {
+  const db = supabaseAdmin();
+  const now = new Date().toISOString();
+  const ids = new Set<string>();
+
+  if (input.label) {
+    const { data, error } = await db
+      .from("mcp_tokens")
+      .update({ revoked_at: now })
+      .eq("user_id", input.userId)
+      .eq("client_id", DEVICE_CLIENT_ID)
+      .eq("client_name", input.label)
+      .is("revoked_at", null)
+      .select("id");
+    if (error) throw error;
+    for (const row of (data ?? []) as { id: string }[]) ids.add(row.id);
+  }
+
+  if (input.tokenId) {
+    const { data, error } = await db
+      .from("mcp_tokens")
+      .update({ revoked_at: now })
+      .eq("id", input.tokenId)
+      .eq("user_id", input.userId)
+      .eq("client_id", DEVICE_CLIENT_ID)
+      .is("revoked_at", null)
+      .select("id");
+    if (error) throw error;
+    for (const row of (data ?? []) as { id: string }[]) ids.add(row.id);
+  }
+
+  return ids.size;
+}
+
+/**
  * Resolve an access token to an identity. The single validation entry point
  * used by the MCP transport boundary AND the loopback /api/* guard. Returns
  * null for non-tokens, unknown/expired/revoked tokens. Touches last_used_at

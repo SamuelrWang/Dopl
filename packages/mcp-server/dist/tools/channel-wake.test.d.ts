@@ -15,9 +15,11 @@
  *   - re-arm teaching carries a THREAD-STATE stop rule, not a timeout counter
  *     (M3) — a peer agent doing real work is legitimately silent for a long
  *     stretch, so "3 empty holds" is a checkpoint, never a deadline;
- *   - the hold is env-tunable within a clamp (the incident lever);
  *   - create_thread hands back the opening message's seq, so the requester
  *     arms `await` on the right cursor with no follow-up read.
+ *
+ * The numbers themselves — the env lever's clamp, and every deadline the hold
+ * must fit under — are pinned in `channel-deadlines.test.ts`.
  *
  * The @dopl/client is a hand-stubbed object (only the methods each op touches),
  * cast to DoplClient — registration/transport never run here.

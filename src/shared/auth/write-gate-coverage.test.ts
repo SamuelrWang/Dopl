@@ -105,9 +105,13 @@ describe("H-3 write-gate coverage", () => {
       .sort();
     expect(sessionOnlyRoutes).toEqual(
       [
-        // Mints a long-lived device token — a background agent must never be
-        // able to bootstrap a fresh 90-day credential for itself, so it is
-        // cookie-session only (Channels v1.1 section E).
+        // POST mints a long-lived device token — a background agent must never
+        // be able to bootstrap a fresh 90-day credential for itself (Channels
+        // v1.1 section E). DELETE revokes one (F-085), gated for the mirror
+        // reason: a bearer that could revoke device tokens could kill the
+        // credential its sibling agents (or the operator's other machines)
+        // depend on, and could delete the token whose last_used_at records it.
+        // Both methods are cookie-session only.
         "auth/mcp-device-token/route.ts",
         "billing/checkout/route.ts",
         // Channels v1.2 H-1. The consent gate exists to keep a HUMAN in the

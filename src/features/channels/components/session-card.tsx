@@ -273,29 +273,45 @@ export function SessionCard({
 }
 
 /**
- * The one note the session control can show: the desktop found NO durable record
- * of this thread on this machine, so there is nothing to open. Every other case
- * opens a session (a thread whose session is parked, settled, or gone still gets
- * a shell seeded with the channel's history), so this copy is deliberately about
- * the machine, not about a session being live.
+ * The note for the one refusal the operator can act on: the desktop cannot reach
+ * this CHANNEL at all (not a member, deleted, or signed out). A thread with no
+ * local record is NOT this case — the desktop resolves the channel from the API
+ * and opens a read-only shell — so this copy is about the channel, never about a
+ * session being live.
  */
 export const NO_LOCAL_SESSION_NOTE =
-  "This thread has no session on this machine.";
+  "This channel isn't available on this machine.";
+
+/** Every window slot is in use — the operator must free one. */
+export const SESSION_BUDGET_NOTE =
+  "Too many session windows are open. Close one and try again.";
 
 /**
- * Open this thread's session from the web card, via the main-window bridge.
- * Resolves the bridge's verdict: `false` means no record of the thread exists on
- * this machine (the {@link NO_LOCAL_SESSION_NOTE} case) — NOT merely that no
- * session is live, since the desktop recreates a shell for a parked or settled
- * thread. Exported for unit testing the click action.
+ * Open this thread's session from the web card, via the main-window bridge, and
+ * turn the desktop's verdict into the note (if any) the card should show.
+ *
+ * A window opens for ANY thread the operator can reach — live, parked, settled,
+ * or never seen on this machine (the desktop resolves the channel from the API
+ * and paints its history read-only). So the absence of a local record is NOT a
+ * failure and must stay silent; only a genuine refusal says anything:
+ *   `no-thread` — the channel itself is unreachable (not a member, deleted,
+ *                 signed out). The one case worth a note.
+ *   `busy`      — the window budget is spent; the operator can free one.
+ * Anything else (an older desktop with no reason, a transport throw) stays
+ * quiet: the operator can just click again.
+ *
+ * Exported for unit testing the click action.
  */
 export async function reopenSessionWindow(
   bridge: DoplSessionsBridge,
   channelId: string,
   threadId: string
-): Promise<boolean> {
+): Promise<string | null> {
   const result = await bridge.reopen(channelId, threadId);
-  return !!result?.ok;
+  if (result?.ok) return null;
+  if (result?.reason === "no-thread") return NO_LOCAL_SESSION_NOTE;
+  if (result?.reason === "busy") return SESSION_BUDGET_NOTE;
+  return null;
 }
 
 /**
@@ -310,7 +326,8 @@ export async function reopenSessionWindow(
  * feature-detected after mount so SSR and first client render agree
  * (hydration-safe). Opening happens in-process (no server/realtime state,
  * F-072); it never starts a query, and gated tools still gate on reshow. Only a
- * genuine `{ ok: false }` (no record on this machine) shows the note.
+ * refusal the operator can act on (unreachable channel, or the window budget)
+ * shows a note; everything else stays silent.
  */
 export function ReopenWindowButton({
   channelId,
@@ -321,7 +338,7 @@ export function ReopenWindowButton({
 }) {
   const [bridge, setBridge] = useState<DoplSessionsBridge | null>(null);
   const [busy, setBusy] = useState(false);
-  const [noLocalSession, setNoLocalSession] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   // Feature-detect after mount (window-only) so SSR and first client render agree.
   useEffect(() => {
@@ -334,19 +351,17 @@ export function ReopenWindowButton({
   return (
     <OpenWindowControls
       busy={busy}
-      noLocalSession={noLocalSession}
+      note={note}
       onOpen={async () => {
         if (busy) return;
         setBusy(true);
-        setNoLocalSession(false);
+        setNote(null);
         try {
-          const ok = await reopenSessionWindow(bridge, channelId, threadId);
-          // Only the bridge's definitive "no record here" answer notes anything.
-          setNoLocalSession(!ok);
+          setNote(await reopenSessionWindow(bridge, channelId, threadId));
         } catch {
           // A thrown invoke is a transport failure, not a verdict about the
           // thread, so it stays quiet: the operator can click again.
-          setNoLocalSession(false);
+          setNote(null);
         } finally {
           setBusy(false);
         }
@@ -364,18 +379,18 @@ export function ReopenWindowButton({
  */
 export function OpenWindowControls({
   busy,
-  noLocalSession,
+  note,
   onOpen,
 }: {
   /** True only while an open call is in flight. */
   busy: boolean;
-  /** True after a genuine `{ ok: false }` — shows the note. */
-  noLocalSession: boolean;
+  /** The refusal note to show, or null when the open succeeded (or stayed quiet). */
+  note: string | null;
   onOpen: () => void;
 }) {
   return (
     <>
-      {noLocalSession && (
+      {note && (
         <span className="shrink-0 truncate text-caption text-text-muted">
           {NO_LOCAL_SESSION_NOTE}
         </span>

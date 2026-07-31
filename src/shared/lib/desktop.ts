@@ -30,7 +30,10 @@ export interface DoplChannelsBridge {
  * window is destroyed on settle, so it is not window-reopenable).
  */
 export interface DoplSessionsBridge {
-  reopen: (channelId: string, taskId: string) => Promise<{ ok: boolean }>;
+  reopen: (
+    channelId: string,
+    taskId: string
+  ) => Promise<{ ok: boolean; reason?: "no-thread" | "busy" }>;
 }
 
 export interface DoplDesktopBridge {

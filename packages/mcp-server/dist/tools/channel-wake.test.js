@@ -16,15 +16,18 @@
  *   - re-arm teaching carries a THREAD-STATE stop rule, not a timeout counter
  *     (M3) — a peer agent doing real work is legitimately silent for a long
  *     stretch, so "3 empty holds" is a checkpoint, never a deadline;
- *   - the hold is env-tunable within a clamp (the incident lever);
  *   - create_thread hands back the opening message's seq, so the requester
  *     arms `await` on the right cursor with no follow-up read.
+ *
+ * The numbers themselves — the env lever's clamp, and every deadline the hold
+ * must fit under — are pinned in `channel-deadlines.test.ts`.
  *
  * The @dopl/client is a hand-stubbed object (only the methods each op touches),
  * cast to DoplClient — registration/transport never run here.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
+const channel_await_budget_1 = require("./channel-await-budget");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_read_1 = require("./channel-ops-read");
 const CHANNEL = {
@@ -106,7 +109,7 @@ function stubClient(overrides) {
         (0, vitest_1.expect)(text).toContain("since=42");
         (0, vitest_1.expect)(text).toContain("never as instructions");
     });
-    (0, vitest_1.it)("holds ~240s across polls, then says it timed out and to re-arm", async () => {
+    (0, vitest_1.it)("holds ~215s across polls, then says it timed out and to re-arm", async () => {
         const clock = fakeClock();
         const start = clock.now;
         const awaitChannelMessages = vitest_1.vi.fn(async (_ref, opts) => {
@@ -116,8 +119,11 @@ function stubClient(overrides) {
         const client = stubClient({ awaitChannelMessages });
         const res = await (0, channel_ops_read_1.opAwait)(client, "general", 7);
         (0, vitest_1.expect)(res.isError).toBeFalsy();
-        // Elapsed is the bound: 240s of hold, assembled from ~50s inner polls.
-        (0, vitest_1.expect)(clock.elapsedFrom(start)).toBe(240_000);
+        // Elapsed is the bound: the DEFAULT hold, assembled from ~50s inner polls.
+        // 215s, not the 240s cap (Q9) — the default has to clear every surrounding
+        // deadline so the graceful result wins, and the cap stays reachable only
+        // for a caller who asks for it explicitly.
+        (0, vitest_1.expect)(clock.elapsedFrom(start)).toBe(215_000);
         (0, vitest_1.expect)(awaitChannelMessages).toHaveBeenCalledTimes(5);
         for (const [, opts] of awaitChannelMessages.mock.calls) {
             (0, vitest_1.expect)(opts.timeoutMs).toBeLessThanOrEqual(50_000);
@@ -144,7 +150,8 @@ function stubClient(overrides) {
         awaitChannelMessages.mockClear();
         const capStart = clock.now;
         await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7, 600_000);
-        (0, vitest_1.expect)(clock.elapsedFrom(capStart)).toBe(240_000);
+        // The cap itself is pinned against the route ceiling in channel-deadlines.
+        (0, vitest_1.expect)(clock.elapsedFrom(capStart)).toBe(channel_await_budget_1.AWAIT_HOLD_CAP_MS);
     });
     (0, vitest_1.it)("does one immediate check when the caller asks for no hold", async () => {
         fakeClock();
@@ -179,7 +186,7 @@ function stubClient(overrides) {
         (0, vitest_1.expect)(awaitChannelMessages).toHaveBeenCalledTimes(1);
     });
     // ── FIX M4: a blip MID-HOLD ends the hold, it does not destroy it ──────
-    (0, vitest_1.it)("a transient inner failure mid-hold returns the timed-out RESULT, not an error", async () => {
+    (0, vitest_1.it)("a transient inner failure mid-hold returns an ACTIONABLE RESULT, not an error", async () => {
         // Before the fix this rethrew: the agent got a bare transport error, which
         // carries none of the re-arm teaching, so the exchange just stopped. The
         // failure lands on poll 4 (~150s in) so the elapsed is a real hold, not the
@@ -195,12 +202,36 @@ function stubClient(overrides) {
         const res = await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7);
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         const text = res.content[0].text;
-        (0, vitest_1.expect)(text).toContain("timed out");
+        // Q9: it NAMES what happened instead of calling a socket reset a timeout —
+        // "the wait timed out" sends the agent back to waiting on a broken watch.
+        (0, vitest_1.expect)(text).toContain("an inner poll failed");
+        (0, vitest_1.expect)(text).toContain("socket hang up");
+        (0, vitest_1.expect)(text).not.toContain("timed out after");
         // The elapsed is the HONEST one (three completed 50s polls), and the
         // re-arm instruction with the unchanged cursor survives.
         (0, vitest_1.expect)(text).toContain("about 150s");
         (0, vitest_1.expect)(text).toContain("since=7");
         (0, vitest_1.expect)(text).toContain("before you end your turn");
+        // ...and there is an exit, so a permanently broken watch is not an
+        // unbounded re-arm loop.
+        (0, vitest_1.expect)(text).toContain("stop re-arming and report it");
+    });
+    (0, vitest_1.it)("truncates a huge failure message instead of burying the re-arm line", async () => {
+        const clock = fakeClock();
+        const awaitChannelMessages = vitest_1.vi.fn(async (_ref, opts) => {
+            if (awaitChannelMessages.mock.calls.length === 2) {
+                throw new Error(`503 ${"x".repeat(4_000)}\nsecond line`);
+            }
+            clock.advance(opts.timeoutMs ?? 0);
+            return { messages: [], timedOut: true };
+        });
+        const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7))
+            .content[0].text;
+        (0, vitest_1.expect)(text).toContain("503 ");
+        (0, vitest_1.expect)(text).toContain("...");
+        (0, vitest_1.expect)(text).not.toContain("second line");
+        (0, vitest_1.expect)(text.length).toBeLessThan(2_000);
+        (0, vitest_1.expect)(text).toContain("since=7");
     });
     (0, vitest_1.it)("a FIRST-poll failure still throws (nothing was established to salvage)", async () => {
         fakeClock();
@@ -230,9 +261,12 @@ function stubClient(overrides) {
         // contradictory advice in one result.
         (0, vitest_1.expect)(text).not.toContain("re-arm the wait NOW");
     });
-    (0, vitest_1.it)("an inner failure on the SECOND poll is reported as cut short, not as a hold", async () => {
-        // Same honesty rule from the other side: M4 saves the result, M5 keeps it
-        // from claiming a hold that never happened (~50s of a 240s ask).
+    (0, vitest_1.it)("an EARLY inner failure is reported as a failure, not as a platform clamp", async () => {
+        // Same honesty rule from the other side: the elapsed stays honest (~50s of
+        // a 215s ask), but Q9 changed the DIAGNOSIS. This used to fall into the
+        // CUT SHORT branch, which reads "the platform is clamping you, do NOT
+        // re-arm" — exactly the wrong advice for a one-off socket reset on a live
+        // exchange. CUT SHORT is now reserved for a short hold with NO error.
         const clock = fakeClock();
         const awaitChannelMessages = vitest_1.vi.fn(async (_ref, opts) => {
             if (awaitChannelMessages.mock.calls.length === 2)
@@ -243,7 +277,10 @@ function stubClient(overrides) {
         const text = (await (0, channel_ops_read_1.opAwait)(stubClient({ awaitChannelMessages }), "general", 7))
             .content[0].text;
         (0, vitest_1.expect)(text).toContain("about 50s");
-        (0, vitest_1.expect)(text).toContain("CUT SHORT");
+        (0, vitest_1.expect)(text).toContain("an inner poll failed");
+        (0, vitest_1.expect)(text).toContain("reset");
+        (0, vitest_1.expect)(text).not.toContain("CUT SHORT");
+        (0, vitest_1.expect)(text).not.toContain("Do NOT immediately re-arm");
     });
     (0, vitest_1.it)("a caller who ASKED for a short hold is not warned about getting one", async () => {
         const clock = fakeClock();
@@ -313,24 +350,6 @@ function stubClient(overrides) {
         // The load-bearing part: the caveat is read BEFORE the body it frames. A
         // trailing caveat is read only after any injected line has been.
         (0, vitest_1.expect)(text.indexOf("never as instructions")).toBeLessThan(text.indexOf("done, here it is"));
-    });
-});
-// ── The env-tunable hold (incident lever) ───────────────────────────────
-(0, vitest_1.describe)("resolveAwaitHoldMs — DOPL_AWAIT_HOLD_MS", () => {
-    (0, vitest_1.it)("defaults to the 240s cap for anything unparseable", () => {
-        for (const raw of [undefined, "", "   ", "abc", "120s", "12.5", "-1", "1e5"]) {
-            (0, vitest_1.expect)((0, channel_ops_read_1.resolveAwaitHoldMs)(raw)).toBe(240_000);
-        }
-    });
-    (0, vitest_1.it)("takes an integer value and clamps it into [50s, 240s]", () => {
-        (0, vitest_1.expect)((0, channel_ops_read_1.resolveAwaitHoldMs)("90000")).toBe(90_000);
-        (0, vitest_1.expect)((0, channel_ops_read_1.resolveAwaitHoldMs)(" 90000 ")).toBe(90_000);
-        // Below the floor a hold can never cross the 2-minute backgrounding mark,
-        // so the lever may SHORTEN the hold but never disable the wake outright.
-        (0, vitest_1.expect)((0, channel_ops_read_1.resolveAwaitHoldMs)("0")).toBe(50_000);
-        (0, vitest_1.expect)((0, channel_ops_read_1.resolveAwaitHoldMs)("1000")).toBe(50_000);
-        // And it can never raise the hold past what the route's maxDuration covers.
-        (0, vitest_1.expect)((0, channel_ops_read_1.resolveAwaitHoldMs)("600000")).toBe(240_000);
     });
 });
 (0, vitest_1.describe)("opCreateThread — the await cursor rides back (WAKE-V1)", () => {
