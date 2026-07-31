@@ -56,8 +56,9 @@ function msgFromRecord(rec, body) {
   return { seq: rec.seq, id: rec.messageId, body: body || '' };
 }
 function taskIdFor(rec) {
-  // Deterministic per (channel, seq) — a replay reuses the SAME id so task_started
-  // and its end group together instead of splitting across a fresh random id.
+  // Deterministic per (channel, seq) — a replay reuses the SAME id so task_started and its end
+  // group together instead of splitting across a fresh random id. THE one source of a record's
+  // thread id, so every outbound tag reads it and not rec.taskId (unset for a legacy inbound).
   return rec.taskId || `task-${rec.channelId}-${rec.seq}`;
 }
 
@@ -106,16 +107,15 @@ async function handleTrigger(entry, m) {
   const requesterName = io.displayNameFor(m.authorUserId);
   const summary = targeting.metaStr(m, 'summary');
   const bodyPreview = targeting.truncate(m.body, 2000);
-  // Snapshot the tool profile at request time — the async approval may land much
-  // later; the request was made under this profile's containment.
+  // Snapshot the tool profile at request time — the async approval may land much later; the
+  // request was made under this profile's containment.
   const toolProfile = targeting.resolveToolProfile(entry.channel);
-  // v1.7: a first-class (UUID) task id on the inbound message threads the whole
-  // reply + lifecycle under the requester's task card (taskIdFor prefers it). A
-  // legacy/absent id -> '' -> undefined here -> deterministic legacy id, unchanged.
+  // v1.7: a first-class (UUID) task id on the inbound message threads the whole reply +
+  // lifecycle under the requester's task card (taskIdFor prefers it). A legacy/absent id
+  // -> '' -> undefined here -> deterministic legacy id, unchanged.
   const inboundTaskId = targeting.firstClassTaskId(m);
-  // Item 8: the (channel,task) key the eventual session will run under, so the
-  // pre-consent window registers where launchResponderSession later ADOPTS it. Mirrors
-  // taskIdFor: a first-class id else the deterministic legacy `task-<channel>-<seq>`.
+  // Item 8: the (channel,task) key the eventual session will run under, so the pre-consent
+  // window registers where launchResponderSession later ADOPTS it. Mirrors taskIdFor.
   const futureTaskId = inboundTaskId || `task-${entry.channel.id}-${m.seq}`;
   diag('consent create:', entry.channel.id.slice(0, 8), 'seq', m.seq);
 
@@ -270,13 +270,14 @@ async function launchResponderSession(entry, m, rec, { taskId }) {
     // D1: taskTitle rides the responder context too (the SAME server-stamped meta the
     // consent payload above already reads), so the session header names the TASK
     // instead of falling back to the channel or a bare "Session".
-    // v2.x: the CONCRETE ids ride the context too, because prompt-framing's delivery
-    // section reads only the context — a spawn told just the channel's display name could
-    // not fill dopl_channel's required `channel=` and hunted with op "list".
+    // v2.x: the CONCRETE ids ride the context too, because prompt-framing's delivery section
+    // reads only the context — a spawn told just the channel's display name could not fill
+    // dopl_channel's `channel=` and hunted with op "list". 2026-07-31: taskId rides for the same
+    // reason, LEGACY ids included, or the reply reaches the peer as a brand-new request.
     context: {
       channelName: entry.channel.name, authorName: rec.requesterName,
       authorKind: m.authorKind, taskTitle: targeting.metaStr(m, 'taskTitle') || null,
-      channelId: entry.channel.id, workspaceId: entry.workspaceId,
+      channelId: entry.channel.id, workspaceId: entry.workspaceId, taskId: rec.taskId || taskId,
     },
     toolProfile: rec.toolProfile,
     mode,
@@ -406,15 +407,15 @@ async function outboundApproved(rec) {
   const entry = entryFromRecord(rec);
   const m = msgFromRecord(rec, '');
   const reply = consent.clampBody(rec.proposedReply || '');
-  const posted = await postResult(entry, m, reply, { taskId: rec.taskId });
+  const posted = await postResult(entry, m, reply, { taskId: taskIdFor(rec) });
   diag('post reply:', posted ? 'ok' : 'FAILED');
   if (posted) {
-    await postTaskEvent(entry, m, 'task_finished', rec.taskId, { durationMs: Date.now() - rec.startedAt });
+    await postTaskEvent(entry, m, 'task_finished', taskIdFor(rec), { durationMs: Date.now() - rec.startedAt });
     notifyReplied(entry, reply);
     watcher.settle(rec.key, 'sent');
   } else {
     // An approved reply that never landed: say so, never claim the request finished.
-    await postTaskEvent(entry, m, 'task_failed', rec.taskId, { durationMs: Date.now() - rec.startedAt });
+    await postTaskEvent(entry, m, 'task_failed', taskIdFor(rec), { durationMs: Date.now() - rec.startedAt });
     notifyLocal(
       `Dopl: reply not delivered in "${entry.channel.name}"`,
       'You approved the reply but it could not be posted. Open Dopl and try again.'
@@ -431,7 +432,7 @@ async function outboundCancelled(rec) {
   // M-4: a cancelled reply is NOT a finished request; do not tell teammates an
   // answer was delivered. task_failed WITHOUT declined → this is a drop, not a deny.
   await postTaskEvent(
-    entry, m, 'task_failed', rec.taskId,
+    entry, m, 'task_failed', taskIdFor(rec),
     { durationMs: Date.now() - rec.startedAt, dropped: true },
     'Reply was not sent.'
   );

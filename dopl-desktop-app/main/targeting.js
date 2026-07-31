@@ -4,10 +4,13 @@
 // targeting classifier (`classify`/`metaStr`), the tool-profile resolver, and the
 // notification→window handoff (`openChannelForEntry` + the `handlers` it uses).
 //
-// CRITICAL: test/classify.test.mjs reads THIS file and evaluates the `classify`
-// and `metaStr` function bodies verbatim (they are private / non-exported). Keep
-// them as plain top-level `function` declarations with no braces inside their
-// strings/comments/regex, or the test's brace-balancing extractor breaks.
+// CRITICAL: test/classify.test.mjs (plus main-audit-targeting / task-notify /
+// wake-external-requester) reads THIS file and evaluates the `classify` and
+// `metaStr` function bodies verbatim. Keep them as plain top-level `function`
+// declarations with no braces inside their strings/comments/regex, or the test's
+// brace-balancing extractor breaks. classify also calls into the LEGACY-THREADS
+// block below, which those harnesses slice whole between its BEGIN/END sentinels
+// (it carries module state, so it cannot be extracted function by function).
 
 let handlers = {}; // window-control callbacks from index.js (openChannel)
 
@@ -53,7 +56,13 @@ function classify(m, entry, myId) {
   if (!m || m.kind !== 'message' || !m.authorUserId) return 'ignore';
   if (m.authorKind !== 'user' && m.authorKind !== 'agent') return 'ignore';
   if (!myId) return 'ignore';
-  if (m.authorUserId === myId) return 'ignore';
+  if (m.authorUserId === myId) {
+    // Still 'ignore' for targeting. But my OWN addressed message is the only place
+    // this machine ever learns which LEGACY threads it opened, so record it on the
+    // way past (noteMyLegacyThread is a no-op for anything else). See the registry.
+    noteMyLegacyThread(m, entry, myId);
+    return 'ignore';
+  }
 
   const rawCount = Number(entry.channel && entry.channel.memberCount);
   const knownTwo = Number.isFinite(rawCount) && rawCount === 2;
@@ -94,6 +103,32 @@ function classify(m, entry, myId) {
     metaStr(m, 'taskCreatedBy') === myId &&
     metaStr(m, 'taskTarget') === m.authorUserId
   ) return 'task-reply';
+  // LEGACY TASK-REPLY (incident 2026-07-31). The branch above can only ever fire for a
+  // FIRST-CLASS thread, because taskMode / taskCreatedBy / taskTarget are stamped ONLY
+  // from a resolved channel_tasks row; a legacy 'task-<channel>-<seq>' id is not a UUID,
+  // resolves to no row, and therefore carries NOTHING but the caller-set taskId itself
+  // (src/features/channels/server/service-writes-metadata.ts resolvePostMetadata: the
+  // four keys are deleted unconditionally and re-stamped only when `task` is non-null).
+  // So a session answering a LEGACY request posts an addressed, agent-authored reply that
+  // looks EXACTLY like a fresh request on the requester's machine, and the requester's
+  // desktop opened consent + spawned a counter-session against its own reply.
+  //
+  // The missing bit is provenance, and it cannot come off the wire (a legacy id is
+  // caller-settable, so any member could claim one). It comes from THIS MACHINE: the
+  // registry below holds the legacy ids of threads *I* opened, computed from my own
+  // outbound messages, which no peer can author. A reply tagged with one of those ids,
+  // from the very member I addressed, back to me, is my own outstanding request being
+  // answered. Same passive-notice outcome as the first-class branch, same AGENT-ONLY
+  // rule (AUDIT D1: a human addressing me always gates).
+  //
+  // FAILS SAFE toward 'trigger', never toward silence: an unknown id, an id evicted by
+  // the cap, a restart, or a first-watch backlog we never classified all leave the
+  // message on today's addressed path, where the consent gate is the safety net.
+  if (
+    m.authorKind === 'agent' &&
+    toUserId === myId &&
+    knownLegacyReply(m, myId)
+  ) return 'task-reply';
   if (toUserId) {
     // Explicit address always prompts — for USER *and* AGENT authors. This is
     // the fix: an agent addressed to me triggers a consented answering turn.
@@ -127,6 +162,113 @@ function firstClassTaskId(m) {
   const id = metaStr(m, 'taskId');
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : '';
 }
+
+// ── Legacy thread registry (incident 2026-07-31) ─────────────────────────────
+// THE ONLY LOCAL RECORD OF A THREAD I OPENED WITHOUT create_thread.
+//
+// A legacy exchange has no channel_tasks row, so the server stamps NO task metadata
+// for it at all: resolvePostMetadata deletes taskMode / taskCreatedBy / taskTitle /
+// taskTarget unconditionally and re-adds them only from a resolved (UUID) task, and a
+// 'task-<channel>-<seq>' id is not a UUID, so it resolves to nothing and is passed
+// through verbatim (it is also NOT rejected: only an unresolved UUID 400s). The wire
+// therefore tells the requester nothing about who owns a legacy thread.
+//
+// What the requester DOES own is the fact that it authored the opening message. The
+// legacy id is deterministic from (channel, seq) alone (trigger.taskIdFor's fallback,
+// and handleTrigger's futureTaskId), so this machine can compute the exact id a peer's
+// desktop will mint for MY message the moment it sees that message go by, and store it
+// with the member I addressed. Matching a later reply against that store is provenance
+// no peer can forge, because no peer can author a message as me.
+//
+// IN MEMORY ON PURPOSE. This is a routing hint whose only failure mode is a fallback to
+// the consent gate, so it is not worth an electron-store write on the listener's hot
+// path (and this module is deliberately dependency-free so the truth tables can slice
+// it). A restart, a sign-out, or a first-watch backlog drain simply means the next reply
+// prompts instead of notifying. Bounded by LEGACY_THREAD_CAP *and* LEGACY_THREAD_TTL_MS
+// (FIX S5), oldest evicted first.
+//
+// FIX S5 (Q5 review) — THE REGISTRY WAS FAR TOO BROAD, AND ENTRIES NEVER DIED.
+//
+// It recorded EVERY addressed message of mine, and in a DM the server auto-addresses
+// every post (since v2.6), so in the ordinary 1:1 case that is literally every message
+// the operator sends — each one minting a legacy id a peer may later claim. And
+// `metadata.taskId` is CALLER-SETTABLE for a legacy id with no participation check
+// (F-083: only the calm flags are gated), so a peer could stamp a genuinely NEW request
+// with an old legacy id of mine and have it classified 'task-reply' — a passive banner
+// with NO consent row, NO gate and NO Accept — for as long as the process lived.
+//
+// Two bounds close that, both in the fail-safe direction (a miss costs a consent
+// prompt, never a swallowed message):
+//   OPENERS ONLY. A message carrying an inbound taskId is a CONTINUATION, not the
+//     start of a thread, so it opens nothing. The legacy id is derived from the
+//     OPENER's seq, so a multi-turn exchange still matches the one record — every
+//     later turn of mine carries `thread=<that id>` and is skipped here.
+//   A TTL. Six hours: long enough for a real exchange (a session that runs longer than
+//     that has a first-class thread), short enough that a legacy id cannot be banked
+//     and replayed days later. The 500-entry cap stays as the memory bound.
+//
+// ─── BEGIN LEGACY-THREADS (sliced verbatim by the classify truth tables) ─────
+const LEGACY_THREAD_CAP = 500;
+const LEGACY_THREAD_TTL_MS = 6 * 60 * 60 * 1000;
+const legacyThreads = new Map(); // legacy task id -> { owner, target, at }
+
+// The legacy thread id a peer's desktop mints for a message at (channel, seq). MUST stay
+// byte-identical to trigger.js taskIdFor / handleTrigger's futureTaskId, since matching a
+// reply is a plain string lookup. Built by concatenation, not a template literal, so the
+// brace-balancing extractor the truth tables use never has to reason about `${`.
+function legacyThreadId(channelId, seq) {
+  return 'task-' + String(channelId) + '-' + String(seq);
+}
+
+// Record a thread I opened: MY OWN message, explicitly addressed to someone else. Called
+// from classify's self-authored branch, which is the one place every message this
+// operator posts (web composer, desktop session, or an EXTERNAL Claude Code session
+// posting through MCP) passes through. Unaddressed own messages are NOT recorded: with
+// no addressee there is no member to bind a later reply to, and an unbound entry would
+// let any channel member's tag suppress their own consent prompt. In a DM the server
+// auto-addresses the peer, so the ordinary 1:1 case is covered.
+// FIX S5: `nowMs` is injectable so the TTL is a truth table rather than a sleep.
+function noteMyLegacyThread(m, entry, myId, nowMs) {
+  const to = metaStr(m, 'to_user_id');
+  const channelId = entry && entry.channel ? String(entry.channel.id || '') : '';
+  const seq = Number(m.seq);
+  if (!to || to === myId || !channelId) return;
+  // OPENERS ONLY. A message already carrying a thread id continues someone's thread;
+  // it does not open one, and recording it would mint a second id for the same
+  // exchange that no reply will ever match anyway.
+  if (metaStr(m, 'taskId')) return;
+  if (!Number.isInteger(seq) || seq <= 0) return;
+  const at = Number(nowMs) || Date.now();
+  const id = legacyThreadId(channelId, seq);
+  legacyThreads.delete(id); // re-insert so a re-seen message refreshes its eviction age
+  legacyThreads.set(id, { owner: myId, target: to, at: at });
+  // Insertion order is age order, so one pass from the front drops whatever is over
+  // the cap AND whatever has aged out, and stops at the first entry that is neither.
+  for (const [oldest, rec] of legacyThreads) {
+    if (legacyThreads.size <= LEGACY_THREAD_CAP && at - rec.at <= LEGACY_THREAD_TTL_MS) break;
+    legacyThreads.delete(oldest);
+  }
+}
+
+// TRUE iff this message is tagged with a legacy thread id THIS machine opened, and is
+// authored by the very member that thread addresses. `owner` pins the entry to the
+// operator who recorded it, so a sign-out and sign-in as somebody else cannot inherit
+// another account's threads. Fails closed on every miss.
+// FIX S5: an entry past its TTL is dropped on read and answers false, so a banked
+// legacy id cannot suppress consent indefinitely.
+function knownLegacyReply(m, myId, nowMs) {
+  const id = metaStr(m, 'taskId');
+  if (!id) return false;
+  const rec = legacyThreads.get(id);
+  if (!rec) return false;
+  const now = Number(nowMs) || Date.now();
+  if (now - rec.at > LEGACY_THREAD_TTL_MS) {
+    legacyThreads.delete(id);
+    return false;
+  }
+  return rec.owner === myId && rec.target === m.authorUserId;
+}
+// ─── END LEGACY-THREADS ──────────────────────────────────────────────────────
 
 // ── Requester auto-open detector (v1.9, Q4) ──────────────────────────────────
 // TRUE iff this message is MY OWN first-class create_task addressed to a peer, so
@@ -201,6 +343,11 @@ module.exports = {
   metaStr,
   classify,
   firstClassTaskId,
+  LEGACY_THREAD_CAP,
+  LEGACY_THREAD_TTL_MS, // S5: the registry's two bounds, asserted by the truth tables
+  legacyThreadId,
+  noteMyLegacyThread,
+  knownLegacyReply,
   requesterTaskOpen,
   openChannelForEntry,
   resolveToolProfile,

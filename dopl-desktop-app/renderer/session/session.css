@@ -663,14 +663,16 @@ html, body {
 .inbound-pending.is-released { opacity: 0.55; }
 .inbound-pending.is-declined { opacity: 0.55; }
 
-/* ── Read-only channel history (v2.5 D3): the muted twin of a live bubble. The
-   lane class (single-class selector) still owns align-self + the 66% cap, so this
-   recipe carries the SURFACE only, exactly like .bubble.role-*. ───────────── */
+/* ── Read-only channel history (v2.5 D3 / v3.0 FIX Q2): an AGE CUE, nothing else.
+   This used to be a surface of its own — transparent fill, dashed 6%-alpha hairline,
+   secondary ink — which matched NO live bubble: a replayed exchange read as a ghost
+   rather than as the same conversation, earlier. The entry now carries the live
+   `.bubble.role-*` recipe (the view-model stamps the role), so the surface belongs
+   to those rules and this one only says "earlier".
+   align-self stays OUT: the lane class (single-class selector) owns alignment + the
+   66% cap, and a 2-class selector here would outrank it. ─────────────────── */
 .history-entry {
-  background: transparent;
-  border-color: var(--border-subtle);
-  border-style: dashed;
-  color: var(--text-secondary);
+  opacity: 0.85;
 }
 .history-divider {
   align-self: center;

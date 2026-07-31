@@ -210,8 +210,8 @@ test("a `history` event appends ONE divider then the entries, in order", () => {
   const s = vm.reduceEvent(vm.initialState(), {
     type: "history",
     entries: [
-      { from: "Sam", text: "kick off", lane: "me" },
-      { from: "David", text: "on it", lane: "them" },
+      { from: "Sam", text: "kick off", lane: "me", agent: false },
+      { from: "David", text: "on it", lane: "them", agent: false },
     ],
   });
   assert.deepEqual(s.items.map((i) => i.kind), ["history_divider", "history", "history"]);
@@ -221,6 +221,9 @@ test("a `history` event appends ONE divider then the entries, in order", () => {
     ["me", "Sam", "kick off"],
     ["them", "David", "on it"],
   ]);
+  // Q2: and each entry carries the role + avatarKey a LIVE bubble has, so one set of surface
+  // rules paints both. The peer's side is the counterparty whatever the row claims to be.
+  assert.deepEqual(s.items.slice(1).map((i) => [i.role, i.avatarKey]), [["operator", "self"], ["counterparty", "peer"]]);
 });
 
 test("a `history` event with no entries changes nothing (no empty divider)", () => {
@@ -235,6 +238,24 @@ test("history entry fields are coerced, and an unknown lane defaults to 'me'", (
     entries: [{ from: null, text: null, lane: "sideways" }],
   });
   assert.deepEqual([last(s).from, last(s).text, last(s).lane], ["", "", "me"]);
+});
+
+// ── Q2 (pure): a replayed entry is stamped like the LIVE bubble it replays. It used to reach the
+// renderer with only a lane, so the transparent, avatar-less `.history-entry` was all that applied.
+
+test("Q2: my side is the AGENT only on an explicit `agent` flag (never over-attributed)", () => {
+  const one = (entry) => last(vm.reduceEvent(vm.initialState(), { type: "history", entries: [entry] }));
+  assert.equal(one({ from: "S", text: "posted", lane: "me", agent: true }).role, "agent");
+  assert.equal(one({ from: "D", text: "on it", lane: "them", agent: true }).role, "counterparty", "the peer is the peer");
+  for (const agent of [undefined, null, false, "true", 1, {}]) {
+    const it = one({ from: "S", text: "x", lane: "me", agent });
+    assert.deepEqual([it.role, it.avatarKey], ["operator", "self"], String(agent));
+  }
+  // The reducer + divider copy are their own pure module now (§2), loaded BEFORE the view-model.
+  const hvm = require(R("session-history-vm.js"));
+  assert.equal(hvm.HISTORY_NOTE, "History from the channel");
+  assert.ok(!/document|innerHTML|electron/.test(readFileSync(R("session-history-vm.js"), "utf8").replace(/\/\/.*$/gm, "")));
+  assert.ok(orderOf(HTML, "session-history-vm.js", "session-viewmodel.js", "script order"), "a local script, loaded first");
 });
 
 test("history items align like live turns; the divider and the gate card do NOT", () => {
@@ -332,31 +353,64 @@ test("DOM: FIX F3 — a not_sent outbound reads 'Not sent' on the muted surface"
   for (const s of ["Not sent", "Sent to David", "Posted to channel"]) assert.ok(!s.includes("—"), "no em dash in copy");
 });
 
-test("DOM: a history entry is a muted bubble on its stamped lane, with NO controls", () => {
-  const them = render.makeHistory({ from: "David", text: "on it", lane: "them" });
-  assert.ok(them.el.classList.contains("history-entry"));
-  assert.ok(them.el.classList.contains("bubble"), "it reuses the bubble surface");
-  assert.ok(them.el.classList.contains("lane-them"));
-  assert.equal(them.el.children[0].textContent, "David");
+// ── Q2 (DOM): the history bubble IS the live bubble, one age cue apart. It used to be FLAT (`.who`
+// then `.body`, no head, no avatar) and registered UNBOUND, so ctx.avatarFor was unreachable and
+// update() a noop. Pinned now: `.cp-head` (avatar + name) then `.body`, a role class, a repaint.
+
+const DATA_SELF = "data:image/png;base64,AAAAself";
+const DATA_PEER = "data:image/png;base64,AAAApeer";
+const ctxAvatars = { vm, avatarFor: (k) => (k === "self" ? DATA_SELF : k === "peer" ? DATA_PEER : null) };
+const headOf = (rec) => rec.el.children.find((c) => c.classList.contains("cp-head"));
+const whoOf = (rec) => headOf(rec).children.find((c) => c.classList.contains("who"));
+const imgIn = (av) => av.children.find((c) => c.className === "av-img");
+const histCls = (item) => render.makeHistory(item, {}).el.className.split(/\s+/);
+
+test("DOM: a history entry is a live-shaped bubble on its stamped lane, with NO controls", () => {
+  const them = render.makeHistory({ from: "David", text: "on it", lane: "them", role: "counterparty", avatarKey: "peer" }, {});
+  for (const c of ["history-entry", "bubble", "lane-them"]) assert.ok(them.el.classList.contains(c), c);
+  assert.deepEqual(them.el.children.map((c) => c.className.split(" ")[0]), ["cp-head", "body"], "head THEN body");
+  assert.equal(whoOf(them).textContent, "David");
   assert.equal(them.el.children[1].textContent, "on it");
   assert.equal(buttonsOf(them).length, 0, "read-only: nothing to click");
-  const mine = render.makeHistory({ from: "", text: "kick off", lane: "me" });
+  const mine = render.makeHistory({ from: "", text: "kick off", lane: "me", role: "operator", avatarKey: "self" }, {});
   assert.ok(mine.el.classList.contains("lane-me"));
-  assert.equal(mine.el.children[0].textContent, "You", "a missing name falls back per lane");
-  assert.equal(render.makeHistory({ text: "x", lane: "them" }).el.children[0].textContent, "Counterparty");
+  assert.equal(whoOf(mine).textContent, "You", "a missing name falls back per lane");
+  assert.equal(whoOf(render.makeHistory({ text: "x", lane: "them" }, {})).textContent, "Counterparty");
+  // The role class per lane/author is what makes a LIVE surface recipe apply at all.
+  assert.ok(histCls({ lane: "them", role: "counterparty", from: "D" }).includes("role-counterparty"));
+  assert.ok(histCls({ lane: "me", role: "operator" }).includes("role-operator"));
+  assert.ok(histCls({ lane: "me", role: "agent" }).includes("role-agent"));
+  // FAIL SAFE: an un-stamped entry still lands on a live recipe, and never claims the agent
+  // wrote what the operator did. End to end: the vm's stamp is what the factory paints.
+  assert.ok(histCls({ lane: "them" }).includes("role-counterparty"));
+  for (const it of [{ lane: "me" }, { lane: "me", role: "nonsense" }]) assert.ok(histCls(it).includes("role-operator"));
+  const s = vm.reduceEvent(vm.initialState(), { type: "history", entries: [{ from: "Sam", text: "p", lane: "me", agent: true }] });
+  assert.ok(render.makeHistory(s.items[1], {}).el.classList.contains("role-agent"));
+});
+
+test("DOM: Q2 — a BOUND history factory carries an avatar a late `avatars` fill repaints", () => {
+  let uri = null; // cold cache: the initials fallback, exactly like a live bubble with no photo
+  const item = { kind: "history", from: "David", text: "on it", lane: "them", role: "counterparty", avatarKey: "peer" };
+  const rec = render.makeHistory(item, { vm, avatarFor: () => uri });
+  const cold = headOf(rec).children[0];
+  assert.ok(cold.classList.contains("cp-avatar") && cold.textContent === "D", "starts as the initials fallback");
+  uri = DATA_PEER; // the `avatars` event lands; the controller re-renders through update()
+  rec.update(item);
+  assert.equal(imgIn(headOf(rec).children[0]).getAttribute("src"), DATA_PEER, "the PEER photo, in place");
+  // BOUND in the map: an UNBOUND factory could never reach ctx.avatarFor at all (the Q2 bug).
+  const f = render.makeFactories(ctxAvatars);
+  assert.equal(imgIn(headOf(f.history(item)).children[0]).getAttribute("src"), DATA_PEER);
+  const self = f.history({ ...item, lane: "me", role: "operator", avatarKey: "self" });
+  assert.equal(imgIn(headOf(self).children[0]).getAttribute("src"), DATA_SELF, "the SELF photo on my side");
+  assert.match(readFileSync(R("session-render.js"), "utf8"), /history: bind\(makeHistory\)/);
+  // and it still routes the other v2.5 kinds (an unknown kind falls through to a notice).
+  for (const kind of ["history", "history_divider", "inbound_pending"]) assert.equal(typeof f[kind], "function", kind);
 });
 
 test("DOM: the divider is a plain muted line, un-laned", () => {
   const rec = render.makeHistoryDivider({ text: "History from the channel" });
   assert.equal(rec.el.className, "history-divider");
   assert.equal(rec.el.textContent, "History from the channel");
-});
-
-test("DOM: the factory map routes the new kinds (an unknown kind would fall to a notice)", () => {
-  const f = render.makeFactories({ vm });
-  for (const kind of ["history", "history_divider", "inbound_pending"]) {
-    assert.equal(typeof f[kind], "function", `${kind} has a factory`);
-  }
 });
 
 // ── markup / controller / stylesheet guards ───────────────────────────────────────
@@ -387,7 +441,15 @@ test("the gate + history recipes exist and keep the established stream language"
   assert.ok(hasRule(CSS, ".history-divider"));
   // The lane classes own alignment, so .history-entry must NOT re-declare align-self
   // (a 2-class selector would outrank the single-class lane recipe).
-  assert.ok(!("align-self" in declsOf(CSS, ".history-entry")), "the history bubble carries the surface only");
+  assert.ok(!("align-self" in declsOf(CSS, ".history-entry")), "the history bubble carries no alignment");
+  // Q2: and it is an AGE CUE only now. The transparent fill + dashed hairline it used to declare
+  // were why a replayed exchange read as a ghost; `.bubble.role-*` owns the surface it sits on.
+  const cue = declsOf(CSS, ".history-entry");
+  assert.deepEqual(Object.keys(cue), ["opacity"], "one cue, nothing else");
+  assert.ok(parseFloat(cue.opacity) > 0.5 && parseFloat(cue.opacity) <= 1, cue.opacity);
+  for (const role of ["agent", "operator", "counterparty"]) {
+    assert.ok(hasRule(CSS, `.bubble.role-${role}`), `.bubble.role-${role} paints the replayed bubble too`);
+  }
 });
 
 test("the renderer stays textContent-only and the CSP is untouched", () => {
@@ -430,8 +492,9 @@ test("FIX F3/F10: the CSS carries the not-sent recipe and the gate stamp waits o
 // vacuously) if makeHistoryDivider were ever declared above makeHistory. fnOf brace-matches
 // makeHistory's own body, so neither declaration order nor a rename can empty it silently.
 test("no absolute path or id leaks into the history surface (label-only rule, §H-9)", () => {
-  const factory = fnOf(readFileSync(R("session-render.js"), "utf8"), "makeHistory");
+  const src = readFileSync(R("session-render.js"), "utf8");
+  const factory = fnOf(src, "makeHistory") + fnOf(src, "makeHead"); // makeHead feeds EVERY bubble head
   assert.ok(factory.startsWith("function makeHistory("), "a REAL block, never an empty slice");
-  assert.ok(factory.includes("history-entry"), "and the whole body, not a prefix of it");
+  assert.ok(factory.includes("history-entry") && factory.includes("cp-head"), "whole bodies, not prefixes");
   assert.ok(!/pendingId|toolUseId|sessionId|channelId|authorUserId/.test(factory), "no ids in the read-only bubble");
 });

@@ -14,6 +14,7 @@
 const { Notification } = require('electron');
 const Store = require('electron-store');
 const auth = require('./auth');
+const heal = require('./listener-heal');
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
 
@@ -215,20 +216,85 @@ function normalizeList(data, key) {
   return [];
 }
 
+// NULL means "could not ask" (401 / non-OK), NOT "you are in no workspaces".
+// reconcile treats null as abort-this-pass and keeps every existing loop; an
+// empty array would prune them all.
 async function listWorkspaces() {
   const res = await apiFetch('/api/workspaces', { timeoutMs: 15000 });
   if (res.status === 401) { notifyStale(); return null; }
-  if (!res.ok) return [];
+  if (!res.ok) { diag('listWorkspaces', res.status); return null; }
   return normalizeList(await res.json(), 'workspaces');
 }
 
+// Q4 (b): returns an ARRAY of channels, or NULL when this workspace could NOT be
+// enumerated (401 / 5xx / network / unparseable). The null is load-bearing: the
+// old contract returned [] for every failure, so reconcile could not tell "this
+// workspace has no channels" from "I never got an answer" — and the prune step
+// then silently killed every loop for a workspace whose read failed inside an
+// expired-token window (the 02:18 incident). A 404 is different: it is a real,
+// stable answer meaning the Channels feature is not deployed, so it stays [].
+// FIX S6 — was the LAST listChannels failure AUTH-shaped? The retry ladder used to
+// run the session-refresh dance after EVERY failure, so a 500 or a dropped socket
+// rotated the Supabase refresh token and rewrote the cookie jar for no reason.
+// Combined with the (then) clear-then-set writeback, a transient 5xx across N loops
+// was the amplification path that ended in clearSession(). Set on every call and read
+// immediately by listChannelsWithRetry, which awaits listChannels serially.
+let lastChannelsAuthFailure = false;
+
 async function listChannels(workspaceId) {
-  const res = await apiFetch('/api/channels', { workspaceId, timeoutMs: 15000 });
+  const short = String(workspaceId).slice(0, 8);
+  lastChannelsAuthFailure = false;
+  let res;
+  try {
+    res = await apiFetch('/api/channels', { workspaceId, timeoutMs: 15000 });
+  } catch (err) {
+    diag('listChannels error ws', short, err && err.message);
+    return null;
+  }
   if (res.status === 404) { featureAvailable = false; return []; }
-  if (res.status === 401) { notifyStale(); return []; }
-  if (!res.ok) return [];
-  featureAvailable = true;
-  return normalizeList(await res.json(), 'channels');
+  if (res.status === 401) { lastChannelsAuthFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
+  if (!res.ok) { diag('listChannels', res.status, 'ws', short); return null; }
+  try {
+    const list = normalizeList(await res.json(), 'channels');
+    featureAvailable = true;
+    return list;
+  } catch (err) {
+    diag('listChannels parse error ws', short, err && err.message);
+    return null;
+  }
+}
+
+// Bounded retry ladder around listChannels (heal.ENUM_RETRY_DELAYS_MS). A
+// transient failure used to drop the workspace for the whole 5-minute reconcile
+// period — or, at 02:18, until the next reboot. Serial and short: at most two
+// extra tries for ONE workspace, never concurrent, so this cannot storm (F-072).
+// An AUTH-shaped retry first repairs the session, because the observed failure WAS an
+// expired-token window and a refresh is exactly what fixes it.
+//
+// FIX S6: only a 401 gets that repair now. A refresh cannot fix a 500, a timeout or a
+// dropped socket, and running it anyway rotated the refresh token (Supabase rotates on
+// use) and rewrote the cookie jar on every transient blip — the write half of the
+// amplification loop this round closes. A non-auth failure just backs off and retries.
+async function listChannelsWithRetry(workspaceId) {
+  for (let attempt = 0; ; attempt += 1) {
+    const chans = await listChannels(workspaceId);
+    if (chans !== null) return chans;
+    const authShaped = lastChannelsAuthFailure;
+    const delay = heal.enumerationRetryDelay(attempt);
+    if (delay == null) {
+      diag('listChannels gave up ws', String(workspaceId).slice(0, 8), 'after', attempt + 1, 'tries');
+      return null;
+    }
+    if (authShaped) {
+      try {
+        const s = await auth.ensureFresh();
+        if (s) await auth.writeSessionCookies(s);
+      } catch (err) {
+        diag('listChannels retry refresh error', err && err.message);
+      }
+    }
+    await sleep(delay);
+  }
 }
 
 // ── Identity ─────────────────────────────────────────────────────────────────
@@ -323,6 +389,7 @@ module.exports = {
   normalizeList,
   listWorkspaces,
   listChannels,
+  listChannelsWithRetry,
   resolveIdentity,
   displayNameFor,
   avatarUrlFor,

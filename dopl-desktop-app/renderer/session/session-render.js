@@ -101,30 +101,34 @@
     operator: { who: "You", cls: "role-operator" },
   };
 
+  // The `.cp-head` line EVERY avatar-bearing bubble shares (item 1/5/6): the author's avatar
+  // then the `.who` name, appended to `root` in that order. The returned repaint(key) RE-APPLIES
+  // the avatar in place, which is how a late `avatars` event turns initials into the real photo
+  // without rebuilding the item. ONE implementation for makeTurn / makeCounterparty / makeHistory
+  // (v3.0 FIX Q2): a replayed bubble cannot drift from the live one it replays if they share this.
+  function makeHead(root, ctx, key, who, forInitials) {
+    const node = root.appendChild(el("div", "cp-head"));
+    const paint = (k) => avatarNode(avatarForKey(ctx, k === undefined ? key : k), initial(forInitials));
+    let av = node.appendChild(paint());
+    node.appendChild(el("span", "who", who));
+    return (k) => { const next = paint(k); node.replaceChild(next, av); av = next; };
+  }
+
   // ── stream item factories: each returns { el, update(item) } ───────────────
-  // Every avatar-bearing factory holds a reference to its avatar node so update()
-  // can RE-APPLY it in place — a late `avatars` event repaints already-rendered
-  // bubbles (initials → the real photo) without rebuilding the whole item.
   function makeTurn(item, ctx) {
     const role = ROLE[item.role] || { who: cap(item.role), cls: "role-agent" };
     // v2.7 L1: BOTH turn roles take the RIGHT lane — the operator's typed steer and the agent's
     // own text are this machine's output; only the peer's reply sits on the left. The lane class
     // comes from chrome.laneClass; the surface recipes (F2) are what tell the two roles apart.
     const root = el("div", lane("bubble " + role.cls, { kind: "turn", role: item.role }));
-    const head = el("div", "cp-head");
     // agent/operator turns are both ME → the SELF photo (item 1/5/6).
-    let av = avatarNode(avatarForKey(ctx, item.avatarKey), initial(role.who));
-    head.appendChild(av);
-    head.appendChild(el("span", "who", role.who));
-    root.appendChild(head);
+    const repaint = makeHead(root, ctx, item.avatarKey, role.who, role.who);
     const body = el("span", "body", item.text || "");
     root.appendChild(body);
     const update = (it) => {
       body.textContent = it.text || "";
       root.classList.toggle("is-streaming", it.streaming === true);
-      const next = avatarNode(avatarForKey(ctx, it.avatarKey), initial(role.who));
-      head.replaceChild(next, av);
-      av = next;
+      repaint(it.avatarKey);
     };
     update(item);
     return { el: root, update };
@@ -134,18 +138,9 @@
   // (item 1/5/6), falling back to the initials-on-token recipe (item 1).
   function makeCounterparty(item, ctx) {
     const root = el("div", lane("bubble role-counterparty", { kind: "counterparty" }));
-    const head = el("div", "cp-head");
-    let av = avatarNode(avatarForKey(ctx, "peer"), initial(item.from));
-    head.appendChild(av);
-    head.appendChild(el("span", "who", item.from || "Counterparty"));
-    root.appendChild(head);
+    const repaint = makeHead(root, ctx, "peer", item.from || "Counterparty", item.from);
     root.appendChild(el("span", "body", item.text || ""));
-    const update = () => {
-      const next = avatarNode(avatarForKey(ctx, "peer"), initial(item.from));
-      head.replaceChild(next, av);
-      av = next;
-    };
-    return { el: root, update };
+    return { el: root, update: () => repaint() };
   }
 
   // What MY agent SENT to the peer (op=post) — a distinct styled COMPONENT (item
@@ -364,14 +359,20 @@
     return { el: root, update };
   }
 
-  // v2.5 D3: a READ-ONLY history entry replayed from the channel thread. Deliberately
-  // the muted twin of a live bubble (the lane class still aligns it) so it reads as
-  // "earlier" at a glance and carries no controls at all.
-  function makeHistory(item) {
-    const root = el("div", lane("bubble history-entry", { kind: "history", lane: item.lane }));
-    root.appendChild(el("span", "who", item.from || (item.lane === "them" ? "Counterparty" : "You")));
+  // v2.5 D3 / v3.0 FIX Q2: a READ-ONLY history entry replayed from the channel thread. It is now
+  // the SAME bubble as the live one it replays: the view-model stamps `role` + `avatarKey`
+  // (counterparty for the peer; agent or operator for this side), so the live surface recipes and
+  // the shared head/avatar line apply and `.history-entry` only carries the age cue. It was a
+  // transparent, dashed, avatar-less twin before, which matched no live surface at all. FAIL TO
+  // THE PEER: an un-stamped `them` entry is still the counterparty. Read-only — no controls.
+  function makeHistory(item, ctx) {
+    const them = item.lane === "them";
+    const role = them ? "counterparty" : item.role === "agent" ? "agent" : "operator";
+    const who = item.from || (them ? "Counterparty" : "You");
+    const root = el("div", lane("bubble role-" + role + " history-entry", { kind: "history", lane: item.lane }));
+    const repaint = makeHead(root, ctx, item.avatarKey || (them ? "peer" : "self"), who, item.from || who);
     root.appendChild(el("span", "body", item.text || ""));
-    return { el: root, update: noop };
+    return { el: root, update: () => repaint() };
   }
 
   // The single divider that introduces the replayed history (copy from the view-model).
@@ -469,7 +470,7 @@
       counterparty: bind(makeCounterparty),
       outbound: bind(makeOutbound),
       inbound_pending: bind(makeInboundPending),
-      history: makeHistory, // v2.5 D3 (read-only; needs no ctx)
+      history: bind(makeHistory), // v2.5 D3, BOUND (v3.0 FIX Q2: it needs ctx.avatarFor too)
       history_divider: makeHistoryDivider,
       notice: makeNotice,
     };

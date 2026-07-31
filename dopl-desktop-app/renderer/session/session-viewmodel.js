@@ -44,6 +44,15 @@
   const shortToolName = fmt.shortToolName;
   const summarizeToolInput = fmt.summarizeToolInput;
 
+  // v3.0 FIX Q2: the read-only history reducer (and the divider copy it owns) live in
+  // session-history-vm.js — the §2 500-line split — reached exactly the way session-format.js is.
+  // Same NIT posture: a MISSING module THROWS at load rather than dropping a shell's history.
+  const history =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-history-vm.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionHistoryVM) || {};
+  if (typeof history.historyItems !== "function") throw new Error("session-history-vm.js did not load: historyItems");
+
   // C8/MEDIUM-6: the bound every COUNTERPARTY-CONTROLLED display name gets before it reaches a
   // decision surface (the peer bubble already had it). v2.9 THE TWO AXES: the renderer's own copy of
   // the canonical tables (a sandboxed page cannot require main), used ONLY to fail-closed a `modes`
@@ -292,20 +301,12 @@
       case "inbound_resolved":
         return markInboundDecided(state, event.pendingId, event.decision);
 
-      // v2.5 D3: read-only channel history for a reopened shell. One divider note (copy owned here)
-      // then the entries in stream order. Display only — no pendingId, no controls.
+      // v2.5 D3: read-only channel history for a reopened shell — one divider note then the
+      // entries in stream order, each stamped with the role + avatarKey a LIVE bubble carries
+      // (v3.0 FIX Q2). Display only, no controls; the whole slice is built in session-history-vm.js.
       case "history": {
-        const entries = Array.isArray(event.entries) ? event.entries : [];
-        if (!entries.length) return state;
-        const items = [{ kind: "history_divider", text: HISTORY_NOTE }].concat(
-          entries.map((e) => ({
-            kind: "history",
-            from: e && e.from ? String(e.from) : "",
-            text: e && e.text == null ? "" : String(e.text),
-            lane: e && e.lane === "them" ? "them" : "me",
-          }))
-        );
-        return { ...state, items: state.items.concat(items) };
+        const items = history.historyItems(event.entries);
+        return items.length ? { ...state, items: state.items.concat(items) } : state;
       }
 
       case "status": // no `usage` case: the meter was removed (item 6); the caps live in main
@@ -473,8 +474,6 @@
   const PAUSED_NOTE = "Paused after inactivity. Send a message or wait for a reply to continue.";
   // FIX #17: the same park with a message HELD. "Wait for a reply" is wrong: it already arrived.
   const PAUSED_GATED_NOTE = "Paused after inactivity. Accept the waiting message or send one to continue.";
-  // D3: the divider introducing a reopened window's channel history. Renderer copy, no em dash.
-  const HISTORY_NOTE = "History from the channel";
 
   // The label strings live in session-labels.js (the §2 split) and are RE-EXPORTED verbatim, so
   // callers keep reaching vm.statusText / vm.folderLabel / vm.permissionPostureText. Reached the

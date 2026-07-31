@@ -26,6 +26,7 @@ const taskNotify = require('./task-notify');
 const watcher = require('./consent-watcher');
 const sessionEngine = require('./session-engine');
 const realtime = require('./realtime');
+const heal = require('./listener-heal');
 const { LISTENER, REALTIME } = require('./config');
 
 // Console output is invisible for a GUI-launched app, and the trigger path has
@@ -43,6 +44,12 @@ let myUserId = null; // resolved operator identity (H2); null until known
 let reconciling = null; // in-flight reconcile promise (M1 re-entrancy guard)
 let onPendingCb = null; // tray pending-count callback (from index.js handlers)
 const loops = new Map(); // channelId -> loop entry
+// Q4 fix 2: the last workspace set we successfully enumerated, so a `want=0`
+// realtime state can be repaired without waiting for a pass that may fail.
+let lastGoodWorkspaceIds = [];
+// Bounded, coalesced "re-ask later" scheduling for the two self-heal paths
+// (loop=miss re-enumeration, unenumerated-workspace retry). See listener-heal.js.
+const healer = heal.createReconcileHealer({ run: () => reconcile(), log: diag });
 
 // ── v2.2 session-window dispatch (checked BEFORE classify → consent, §A.2) ────
 // The three pre-classify routes (feedLiveSession, maybeOpenRequesterSession,
@@ -198,26 +205,46 @@ function reconcile() {
 
 async function reconcileInner() {
   if (!running) return;
-  if (!auth.isSignedIn()) {
+  // Q4 fix 1: the gate is cookie-aware and ASYNC here. ensureSignedIn() re-reads
+  // the cookie jar (and repairs a dead session blob from it) before answering, so
+  // a boot whose encrypted blob rotted while the web cookies stayed valid no
+  // longer skips the entire listener — which is what left `want=0` wedged.
+  if (!(await auth.ensureSignedIn())) {
     myUserId = null; // force re-resolve on next sign-in
     stopLoops();
     presence.setWorkspaces([]); // stop heartbeating when signed out
     if (REALTIME.ENABLED) realtime.setWorkspaces([]); // drop the WS subscriptions
     watcher.reset(); // FIX 1: drop in-memory pending records + zero the tray count
+    lastGoodWorkspaceIds = [];
+    diag('reconcile: signed out (no blob, no cookie session) — listener idle');
     setStatus();
     return;
+  }
+  // FIX S4: jar and blob name DIFFERENT users, and `myUserId` is cached for the process's
+  // life — so drop that cache while the conflict lasts (auth-state.js refuses to adopt).
+  if (auth.identityMismatch()) myUserId = null;
+  // Q4 fix 2c: push wedged at want=0 while we hold a live credential. Re-apply the
+  // last known-good workspace set NOW, before an enumeration that may itself fail.
+  if (REALTIME.ENABLED &&
+      heal.shouldReapplyWorkspaces(true, realtime.desiredCount(), lastGoodWorkspaceIds.length)) {
+    diag('reconcile self-heal: realtime want=0 with a live credential — re-applying',
+      lastGoodWorkspaceIds.length, 'workspace(s)');
+    realtime.refreshAuth();
+    realtime.setWorkspaces(lastGoodWorkspaceIds);
   }
   let workspaces;
   try {
     workspaces = await io.listWorkspaces();
   } catch (err) {
-    console.error('[listener] listWorkspaces error:', err && err.message);
-    setStatus();
-    return;
+    diag('reconcile: listWorkspaces error —', err && err.message);
+    workspaces = null;
   }
-  if (workspaces === null) { setStatus(); return; } // 401 handled
+  // A workspace list we never got is the same class of failure as a channel list
+  // we never got: retry it soon instead of idling until the 5-minute timer.
+  if (workspaces === null) { healer.onEnumerationFailure(1); setStatus(); return; }
 
   const desired = new Map();
+  const failedWorkspaces = new Set(); // enumeration never answered for these
   for (const ws of workspaces) {
     if (!ws || !ws.id) continue;
     // Feature B/C: refresh the userId->displayName cache once per workspace per
@@ -228,11 +255,16 @@ async function reconcileInner() {
     // to cache and no window in which a revoked rule keeps auto-allowing.
     // Canonical URL segment for the notification deep-link (Feature B).
     const workspaceSegment = ws.slug && ws.publicId ? `${ws.slug}-${ws.publicId}` : null;
-    let chans = [];
-    try {
-      chans = await io.listChannels(ws.id);
-    } catch (err) {
-      console.error('[listener] listChannels error:', err && err.message);
+    // Q4 fix 2b: null = "never got an answer" (after the bounded retry ladder), so
+    // this workspace is NOT treated as empty — its loops survive the prune below
+    // and one follow-up reconcile is scheduled. Dropping it silently is exactly
+    // what left samuels-workspace unwatched from 02:18 until the next reboot.
+    const chans = await io.listChannelsWithRetry(ws.id);
+    if (chans === null) {
+      failedWorkspaces.add(ws.id);
+      diag('reconcile: channel enumeration FAILED ws', ws.slug || String(ws.id).slice(0, 8),
+        '— keeping existing loops, retry scheduled');
+      continue;
     }
     for (const c of chans) {
       if (!c || !c.id) continue;
@@ -243,9 +275,14 @@ async function reconcileInner() {
 
   // Feature 5: presence heartbeats target every member workspace (not just ones
   // with channels) so the web shows this operator's agent as listening.
-  presence.setWorkspaces(workspaces.map((w) => w && w.id).filter(Boolean));
+  const wsIds = workspaces.map((w) => w && w.id).filter(Boolean);
+  // FIX S8: the EMPTY set too. `if (wsIds.length)` kept the last non-empty set forever for
+  // an operator who left every workspace, so shouldReapplyWorkspaces re-subscribed push to
+  // them every 5 minutes in perpetuity. A successful enumeration of nothing is an ANSWER.
+  lastGoodWorkspaceIds = wsIds; // the want=0 repair source above
+  presence.setWorkspaces(wsIds);
   // Push: refresh the WS JWT (else ~1h expiry silently kills push) + resubscribe.
-  if (REALTIME.ENABLED) { realtime.refreshAuth(); realtime.setWorkspaces(workspaces.map((w) => w && w.id).filter(Boolean)); }
+  if (REALTIME.ENABLED) { realtime.refreshAuth(); realtime.setWorkspaces(wsIds); }
 
   // H2: resolve the operator identity before any loop can evaluate classify().
   if (!myUserId) {
@@ -255,12 +292,13 @@ async function reconcileInner() {
     sessionEngine.setSelfIdentity(myUserId);
   }
 
-  // Stop loops for channels no longer desired.
+  // Stop loops for channels no longer desired — EXCEPT those belonging to a
+  // workspace we failed to enumerate, whose absence from `desired` means nothing.
   for (const [id, entry] of loops) {
-    if (!desired.has(id)) {
-      entry.stop = true;
-      loops.delete(id);
-    }
+    if (desired.has(id)) continue;
+    if (heal.keepLoopOnPrune(entry.workspaceId, failedWorkspaces)) continue;
+    entry.stop = true;
+    loops.delete(id);
   }
   // Start loops for newly-seen channels; refresh metadata for existing. The
   // in-flight guard above means this runs serialized, but we still re-check
@@ -304,6 +342,8 @@ async function reconcileInner() {
       existing.workspaceSegment = d.workspaceSegment;
     }
   }
+  // One bounded follow-up pass when a workspace never answered; no-op otherwise.
+  healer.onEnumerationFailure(failedWorkspaces.size);
   setStatus();
 }
 
@@ -321,9 +361,12 @@ function status() {
   return `Listener: watching ${n} channel${n === 1 ? '' : 's'}`;
 }
 
+// The tray gets the status STRING plus the signed-out FACT as a boolean; it used to get only
+// the string and re-derive the fact with /signed out/i (one copy edit from a vanished sign-in
+// affordance). `running === false` is "off", not "signed out".
 function setStatus() {
   if (onStatus) {
-    try { onStatus(status()); } catch (_) { /* tray may be gone */ }
+    try { onStatus(status(), { signedOut: running && !auth.isSignedIn() }); } catch (_) { /* tray may be gone */ }
   }
 }
 
@@ -429,6 +472,11 @@ function wakeChannel(channelId) {
   // DIAG: every wake the transport fires, and whether a live loop caught it
   // (hit) or the channel has no loop yet (miss) — closes the trace INSERT→wake.
   diag('realtime wake', String(channelId).slice(0, 8), `(loop=${entry ? 'hit' : 'miss'})`);
+  // Q4 fix 2a: a miss means push is delivering for a channel our channel SET does
+  // not know about — a stale set, not a stale message. Re-enumerate instead of
+  // letting it persist to reboot. Bounded: the healer admits ONE reconcile per
+  // window and swallows every further miss inside it (F-072, no storm).
+  if (!entry) { healer.onLoopMiss(channelId); return; }
   io.wakeEntry(entry);
 }
 
@@ -441,6 +489,7 @@ function onRealtimeHealth(_healthy) {
 function stop() {
   running = false;
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  healer.stop(); // cancel any pending self-heal retry
   stopLoops();
   watcher.stop(); // Round B: stop the async consent poll loop
   presence.stop(); // Feature 5: stop heartbeating on shutdown

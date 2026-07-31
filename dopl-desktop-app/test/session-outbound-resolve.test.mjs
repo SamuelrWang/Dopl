@@ -144,7 +144,9 @@ test("C6: a bodiless post still resolves its card (text degrades to '')", async 
 test("C6: the engine wires the wrapper around the REAL gate and emits QUIETLY", async () => {
   const { readFileSync } = await import("node:fs");
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-  assert.match(ENGINE, /canUseTool: sessionOutbound\.wrapCanUseTool\(s, io\.makeCanUseTool\(s, dispatch\), emitQuiet\)/,
+  // The third argument is the injected `log` (session-io must stay electron-free, so the
+  // forced-thread-tag conflict line is diag'd from here). The wrapper still only OBSERVES.
+  assert.match(ENGINE, /canUseTool: sessionOutbound\.wrapCanUseTool\(s, io\.makeCanUseTool\(s, dispatch, diag\), emitQuiet\)/,
     "the gate is unchanged; the wrapper only observes its verdict");
   // emitQuiet skips the RESHOW check: an auto-allowed post needs nothing from the operator,
   // so resolving its card must not pop a hidden window open.

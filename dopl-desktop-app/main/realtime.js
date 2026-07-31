@@ -491,5 +491,6 @@ module.exports = {
   refreshAuth,
   isHealthy,
   isWorkspaceHealthy,
+  desiredCount: () => desiredWorkspaces.size, // Q4: the `want=` count reconcile self-heals on
   snapshot: describeState,
 };

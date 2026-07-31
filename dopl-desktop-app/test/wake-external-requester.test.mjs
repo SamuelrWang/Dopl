@@ -122,8 +122,15 @@ function extractFn(src, name) {
   }
   return src.slice(start, i);
 }
+// classify also calls the LEGACY-THREADS registry, which carries module state and so is
+// sliced whole between its sentinels rather than brace-balanced out function by function.
+const LEGACY = TARGETING.slice(
+  TARGETING.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  TARGETING.indexOf("// ─── END LEGACY-THREADS")
+);
+assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 const { classify } = new Function(
-  `${extractFn(TARGETING, "metaStr")}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
+  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
 )();
 
 const ME = "11111111-1111-1111-1111-111111111111";

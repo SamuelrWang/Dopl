@@ -22,7 +22,10 @@ import { createRequire } from "node:module";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const SRC = readFileSync(join(HERE, "..", "main", "session-io.js"), "utf8");
+// The pure block moved to session-outbound-tag.js (session-io.js was AT the 500-line cap
+// and the forced thread tag belongs with the classifier it keys off). session-io re-exports
+// isOutboundPost, so the direct-require half below is unchanged.
+const SRC = readFileSync(join(HERE, "..", "main", "session-outbound-tag.js"), "utf8");
 
 // The REAL exports the block depends on — pins the classifier to what ships.
 const { DOPL_CHANNEL_TOOL } = require(join(HERE, "..", "main", "tool-profiles.js"));

@@ -43,8 +43,16 @@ function extractFn(name) {
   return SRC.slice(start, i);
 }
 
+// classify also calls the LEGACY-THREADS registry (targeting.js), which holds module state
+// and so is sliced whole between its sentinels instead of function by function.
+const LEGACY = SRC.slice(
+  SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  SRC.indexOf("// ─── END LEGACY-THREADS")
+);
+assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
+
 const { classify } = new Function(
-  `${extractFn("metaStr")}\n${extractFn("classify")}\nreturn { classify, metaStr };`
+  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("classify")}\nreturn { classify, metaStr };`
 )();
 
 const ME = "me-uuid"; // the REQUESTER (I created the thread)

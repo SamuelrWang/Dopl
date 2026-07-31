@@ -98,13 +98,16 @@ async function maybeOpenRequesterSession(entry, m, myUserId) {
     // v2.x: the CONCRETE ids ride the context as well — prompt-framing's delivery section
     // reads only the context, and a requester told just the channel's display name could
     // not fill dopl_channel's required `channel=` (nor the workspace a multi-workspace
-    // token demands), so it hunted with op "list" instead of posting.
+    // token demands), so it hunted with op "list" instead of posting. 2026-07-31: taskId
+    // joins them, so the delivery call NAMES the thread and every post this session makes
+    // threads instead of arriving on the peer as a brand-new request.
     context: {
       channelName: entry.channel.name,
       targetName: io.displayNameFor(targeting.metaStr(m, 'taskTarget')),
       taskTitle: targeting.metaStr(m, 'taskTitle'),
       channelId: entry.channel.id,
       workspaceId: entry.workspaceId,
+      taskId,
     },
     toolProfile: targeting.resolveToolProfile(entry.channel),
     mode: targeting.metaStr(m, 'taskMode') || 'autonomous',

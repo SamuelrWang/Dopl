@@ -12,8 +12,12 @@
 // imperative shell) remains the only stateful, electron-bound module.
 
 const crypto = require('crypto');
-const { grantDecision, grantKeyFor, isOwnChannelPost, isChannelTool } = require('./session-profiles');
+const { grantDecision, grantKeyFor, isOwnChannelPost } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
+// The own-channel-post classifier (`isOutboundPost`) and the FORCED thread tag live in
+// session-outbound-tag.js (§2 cap). isOutboundPost is re-exported below, so no caller changed.
+const outboundTag = require('./session-outbound-tag');
+const { isOutboundPost } = outboundTag;
 // The turn-TEXT assembly (fences, the channel-history seed, the gate-exclusion
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
@@ -123,21 +127,6 @@ function summarizeResult(content) {
     return '';
   }
 }
-
-// ─── BEGIN SESSION-IO-PURE (pure; unit-tested via source extraction) ──────────
-//
-// Item 2 classifier. A `dopl_channel` op=post into the session's OWN channel is the real
-// OUTBOUND message the agent sent to the peer — it must render as a sent message, not a
-// generic tool card. Reuses the SAME op-scope as the grant (session-profiles.isOwnChannelPost);
-// this does NOT widen the grant (§H-2), it only classifies for display. FIX F3: the tool-name
-// half is `isChannelTool` (server prefix + short name), the SAME predicate the Axis-B branch
-// uses, so a renamed/versioned channel tool cannot be gated as a message but painted as a
-// generic tool card. Pure: references isChannelTool + isOwnChannelPost (both imported at module
-// top) and holds no state, so the test slices this block and injects the real values.
-function isOutboundPost(name, input, sessionChannelId) {
-  return isChannelTool(name) && isOwnChannelPost(input, sessionChannelId);
-}
-// ─── END SESSION-IO-PURE ──────────────────────────────────────────────────────
 
 // v2.9 — the per-call grant arguments read off the live session. ONE place builds them, so
 // postWillGate's prediction and makeCanUseTool's decision can never drift apart. Both axes
@@ -350,14 +339,23 @@ function baseRecord(s) {
 //                   already have blocked it before the SDK ever calls us).
 //   'gate'        — PAUSE on an awaited operator button.
 // Only the gate branch stashes a resolver on the session for resolvePermission.
-function makeCanUseTool(s, dispatch) {
+// `log` is injected (session-engine passes diag) so this module stays electron-free.
+function makeCanUseTool(s, dispatch, log) {
   return function canUseTool(name, input, opts) {
     // v2.9: BOTH axes resolve inside grantDecision — there is no post-decision override
     // here any more. The old item-10 `gate && autoApprove -> allow` line is gone: it was a
     // second decision point that knew nothing about which axis a call belonged to, which
     // is exactly how one switch came to authorize both Bash and outbound messages.
     const decision = grantDecision(grantArgs(s, name, input));
-    if (decision === 'preapproved' || decision === 'allow') return Promise.resolve({ behavior: 'allow' });
+    // THE FORCED THREAD TAG (session-outbound-tag.js — the prompt alone demonstrably does
+    // not hold it). Computed here but read only on an ALLOW: it rides a verdict, it never
+    // makes one, and both axes resolved above without ever seeing it.
+    const tag = isOutboundPost(name, input, s.channelId) ? outboundTag.threadTagFor(input, s.taskId) : null;
+    if (tag && tag.action === 'conflict' && typeof log === 'function') {
+      log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
+        'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');
+    }
+    if (decision === 'preapproved' || decision === 'allow') return Promise.resolve(outboundTag.allowResult(tag));
     if (decision === 'deny') return Promise.resolve({ behavior: 'deny', message: 'Blocked for this session' });
     return new Promise((resolve) => {
       const requestId = (opts && opts.requestId) || crypto.randomUUID();
@@ -365,7 +363,8 @@ function makeCanUseTool(s, dispatch) {
       // this task" click records, so a post grant stays scoped to own-channel posts.
       // The renderer still sees the real tool name in the payload.
       const grantName = grantKeyFor(name, input, s.channelId);
-      s.pendingPermissions.set(requestId, resolve);
+      // The tag rides the OPERATOR's allow here; a deny (park included) carries nothing.
+      s.pendingPermissions.set(requestId, outboundTag.wrapAllow(resolve, tag));
       s.pendingNames.set(requestId, grantName);
       // v2.7 L3 — an OWN-CHANNEL POST decides on its own inline stream card instead of in
       // the bottom dock. The POLICY path is untouched: the same `permission_request`

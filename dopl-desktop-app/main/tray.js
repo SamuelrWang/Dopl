@@ -6,6 +6,7 @@ const path = require('path');
 
 let tray = null;
 let currentStatus = 'Listener: starting…';
+let signedOutNow = false; // the listener's own signed-out fact (never parsed from the string)
 let handlers = {};
 let updateReadyVersion = null;
 let windowMode = true; // v1.9: reflect the "Run sessions in a window" setting (default ON)
@@ -82,10 +83,40 @@ function sessionsSubmenu() {
   return items;
 }
 
+// ─── BEGIN TRAY-AUTH (pure; unit-tested via source extraction) ──────────────
+// Q4 fix 3: the tray was the ONLY surface that knew the listener was signed out,
+// and all it did was print a dead "Listener: signed out" line — no way to act on
+// it. Meanwhile the app window rendered signed in on its cookies, so the operator
+// had no reason to suspect anything and no control to fix it; the actual field
+// recovery was deleting the app's Cookies store by hand.
+//
+// So the signed-out state drives an affordance: signed out → a clickable "Sign in…"
+// that runs the real CSRF-gated OAuth flow; otherwise → "Sign out", which clears
+// BOTH the stored blob and the cookie jar. Pure (boolean in, descriptor out) so the
+// state transitions are a truth table, not a click test.
+//
+// FIX (Q5 review): this took the STATUS STRING and ran /signed out/i over it. The
+// listener already knows the fact — it calls auth.isSignedIn() to build that string
+// — so the tray was re-deriving a boolean from prose it does not own. Rewording
+// "Listener: signed out" would have removed the only sign-in entry point in the app
+// with nothing failing. channel-listener.setStatus now passes the boolean.
+function authMenuState(signedOut) {
+  return signedOut === true
+    ? { signedOut: true, action: 'signIn', label: 'Listener signed out — Sign in…' }
+    : { signedOut: false, action: 'signOut', label: 'Sign out' };
+}
+// ─── END TRAY-AUTH ───────────────────────────────────────────────────────────
+
 function buildMenu() {
   const template = [
     { label: 'Open Dopl', click: () => handlers.onOpen && handlers.onOpen() },
   ];
+  // A signed-out listener gets its call to action at the TOP of the menu, above
+  // everything else — it is the one thing that has to be fixed first.
+  const authItem = authMenuState(signedOutNow);
+  if (authItem.signedOut) {
+    template.push({ label: authItem.label, click: () => handlers.onSignIn && handlers.onSignIn() });
+  }
   // Round B: surface pending consent requests and let a click jump straight to the
   // Channels / Pending Requests view (reuses the notification-click open path).
   if (pendingCount > 0) {
@@ -106,10 +137,14 @@ function buildMenu() {
       click: () => handlers.onUpdate && handlers.onUpdate(),
     });
   }
-  template.push(
-    { type: 'separator' },
-    { label: 'Quit Dopl', click: () => handlers.onQuit && handlers.onQuit() }
-  );
+  template.push({ type: 'separator' });
+  // The escape hatch. Present whenever we are NOT already signed out, so a wedged
+  // session can always be dropped from here instead of by deleting the Cookies
+  // store; when signed out the "Sign in…" item above is the affordance instead.
+  if (!authItem.signedOut) {
+    template.push({ label: authItem.label, click: () => handlers.onSignOut && handlers.onSignOut() });
+  }
+  template.push({ label: 'Quit Dopl', click: () => handlers.onQuit && handlers.onQuit() });
   const menu = Menu.buildFromTemplate(template);
   tray.setContextMenu(menu);
   tray.setToolTip(currentStatus);
@@ -126,8 +161,12 @@ function create(opts) {
   return tray;
 }
 
-function update(status) {
+// `meta.signedOut` is the listener's own answer, not something re-read out of the
+// status string (see authMenuState). Absent meta leaves the last known value alone,
+// so a caller that only wants to change the label cannot flip the affordance.
+function update(status, meta) {
   if (status) currentStatus = status;
+  if (meta && typeof meta.signedOut === 'boolean') signedOutNow = meta.signedOut;
   if (tray) buildMenu();
 }
 

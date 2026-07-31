@@ -159,6 +159,47 @@ function deviceTokenForSpawn() {
   return token;
 }
 
+// FIX S2 (Q5 review) — THE SIGN-OUT TEARDOWN FOR THE MCP CREDENTIAL.
+//
+// Sign-out cleared the Supabase blob and the cookie jar and stopped there, which left
+// the OTHER credential this app holds fully live: a 90-day `dopl.read` + `dopl.write`
+// device token, in electron-store under DT_KEY / DT_KEY_PLAIN and in
+// userData/mcp-spawn.json (mode 600, bearer in the Authorization header). Anything able
+// to read the app's data dir — including the next operator to sign in on this machine —
+// kept complete API access to the account that had just signed out. Called by
+// auth-state.signOut().
+//
+// LOCAL ONLY, AND THAT IS A KNOWN GAP (F-085). `/api/auth/mcp-device-token` is MINT-ONLY
+// (POST); there is no DELETE and no revoke route for a device token, and issueDeviceToken
+// revokes prior tokens only for the same LABEL on the next mint. So this deletes our
+// copies while the token itself stays valid server-side until it expires or the operator
+// revokes it from the web "Connected apps" list.
+//
+// NOT covered here either: the user-scope `dopl` entry the CLI keeps in its own config
+// (`claude mcp add … --header Authorization: Bearer …`). Removing it means resolving the
+// claude binary and running a 25s-timeout child process on a click that must feel
+// instant, and it is the operator's own global CLI config rather than app state. Also
+// F-085.
+function clearDeviceToken() {
+  spawnToken = ''; // C1: the in-memory copy buildMcpServers injects
+  let ok = true;
+  try {
+    store.delete(DT_KEY);
+    store.delete(DT_KEY_PLAIN);
+  } catch (err) {
+    ok = false;
+    diag('mcp-config: device-token store clear failed', err && err.message);
+  }
+  try {
+    fs.rmSync(spawnConfigPath(), { force: true });
+  } catch (err) {
+    ok = false;
+    diag('mcp-config: spawn config unlink failed', err && err.message);
+  }
+  diag('mcp-config: device token cleared', ok ? '(store + spawn config)' : '(PARTIAL)');
+  return ok;
+}
+
 function parseExpiry(v) {
   if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // seconds vs ms
   if (typeof v === 'string') {
@@ -290,7 +331,11 @@ function ensureMcpConfig() {
 
 async function ensureMcpConfigInner() {
   try {
-    if (!auth.isSignedIn()) {
+    // Q4: async gate — this runs at startup, BEFORE the first reconcile has
+    // warmed the cookie-identity cache, so it must re-read the jar itself. The
+    // old sync blob-only check is why a dead blob silently stopped refreshing the
+    // CLI's Dopl MCP entry while the web UI was signed in.
+    if (!(await auth.ensureSignedIn())) {
       diag('mcp-config: skip (signed out)');
       return;
     }
@@ -331,5 +376,6 @@ module.exports = {
   ensureMcpConfig,
   spawnConfigPath,
   deviceTokenForSpawn, // C1: the SDK path's bearer, from safeStorage — never off disk
+  clearDeviceToken, // S2: sign-out teardown (auth-state.signOut)
   spawnConfigBody, // C2: the exact bytes writeSpawnConfig compares against
 };

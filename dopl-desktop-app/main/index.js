@@ -6,6 +6,8 @@ const Store = require('electron-store');
 // listener never drift. See config.js for APP_URL / HOME_URL / PROTOCOL.
 const { APP_ORIGIN, HOME_URL, PROTOCOL } = require('./config');
 const auth = require('./auth');
+const authActions = require('./auth-actions');
+const appMenu = require('./app-menu');
 const tray = require('./tray');
 const updater = require('./updater');
 const listener = require('./channel-listener');
@@ -26,20 +28,10 @@ let loadGuard = null; // owns the main window's load lifecycle (load-guard.js)
 let pendingDeepLink = null; // deep link received before the window is ready
 let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
 
-// In-app navigation is limited to the app's own web origin. Sign-in runs in the
-// SYSTEM BROWSER (Supabase PKCE requires it), so OAuth provider hosts are NOT
-// kept in-window — they're opened externally and hand the session back via the
-// dopl:// deep link.
-function isAppUrl(urlStr) {
-  try {
-    const u = new URL(urlStr);
-    if (u.origin === APP_ORIGIN) return true;
-    if (u.hostname === 'usedopl.com' || u.hostname.endsWith('.usedopl.com')) return true;
-    return false;
-  } catch (_) {
-    return false;
-  }
-}
+// isAppOrigin / maybeBeginAuth (the M4 sign-in CSRF nonce) live in auth-actions.js
+// alongside the tray's sign-in entry point, so every path that starts a sign-in
+// arms the gate identically.
+const { isAppOrigin, maybeBeginAuth } = authActions;
 
 // ── Window ────────────────────────────────────────────────────────────────────
 // `opts.show === true` forces the window visible once painted even on a hidden
@@ -154,22 +146,6 @@ function loadApp() {
   if (loadGuard) loadGuard.load(HOME_URL);
 }
 
-// M4: when we hand an app-origin sign-in URL to the system browser, arm the
-// pending-auth gate and tag the URL with our state nonce. captureFromFragment()
-// then refuses any dopl:// session that wasn't initiated here. Non-auth URLs are
-// returned unchanged.
-function maybeBeginAuth(urlStr) {
-  try {
-    const u = new URL(urlStr);
-    if (!isAppUrl(urlStr) || !/\/auth\//i.test(u.pathname)) return urlStr;
-    const nonce = auth.beginPendingAuth();
-    if (!u.searchParams.has('state')) u.searchParams.set('state', nonce);
-    return u.toString();
-  } catch (_) {
-    return urlStr;
-  }
-}
-
 // ── Navigation / link handling ─────────────────────────────────────────────────
 function wireNavigation(contents) {
   // window.open / target=_blank → always open in the system browser. This is how
@@ -180,10 +156,12 @@ function wireNavigation(contents) {
     return { action: 'deny' };
   });
 
-  // In-window navigation stays on the app's own origin; anything else goes to the
-  // system browser so the wrapper never becomes a general-purpose browser.
+  // In-window navigation stays on the app's own EXACT origin (FIX S3: it used to
+  // admit every *.usedopl.com host, which is what made auth-cookies.js's
+  // "origin-locked" claim false); anything else goes to the system browser so the
+  // wrapper never becomes a general-purpose browser.
   contents.on('will-navigate', (event, url) => {
-    if (!isAppUrl(url)) {
+    if (!isAppOrigin(url)) {
       event.preventDefault();
       shell.openExternal(maybeBeginAuth(url));
     }
@@ -195,84 +173,9 @@ function wireNavigation(contents) {
 }
 
 // ── Menu ────────────────────────────────────────────────────────────────────
+// The menu-bar template lives in app-menu.js (extracted at the 500-line cap).
 function buildMenu() {
-  const isMac = process.platform === 'darwin';
-  const template = [
-    ...(isMac ? [{
-      label: 'Dopl',
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
-    }] : []),
-    {
-      label: 'File',
-      submenu: [isMac ? { role: 'close' } : { role: 'quit' }],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ],
-    },
-    {
-      label: 'View',
-      submenu: [
-        {
-          label: 'Home',
-          accelerator: 'CmdOrCtrl+Shift+H',
-          click: () => loadApp(),
-        },
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { type: 'separator' },
-        {
-          label: 'Back',
-          accelerator: 'CmdOrCtrl+[',
-          click: () => {
-            // Electron 32+: navigation moved onto webContents.navigationHistory.
-            const nav = mainWindow && mainWindow.webContents.navigationHistory;
-            if (nav && nav.canGoBack()) nav.goBack();
-          },
-        },
-        {
-          label: 'Forward',
-          accelerator: 'CmdOrCtrl+]',
-          click: () => {
-            const nav = mainWindow && mainWindow.webContents.navigationHistory;
-            if (nav && nav.canGoForward()) nav.goForward();
-          },
-        },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-        { role: 'toggleDevTools' },
-      ],
-    },
-    {
-      role: 'window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
-      ],
-    },
-  ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  appMenu.build({ onHome: loadApp, getWindow: () => mainWindow });
 }
 
 // ── Deep link (dopl://) ─────────────────────────────────────────────────────────
@@ -380,6 +283,20 @@ if (!gotLock) {
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
       onUpdate: () => updater.quitAndInstall(),
+      // Q4 fix 3: the escape hatch. "Sign in…" appears only while the listener
+      // reports signed out and runs the same CSRF-gated external OAuth flow the
+      // web login page does; "Sign out" clears the blob AND the cookie jar, then
+      // reloads the app (which resolves to /login) and re-reconciles the listener.
+      onSignIn: () => authActions.beginSignIn({ showWindow: showMainWindow }),
+      onSignOut: () => {
+        authActions
+          .signOut({
+            showWindow: showMainWindow,
+            load: (url) => { if (loadGuard) loadGuard.load(url); },
+            onSignedOut: () => listener.restart(),
+          })
+          .catch((err) => diag('sign-out error', err && err.message));
+      },
       // Round B: clicking "Pending: N" opens the app to the most-recent pending
       // channel (reusing the notification-click open path), else just the window.
       onPending: () => {
@@ -433,7 +350,7 @@ if (!gotLock) {
     // openChannel handler lets a clicked notification open + navigate the window;
     // onPending feeds the tray "Pending: N" count + remembers the newest pending
     // channel so the tray item can open straight to it (Round B).
-    listener.start((status) => tray.update(status), {
+    listener.start((status, meta) => tray.update(status, meta), {
       openChannel: navigateToChannels,
       onPending: ({ count, segment }) => {
         if (segment) latestPendingSegment = segment;

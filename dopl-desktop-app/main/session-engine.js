@@ -263,7 +263,7 @@ function buildSdkOptions(s) {
     permissionMode: 'default', // FIX M2: pin — bypass/acceptEdits/dontAsk short-circuit canUseTool
     env: buildScrubbedEnv(), // FIX M2: strip permission-mode env knobs, keep auth (sdk-loader)
     // C6: the gate is unchanged; the wrapper only resolves the card an ALLOWED post painted.
-    canUseTool: sessionOutbound.wrapCanUseTool(s, io.makeCanUseTool(s, dispatch), emitQuiet),
+    canUseTool: sessionOutbound.wrapCanUseTool(s, io.makeCanUseTool(s, dispatch, diag), emitQuiet), // diag: the forced-thread-tag conflict log (session-io stays electron-free)
     abortController: s.abortController,
     // LOAD-BEARING for v2.7 L3 (FIX F4): the outbound card shows the operator the bytes a post will
     // send, so the streamed tool_use input must be the WHOLE, FINAL input. No fragments (below) and NO

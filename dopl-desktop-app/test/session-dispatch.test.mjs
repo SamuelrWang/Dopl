@@ -141,6 +141,9 @@ test("openRequester: v2.x — the launch context carries the channel + workspace
   assert.equal(ctx.channelId, "c1", "the concrete channel id");
   assert.equal(ctx.workspaceId, "w1", "and the workspace it lives in");
   assert.equal(ctx.channelName, "General", "the display identity still rides");
+  // 2026-07-31: and the THREAD id, so the delivery call names the thread every post
+  // belongs to. Without it a reply reaches the peer as a brand-new request.
+  assert.equal(ctx.taskId, TASK, "the thread this requester session drives");
   // The spec-level ids the engine also needs are unchanged.
   assert.equal(h.calls.launch[0].workspaceId, "w1");
   assert.equal(h.calls.launch[0].channelId, "c1");

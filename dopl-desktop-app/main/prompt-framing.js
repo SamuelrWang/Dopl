@@ -104,12 +104,40 @@ function idToken(value) {
 // The EXACT dopl_channel call this session must make, or '' when either id is missing.
 // WORKSPACE UUID, never the slug: a prod anomaly has two workspaces sharing a slug, so a
 // slug can address the wrong one.
+//
+// THE THREAD TAG (incident 2026-07-31). `thread` rides the call whenever the session has a
+// thread id, and that now includes the LEGACY 'task-<channel>-<seq>' ids the desktop mints
+// for a request that arrived without create_thread. Untagged replies were the whole bug: an
+// addressed, agent-authored, thread-less reply is indistinguishable from a fresh request on
+// the peer's machine, so the peer raised consent and spawned a counter-session against the
+// answer to its own question. A legacy id is safe to pass on the wire: the server only
+// validates (and can only reject) a taskId that is a UUID, so a legacy value threads the
+// message without ever touching thread resolution. idToken bounds it like the other two.
+//
+// FIX S1 (Q5 review). This printed `task "<id>"` — a parameter dopl_channel DOES NOT HAVE.
+// The 1.7.11 hard cutover made the agent-facing argument `thread` (packages/mcp-server/src/
+// tools/channel.ts) and kept `taskId` only as the STORAGE key the op folds it into
+// (channel-ops-write.ts). So every window-mode session was taught an argument the MCP server
+// would reject or ignore, which made the whole tagging fix inert on the primary path — the
+// exact untagged reply the incident is about, now with a prompt that looks correct. Wire
+// name in, domain name out: the tool takes `thread`, storage still says `taskId`.
 function deliveryCall(ctx) {
   const channelId = idToken(ctx && ctx.channelId);
   const workspaceId = idToken(ctx && ctx.workspaceId);
   if (!channelId || !workspaceId) return '';
-  return `op "post", channel "${channelId}", workspace "${workspaceId}"`;
+  const taskId = idToken(ctx && ctx.taskId);
+  const thread = taskId ? `, thread "${taskId}"` : '';
+  return `op "post", channel "${channelId}", workspace "${workspaceId}"${thread}`;
 }
+
+// Why the tag must survive EVERY turn, not just the first post. Appended to the delivery
+// section only when the call really carries a `thread` argument, so a session with no thread
+// id keeps the wording it had before, byte for byte.
+const THREAD_TAG = [
+  `Keep that thread argument on every post you make here. It is what tells the other`,
+  `member's machine that your message continues THIS thread; a post without it arrives`,
+  `there as a brand new request and starts a second agent run against your own reply.`,
+];
 
 // The DELIVERY section, which NAMES the call (v2.x "the spawned agent does not know where
 // it lives"). A spawn used to be told only the channel's DISPLAY NAME, so the agent could
@@ -125,6 +153,7 @@ function deliverySection(side, ctx) {
     `delivery, not a cross-channel post. You already have the address: a discovery call`,
     `like op "list" is unnecessary here, costs a turn, and can fail on this connection.`,
   ];
+  if (call && idToken(ctx && ctx.taskId)) own.push(...THREAD_TAG);
   if (side === 'requester') {
     if (!call) {
       return [
@@ -161,8 +190,11 @@ function deliverySection(side, ctx) {
 // shared unit both members see and it does not pause, while a SESSION is the local run
 // that does. Anything the agent scopes "for this session" (a standing grant, a mode) dies
 // with the session; anything it says about the THREAD is visible to the other member.
-// Note also the WIRE spelling: dopl_channel's own `task=<id>` argument and the
-// `kind="task_*"` post kinds are the storage name for `thread` and are unchanged.
+//
+// FIX S1: this used to teach `task=<id>` as the tool ARGUMENT. dopl_channel has no such
+// parameter — the 1.7.11 cutover made the agent-facing argument `thread=<id>` and left the
+// older word only on the post KINDS (`kind="task_*"`) and the storage key (`metadata.taskId`),
+// which the agent never types. The split is stated below exactly that way.
 const VOCABULARY = [
   'VOCABULARY (use these words when you write):',
   '- A CHANNEL (or DM) holds many THREADS.',
@@ -172,21 +204,23 @@ const VOCABULARY = [
   '- A SESSION is ONE member\'s agent run working a thread, on THAT member\'s machine. Each',
   '  side has its own session. A session pauses and resumes; a thread does not. You never',
   '  see the other member\'s session, only the messages it sends.',
-  '- The tool arguments keep the older storage word: `task=<id>` and kind="task_*" name',
-  '  THIS thread. Use them as given, and say "thread" in what you write.',
+  '- The tool ARGUMENT that names this thread is `thread=<id>`. The post KINDS keep the',
+  '  older storage word (kind="task_started" / "task_progress" / "task_finished" /',
+  '  "task_failed"). Use each as given, and say "thread" in what you write.',
 ];
 
 // Advisory milestone-logging line, used ONLY when the spawn profile can post
 // (full / terminal-full). Without a posting tool (read_only / dopl_only, which
 // reply from stdout) -> '' so the caller appends nothing. Kept separate from the
 // framing because the terminal-restricted branch shares the framing but not this.
-// The `task_progress` kind and the `task=<id>` argument are WIRE names (wire name
-// `task` == domain name `thread`) and are passed through byte-for-byte.
+// FIX S1: the `task_progress` KIND is a wire name and is passed through byte-for-byte, but
+// the thread ARGUMENT is `thread=<id>` — this line used to say `task=<id>`, which dopl_channel
+// does not accept, so a milestone written exactly as instructed landed unthreaded.
 function milestoneGuidance({ hasPostingTool } = {}) {
   if (!hasPostingTool) return '';
   return (
     'MILESTONES: for multi-step work carried by a thread, post a task_progress ' +
-    '(via dopl_channel, kind="task_progress", task=<id>) the moment each concrete ' +
+    '(via dopl_channel, kind="task_progress", thread=<id>) the moment each concrete ' +
     'step lands, so the requester sees progress without waiting for the final reply.'
   );
 }

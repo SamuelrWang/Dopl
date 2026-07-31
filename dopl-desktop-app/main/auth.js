@@ -14,66 +14,30 @@
 // The captured access/refresh tokens + Supabase refresh endpoint (both required
 // by Phase 3) are still implemented here: they keep a valid session alive when
 // the window is hidden, and repair the cookie jar if it goes stale.
+//
+// SPLIT NOTE (Q4, 500-line cap). Three siblings sit under this file and it
+// re-exports all of them, so no caller changed:
+//   auth-store.js   — the encrypted blob + JWT decoders + throttled failure log
+//   auth-cookies.js — everything that touches the Electron cookie jar
+//   auth-state.js   — isSignedIn / ensureSignedIn / blob repair / signOut
+// This file keeps the deep-link CSRF gate, the Realtime credential choice, the
+// Supabase refresh call, and the Cookie-header assembly for API calls.
 
 const crypto = require('crypto');
-const { app, safeStorage, session } = require('electron');
-const Store = require('electron-store');
-const {
-  APP_ORIGIN,
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  SUPABASE_REF,
-} = require('./config');
+const { app } = require('electron');
+const cookies = require('./auth-cookies');
+const state = require('./auth-state');
+const { store, authFail, persist, loadSession, clearSession, decodeJwt, jwtExp } = require('./auth-store');
+const { diag } = require('./diag');
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./config');
 
-const store = new Store();
-const STORE_KEY = 'authSession'; // safeStorage-encrypted blob
-const COOKIE_BASE = `sb-${SUPABASE_REF}-auth-token`;
-const BASE64_PREFIX = 'base64-';
 const PENDING_AUTH_KEY = 'pendingAuth'; // { nonce, ts } — M4 login-CSRF gate
 const PENDING_AUTH_TTL_MS = 10 * 60 * 1000;
-
-// ── Encrypted persistence ─────────────────────────────────────────────────
-function persist(sessionObj) {
-  try {
-    const json = JSON.stringify(sessionObj);
-    if (safeStorage.isEncryptionAvailable()) {
-      store.set(STORE_KEY, safeStorage.encryptString(json).toString('base64'));
-      store.delete(STORE_KEY + 'Plain');
-    } else {
-      // No OS keychain (unusual on macOS). Fall back to local-only plaintext —
-      // still confined to this user's app-support dir. Warn once.
-      console.warn('[auth] safeStorage unavailable; storing session unencrypted');
-      store.set(STORE_KEY + 'Plain', json);
-      store.delete(STORE_KEY);
-    }
-  } catch (err) {
-    console.error('[auth] persist failed:', err && err.message);
-  }
-}
-
-function loadSession() {
-  try {
-    const enc = store.get(STORE_KEY);
-    if (enc && safeStorage.isEncryptionAvailable()) {
-      return JSON.parse(safeStorage.decryptString(Buffer.from(enc, 'base64')));
-    }
-    const plain = store.get(STORE_KEY + 'Plain');
-    if (plain) return JSON.parse(plain);
-  } catch (err) {
-    console.error('[auth] load failed:', err && err.message);
-  }
-  return null;
-}
-
-function clearSession() {
-  store.delete(STORE_KEY);
-  store.delete(STORE_KEY + 'Plain');
-}
 
 // ── Login-CSRF gate for the deep link (M4) ─────────────────────────────────
 // A dopl://auth#<tokens> link can be fired by ANY local process or a website
 // (login CSRF): the app would otherwise adopt an attacker-controlled session.
-// We require that THIS app initiated a sign-in recently: index.js calls
+// We require that THIS app initiated a sign-in recently: auth-actions.js calls
 // beginPendingAuth() when it opens the external sign-in URL (and appends the
 // nonce as ?state=), and captureFromFragment() will only persist a fragment
 // when a matching pending record exists inside the TTL.
@@ -95,12 +59,12 @@ function hasValidPendingAuth() {
 
 // Single-use: consumes (deletes) the pending record and returns whether it was
 // valid. If the flow echoed a `state`, it must match the stored nonce.
-function consumePendingAuth(state) {
+function consumePendingAuth(state_) {
   const p = store.get(PENDING_AUTH_KEY);
   store.delete(PENDING_AUTH_KEY);
   if (!p || !p.ts) return false;
   if (Date.now() - p.ts > PENDING_AUTH_TTL_MS) return false;
-  if (state != null && state !== '' && state !== p.nonce) return false;
+  if (state_ != null && state_ !== '' && state_ !== p.nonce) return false;
   return true;
 }
 
@@ -118,34 +82,26 @@ function captureFromFragment(fragment) {
     // M4: reject sessions we didn't initiate (no pending flag / expired / bad state).
     if (!consumePendingAuth(params.get('state'))) {
       console.warn('[auth] rejected deep-link session: no matching pending sign-in');
+      diag('auth: rejected deep-link session (no matching pending sign-in)');
       return false;
     }
 
     const expiresIn = Number(params.get('expires_in') || 0);
     const expiresAt = Number(params.get('expires_at') || 0);
-    const sessionObj = {
+    persist({
       access_token,
       refresh_token,
       token_type: 'bearer',
       expires_in: expiresIn || 3600,
       expires_at: expiresAt || Math.floor(Date.now() / 1000) + (expiresIn || 3600),
-    };
-    persist(sessionObj);
+    });
+    state.invalidateCookieIdentity(); // re-read the jar the completion page sets
     console.log('[auth] captured Supabase session from deep link');
+    diag('auth: captured Supabase session from deep link');
     return true;
   } catch (err) {
-    console.error('[auth] captureFromFragment failed:', err && err.message);
+    authFail('captureFromFragment failed', err);
     return false;
-  }
-}
-
-// ── JWT helpers (offline) ──────────────────────────────────────────────────
-function decodeJwt(token) {
-  try {
-    const payload = token.split('.')[1];
-    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-  } catch (_) {
-    return null;
   }
 }
 
@@ -159,49 +115,15 @@ function getUserId() {
   return claims && claims.sub ? claims.sub : null;
 }
 
-function cookieChunkIndex(name) {
-  const m = name.match(/\.(\d+)$/);
-  return m ? Number(m[1]) : -1; // the unsuffixed base cookie sorts first
-}
-
-// Reassemble the Supabase auth COOKIE the web sign-in set and return the raw
-// access_token JWT string (or null). The cookie value is @supabase/ssr's
-// `base64-` + base64url(JSON session), possibly chunked across `<base>.0`,
-// `.1`, …; we reassemble, decode, and pull the access token. No signature check
-// needed — it came from our own cookie jar. Shared by getUserIdFromCookies
-// (reads the token's `sub`) and getAccessToken (returns the token for Realtime).
-async function readCookieAccessToken() {
-  const jar = await session.defaultSession.cookies.get({ url: APP_ORIGIN });
-  const authCookies = jar
-    .filter((c) => c.name === COOKIE_BASE || c.name.startsWith(COOKIE_BASE + '.'))
-    .sort((a, b) => cookieChunkIndex(a.name) - cookieChunkIndex(b.name));
-  if (authCookies.length === 0) return null;
-
-  let raw = authCookies.map((c) => c.value).join('');
-  if (raw.startsWith(BASE64_PREFIX)) raw = raw.slice(BASE64_PREFIX.length);
-  let json;
-  try {
-    json = Buffer.from(raw, 'base64url').toString('utf8');
-  } catch (_) {
-    json = Buffer.from(raw, 'base64').toString('utf8');
-  }
-  const parsed = JSON.parse(json);
-  return (
-    (parsed && parsed.access_token) ||
-    (Array.isArray(parsed) && parsed[0]) ||
-    null
-  );
-}
-
 // H2: derive the operator id from the auth cookie, covering cookie-only sessions
 // where getUserId() (stored blob) is null.
 async function getUserIdFromCookies() {
   try {
-    const token = await readCookieAccessToken();
+    const token = await cookies.readCookieAccessToken();
     const claims = token ? decodeJwt(token) : null;
     return claims && claims.sub ? claims.sub : null;
   } catch (err) {
-    console.error('[auth] cookie identity decode failed:', err && err.message);
+    authFail('cookie identity decode failed', err);
     return null;
   }
 }
@@ -215,14 +137,6 @@ const ACCESS_SKEW_SEC = 60;
 // (F-072: a read must never trigger a write storm).
 const REFRESH_COOLDOWN_MS = 30_000;
 let lastRefreshAttemptMs = 0;
-
-// The `exp` claim (unix seconds) of a JWT, or null when it cannot be read (e.g. a
-// Dopl `dopl_at_` device token, which is not a JWT at all).
-function jwtExp(token) {
-  const claims = token ? decodeJwt(token) : null;
-  const exp = claims && claims.exp;
-  return typeof exp === 'number' && Number.isFinite(exp) ? exp : null;
-}
 
 // ─── BEGIN TOKEN-CHOICE (pure; unit-tested via source extraction) ──────────
 // WHICH credential Realtime gets. Two sources exist and they DRIFT APART:
@@ -280,9 +194,9 @@ async function getAccessTokenInfo() {
   const stored = loadSession();
   let cookieToken = null;
   try {
-    cookieToken = await readCookieAccessToken();
+    cookieToken = await cookies.readCookieAccessToken();
   } catch (err) {
-    console.error('[auth] access-token read failed:', err && err.message);
+    authFail('access-token read failed', err);
   }
   const candidates = [
     { kind: 'stored', token: (stored && stored.access_token) || null },
@@ -311,7 +225,26 @@ function isAccessExpired(skewSec = 60) {
 }
 
 // ── Refresh via the Supabase token endpoint (Phase 3) ──────────────────────
-async function refresh() {
+//
+// FIX S6 (Q5 review) — SINGLE-FLIGHT, because the amplification was real. Only
+// getAccessTokenInfo() was cooldowned; `ensureFresh()` (the listener's per-workspace
+// enumeration-retry path, and getAuthCookie's repair branch) called refresh()
+// directly with no coordination at all. N concurrent channel loops therefore fired N
+// refreshes against the SAME refresh token, and Supabase ROTATES on use — exactly one
+// wins and the rest get a 400, whose handler below drops the stored blob. So a
+// transient failure could convert itself into a real sign-out of the blob. One
+// in-flight promise, shared by every caller: the cooldown in getAccessTokenInfo is
+// still useful (it bounds how OFTEN we rotate) but it is no longer the only bound.
+let refreshing = null;
+function refresh() {
+  if (refreshing) return refreshing;
+  refreshing = refreshInner().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+async function refreshInner() {
   const s = loadSession();
   if (!s || !s.refresh_token) return null;
   try {
@@ -328,10 +261,15 @@ async function refresh() {
       }
     );
     if (!res.ok) {
-      console.warn('[auth] refresh failed:', res.status);
+      authFail('refresh failed', `HTTP ${res.status}`);
       // A 400 here usually means the refresh token was rotated/revoked — the
-      // stored session is dead. Drop it so we stop retrying a bad token.
-      if (res.status === 400) clearSession();
+      // stored session is dead. Drop it so we stop retrying a bad token. The
+      // cookie jar may still be perfectly alive, which is exactly why the
+      // signed-in state no longer depends on this blob (auth-state.js).
+      if (res.status === 400) {
+        clearSession();
+        diag('auth: refresh 400 — stored blob dropped; cookie session may still be live');
+      }
       return null;
     }
     const data = await res.json();
@@ -350,7 +288,7 @@ async function refresh() {
     console.log('[auth] refreshed Supabase session');
     return next;
   } catch (err) {
-    console.error('[auth] refresh error:', err && err.message);
+    authFail('refresh error', err);
     return null;
   }
 }
@@ -361,83 +299,18 @@ async function ensureFresh() {
   return loadSession();
 }
 
-// ── Live cookie forwarding (the auth the API server actually accepts) ───────
-// Reads the Supabase auth cookies from the Electron session and returns them as
-// a Cookie header value. Empty string when signed out / no cookies yet.
-async function getSessionCookieHeader() {
-  try {
-    const jar = await session.defaultSession.cookies.get({ url: APP_ORIGIN });
-    const authCookies = jar.filter(
-      (c) => c.name === COOKIE_BASE || c.name.startsWith(COOKIE_BASE + '.')
-    );
-    if (authCookies.length === 0) return '';
-    return authCookies.map((c) => `${c.name}=${c.value}`).join('; ');
-  } catch (err) {
-    console.error('[auth] cookie read failed:', err && err.message);
-    return '';
-  }
-}
-
-// Best-effort resilience: encode the stored session into the Electron cookie jar
-// in @supabase/ssr's format (`base64-` + base64url(JSON), chunked at 3180) so a
-// background call still has valid cookies if the renderer's own auto-refresh has
-// not run. The live page normally keeps these fresh; this only repairs gaps.
-async function writeSessionCookies(sessionObj) {
-  try {
-    const encoded =
-      BASE64_PREFIX + Buffer.from(JSON.stringify(sessionObj), 'utf8').toString('base64url');
-    // L5: clear the base + ALL chunk cookies (.0–.9) to avoid stale-chunk
-    // reassembly — a larger session can span more than the first few chunks.
-    for (const name of [
-      COOKIE_BASE,
-      ...Array.from({ length: 10 }, (_, i) => `${COOKIE_BASE}.${i}`),
-    ]) {
-      await session.defaultSession.cookies.remove(APP_ORIGIN, name).catch(() => {});
-    }
-    const expirationDate = Math.floor(Date.now() / 1000) + 400 * 24 * 60 * 60;
-    const chunks = [];
-    if (encoded.length <= 3180) {
-      chunks.push({ name: COOKIE_BASE, value: encoded });
-    } else {
-      for (let i = 0, part = 0; i < encoded.length; i += 3180, part++) {
-        chunks.push({ name: `${COOKIE_BASE}.${part}`, value: encoded.slice(i, i + 3180) });
-      }
-    }
-    for (const c of chunks) {
-      await session.defaultSession.cookies.set({
-        url: APP_ORIGIN,
-        name: c.name,
-        value: c.value,
-        path: '/',
-        secure: true,
-        httpOnly: false,
-        sameSite: 'lax',
-        expirationDate,
-      });
-    }
-    return true;
-  } catch (err) {
-    console.error('[auth] cookie writeback failed:', err && err.message);
-    return false;
-  }
-}
-
 // Returns a Cookie header for an API call, repairing the jar from the stored
 // (refreshed) session when the live cookies are missing or stale.
 async function getAuthCookie() {
-  let cookie = await getSessionCookieHeader();
+  let cookie = await cookies.getSessionCookieHeader();
   if (cookie) return cookie;
   // No live cookies — try to reconstruct from the stored session.
   const fresh = await ensureFresh();
   if (fresh) {
-    await writeSessionCookies(fresh);
-    cookie = await getSessionCookieHeader();
+    await cookies.writeSessionCookies(fresh);
+    cookie = await cookies.getSessionCookieHeader();
   }
   return cookie;
-}
-
-function isSignedIn() {
-  return !!loadSession();
 }
 
 module.exports = {
@@ -451,10 +324,17 @@ module.exports = {
   isAccessExpired,
   refresh,
   ensureFresh,
-  getSessionCookieHeader,
+  getSessionCookieHeader: cookies.getSessionCookieHeader,
   getAuthCookie,
-  writeSessionCookies,
-  isSignedIn,
+  writeSessionCookies: cookies.writeSessionCookies,
   clearSession,
+  // Q4 signed-in state (auth-state.js) — re-exported so every existing
+  // `auth.isSignedIn()` call site keeps working, now cookie-aware.
+  isSignedIn: state.isSignedIn,
+  ensureSignedIn: state.ensureSignedIn,
+  refreshSignedInState: state.refreshSignedInState,
+  signedInSource: state.signedInSource,
+  identityMismatch: state.identityMismatch, // S4: the jar and the blob name different users
+  signOut: state.signOut,
   _appName: () => (app && app.getName ? app.getName() : 'Dopl'),
 };

@@ -38,6 +38,23 @@
 // EMPTY stream for a conversation that plainly had messages. The task-scoped read is now
 // the PREFERRED pass, with a PAIR-SCOPED fallback behind it: same two-party author rule,
 // minus the taskId condition. The fallback widens WHICH rows count, never WHOSE.
+//
+// FIX Q1: that fallback then overshot from "too narrow" to "unscoped". It ran for EVERY
+// legacy task (their messages are never stamped, so the tagged pass always found zero), and
+// a pair-scoped read of a DM is the WHOLE channel — a reopened window for one 10-minute task
+// replayed months of unrelated conversation, and seeded it into the fresh run's first turn.
+// A session that HAS a task id now gets a task WINDOW instead: rows stamped with this task,
+// plus the unstamped two-party messages that sit inside the task's own `seq` span. The span
+// is read off the rows already fetched (no second request, no server filter — see the
+// REJECTED note on `?taskId=` in the fix queue) and mirrors the web thread grouper:
+//   start — a legacy `task-<channelId>-<seq>` id CARRIES its opener's seq (trigger.js:61), so
+//           the request that started the task is inside the window even though nothing
+//           stamped it; a first-class id starts at the oldest row that names it.
+//   end   — this task's `task_finished` / `task_failed`, else the next OTHER `task_started`
+//           (a new task supersedes the open one, group-thread.ts:478), else open-ended.
+// A task with NO anchor in the fetched window paints NOTHING and says where to read it. The
+// pair-scoped pass survives ONLY for a shell with no task id at all (a responder that never
+// got a first-class task): there is no window to compute, and the pair IS the scope.
 
 const { apiFetch } = require('./api');
 const listenerIo = require('./listener-io');
@@ -75,10 +92,104 @@ function oneLine(value, cap) {
   return s.length > cap ? s.slice(0, cap - 1).trimEnd() + '…' : s;
 }
 
+// PURE (ported from the web grouper's parseLegacyTaskSeq, group-thread.ts): the trailing
+// seq N of a legacy deterministic task id `task-<channelId>-<N>` — the id the desktop mints
+// when the trigger carries no first-class task (trigger.js:61), where N is the seq of the
+// message that STARTED the task. The channel id is itself a UUID full of hyphens, so this
+// anchors on the known prefix instead of splitting on '-'. null for any other shape (a
+// first-class UUID id, a malformed id), which keeps the reach-back legacy-only.
+function parseLegacyTaskSeq(taskId, channelId) {
+  if (!taskId || !channelId) return null;
+  const prefix = `task-${channelId}-`;
+  if (taskId.slice(0, prefix.length) !== prefix) return null;
+  const rest = taskId.slice(prefix.length);
+  if (!/^\d+$/.test(rest)) return null;
+  return Number(rest);
+}
+
+// PURE: a row's position, or null when it has none. `seq` is compared only against other
+// rows of THIS fetch (FIX F5: it is a TABLE-WIDE identity, never a per-channel offset and
+// never a fetch cursor). A row with no usable seq cannot be placed, so it fails CLOSED.
+function rowSeq(r) {
+  const n = Number(r && r.seq);
+  return Number.isFinite(n) ? n : null;
+}
+
+// PURE: the server-stamped task id of a row, '' when it carries none.
+function rowTaskId(r) {
+  const meta = (r && r.metadata) || {};
+  return String(meta.taskId == null ? '' : meta.taskId);
+}
+
+// PURE (FIX Q1): the `seq` span of THIS task inside the rows already fetched, or null when
+// the task has no anchor in them (the caller then paints nothing rather than widening).
+//
+// START — the legacy id's own seq when that opener row is in the window (it is the request
+// the task answers, and nothing ever stamped it), else the oldest row stamped with this task,
+// WHATEVER its kind. That last clause used to read "for a legacy exchange the ONLY stamped
+// rows are lifecycle events", and Q5 made it false: a session's REPLY messages now carry the
+// thread argument too (prompt-framing's delivery call, and the forced tag in
+// session-outbound-tag.js), so plain `message` rows of a legacy exchange are stamped as well.
+// The code was already kind-agnostic here; only the comment claimed otherwise.
+// END — the task's own terminal event; else the next OTHER `task_started` after the start,
+// which supersedes an open task (group-thread.ts:478); else Infinity, an open task runs to
+// the end of the thread. A `task_started` with no id of its own is malformed, not a
+// successor, so it never truncates real history.
+function taskWindow(rows, taskId, channelId) {
+  if (!taskId) return null;
+  const list = Array.isArray(rows) ? rows : [];
+  const legacySeq = parseLegacyTaskSeq(taskId, String(channelId == null ? '' : channelId));
+  let openerSeq = null; // the legacy opener, ONLY if it is in this fetch window
+  let taggedMin = null; // the oldest row that names this task, whatever its kind
+  for (const r of list) {
+    const seq = rowSeq(r);
+    if (seq === null) continue;
+    if (legacySeq !== null && seq === legacySeq) openerSeq = seq;
+    if (rowTaskId(r) === taskId && (taggedMin === null || seq < taggedMin)) taggedMin = seq;
+  }
+  let startSeq = taggedMin;
+  if (openerSeq !== null) startSeq = taggedMin === null ? openerSeq : Math.min(openerSeq, taggedMin);
+  if (startSeq === null) return null;
+  // FIX H1: a settled task can be REOPENED and continued (recreateParkedShell posts a
+  // new terminal each round), so the window must run to the LAST terminal of this task,
+  // not the first — else every reopen re-hides the rounds after the first interruption.
+  // A successor task's start still caps the scan so another task's traffic never leaks in.
+  let successorSeq = Infinity;
+  for (const r of list) {
+    const seq = rowSeq(r);
+    if (seq === null || seq <= startSeq || r.kind !== 'task_started') continue;
+    const tag = rowTaskId(r);
+    if (!tag || tag === taskId || seq >= successorSeq) continue;
+    successorSeq = seq;
+  }
+  let lastTerminal = null;
+  for (const r of list) {
+    const seq = rowSeq(r);
+    if (seq === null || seq < startSeq || seq >= successorSeq) continue;
+    const terminal = r.kind === 'task_finished' || r.kind === 'task_failed';
+    if (terminal && rowTaskId(r) === taskId && (lastTerminal === null || seq > lastTerminal)) lastTerminal = seq;
+  }
+  const endSeq = lastTerminal !== null ? lastTerminal : successorSeq;
+  return { startSeq: startSeq, endSeq: endSeq };
+}
+
+// PURE (FIX Q1): does this row belong to THIS task? A row STAMPED with the task id does,
+// wherever it sits. An UNSTAMPED row does when it falls inside the task's own seq window —
+// that is the legacy exchange FIX F17 was reaching for, and the reason the whole-channel
+// fallback existed. A row stamped with ANOTHER task never does, and neither does a row with
+// no seq to place: the window narrows the fallback, it does not reopen it.
+function inTaskScope(r, taskId, span) {
+  const tag = rowTaskId(r);
+  if (tag === taskId) return true;
+  if (tag || !span) return false;
+  const seq = rowSeq(r);
+  return seq !== null && seq >= span.startSeq && seq <= span.endSeq;
+}
+
 // PURE: the two-party rows of one pass, newest LAST (stream order), uncapped.
 //   - only real `message` rows (lifecycle events are the web card's story, not turns)
-//   - `taskId` '' means ANY task (the FIX F17 pair-scoped pass); a non-empty taskId keeps
-//     only rows whose server-stamped metadata.taskId IS that task.
+//   - `taskId` '' means ANY task (the FIX F17 pair-scoped pass, now reserved for a shell
+//     with no task id at all); a non-empty taskId keeps only the rows inTaskScope admits.
 //   - FIX F4: only rows written by one of the TWO parties of this session. `metadata.taskId`
 //     is caller-settable, so a third channel member could otherwise land their own text
 //     in this window (and in the seed) by stamping the task id on a post — and the
@@ -88,12 +199,11 @@ function oneLine(value, cap) {
 //     Neither id known -> that side contributes nothing, so counterparty text can never
 //     be painted as the operator's own words (and a shell with no bound counterparty at
 //     all contributes nothing on either pass).
-function pairRows(rows, taskId, selfId, peerId) {
+function pairRows(rows, taskId, selfId, peerId, span) {
   const out = [];
   for (const r of rows || []) {
     if (!r || r.kind !== 'message') continue;
-    const meta = r.metadata || {};
-    if (taskId && String(meta.taskId == null ? '' : meta.taskId) !== taskId) continue;
+    if (taskId && !inTaskScope(r, taskId, span)) continue;
     const author = String(r.authorUserId == null ? '' : r.authorUserId);
     if (!author) continue; // unattributable: never guess a lane for it
     const isSelf = !!selfId && author === selfId;
@@ -101,23 +211,34 @@ function pairRows(rows, taskId, selfId, peerId) {
     if (!isSelf && !isPeer) continue; // a third member is not part of this conversation
     const text = clamp(r.body, TEXT_CAP);
     if (!text) continue;
-    out.push({ from: oneLine(r.authorName, NAME_CAP), text: text, lane: isSelf ? 'me' : 'them' });
+    // `agent` is the AUTHOR KIND, not an identity: the renderer needs it to give a history
+    // bubble the same surface its live twin has (an agent's own words look different from a
+    // person's). Deliberately NOT an id — no author id crosses into the renderer (§H-9), and
+    // the seed transcript reads only from/text/lane, so it is unaffected either way.
+    out.push({
+      from: oneLine(r.authorName, NAME_CAP),
+      text: text,
+      lane: isSelf ? 'me' : 'them',
+      agent: r.authorKind === 'agent',
+    });
   }
   return out;
 }
 
 // PURE: the read-only render entries for a session, newest LAST (stream order).
 //
-// TWO PASSES, in preference order:
-//   1. TASK-SCOPED (preferred) — a first-class task whose messages ARE tagged still shows
-//      exactly its own thread, nothing else.
-//   2. PAIR-SCOPED (FIX F17) — the recent conversation between the two parties in this
-//      channel, whatever taskId the rows carry. Taken when this session has NO task id, or
-//      when pass 1 found ZERO entries: the untagged/legacy exchange that used to paint an
-//      empty window.
+// TWO PASSES, chosen by whether this shell HAS a task (FIX Q1 — they are no longer tried in
+// preference order, because "pass 1 found nothing" is the normal state of a legacy task and
+// falling through to pass 2 is what replayed the whole channel):
+//   1. TASK-SCOPED — every row stamped with this task, plus the UNSTAMPED two-party messages
+//      inside the task's own seq window. A task with no anchor in the fetched rows yields
+//      NOTHING; the caller says where to read it instead.
+//   2. PAIR-SCOPED (FIX F17) — the recent conversation between the two parties, whatever
+//      taskId the rows carry. ONLY for a shell with no task id at all (a responder that never
+//      got a first-class task): with no task there is no window, and the pair IS the scope.
 //
-// The last `cap` of the winning pass survive, so a long thread shows its most recent
-// stretch. Order and cap are identical on both paths.
+// The last `cap` of the chosen pass survive, so a long thread shows its most recent stretch.
+// Order and cap are identical on both paths.
 function historyEntries(rows, opts) {
   const o = opts || {};
   const taskId = String(o.taskId == null ? '' : o.taskId);
@@ -125,10 +246,11 @@ function historyEntries(rows, opts) {
   const peerId = String(o.peerUserId == null ? '' : o.peerUserId);
   const cap = Number.isFinite(o.cap) && o.cap > 0 ? o.cap : ENTRY_CAP;
   if (taskId) {
-    const scoped = pairRows(rows, taskId, selfId, peerId);
-    if (scoped.length) return scoped.slice(-cap);
+    const span = taskWindow(rows, taskId, o.channelId);
+    if (!span) return [];
+    return pairRows(rows, taskId, selfId, peerId, span).slice(-cap);
   }
-  return pairRows(rows, '', selfId, peerId).slice(-cap);
+  return pairRows(rows, '', selfId, peerId, null).slice(-cap);
 }
 
 // The authenticated read: the NEWEST `FETCH_LIMIT` rows of the channel, ascending.
@@ -211,9 +333,20 @@ async function load(s) {
   // FIX F17: this filter sits OUTSIDE historyEntries, so it covers the pair-scoped pass as
   // well — a held or declined body cannot walk back in through the widened taskId condition.
   const entries = historyEntries(rows, {
-    taskId: s.taskId, peerUserId: s.counterpartyId, selfUserId: selfId, cap: ENTRY_CAP,
+    taskId: s.taskId, channelId: s.channelId, peerUserId: s.counterpartyId,
+    selfUserId: selfId, cap: ENTRY_CAP,
   }).filter((e) => !io.isGatedEntry(e, (s && s.gatedBodies) || []));
-  if (!entries.length) return false; // an empty thread stays quiet (no empty divider)
+  if (!entries.length) {
+    // FIX Q1: a thread that HAS rows but none of THIS task's — the task's span fell out of
+    // the newest-200 window — gets the same calm pointer the no-counterparty case gets,
+    // rather than a silent widening to the channel. Same wording on purpose: a second
+    // string would only tell the operator which internal filter missed. A genuinely empty
+    // thread still stays quiet (there is nothing in the channel to point at).
+    if (rows.length && s.taskId && !taskWindow(rows, String(s.taskId), s.channelId)) {
+      deps.emit(s, { type: 'notice', level: 'info', text: NO_PEER_NOTE });
+    }
+    return false; // an empty thread stays quiet (no empty divider)
+  }
   deps.emit(s, { type: 'history', entries: entries });
   // D3: a shell with NOTHING to resume starts a fresh SDK session on the first turn, so
   // the thread rides that turn as fenced DATA. FIX F1: the seed is NOT built here — the
@@ -229,6 +362,8 @@ module.exports = {
   bind,
   load,
   historyEntries,
+  taskWindow, // FIX Q1
+  parseLegacyTaskSeq, // FIX Q1
   ENTRY_CAP,
   FETCH_FAILED_NOTE,
   NO_PEER_NOTE, // FIX F4
