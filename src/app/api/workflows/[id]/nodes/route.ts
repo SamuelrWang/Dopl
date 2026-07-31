@@ -5,6 +5,7 @@ import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
 import { parseJson } from "@/shared/api/parse-json";
 import { DESCRIPTION_MAX } from "@/config";
+import { WorkflowStepTitleSchema } from "@/features/workflows/schema";
 import {
   requireWorkflowEdit,
   resolveWorkflowId,
@@ -21,7 +22,7 @@ interface Ctx {
 
 const NodeBody = z.object({
   ref: z.string().min(1).max(120),
-  title: z.string().max(200).optional(),
+  title: WorkflowStepTitleSchema.optional(),
   description: z.string().max(2000).optional(),
   reads: z.array(z.object({ kbId: z.string().min(1), entryId: z.string().uuid().optional() })).max(50).optional(),
   actions: z.array(z.object({ skillId: z.string().min(1) })).max(50).optional(),

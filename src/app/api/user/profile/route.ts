@@ -4,6 +4,7 @@ import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { SAFE_LABEL_RE, safeLabelMessage } from "@/shared/lib/safe-label";
 
 /** The only columns this route ever reads back. */
 const PROFILE_COLUMNS =
@@ -37,15 +38,14 @@ const PROFILE_COLUMNS =
 const DISPLAY_NAME_MAX = 80;
 
 /**
- * Rejects control characters (the newline that forges a transcript line, and
- * every other C0 / DEL byte), zero-width and bidi-override characters, and the
- * line/paragraph separators some renderers still treat as newlines.
+ * The rule is `SAFE_LABEL_RE` in `@/shared/lib/safe-label` — the single home
+ * for the short-label charset rule this route first introduced. It rejects
+ * control characters (the newline that forges a transcript line, and every
+ * other C0 / DEL byte), zero-width and bidi-override characters, and the
+ * line/paragraph separators some renderers still treat as newlines. The copy
+ * below is the same sentence, built from the field name.
  */
-const DISPLAY_NAME_RE =
-  /^[^\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/u;
-
-const DISPLAY_NAME_CHARSET_MESSAGE =
-  "Display name cannot contain control, zero-width, or line-separator characters";
+const DISPLAY_NAME_CHARSET_MESSAGE = safeLabelMessage("Display name");
 
 // `.trim()` runs before the length and charset checks, so a padded name is
 // stored tidy and a whitespace-only one is rejected rather than silently
@@ -56,7 +56,7 @@ const DisplayNameSchema = z
   .trim()
   .min(1, "Display name cannot be blank")
   .max(DISPLAY_NAME_MAX, `Display name must be ${DISPLAY_NAME_MAX} characters or less`)
-  .regex(DISPLAY_NAME_RE, DISPLAY_NAME_CHARSET_MESSAGE)
+  .regex(SAFE_LABEL_RE, DISPLAY_NAME_CHARSET_MESSAGE)
   .nullable();
 
 /**

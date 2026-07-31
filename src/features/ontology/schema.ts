@@ -1,5 +1,25 @@
 import { z } from "zod";
 import { graphLayoutSchema } from "@/shared/graph/layout-schema";
+import { safeLabel } from "@/shared/lib/safe-label";
+
+/**
+ * Cluster and object names are the ontology's short labels: `dopl_map` prints
+ * every cluster name at session start and `dopl_ontology` prints object names
+ * as the spine of every read. Both are real columns on editor-writable tables,
+ * so both get the charset rule and a matching DB CHECK.
+ *
+ * The labels NESTED IN JSONB — `attributes[].label`, `template[].label`,
+ * `relationships[].label`, `methods[].name` — are deliberately left alone
+ * here. They render into narration too, but they are not columns: a CHECK on
+ * them means walking a jsonb array on every write, and `ontology_objects`
+ * carries an editor-scoped UPDATE policy for `public`, so a zod-only bound on
+ * them would be exactly the fence-beside-an-open-gate this work exists to
+ * avoid. Bounding them properly is its own change. `purpose`, `subtitle`,
+ * the method descriptions and the text attribute values are prose and stay
+ * prose.
+ */
+const OntologyClusterNameSchema = safeLabel("Cluster name", 200);
+const OntologyObjectNameSchema = safeLabel("Object name", 300);
 
 const attributeValueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), value: z.string().max(4000) }),
@@ -36,13 +56,13 @@ const relationshipSchema = z.object({
 });
 
 export const OntologyClusterCreateSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: OntologyClusterNameSchema,
   purpose: z.string().max(1000).optional(),
 });
 export type OntologyClusterCreateInput = z.infer<typeof OntologyClusterCreateSchema>;
 
 export const OntologyClusterUpdateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
+  name: OntologyClusterNameSchema.optional(),
   purpose: z.string().max(1000).optional(),
   layout: graphLayoutSchema.optional(),
 });
@@ -52,7 +72,7 @@ export const OntologyObjectCreateSchema = z
   .object({
     clusterId: z.string().uuid().optional(),
     parentObjectId: z.string().uuid().optional(),
-    name: z.string().min(1).max(300),
+    name: OntologyObjectNameSchema,
   })
   .refine((v) => Boolean(v.clusterId) !== Boolean(v.parentObjectId), {
     message: "Provide exactly one of clusterId (new column) or parentObjectId (new card)",
@@ -60,7 +80,7 @@ export const OntologyObjectCreateSchema = z
 export type OntologyObjectCreateInput = z.infer<typeof OntologyObjectCreateSchema>;
 
 export const OntologyObjectUpdateSchema = z.object({
-  name: z.string().min(1).max(300).optional(),
+  name: OntologyObjectNameSchema.optional(),
   subtitle: z.string().max(1000).optional(),
   attributes: z.array(attributeSchema).max(100).optional(),
   methods: z.array(methodSchema).max(50).optional(),

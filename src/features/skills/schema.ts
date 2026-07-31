@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
 
 /**
  * Zod schemas for the skills feature. Both REST handlers and MCP tools
@@ -17,6 +18,21 @@ const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const MAX_BODY_BYTES = 1_048_576;
 const bodyMaxMessage = "Body must be 1 MB or less";
 
+/**
+ * `name` and `folder` are the skill's two short labels — `dopl_map` prints
+ * the name at session start, `dopl_skill` op="list" prints both, and
+ * `dopl_search` prints the name as a hit header. Charset-bounded per
+ * `@/shared/lib/safe-label`; `skills_editor_update` is a `public` UPDATE
+ * policy, so the matching DB CHECK is the half that actually holds.
+ *
+ * `description`, `whenToUse`, `whenNotToUse` and the SKILL.md body are
+ * NOT bounded and must not be: they are the procedure itself, legitimately
+ * multi-line markdown, and rendered as bodies under framing that says so.
+ */
+const SkillNameSchema = safeLabel("Skill name", 120);
+/** Organizing folder label. Trimmed; the service maps empty → unfiled (null). */
+const SkillFolderSchema = safeOptionalLabel("Skill folder", 80);
+
 // ─── Skill ──────────────────────────────────────────────────────────
 
 export const SkillSlugSchema = z
@@ -29,7 +45,7 @@ export type SkillSlugInput = z.infer<typeof SkillSlugSchema>;
 export const SkillStatusSchema = z.enum(["active", "draft"]);
 
 export const SkillCreateSchema = z.object({
-  name: z.string().min(1).max(120),
+  name: SkillNameSchema,
   description: z.string().min(1).max(2000),
   whenToUse: z.string().min(1).max(2000),
   whenNotToUse: z.string().max(2000).nullable().optional(),
@@ -37,7 +53,7 @@ export const SkillCreateSchema = z.object({
   status: SkillStatusSchema.optional(),
   agentWriteEnabled: z.boolean().optional(),
   /** Optional organizing folder label. Trimmed; empty → unfiled (null). */
-  folder: z.string().trim().max(80).nullable().optional(),
+  folder: SkillFolderSchema.nullable().optional(),
   /** Optional initial body for SKILL.md. Defaults to empty. */
   body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
   /**
@@ -52,7 +68,7 @@ export type SkillCreateInput = z.infer<typeof SkillCreateSchema>;
 
 export const SkillUpdateSchema = z
   .object({
-    name: z.string().min(1).max(120).optional(),
+    name: SkillNameSchema.optional(),
     description: z.string().min(1).max(2000).optional(),
     whenToUse: z.string().min(1).max(2000).optional(),
     whenNotToUse: z.string().max(2000).nullable().optional(),
@@ -60,7 +76,7 @@ export const SkillUpdateSchema = z
     status: SkillStatusSchema.optional(),
     agentWriteEnabled: z.boolean().optional(),
     /** Organizing folder label. Trimmed; empty → unfiled (null). */
-    folder: z.string().trim().max(80).nullable().optional(),
+    folder: SkillFolderSchema.nullable().optional(),
     /**
      * Full three-way sharing (skill_team_sharing migration): visibility
      * is two-way, and 'public' pairs with accessMode 'workspace'

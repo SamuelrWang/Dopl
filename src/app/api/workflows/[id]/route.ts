@@ -5,6 +5,7 @@ import { graphLayoutSchema } from "@/shared/graph/layout-schema";
 import { HttpError } from "@/shared/lib/http-error";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
+import { WorkflowNameSchema } from "@/features/workflows/schema";
 import {
   deleteWorkflow,
   getWorkflow,
@@ -33,7 +34,7 @@ function scopeOf(ctx: Ctx) {
 // is the web-only draggable-node positions; the MCP update op never sends it
 // (an optional field that agents simply omit).
 const PatchSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
+  name: WorkflowNameSchema.optional(),
   description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   clusterId: z.string().uuid().nullable().optional(),
   layout: graphLayoutSchema.optional(),

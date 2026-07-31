@@ -1,6 +1,19 @@
 import { z } from "zod";
+import { safeLabel } from "@/shared/lib/safe-label";
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * A team name renders into `dopl_members` narration (`get_team`,
+ * `access_matrix`, every membership line), so it is a label an agent reads as
+ * the server speaking. `teams_admin_write` is a `FOR ALL` policy for `public`
+ * and `authenticated` holds UPDATE, so any workspace ADMIN can rename a team
+ * straight through PostgREST without passing this schema — which is why the
+ * matching DB CHECK, not this line, is the load-bearing half. Description is
+ * left prose: it is a paragraph about what the team does, and it renders only
+ * in the web UI.
+ */
+const TeamNameSchema = safeLabel("Team name", 80);
 
 const TeamGrantInputSchema = z.object({
   resourceType: z.enum(["knowledge_base", "workflow"]),
@@ -9,7 +22,7 @@ const TeamGrantInputSchema = z.object({
 });
 
 export const TeamCreateSchema = z.object({
-  name: z.string().trim().min(1, "Team name required").max(80),
+  name: TeamNameSchema,
   description: z.string().trim().max(400).optional(),
   color: z.string().regex(HEX_COLOR, "Color must be a hex value").optional(),
   icon: z.string().max(40).optional(),
@@ -21,7 +34,7 @@ export const TeamCreateSchema = z.object({
 export type TeamCreateInput = z.infer<typeof TeamCreateSchema>;
 
 export const TeamUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
+  name: TeamNameSchema.optional(),
   description: z.string().trim().max(400).nullable().optional(),
   color: z.string().regex(HEX_COLOR).nullable().optional(),
   icon: z.string().max(40).nullable().optional(),

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { parseJson } from "@/shared/api/parse-json";
+import { parseJson, validationResponseBody } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { WorkspaceUpdateSchema } from "@/features/workspaces/schema";
 import {
@@ -65,7 +65,7 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
     return NextResponse.json({ workspace: updated });
   } catch (err) {
     if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
+      return NextResponse.json(validationResponseBody(err), { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

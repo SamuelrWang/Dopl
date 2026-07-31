@@ -5,6 +5,7 @@ import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
 import { parseJson } from "@/shared/api/parse-json";
 import { DESCRIPTION_MAX } from "@/config";
+import { WorkflowStepTitleSchema } from "@/features/workflows/schema";
 import {
   requireWorkflowEdit,
   resolveWorkflowId,
@@ -23,7 +24,7 @@ const ReadRef = z.object({ kbId: z.string().min(1), entryId: z.string().uuid().o
 const ActionRef = z.object({ skillId: z.string().min(1) });
 const NodeSpec = z.object({
   ref: z.string().min(1).max(120),
-  title: z.string().max(200).optional(),
+  title: WorkflowStepTitleSchema.optional(),
   description: z.string().max(2000).optional(),
   reads: z.array(ReadRef).max(50).optional(),
   actions: z.array(ActionRef).max(50).optional(),

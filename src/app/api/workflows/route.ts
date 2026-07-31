@@ -9,10 +9,11 @@ import {
   listWorkflows,
 } from "@/features/workflows/server/service";
 import { DESCRIPTION_MAX } from "@/config";
+import { WorkflowNameSchema } from "@/features/workflows/schema";
 
 const WorkflowCreateSchema = z.object({
   id: z.string().uuid().optional(),
-  name: z.string().min(1, "Name is required").max(120),
+  name: WorkflowNameSchema,
   description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   clusterId: z.string().uuid().nullable().optional(),
 });

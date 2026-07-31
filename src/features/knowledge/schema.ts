@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
+import { safeLabel } from "@/shared/lib/safe-label";
 
 /**
  * Zod input schemas for the knowledge feature. Used by REST handlers
@@ -16,6 +17,22 @@ import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
  */
 
 const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+
+/**
+ * The BASE name was the gap in this file: folder names and entry titles have
+ * carried `NAME_RE` since audit fix #14, but the base sitting above them was
+ * bounded by length alone — and it is the one of the three that `dopl_map`
+ * prints at session start and that every `dopl_kb` and `dopl_search` result
+ * names. Same class as `NAME_RE` minus its '/' ban, which exists for the
+ * path resolver and has nothing to say about a base name. `description` stays
+ * prose (2000 chars of what the base is for).
+ *
+ * `knowledge_bases_editor_update` is a `public` UPDATE policy and
+ * `authenticated` holds UPDATE, so any workspace editor can rename a base
+ * straight through PostgREST without passing this schema. The DB CHECK is the
+ * load-bearing half; this line is the one that produces a readable error.
+ */
+const KnowledgeBaseNameSchema = safeLabel("Knowledge base name", 120);
 
 // Folder / entry names — design notes (audit fix #14):
 //
@@ -111,7 +128,7 @@ function refineScope(requireGrants: boolean) {
 
 export const KnowledgeBaseCreateSchema = z
   .object({
-    name: z.string().min(1, "Name is required").max(120),
+    name: KnowledgeBaseNameSchema,
     // `nullable().optional()` for parity with KnowledgeBaseUpdateSchema —
     // both `undefined` (omit) and `null` (explicit clear) are valid.
     description: z.string().max(KB_BASE_DESCRIPTION_MAX).nullable().optional(),
@@ -137,7 +154,7 @@ export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>
 
 export const KnowledgeBaseUpdateSchema = z
   .object({
-    name: z.string().min(1).max(120).optional(),
+    name: KnowledgeBaseNameSchema.optional(),
     description: z.string().max(KB_BASE_DESCRIPTION_MAX).nullable().optional(),
     slug: z.string().min(1).max(80).regex(slugRegex).optional(),
     agentWriteEnabled: z.boolean().optional(),

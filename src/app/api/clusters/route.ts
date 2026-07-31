@@ -5,9 +5,10 @@ import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { createCluster, listClusters } from "@/features/clusters/server/service";
 import { DESCRIPTION_MAX } from "@/config";
+import { ClusterNameSchema } from "@/features/clusters/schema";
 
 const ClusterCreateSchema = z.object({
-  name: z.string().min(1, "Name is required").max(120),
+  name: ClusterNameSchema,
   description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
 });
 

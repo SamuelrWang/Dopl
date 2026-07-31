@@ -1,4 +1,27 @@
 import { z } from "zod";
+import { safeLabel } from "@/shared/lib/safe-label";
+
+/**
+ * A chat title, its project tag and its folder name are the three short labels
+ * the chats feature puts into agent narration: `dopl_chats` op="list" prints
+ * one line per chat (title, folder, project) and `dopl_search` prints titles
+ * as hit headers. Bounded on the charset for the same reason as every other
+ * label — see `@/shared/lib/safe-label`.
+ *
+ * `overview`, `learnings`, the deliverable labels and the message
+ * summary/verbatim pair are NOT bounded: those are the transcript, the payload
+ * the feature exists to hand an agent, and they are rendered as bodies under
+ * framing that says what they are.
+ *
+ * `chats` and `chat_folders` carry no INSERT/UPDATE RLS policy (verified
+ * against prod), so unlike skills or knowledge bases these rows can only be
+ * written by the service role — this schema really is the only writer, and the
+ * DB CHECK is the layer that survives the next one.
+ */
+const ChatTitleSchema = safeLabel("Chat title", 200);
+const ChatProjectSchema = safeLabel("Project", 120);
+/** Folder NAME (resolved / created by the service), not an id. */
+const ChatFolderNameSchema = safeLabel("Folder name", 80);
 
 export const ChatMessageSchema = z.object({
   role: z.enum(["user", "agent"]),
@@ -46,13 +69,13 @@ const SessionDateSchema = z
  * merge relies on. Defaults for a fresh create are applied in the service.
  */
 export const ChatExportSchema = z.object({
-  title: z.string().trim().min(1).max(200),
+  title: ChatTitleSchema,
   overview: z.string().max(2000).optional(),
   source: SourceSchema.optional(),
-  project: z.string().min(1).max(120).nullish(),
+  project: ChatProjectSchema.nullish(),
   sessionDate: SessionDateSchema.optional(),
   clientSessionId: z.string().min(1).max(200).optional(),
-  folder: z.string().min(1).max(80).optional(),
+  folder: ChatFolderNameSchema.optional(),
   visibility: VisibilitySchema.optional(),
   deliverables: z.array(DeliverableSchema).max(50).optional(),
   learnings: z.array(z.string().min(1).max(1000)).max(50).optional(),
@@ -62,12 +85,12 @@ export type ChatExportInput = z.infer<typeof ChatExportSchema>;
 
 export const ChatUpdateSchema = z
   .object({
-    title: z.string().trim().min(1).max(200).optional(),
+    title: ChatTitleSchema.optional(),
     overview: z.string().max(2000).optional(),
-    project: z.string().min(1).max(120).nullable().optional(),
+    project: ChatProjectSchema.nullable().optional(),
     sessionDate: SessionDateSchema.optional(),
     folderId: z.string().uuid().nullable().optional(),
-    folder: z.string().min(1).max(80).nullable().optional(),
+    folder: ChatFolderNameSchema.nullable().optional(),
     visibility: VisibilitySchema.optional(),
     accessMode: AccessModeSchema.optional(),
     /** Teams granted read access; only meaningful with accessMode 'teams'. */
@@ -107,7 +130,7 @@ export const ChatAppendSchema = z.object({
 export type ChatAppendInput = z.infer<typeof ChatAppendSchema>;
 
 export const ChatFolderCreateSchema = z.object({
-  name: z.string().min(1).max(80),
+  name: ChatFolderNameSchema,
 });
 export type ChatFolderCreateInput = z.infer<typeof ChatFolderCreateSchema>;
 
@@ -118,7 +141,7 @@ export type ChatFolderCreateInput = z.infer<typeof ChatFolderCreateSchema>;
  */
 export const ChatFolderUpdateSchema = z
   .object({
-    name: z.string().min(1).max(80).optional(),
+    name: ChatFolderNameSchema.optional(),
     visibility: VisibilitySchema.optional(),
     accessMode: AccessModeSchema.optional(),
     /** Teams granted read access; only meaningful with accessMode 'teams'. */
