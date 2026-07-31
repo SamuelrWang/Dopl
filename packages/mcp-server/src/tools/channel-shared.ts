@@ -75,6 +75,27 @@ export function neutralizeInline(raw: string): string | null {
 }
 
 /**
+ * A peer-authored string as one inline code span, or `fallback` when nothing
+ * survives neutralization. The fallback matters: rendering an empty pair of
+ * backticks would hide the "the server could not name this" tell that the L3
+ * legend and the thread renderers both rely on.
+ *
+ * LIVES HERE, not in `channel-render.ts` where the read-ops fix first wrote it.
+ * The Q1 sweep into the WRITE ops found the same helper wanted by three modules
+ * — the renderers, the write handlers, and `resolveMemberOr` a few lines below —
+ * and `channel-render.ts` already imports from this file, so keeping it there
+ * would have forced either a cycle or a copy. A copied neutralizer is the exact
+ * failure mode {@link neutralizeInline}'s own note warns about.
+ */
+export function inlineOr(
+  raw: string | null | undefined,
+  fallback: string,
+): string {
+  const safe = raw ? neutralizeInline(raw) : null;
+  return safe ?? fallback;
+}
+
+/**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member
  * resolvers — the caller short-circuits on the error branch.
@@ -125,11 +146,40 @@ export async function resolveChannelOr(
 
 export interface ResolvedMember {
   userId: string;
+  /**
+   * RENDER-SAFE already — one inline code span, never a bare name. See
+   * {@link memberLabel}. Splice it directly; do NOT neutralize it again (double
+   * neutralization would strip the span's own backticks and hand back a bare
+   * name, i.e. the bug).
+   */
   label: string;
 }
 
+/**
+ * How a workspace member is NAMED in tool output — neutralized AT THE SOURCE.
+ *
+ * Q1-D (write-op sweep). `displayName` is `profiles.display_name`, which any
+ * signed-in user sets for themselves, and this label is spliced into ten-odd
+ * write-op lines that carry no untrusted-content framing at all ("Added <label>
+ * to …", "addressed to <label>", the invite and addressee errors). The read side
+ * neutralized the same column inside `formatAuthor`; the write side splices the
+ * label instead, and every one of those sites was raw.
+ *
+ * Neutralizing HERE rather than at each call site is deliberate: `label` is the
+ * ONLY thing callers do with a `ResolvedMember` besides `userId`, so making it
+ * safe by construction means a call site added later cannot reintroduce the
+ * defect — which is precisely how the write ops were missed the first time.
+ * `userId` stays raw and unrendered-as-narration: it is a server-issued UUID and
+ * the one half of an identity the member does not control.
+ *
+ * The route bound added tonight (`src/app/api/user/profile/route.ts`) and the
+ * pending DB CHECK are the other two layers; neither is a reason to render the
+ * value raw. The route is not the only writer (RLS lets a user PATCH the column
+ * straight through PostgREST), the CHECK is written but NOT APPLIED, and `email`
+ * — the fallback below — is bounded by no charset rule of ours either.
+ */
 function memberLabel(m: WorkspaceMember): string {
-  return m.displayName || m.email || m.userId;
+  return inlineOr(m.displayName || m.email || m.userId, "(unnamed member)");
 }
 
 /**

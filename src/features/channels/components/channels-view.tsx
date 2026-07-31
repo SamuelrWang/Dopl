@@ -128,9 +128,10 @@ export function ChannelsView({
     loading: threadsLoading,
     refetch: refetchThreads,
   } = useChannelThreads(selected?.id ?? null, workspaceId);
-  // Poll fallback scoped to THIS page (not the sidebar badge) so a pending
-  // request appears within a few seconds even when Realtime drops the consent
-  // INSERT; pauses automatically while the tab is hidden (TanStack default).
+  // Poll BACKSTOP scoped to THIS page (not the sidebar badge), for the case
+  // where the realtime socket itself is down — consent INSERTs are delivered
+  // over realtime (see CONSENT_INBOX_POLL_MS). Pauses automatically while the
+  // tab is hidden (TanStack default).
   const { inbound, outbound, refetch: refetchConsent } = useConsentInbox(
     workspaceId,
     undefined,

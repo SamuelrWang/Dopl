@@ -18,7 +18,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const channel_ops_write_1 = require("./channel-ops-write");
+const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_read_1 = require("./channel-ops-read");
+const channel_render_1 = require("./channel-render");
 const CHANNEL = {
     id: "chan-1",
     slug: "general",
@@ -163,7 +165,7 @@ function stubClient(overrides) {
         });
         const res = await (0, channel_ops_write_1.opPost)(client, "general", "posted fine", {});
         (0, vitest_1.expect)(res.isError).toBeFalsy();
-        (0, vitest_1.expect)(res.content[0].text).toContain("Posted to **General**");
+        (0, vitest_1.expect)(res.content[0].text).toContain("Posted to **`General`**");
         (0, vitest_1.expect)(res.content[0].text).not.toContain("boom");
     });
 });
@@ -172,7 +174,7 @@ function stubClient(overrides) {
         const closeChannelThread = vitest_1.vi.fn();
         closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "completed" });
         const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_write_1.opCloseThread)(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
+        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
         const [channelId, threadId, input] = closeChannelThread.mock.calls[0];
         (0, vitest_1.expect)(channelId).toBe("chan-1");
         (0, vitest_1.expect)(threadId).toBe("thread-uuid");
@@ -183,10 +185,13 @@ function stubClient(overrides) {
         const closeChannelThread = vitest_1.vi.fn();
         closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "failed" });
         const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_write_1.opCloseThread)(client, "general", "thread-uuid", "failed");
+        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "failed");
         const [, , input] = closeChannelThread.mock.calls[0];
         (0, vitest_1.expect)(input).toEqual({ outcome: "failed", summary: undefined });
-        (0, vitest_1.expect)(res.content[0].text).toBe("Closed thread **Ship it** in **General** as failed.");
+        // Q1 (write sweep): the peer-typed title is a code span and the result now
+        // opens with the thread header — a thread's TARGET may close it, so this
+        // echo routinely renders a title the caller never wrote.
+        (0, vitest_1.expect)(res.content[0].text).toBe(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\nClosed thread **\`Ship it\`** in **\`General\`** as failed.`);
     });
 });
 (0, vitest_1.describe)("opPost — bad thread mapping (Gap 4)", () => {
@@ -334,7 +339,10 @@ function stubClient(overrides) {
         });
         const text = (await (0, channel_ops_read_1.opRead)(client, "general")).content[0].text;
         // Inline: a short tag per line, so a 200-message read does not carry 200 uuids.
-        (0, vitest_1.expect)(text).toContain("· thread 3f2a91c4");
+        // Q1-E: the tag is a code span — `metadata.taskId` is stored verbatim
+        // for any non-UUID value, so the eight characters at a line head are
+        // peer bytes.
+        (0, vitest_1.expect)(text).toContain("· thread `3f2a91c4`");
         // The un-threaded one is called out, because the listing DOES contain
         // threaded messages — absence is only meaningful when the tag is in play.
         (0, vitest_1.expect)(text).toContain("· no thread");

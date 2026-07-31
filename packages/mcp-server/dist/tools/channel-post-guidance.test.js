@@ -25,6 +25,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const zod_1 = require("zod");
 const channel_ops_write_1 = require("./channel-ops-write");
+const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_1 = require("./channel");
 const CHANNEL = { id: "chan-1", slug: "eng", name: "eng", visibility: "private" };
 const BOB = { userId: "u-bob", email: "bob@x.com", displayName: "Bob", status: "active" };
@@ -45,7 +46,7 @@ async function createThreadWith(thrown) {
             throw thrown;
         }),
     });
-    const res = await (0, channel_ops_write_1.opCreateThread)(client, "eng", "Title", "body", "bob@x.com");
+    const res = await (0, channel_ops_threads_1.opCreateThread)(client, "eng", "Title", "body", "bob@x.com");
     (0, vitest_1.expect)(res.isError).toBe(true);
     return res.content[0].text;
 }
@@ -58,7 +59,7 @@ async function createThreadWith(thrown) {
         // ...and it now names the thing that was actually wrong.
         (0, vitest_1.expect)(text).toContain("title <=200 characters");
         (0, vitest_1.expect)(text).toContain("rejected as INVALID");
-        (0, vitest_1.expect)(text).toContain("do NOT invite Bob");
+        (0, vitest_1.expect)(text).toContain("do NOT invite `Bob`");
     });
     (0, vitest_1.it)("CHANNEL_ADDRESSEE_NOT_MEMBER still gets the addressee message", async () => {
         const text = await createThreadWith(apiError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER"));
@@ -97,7 +98,7 @@ async function createThreadWith(thrown) {
                 throw apiError(500, "INTERNAL_ERROR");
             }),
         });
-        await (0, vitest_1.expect)((0, channel_ops_write_1.opCreateThread)(client, "eng", "Title", "body", "bob@x.com")).rejects.toBeTruthy();
+        await (0, vitest_1.expect)((0, channel_ops_threads_1.opCreateThread)(client, "eng", "Title", "body", "bob@x.com")).rejects.toBeTruthy();
     });
 });
 (0, vitest_1.describe)("Q9 · post — the same shape, same fix", () => {

@@ -24,7 +24,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { opCreateThread, opPost } from "./channel-ops-write";
+import { opPost } from "./channel-ops-write";
+import { opCreateThread } from "./channel-ops-threads";
 import { registerChannelTool } from "./channel";
 import type { RegisterTool } from "./respond";
 
@@ -66,7 +67,7 @@ describe("Q9 · create_thread — a 400 is read off its CODE", () => {
     // ...and it now names the thing that was actually wrong.
     expect(text).toContain("title <=200 characters");
     expect(text).toContain("rejected as INVALID");
-    expect(text).toContain("do NOT invite Bob");
+    expect(text).toContain("do NOT invite `Bob`");
   });
 
   it("CHANNEL_ADDRESSEE_NOT_MEMBER still gets the addressee message", async () => {

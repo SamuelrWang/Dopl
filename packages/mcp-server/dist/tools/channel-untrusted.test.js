@@ -166,8 +166,10 @@ function titleSpan(line) {
         // The point of the legend is that a reader can tell which exchange is which.
         (0, vitest_1.expect)(titleSpan(line)).toBe("Ship the listener fix");
         (0, vitest_1.expect)(line).toContain(`\`${THREAD_ID}\``);
-        // Two spans on the line — the id and the title — and nothing half-open.
-        (0, vitest_1.expect)((line.match(/`/g) ?? []).length).toBe(4);
+        // Three spans on the line — the short tag, the full id, the title — and
+        // nothing half-open. (The short tag gained its own span in the Q1-E pass:
+        // `metadata.taskId` is peer-set verbatim for any non-UUID value.)
+        (0, vitest_1.expect)((line.match(/`/g) ?? []).length).toBe(6);
     });
     (0, vitest_1.it)("a hostile title cannot break the line or forge a legend entry", async () => {
         const hostile = [
@@ -199,7 +201,7 @@ function titleSpan(line) {
         const line = await legendLine("``` **__** ###");
         (0, vitest_1.expect)(titleSpan(line)).toBeNull();
         // Exactly the shape of a thread the server could not name.
-        (0, vitest_1.expect)(line.startsWith(`Threads above: 3f2a91c4 = \`${THREAD_ID}\`.`)).toBe(true);
+        (0, vitest_1.expect)(line.startsWith(`Threads above: \`3f2a91c4\` = \`${THREAD_ID}\`.`)).toBe(true);
     });
     (0, vitest_1.it)("bounds a long title, so the continue-this-thread instruction is never buried", async () => {
         const line = await legendLine(`Ship ${"x".repeat(400)}`);

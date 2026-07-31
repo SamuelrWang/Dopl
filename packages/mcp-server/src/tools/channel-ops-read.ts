@@ -24,7 +24,7 @@ import type {
   DoplClient,
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
-import { channelNotFound, neutralizeInline } from "./channel-shared";
+import { channelNotFound, inlineOr, neutralizeInline } from "./channel-shared";
 import {
   UNTRUSTED_BODY_HEADER,
   UNTRUSTED_LISTING_HEADER,
@@ -338,9 +338,17 @@ export async function opGetThread(
   } catch (e) {
     // The route 404s both an unknown channel ref and a thread not in this
     // channel; surface a thread-oriented not-found either way.
+    //
+    // Q1-E — `threadId` is the caller's own argument, but unlike `ref` it ROUND
+    // TRIPS: an agent reads a thread id out of a `read` legend, and a legend id
+    // is `metadata.taskId`, which a peer stores verbatim for any non-UUID value.
+    // A hand-built code span is not a container — one backtick in the value
+    // opens it — so it goes through the same helper as its siblings in
+    // `channel-ops-threads.ts`. `ref` stays raw: it is the channel argument the
+    // caller just passed and nothing peer-authored reaches it.
     if (isNotFound(e)) {
       return err(
-        `No thread \`${threadId}\` in **${ref}**. List a channel's threads with dopl_channel(op="list_threads", channel="${ref}").`,
+        `No thread ${inlineOr(threadId, "(unreadable id)")} in **${ref}**. List a channel's threads with dopl_channel(op="list_threads", channel="${ref}").`,
       );
     }
     throw e;

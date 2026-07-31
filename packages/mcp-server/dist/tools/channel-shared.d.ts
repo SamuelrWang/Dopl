@@ -44,6 +44,20 @@ export declare const INLINE_TEXT_MAX = 160;
  */
 export declare function neutralizeInline(raw: string): string | null;
 /**
+ * A peer-authored string as one inline code span, or `fallback` when nothing
+ * survives neutralization. The fallback matters: rendering an empty pair of
+ * backticks would hide the "the server could not name this" tell that the L3
+ * legend and the thread renderers both rely on.
+ *
+ * LIVES HERE, not in `channel-render.ts` where the read-ops fix first wrote it.
+ * The Q1 sweep into the WRITE ops found the same helper wanted by three modules
+ * — the renderers, the write handlers, and `resolveMemberOr` a few lines below —
+ * and `channel-render.ts` already imports from this file, so keeping it there
+ * would have forced either a cycle or a copy. A copied neutralizer is the exact
+ * failure mode {@link neutralizeInline}'s own note warns about.
+ */
+export declare function inlineOr(raw: string | null | undefined, fallback: string): string;
+/**
  * True when a resolver returned a ToolResponse error instead of the
  * resolved value. Generic so it narrows both the channel and member
  * resolvers — the caller short-circuits on the error branch.
@@ -70,6 +84,12 @@ export declare function channelNotFound(ref: string): ToolResponse;
 export declare function resolveChannelOr(client: DoplClient, ref: string): Promise<Channel | ToolResponse>;
 export interface ResolvedMember {
     userId: string;
+    /**
+     * RENDER-SAFE already — one inline code span, never a bare name. See
+     * {@link memberLabel}. Splice it directly; do NOT neutralize it again (double
+     * neutralization would strip the span's own backticks and hand back a bare
+     * name, i.e. the bug).
+     */
     label: string;
 }
 /**

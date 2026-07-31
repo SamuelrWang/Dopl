@@ -286,8 +286,16 @@ async function opGetThread(client, ref, threadId) {
     catch (e) {
         // The route 404s both an unknown channel ref and a thread not in this
         // channel; surface a thread-oriented not-found either way.
+        //
+        // Q1-E — `threadId` is the caller's own argument, but unlike `ref` it ROUND
+        // TRIPS: an agent reads a thread id out of a `read` legend, and a legend id
+        // is `metadata.taskId`, which a peer stores verbatim for any non-UUID value.
+        // A hand-built code span is not a container — one backtick in the value
+        // opens it — so it goes through the same helper as its siblings in
+        // `channel-ops-threads.ts`. `ref` stays raw: it is the channel argument the
+        // caller just passed and nothing peer-authored reaches it.
         if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No thread \`${threadId}\` in **${ref}**. List a channel's threads with dopl_channel(op="list_threads", channel="${ref}").`);
+            return (0, respond_1.err)(`No thread ${(0, channel_shared_1.inlineOr)(threadId, "(unreadable id)")} in **${ref}**. List a channel's threads with dopl_channel(op="list_threads", channel="${ref}").`);
         }
         throw e;
     }

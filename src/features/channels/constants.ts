@@ -20,21 +20,38 @@ export const CONSENT_TABLES = ["channel_consent_requests"] as const;
 export const PRESENCE_TABLES = ["agent_presence"] as const;
 
 /**
- * Liveness fallback for the consent inbox. `channel_consent_requests` INSERTs
- * are not reliably delivered by Supabase Realtime (its RLS-on-the-WAL-record
- * evaluation of the per-operator `operator_user_id = auth.uid()` policy is a
- * known gotcha — a row is SELECT-able on reload yet its INSERT never reaches the
- * postgres_changes stream), so a pending request could sit invisible until the
- * operator reloaded. This poll guarantees it surfaces within a few seconds.
+ * Liveness fallback for the consent inbox — a BACKSTOP, not the delivery path.
+ *
+ * Q11 — this was 4s, which is 900 requests an hour from one idle focused tab,
+ * and the comment justifying that number rested on a diagnosis the repo had
+ * already corrected. It claimed `channel_consent_requests` INSERTs "are not
+ * reliably delivered by Supabase Realtime". They are. The undelivered events
+ * were UPDATEs and DELETEs, because the default REPLICA IDENTITY (primary key
+ * only) leaves the WAL record without the `operator_user_id` column that the
+ * per-operator RLS policy needs to authorize delivery — an INSERT record has
+ * always carried every column. Migration 20260727130000 says exactly this
+ * ("INSERT already carries all columns; this is chiefly for live delivery of the
+ * UPDATE … and DELETE paths") and set REPLICA IDENTITY FULL, which fixed the
+ * other two. So the case the poll was tuned for — a pending request appearing
+ * and sitting invisible — is the case realtime handles, and has since July 27.
+ *
+ * 30s, and the poll STAYS: realtime has dropped on this project before, the
+ * failure mode is an operator's approval sitting unseen while an agent waits on
+ * it, and a backstop that only fires when the socket is already broken should be
+ * priced for that. At 30s an idle focused tab makes 120 requests an hour instead
+ * of 900, and the worst-case latency it has to cover is a socket outage, where
+ * 30s is a rounding error against the reconnect. Anything faster is paying a
+ * per-request cost 7 times over for a path that normally delivers in under a
+ * second.
  *
  * Scoped deliberately: only the CHANNELS PAGE inbox (`channels-view`) passes it,
- * so the fast poll lives with the panel that renders the requests. The
- * always-mounted sidebar badge stays realtime-only (no interval) so we don't add
- * a workspace-wide background poll on every page. TanStack's default
+ * so the poll lives with the panel that renders the requests. The always-mounted
+ * sidebar badge stays realtime-only (no interval) so we don't add a
+ * workspace-wide background poll on every page. TanStack's default
  * `refetchIntervalInBackground: false` also pauses this poll while the tab is
  * hidden, so a backgrounded channels tab stops polling on its own.
  */
-export const CONSENT_INBOX_POLL_MS = 4_000;
+export const CONSENT_INBOX_POLL_MS = 30_000;
 
 /**
  * A member's agent is "online / listening" when its last heartbeat is newer

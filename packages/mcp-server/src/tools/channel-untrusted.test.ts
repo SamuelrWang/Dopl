@@ -188,8 +188,10 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     // The point of the legend is that a reader can tell which exchange is which.
     expect(titleSpan(line)).toBe("Ship the listener fix");
     expect(line).toContain(`\`${THREAD_ID}\``);
-    // Two spans on the line — the id and the title — and nothing half-open.
-    expect((line.match(/`/g) ?? []).length).toBe(4);
+    // Three spans on the line — the short tag, the full id, the title — and
+    // nothing half-open. (The short tag gained its own span in the Q1-E pass:
+    // `metadata.taskId` is peer-set verbatim for any non-UUID value.)
+    expect((line.match(/`/g) ?? []).length).toBe(6);
   });
 
   it("a hostile title cannot break the line or forge a legend entry", async () => {
@@ -228,7 +230,7 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     const line = await legendLine("``` **__** ###");
     expect(titleSpan(line)).toBeNull();
     // Exactly the shape of a thread the server could not name.
-    expect(line.startsWith(`Threads above: 3f2a91c4 = \`${THREAD_ID}\`.`)).toBe(true);
+    expect(line.startsWith(`Threads above: \`3f2a91c4\` = \`${THREAD_ID}\`.`)).toBe(true);
   });
 
   it("bounds a long title, so the continue-this-thread instruction is never buried", async () => {

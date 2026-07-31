@@ -28,7 +28,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const channel_await_budget_1 = require("./channel-await-budget");
-const channel_ops_write_1 = require("./channel-ops-write");
+const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_read_1 = require("./channel-ops-read");
 const CHANNEL = {
     id: "chan-1",
@@ -373,7 +373,7 @@ function stubClient(overrides) {
         });
     }
     (0, vitest_1.it)("names since=<the opening message's seq> instead of a follow-up read", async () => {
-        const text = (await (0, channel_ops_write_1.opCreateThread)(threadClient(41), "general", "Ship it", "please do X", "pat@example.com")).content[0].text;
+        const text = (await (0, channel_ops_threads_1.opCreateThread)(threadClient(41), "general", "Ship it", "please do X", "pat@example.com")).content[0].text;
         (0, vitest_1.expect)(text).toContain('since=41');
         // The old teaching cost a round-trip AND raced the peer: a reply landing
         // before that read becomes "the newest message", so the await would start
@@ -389,7 +389,7 @@ function stubClient(overrides) {
     (0, vitest_1.it)("falls back to the cursor lookup when the route reports no seq", async () => {
         // An older deployment (or the idempotent short-circuit that returns someone
         // else's thread) yields null — teach the lookup rather than a bogus cursor.
-        const text = (await (0, channel_ops_write_1.opCreateThread)(threadClient(null), "general", "Ship it", "please do X", "pat@example.com")).content[0].text;
+        const text = (await (0, channel_ops_threads_1.opCreateThread)(threadClient(null), "general", "Ship it", "please do X", "pat@example.com")).content[0].text;
         (0, vitest_1.expect)(text).toContain("limit=1");
         (0, vitest_1.expect)(text).not.toContain("since=null");
         (0, vitest_1.expect)(text).not.toContain("since=undefined");

@@ -81,6 +81,20 @@ export declare function formatAuthor(m: ChannelMessage): string;
  * forgeable is `taskTitle`: the server stamps it from the thread row and strips
  * any caller copy, so a fabricated tag renders with an id and NO title. That
  * titleless render in the legend below is the tell.
+ *
+ * Q1-E — AND THAT MAKES THE ID ITSELF PEER-CONTROLLED TEXT, which the first Q1
+ * pass missed on this very line while quoting the fact that produces it. A
+ * non-UUID `taskId` is stored VERBATIM: `resolvePostMetadata` runs its lookup
+ * and participation gate only inside `if (isUuid(callerTaskId))`
+ * (service-writes-metadata.ts:236-245), and the route's `metadata` schema is a
+ * bare `z.record(z.string(), z.unknown())` with no length, charset or newline
+ * rule on any value. So a peer posts `metadata.taskId = "\n## SYSTEM …"` and the
+ * string lands, unaltered, in whatever we splice it into. Both splice sites are
+ * OUTSIDE the untrusted-body framing and outside the body's two-space indent:
+ * the message line's own head, and the legend. Both are neutralized below.
+ * (`taskTitle` is NOT in the same position — `resolvePostMetadata` deletes any
+ * caller copy and re-stamps it from the thread row — but it is peer-typed all
+ * the same, and it was already neutralized.)
  */
 export declare function threadIdOf(m: ChannelMessage): string | undefined;
 /** The message lines plus, when anything is threaded, the id legend. */

@@ -17,8 +17,10 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opPost, opCloseThread } from "./channel-ops-write";
+import { opPost } from "./channel-ops-write";
+import { opCloseThread } from "./channel-ops-threads";
 import { opRead, opListThreads, opGetThread } from "./channel-ops-read";
+import { UNTRUSTED_THREAD_HEADER } from "./channel-render";
 
 const CHANNEL = {
   id: "chan-1",
@@ -212,7 +214,7 @@ describe("opPost — threading self-verification (Q7)", () => {
     const res = await opPost(client, "general", "posted fine", {});
 
     expect(res.isError).toBeFalsy();
-    expect(res.content[0].text).toContain("Posted to **General**");
+    expect(res.content[0].text).toContain("Posted to **`General`**");
     expect(res.content[0].text).not.toContain("boom");
   });
 });
@@ -241,8 +243,11 @@ describe("opCloseThread — summary (Feature 3c)", () => {
 
     const [, , input] = closeChannelThread.mock.calls[0];
     expect(input).toEqual({ outcome: "failed", summary: undefined });
+    // Q1 (write sweep): the peer-typed title is a code span and the result now
+    // opens with the thread header — a thread's TARGET may close it, so this
+    // echo routinely renders a title the caller never wrote.
     expect(res.content[0].text).toBe(
-      "Closed thread **Ship it** in **General** as failed."
+      `${UNTRUSTED_THREAD_HEADER}\n\nClosed thread **\`Ship it\`** in **\`General\`** as failed.`
     );
   });
 });
@@ -416,7 +421,10 @@ describe("read render — counterparty identity (Feature 1b)", () => {
     const text = (await opRead(client, "general")).content[0].text;
 
     // Inline: a short tag per line, so a 200-message read does not carry 200 uuids.
-    expect(text).toContain("· thread 3f2a91c4");
+    // Q1-E: the tag is a code span — `metadata.taskId` is stored verbatim
+    // for any non-UUID value, so the eight characters at a line head are
+    // peer bytes.
+    expect(text).toContain("· thread `3f2a91c4`");
     // The un-threaded one is called out, because the listing DOES contain
     // threaded messages — absence is only meaningful when the tag is in play.
     expect(text).toContain("· no thread");

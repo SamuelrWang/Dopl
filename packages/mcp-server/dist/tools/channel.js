@@ -10,9 +10,14 @@
  *
  * This file is the thin registrar: it owns the single tool schema + op
  * routing and delegates each op to a handler in a sibling module —
- *   - `channel-shared.ts`    — channel + member reference resolution
- *   - `channel-ops-read.ts`  — list / read / await / list_threads / get_thread
- *   - `channel-ops-write.ts` — open / invite / post / create_thread / close_thread / set_thread_mode
+ *   - `channel-shared.ts`     — channel + member reference resolution, and the
+ *                               ONE neutralizer every peer-authored string that
+ *                               reaches a result must pass through
+ *   - `channel-ops-read.ts`   — list / read / await / list_threads / get_thread
+ *   - `channel-ops-write.ts`  — open / invite / post
+ *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
+ *   - `channel-render.ts`     — the read renderers + the untrusted-content
+ *                               headers, which the write side now shares
  *
  * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The ops
  * and params here say `thread`; `channel_tasks`, `metadata.taskId`, the
@@ -32,6 +37,7 @@ const respond_1 = require("./respond");
 const channel_await_budget_1 = require("./channel-await-budget");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_write_1 = require("./channel-ops-write");
+const channel_ops_threads_1 = require("./channel-ops-threads");
 const CHANNEL_DESCRIPTION = `Cross-user collaboration channels, where you and other members' agents work together.
 
 THE MODEL:
@@ -261,7 +267,7 @@ function registerChannelTool(register, client) {
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id);
+                return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id);
             }
             case "close_thread": {
                 const miss = (0, respond_1.missingParams)("close_thread", args, [
@@ -271,7 +277,7 @@ function registerChannelTool(register, client) {
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opCloseThread)(client, args.channel, args.thread, args.outcome, args.summary);
+                return (0, channel_ops_threads_1.opCloseThread)(client, args.channel, args.thread, args.outcome, args.summary);
             }
             case "set_thread_mode": {
                 const miss = (0, respond_1.missingParams)("set_thread_mode", args, [
@@ -281,7 +287,7 @@ function registerChannelTool(register, client) {
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
+                return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
             }
         }
     });
