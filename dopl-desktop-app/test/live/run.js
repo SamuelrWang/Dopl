@@ -123,15 +123,33 @@ async function setup(ctx, who, tg) {
   say(`agents — @${ctx.agents.a.name} ${ctx.agents.a.id}  /  @${ctx.agents.b.name} ${ctx.agents.b.id}`);
 
   // ── the traffic, in the order that makes the checks bite ──────────────────────
-  // The addressed posts go FIRST so both agents are ENGAGED server-side by the time the
+  // The addressed posts go FIRST so that both agents are ENGAGED server-side by the time the
   // chat post lands: without the chat brake, an engaged agent takes that post, so check 1
-  // tests the brake rather than an empty room.
+  // tests the brake rather than an empty room. Whether that engagement ACTUALLY LANDED is
+  // not assumed — it is read back off the roster below and probed as a capability, because
+  // an unengaged room makes check 1 vacuous and the harness has to know which run it is in.
+  // (Against a server carrying the 2026-07-31 credential-keyed brake it never lands here at
+  // all; see `engagement_stamped` in CAP_WHY. The order is still right for the day it does.)
+  //
+  // AND THE CONTROL. `chat` and `control` are the SAME post but for one field: `control`
+  // omits `intent` entirely. Check 1 needs both, because "the chat post fed nobody" is only
+  // evidence about `intent` if the otherwise-identical post DID feed somebody. The control
+  // is also what arms check 5 — an unaddressed HUMAN post is the shape classify answers
+  // 'trigger' for, so it proves the room can trigger at all before check 5 claims the loop
+  // brake is what stopped the agent-authored twin.
   //
   // `authorKind: 'user'` IS LOAD-BEARING. The device token is an AGENT credential and the
   // service derives `agent` from it when the field is omitted — so every post would be
   // agent-authored, the loop brake would refuse everything, and checks 1/2/4 would pass
   // vacuously against a room where nothing could ever route. A human TYPING in the composer
   // posts over a cookie session as `user`, and that is the row shape being reproduced.
+  //
+  // WHAT IT DOES NOT BUY IS ENGAGEMENT, and that limit is the whole of check 1's SKIP.
+  // `authorKind` is a CLAIM about the row; `ctx.source` is the authentication FACT, and
+  // since 2026-07-31 the server engages on the fact (`recordAgentEngagement`). So these
+  // posts route and wake exactly like a person's and engage nobody — which is the loop
+  // brake working, not a bug, and is why the harness probes engagement instead of assuming
+  // this shape produced it.
   const posted = {};
   posted.one = await must(api.post(ctx.channel.id, {
     body: `@${ctx.agents.a.name} live harness: single address`,
@@ -153,6 +171,11 @@ async function setup(ctx, who, tg) {
     intent: 'chat',
     clientMsgId: `harness-${tg.stamp}-chat`,
   }), 'post chat');
+  posted.control = await must(api.post(ctx.channel.id, {
+    body: 'live harness: human aside, addressed to nobody, NO intent — the control. Automated probe, no action needed.',
+    authorKind: 'user',
+    clientMsgId: `harness-${tg.stamp}-control`,
+  }), 'post control');
   posted.agentNoise = await must(api.post(ctx.channel.id, {
     body: 'live harness: an agent talking to the room, addressed to nobody',
     authorKind: 'agent',
@@ -227,13 +250,30 @@ async function setup(ctx, who, tg) {
   }
   ctx.engagedRows = ctx.roster.filter((r) => r.ownerUserId === ctx.me && r.engagedAt);
 
-  // ── SERVER CAPABILITIES, probed off the wire this run just produced ───────────
+  // ── DID THE ENGAGEMENT ACTUALLY LAND? THE SERVER'S WORD, RE-READ ──────────────
+  // The addressed posts above are the ENGAGE step: a human-authored post naming @hxa is
+  // exactly what `recordAgentEngagement` stamps `engaged_at` for. It is CONFIRMED here off
+  // the roster the desktop itself reads, never assumed — and when it did not land, check 1
+  // says so and stops rather than "passing" against a room where the lane it tests is
+  // unreachable. `engageTarget` is the agent check 1 drives; `engagedRow` is the server's
+  // row for it, or null.
+  ctx.engageTarget = ctx.agents.a;
+  ctx.engagedRow = ctx.roster.find((r) => r.id === ctx.engageTarget.id && r.engagedAt) || null;
+
+  // ── WHAT THIS WIRE COULD ACTUALLY DO, probed off the run just produced ───────
   // Not a version string and not a guess: each one asks "did the field the desktop reads
   // actually come back". The day the wave deploys, the gated checks arm themselves.
+  //
+  // `engagement_stamped` IS THE ODD ONE OUT AND IT IS LABELLED AS SUCH BELOW. Every other
+  // entry is a deploy fact ("the server does not send this yet"). That one is a fact about
+  // THIS CALLER: the server implements engagement and refuses to stamp it for an AGENT
+  // credential, which is every credential this harness can hold. It is probed the same way
+  // regardless — post, then re-read — so the day a run holds a human credential it arms.
   ctx.caps = {
     to_agent_ids: Array.isArray(ctx.msg.two.metadata.to_agent_ids),
     intent: ctx.msg.chat.metadata.intent === 'chat',
     engagement: ctx.roster.some((r) => Object.prototype.hasOwnProperty.call(r, 'engagedAt')),
+    engagement_stamped: !!ctx.engagedRow,
     thread_participants: Array.isArray(ctx.roomParticipants),
     handshake_derivation: Array.isArray(ctx.derivedParticipants) && ctx.derivedParticipants.length > 0,
   };
@@ -244,9 +284,16 @@ async function setup(ctx, who, tg) {
       (ctx.room ? `, ${[ctx.derivedThread, ctx.slugThread, ctx.room].filter(Boolean).length} threads` : '')
   );
   say('');
-  say('SERVER CAPABILITIES (probed live — a missing one SKIPS its checks, it does not fail them)');
+  say('CAPABILITIES (probed live — a missing one SKIPS its checks, it does not fail them)');
   for (const [k, v] of Object.entries(ctx.caps)) {
     say(`  ${v ? 'yes' : 'NO '}  ${k}${v ? '' : `  — ${CAP_WHY[k]}`}`);
+  }
+  if (!ctx.caps.engagement_stamped) {
+    say(
+      `      evidence: posted a human-authored post addressing @${ctx.engageTarget.name} as ${ctx.me}, ` +
+        `then re-read GET /api/channels/${ctx.channel.id}/agents — ` +
+        ctx.roster.map((r) => `${r.name} engagedAt=${r.engagedAt === undefined ? '(no field)' : String(r.engagedAt)}`).join(', ')
+    );
   }
   say('');
 }
