@@ -8,11 +8,14 @@ import "server-only";
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
  *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await poll
  *   - `service-await.ts`   — the await long-poll HOLD loop (tick + recheck cadence)
- *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message, members
+ *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message
+ *   - `service-writes-members.ts` — channel membership (add / remove / own prefs),
+ *                            incl. clearing a departing member's agent engagement
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
  *                            the server stamps (addressing, DM auto-address, task keys)
  *   - `service-tasks.ts`   — first-class task lifecycle (create / close / mode / reopen)
- *   - `service-agents.ts`  — channel agents (summon / list / rename / status)
+ *   - `service-agents.ts`  — channel agents (summon / list / rename / status /
+ *                            disengage)
  *   - `service-participants.ts` — thread participant sets (breakout membership)
  *   - `service-writes-agents.ts` — agent addressing on a post (`toAgent` /
  *                            `authorAgentId` resolution + authorization)
@@ -45,10 +48,13 @@ export {
   updateChannel,
   deleteChannel,
   postMessage,
+} from "./service-writes";
+
+export {
   addMember,
   removeMember,
   updateMyMemberSettings,
-} from "./service-writes";
+} from "./service-writes-members";
 
 export {
   createTask,
@@ -59,6 +65,7 @@ export {
 
 export {
   createAgent,
+  disengageAgent,
   listAgents,
   renameAgent,
   setAgentStatus,

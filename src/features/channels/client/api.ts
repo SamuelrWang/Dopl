@@ -10,6 +10,7 @@ import type {
   ChannelMessage,
   ChannelThread,
   ChannelVisibility,
+  MessageIntent,
   NotifyScope,
   ThreadMode,
   ThreadOutcome,
@@ -116,6 +117,16 @@ export interface PostMessageBody {
   toUserId?: string;
   /** One-line intent (shown in the receiver's consent prompt). */
   summary?: string;
+  /** Says this post is chat, so nothing infers a request from a missing field. */
+  intent?: MessageIntent;
+  /**
+   * The agents this message addresses — agent ids or handles, capped at the
+   * schema's `MAX_ADDRESSED_AGENTS`. The composer fills it by resolving the
+   * body's `@handle` tokens against the channel roster (`lib/mention.ts`), and
+   * it is the ONLY addressing a chat message may carry: those agents act, and
+   * the server engages them for the untagged human messages that follow.
+   */
+  toAgents?: string[];
 }
 
 export async function postMessage(
@@ -260,13 +271,18 @@ export async function setChannelThreadMode(
 
 // ─── Agents ─────────────────────────────────────────────────────────
 //
-// CODED TO CONTRACT (multiplayer wave 2): these calls are written against the
-// agreed route surface, which lane S is building concurrently:
+// The agent route surface, all of it live:
 //
 //   POST   /api/channels/[channelId]/agents { name? }  -> 201 { agent }
 //   PATCH  /api/channels/[channelId]/agents/[agentId]
 //            { op: "rename",     name }                -> { agent }
 //            { op: "set_status", status }              -> { agent }
+//            { op: "disengage" }                       -> { agent }
+//
+// `disengage` is the ENGAGEMENT contract's write (`server/service-agents.ts`;
+// see `lib/agent-engagement.ts` for the matching read fields). It clears the
+// agent's `engaged_at` so it stops listening to the channel; it does NOT park
+// or dismiss, because an agent that stopped listening is still a member.
 //
 // The WRITES only. `GET /api/channels/[channelId]/agents -> { agents }` has no
 // wrapper here on purpose: `use-channel-agents.ts` reads it through
@@ -322,6 +338,23 @@ export async function setChannelAgentStatus(
   const data = await request<{ agent: ChannelAgent }>(
     agentPath(channelId, agentId),
     { method: "PATCH", body: { op: "set_status", status }, workspaceId }
+  );
+  return data.agent;
+}
+
+/**
+ * Stop your own agent listening to this channel (owner-only; the server
+ * re-checks). Leaves its status alone — it is still a member, it is just no
+ * longer engaged.
+ */
+export async function disengageChannelAgent(
+  channelId: string,
+  agentId: string,
+  workspaceId: string
+): Promise<ChannelAgent> {
+  const data = await request<{ agent: ChannelAgent }>(
+    agentPath(channelId, agentId),
+    { method: "PATCH", body: { op: "disengage" }, workspaceId }
   );
   return data.agent;
 }

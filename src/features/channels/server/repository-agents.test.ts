@@ -19,6 +19,7 @@ vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
+  clearEngagementByEngager,
   findAgentById,
   findAgentByName,
   insertAgent,
@@ -42,6 +43,8 @@ function agentRow(name: string, status = "summoned"): ChannelAgentRow {
     owner_user_id: "user-1",
     name,
     status,
+    engaged_at: null,
+    engaged_by: null,
     created_at: "2026-07-31T00:00:00Z",
     updated_at: "2026-07-31T00:00:00Z",
   };
@@ -237,6 +240,37 @@ describe("updateAgentName — the unique-violation path", () => {
   });
 });
 
+describe("clearEngagementByEngager — the departure sweep", () => {
+  it("nulls both engagement columns, scoped to ONE channel and ONE engager", async () => {
+    const calls = makeAdmin([{ data: null, error: null }]);
+
+    await clearEngagementByEngager(CHANNEL, "user-9");
+
+    // Scoped to the channel the member was removed from: engagement in a room
+    // they are still in must survive their leaving a different one.
+    expect(eqFilters(calls)).toEqual({
+      channel_id: CHANNEL,
+      engaged_by: "user-9",
+    });
+    const patch = calls.find((c) => c.op === "update")?.args[0] as Record<
+      string,
+      unknown
+    >;
+    expect(patch.engaged_at).toBeNull();
+    expect(patch.engaged_by).toBeNull();
+    // Set-based: one departure is one decision, and half a room still listening
+    // for someone who left is not a state anybody asked for.
+    expect(calls.some((c) => c.op === "single")).toBe(false);
+  });
+
+  it("throws on a database error (the service decides to fail soft, not this)", async () => {
+    const boom = { code: "57014", message: "canceling statement" };
+    makeAdmin([{ data: null, error: boom }]);
+
+    await expect(clearEngagementByEngager(CHANNEL, "user-9")).rejects.toBe(boom);
+  });
+});
+
 describe("mapAgentRow", () => {
   it("maps snake_case to the camelCase domain type", () => {
     expect(mapAgentRow(agentRow("juniper", "active"))).toEqual({
@@ -246,6 +280,10 @@ describe("mapAgentRow", () => {
       ownerUserId: "user-1",
       name: "juniper",
       status: "active",
+      // ENGAGEMENT rides the same row: an idle agent reads as null, never
+      // undefined, so no consumer has to tell "not engaged" from "not loaded".
+      engagedAt: null,
+      engagedBy: null,
       createdAt: "2026-07-31T00:00:00Z",
       updatedAt: "2026-07-31T00:00:00Z",
     });

@@ -106,6 +106,8 @@ function agentRow(overrides: Partial<ChannelAgentRow> = {}): ChannelAgentRow {
     owner_user_id: PEER,
     name: "quartz",
     status: "active",
+    engaged_at: null,
+    engaged_by: null,
     created_at: "2026-07-31T00:00:00Z",
     updated_at: "2026-07-31T00:00:00Z",
     ...overrides,

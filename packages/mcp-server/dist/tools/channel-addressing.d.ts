@@ -40,6 +40,17 @@
  *     That is the 1.7.14 incident shape, produced by the note meant to prevent
  *     silent drops.
  *
+ *  4. ENGAGEMENT IS A FOURTH WAY AN UNTAGGED MESSAGE IS ACTED ON, and it is not
+ *     keyed on size either. A human who addresses an agent by handle stamps
+ *     `channel_agents.engaged_at` (`service-writes-agents.ts#recordAgentEngagement`),
+ *     and the desktop then treats that human's UNTAGGED messages as that agent's
+ *     for ~an hour (`dopl-desktop-app/main/channel-engagement.js`). It changes
+ *     nothing about the caller's OWN posts — engagement is stamped only for a
+ *     HUMAN author, and fact 2 is why every post from this tool is agent's — so
+ *     the notes below still hold as written. What it kills is the ABSOLUTE
+ *     "two members is the only size where an untagged message can be a request",
+ *     which is why `rosterAddressingRule` now says "by default".
+ *
  * Nothing here is conditional on a value this package cannot see. Where the
  * member count is unknown (`Channel.memberCount` is optional) the copy states
  * only what holds at every size.
@@ -53,6 +64,23 @@
  * the two copies to the same number.
  */
 export declare const GROUP_CHANNEL_MIN_MEMBERS = 3;
+/**
+ * How many AGENTS one post may address, `to_agent` and `to_agents` TOGETHER.
+ *
+ * DUPLICATED on the same terms as the constant above, from
+ * `src/features/channels/schema.ts#MAX_ADDRESSED_AGENTS`, and pinned to it by
+ * `channel-addressing-rule.test.ts`.
+ *
+ * IT BOUNDS THE MERGED ADDRESS, NOT ONE FIELD OF IT, and that is the whole
+ * reason it is named here rather than left as a `.max(8)` literal on the array.
+ * `to_agent` is exactly a one-element `to_agents`; `resolveAgentAddressing`
+ * concatenates and dedupes the two and checks the cap on the RESULT. So the
+ * tool published `to_agents.max(8)`, said nothing about `to_agent` counting
+ * toward the same eight, and a caller that read the surface literally sent NINE
+ * and got a 400 the tool could not explain. One constant, quoted in both
+ * describes and in the error that fires when it is exceeded.
+ */
+export declare const MAX_ADDRESSED_AGENTS = 8;
 /**
  * TRUE for a thread id the receiving desktop will ROUTE on. Only a first-class
  * (uuid) id reaches `feedLiveSession` / `maybeSurfaceRequesterReply`: both call

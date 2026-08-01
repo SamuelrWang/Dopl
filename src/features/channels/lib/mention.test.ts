@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   applyMention,
   buildMentionCandidates,
+  extractMentionedAgentIds,
+  extractMentionedAgents,
   findMentionQuery,
   MENTION_LIMIT,
   mentionPopupHeight,
 } from "./mention";
+import { MAX_ADDRESSED_AGENTS } from "../schema";
 import type { ChannelAgent, ChannelMember } from "../types";
 
 const ME = "u-me";
@@ -38,6 +41,8 @@ function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
     ownerUserId: ADA,
     name: "quartz",
     status: "active",
+    engagedAt: null,
+    engagedBy: null,
     createdAt: "2026-07-31T00:00:00.000Z",
     updatedAt: "2026-07-31T00:00:00.000Z",
     ...over,
@@ -179,6 +184,95 @@ describe("applyMention — what lands in the draft", () => {
   it("inserts a human's display name in the same @ form", () => {
     const mention = findMentionQuery("@Ad", 3)!;
     expect(applyMention("@Ad", mention, "Ada").value).toBe("@Ada ");
+  });
+});
+
+/**
+ * THE BUG THIS SUITE EXISTS FOR: "@quartz @onyx work together on X" typed into
+ * the composer used to address NOBODY. The handles were inserted as plain text
+ * and nothing ever turned them into an address, so neither agent acted and
+ * nothing on screen said why. Resolution runs on the COMPOSED BODY, so a handle
+ * counts however it got there and stops counting the moment it is deleted.
+ */
+describe("extractMentionedAgents — @handles become an address", () => {
+  const roster = [
+    agent({ id: "a1", name: "quartz" }),
+    agent({ id: "a2", name: "onyx" }),
+    agent({ id: "a3", name: "code-review" }),
+    agent({ id: "a4", name: "parked-one", status: "parked" }),
+    agent({ id: "a5", name: "gone", status: "dismissed" }),
+  ];
+  const ids = (body: string) => extractMentionedAgentIds(body, roster);
+
+  it("resolves ONE mention", () => {
+    expect(ids("@quartz can you take this")).toEqual(["a1"]);
+  });
+
+  it("resolves the operator's core flow, in the order they were named", () => {
+    expect(ids("@quartz @onyx work together on X")).toEqual(["a1", "a2"]);
+  });
+
+  it("keeps FIRST-appearance order, not roster order", () => {
+    expect(ids("@onyx and @quartz")).toEqual(["a2", "a1"]);
+  });
+
+  it("dedupes a repeated handle into one address", () => {
+    expect(ids("@quartz start, then @quartz finish")).toEqual(["a1"]);
+  });
+
+  it("is case-insensitive (the server folds handles the same way)", () => {
+    expect(ids("@QUARTZ and @Onyx")).toEqual(["a1", "a2"]);
+  });
+
+  it("ignores an unknown handle rather than guessing a near match", () => {
+    // A typo has to visibly fail to resolve — that is the composer's only
+    // warning that the agent you meant is not going to act.
+    expect(ids("@quarzt please look")).toEqual([]);
+    expect(ids("@quarzt but also @quartz")).toEqual(["a1"]);
+  });
+
+  it("drops punctuation that trails the handle", () => {
+    expect(ids("@quartz, @onyx: and @quartz's turn")).toEqual(["a1", "a2"]);
+    expect(ids("ping @onyx.")).toEqual(["a2"]);
+    expect(ids("ready @onyx?")).toEqual(["a2"]);
+  });
+
+  it("keeps a hyphen INSIDE a handle but not a trailing one", () => {
+    expect(ids("@code-review please")).toEqual(["a3"]);
+    expect(ids("@code-review- please")).toEqual(["a3"]);
+  });
+
+  it("never treats an email address as a mention", () => {
+    expect(ids("mail ada@quartz.example.com about it")).toEqual([]);
+  });
+
+  it("ignores a handle inside a code span", () => {
+    expect(ids("run `@quartz --help` first")).toEqual([]);
+    expect(ids("run `@quartz` then ping @onyx")).toEqual(["a2"]);
+  });
+
+  it("ignores non-addressable agents (parked, dismissed)", () => {
+    expect(ids("@parked-one @gone @quartz")).toEqual(["a1"]);
+  });
+
+  it("returns nothing for a body with no mentions", () => {
+    expect(ids("morning all")).toEqual([]);
+  });
+
+  it("caps at the schema's address limit", () => {
+    const many = Array.from({ length: 12 }, (_, i) =>
+      agent({ id: `m${i}`, name: `bot-${i}` })
+    );
+    const body = many.map((a) => `@${a.name}`).join(" ");
+    const resolved = extractMentionedAgentIds(body, many);
+    expect(resolved).toHaveLength(MAX_ADDRESSED_AGENTS);
+    expect(resolved[0]).toBe("m0");
+  });
+
+  it("returns the resolved agents themselves, for the helper line's handles", () => {
+    expect(
+      extractMentionedAgents("@Onyx @quartz", roster).map((a) => a.name)
+    ).toEqual(["onyx", "quartz"]);
   });
 });
 

@@ -401,9 +401,9 @@ function start(statusCb, h) {
       getAccessTokenInfo: auth.getAccessTokenInfo,
       getAccessToken: auth.getAccessToken,
       onInsert: wakeChannel,
-      // D2: a `channel_agents` INSERT is a doorbell for the ROSTER, not for messages — it
-      // re-reads that one channel's agents (channel-agents.js owns the read + the summon).
-      onAgentInsert: (id) => channelAgents.wakeChannel(loops.get(id)),
+      // D2: a `channel_agents` INSERT or UPDATE is a doorbell for the ROSTER, not for
+      // messages — it re-reads that channel's agents (channel-agents.js owns the read).
+      onAgentChange: (id) => channelAgents.wakeChannel(loops.get(id)),
       onHealthChange: onRealtimeHealth,
     });
   }

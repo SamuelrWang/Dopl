@@ -90,6 +90,14 @@ describe("ChannelAgentUpdateSchema", () => {
     ).toBe(false);
   });
 
+  it("accepts a payload-free disengage", () => {
+    // It clears `engaged_at` / `engaged_by` server-side, so there is nothing
+    // for a caller to supply — and nothing for a caller to get wrong.
+    expect(ChannelAgentUpdateSchema.parse({ op: "disengage" }).op).toBe(
+      "disengage"
+    );
+  });
+
   it("rejects an unknown op, and fields bleeding between ops", () => {
     expect(
       ChannelAgentUpdateSchema.safeParse({ op: "delete", name: "quartz" })

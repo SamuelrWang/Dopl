@@ -48,14 +48,15 @@ function extractFn(name) {
 // sliced WHOLE between its sentinels rather than function by function. classify calls into
 // it, so it has to be in the evaluated scope; slicing the real block keeps this harness as
 // honest as the brace-balanced functions around it.
-function extractBlock(begin, end) {
-  const a = SRC.indexOf(begin);
-  const b = SRC.indexOf(end);
-  assert.notEqual(a, -1, `block sentinel ${begin} not found in targeting.js`);
-  assert.ok(b > a, `block sentinel ${end} not found after ${begin}`);
-  return SRC.slice(a, b);
-}
-const LEGACY = extractBlock("// ─── BEGIN LEGACY-THREADS", "// ─── END LEGACY-THREADS");
+// §2 SPLIT (2026-07-31): the LEGACY-THREADS registry classify calls into moved to its own
+// module when targeting.js went past the 500-line cap; classify's body did not change, so only
+// the FILE this block is sliced out of did. It carries module state, hence the whole-block cut.
+const LEGACY_SRC = readFileSync(join(HERE, "..", "main", "legacy-threads.js"), "utf8");
+const LEGACY = LEGACY_SRC.slice(
+  LEGACY_SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
+);
+assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 
 // Build the real classify() in an isolated scope alongside its metaStr helper. Every
 // `new Function` call gets a FRESH registry, so no test can leak state into another.

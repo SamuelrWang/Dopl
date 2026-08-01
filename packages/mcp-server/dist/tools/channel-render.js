@@ -41,6 +41,11 @@ exports.formatThreadLine = formatThreadLine;
 exports.formatThreadDetail = formatThreadDetail;
 exports.formatMemberLine = formatMemberLine;
 const channel_shared_1 = require("./channel-shared");
+// WHICH AGENTS a message names, and how one is rendered. Split out at the §2
+// cap — it parses an address out of jsonb rather than rendering a typed row,
+// and it is the only part of a line that needs a roster to name. One-way:
+// nothing there imports this file.
+const channel_render_agents_1 = require("./channel-render-agents");
 /**
  * Untrusted-content framing, emitted as a HEADER — BEFORE any counterparty body
  * is rendered, never only after. Framing that trails the content it frames is
@@ -213,8 +218,21 @@ function namesFromMessages(messages) {
  * the listing uses threads at all: a listing in which NOTHING is addressed is
  * the state a reader most needs told, because in a 3+ member channel those
  * messages woke every armed listener and triggered no one.
+ *
+ * BLOCKER-3 — AND WHICH AGENTS IT NAMES, which is a different question with a
+ * different answer. The server stamps `to_user_id` from the FIRST addressed
+ * agent's owner, so a message addressing two agents rendered as one address to
+ * one person: the second agent's side read `· to <the other owner>` and had no
+ * way to see it had been named. `· to agents ...` is emitted whenever the
+ * message names any, ALONGSIDE the member tag rather than instead of it —
+ * they are two facts (which machine the server addressed, and which agents it
+ * named), and collapsing them is what hid the second one.
+ *
+ * ONE TAG, NOT A PLURALIZED PAIR: `· to agents` is written the same way for
+ * one agent as for five, so a reader (or a grep) has a single token to scan
+ * for. The count is legible from the list itself.
  */
-function formatMessage(m, anyThreaded, view) {
+function formatMessage(m, anyThreaded, view, agentNames) {
     const author = formatAuthor(m);
     const kindTag = m.kind !== "message" ? ` · ${m.kind}` : "";
     const threadId = threadIdOf(m);
@@ -228,8 +246,17 @@ function formatMessage(m, anyThreaded, view) {
             ? ` · no thread`
             : "";
     const to = addresseeOf(m);
-    const addressTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
-    const head = `**#${m.seq}** ${author}${kindTag}${threadTag}${addressTag} · ${m.createdAt}`;
+    const agentTag = (0, channel_render_agents_1.agentAddressTag)(m, agentNames);
+    // "unaddressed" is a claim about the WHOLE address, so an agent-only address
+    // must clear it: a message naming an agent by handle is emphatically not one
+    // nobody was asked to act on, and rendering it as unaddressed would teach the
+    // reader the opposite of the law it is supposed to be following.
+    const memberTag = to
+        ? ` · to ${memberRef(to, view)}`
+        : agentTag
+            ? ""
+            : " · unaddressed";
+    const head = `**#${m.seq}** ${author}${kindTag}${threadTag}${memberTag}${agentTag} · ${m.createdAt}`;
     const body = m.body ? `\n  ${m.body.replace(/\n/g, "\n  ")}` : "";
     return `- ${head}${body}`;
 }
@@ -281,14 +308,20 @@ function threadLegend(messages, ref) {
 /**
  * The message lines plus, when anything is threaded, the id legend.
  *
- * `selfUserId` is what turns "to `2dac1943-…`" into "to you". Names come from
- * the listing's own hydrated authors, so this stays a pure function of the
- * messages — no roster fetch on the read/await path.
+ * `selfUserId` is what turns "to `2dac1943-…`" into "to you". MEMBER names come
+ * from the listing's own hydrated authors, so naming the people costs the
+ * read/await path nothing.
+ *
+ * `agentNames` is the one thing this cannot harvest from the messages — a
+ * message carries agent IDS and no handles — so the caller passes it in,
+ * already fetched and already fail-soft. It defaults to empty, which renders
+ * every addressed agent as a bare id: the correct degradation, and what every
+ * caller that has no roster in hand gets.
  */
-function formatMessages(messages, ref, selfUserId = null) {
+function formatMessages(messages, ref, selfUserId = null, agentNames = new Map()) {
     const view = { selfUserId, names: namesFromMessages(messages) };
     const anyThreaded = messages.some((m) => threadIdOf(m) !== undefined);
-    const lines = messages.map((m) => formatMessage(m, anyThreaded, view));
+    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, agentNames));
     const legend = threadLegend(messages, ref);
     if (legend)
         lines.push(`\n${legend}`);

@@ -60,6 +60,12 @@ interface Props {
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
   onSend: (body: string, opts?: SendOptions) => Promise<void>;
+  /** REQUEST mode's path: open a titled thread addressed to one member. */
+  onCreateThread: (input: {
+    title: string;
+    body: string;
+    toUserId: string;
+  }) => Promise<void>;
   onCloseThread: (
     threadId: string,
     outcome: "completed" | "failed",
@@ -106,6 +112,7 @@ export function ChannelPane({
   trustBusyIds,
   consentBusyIds,
   onSend,
+  onCreateThread,
   onCloseThread,
   onReopenThread,
   onInvite,
@@ -135,6 +142,7 @@ export function ChannelPane({
     createAgent,
     renameAgent,
     setAgentStatus,
+    disengageAgent,
   } = useChannelAgents(channel.id, channel.workspaceId, {
     enabled: channel.isMember,
   });
@@ -363,6 +371,7 @@ export function ChannelPane({
           currentUserId={currentUserId}
           onRename={renameAgent}
           onSetStatus={setAgentStatus}
+          onDisengage={disengageAgent}
         />
       )}
 
@@ -419,6 +428,7 @@ export function ChannelPane({
           {channel.isMember ? (
             <MessageComposer
               onSend={onSend}
+              onCreateThread={onCreateThread}
               members={members}
               currentUserId={currentUserId}
               isDirect={channel.isDirect}
@@ -457,6 +467,7 @@ export function ChannelPane({
           <RoomsSidebar
             threads={threads}
             threadsLoading={threadsLoading}
+            agents={agents}
             onSelectThread={handleSelectThread}
             onCollapse={() => setRoomsOpen(false)}
           />

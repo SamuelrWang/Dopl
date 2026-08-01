@@ -1,113 +1,41 @@
-// D2 — the summon lane and the @-addressed routing rule (main/channel-agents.js).
+// D2 — the summon lane and the @-addressed routing rule (main/channel-agents.js +
+// main/channel-roster.js).
 //
 // WHAT IS PINNED HERE, in the order the feature happens:
-//   SUMMON     a `channel_agents` row that is MINE and still `summoned` becomes a TEAM
-//              session, and ONLY a session that really opened flips the row to `active`.
+//   SUMMON     a `channel_agents` row that is MINE and still `summoned` GREETS THE ROOM —
+//              no window, no session — and ONLY a greeting that really posted flips the row
+//              to `active`. A greeting that could not be posted leaves it `summoned`.
+//   WAKE       being @-addressed with nothing running here is what opens that agent's
+//              session, through the OTHER engine entry point.
 //   ROSTER     a read that FAILS keeps the last known roster (a transient 5xx must not read
 //              as "this operator has no agents" and silently re-enable the implicit trigger).
 //   COUNT      `entry.teamAgents` is what classify gates on, so it is maintained on the loop
 //              entry by every path that touches the roster.
 //   ROUTE      a message naming one of MY agents is fed into THAT agent's session, keyed
-//              (channel, agent); one naming somebody else's agent, or an agent of no channel
-//              I know, is refused and falls through to the ordinary dispatch.
+//              (channel, agent) — and naming SEVERAL reaches every one of mine it named. One
+//              naming somebody else's agent, or an agent of no channel I know, is refused and
+//              falls through to the ordinary dispatch.
 //
-// METHOD: the session-dispatch idiom. The CHANNEL-AGENTS-PURE block is sliced and evaluated
-// with fakes for the five module-top requires, so the routing truth table drives the REAL
-// shipped rules with no electron, no HTTP and no engine.
+// The UNTAGGED half of the routing rule (engagement) lives in channel-engagement.test.mjs;
+// both suites share test/helpers/channel-agents.mjs, which wires the three real modules to
+// each other exactly as the app does.
+//
+// METHOD: the session-dispatch idiom. The PURE blocks are sliced and evaluated with fakes for
+// the host-bound requires, so the routing truth table drives the REAL shipped rules with no
+// electron, no HTTP and no engine.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import {
+  AGENTS, ROSTER, BANNED, ME, PEER, CH, MINE, MINE2, THEIRS,
+  agent, entry, msg, harness, routed,
+} from "./helpers/channel-agents.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "channel-agents.js"), "utf8");
-
-const BEGIN = "// ─── BEGIN CHANNEL-AGENTS-PURE";
-const END = "// ─── END CHANNEL-AGENTS-PURE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-// A missing / inverted sentinel would slice "" and pass every negative assertion vacuously.
-if (from === -1 || to === -1 || to <= from) throw new Error("CHANNEL-AGENTS-PURE sentinels missing or out of order");
-const BLOCK = SRC.slice(from, to);
-
-test("the sliced block is host-free: no require, no electron, no fs", () => {
-  for (const banned of ["require(", "electron", "fs.", "child_process"]) {
-    assert.ok(!BLOCK.includes(banned), `CHANNEL-AGENTS-PURE must not reference ${banned}`);
+test("the sliced blocks are host-free: no require, no electron, no fs", () => {
+  for (const { block, name } of [{ block: AGENTS.block, name: "CHANNEL-AGENTS-PURE" }, { block: ROSTER.block, name: "CHANNEL-ROSTER-PURE" }]) {
+    for (const banned of BANNED) assert.ok(!block.includes(banned), `${name} must not reference ${banned}`);
   }
 });
-
-const ME = "me-uuid";
-const PEER = "peer-uuid";
-const CH = "chan-1";
-const MINE = "agent-mine";
-const THEIRS = "agent-theirs";
-
-const agent = (over = {}) => ({ id: MINE, channelId: CH, ownerUserId: ME, name: "quartz", status: "summoned", ...over });
-
-function harness(cfg = {}) {
-  const calls = { fetch: [], patch: [], summon: [], feed: [], diag: [], persisted: [] };
-  const roster = cfg.roster === undefined ? [agent()] : cfg.roster;
-  const durable = { ...(cfg.durable || {}) }; // the electron-store map, seeded per test
-
-  const io = {
-    apiFetch: async (pathname, opts) => {
-      calls.fetch.push({ pathname, method: (opts && opts.method) || "GET", body: opts && opts.body });
-      if (opts && opts.method === "PATCH") {
-        calls.patch.push({ pathname, body: opts.body });
-        return { ok: cfg.patchOk !== false, status: cfg.patchOk === false ? 500 : 200 };
-      }
-      if (cfg.rosterStatus && cfg.rosterStatus !== 200) return { ok: false, status: cfg.rosterStatus };
-      return { ok: true, status: 200, json: async () => ({ agents: roster }) };
-    },
-    normalizeList: (data, key) => (Array.isArray(data) ? data : (data && data[key]) || []),
-    displayNameFor: (id) => (id === ME ? "Samuel" : "David"),
-    // FIX B1: the durable last-known count. A fake object stands in for electron-store, so
-    // the persistence rule (only a SUCCESSFUL read writes; a zero deletes) is driven for real.
-    getTeamAgentCount: (id) => Number(durable[id]) || 0,
-    setTeamAgentCount: (id, n) => {
-      calls.persisted.push({ id, n });
-      if (Number(n) > 0) durable[id] = Number(n);
-      else delete durable[id];
-    },
-  };
-  const targeting = {
-    metaStr: (m, k) => {
-      const v = m && m.metadata ? m.metadata[k] : undefined;
-      return typeof v === "string" && v.trim() ? v.trim() : "";
-    },
-    resolveToolProfile: () => "full",
-  };
-  const settings = { getWindowMode: () => cfg.windowMode !== false };
-  const live = new Set(cfg.live || []);
-  const sessionEngine = {
-    summonTeamSession: async (a) => {
-      calls.summon.push(a);
-      if (cfg.summonSkip) return { skipped: cfg.summonSkip };
-      live.add(`${a.channelId}:${a.agentId}`);
-      return { sessionId: "sess-1" };
-    },
-    hasLiveSession: (a) => live.has(`${a.channelId}:${a.agentId || a.taskId || ""}`),
-    acceptsInboundFrom: (a, author) => cfg.accepts !== false && !!author,
-    feedInbound: (a) => {
-      calls.feed.push(a);
-      return cfg.fed !== false;
-    },
-  };
-  const diag = (...args) => calls.diag.push(args.join(" "));
-
-  const api = new Function(
-    "io", "targeting", "settings", "sessionEngine", "diag",
-    `${BLOCK}\n return { isMyLiveAgent, teamAgentCount, summonTargets, agentById, handleFor,` +
-      ` fetchRoster, setStatus, reconcileChannel, reconcileAll, wakeChannel, routeAddressedAgent };`
-  )(io, targeting, settings, sessionEngine, diag);
-  // What channel-listener.js seeds a fresh loop entry with (io.getTeamAgentCount).
-  return { ...api, calls, live, durable, getTeamAgentSeed: io.getTeamAgentCount };
-}
-
-const entry = () => ({ channel: { id: CH, name: "Ops" }, workspaceId: "ws-1" });
-const msg = (over = {}) => ({ kind: "message", authorUserId: PEER, seq: 9, body: "please look", ...over });
 
 // ── roster policy ────────────────────────────────────────────────────────────────
 
@@ -138,28 +66,63 @@ test("summonTargets picks only MY still-summoned rows (an `active` leftover is n
 
 // ── summon -> spawn -> status ────────────────────────────────────────────────────
 
-test("a summoned row of MINE opens a TEAM session and is then flipped to active", async () => {
+test("a summoned row of MINE GREETS THE ROOM and is then flipped to active", async () => {
   const h = harness();
   const e = entry();
   assert.equal(await h.reconcileChannel(e, ME), true);
   assert.equal(h.calls.summon.length, 1);
+  assert.equal(h.calls.wake.length, 0, "a summon opens NO session and therefore no window");
   assert.deepEqual(
     { channelId: h.calls.summon[0].channelId, agentId: h.calls.summon[0].agentId, agentName: h.calls.summon[0].agentName },
     { channelId: CH, agentId: MINE, agentName: "quartz" }
   );
-  assert.equal(h.calls.summon[0].ownerName, "Samuel", "the framing gets the OWNER's display name");
+  assert.equal(h.calls.summon[0].ownerName, "Samuel", "the greeting gets the OWNER's display name");
+  assert.equal(h.calls.summon[0].ownerUserId, ME, "…and the operator id the DM addressee rule needs");
+  assert.equal(h.calls.summon[0].direct, false, "a group channel greets UNADDRESSED");
+  assert.equal(h.calls.summon[0].agentStamp, "", "…and carries the row stamp the idempotency key uses");
   assert.deepEqual(h.calls.patch[0].body, { op: "set_status", status: "active" });
   assert.match(h.calls.patch[0].pathname, /\/agents\/agent-mine$/);
   assert.equal(e.teamAgents, 1, "classify's gate is maintained on the loop entry");
 });
 
-test("a summon that could NOT start leaves the row `summoned` (the next pass retries)", async () => {
-  const h = harness({ summonSkip: "cap" });
+test("a greeting that could NOT be posted leaves the row `summoned` (the next pass retries)", async () => {
+  const h = harness({ summonSkip: "post-failed" });
   const e = entry();
   await h.reconcileChannel(e, ME);
   assert.equal(h.calls.summon.length, 1);
-  assert.equal(h.calls.patch.length, 0, "nothing claims an agent is active when none started");
+  assert.equal(h.calls.patch.length, 0, "nothing claims an agent is active when the room was never told");
   assert.equal(e.teamAgents, 1, "it is still an agent in the room — addressing stays required");
+});
+
+test("the whole arc: a summon GREETS and starts nothing, then an addressed message wakes it", async () => {
+  // This is the operator-reported bug as a behavior: /new-agent must put a message in the
+  // chat and leave the machine idle, and the agent must still be there when it is addressed.
+  const h = harness();
+  const e = entry();
+  await h.reconcileChannel(e, ME);
+  assert.deepEqual(h.calls.summon.map((a) => a.agentId), [MINE], "one greeting");
+  assert.equal(h.calls.wake.length, 0, "and NOTHING running: no session, no window");
+  assert.deepEqual(h.calls.patch.map((p) => p.body.status), ["active"], "greeted == alive and listening");
+
+  const verdict = await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME);
+  assert.equal(verdict, "fed", "the lazy wake is unchanged: being addressed is what runs it");
+  assert.equal(h.calls.wake.length, 1);
+  assert.equal(h.calls.summon.length, 1, "and the room is not greeted a second time");
+});
+
+test("a DIRECT channel's greeting carries the operator id (the server addresses DMs for us)", async () => {
+  const h = harness();
+  const e = { channel: { id: CH, name: "Samuel + David", isDirect: true }, workspaceId: "ws-1" };
+  await h.reconcileChannel(e, ME);
+  assert.equal(h.calls.summon[0].direct, true);
+  assert.equal(h.calls.summon[0].ownerUserId, ME,
+    "session-greeting names the summoner so the auto-addressed post reads as self-addressed noise");
+});
+
+test("the row STAMP rides the spec, so a re-summoned row greets again instead of deduping", async () => {
+  const h = harness({ roster: [agent({ updatedAt: "2026-07-31T10:00:00.000Z" })] });
+  await h.reconcileChannel(entry(), ME);
+  assert.equal(h.calls.summon[0].agentStamp, "2026-07-31T10:00:00.000Z");
 });
 
 test("a PEER's summoned row is never started here (their agent runs on their machine)", async () => {
@@ -244,17 +207,9 @@ test("reconcileChannel is SINGLE-FLIGHT: a doorbell during a read joins it, neve
 
 // ── the @-addressed routing rule ─────────────────────────────────────────────────
 
-async function routed(cfg = {}) {
-  const h = harness(cfg);
-  const e = entry();
-  await h.reconcileChannel(e, ME); // seed the roster the router reads
-  h.calls.summon.length = 0;
-  h.calls.feed.length = 0;
-  return { h, e };
-}
-
 test("a message naming MY agent is fed into THAT agent's session, keyed (channel, agent)", async () => {
   const { h, e } = await routed();
+  h.live.add(`${CH}:${MINE}`); // a session is already open here (an earlier addressed message)
   const ok = await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME);
   assert.equal(ok, "fed", "the route CLAIMS the message");
   assert.equal(h.calls.feed.length, 1);
@@ -263,17 +218,72 @@ test("a message naming MY agent is fed into THAT agent's session, keyed (channel
     { channelId: CH, agentId: MINE, message: "please look" }
   );
   assert.equal(h.calls.feed[0].taskId, undefined, "an agent slot is NOT a thread id");
-  assert.equal(h.calls.summon.length, 0, "a live session is reused, never re-spawned");
+  assert.equal(h.calls.wake.length, 0, "a live session is reused, never re-spawned");
 });
 
-test("addressed with NO live session: it is summoned on demand, then fed", async () => {
+// ── MULTI-ADDRESS: "@quartz @onyx work together" reaches BOTH of mine ────────────
+// `metadata.to_agent_ids` is the list; `to_agent_id` is the compat mirror of its FIRST
+// element. Routing off the mirror alone silently dropped every agent but one.
+
+test("a multi-address feeds EVERY one of my agents it names, not just the first", async () => {
+  const { h, e } = await routed({
+    roster: [agent({ status: "active" }), agent({ id: MINE2, name: "onyx", status: "active" })],
+    live: [`${CH}:${MINE}`, `${CH}:${MINE2}`],
+  });
+  const m = msg({ metadata: { to_agent_ids: [MINE, MINE2], to_agent_id: MINE } });
+  assert.equal(await h.routeAddressedAgent(e, m, ME), "fed");
+  assert.deepEqual(h.calls.feed.map((f) => f.agentId), [MINE, MINE2], "both, in the order named");
+});
+
+test("a multi-address delivers to MINE and silently skips the ones that are not", async () => {
+  const { h, e } = await routed({
+    roster: [
+      agent({ status: "active" }),
+      agent({ id: THEIRS, ownerUserId: PEER, name: "onyx", status: "active" }),
+    ],
+    live: [`${CH}:${MINE}`],
+  });
+  const m = msg({ metadata: { to_agent_ids: [THEIRS, MINE], to_agent_id: THEIRS } });
+  assert.equal(await h.routeAddressedAgent(e, m, ME), "fed", "the mirror named a PEER's agent, and mine still ran");
+  assert.deepEqual(h.calls.feed.map((f) => f.agentId), [MINE]);
+  assert.equal(h.calls.wake.length, 0, "and nothing was started for the agent that is not mine");
+});
+
+test("the scalar mirror is the whole answer when there is no array (an older server)", async () => {
+  const { h, e } = await routed({ roster: [agent({ status: "active" })], live: [`${CH}:${MINE}`] });
+  assert.equal(await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME), "fed");
+  assert.deepEqual(h.calls.feed.map((f) => f.agentId), [MINE]);
+});
+
+test("one delivered agent claims the message even when another of mine could not run", async () => {
+  // The verdict fold: 'fed' outranks 'refused' outranks 'dismissed'. The message reached an
+  // agent of mine, so the listener must not carry on to classify with it.
+  const { h, e } = await routed({
+    roster: [agent({ status: "active" }), agent({ id: MINE2, name: "onyx", status: "dismissed" })],
+    live: [`${CH}:${MINE}`],
+  });
+  const m = msg({ metadata: { to_agent_ids: [MINE2, MINE], to_agent_id: MINE2 } });
+  assert.equal(await h.routeAddressedAgent(e, m, ME), "fed");
+  assert.deepEqual(h.calls.feed.map((f) => f.agentId), [MINE]);
+  // …and with NOTHING deliverable, the strongest refusal is what the caller hears.
+  const dead = await routed({
+    roster: [agent({ status: "dismissed" }), agent({ id: MINE2, name: "onyx", status: "active" })],
+    wakeSkip: "cap",
+  });
+  const both = msg({ metadata: { to_agent_ids: [MINE, MINE2], to_agent_id: MINE } });
+  assert.equal(await dead.h.routeAddressedAgent(dead.e, both, ME), "refused");
+  assert.equal(dead.h.calls.feed.length, 0);
+});
+
+test("addressed with NO live session: it is WOKEN on demand, then fed", async () => {
   const h = harness({ roster: [agent({ status: "active" })] }); // active, but nothing running here
   const e = entry();
   await h.reconcileChannel(e, ME);
-  assert.equal(h.calls.summon.length, 0, "a stale `active` row is not auto-started by a pass");
+  assert.equal(h.calls.wake.length, 0, "a stale `active` row is not auto-started by a pass");
   const ok = await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME);
   assert.equal(ok, "fed");
-  assert.equal(h.calls.summon.length, 1, "…but being addressed IS a reason to start it");
+  assert.equal(h.calls.wake.length, 1, "…but being addressed IS a reason to open its session");
+  assert.equal(h.calls.summon.length, 0, "and it does NOT re-greet the room to do it");
   assert.deepEqual(h.calls.patch.map((p) => p.body.status), ["active"]);
   assert.equal(h.calls.feed.length, 1);
 });
@@ -283,8 +293,8 @@ test("addressed with NO live session: it is summoned on demand, then fed", async
 // listener short-circuits and the message never reaches classify -> 'trigger' -> a consent
 // card and a pair ASSIST spawn standing in for the agent that was actually named.
 
-test("S2: a summon that cannot start REFUSES — it does not fall through to a pair spawn", async () => {
-  const h = harness({ roster: [agent({ status: "active" })], summonSkip: "cap" });
+test("S2: a wake that cannot start REFUSES — it does not fall through to a pair spawn", async () => {
+  const h = harness({ roster: [agent({ status: "active" })], wakeSkip: "cap" });
   const e = entry();
   await h.reconcileChannel(e, ME);
   assert.equal(await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME), "refused");
@@ -295,7 +305,7 @@ test("S2: a summon that cannot start REFUSES — it does not fall through to a p
 test("an agent I do NOT own falls through: a peer cannot start a session on my machine", async () => {
   const { h, e } = await routed({ roster: [agent(), agent({ id: THEIRS, ownerUserId: PEER, name: "onyx" })] });
   assert.equal(await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: THEIRS } }), ME), "");
-  assert.equal(h.calls.summon.length, 0);
+  assert.equal(h.calls.wake.length, 0);
   assert.equal(h.calls.feed.length, 0);
 });
 
@@ -305,7 +315,7 @@ test("S2: an UNKNOWN id on a READ roster falls through; a DISMISSED row of mine 
     "the roster was read and this id is not in it — not my lane");
   const dismissed = await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME);
   assert.equal(dismissed, "dismissed", "a retired agent starts NOTHING, and is not a fall-through");
-  assert.equal(h.calls.summon.length, 0, "…nothing is started for it");
+  assert.equal(h.calls.wake.length, 0, "…nothing is started for it");
   assert.equal(h.calls.feed.length, 0);
   assert.equal(await h.routeAddressedAgent(e, msg(), ME), "", "no to_agent_id at all");
 });
@@ -333,10 +343,30 @@ test("S2: an id this machine cannot resolve refuses when the OWNER BRIDGE names 
   assert.equal(h.calls.feed.length, 0, "and neither of them starts anything");
 });
 
-test("my OWN message never routes, and neither does anything with no identity", async () => {
+test("MY OWN message addressed to MY OWN agent ROUTES — the product's primary flow", async () => {
+  // The regression this file exists to catch from now on. `/new-agent` summons an agent for
+  // ITS OWN OPERATOR, and "@quartz do X" typed into the composer is a message THEY authored,
+  // naming an agent THEY own, whose session runs on THIS machine. The route used to refuse
+  // `authorUserId === myUserId` outright, so after summoning, the agent was deaf to the one
+  // person entitled to drive it and only a PEER could ever reach it.
+  const { h, e } = await routed({ roster: [agent({ status: "active" })], live: [`${CH}:${MINE}`] });
+  const mine = msg({ authorUserId: ME, metadata: { to_agent_ids: [MINE], to_agent_id: MINE, to_user_id: ME } });
+  assert.equal(await h.routeAddressedAgent(e, mine, ME), "fed");
+  assert.deepEqual(h.calls.feed.map((f) => f.agentId), [MINE]);
+  assert.equal(h.calls.feed[0].selfAuthored, true,
+    "…and it is flagged, so the inbound gate does not ask the operator to approve their own sentence");
+});
+
+test("nothing routes with no identity resolved", async () => {
   const { h, e } = await routed();
-  assert.equal(await h.routeAddressedAgent(e, msg({ authorUserId: ME, metadata: { to_agent_id: MINE } }), ME), "");
   assert.equal(await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), null), "");
+  assert.equal(h.calls.feed.length, 0);
+});
+
+test("a PEER's message is NOT flagged self-authored (the gate still holds their words)", async () => {
+  const { h, e } = await routed({ roster: [agent({ status: "active" })], live: [`${CH}:${MINE}`] });
+  assert.equal(await h.routeAddressedAgent(e, msg({ metadata: { to_agent_id: MINE } }), ME), "fed");
+  assert.equal(h.calls.feed[0].selfAuthored, false);
 });
 
 test("window-mode OFF short-circuits the whole lane (a legacy build behaves like one)", async () => {

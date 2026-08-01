@@ -7,6 +7,7 @@ import {
   ChannelAgentNameConflictError,
   ChannelAgentNotFoundError,
   ChannelAgentNotInChannelError,
+  ChannelChatAddressedError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
@@ -15,6 +16,7 @@ import {
   ChannelParticipantNotMemberError,
   ChannelSlugConflictError,
   ChannelTaskNotInChannelError,
+  ChannelTooManyAgentsError,
   ConsentAlreadyDecidedError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
@@ -67,6 +69,12 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelAgentForbiddenError) {
     return new HttpError(403, "CHANNEL_AGENT_FORBIDDEN", err.message);
+  }
+  if (err instanceof ChannelTooManyAgentsError) {
+    return new HttpError(400, "CHANNEL_TOO_MANY_AGENTS", err.message);
+  }
+  if (err instanceof ChannelChatAddressedError) {
+    return new HttpError(400, "CHANNEL_CHAT_ADDRESSED", err.message);
   }
   if (err instanceof ChannelParticipantNotMemberError) {
     return new HttpError(400, "CHANNEL_PARTICIPANT_NOT_MEMBER", err.message);

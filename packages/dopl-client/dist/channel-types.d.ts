@@ -173,6 +173,22 @@ export interface ChannelAgent {
     /** The handle as typed in an @-mention. */
     name: string;
     status: AgentStatus;
+    /**
+     * ENGAGEMENT — when a HUMAN last addressed this agent, or null while it is
+     * IDLE. Idle = it sees everything in the room and acts only on messages that
+     * tag it; engaged = it also acts on UNTAGGED messages from humans there.
+     *
+     * A FACT, not a state. The server records it and NEVER expires it: the client
+     * (the desktop) compares it against its 60-minute engagement window and
+     * refreshes engagement by ACTING. Read it through that window — a stamp older
+     * than the window is still a stamp, never a boolean.
+     *
+     * Never set by an agent-authored message; that is the loop brake, server-side
+     * and absolute.
+     */
+    engagedAt: string | null;
+    /** The human who engaged it — audit, and the one non-owner who may disengage. */
+    engagedBy: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -230,9 +246,14 @@ export interface ChannelAgentCreateInput {
     name?: string;
 }
 /**
- * `PATCH /agents/[agentId]` — rename it, or move it along its lifecycle. A
- * discriminated union so the two ops cannot bleed fields into each other.
- * BOTH are OWNER-ONLY; the server enforces that (403), not this type.
+ * `PATCH /agents/[agentId]` — rename it, move it along its lifecycle, or
+ * DISENGAGE it. A discriminated union so the ops cannot bleed fields into each
+ * other. The server enforces authorization (403), not this type, and it is NOT
+ * uniform: `rename` / `set_status` are OWNER-ONLY, while `disengage` is the
+ * owner OR the human recorded as having engaged it. `disengage` carries no
+ * payload and is idempotent — an already-idle agent is not an error.
+ *
+ * Parking or dismissing an agent also clears its engagement server-side.
  */
 export type ChannelAgentUpdateInput = {
     op: "rename";
@@ -240,6 +261,8 @@ export type ChannelAgentUpdateInput = {
 } | {
     op: "set_status";
     status: AgentStatus;
+} | {
+    op: "disengage";
 };
 /**
  * What `createChannelThread` returns: the thread plus `openingSeq`, the seq of
@@ -300,6 +323,19 @@ export interface ChannelMessageInput {
      */
     toAgent?: string;
     /**
+     * MULTIPLAYER — the SAME thing for N agents ("@quartz @onyx work together"):
+     * agent ids and/or handles, max 8, deduped server-side. `toAgent` is exactly a
+     * one-element `toAgents` and the two merge. Stamped as
+     * `metadata.to_agent_ids`, with `metadata.to_agent_id` kept as a compat
+     * mirror of the FIRST entry for clients that only read the scalar.
+     *
+     * ALL OR NOTHING: a ref that names no agent of this channel, or one whose
+     * owner has left it, fails the whole post naming that ref — never a partial
+     * address, which would leave the caller believing N machines are working when
+     * fewer are.
+     */
+    toAgents?: string[];
+    /**
      * MULTIPLAYER — WHO THE MESSAGE IS FROM, when that is one of the CALLER'S
      * OWN agents: the agent id (`metadata.author_agent_id`). It SUPPLEMENTS the
      * author, it never replaces one — `author_user_id` stays the calling human
@@ -307,7 +343,29 @@ export interface ChannelMessageInput {
      * else is a 403, not a silent drop.
      */
     authorAgentId?: string;
+    /**
+     * CHAT vs. REQUEST — whether this post is allowed to reach anybody's agent.
+     * Optional, and absent means `request`: today's behaviour, unchanged.
+     *
+     *  - `request` — the DM auto-address still fires (a post into a direct
+     *    channel with no `to` is addressed to the peer server-side), so the
+     *    receiving listener triggers. This is what makes a reply deliverable.
+     *  - `chat` — HUMAN TALK. The DM auto-address is SKIPPED ENTIRELY: no
+     *    `to_user_id` is manufactured, so nothing on the far side reads it as an
+     *    ask. Everything else is a normal message — seq, realtime, read
+     *    watermark, and an explicit `thread` tag if you pass one.
+     *
+     * `chat` together with `toUserId` / `toAgent` / `toAgents` is a
+     * CONTRADICTION and is refused 400 `CHANNEL_CHAT_ADDRESSED`, never silently
+     * resolved one way or the other.
+     */
+    intent?: MessageIntent;
 }
+/**
+ * Whether a post is meant to reach an agent (`request`, the default) or to
+ * reach only the humans in the room (`chat`). See `ChannelMessageInput.intent`.
+ */
+export type MessageIntent = "chat" | "request";
 export interface ReadMessagesOptions {
     /** Return only messages with seq greater than this. */
     since?: number;

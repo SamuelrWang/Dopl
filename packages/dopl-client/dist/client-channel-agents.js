@@ -74,7 +74,8 @@ class ChannelAgentsClient {
     // A channel is a ROOM: its human members plus the named agents they summon.
     // An agent is owned by ONE member and runs on THAT member's machine, which
     // is why summoning is member-gated and renaming / parking is owner-gated,
-    // server-side.
+    // server-side. ENGAGEMENT is the exception: the human who engaged an agent may
+    // disengage it without owning it (see `updateChannelAgent`'s op union).
     listChannelAgents(channelId) {
         return agents.listChannelAgents(this.transport, channelId);
     }

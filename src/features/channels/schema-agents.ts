@@ -66,14 +66,25 @@ export const ChannelAgentCreateSchema = z.object({
 export type ChannelAgentCreateInput = z.infer<typeof ChannelAgentCreateSchema>;
 
 /**
- * PATCH /agents/[agentId] — rename it, or move it along its lifecycle. A
- * discriminated union so the two ops cannot bleed fields into each other (same
- * shape as `TaskUpdateSchema`). BOTH are owner-only; the service enforces that,
- * not this schema.
+ * PATCH /agents/[agentId] — rename it, move it along its lifecycle, or
+ * DISENGAGE it. A discriminated union so the ops cannot bleed fields into each
+ * other (same shape as `TaskUpdateSchema`). Authorization is the SERVICE's, not
+ * this schema's, and it is NOT uniform:
+ *   - `rename` / `set_status` — OWNER only (they describe a process on the
+ *     owner's machine).
+ *   - `disengage` — the owner OR the human who engaged it. Whoever put an agent
+ *     on standing duty must be able to take it off again without owning it,
+ *     and `set_status` is the wrong instrument for that (parking someone else's
+ *     agent reaches into their machine; ending its attention to YOUR messages
+ *     does not).
+ *
+ * `disengage` carries no payload — it clears `engaged_at` / `engaged_by`
+ * server-side, and is idempotent (an already-idle agent is not an error).
  */
 export const ChannelAgentUpdateSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("rename"), name: AgentHandleSchema }),
   z.object({ op: z.literal("set_status"), status: AgentStatusSchema }),
+  z.object({ op: z.literal("disengage") }),
 ]);
 export type ChannelAgentUpdateInput = z.infer<typeof ChannelAgentUpdateSchema>;
 

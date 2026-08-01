@@ -1,7 +1,6 @@
 /**
- * AGENT ADDRESSING ON THE EXISTING OPS — `post`'s `to_agent` / `as_agent`,
- * `create_thread`'s `participants`, and the participant set `get_thread` now
- * renders.
+ * AGENT ADDRESSING ON `op="post"` — `to_agent` / `as_agent`, the `to_agents`
+ * multi-address, and `intent`.
  *
  * What these pin, and why each one is worth a test:
  *
@@ -20,73 +19,22 @@
  *  - AND WHEN BOTH ADDRESSES ARE SET, the agent's owner wins — silently at the
  *    route, so the result has to say it.
  *
+ * THE OTHER HALF: the thread PARTICIPANT SET — `create_thread`'s `participants`
+ * seed and the set `get_thread` renders — is `channel-thread-participants.test.ts`,
+ * split out of here at the §2 500-line cap along the line the ops already draw.
+ * Addressing decides who ONE MESSAGE reaches and is resolved per post; a
+ * participant set decides who may write in a ROOM at all and is seeded once,
+ * server-side, against a different roster. Neither half's refusals are reachable
+ * from the other's code path. The harness both need is
+ * `agent-addressing-fixtures.ts` — shared, because the channel-vs-workspace
+ * roster asymmetry it encodes is the subject of one half's tests.
+ *
  * The @dopl/client is hand-stubbed; nothing transports.
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient } from "@dopl/client";
-import type { RegisterTool } from "./respond";
-import { registerChannelTool } from "./channel";
 import { opPost } from "./channel-ops-write";
-import { opCreateThread } from "./channel-ops-threads";
-import { opGetThread } from "./channel-ops-read";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-const QUARTZ = {
-  id: "agent-1",
-  channelId: "chan-1",
-  workspaceId: "ws-1",
-  ownerUserId: "u-me",
-  name: "quartz",
-  status: "active",
-  createdAt: "2026-07-31T00:00:00Z",
-  updatedAt: "2026-07-31T00:00:00Z",
-};
-/** Bob's agent — the one this caller may ADDRESS but may never speak AS. */
-const ONYX = { ...QUARTZ, id: "agent-2", ownerUserId: "u-bob", name: "onyx" };
-
-const BOB = { userId: "u-bob", email: "bob@x.com", displayName: "Bob", status: "active" };
-const CARA = { userId: "u-cara", email: "cara@x.com", displayName: "Cara", status: "active" };
-/** In the WORKSPACE, not in the channel — the B2 case, and the common one. */
-const DALE = { userId: "u-dale", email: "dale@x.com", displayName: "Dale", status: "active" };
-
-type PostSpy = (
-  channelId: string,
-  input: Record<string, unknown>,
-) => Promise<Record<string, unknown>>;
-
-function stubClient(overrides: Record<string, unknown> = {}): DoplClient {
-  const postChannelMessage = vi.fn<PostSpy>(async () => ({
-    id: "m1",
-    seq: 12,
-    kind: "message",
-    metadata: {},
-    authorUserId: "u-me",
-  }));
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    listChannelAgents: vi.fn(async () => [QUARTZ, ONYX]),
-    // The CHANNEL roster — a strict subset of the workspace. Dale is only in
-    // the workspace, which is exactly the shape B2 is about.
-    listChannelMembers: vi.fn(async () => [
-      { userId: "u-me", displayName: "Me", email: "me@x.com", role: "owner" },
-      { userId: "u-bob", displayName: "Bob", email: "bob@x.com", role: "member" },
-      { userId: "u-cara", displayName: "Cara", email: "cara@x.com", role: "member" },
-    ]),
-    listWorkspaceMembers: vi.fn(async () => [BOB, CARA, DALE]),
-    listChannelThreads: vi.fn(async () => []),
-    postChannelMessage,
-    ...overrides,
-  } as unknown as DoplClient;
-}
-
-function apiError(status: number, code?: string): unknown {
-  return Object.assign(new Error(`HTTP ${status}`), { status, code });
-}
-
-const textOf = (res: { content: Array<{ text: string }> }) =>
-  res.content.map((c) => c.text).join("\n");
+import { apiError, stubClient, textOf } from "./agent-addressing-fixtures";
 
 describe('op="post" — to_agent / as_agent', () => {
   it("resolves a handle to an AGENT ID and sends both fields", async () => {
@@ -219,247 +167,141 @@ describe('op="post" — to_agent / as_agent', () => {
   });
 });
 
-describe('op="create_thread" — participants (the breakout room)', () => {
-  const created = {
-    thread: { id: "thread-1", title: "Ship it", mode: "interactive" },
-    openingSeq: 41,
-  };
+describe('op="post" — to_agents (the multi-address) and intent', () => {
+  it("sends EVERY addressed agent as ids, in the caller's order, and names them all", async () => {
+    // ORDER IS LOAD-BEARING: the server stamps the FIRST agent's owner as
+    // `to_user_id` and mirrors the first id into the compat scalar
+    // `metadata.to_agent_id` (service-writes-agents.ts). Sorting or set-ifying
+    // here would silently re-point which machine the message is delivered to.
+    const client = stubClient();
+    const res = await opPost(client, "general", "work together on X", {
+      toAgents: ["@Onyx", "quartz"],
+    });
 
-  it("resolves the prefix form into {kind, id} refs", async () => {
-    const createChannelThread = vi.fn(async () => created);
-    const client = stubClient({ createChannelThread });
+    const post = client.postChannelMessage as unknown as ReturnType<typeof vi.fn>;
+    const [, input] = post.mock.calls[0];
+    expect(input.toAgents).toEqual(["agent-2", "agent-1"]);
+    // The compat scalar still names the head, so nothing about the single-agent
+    // wire had to change for the multi case to exist.
+    expect(input.toAgent).toBe("agent-2");
 
-    const res = await opCreateThread(
-      client,
-      "general",
-      "Ship it",
-      "please help",
-      "bob@x.com",
-      undefined,
-      undefined,
-      null,
-      ["agent:@Quartz", "user:cara@x.com"],
-    );
-
-    const [, input] = createChannelThread.mock.calls[0] as unknown as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(input.participants).toEqual([
-      { kind: "agent", id: "agent-1" },
-      { kind: "user", id: "u-cara" },
-    ]);
     const text = textOf(res);
-    expect(text).toContain("BREAKOUT ROOM");
-    expect(text).toContain("2 extra participants");
+    expect(text).toContain("addressed to 2 agents `onyx` (`agent-2`), `quartz` (`agent-1`)");
   });
 
-  it("a prefixless entry is refused and NO thread is opened", async () => {
-    const createChannelThread = vi.fn(async () => created);
-    const client = stubClient({ createChannelThread });
+  it("a ONE-agent to_agents sends the same request a to_agent always did", async () => {
+    // No `toAgents` on the wire at all for a single address: the server treats
+    // `toAgent` as a one-element list, so a one-agent post keeps the exact shape
+    // it has had, and the result line keeps saying "agent", not "1 agents".
+    const client = stubClient();
+    const res = await opPost(client, "general", "take this", { toAgents: ["onyx"] });
 
-    const res = await opCreateThread(
-      client,
-      "general",
-      "Ship it",
-      "please help",
-      "bob@x.com",
-      undefined,
-      undefined,
-      null,
-      ["quartz"],
-    );
+    const post = client.postChannelMessage as unknown as ReturnType<typeof vi.fn>;
+    const [, input] = post.mock.calls[0];
+    expect(input.toAgent).toBe("agent-2");
+    expect(input.toAgents).toBeUndefined();
+    expect(textOf(res)).toContain("addressed to agent `onyx` (`agent-2`)");
+  });
+
+  it("merges `to_agent` with `to_agents` and collapses a duplicate to ONE address", async () => {
+    const client = stubClient();
+    await opPost(client, "general", "both of you", {
+      toAgent: "quartz",
+      toAgents: ["agent-1", "onyx"],
+    });
+
+    const post = client.postChannelMessage as unknown as ReturnType<typeof vi.fn>;
+    const [, input] = post.mock.calls[0];
+    // `quartz` and `agent-1` are the same row — one address, not two — and the
+    // dedupe is by RESOLVED ID, so a handle and an id collapse.
+    expect(input.toAgents).toEqual(["agent-1", "agent-2"]);
+  });
+
+  it("ALL OR NOTHING: one unknown ref refuses the whole post before it is sent", async () => {
+    // A partial address is the worse failure by far: the caller believes N
+    // machines are working and fewer are, and nothing in the result says which.
+    const client = stubClient();
+    const res = await opPost(client, "general", "both of you", {
+      toAgents: ["onyx", "topaz"],
+    });
 
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain('"agent:<handle or agent id>"');
-    expect(createChannelThread).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("No agent `topaz` in this channel");
+    expect(client.postChannelMessage).not.toHaveBeenCalled();
   });
 
-  it("B2: a WORKSPACE member who is not in the CHANNEL is refused BEFORE the call", async () => {
-    // `createTask` inserts the thread row, THEN seeds participants, THEN posts
-    // the opening message. `seedThreadParticipants` → `assertIdentityBelongs`
-    // 400s `CHANNEL_PARTICIPANT_NOT_MEMBER` for a workspace-only colleague, so
-    // resolving the seed against the WORKSPACE roster (as this used to) put a
-    // live, titled, empty, unanswerable thread in the channel and then reported
-    // "No thread was opened". The roster this resolves against is now the one
-    // the route checks, so the call never happens.
-    const createChannelThread = vi.fn(async () => created);
-    const client = stubClient({ createChannelThread });
+  it("a multi-address tells the sender to expect ONE thread, with the derived key", async () => {
+    const res = await opPost(stubClient(), "general", "work together", {
+      toAgents: ["onyx", "quartz"],
+    });
 
-    const res = await opCreateThread(
-      client,
-      "general",
-      "Ship it",
-      "please help",
-      "bob@x.com",
-      undefined,
-      undefined,
-      null,
-      ["user:dale@x.com"],
-    );
-
-    expect(res.isError).toBe(true);
-    expect(createChannelThread).not.toHaveBeenCalled();
     const text = textOf(res);
-    expect(text).toContain("No member `dale@x.com` in this channel");
-    expect(text).toContain('op="members"');
-    expect(text).toContain('op="invite"');
-    expect(text).toContain("Nothing was created");
+    expect(text).toContain("ADDRESSED 2 AGENTS");
+    expect(text).toContain("reached on ITS OWN owner's machine, separately");
+    expect(text).toContain('client_msg_id="thread-open-chan-1-12"');
+    expect(text).toContain("expect ONE thread back, not 2");
   });
 
-  it("B2: a participant 400 that DOES get through never claims no thread was opened", async () => {
-    // The residue case — a membership that changed between the resolve and the
-    // call. The thread may exist with no request in it, so the arm has to send
-    // the caller to look instead of retrying blind (a retry with the same
-    // client_msg_id returns the stored thread and re-seeds nothing).
+  it("carries `intent` through to the client, and stamps nothing when it is absent", async () => {
+    const client = stubClient();
+    await opPost(client, "general", "sounds good", { intent: "chat" });
+    await opPost(client, "general", "please do X", {});
+
+    const post = client.postChannelMessage as unknown as ReturnType<typeof vi.fn>;
+    expect(post.mock.calls[0][1].intent).toBe("chat");
+    // ABSENT, not "request": an omitted intent stamps no metadata key at all
+    // server-side, so an existing caller's wire is unchanged.
+    expect(post.mock.calls[1][1].intent).toBeUndefined();
+  });
+
+  it("a CHAT post is not told to re-post with `to` — it is unaddressed on purpose", async () => {
+    // `unaddressedPostNote`'s remedy is "re-post it with to=<one member>", which
+    // is exactly what an intent="chat" caller decided against. Rendering it here
+    // would talk every deliberate chat message into becoming a request.
+    const res = await opPost(stubClient(), "general", "morning all", {
+      intent: "chat",
+    });
+
+    const text = textOf(res);
+    expect(text).toContain("CHAT — you posted this as `intent`=\"chat\"");
+    expect(text).toContain("NOT a delivery failure to repair");
+    expect(text).not.toContain("NOT ADDRESSED —");
+  });
+
+  it("CHAT plus an address is refused BEFORE anything is sent", async () => {
+    for (const addressed of [
+      { to: "bob@x.com" },
+      { toAgent: "onyx" },
+      { toAgents: ["onyx"] },
+    ]) {
+      const client = stubClient();
+      const res = await opPost(client, "general", "hi", {
+        intent: "chat",
+        ...addressed,
+      });
+
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toContain("cannot be addressed — nothing was sent");
+      expect(client.postChannelMessage).not.toHaveBeenCalled();
+      // Not even a roster read: a contradictory post has nothing to resolve.
+      expect(client.listChannelAgents).not.toHaveBeenCalled();
+    }
+  });
+
+  it("the route's CHANNEL_CHAT_ADDRESSED 400 answers with the RULE, not with 'unrecognized'", async () => {
+    // Unreachable while the local guard holds — classified anyway, because
+    // "unreachable" is the assumption the status-only branch this replaced was
+    // built on. Reaching it means the tool and the route disagree, and the
+    // caller still needs the rule rather than an opaque 400.
     const client = stubClient({
-      createChannelThread: vi.fn(async () => {
-        throw apiError(400, "CHANNEL_PARTICIPANT_NOT_MEMBER");
+      postChannelMessage: vi.fn(async () => {
+        throw apiError(400, "CHANNEL_CHAT_ADDRESSED");
       }),
     });
 
-    const res = await opCreateThread(
-      client,
-      "general",
-      "Ship it",
-      "please help",
-      "bob@x.com",
-      undefined,
-      undefined,
-      null,
-      ["user:cara@x.com"],
-    );
+    const res = await opPost(client, "general", "hi", {});
 
     expect(res.isError).toBe(true);
-    const text = textOf(res);
-    expect(text).not.toContain("No thread was opened");
-    expect(text).toContain("A THREAD MAY HAVE BEEN OPENED ANYWAY");
-    expect(text).toContain('op="list_threads"');
-    expect(text).toContain("does NOT re-seed the participant set");
-  });
-
-  it("S2: `as_agent` on create_thread is REFUSED, not silently dropped", async () => {
-    // `TaskCreateSchema` has no `authorAgentId`, so the registrar had nowhere
-    // to route this and dropped it — the opening request went out as the bare
-    // human's and nothing said so. It is refused rather than wired through
-    // because an agent-attributed message addressed to a person classifies as
-    // `agent-escalation` on the receiving desktop: notify-only, spawning
-    // nothing, which is the one thing create_thread exists to do.
-    const createChannelThread = vi.fn(async () => created);
-    const client = stubClient({ createChannelThread });
-
-    let handler:
-      | ((args: Record<string, unknown>) => Promise<{
-          isError?: boolean;
-          content: Array<{ text: string }>;
-        }>)
-      | null = null;
-    const capture = ((_n: string, _d: string, _s: unknown, h: unknown) => {
-      handler = h as typeof handler;
-    }) as unknown as RegisterTool;
-    registerChannelTool(capture, client);
-    expect(handler).not.toBeNull();
-
-    const res = await handler!({
-      op: "create_thread",
-      channel: "general",
-      title: "Ship it",
-      body: "please help",
-      to: "bob@x.com",
-      as_agent: "quartz",
-    });
-
-    expect(res.isError).toBe(true);
-    expect(createChannelThread).not.toHaveBeenCalled();
-    const text = res.content.map((c) => c.text).join("\n");
-    expect(text).toContain("create_thread does not take `as_agent`");
-    expect(text).toContain("nothing was created");
-    expect(text).toContain('as_agent="<your handle>"');
-  });
-
-  it("no participants → the field is omitted and the thread stays pair-gated", async () => {
-    const createChannelThread = vi.fn(async () => created);
-    const client = stubClient({ createChannelThread });
-
-    const res = await opCreateThread(
-      client,
-      "general",
-      "Ship it",
-      "please help",
-      "bob@x.com",
-    );
-
-    const [, input] = createChannelThread.mock.calls[0] as unknown as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(input.participants).toBeUndefined();
-    expect(textOf(res)).not.toContain("BREAKOUT ROOM");
-  });
-});
-
-describe('op="get_thread" — the participant set', () => {
-  const THREAD = {
-    id: "thread-1",
-    channelId: "chan-1",
-    workspaceId: "ws-1",
-    title: "Ship it",
-    status: "open",
-    outcome: null,
-    mode: "interactive",
-    createdBy: "u-me",
-    targetUserId: "u-bob",
-    createdAt: "2026-07-28T00:00:00Z",
-    updatedAt: "2026-07-28T00:00:00Z",
-    closedAt: null,
-    outcomeSummary: null,
-  };
-
-  it("names each participant — an agent by handle AND id, a person by member ref", async () => {
-    const client = stubClient({
-      getChannelThread: vi.fn(async () => ({
-        ...THREAD,
-        participants: [
-          { id: "p1", threadId: "thread-1", kind: "user", userId: "u-bob", agentId: null },
-          { id: "p2", threadId: "thread-1", kind: "agent", userId: null, agentId: "agent-1" },
-        ],
-      })),
-    });
-
-    const text = textOf(await opGetThread(client, "general", "thread-1", "u-me"));
-
-    expect(text).toContain("participants (2)");
-    expect(text).toContain("agent `quartz` (`agent-1`)");
-    expect(text).toContain("`Bob` (`u-bob`)");
-    expect(text).toContain("BREAKOUT ROOM");
-  });
-
-  it("an EMPTY set says the thread is pair-gated, rather than saying nothing", async () => {
-    const client = stubClient({
-      getChannelThread: vi.fn(async () => ({ ...THREAD, participants: [] })),
-    });
-
-    const text = textOf(await opGetThread(client, "general", "thread-1", "u-me"));
-
-    expect(text).toContain("participants: none");
-    expect(text).toContain("only the member who opened it");
-  });
-
-  it("an unnameable agent still renders by id (the roster fetch fails soft)", async () => {
-    const client = stubClient({
-      listChannelAgents: vi.fn(async () => {
-        throw new Error("roster down");
-      }),
-      getChannelThread: vi.fn(async () => ({
-        ...THREAD,
-        participants: [
-          { id: "p2", threadId: "thread-1", kind: "agent", userId: null, agentId: "agent-1" },
-        ],
-      })),
-    });
-
-    const text = textOf(await opGetThread(client, "general", "thread-1", "u-me"));
-
-    expect(text).toContain("agent `agent-1`");
+    expect(textOf(res)).toContain('A message with `intent`="chat" cannot be addressed');
   });
 });

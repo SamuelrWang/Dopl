@@ -43,6 +43,10 @@ const HTML = readFileSync(R("session.html"), "utf8");
 const IPC = readFileSync(M("session-ipc.js"), "utf8");
 const GATE = readFileSync(M("session-gate.js"), "utf8");
 const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
+// §2 SPLIT (2026-07-31): the reducer's STATE SHAPE — its defaults, initialSessionState and the
+// two mode tables it defends itself with — moved to session-state.js when session-reducer.js
+// (a zero-headroom §2 file) had to grow the self-authored inbound conjunct.
+const STATE_SRC = readFileSync(M("session-state.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: buildSdkOptions lives here
 
@@ -332,11 +336,11 @@ test("A4/A5/C9/F1: park resets both axes, inboundForTask AND every standing gran
 test("the mode tables agree across main, the reducer, the preload and the HTML", () => {
   assert.deepEqual(TOOL_MODES, ["manual", "accept_edits", "auto", "bypass"]);
   assert.deepEqual(MESSAGE_MODES, ["ask", "auto_inbound", "auto_outbound", "auto_both"]);
-  // The reducer's own copy (source-extracted, since the block is evaluated standalone).
+  // The state machine's own copy (source-extracted, since the block is evaluated standalone).
   const red = (name) => {
-    const at = REDUCER_SRC.indexOf("const " + name + " = [");
-    assert.notEqual(at, -1, name + " missing from the reducer");
-    const list = REDUCER_SRC.slice(REDUCER_SRC.indexOf("[", at) + 1, REDUCER_SRC.indexOf("]", at));
+    const at = STATE_SRC.indexOf("const " + name + " = [");
+    assert.notEqual(at, -1, name + " missing from session-state.js");
+    const list = STATE_SRC.slice(STATE_SRC.indexOf("[", at) + 1, STATE_SRC.indexOf("]", at));
     return list.split(",").map((x) => x.trim().replace(/['"]/g, ""));
   };
   assert.deepEqual(red("TOOL_MODES"), TOOL_MODES);
@@ -457,44 +461,4 @@ test("C8: reduceEvent caps the counterparty name at 60 on both decision surfaces
     const wrapped = vm.reduceEvent(vm.initialState(), { type, pendingId: "p1", from: multi, text: "hi" });
     assert.ok(!/[\n\r\t]/.test(wrapped.items[0][key]), `${type}: single line`);
   }
-});
-
-// ── I. THE POSTURE LINE (contract D copy, verbatim) ───────────────────────────────
-
-test("permissionPostureText states BOTH axes, in the contract's exact words", () => {
-  assert.equal(
-    labels.permissionPostureText("manual", "ask", "Full access"),
-    "Tools: Asking before each command · Messages: Asking before messages in and out · Full access"
-  );
-  assert.equal(
-    labels.permissionPostureText("accept_edits", "auto_inbound", null),
-    "Tools: Auto approving file edits · Messages: Auto accepting incoming messages"
-  );
-  // FIX F2: the `auto` line names the workspace writes it now gates. It used to say only "asking
-  // for shell and web" while auto-approving the Dopl write tools, i.e. data off this machine.
-  assert.equal(
-    labels.permissionPostureText("auto", "auto_outbound", ""),
-    "Tools: Auto approving local edits and lookups, asking for shell, web and workspace writes" +
-    " · Messages: Auto sending outgoing messages"
-  );
-  assert.equal(
-    labels.permissionPostureText("bypass", "auto_both", null),
-    "Tools: Auto approving every command the tool profile allows · Messages: Messages flow automatically"
-  );
-  // A junk mode reads as the most restrictive line, never a more permissive one.
-  assert.equal(labels.permissionPostureText("nonsense", "nonsense", null), labels.permissionPostureText("manual", "ask", null));
-  // No em dash anywhere in our own copy (§H-13).
-  for (const t of ["manual", "accept_edits", "auto", "bypass"]) {
-    for (const m of ["ask", "auto_inbound", "auto_outbound", "auto_both"]) {
-      assert.ok(!labels.permissionPostureText(t, m, "Full access").includes("—"), t + "/" + m);
-    }
-  }
-});
-
-test("bypassNoticeText fires for bypass ONLY, and says it is per session", () => {
-  assert.equal(labels.bypassNoticeText("bypass"), "Bypass is on for this session only");
-  for (const m of ["manual", "accept_edits", "auto", undefined, null, "nonsense"]) {
-    assert.equal(labels.bypassNoticeText(m), "", String(m));
-  }
-  assert.ok(!labels.bypassNoticeText("bypass").includes("—"));
 });

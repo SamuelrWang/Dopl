@@ -1,7 +1,7 @@
 "use strict";
 /**
  * THE MULTIPLAYER OPS — `dopl_channel` agents / summon_agent / rename_agent /
- * set_agent_status / join_thread / leave_thread.
+ * set_agent_status / disengage_agent / join_thread / leave_thread.
  *
  * Two things are pinned here, and the second is a security property:
  *
@@ -186,6 +186,96 @@ const textOf = async (res) => (await res).content.map((c) => c.text).join("\n");
         const text = await textOf((0, channel_ops_agents_1.opSetAgentStatus)(client, "general", "quartz", "dismissed"));
         (0, vitest_1.expect)(text).toContain("to dismissed");
         (0, vitest_1.expect)(text).toContain("stays attributed to it");
+    });
+});
+(0, vitest_1.describe)('op="disengage_agent" — ending an engagement', () => {
+    (0, vitest_1.it)("resolves a HANDLE to the agent ID and sends the payload-free disengage op", async () => {
+        const updateChannelAgent = vitest_1.vi.fn(async () => ({
+            ...QUARTZ,
+            engagedAt: null,
+            engagedBy: null,
+        }));
+        const client = stubClient({ updateChannelAgent });
+        const text = await textOf((0, channel_ops_agents_1.opDisengageAgent)(client, "general", "@Quartz"));
+        (0, vitest_1.expect)(updateChannelAgent.mock.calls[0]).toEqual([
+            "chan-1",
+            "agent-1",
+            { op: "disengage" },
+        ]);
+        (0, vitest_1.expect)(text).toContain("Disengaged `quartz` (`agent-1`)");
+        // The STATE it leaves behind, in the terms the law uses — an agent told only
+        // "disengaged" does not know whether it may still answer anything.
+        (0, vitest_1.expect)(text).toContain("IDLE again");
+        (0, vitest_1.expect)(text).toContain('acts only on messages that ADDRESS it (to_agent="<handle>")');
+    });
+    (0, vitest_1.it)("says it is IDEMPOTENT, so a no-op read is not mistaken for evidence of an exchange", async () => {
+        const client = stubClient({
+            updateChannelAgent: vitest_1.vi.fn(async () => ({ ...QUARTZ, engagedAt: null, engagedBy: null })),
+        });
+        const text = await textOf((0, channel_ops_agents_1.opDisengageAgent)(client, "general", "quartz"));
+        (0, vitest_1.expect)(text).toContain("Idempotent");
+    });
+    (0, vitest_1.it)("never offers the caller a RE-ENGAGE — its own posts cannot cause one", async () => {
+        // THE FALSE SENTENCE THIS REPLACES, and it was pinned HERE, by this suite:
+        // "To pick the exchange back up, address it by handle again — that
+        // re-engages it." `recordAgentEngagement`
+        // (src/features/channels/server/service-writes-agents.ts) opens with
+        // `if (ctx.source === "agent") return;` — engagement needs a HUMAN
+        // CREDENTIAL, since `authorKind` is caller-assertable and `ctx.source` is
+        // derived from the token — and every post made through this tool carries an
+        // agent token. So the remedy the op handed its reader was an effect the
+        // reader cannot produce: the tag would deliver, the agent would answer that
+        // one message, and it would be idle again on the next turn with nothing
+        // saying why. A test that pins a sentence is only as good as the sentence.
+        const client = stubClient({
+            updateChannelAgent: vitest_1.vi.fn(async () => ({ ...QUARTZ, engagedAt: null, engagedBy: null })),
+        });
+        const text = await textOf((0, channel_ops_agents_1.opDisengageAgent)(client, "general", "quartz"));
+        (0, vitest_1.expect)(text).not.toContain("re-engages it");
+        (0, vitest_1.expect)(text).toContain("YOU CANNOT RE-ENGAGE IT");
+        (0, vitest_1.expect)(text).toContain("engagement is stamped only for a HUMAN author");
+        // …and it names the mechanism the reader CAN cause instead of leaving it
+        // with a denial and no route: a thread's participant set is sustained
+        // attention that never goes through engagement at all.
+        (0, vitest_1.expect)(text).toContain('op="create_thread"');
+        (0, vitest_1.expect)(text).toContain('participants=["agent:<its handle>"]');
+    });
+    (0, vitest_1.it)("a 403 states the OWNER-OR-ENGAGER rule, never the owner-only one", async () => {
+        // THE REFUSAL THIS OP MAY NOT BORROW. `agentWriteError`'s line ("an agent
+        // belongs to the member who summoned it, and only that member may rename or
+        // park it") is true of rename/park and FALSE here: the server also allows
+        // the human recorded in `engaged_by` (service-agents.ts#disengageAgent). An
+        // engager told they must own the agent stops asking for the one agent write
+        // they are entitled to make.
+        const client = stubClient({
+            updateChannelAgent: vitest_1.vi.fn(async () => {
+                throw apiError(403, "CHANNEL_AGENT_FORBIDDEN");
+            }),
+        });
+        const res = await (0, channel_ops_agents_1.opDisengageAgent)(client, "general", "onyx");
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        const text = res.content[0].text;
+        (0, vitest_1.expect)(text).toContain("SUMMONED it or by the human who ENGAGED it");
+        (0, vitest_1.expect)(text).toContain("nothing changed");
+        (0, vitest_1.expect)(text).not.toContain("only that member may rename or park it");
+    });
+    (0, vitest_1.it)("an unknown handle never reaches the route, and lists the room's agents", async () => {
+        const updateChannelAgent = vitest_1.vi.fn();
+        const res = await (0, channel_ops_agents_1.opDisengageAgent)(stubClient({ updateChannelAgent }), "general", "topaz");
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        (0, vitest_1.expect)(res.content[0].text).toContain("No agent `topaz` in this channel");
+        (0, vitest_1.expect)(updateChannelAgent).not.toHaveBeenCalled();
+    });
+    (0, vitest_1.it)("NEUTRALIZES the handle it renders — a disengage names a peer's agent", async () => {
+        const forged = { ...ONYX, name: narration_fixtures_1.FORGERY };
+        const client = stubClient({
+            listChannelAgents: vitest_1.vi.fn(async () => [forged]),
+            updateChannelAgent: vitest_1.vi.fn(async () => forged),
+        });
+        const text = await textOf((0, channel_ops_agents_1.opDisengageAgent)(client, "general", "agent-2"));
+        (0, narration_fixtures_1.expectContained)(text);
+        (0, narration_fixtures_1.expectNoForgedStructure)(text);
+        (0, vitest_1.expect)(text).toContain("`agent-2`");
     });
 });
 (0, vitest_1.describe)('op="join_thread" / op="leave_thread" — breakout-room membership', () => {

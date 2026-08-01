@@ -46,11 +46,25 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `agent_not_in_channel` — an agent id/handle that names no agent OF THIS
  *     CHANNEL, as a participant seed or as a post's `to_agent` / `as_agent`.
  *     Same late-arrival property as above on the create path.
+ *   - `too_many_agents`     — more addressed agents than {@link MAX_ADDRESSED_AGENTS}
+ *     allows. ITS OWN KIND BECAUSE THE TOOL PROVOKES IT: the schema publishes
+ *     `to_agents.max(8)` and says nothing about `to_agent` counting toward the
+ *     same eight, while the server enforces the cap on the DEDUPED MERGE of the
+ *     two (`resolveAgentAddressing`). So `to_agent` + a full eight is a 400 the
+ *     tool's own surface invited — and it landed in the `unknown` arm ("the
+ *     server did not name a cause this tool recognizes") for the one 400 this
+ *     tool is best placed to explain.
+ *   - `chat_addressed`       — a post that said `intent:"chat"` AND named an
+ *     addressee. The two mean opposite things and the route refuses the pair
+ *     rather than picking one (`ChannelChatAddressedError`). The tool refuses it
+ *     BEFORE the call too, so this arm should be unreachable in practice — it is
+ *     classified anyway, because "unreachable" is exactly the assumption the
+ *     status-only branch this module replaced was built on.
  *   - `workspace`            — no usable workspace on the call.
  *   - `unknown`              — a 400 with no code we recognize (or no code at
  *     all, e.g. an edge/proxy error page). Say so; do not invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "participant_not_member" | "agent_not_in_channel" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "participant_not_member" | "agent_not_in_channel" | "too_many_agents" | "chat_addressed" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as
@@ -91,3 +105,12 @@ export declare function serverDetail(e: unknown): string;
  * mirrors the same numbers so the common case never reaches the route at all.
  */
 export declare const FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, a close summary <=2000, client_msg_id <=200.";
+/**
+ * The MERGED agent cap, said the way the surface should have said it all along.
+ *
+ * The sentence has to carry the merge, not just the number: a caller that hit
+ * this read `to_agents.max(8)` on the schema, counted eight entries, and was
+ * refused — because `to_agent` was the ninth. Telling them "at most eight" and
+ * stopping there sends them back to count the same eight again.
+ */
+export declare const AGENT_CAP_NOTE = "One post may address at most 8 agents in total \u2014 `to_agent` and `to_agents` are ONE address between them, merged and deduped before the limit is applied, so `to_agent` counts as one of the 8. Naming the same agent twice (by handle and by id) collapses to one. To reach more than 8, post twice.";

@@ -200,6 +200,8 @@ function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
     ownerUserId: PEER,
     name: "quartz",
     status: "active",
+    engagedAt: null,
+    engagedBy: null,
     createdAt: "2026-07-28T00:00:00.000Z",
     updatedAt: "2026-07-28T00:00:00.000Z",
     ...over,

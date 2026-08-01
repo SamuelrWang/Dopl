@@ -26,6 +26,11 @@ const channel_await_budget_1 = require("./channel-await-budget");
 // The status enum has ONE definition, beside the agent-identity helpers that
 // share it — this schema publishes it rather than restating it.
 const channel_agent_refs_1 = require("./channel-agent-refs");
+// The MERGED agent-address cap, likewise one definition. Declaring it as this
+// array's `.max()` is the CHEAP HALF of the bound: the server applies it to the
+// deduped merge of `to_agent` + `to_agents`, which is why both describes below
+// have to say "in total". See channel-addressing.ts.
+const channel_addressing_1 = require("./channel-addressing");
 exports.CHANNEL_INPUT_SHAPE = {
     op: zod_1.z
         .enum([
@@ -45,6 +50,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         "summon_agent",
         "rename_agent",
         "set_agent_status",
+        "disengage_agent",
         "join_thread",
         "leave_thread",
     ])
@@ -52,7 +58,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     channel: zod_1.z
         .string()
         .optional()
-        .describe('Channel slug or id. Required for every op except "open" (which creates a channel) and "list" (which lists them all) — including the multiplayer ops (agents / summon_agent / rename_agent / set_agent_status / join_thread / leave_thread), since an agent and a participant set both belong to ONE channel.'),
+        .describe('Channel slug or id. Required for every op except "open" (which creates a channel) and "list" (which lists them all) — including the multiplayer ops (agents / summon_agent / rename_agent / set_agent_status / disengage_agent / join_thread / leave_thread), since an agent and a participant set both belong to ONE channel.'),
     direct: zod_1.z
         .boolean()
         .optional()
@@ -76,7 +82,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     agent: zod_1.z
         .string()
         .optional()
-        .describe('The agent, named either by its HANDLE (as in an @-mention, with or without the "@") or by its agent id. Required for op="rename_agent" / op="set_agent_status" (yours only — an agent may be changed by the member who summoned it and no one else), and for op="join_thread" / op="leave_thread" when the participant is an agent rather than a person. List the channel\'s agents with op="agents".'),
+        .describe('The agent, named either by its HANDLE (as in an @-mention, with or without the "@") or by its agent id. Required for op="rename_agent" / op="set_agent_status" (yours only — an agent may be changed by the member who summoned it and no one else), for op="disengage_agent" (its OWNER or the human who engaged it), and for op="join_thread" / op="leave_thread" when the participant is an agent rather than a person. List the channel\'s agents with op="agents".'),
     status: zod_1.z
         .enum(channel_agent_refs_1.AGENT_STATUSES)
         .optional()
@@ -84,11 +90,27 @@ exports.CHANNEL_INPUT_SHAPE = {
     to_agent: zod_1.z
         .string()
         .optional()
-        .describe('op="post" (optional): address this message to a named AGENT — its handle or agent id, in THIS channel. Addressing an agent is what makes it ACT. Addressing a PERSON with `to` is the other path and it is NOT notify-only by default: with `as_agent` set it notifies them and starts no agent, without `as_agent` it triggers that member\'s listener and can start theirs. The agent\'s OWNER is the machine `to_agent` reaches, so setting both `to` and `to_agent` addresses the agent\'s owner, not the member in `to`.'),
+        .describe(`op="post" (optional): address this message to ONE named AGENT — its handle or agent id, in THIS channel. Addressing an agent is what makes it ACT. When the author is a HUMAN it also ENGAGES that agent — for roughly the next hour, or until op="disengage_agent" or a park/dismiss, it acts on that person's UNADDRESSED messages here as well, so a human tags to START an exchange rather than on every turn. A post of YOURS is agent-authored: it addresses and delivers, and it engages nothing. To address SEVERAL agents at once, use \`to_agents\` — \`to_agent\` is exactly the one-element form of it, and the two are ONE address: the cap is ${channel_addressing_1.MAX_ADDRESSED_AGENTS} agents in total, \`to_agent\` included, so \`to_agent\` plus a full \`to_agents\` of ${channel_addressing_1.MAX_ADDRESSED_AGENTS} is refused. Addressing a PERSON with \`to\` is the other path and it is NOT notify-only by default: with \`as_agent\` set it notifies them and starts no agent, without \`as_agent\` it triggers that member's listener and can start theirs. The FIRST addressed agent's OWNER is the machine this reaches, so setting both \`to\` and \`to_agent\` addresses the agent's owner, not the member in \`to\`.`),
+    to_agents: zod_1.z
+        .array(zod_1.z.string())
+        // `.min(1)` MIRRORS THE ROUTE, which has always required it: an EMPTY array
+        // is a 400 there, not a synonym for absence. This schema had no minimum, so
+        // `to_agents: []` passed the tool, reached a route that folds the field away
+        // when it is absent from the merge, and posted a successfully UNADDRESSED
+        // message — with a "NOT ADDRESSED" note under it that the caller reads as
+        // its own forgotten `to`. Refused here instead, before anything is sent.
+        .min(1)
+        .max(channel_addressing_1.MAX_ADDRESSED_AGENTS)
+        .optional()
+        .describe(`op="post" (optional): address this message to SEVERAL named AGENTS at once — handles and/or agent ids, all of THIS channel. This is how two agents are told to work together ("@quartz @onyx work on X"): each one is addressed and each one acts, on the same terms a single \`to_agent\` gets (including engagement, when the author is a human). THE CAP IS ${channel_addressing_1.MAX_ADDRESSED_AGENTS} IN TOTAL, \`to_agent\` INCLUDED — the server merges and dedupes the two fields and applies the limit to the result, so ${channel_addressing_1.MAX_ADDRESSED_AGENTS} here PLUS a \`to_agent\` is ${channel_addressing_1.MAX_ADDRESSED_AGENTS + 1} and is refused. It is ALL OR NOTHING — a ref that names no agent of this channel fails the whole post, so nothing is ever half-delivered. Duplicates collapse and ORDER MATTERS in one respect: the FIRST agent's owner is the member stamped as the post's human addressee. An EMPTY list is refused rather than treated as "no agents": leave the field off instead. If the work needs a thread, only ONE of the addressed agents opens it — see op="create_thread" and \`client_msg_id\`.`),
+    intent: zod_1.z
+        .enum(["chat", "request"])
+        .optional()
+        .describe('op="post" (optional, default "request"): what this message IS. "request" is the working message and is today\'s behaviour unchanged — it may address people and agents, and in a DIRECT (1:1) channel the server addresses it to the other member for you. "chat" is PEOPLE TALKING: it addresses nobody, starts nobody, and the direct-channel auto-address is skipped entirely, so two humans can talk in a DM without each line poking the other side\'s machine. "chat" together with `to`, `to_agent` or `to_agents` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".'),
     as_agent: zod_1.z
         .string()
         .optional()
-        .describe('op="post" ONLY (optional; passing it to op="create_thread" is REFUSED, not dropped — the opening request is the human\'s): post AS one of YOUR OWN agents, by handle or id. It does THREE things. (1) It is REQUIRED for a post to be attributed to an agent at all; without it the message is simply its human author\'s. (2) With `to`=<a person> it makes the post a NOTIFICATION to them instead of a request that triggers their agent — that difference is `as_agent` alone. (3) It is REQUIRED to post into a BREAKOUT THREAD (`thread=<id>`) that admits you through one of YOUR AGENTS: the server checks the thread\'s participant set against the agent you CLAIM, not the ones you own, so the post is refused (403) without it. Identity is SERVER-VERIFIED: naming an agent you do not own is refused (403), never silently ignored. It supplements the human author, it never replaces one.'),
+        .describe('op="post" ONLY (optional; passing it to op="create_thread" is REFUSED, not dropped — the opening request is the human\'s): post AS one of YOUR OWN agents, by handle or id. It does THREE things. (1) It is REQUIRED for a post to be attributed to an agent at all; without it the message is simply its human author\'s. (2) With `to`=<a person> it makes the post a NOTIFICATION to them instead of a request that triggers their agent — that difference is `as_agent` alone. (3) It is REQUIRED to post into a BREAKOUT THREAD (`thread=<id>`) that admits you through one of YOUR AGENTS: the server checks the thread\'s participant set against the agent you CLAIM, not the ones you own, so the post is refused (403) without it. Identity is SERVER-VERIFIED: naming an agent you do not own is refused (403), never silently ignored. It supplements the human author, it never replaces one. What it does NOT do is engage anybody: an agent-authored message engages no agent and starts no agent when it is unaddressed, at any member count — that is the loop brake, and every post you make is agent-authored.'),
     participants: zod_1.z
         .array(zod_1.z.string())
         .max(20)
@@ -112,7 +134,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     to: zod_1.z
         .string()
         .optional()
-        .describe('op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post, WHAT IT DOES DEPENDS ON `as_agent`: with `as_agent` the member is notified and no agent of theirs starts; without it the post is a request that triggers that member\'s listener and can start their agent. Omit it for general chat nobody must act on. For create_thread, it is the member the thread is for.'),
+        .describe('op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post, WHAT IT DOES DEPENDS ON `as_agent`: with `as_agent` the member is notified and no agent of theirs starts; without it the post is a request that triggers that member\'s listener and can start their agent. Omit it for talk nobody must act on — and say so outright with `intent`="chat", which addresses nobody even in a direct channel. To reach a named AGENT rather than a person, use `to_agent` / `to_agents`. For create_thread, it is the member the thread is for.'),
     // One param, two routes, two caps: a post's summary is capped at 200 and a
     // close summary at 2000. The schema declares the LOOSER of the two so a
     // legitimate close summary is never refused client-side; a 201-character
@@ -142,7 +164,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .string()
         .max(200)
         .optional()
-        .describe('op="post" / op="create_thread": optional idempotency key — re-sending the same op with the same id won\'t create a duplicate (a repeat create_thread returns the already-created thread instead of opening a second).'),
+        .describe('op="post" / op="create_thread": optional idempotency key — re-sending the same op with the same id won\'t create a duplicate (a repeat create_thread returns the already-created thread instead of opening a second). THE HANDSHAKE FORM, and it is not optional when several agents were addressed together and one of you opens a thread for the shared work: derive it from the message that asked, as "thread-open-<channelId>-<seq>". `<channelId>` IS THE CHANNEL\'S UUID, NEVER ITS SLUG — the server anchors the key on the id, and a key built from the slug parses as no handshake at all, which opens the thread with no participant set and 403s the other addressed agent out of the room it was told to join. `op="list"` and `op="agents"` both render the id ("id: `...`"); if you were called with a slug, that is where the uuid comes from. `<seq>` is the seq of the TRIGGERING message, as shown on its line in "read" / "await" ("**#42**" means seq 42). Two agents that race to open the same thread then send the SAME id, and the server collapses them into ONE thread instead of two rooms for one job. On op="create_thread" this tool NORMALIZES a "thread-open-" key onto the channel it just resolved and tells you it did, so passing the slug form still works — but the id form is the one to send, and a "thread-open-" key with no `<seq>` is refused rather than repaired.'),
     title: zod_1.z
         .string()
         .trim()

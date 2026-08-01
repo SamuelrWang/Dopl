@@ -139,6 +139,7 @@ function render(
       trustBusyIds={new Set()}
       consentBusyIds={new Set()}
       onSend={noopAsync}
+      onCreateThread={noopAsync}
       onCloseThread={noopAsync}
       onReopenThread={noopAsync}
       onInvite={noop}
@@ -248,6 +249,8 @@ describe("ChannelPane multiplayer surfaces", () => {
       ownerUserId: ME,
       name: "quartz",
       status: "active",
+      engagedAt: null,
+      engagedBy: null,
       createdAt: "2026-07-31T00:00:00.000Z",
       updatedAt: "2026-07-31T00:00:00.000Z",
     });

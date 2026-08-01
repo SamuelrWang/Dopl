@@ -214,6 +214,35 @@ describe("ChannelMessageCreateSchema", () => {
     // A record is object-keyed; an array is not an accepted shape.
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", metadata: [1, 2] }).success).toBe(false);
   });
+
+  /**
+   * `intent` is OPTIONAL and stays optional: the schema must not manufacture a
+   * default, because "the caller said request" and "the caller said nothing"
+   * are different facts on the wire — only the first stamps a key.
+   */
+  it("intent: optional, and only chat|request", () => {
+    const bare = ChannelMessageCreateSchema.safeParse({ body: "x" });
+    expect(bare.success && "intent" in bare.data).toBe(false);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", intent: "chat" }).success).toBe(true);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", intent: "request" }).success).toBe(true);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", intent: "" }).success).toBe(false);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", intent: "fyi" }).success).toBe(false);
+  });
+
+  it("toAgents: 1..8 non-empty refs, ids or handles", () => {
+    // An EMPTY array is a 400, not a synonym for absence: "empty means absent"
+    // used to be encoded here AND in the service, so the one rule had two homes
+    // and a caller that built an empty list learned it addressed nobody from an
+    // agent that never woke. Omit the field to address nobody.
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: [] }).success).toBe(false);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x" }).success).toBe(true);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: ["quartz", UUID] }).success).toBe(true);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: Array(8).fill("quartz") }).success).toBe(true);
+    // A working set, not a mailing list — every entry wakes a real machine.
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: Array(9).fill("quartz") }).success).toBe(false);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: [""] }).success).toBe(false);
+    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: "quartz" }).success).toBe(false);
+  });
 });
 
 describe("ChannelMemberSelfUpdateSchema", () => {

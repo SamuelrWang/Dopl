@@ -15,11 +15,18 @@
  *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
  *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
  *                               §2 cap — it is the only op here that loops)
- *   - `channel-ops-write.ts`  — open / invite / post
+ *   - `channel-ops-open.ts`   — open / invite (the ROOM and who is in it; split
+ *                               off at the §2 cap)
+ *   - `channel-ops-write.ts`  — post, plus `channel-post-notes.ts` /
+ *                               `channel-post-linkage.ts`, which own the
+ *                               result lines a post's addressing and threading
+ *                               produce
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
  *   - `channel-ops-agents.ts` — agents / summon_agent / rename_agent /
- *                               set_agent_status / join_thread / leave_thread
- *                               (the MULTIPLAYER ops: who is in the room)
+ *                               set_agent_status / disengage_agent /
+ *                               join_thread / leave_thread
+ *                               (the MULTIPLAYER ops: who is in the room, and
+ *                               which of them is currently ENGAGED)
  *   - `channel-agent-refs.ts` — agent identity: handle→row resolution, how a
  *                               handle is rendered, the participant-set render
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
@@ -48,7 +55,8 @@ import {
   opRead,
 } from "./channel-ops-read";
 import { opAwait } from "./channel-ops-await";
-import { opInvite, opOpen, opPost } from "./channel-ops-write";
+import { opInvite, opOpen } from "./channel-ops-open";
+import { opPost } from "./channel-ops-write";
 import {
   asAgentNotOnCreateThread,
   opCloseThread,
@@ -57,6 +65,7 @@ import {
 } from "./channel-ops-threads";
 import {
   opAgents,
+  opDisengageAgent,
   opJoinThread,
   opLeaveThread,
   opRenameAgent,
@@ -133,7 +142,9 @@ export function registerChannelTool(
             summary: args.summary,
             thread: args.thread,
             toAgent: args.to_agent,
+            toAgents: args.to_agents,
             asAgent: args.as_agent,
+            intent: args.intent,
             runtime,
           });
         }
@@ -274,6 +285,18 @@ export function registerChannelTool(
             args.channel as string,
             args.agent as string,
             args.status as AgentStatus,
+          );
+        }
+        case "disengage_agent": {
+          const miss = missingParams("disengage_agent", args, [
+            "channel",
+            "agent",
+          ]);
+          if (miss) return miss;
+          return opDisengageAgent(
+            client,
+            args.channel as string,
+            args.agent as string,
           );
         }
         case "join_thread": {

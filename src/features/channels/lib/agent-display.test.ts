@@ -28,6 +28,8 @@ function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
     ownerUserId: ADA,
     name: "quartz",
     status: "active",
+    engagedAt: null,
+    engagedBy: null,
     createdAt: "2026-07-31T00:00:00.000Z",
     updatedAt: "2026-07-31T00:00:00.000Z",
     ...over,

@@ -303,7 +303,10 @@ describe("createTask — idempotency (client_msg_id)", () => {
     });
 
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    // No post happened, so there is no cursor to report — null, never a guess.
+    // No post happened. The seq that comes back is the OTHER thread's stored
+    // opening message, READ under its derived key — and it is null here because
+    // no such message exists in this fixture, never because a number was
+    // guessed. (`service-tasks-handshake-room.test.ts` pins the read itself.)
     expect(openingSeq).toBeNull();
   });
 });

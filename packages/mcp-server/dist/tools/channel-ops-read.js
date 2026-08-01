@@ -29,6 +29,9 @@ exports.opMembers = opMembers;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
+// Whether anything in a page names an AGENT — the predicate that keeps the
+// roster read off the hot path (BLOCKER-3).
+const channel_render_agents_1 = require("./channel-render-agents");
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 const channel_addressing_1 = require("./channel-addressing");
@@ -116,7 +119,15 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
         // caveat placed under them is read after the injected line it warns about.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
+    // BLOCKER-3 — the handles for any agents these messages ADDRESS. Fetched
+    // ONLY when something in the page actually names one, so an ordinary
+    // transcript (and the poll loop behind it) pays nothing: this is the hot
+    // path, and the whole reason `read` skips `resolveChannelOr`. Fails soft —
+    // an unreadable roster renders the ids bare, never an error.
+    const agentNames = (0, channel_render_agents_1.anyAgentAddressed)(messages)
+        ? (await (0, channel_agent_refs_1.agentAddressIndex)(client, ref, selfUserId)).names
+        : undefined;
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, agentNames));
     const lastSeq = messages[messages.length - 1].seq;
     lines.push(scope
         ? `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel; messages in other exchanges may sit above it. Watch for newer messages with ${watch}${lastSeq}): await is channel-wide and takes no thread, so it returns whatever lands next, in any exchange. Drop \`thread\` for the full transcript.`

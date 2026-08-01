@@ -1,6 +1,6 @@
 import "server-only";
 import { slugify } from "@/shared/lib/slug/slugify";
-import type { Channel, ChannelMember, ChannelMessage } from "../types";
+import type { Channel, ChannelMessage } from "../types";
 import type {
   ChannelCreateInput,
   ChannelMessageCreateInput,
@@ -10,18 +10,19 @@ import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
-  ChannelLastOwnerError,
-  ChannelMemberExistsError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
 } from "./errors";
-import type { AgentToolProfile, NotifyScope } from "../types";
-import { mapMemberRow, mapMessageRow } from "./dto";
+import { mapMessageRow, type ChannelMessageRow } from "./dto";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
 import { resolvePostMetadata } from "./service-writes-metadata";
+import {
+  assertChatIsUnaddressed,
+  recordAgentEngagement,
+} from "./service-writes-agents";
 import {
   canManageChannel,
   loadVisibleChannel,
@@ -32,12 +33,15 @@ import {
 } from "./service-shared";
 
 /**
- * Write-side channels service: create, header update (incl. archive),
- * soft-delete, post message / activity event, and membership add / remove.
- * Every mutation re-checks the channel-scoped gate (member to post, owner
- * or workspace admin to manage) — the route-level `minRole` is only the
- * workspace floor. The task lifecycle lives in `service-tasks.ts`; the
- * metadata folds a post goes through live in `service-writes-metadata.ts`.
+ * Write-side channels service: create (incl. direct), header update (incl.
+ * archive), soft-delete, and post message / activity event. Every mutation
+ * re-checks the channel-scoped gate (member to post, owner or workspace admin
+ * to manage) — the route-level `minRole` is only the workspace floor.
+ *
+ * Siblings, each with its own reason to change: the membership lane is
+ * `service-writes-members.ts`, the task lifecycle `service-tasks.ts`, the
+ * metadata folds a post goes through `service-writes-metadata.ts`, and the
+ * agent identities a post may name `service-writes-agents.ts`.
  */
 
 // ─── Channel lifecycle ──────────────────────────────────────────────
@@ -271,6 +275,37 @@ export async function deleteChannel(
 
 // ─── Messages ───────────────────────────────────────────────────────
 
+/**
+ * Post a message (or an activity event) into a channel.
+ *
+ * TWO WRITES, ONE IDEMPOTENCY ENVELOPE. The message insert and the ENGAGEMENT
+ * stamp (`channel_agents.engaged_at`) are separate statements with no
+ * transaction around them, and the engagement one used to sit outside every
+ * retry path. If it threw, the message HAD posted, the caller got a 500, and
+ * the operator's natural retry hit the `client_msg_id` short-circuit — which
+ * returned the stored message and engaged NOBODY. One transient failure lost
+ * that engagement permanently, and a retry WITHOUT the same key duplicated the
+ * message instead.
+ *
+ * The fix is the one `create_thread` already uses for its opening post (v3.1,
+ * `service-tasks.ts` `postOpeningMessage`): re-drive the second write on EVERY
+ * path that returns the message — the fresh insert, the `client_msg_id`
+ * short-circuit, and the lost-insert race. Engagement is idempotent by nature
+ * (the same two columns, the same values, one statement), so re-driving costs a
+ * write and repairs a hole.
+ *
+ * THE ERROR STILL SURFACES ON THE FIRST ATTEMPT — deliberately, and it is the
+ * half that makes the repair work. Swallowing it would mean the post returns
+ * 200 with no engagement, nothing tells anyone, and the retry that would have
+ * repaired it never happens because nothing looked broken. A 500 on a post the
+ * operator can see landed is confusing for one round-trip; an agent that
+ * silently never listens is confusing for an hour. The engagement write is a
+ * single UPDATE on an already-located set, so this is the rare failure, not the
+ * common one.
+ *
+ * What a replay re-drives is read from the STORED ROW, never the retry's input:
+ * a re-send cannot re-address a message or change who it engaged for.
+ */
 export async function postMessage(
   ctx: ChannelContext,
   ref: string,
@@ -282,16 +317,24 @@ export async function postMessage(
     throw new ChannelForbiddenError("post to this channel");
   }
 
+  // `intent:"chat"` means "reach nobody's agent", so naming an addressee
+  // contradicts it — 400 rather than silently picking a half. Beside the
+  // membership check because both must precede the idempotency short-circuit:
+  // a contradictory post has to fail on the retry too.
+  assertChatIsUnaddressed(input);
+
   // Addressing (v1.1): a `toUserId` must name an actual channel member —
   // otherwise the message would target a listener that will never see it.
   if (input.toUserId && !(await repo.findMembership(channel.id, input.toUserId))) {
     throw new ChannelAddresseeNotMemberError(input.toUserId);
   }
 
-  // Idempotency: a re-sent client_msg_id returns the stored message.
+  // Idempotency: a re-sent client_msg_id returns the stored message — and
+  // re-drives its engagement, which is what repairs a stamp that was lost after
+  // the insert landed (see the docblock).
   if (input.clientMsgId) {
     const existing = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
-    if (existing) return hydrateOne(existing);
+    if (existing) return replayStoredMessage(ctx, existing);
   }
 
   // Addressing (incl. the DM auto-address), the reserved-key anti-spoof fold
@@ -319,16 +362,45 @@ export async function postMessage(
       client_msg_id: input.clientMsgId ?? null,
     });
   } catch (err) {
-    // Lost an idempotency race — converge on the stored winner.
+    // Lost an idempotency race — converge on the stored winner, engagement
+    // included: this is the short-circuit reached a second way and must answer
+    // identically.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
       const raced = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
-      if (raced) return hydrateOne(raced);
+      if (raced) return replayStoredMessage(ctx, raced);
     }
     throw err;
   }
 
+  // ENGAGEMENT. Tagging an agent is what makes it act on the untagged human
+  // messages that follow. Recorded AFTER the insert (a post that failed leaves
+  // no engagement behind) and from the INSERTED ROW, so the loop brake in
+  // `recordAgentEngagement` judges what the server actually stored — and judges
+  // a replay by exactly the same facts.
+  await recordAgentEngagement(ctx, row);
+
   // Surface the channel as active (list sorts by updated_at).
   await repo.touchChannel(ctx.workspaceId, channel.id);
+  return hydrateOne(row);
+}
+
+/**
+ * Return an ALREADY-STORED message, repairing its engagement on the way out.
+ *
+ * The one place both idempotent paths meet — the `client_msg_id` short-circuit
+ * and the lost-insert race — so they cannot drift. It does NOT re-post, does
+ * not re-stamp metadata and does not touch the channel: the stored message is
+ * the source of truth and nothing about it changes. The only write is the
+ * engagement stamp, which is idempotent (the same two columns, the same
+ * values), gated by exactly the same loop brake as a first attempt, and read
+ * off the STORED row — so a caller replaying somebody else's key can only ever
+ * re-assert the engagement that message already earned, for its own author.
+ */
+async function replayStoredMessage(
+  ctx: ChannelContext,
+  row: ChannelMessageRow
+): Promise<ChannelMessage> {
+  await recordAgentEngagement(ctx, row);
   return hydrateOne(row);
 }
 
@@ -338,123 +410,4 @@ async function hydrateOne(
   if (!row.author_user_id) return mapMessageRow(row, undefined);
   const profiles = await profilesById([row.author_user_id]);
   return mapMessageRow(row, profiles.get(row.author_user_id));
-}
-
-// ─── Membership ─────────────────────────────────────────────────────
-
-/**
- * Add a workspace member to the channel. The inviter must be a channel
- * member; the invitee must be an active workspace member (in-workspace
- * invites only, v1 — no token / email invites). One relaxation: any
- * workspace member may self-join a PUBLIC channel (it's already readable
- * to them), so a public channel is actually joinable.
- */
-export async function addMember(
-  ctx: ChannelContext,
-  ref: string,
-  userId: string
-): Promise<ChannelMember> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  // A DM is a fixed 1:1 pair — never admit a third member (this is also the
-  // path the MCP `invite` op takes, so the guard covers agent invites too).
-  if (channel.is_direct) {
-    throw new DirectChannelImmutableError("membership");
-  }
-  const selfJoinPublic =
-    channel.visibility === "public" && userId === ctx.userId;
-  if (!membership && !selfJoinPublic) {
-    throw new ChannelForbiddenError("add members to this channel");
-  }
-  if (!(await repo.isActiveWorkspaceMember(ctx.workspaceId, userId))) {
-    throw new ChannelInviteeNotMemberError(userId);
-  }
-  if (await repo.findMembership(channel.id, userId)) {
-    throw new ChannelMemberExistsError();
-  }
-
-  let row;
-  try {
-    row = await repo.insertMember({
-      channel_id: channel.id,
-      user_id: userId,
-      workspace_id: ctx.workspaceId,
-      role: "member",
-      added_by: ctx.userId,
-    });
-  } catch (err) {
-    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
-      throw new ChannelMemberExistsError();
-    }
-    throw err;
-  }
-
-  const profiles = await profilesById([userId]);
-  // `viewerUserId` is the caller, not the added member: inviting someone must
-  // not echo back THEIR notify scope / tool profile (the mapper scrubs them
-  // for anyone but the viewer, exactly as the roster read does).
-  return mapMemberRow(row, profiles.get(userId), { viewerUserId: ctx.userId });
-}
-
-/**
- * Remove a member: a member can leave (self), and an owner / workspace
- * admin can remove anyone. Removing the caller's own row is always allowed —
- * except the LAST owner can neither leave nor be removed (that would orphan
- * the channel with no one able to manage it); transfer ownership first.
- *
- * A DM is exempt entirely: its 1:1 membership is immutable in BOTH directions
- * (`addMember` already refused to add a third).
- */
-export async function removeMember(
-  ctx: ChannelContext,
-  ref: string,
-  targetUserId: string
-): Promise<void> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  // Q2 — deleting one of a DM's two rows is PERMANENT: `reopenDirectChannel`
-  // can revive a soft-deleted pair, but a torn LIVE pair reads as not-found to
-  // the missing side, and the partial unique index on `direct_key` keeps the
-  // live row reserving the pair so a fresh DM can't be opened either. The
-  // supported exit is deleting the CONVERSATION (soft-delete, reversible,
-  // available to both members) — never dropping a membership row.
-  if (channel.is_direct) {
-    throw new DirectChannelImmutableError("membership");
-  }
-  const isSelf = targetUserId === ctx.userId;
-  if (!isSelf && !canManageChannel(ctx, membership)) {
-    throw new ChannelForbiddenError("remove this member");
-  }
-
-  const target = await repo.findMembership(channel.id, targetUserId);
-  if (!target) return; // already not a member — idempotent no-op
-  if (target.role === "owner" && (await repo.countOwners(channel.id)) <= 1) {
-    throw new ChannelLastOwnerError();
-  }
-
-  await repo.deleteMember(channel.id, targetUserId);
-}
-
-/**
- * Update the CALLER's own per-channel preferences (notification scope and /
- * or responding-agent tool profile). Any channel member may set their own
- * (they are personal preferences, not management actions); a non-member is
- * refused. Always targets the caller's row. Returns the updated membership
- * DTO.
- */
-export async function updateMyMemberSettings(
-  ctx: ChannelContext,
-  ref: string,
-  patch: { notifyScope?: NotifyScope; agentToolProfile?: AgentToolProfile }
-): Promise<ChannelMember> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("update settings for this channel");
-  }
-  const dbPatch: { notify_scope?: string; agent_tool_profile?: string } = {};
-  if (patch.notifyScope !== undefined) dbPatch.notify_scope = patch.notifyScope;
-  if (patch.agentToolProfile !== undefined) {
-    dbPatch.agent_tool_profile = patch.agentToolProfile;
-  }
-  const row = await repo.updateMemberPrefs(channel.id, ctx.userId, dbPatch);
-  const profiles = await profilesById([ctx.userId]);
-  return mapMemberRow(row, profiles.get(ctx.userId), { viewerUserId: ctx.userId });
 }

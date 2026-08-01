@@ -32,7 +32,7 @@ import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
  * A channel runs MANY threads at once, between different pairs, so the card
  * never assumes the thread is the viewer's: when the authoritative thread row
  * says they are neither its creator nor its addressee, the footer drops
- * "Open session" for a read-only marker. That button opens a window bound to
+ * "Open thread" for a read-only marker. That button opens a window bound to
  * THIS thread and the desktop forces the thread tag onto whatever the session
  * posts (`session-outbound-tag.js`), so for a non-party it leads only to a
  * server refusal. A legacy session carries no thread row, so its parties are
@@ -297,9 +297,10 @@ export function SessionCard({
 export const NO_LOCAL_SESSION_NOTE =
   "This channel isn't available on this machine.";
 
-/** Every window slot is in use — the operator must free one. */
+/** Every window slot is in use — the operator must free one. The visible noun
+ *  is THREAD (the window depicts one); the constant name is not visible. */
 export const SESSION_BUDGET_NOTE =
-  "Too many session windows are open. Close one and try again.";
+  "Too many thread windows are open. Close one and try again.";
 
 /**
  * Open this thread's session from the web card, via the main-window bridge, and
@@ -416,7 +417,7 @@ export function OpenWindowControls({
         onClick={onOpen}
         className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
       >
-        Open session
+        Open thread
       </button>
     </>
   );

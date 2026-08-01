@@ -154,11 +154,17 @@ export declare function memberRef(userId: string, view: MemberView): string;
 /**
  * The message lines plus, when anything is threaded, the id legend.
  *
- * `selfUserId` is what turns "to `2dac1943-…`" into "to you". Names come from
- * the listing's own hydrated authors, so this stays a pure function of the
- * messages — no roster fetch on the read/await path.
+ * `selfUserId` is what turns "to `2dac1943-…`" into "to you". MEMBER names come
+ * from the listing's own hydrated authors, so naming the people costs the
+ * read/await path nothing.
+ *
+ * `agentNames` is the one thing this cannot harvest from the messages — a
+ * message carries agent IDS and no handles — so the caller passes it in,
+ * already fetched and already fail-soft. It defaults to empty, which renders
+ * every addressed agent as a bare id: the correct degradation, and what every
+ * caller that has no roster in hand gets.
  */
-export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null): string[];
+export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null, agentNames?: Map<string, string>): string[];
 /**
  * One rendered channel line for `list`.
  *

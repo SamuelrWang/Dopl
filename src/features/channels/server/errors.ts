@@ -193,6 +193,61 @@ export class ChannelAgentForbiddenError extends ChannelError {
 }
 
 /**
+ * One post addressed more agents than {@link MAX_ADDRESSED_AGENTS} allows. 400.
+ *
+ * IT NAMES THE MERGED COUNT, because that is the number the caller has to
+ * change. `toAgent` and `toAgents` are ONE address list — the singular is
+ * exactly a one-element plural — so a caller sending `toAgent` plus a full
+ * eight-entry `toAgents` passed the array's own `.max()` and still addressed
+ * NINE. That is one over every bound the rest of the system states, and the
+ * failure it produced was not a clean refusal: `MAX_DERIVED_AGENTS`
+ * (`service-thread-handshake.ts`) truncated the ninth agent out of the derived
+ * participant set, so it was engaged, woken, told to join the handshake thread,
+ * and then 403'd out of it by `mayWriteThread` — the exact "told to join a room,
+ * locked out of it" case that module exists to prevent.
+ *
+ * An error, not a truncation: silently dropping the ninth agent produces a room
+ * where the caller believes nine machines are working and eight are, which is
+ * the same reason a single unresolvable ref fails the whole post.
+ */
+export class ChannelTooManyAgentsError extends ChannelError {
+  constructor(
+    public readonly count: number,
+    public readonly max: number
+  ) {
+    super(
+      `A message can address at most ${max} agents; this one addresses ${count}. ` +
+        `toAgent and toAgents are one list — the singular counts toward the same limit.`
+    );
+  }
+}
+
+/**
+ * A post declared `intent:"chat"` AND addressed a PERSON (`toUserId`). 400.
+ *
+ * NARROWED 2026-07-31, and the narrowing is the rule: `toAgent` / `toAgents`
+ * under chat are ALLOWED and no longer reach here. A human tagging `@quartz`
+ * mid-conversation is chat, and it is the primary way an agent is given work;
+ * refusing it made the composer's core flow unsendable.
+ *
+ * What stays refused is a human addressee, because that is the one address that
+ * starts ANOTHER PERSON'S agent on a subject they never saw a title for. Chat
+ * means "raise no prompt on anyone's machine"; a human `to` means "raise one on
+ * exactly this machine". Refused rather than reconciled — dropping the address
+ * would silently fail to deliver a message the caller believes was routed, and
+ * dropping the intent would poke a machine the caller explicitly said not to.
+ * Requesting a person's agent is what REQUEST mode is for, and it carries the
+ * title their consent prompt renders.
+ */
+export class ChannelChatAddressedError extends ChannelError {
+  constructor(public readonly field: string) {
+    super(
+      `A chat message cannot be addressed to a person (${field}). Mention an agent with toAgents to have it act, or post with intent "request" to reach a teammate.`
+    );
+  }
+}
+
+/**
  * A thread participant of `kind:"user"` who is not a member of the thread's
  * channel. 400, on the same reasoning as {@link ChannelAddresseeNotMemberError}:
  * a participant set may only admit people who can already read the room.

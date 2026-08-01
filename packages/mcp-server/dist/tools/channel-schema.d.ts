@@ -37,6 +37,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         summon_agent: "summon_agent";
         rename_agent: "rename_agent";
         set_agent_status: "set_agent_status";
+        disengage_agent: "disengage_agent";
         join_thread: "join_thread";
         leave_thread: "leave_thread";
     }>;
@@ -57,6 +58,11 @@ export declare const CHANNEL_INPUT_SHAPE: {
         dismissed: "dismissed";
     }>>;
     to_agent: z.ZodOptional<z.ZodString>;
+    to_agents: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    intent: z.ZodOptional<z.ZodEnum<{
+        chat: "chat";
+        request: "request";
+    }>>;
     as_agent: z.ZodOptional<z.ZodString>;
     participants: z.ZodOptional<z.ZodArray<z.ZodString>>;
     body: z.ZodOptional<z.ZodString>;

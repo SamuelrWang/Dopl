@@ -31,6 +31,16 @@ async function dispatchMessage(entry, m, myUserId) {
   // returns a value nobody reads here, swallows its own errors, and cannot
   // change a single verdict below.
   versionSkew.observe(entry, m, myUserId);
+  // THE LEGACY-THREAD REGISTRY IS RECORDED HERE NOW, ahead of every route (2026-07-31).
+  // It used to be written from classify's self-authored branch, on the argument that classify
+  // was the one place every message this operator posts passes through. That stopped being
+  // true the moment MY OWN messages started routing to MY OWN agents: an untagged line of
+  // mine, taken by an engaged agent, short-circuits above classify and the opener it would
+  // have recorded is lost — costing a spurious consent prompt on the peer's eventual reply.
+  // It is a NO-OP for anything that is not a self-authored, addressed, thread-opening message
+  // (see noteMyLegacyThread), and re-seeing one only refreshes its eviction age, so calling it
+  // here as well as from classify cannot double-record or change a verdict.
+  targeting.noteMyLegacyThread(m, entry, myUserId);
   // D2 — ADDRESSING WINS, so it is checked FIRST. A message naming one of THIS operator's
   // agents (`metadata.to_agent_id`) belongs to that agent's own session and to nothing
   // else. Ahead of feedLiveSession deliberately: an addressed message that also carries a

@@ -1,0 +1,31 @@
+-- Drop `channel_agents_engaged_idx` — an index with no query behind it.
+--
+-- It was added one migration ago (20260731140000) on the reasoning that "the
+-- engaged set of a room is read per channel". Nothing reads it that way, and
+-- nothing is planned to. Every server read of `channel_agents` goes through
+-- `repository-agents.ts` and filters on `id` (PK), on `(channel_id, name)` (the
+-- case-folded handle index), or on `channel_id` alone for the roster —
+-- `listAgentsByChannel` returns the WHOLE roster and orders by `created_at`,
+-- because the web renders engaged and idle agents side by side. The engaged/idle
+-- split is decided in the CLIENT (`lib/agent-engagement.ts`, which also applies
+-- the TTL the server deliberately does not), off a roster it already holds.
+--
+-- The one filter that does name an engagement column is the departure sweep
+-- added with this wave (`clearEngagementByEngager`), and it is
+-- `(channel_id, engaged_by)` — a different column, on a write, at most a
+-- roster-sized scan of one room.
+--
+-- So the index buys nothing and costs a write amplification on the hottest
+-- statement in the lane: `markAgentsEngaged` sets `engaged_at` on every post
+-- that addresses an agent, which is exactly the UPDATE this partial index has
+-- to be maintained through, including on every insertion into and deletion from
+-- the partial set.
+--
+-- DROPPED rather than left in place, and the reason it is safe to drop
+-- mid-wave: an index is not part of any contract. No query plan, RLS policy,
+-- constraint, trigger or publication depends on it, so removing it changes no
+-- behaviour and needs no code to land with it. `IF EXISTS` makes this a clean
+-- no-op wherever the previous migration has not been applied yet. If a
+-- per-channel engaged-set read is ever added, it comes back WITH that query and
+-- the shape that query wants.
+DROP INDEX IF EXISTS public.channel_agents_engaged_idx;

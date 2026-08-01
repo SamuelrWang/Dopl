@@ -5,6 +5,7 @@ import {
   MAX_AWAIT_TIMEOUT_MS,
   MAX_MESSAGE_LIMIT,
 } from "./constants";
+import type { MessageIntent } from "./types";
 import { ThreadParticipantSeedSchema } from "./schema-agents";
 
 /**
@@ -137,6 +138,68 @@ export const ChannelUpdateSchema = z
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
 
 /**
+ * CHAT vs. REQUEST — whether a post is allowed to reach anybody's agent.
+ *
+ * The operator's report, verbatim: *"if I send a message it's just going as a
+ * message to the channel... doesn't prompt an agent."* It was the opposite. In
+ * a DM the server AUTO-ADDRESSES every post to the peer (v2.6, and for a good
+ * reason — an unaddressed agent reply is deliberately ignorable, so a real
+ * reply was posting successfully and never being delivered). The cost of that
+ * fix was that two HUMANS could not talk in a DM without poking each other's
+ * machines: every "sounds good" addressed the peer and raised a consent prompt.
+ *
+ * So intent is now first-class rather than inferred:
+ *  - `request` (the DEFAULT, and what every existing caller gets) — today's
+ *    behaviour, byte for byte. The DM auto-address still fires, `to` / `toAgent`
+ *    still address, and the receiving listener still triggers.
+ *  - `chat` — HUMAN TALK. The DM auto-address is SKIPPED ENTIRELY: no
+ *    `to_user_id` is manufactured from the peer, so nothing on the far side
+ *    classifies an aside as an ask. Everything else about the post is normal
+ *    (seq, realtime, read watermark, an explicit `thread` tag if the caller
+ *    passes one).
+ *
+ * `chat` WITH `toAgent` / `toAgents` is ALLOWED, and is the PRIMARY way an agent
+ * is given work: "@quartz @onyx work together on X" typed into the composer is a
+ * human talking in the room and naming who should act. The addressed agents are
+ * stamped, engaged, and reached through the owner bridge; nobody else is.
+ *
+ * `chat` WITH an explicit human `to` is still a CONTRADICTION and is refused 400
+ * `CHANNEL_CHAT_ADDRESSED` (`server/errors.ts`) rather than silently resolved.
+ * Addressing a PERSON starts that person's agent on a subject they never saw a
+ * title for; asking for someone else's machine is what `request` is for, and it
+ * carries the title their consent prompt renders.
+ */
+const MessageIntentSchema: z.ZodType<MessageIntent> = z.enum([
+  "chat",
+  "request",
+]);
+
+/**
+ * How many agents ONE post may address. A multi-address is "@quartz @onyx work
+ * together" — a small working set, each of which wakes a real machine — not a
+ * mailing list, and every entry costs a resolution + a membership read. Eight
+ * is well above any room we have seen and low enough that a runaway loop cannot
+ * fan out through it.
+ *
+ * EXPORTED because the composer has to cap the SAME way: it resolves `@handle`
+ * tokens out of the typed body and sends them as `toAgents`, so a body naming
+ * nine agents must stop at eight on the client rather than being built into a
+ * payload the server rejects wholesale (`lib/mention.ts`). One number, not a
+ * restated one.
+ *
+ * IT BOUNDS THE MERGED ADDRESS, not one field of it. `toAgent` is exactly a
+ * one-element `toAgents` and the two are merged before anything is resolved
+ * (`server/service-writes-agents.ts`), so the bound that actually holds is
+ * enforced there, on the deduped merge. The `.max()` on the array below is the
+ * cheap first line for the commonest shape; without the merged check a caller
+ * could address NINE — one over every bound the rest of the system states,
+ * including `MAX_DERIVED_AGENTS` in `server/service-thread-handshake.ts`, which
+ * imports this same constant and would silently truncate the ninth agent out of
+ * the handshake thread it was told to join.
+ */
+export const MAX_ADDRESSED_AGENTS = 8;
+
+/**
  * Post a message or activity event. `body` carries the human-readable
  * render (so the thread needs no special-casing per kind); structured
  * payload rides in `metadata`. `clientMsgId` is the idempotency key.
@@ -148,11 +211,26 @@ export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
  *
  * AGENT ADDRESSING (multiplayer): `toAgent` names the agent a message is FOR —
  * an agent id or its handle (`@quartz` minus the `@`), resolved case-folded
- * against THIS channel's agents. `authorAgentId` names the agent a message is
- * FROM, and is honoured only for that agent's own owner (an agent identity is
- * not assumable). Both are stamped as reserved metadata by the server; neither
- * is settable through `metadata` (`server/service-writes-metadata.ts`).
- * `toAgent` is deliberately NOT `.uuid()` — a handle is the point.
+ * against THIS channel's agents. `toAgents` is the SAME thing for N agents
+ * ("@quartz @onyx work together"); `toAgent` is exactly a one-element
+ * `toAgents`. `authorAgentId` names the agent a message is FROM, and is
+ * honoured only for that agent's own owner (an agent identity is not
+ * assumable). All are stamped as reserved metadata by the server; none is
+ * settable through `metadata` (`server/service-writes-metadata.ts`).
+ * `toAgent` / `toAgents` are deliberately NOT `.uuid()` — a handle is the point.
+ *
+ * `toAgents` is `.min(1)`: an EMPTY array is a 400, not a synonym for absence.
+ * "Empty means absent" used to be encoded twice — the schema tolerated `[]` and
+ * the service quietly folded it into "addressed nobody" — so one behaviour had
+ * two homes and neither stated it. Nothing on the wire sends `[]` (the composer
+ * spreads the field only when the body resolved mentions; the MCP lane emits it
+ * only for a genuine multi-address), so the rule lives once, here, and a caller
+ * that builds an empty list is told it addressed nobody instead of learning it
+ * from an agent that never woke. The `.max()` is the CHEAP HALF of the bound —
+ * see {@link MAX_ADDRESSED_AGENTS} for the merged one that actually holds.
+ *
+ * `intent` says whether this post is meant to REACH AN AGENT at all — see
+ * {@link MessageIntentSchema}.
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
@@ -163,7 +241,13 @@ export const ChannelMessageCreateSchema = z.object({
   toUserId: z.string().uuid().optional(),
   summary: z.string().trim().min(1).max(200).optional(),
   toAgent: z.string().trim().min(1).max(64).optional(),
+  toAgents: z
+    .array(z.string().trim().min(1).max(64))
+    .min(1)
+    .max(MAX_ADDRESSED_AGENTS)
+    .optional(),
   authorAgentId: z.string().uuid().optional(),
+  intent: MessageIntentSchema.optional(),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema

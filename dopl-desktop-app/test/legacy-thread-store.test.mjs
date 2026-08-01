@@ -38,9 +38,13 @@ const {
 
 // A fresh registry per test: the block is sliced whole (it carries module state),
 // exactly as classify.test.mjs does, so no test can leak entries into another.
-const LEGACY = SRC.slice(
-  SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
-  SRC.indexOf("// ─── END LEGACY-THREADS")
+// §2 SPLIT (2026-07-31): the registry itself moved to main/legacy-threads.js when
+// targeting.js went past the 500-line cap. classify calls into it as free variables
+// exactly as before, so only the FILE this block is read out of changed.
+const LEGACY_SRC = M("legacy-threads.js");
+const LEGACY = LEGACY_SRC.slice(
+  LEGACY_SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
 function extractFn(name) {
   const start = SRC.indexOf(`function ${name}(`);
@@ -266,15 +270,29 @@ test("a store that THROWS degrades to memory instead of breaking targeting", () 
 
 // ── the constraint that made all of this awkward, restated ───────────────────
 
-test("targeting.js is STILL dependency-free, so the truth tables can slice it", () => {
-  assert.equal(/require\(/.test(SRC), false, "targeting.js must require nothing at all");
+test("targeting.js is STILL slice-able: nothing the truth tables evaluate has a dependency", () => {
+  // §2 SPLIT (2026-07-31): targeting.js grew the CHAT suppression and the registry's
+  // authorship guard, and had to shed its non-classifier halves to stay under the cap. It now
+  // carries exactly TWO requires — the window/tool-profile module and the legacy-thread
+  // registry — and both are re-exported verbatim. The invariant this test protects was never
+  // "the FILE has no imports", it was "the SLICED REGIONS reach for nothing a bare
+  // `new Function` scope lacks", so that is what is asserted, plus the bound that keeps the
+  // first sentence true: named requires, and none of them reachable from classify.
+  const requires = [...SRC.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]);
+  assert.deepEqual(requires, ["./targeting-window", "./legacy-threads"], "the two §2 splits");
+  // …and the registry's own file is slice-able for the same reason: it requires NOTHING.
+  assert.deepEqual([...LEGACY_SRC.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]), []);
+  const classifyBody = SRC.slice(SRC.indexOf("function classify("), SRC.indexOf("function firstClassTaskId("));
+  const metaStrBody = SRC.slice(SRC.indexOf("function metaStr("), SRC.indexOf("// ── Targeting classification"));
   // The block is evaluated in a BARE `new Function` scope by five harnesses, so
   // it may reach for nothing a plain scope does not have — the whole reason the
   // store is injected instead of constructed here.
-  for (const forbidden of [/require\(/, /\bmodule\./, /\bprocess\./, /\b__dirname\b/]) {
+  for (const forbidden of [/require\(/, /\bmodule\./, /\bprocess\./, /\b__dirname\b/, /\bwin\./]) {
     assert.equal(forbidden.test(LEGACY), false, `LEGACY-THREADS reaches for ${forbidden}`);
+    assert.equal(forbidden.test(classifyBody), false, `classify reaches for ${forbidden}`);
+    assert.equal(forbidden.test(metaStrBody), false, `metaStr reaches for ${forbidden}`);
   }
   // The store arrives through the seam, and index.js is what hands it over.
-  assert.match(SRC, /function useLegacyThreadStore\(store, nowMs\)/);
+  assert.match(LEGACY_SRC, /function useLegacyThreadStore\(store, nowMs\)/);
   assert.match(M("index.js"), /targeting\.useLegacyThreadStore\(store\)/);
 });

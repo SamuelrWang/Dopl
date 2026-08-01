@@ -1,7 +1,33 @@
 "use client";
 
 import { useWorkspaceTablesRealtime } from "@/shared/realtime/use-workspace-tables-realtime";
-import { CHANNEL_TABLES, CONSENT_TABLES, PRESENCE_TABLES } from "../constants";
+import {
+  AGENT_TABLES,
+  CHANNEL_TABLES,
+  CONSENT_TABLES,
+  PRESENCE_TABLES,
+} from "../constants";
+
+/**
+ * THE TABLE THAT IS NOT WATCHED, and why there is no hook for it below.
+ *
+ * `channel_task_participants` — the "who is in this thread" set behind the rooms
+ * sidebar's agent pills — is deliberately OUT of the realtime publication.
+ * Migration 20260731130000 says so in as many words, on the F-072 grounds that
+ * publishing a rarely-changing child table re-creates read amplification for no
+ * live benefit (the same call 20260728010000 made when it pulled `channel_tasks`
+ * back out). There is therefore no stream to subscribe to from here: a
+ * `useWorkspaceTablesRealtime` call naming it would register a channel that
+ * never delivers an event, which is WORSE than no subscription, because it
+ * looks like coverage. Publishing it is a migration plus a publication
+ * decision, not a client change, and neither belongs in this file.
+ *
+ * THE CONSEQUENCE, STATED RATHER THAN HIDDEN: the participant set refreshes
+ * only when the thread list refetches (any `channel_messages` event coalesces
+ * one), so a second agent that joins a thread WITHOUT posting leaves the pills
+ * a beat behind. `lib/thread-agents.ts#threadAgentsLabel` carries that caveat
+ * in the row's own copy, so the sidebar never presents the set as live.
+ */
 
 /**
  * Realtime refetch signal for the channels tables of a workspace. Fires
@@ -41,21 +67,18 @@ export function useConsentRealtime(
 }
 
 /**
- * The agent roster table.
- *
- * LANE NOTE: the other table lists live in `../constants`, which is not this
- * lane's file this round, so this one is declared here. It is module-level for
- * the same reason as the others — a fresh array per render resubscribes.
- */
-const AGENT_TABLES = ["channel_agents"] as const;
-
-/**
  * Realtime signal for the channel's agent roster. `channel_agents` is in the
  * publication (migration 20260731120000), and every write to it happens
  * service-side (`/new-agent` from either machine, a desktop session flipping an
  * agent to `active`, a park), so the chips bar only ever learns about them this
  * way. Watched separately from CHANNEL_TABLES so a status flip refetches the
  * agent list alone, not the whole channel list.
+ *
+ * IT DOES NOT COVER EXPIRY. `engaged_at` is a stamp the server never clears on
+ * a timer, so an agent falling out of the engagement window produces no row
+ * change and therefore no event here. The chips bar schedules its own wake for
+ * that (`components/agent-chips-bar.tsx#useEngagementClock`); this stream and
+ * that clock are the two halves of a chip that stays true.
  */
 export function useChannelAgentsRealtime(
   workspaceId: string | null | undefined,

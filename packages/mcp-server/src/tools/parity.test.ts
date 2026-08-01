@@ -152,8 +152,14 @@ const READ_OPS: Record<string, string[]> = {
   // `agents` is a roster READ, exactly like `members`: `opAgents` calls only
   // `listChannelAgents` (GET /api/channels/[id]/agents) plus the fail-soft
   // member-name enrichment, and renders them. The roster is CHANGED by
-  // op="summon_agent" / "rename_agent" / "set_agent_status" — all gated as
-  // writes in server.ts.
+  // op="summon_agent" / "rename_agent" / "set_agent_status" /
+  // "disengage_agent" — all gated as writes in server.ts.
+  //
+  // `disengage_agent` IS A WRITE despite being the one agent op a non-owner may
+  // call: it PATCHes `channel_agents` (clearing `engaged_at` / `engaged_by`).
+  // "who may call it" and "does it write" are different questions, and answering
+  // the second with the first is how a write op ends up callable from a
+  // read-only token.
   dopl_channel: [
     "list",
     "read",
@@ -272,6 +278,27 @@ describe("write-op completeness", () => {
       expected[k] = [...v].sort();
     }
     expect(computed).toEqual(expected);
+  });
+
+  it("SECURITY: dopl_channel's agent-state ops are WRITES, including the non-owner one", () => {
+    // Named explicitly rather than left to the completeness scan above, because
+    // the tempting mistake with `disengage_agent` is specific and one-directional:
+    // it is the only agent op the server allows to somebody who does not own the
+    // agent (the human recorded in `engaged_by`), which reads like "not really a
+    // write" right up until a read-only token clears somebody's engagement.
+    const write = WRITE_OPS.dopl_channel ?? new Set<string>();
+    for (const op of [
+      "summon_agent",
+      "rename_agent",
+      "set_agent_status",
+      "disengage_agent",
+    ]) {
+      expect(write.has(op), `dopl_channel op="${op}" is not gated as a write`).toBe(true);
+      expect(
+        (READ_OPS.dopl_channel ?? []).includes(op),
+        `dopl_channel op="${op}" is listed as a READ op`,
+      ).toBe(false);
+    }
   });
 
   it("SECURITY: no read-only-token write holes — every op is gated as write or read", () => {

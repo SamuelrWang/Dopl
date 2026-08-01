@@ -32,9 +32,15 @@ export declare function listChannelAgents(t: DoplTransport, channelId: string): 
  */
 export declare function createChannelAgent(t: DoplTransport, channelId: string, input?: ChannelAgentCreateInput): Promise<ChannelAgent>;
 /**
- * Rename an agent, or move it along its lifecycle. OWNER ONLY — an agent is a
- * member's process on a member's machine, so a teammate renaming or parking it
- * would be reaching into that machine (403 from the route, not from here).
+ * Rename an agent, move it along its lifecycle, or DISENGAGE it.
+ *
+ * AUTHORIZATION IS NOT UNIFORM, and the route enforces it (403 from there, not
+ * from here). `rename` / `set_status` are OWNER ONLY — an agent is a member's
+ * process on a member's machine, so a teammate renaming or parking it would be
+ * reaching into that machine. `disengage` is the owner OR the human recorded in
+ * `engaged_by`: engagement is a relationship between an agent and the person who
+ * addressed it, and ending an agent's attention to YOUR OWN messages is not the
+ * same act as parking somebody else's process.
  */
 export declare function updateChannelAgent(t: DoplTransport, channelId: string, agentId: string, input: ChannelAgentUpdateInput): Promise<ChannelAgent>;
 /**

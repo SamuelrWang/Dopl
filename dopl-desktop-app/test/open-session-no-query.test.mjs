@@ -45,9 +45,14 @@ function slice(src, name) {
 
 const REOPEN = slice(read("session-reopen.js"), "SESSION-REOPEN-PURE");
 const PARK = slice(read("session-park.js"), "SESSION-PARK-PURE");
-// §2 SPLIT: the effect builders moved to session-effects.js; the reducer block calls them
-// as free vars, so the two slices must be evaluated together (effects FIRST).
-const REDUCER = slice(read("session-effects.js"), "SESSION-EFFECTS") + "\n" + slice(read("session-reducer.js"), "SESSION-REDUCER");
+// §2 SPLITS: the effect builders moved to session-effects.js and the state shape to
+// session-state.js; the reducer block calls both as free vars, so the three slices must be
+// evaluated together (effects and state FIRST).
+const REDUCER = [
+  slice(read("session-effects.js"), "SESSION-EFFECTS"),
+  slice(read("session-state.js"), "SESSION-STATE"),
+  slice(read("session-reducer.js"), "SESSION-REDUCER"),
+].join("\n");
 const ENGINE = read("session-engine.js");
 
 // ── the reopen bridge: a LIVE window is SHOWN, never driven ───────────────────────

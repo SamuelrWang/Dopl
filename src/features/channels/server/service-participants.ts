@@ -333,23 +333,41 @@ async function loadWritableThread(
 }
 
 /**
- * A participant identity must already belong to the channel: a user as a
- * member, an agent as an agent OF THIS CHANNEL. Both refusals are 400s about
- * the address, not 403s about permission — the caller named something this room
- * cannot hold.
+ * Does this identity belong to the channel — a user as a member, an agent as an
+ * agent OF THIS CHANNEL? THE precondition every participant row must satisfy,
+ * stated once as a predicate.
+ *
+ * Exported because the handshake derivation
+ * (`service-thread-handshake.ts`) has to answer the same question and must
+ * answer it the SAME way: it FILTERS on it (a stale addressee drops out of a
+ * server-derived set rather than failing a create) where {@link
+ * assertIdentityBelongs} REFUSES on it (a caller who named something this room
+ * cannot hold gets told). Two behaviours, one rule — a second copy of the rule
+ * would be a second thing to drift.
+ */
+export async function identityBelongs(
+  channelId: string,
+  identity: ThreadParticipantRef
+): Promise<boolean> {
+  if (identity.kind === "user") {
+    return Boolean(await repo.findMembership(channelId, identity.id));
+  }
+  const agent = await repoAgents.findAgentById(identity.id);
+  return agent !== null && agent.channel_id === channelId;
+}
+
+/**
+ * A participant identity must already belong to the channel (see {@link
+ * identityBelongs}). Both refusals are 400s about the address, not 403s about
+ * permission — the caller named something this room cannot hold.
  */
 async function assertIdentityBelongs(
   channelId: string,
   identity: ThreadParticipantRef
 ): Promise<void> {
+  if (await identityBelongs(channelId, identity)) return;
   if (identity.kind === "user") {
-    if (!(await repo.findMembership(channelId, identity.id))) {
-      throw new ChannelParticipantNotMemberError(identity.id);
-    }
-    return;
+    throw new ChannelParticipantNotMemberError(identity.id);
   }
-  const agent = await repoAgents.findAgentById(identity.id);
-  if (!agent || agent.channel_id !== channelId) {
-    throw new ChannelAgentNotInChannelError(identity.id);
-  }
+  throw new ChannelAgentNotInChannelError(identity.id);
 }

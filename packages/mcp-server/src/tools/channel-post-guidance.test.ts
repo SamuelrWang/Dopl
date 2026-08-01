@@ -184,6 +184,29 @@ describe("Q9 · the MCP schema mirrors the routes' caps", () => {
     expect(s.safeParse({ ...base, title: "T", summary: "s".repeat(2_000) }).success).toBe(true);
     expect(s.safeParse({ ...base, title: "T", summary: "s".repeat(2_001) }).success).toBe(false);
   });
+
+  it("caps `to_agents` at EIGHT — the same number the route enforces", () => {
+    // MIRRORS `MAX_ADDRESSED_AGENTS` (src/features/channels/schema.ts). Declared
+    // here it is published in the tool's inputSchema (the model sees maxItems)
+    // and the ninth handle is refused before the call is made at all — the same
+    // reason every other cap in this block is duplicated rather than described.
+    const s = channelSchema();
+    const post = { op: "post", channel: "eng", body: "b" };
+    const handles = (n: number) => Array.from({ length: n }, (_, i) => `a${i}`);
+    expect(s.safeParse({ ...post, to_agents: handles(8) }).success).toBe(true);
+    expect(s.safeParse({ ...post, to_agents: handles(9) }).success).toBe(false);
+  });
+
+  it("`intent` publishes exactly the two the route's union has", () => {
+    const s = channelSchema();
+    const post = { op: "post", channel: "eng", body: "b" };
+    expect(s.safeParse({ ...post, intent: "chat" }).success).toBe(true);
+    expect(s.safeParse({ ...post, intent: "request" }).success).toBe(true);
+    // Not a free-text field: a third value is a caller believing in a mode that
+    // does not exist, and it is cheaper to refuse it here than to have the route
+    // reject it as an opaque VALIDATION_FAILED.
+    expect(s.safeParse({ ...post, intent: "notify" }).success).toBe(false);
+  });
 });
 
 describe("Q13 · the not-threaded note recommends only WRITABLE threads", () => {

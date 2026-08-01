@@ -19,8 +19,18 @@
  * answer everything they can read is the failure this whole feature is built to
  * avoid. So the law's load-bearing sentences are pinned — including the ones
  * that must NOT come back, because the regression is a later edit that softens
- * "nothing acts unless addressed" into a suggestion, or that restores an
- * unconditional "addressing a person only notifies them".
+ * THE LOOP BRAKE into a suggestion, or that restores an unconditional
+ * "addressing a person only notifies them".
+ *
+ * A STALE LAW IS THE SAME BUG AS A FALSE ONE, and this file has now been on both
+ * sides of it. It used to pin "NOTHING ACTS UNLESS ADDRESSED" as THE rule; that
+ * sentence was true until ENGAGEMENT shipped and then described a product that
+ * no longer existed, and a green suite would have kept it there. What is pinned
+ * now is the narrower absolute that survived (an AGENT-authored unaddressed
+ * message engages and starts nobody, at any size) plus the four rules the room
+ * gained: chat vs. request, engagement and its expiry, multi-address, and the
+ * one-opener thread handshake. When the behaviour moves again, the pin is the
+ * thing to change FIRST — not the thing to work around.
  *
  * Captured through the real registrar with a recording `register` and a stub
  * client (registration is all this needs — no handler ever runs).

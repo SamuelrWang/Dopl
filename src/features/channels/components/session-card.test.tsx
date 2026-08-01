@@ -162,7 +162,7 @@ describe("OpenWindowControls", () => {
     const markup = renderToStaticMarkup(
       <OpenWindowControls busy={false} note={null} onOpen={noop} />
     );
-    expect(markup).toContain("Open session");
+    expect(markup).toContain("Open thread");
     expect(markup).not.toContain('disabled=""');
     expect(markup).not.toContain(NO_LOCAL_SESSION_NOTE);
   });
@@ -181,7 +181,7 @@ describe("OpenWindowControls", () => {
     // Apostrophe is HTML-escaped in static markup, so assert the stable half.
     expect(markup).toContain("available on this machine");
     // The button stays clickable so the operator can retry.
-    expect(markup).toContain("Open session");
+    expect(markup).toContain("Open thread");
     expect(markup).not.toContain('disabled=""');
   });
 
@@ -214,7 +214,7 @@ describe("SessionCard render", () => {
     expect(markup).toContain("Ship the fix");
     // The window button is feature-detected after mount, so it never appears in
     // the server / first-paint markup — proving the hydration-safe gating.
-    expect(markup).not.toContain("Open session");
+    expect(markup).not.toContain("Open thread");
   });
 
   it("shows the plain 'Working…' line for an active session with no reply and no calm end", () => {
@@ -230,7 +230,7 @@ describe("SessionCard render", () => {
     );
     expect(markup).not.toContain("Working…");
     expect(markup).toContain(
-      "The session hit its turn limit. Open the session to continue."
+      "This thread hit its turn limit. Open the thread to continue."
     );
   });
 
@@ -240,7 +240,7 @@ describe("SessionCard render", () => {
     );
     expect(markup).not.toContain("Working…");
     expect(markup).toContain(
-      "The session was ended on the desktop. The thread stays open."
+      "Ended on the desktop. The thread stays open."
     );
   });
 
@@ -257,7 +257,7 @@ describe("SessionCard render", () => {
       />
     );
     expect(markup).not.toContain("Working…");
-    expect(markup).not.toContain("The session was interrupted.");
+    expect(markup).not.toContain("Work on this thread was interrupted.");
     expect(markup).toContain("Here is the answer.");
   });
 
@@ -271,16 +271,16 @@ describe("SessionCard render", () => {
     expect(markup).not.toContain("bg-danger");
     // The terminal note (no reply delivered) explains the calm ending.
     expect(markup).toContain(
-      "The session hit its turn limit. Open the session to continue."
+      "This thread hit its turn limit. Open the thread to continue."
     );
     expect(markup).not.toContain("Working…");
   });
 
-  it("renders an ended session's 'Session ended' chip", () => {
+  it("renders an ended run's 'Ended on desktop' chip", () => {
     const markup = renderToStaticMarkup(
       <SessionCard session={session({ status: "ended" })} />
     );
-    expect(markup).toContain("Session ended");
+    expect(markup).toContain("Ended on desktop");
     expect(markup).toContain("bg-text-disabled");
   });
 });
@@ -326,7 +326,7 @@ describe("SessionCard thread controls", () => {
 /**
  * Whose thread does this card show? A channel runs several threads at once
  * between different pairs, so the footer must not offer the viewer a session on
- * an exchange they are not in: "Open session" opens a window BOUND to this
+ * an exchange they are not in: "Open thread" opens a window BOUND to this
  * thread, and the desktop forces the thread tag onto whatever that session
  * posts, so a non-party would only reach a server refusal.
  */

@@ -1,6 +1,7 @@
 /**
  * `dopl_channel` MULTIPLAYER op handlers: agents (list) / summon_agent /
- * rename_agent / set_agent_status / join_thread / leave_thread.
+ * rename_agent / set_agent_status / disengage_agent / join_thread /
+ * leave_thread.
  *
  * A NEW file rather than more of `channel-ops-write.ts` (453 lines, §2): these
  * ops are about WHO IS IN THE ROOM, not about what gets said in it. Agent
@@ -43,6 +44,38 @@ export declare function opRenameAgent(client: DoplClient, channelRef: string, ag
  * process on the owner's own machine.
  */
 export declare function opSetAgentStatus(client: DoplClient, channelRef: string, agentRef: string, status: AgentStatus): Promise<ToolResponse>;
+/**
+ * END an agent's ENGAGEMENT — it goes back to IDLE: still in the room, still
+ * reading everything, acting only on messages that TAG it.
+ *
+ * NOT OWNER-ONLY, and it is the only write in this file that is not. The server
+ * allows the owner OR the human recorded as having engaged it
+ * (`service-agents.ts#disengageAgent`), because engagement is a relationship
+ * between an agent and the person who addressed it: ending an agent's attention
+ * to YOUR messages is a different act from parking somebody else's process. The
+ * refusal text below therefore may NOT reuse {@link agentWriteError}'s "an agent
+ * belongs to the member who summoned it" line — that sentence is true of rename
+ * and park and false here, and an engager told they must own the agent would
+ * stop asking for the one thing they are entitled to do.
+ *
+ * IDEMPOTENT server-side: an already-idle agent clears to the same two nulls, so
+ * this reads the same whether or not anything was engaged. That is stated rather
+ * than hidden — an agent that reads "disengaged" as proof it HAD been engaged
+ * would infer an exchange that never happened.
+ *
+ * THE RESULT MAY NOT OFFER THE CALLER A RE-ENGAGE, and it did until 2026-07-31
+ * ("address it by handle again — that re-engages it"). `recordAgentEngagement`
+ * (`service-writes-agents.ts`) now opens with `if (ctx.source === "agent")
+ * return;` — engagement requires a HUMAN CREDENTIAL, because `authorKind` is
+ * caller-assertable and `ctx.source` is derived from the token — and every post
+ * made through this tool carries an agent token. So the one remedy the op
+ * offered was an effect the reader cannot cause: it would tag the agent, watch
+ * it answer that single message, and find it idle again on the next turn with
+ * nothing saying why. What the reader CAN cause is a THREAD with a participant
+ * set, which is the sustained-attention mechanism that does not go through
+ * engagement at all — so that is what the result names instead.
+ */
+export declare function opDisengageAgent(client: DoplClient, channelRef: string, agentRef: string): Promise<ToolResponse>;
 /** Which identity a join/leave names — exactly one of the two. */
 interface ParticipantArgs {
     /** A human channel member: an email or user id. */

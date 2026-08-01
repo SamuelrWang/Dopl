@@ -69,9 +69,15 @@ export async function createChannelAgent(
 }
 
 /**
- * Rename an agent, or move it along its lifecycle. OWNER ONLY — an agent is a
- * member's process on a member's machine, so a teammate renaming or parking it
- * would be reaching into that machine (403 from the route, not from here).
+ * Rename an agent, move it along its lifecycle, or DISENGAGE it.
+ *
+ * AUTHORIZATION IS NOT UNIFORM, and the route enforces it (403 from there, not
+ * from here). `rename` / `set_status` are OWNER ONLY — an agent is a member's
+ * process on a member's machine, so a teammate renaming or parking it would be
+ * reaching into that machine. `disengage` is the owner OR the human recorded in
+ * `engaged_by`: engagement is a relationship between an agent and the person who
+ * addressed it, and ending an agent's attention to YOUR OWN messages is not the
+ * same act as parking somebody else's process.
  */
 export async function updateChannelAgent(
   t: DoplTransport,

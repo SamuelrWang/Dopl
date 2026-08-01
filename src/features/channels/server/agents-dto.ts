@@ -22,6 +22,10 @@ export type ChannelAgentRow = {
   owner_user_id: string;
   name: string;
   status: string;
+  /** When a HUMAN last addressed it. Null = idle. Never swept server-side. */
+  engaged_at: string | null;
+  /** The human who engaged it (audit + who it is listening for). */
+  engaged_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -45,6 +49,11 @@ export function mapAgentRow(row: ChannelAgentRow): ChannelAgent {
     ownerUserId: row.owner_user_id,
     name: row.name,
     status: row.status as AgentStatus,
+    // `?? null` rather than a bare read: a row selected from a deployment that
+    // predates the engagement migration has no such property, and `undefined`
+    // on the wire would make every consumer distinguish "idle" from "unknown".
+    engagedAt: row.engaged_at ?? null,
+    engagedBy: row.engaged_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

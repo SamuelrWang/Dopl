@@ -45,9 +45,13 @@ function extractFn(name) {
 
 // classify also calls the LEGACY-THREADS registry (targeting.js), which holds module state
 // and so is sliced whole between its sentinels instead of function by function.
-const LEGACY = SRC.slice(
-  SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
-  SRC.indexOf("// ─── END LEGACY-THREADS")
+// §2 SPLIT (2026-07-31): the registry itself moved to main/legacy-threads.js when
+// targeting.js went past the 500-line cap. classify calls into it as free variables
+// exactly as before, so only the FILE this block is read out of changed.
+const LEGACY_SRC = readFileSync(join(HERE, "..", "main", "legacy-threads.js"), "utf8");
+const LEGACY = LEGACY_SRC.slice(
+  LEGACY_SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
 assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 

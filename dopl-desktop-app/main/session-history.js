@@ -92,6 +92,17 @@ function bind(d) {
 }
 
 const ENTRY_CAP = 50; // read-only entries rendered (contract cap ~50)
+// D2 — A ROOM WINDOW OPENS ON THE RECENT ROOM, NOT ON THE WHOLE CHANNEL. A room-bound
+// session has no counterparty fence and (in the main room) no thread, so the pair/task
+// scoping that bounds every other window bounds nothing here: at ENTRY_CAP a team window
+// painted the last 50 messages of the channel and seeded all 50 into the agent's first
+// turn — jarring to read, and a first turn mostly made of other people's older business.
+// A dozen is the "what is the room doing right now" window, and anything older is still one
+// scroll away in the channel itself, which is where the room's memory lives. (An earlier
+// draft of this comment cited `session-greeting.CONTEXT_LIMIT` as the precedent for the
+// number; that constant was deleted with the greeting's read-the-room turn, so the dozen
+// stands on its own reasoning now.)
+const ROOM_ENTRY_CAP = 12;
 const FETCH_LIMIT = 200; // the server's MAX_MESSAGE_LIMIT for one read
 const TEXT_CAP = 2000; // per-entry bound so one huge post cannot blow up the window
 const NAME_CAP = 80; // the same bound every counterparty display name gets
@@ -416,7 +427,8 @@ async function load(s) {
   // well — a held or declined body cannot walk back in through the widened taskId condition.
   const read = historyRead(rows, {
     taskId: s.taskId, channelId: s.channelId, peerUserId: s.counterpartyId,
-    selfUserId: selfId, cap: ENTRY_CAP, bind: s.bind, // D2: 'room' widens; anything else fences
+    // D2: 'room' widens WHOSE rows count and narrows HOW MANY — every author, recent only.
+    selfUserId: selfId, cap: room ? ROOM_ENTRY_CAP : ENTRY_CAP, bind: s.bind,
   });
   const entries = read.entries.filter((e) => !io.isGatedEntry(e, (s && s.gatedBodies) || []));
   // FIX N1: what the author rule hid. '' when it hid nothing, so a DM (where there IS no third
@@ -471,6 +483,7 @@ module.exports = {
   taskWindow, // FIX Q1
   parseLegacyTaskSeq, // FIX Q1
   ENTRY_CAP,
+  ROOM_ENTRY_CAP, // D2: the recent-room window a team session's window opens on
   // §2 split: the strings now live in session-history-copy.js and are re-exported verbatim, so
   // nothing that imported them from here has to move.
   FETCH_FAILED_NOTE: copy.FETCH_FAILED_NOTE,

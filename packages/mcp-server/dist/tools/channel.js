@@ -16,11 +16,18 @@
  *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
  *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
  *                               §2 cap — it is the only op here that loops)
- *   - `channel-ops-write.ts`  — open / invite / post
+ *   - `channel-ops-open.ts`   — open / invite (the ROOM and who is in it; split
+ *                               off at the §2 cap)
+ *   - `channel-ops-write.ts`  — post, plus `channel-post-notes.ts` /
+ *                               `channel-post-linkage.ts`, which own the
+ *                               result lines a post's addressing and threading
+ *                               produce
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
  *   - `channel-ops-agents.ts` — agents / summon_agent / rename_agent /
- *                               set_agent_status / join_thread / leave_thread
- *                               (the MULTIPLAYER ops: who is in the room)
+ *                               set_agent_status / disengage_agent /
+ *                               join_thread / leave_thread
+ *                               (the MULTIPLAYER ops: who is in the room, and
+ *                               which of them is currently ENGAGED)
  *   - `channel-agent-refs.ts` — agent identity: handle→row resolution, how a
  *                               handle is rendered, the participant-set render
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
@@ -43,6 +50,7 @@ const channel_description_1 = require("./channel-description");
 const channel_schema_1 = require("./channel-schema");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_await_1 = require("./channel-ops-await");
+const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_agents_1 = require("./channel-ops-agents");
@@ -82,12 +90,12 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     const miss = (0, respond_1.missingParams)("open", args, ["member"]);
                     if (miss)
                         return miss;
-                    return (0, channel_ops_write_1.opOpen)(client, { direct: true, member: args.member });
+                    return (0, channel_ops_open_1.opOpen)(client, { direct: true, member: args.member });
                 }
                 const miss = (0, respond_1.missingParams)("open", args, ["name"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opOpen)(client, {
+                return (0, channel_ops_open_1.opOpen)(client, {
                     name: args.name,
                     topic: args.topic,
                     visibility: args.visibility,
@@ -97,7 +105,7 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 const miss = (0, respond_1.missingParams)("invite", args, ["channel", "member"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opInvite)(client, args.channel, args.member);
+                return (0, channel_ops_open_1.opInvite)(client, args.channel, args.member);
             }
             case "post": {
                 const miss = (0, respond_1.missingParams)("post", args, ["channel", "body"]);
@@ -111,7 +119,9 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     summary: args.summary,
                     thread: args.thread,
                     toAgent: args.to_agent,
+                    toAgents: args.to_agents,
                     asAgent: args.as_agent,
+                    intent: args.intent,
                     runtime,
                 });
             }
@@ -217,6 +227,15 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 if (miss)
                     return miss;
                 return (0, channel_ops_agents_1.opSetAgentStatus)(client, args.channel, args.agent, args.status);
+            }
+            case "disengage_agent": {
+                const miss = (0, respond_1.missingParams)("disengage_agent", args, [
+                    "channel",
+                    "agent",
+                ]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_agents_1.opDisengageAgent)(client, args.channel, args.agent);
             }
             case "join_thread": {
                 const miss = (0, respond_1.missingParams)("join_thread", args, ["channel", "thread"]);

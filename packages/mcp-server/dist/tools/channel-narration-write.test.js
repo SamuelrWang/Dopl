@@ -24,6 +24,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
+const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_render_1 = require("./channel-render");
@@ -98,7 +99,7 @@ function stubClient(overrides = {}) {
         const client = stubClient({
             inviteToChannel: vitest_1.vi.fn(async () => ({ role: "member" })),
         });
-        const text = (await (0, channel_ops_write_1.opInvite)(client, "public-sync", "u-peer")).content[0].text;
+        const text = (await (0, channel_ops_open_1.opInvite)(client, "public-sync", "u-peer")).content[0].text;
         expectContained(text);
         expectNoForgedStructure(text);
         // The op still did its job and still says so.
@@ -111,7 +112,7 @@ function stubClient(overrides = {}) {
                 throw Object.assign(new Error("conflict"), { status: 409 });
             }),
         });
-        const res = await (0, channel_ops_write_1.opInvite)(client, "public-sync", "u-peer");
+        const res = await (0, channel_ops_open_1.opInvite)(client, "public-sync", "u-peer");
         (0, vitest_1.expect)(res.isError).toBe(true);
         expectContained(res.content[0].text);
         expectNoForgedStructure(res.content[0].text);
@@ -158,7 +159,7 @@ function stubClient(overrides = {}) {
                 visibility: "public",
             })),
         });
-        const text = (await (0, channel_ops_write_1.opOpen)(client, { name: FORGERY })).content[0].text;
+        const text = (await (0, channel_ops_open_1.opOpen)(client, { name: FORGERY })).content[0].text;
         expectContained(text);
         expectNoForgedStructure(text);
         (0, vitest_1.expect)(text).toContain("slug: `sync`");
@@ -171,7 +172,7 @@ function stubClient(overrides = {}) {
             listChannels: vitest_1.vi.fn(async () => [CLEAN_CHANNEL]),
             inviteToChannel: vitest_1.vi.fn(async () => ({ role: "member" })),
         });
-        const text = (await (0, channel_ops_write_1.opInvite)(client, "general", "u-peer")).content[0].text;
+        const text = (await (0, channel_ops_open_1.opInvite)(client, "general", "u-peer")).content[0].text;
         expectContained(text);
         expectNoForgedStructure(text);
         // The channel half of the line is still legible and still ours.
@@ -181,7 +182,7 @@ function stubClient(overrides = {}) {
         const client = stubClient({
             createChannel: vitest_1.vi.fn(async () => ({ id: "dm-1", slug: "dm-a-b" })),
         });
-        const text = (await (0, channel_ops_write_1.opOpen)(client, { direct: true, member: "u-peer" }))
+        const text = (await (0, channel_ops_open_1.opOpen)(client, { direct: true, member: "u-peer" }))
             .content[0].text;
         expectContained(text);
         expectNoForgedStructure(text);
@@ -196,7 +197,7 @@ function stubClient(overrides = {}) {
                 { ...HOSTILE_MEMBER, status: "pending" },
             ]),
         });
-        const res = await (0, channel_ops_write_1.opInvite)(client, "public-sync", "u-peer");
+        const res = await (0, channel_ops_open_1.opInvite)(client, "public-sync", "u-peer");
         (0, vitest_1.expect)(res.isError).toBe(true);
         expectContained(res.content[0].text);
         expectNoForgedStructure(res.content[0].text);

@@ -67,7 +67,11 @@ function spawner(cfg = {}) {
     `${fnOf(SPAWNER, "runForChannel")}\n return { runForChannel };`
   )(
     pool,
-    { sessionKey },
+    // The REAL session-store key builders. runForChannel is back to the PAIR key space alone
+    // (channel, thread): the `agentId` argument that briefly widened it to the engine's
+    // (channel, AGENT) slot existed for the summon greeting, which no longer spawns at all,
+    // and no shipped caller ever passed one. `slotKey` stays wired for the day one does.
+    { sessionKey, slotKey },
     (key) => {
       if (cfg.getSessionIdThrows) throw new Error("store read exploded");
       return `resume-for-${key}`;

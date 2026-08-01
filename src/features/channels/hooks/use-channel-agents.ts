@@ -7,6 +7,7 @@ import { toast } from "@/shared/ui/toast";
 import {
   ChannelApiError,
   createChannelAgent,
+  disengageChannelAgent,
   renameChannelAgent,
   setChannelAgentStatus,
 } from "../client/api";
@@ -42,10 +43,12 @@ export interface ChannelAgentsState {
   renameAgent: (agentId: string, name: string) => Promise<ChannelAgent>;
   /** Park / resume / dismiss an agent (owner-only, server-enforced). */
   setAgentStatus: (agentId: string, status: AgentStatus) => Promise<ChannelAgent>;
+  /** Stop an agent listening to this channel (owner-only, server-enforced). */
+  disengageAgent: (agentId: string) => Promise<ChannelAgent>;
 }
 
 /**
- * The channel's AGENT ROSTER — the list plus its three writes.
+ * The channel's AGENT ROSTER — the list plus its four writes.
  *
  * Server state per §7: `useApiQuery` over `apiRequest` for the read (workspace
  * header included), TanStack mutations over the typed client for the writes,
@@ -77,7 +80,7 @@ export function useChannelAgents(
   const refetch = query.refetch;
   useChannelAgentsRealtime(enabled ? workspaceId : null, () => void refetch());
 
-  // One invalidation for all three writes: the list is the only cache entry
+  // One invalidation for every write: the list is the only cache entry
   // agent state lives in, and the server's row is the authority on the result
   // (a rename is normalized, a status flip may be refused).
   const invalidate = useCallback(() => {
@@ -123,6 +126,15 @@ export function useChannelAgents(
     onError: (err) => onError(err, "Couldn't update the agent"),
   });
 
+  // Same invalidation as the other three: `engagedAt` lives on the agent row,
+  // so the list read is where the chip learns it went idle.
+  const disengage = useMutation({
+    mutationFn: (agentId: string) =>
+      disengageChannelAgent(channelId as string, agentId, workspaceId),
+    onSuccess: invalidate,
+    onError: (err) => onError(err, "Couldn't disengage the agent"),
+  });
+
   const createAgent = useCallback(
     (name?: string) => create.mutateAsync(name),
     [create]
@@ -136,11 +148,16 @@ export function useChannelAgents(
       setStatus.mutateAsync({ agentId, status }),
     [setStatus]
   );
+  const disengageAgent = useCallback(
+    (agentId: string) => disengage.mutateAsync(agentId),
+    [disengage]
+  );
 
   return {
     agents: query.data ?? NO_AGENTS,
     createAgent,
     renameAgent,
     setAgentStatus,
+    disengageAgent,
   };
 }

@@ -119,6 +119,7 @@ export type {
   ChannelThreadCreateInput,
   ChannelThreadDetail,
   ChannelVisibility,
+  MessageIntent,
   ParticipantKind,
   ReadMessagesOptions,
   ThreadMode,

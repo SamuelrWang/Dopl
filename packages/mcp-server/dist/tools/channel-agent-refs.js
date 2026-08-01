@@ -22,13 +22,14 @@
  * beside it: the handle is the claim, the id is the server's record of it.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AGENT_STATUSES = exports.NO_AGENT_ID = exports.NO_HANDLE = void 0;
+exports.NO_AGENT_INDEX = exports.AGENT_STATUSES = exports.NO_AGENT_ID = exports.NO_HANDLE = void 0;
 exports.agentLabel = agentLabel;
 exports.resolveAgentOr = resolveAgentOr;
 exports.resolvePostAgentsOr = resolvePostAgentsOr;
 exports.resolveParticipantSeedOr = resolveParticipantSeedOr;
 exports.participantLines = participantLines;
 exports.agentNamesById = agentNamesById;
+exports.agentAddressIndex = agentAddressIndex;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
@@ -85,9 +86,21 @@ async function resolveAgentOr(client, channelId, ref) {
     return pickAgent(roster, ref) ?? agentNotFound(ref, roster, channelId);
 }
 /**
- * Resolve `to_agent` / `as_agent` for a post, both against THIS channel's
- * roster, in ONE round-trip whichever of them is set (and none at all when
- * neither is — an ordinary post pays nothing for this).
+ * Resolve `to_agent` / `to_agents` / `as_agent` for a post, all against THIS
+ * channel's roster, in ONE round-trip whichever of them is set (and none at all
+ * when none is — an ordinary post pays nothing for this).
+ *
+ * MULTI-ADDRESS. `to_agents` is the N-agent form of `to_agent` ("@quartz @onyx
+ * work together"), and `to_agent` is exactly its one-element case, so the two
+ * are concatenated and resolved by the SAME matcher. ALL OR NOTHING, mirroring
+ * `resolveAgentAddressing` on the server: one ref that names no agent of this
+ * channel fails the whole post, naming that ref. A partial address is the worse
+ * outcome by far — the caller believes N machines are working and fewer are.
+ *
+ * DEDUPE IS BY RESOLVED ID, not by string, so naming one agent by handle and by
+ * id is one address rather than two. The server dedupes again (it must — it is
+ * the boundary); doing it here as well is what keeps the RESULT's "addressed to
+ * agents ..." line equal to what was actually sent.
  *
  * WHY RESOLVE `as_agent` HERE when the route wants a uuid anyway: an agent knows
  * its own HANDLE — that is the name it was summoned under and the name the room
@@ -97,17 +110,20 @@ async function resolveAgentOr(client, channelId, ref) {
  * server's alone: this turns a name into an id, it does not decide whose agent
  * it is, and a non-owner is refused with a 403 at the route.
  */
-async function resolvePostAgentsOr(client, channelId, toAgent, asAgent) {
-    if (!toAgent && !asAgent)
-        return {};
+async function resolvePostAgentsOr(client, channelId, toAgent, asAgent, toAgents) {
+    const refs = [...(toAgent ? [toAgent] : []), ...(toAgents ?? [])];
+    if (refs.length === 0 && !asAgent)
+        return { tos: [] };
     const roster = await client.listChannelAgents(channelId);
-    const out = {};
-    if (toAgent) {
-        const found = pickAgent(roster, toAgent);
+    const out = { tos: [] };
+    for (const ref of refs) {
+        const found = pickAgent(roster, ref);
         if (!found)
-            return agentNotFound(toAgent, roster, channelId);
-        out.to = found;
+            return agentNotFound(ref, roster, channelId);
+        if (!out.tos.some((seen) => seen.id === found.id))
+            out.tos.push(found);
     }
+    out.to = out.tos[0];
     if (asAgent) {
         const found = pickAgent(roster, asAgent);
         if (!found)
@@ -238,14 +254,40 @@ participants, view, agentNames) {
 }
 /** The channel's agent handles by id, for naming participants. Fails soft. */
 async function agentNamesById(client, channelId) {
+    return (await agentAddressIndex(client, channelId, null)).names;
+}
+/** Empty index — every agent renders as a bare id and none is the caller's. */
+exports.NO_AGENT_INDEX = {
+    names: new Map(),
+    mine: new Set(),
+};
+/**
+ * The channel's agents, indexed for the read path. FAILS SOFT, on the same rule
+ * as `memberNames`: this is ENRICHMENT, and a roster that 404s, 403s or times
+ * out must degrade to bare ids rather than turn a successful read into an error
+ * the agent might retry. The op that calls it has already established the
+ * channel is visible (its own call would have 404'd first).
+ *
+ * `ref` may be a slug or an id — the agents route resolves either
+ * (`loadVisibleChannel`), so the hot read path does not have to pre-resolve.
+ *
+ * The empty `mine` set on failure is the SAFE direction for the one predicate
+ * that reads it: an unknown owner means "this message may not name you", which
+ * leaves `AWAIT_UNNAMED_NOTICE` firing as it did before. A guessed one would
+ * suppress the notice on somebody else's exchange.
+ */
+async function agentAddressIndex(client, ref, selfUserId) {
     const names = new Map();
+    const mine = new Set();
     try {
-        for (const a of await client.listChannelAgents(channelId)) {
+        for (const a of await client.listChannelAgents(ref)) {
             names.set(a.id, a.name);
+            if (selfUserId !== null && a.ownerUserId === selfUserId)
+                mine.add(a.id);
         }
     }
     catch {
         // Enrichment only — an id still renders, and it is the half that matters.
     }
-    return names;
+    return { names, mine };
 }

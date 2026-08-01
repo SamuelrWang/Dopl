@@ -51,6 +51,9 @@ const LISTENER = M("listener-messages.js");
 const LOOP = M("channel-listener.js");
 const DISPATCH = M("session-dispatch.js");
 const TARGETING = M("targeting.js");
+// §2 SPLIT (2026-07-31): the LEGACY-THREADS registry moved out of targeting.js when that
+// file went past the 500-line cap; classify still calls into it as free variables.
+const LEGACY_SRC = M("legacy-threads.js");
 const GATE = M("session-gate.js");
 const PARK = M("session-park.js");
 
@@ -139,9 +142,9 @@ function extractFn(src, name) {
 }
 // classify also calls the LEGACY-THREADS registry, which carries module state and so is
 // sliced whole between its sentinels rather than brace-balanced out function by function.
-const LEGACY = TARGETING.slice(
-  TARGETING.indexOf("// ─── BEGIN LEGACY-THREADS"),
-  TARGETING.indexOf("// ─── END LEGACY-THREADS")
+const LEGACY = LEGACY_SRC.slice(
+  LEGACY_SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
 assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 const { classify } = new Function(

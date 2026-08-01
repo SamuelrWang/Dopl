@@ -335,8 +335,12 @@ function createServer(client, options = {}) {
             "create_thread",
             "close_thread",
             "set_thread_mode",
-            // Multiplayer: roster + breakout-room membership writes.
-            "summon_agent", "rename_agent", "set_agent_status", "join_thread", "leave_thread",
+            // Multiplayer: roster + engagement + breakout-room membership writes.
+            // `disengage_agent` PATCHes channel_agents (clearing engaged_at /
+            // engaged_by), so it is a write like the other two agent PATCHes — being
+            // allowed to a non-owner does not make it a read.
+            "summon_agent", "rename_agent", "set_agent_status", "disengage_agent",
+            "join_thread", "leave_thread",
         ]),
     };
     // Session default workspace — resolved once at boot (factory.ts), never

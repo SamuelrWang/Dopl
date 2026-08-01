@@ -204,6 +204,16 @@ function buildPrompt(message, context, nonce) {
 //      a disk write that can throw — ABOVE the release, from inside the execFile callback
 //      where a throw is unobservable. See the try/catch there.
 // `bail` is the single settle point: release whatever is held, answer the caller, once.
+//
+// THE FOUR D2 ARGUMENTS ARE GONE (2026-07-31). `agentId`, `prompt`, `timeoutMs` and
+// `budgetUsd` were added for exactly one caller — the summon greeting's bounded read-the-room
+// turn — and the operator cut that turn: an arrival is now a canned string posted straight
+// into the channel (session-greeting.js). Nothing HEADLESS is agent-shaped any more, so no
+// caller passed an `agentId`, and a parameter no caller sets is not a seam, it is an untested
+// second key space in the machine-wide pool. It comes back with the caller that needs it.
+// The other three degraded to exactly today's behaviour when absent: every remaining spawn is
+// a request answered through buildPrompt under MAX_RUNTIME_MS with no `--max-budget-usd`
+// ceiling, so removing them changes nothing for any caller that survives.
 function runForChannel({ channelId, taskId, message, context, toolProfile, onStart }) {
   const slot = { channelId, taskId };
   const key = sessionStore.sessionKey(String(channelId || ''), String(taskId || ''));

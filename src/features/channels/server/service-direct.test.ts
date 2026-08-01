@@ -25,16 +25,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
+vi.mock("./repository-agents");
 vi.mock("./service-reads");
 
 import * as repo from "./repository";
 import * as reads from "./service-reads";
-import {
-  addMember,
-  createChannel,
-  deleteChannel,
-  removeMember,
-} from "./service-writes";
+import { createChannel, deleteChannel } from "./service-writes";
+import { addMember, removeMember } from "./service-writes-members";
 import {
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,

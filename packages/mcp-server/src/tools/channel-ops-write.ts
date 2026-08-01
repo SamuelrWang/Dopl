@@ -1,34 +1,36 @@
 /**
- * `dopl_channel` WRITE op handlers: open (create a channel or direct message),
- * invite (add a workspace member), post (send a message or activity event). The
- * first-class thread ops moved to `channel-ops-threads.ts` at the §2 500-line
- * cap. Maps @dopl/client 4xx collisions to actionable messages. Routed from the
- * registrar in channel.ts.
+ * `dopl_channel` op="post" — send a message or a structured activity event.
+ *
+ * THIS FILE IS NOW ONE OP, and that is the end of a three-step split rather
+ * than an accident. It began as "the write ops"; the first-class thread ops
+ * left for `channel-ops-threads.ts`, the post's result LINES left for
+ * `channel-post-linkage.ts` / `channel-addressing.ts` / `channel-wake-guidance.ts`
+ * / `channel-post-notes.ts`, and the room-lifecycle ops (open / invite) left
+ * for `channel-ops-open.ts`. What is left is the one op every behaviour round
+ * actually lands on: resolve the addressing, make the call, map the 4xx, hand
+ * the outcome to the modules that narrate it.
  *
  * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The
  * `thread` op param folds into `metadata.taskId` and the `task_*` message
  * kinds keep their stored names; only the agent-facing surface says `thread`.
  *
- * PEER-CONTROLLED TEXT (Q1, write side). The read ops were swept first and the
- * write ops were never enumerated, so the same defect survived here: every
- * string below is server NARRATION — no untrusted-content framing, read by the
- * model as the tool speaking — and two peer-authored values are spliced into it.
+ * PEER-CONTROLLED TEXT (Q1, write side). Every string below is server NARRATION
+ * — no untrusted-content framing, read by the model as the tool speaking — and
+ * two peer-authored values are spliced into it.
  *
- *   - `ch.name`, at nearly every site in this file. `resolveChannelOr` lists
- *     channels including PUBLIC ones the caller was never invited to, so the
- *     name can come from someone the agent has had no contact with; the reach is
- *     lower than `op="list"`'s (the agent must name the channel) but it is not
- *     zero. `features/channels/schema.ts` bounded it at 120 characters with NO
- *     charset rule, so it could carry the newlines that forge a line — that gap
- *     is closed there too now, in the same change.
- *   - `member.label` / `toLabel` — `profiles.display_name`. Render-safe by the
- *     time it arrives: `resolveMemberOr` neutralizes at the source, so the label
- *     is spliced directly here and must NOT be neutralized twice.
+ *   - `ch.name`. `resolveChannelOr` lists channels including PUBLIC ones the
+ *     caller was never invited to, so the name can come from someone the agent
+ *     has had no contact with; the reach is lower than `op="list"`'s (the agent
+ *     must name the channel) but it is not zero. `features/channels/schema.ts`
+ *     bounded it at 120 characters with NO charset rule, so it could carry the
+ *     newlines that forge a line — that gap is closed there too now.
+ *   - `toLabel` — `profiles.display_name`. Render-safe by the time it arrives:
+ *     `resolveMemberOr` neutralizes at the source, so the label is spliced
+ *     directly here and must NOT be neutralized twice.
  *
- * Peer TITLES (thread names) render in `channel-post-linkage.ts` — the post's
- * did-it-thread line, split out of this file at the §2 cap — and across
- * `channel-ops-threads.ts`; the untrusted-content headers they carry live in
- * `channel-render.ts` with the read side's, one definition each.
+ * Peer TITLES (thread names) render in `channel-post-linkage.ts`; the
+ * untrusted-content headers they carry live in `channel-render.ts` with the
+ * read side's, one definition each.
  *
  * MULTIPLAYER: `to_agent` / `as_agent` are resolved through
  * `channel-agent-refs.ts`, which also owns how an agent handle is rendered (as a
@@ -37,22 +39,24 @@
 
 import type {
   ChannelMessageInput,
-  ChannelVisibility,
   DoplClient,
+  MessageIntent,
 } from "@dopl/client";
-import {
-  ok,
-  err,
-  isAlreadyExists,
-  withCallerAgent,
-  type ToolResponse,
-} from "./respond";
+import { ok, err, withCallerAgent, type ToolResponse } from "./respond";
 // Agent identity (handle→row resolution, and how a handle is rendered) is one
 // module for the whole tool — post, create_thread and get_thread share it.
 import { agentLabel, resolvePostAgentsOr } from "./channel-agent-refs";
 // A post's result lines each live in their own module — this one answers "did
 // it thread?", which is the question a sender cannot otherwise settle.
 import { threadLinkageNote } from "./channel-post-linkage";
+// …and this one answers "what did the ADDRESSING do?" — the conflict note, the
+// multi-address note, and the addressed/chat/unaddressed line. Split out at the
+// §2 cap (SHOULD-FIX-6) beside its two existing siblings.
+import {
+  CHAT_ADDRESSED_REFUSAL,
+  agentAttributionNotes,
+  postAddressLines,
+} from "./channel-post-notes";
 import {
   inlineOr,
   isErr,
@@ -60,10 +64,6 @@ import {
   resolveChannelOr,
   resolveMemberOr,
 } from "./channel-shared";
-// The addressing rule has ONE statement, in one module, because stating it per
-// site is how three files came to agree with each other and disagree with
-// `classify`. See channel-addressing.ts for what each fact is verified against.
-import { unaddressedPostNote } from "./channel-addressing";
 // Whether a pending `await` can outlive the turn is a CLIENT property this
 // server cannot see. One module decides what may be claimed about it.
 import { postReplyLines } from "./channel-wake-guidance";
@@ -71,6 +71,7 @@ import { postReplyLines } from "./channel-wake-guidance";
 // channel-errors.ts for why the old status-only branch answered every failure
 // with "invite them first".
 import {
+  AGENT_CAP_NOTE,
   FIELD_CAPS_NOTE,
   classifyBadRequest,
   classifyForbidden,
@@ -95,10 +96,30 @@ interface PostOptions {
   thread?: string;
   /**
    * MULTIPLAYER — address the post to a named AGENT (handle or id). Addressing
-   * is what makes an agent act. Addressing a HUMAN (`to`) is NOT notify-only:
-   * see {@link PostOptions.asAgent}, which is what decides that.
+   * is what makes an agent act.
+   *
+   * IT DOES NOT ENGAGE IT WHEN THE CALLER IS THIS TOOL. `recordAgentEngagement`
+   * (service-writes-agents.ts) stamps `engaged_at` only for a HUMAN-authored
+   * post, and every post made through MCP is agent-authored — the write path
+   * derives `author_kind` from the caller's token (`source: auth.agentTokenId ?
+   * "agent" : "user"`, service-shared.ts) and an MCP call always carries one. So
+   * engagement is a thing that HAPPENS TO the caller's own agents (a human tags
+   * them in the web app or the desktop), never a thing this op does to a peer.
+   * Narration that said otherwise would teach an agent it had put a peer on a
+   * standing licence it does not have.
+   *
+   * Addressing a HUMAN (`to`) is NOT notify-only: see
+   * {@link PostOptions.asAgent}, which is what decides that.
    */
   toAgent?: string;
+  /**
+   * MULTIPLAYER — the N-agent form of {@link PostOptions.toAgent}: address up to
+   * eight named agents in ONE post, which is how two agents are told to work
+   * together. `toAgent` is exactly its one-element case and the two merge, in
+   * that order. All-or-nothing (see `resolvePostAgentsOr`), and the FIRST
+   * addressed agent's owner is the member the server stamps the post for.
+   */
+  toAgents?: string[];
   /**
    * MULTIPLAYER — post AS one of the caller's own agents (handle or id). It
    * supplements the human author, it never replaces one, and the server
@@ -117,98 +138,23 @@ interface PostOptions {
    */
   asAgent?: string;
   /**
+   * CHAT vs REQUEST — whether this post may reach anybody's agent at all.
+   * Absent means `request`, which is the whole of today's behaviour: addresses
+   * work, and a DIRECT channel's auto-address still fires. `chat` is people
+   * talking — the auto-address is skipped server-side, so nothing on the far
+   * side reads the message as an ask.
+   *
+   * `chat` beside an address is a CONTRADICTION and is refused here, before the
+   * call (see {@link CHAT_ADDRESSED_REFUSAL}); the route refuses it too, with
+   * `CHANNEL_CHAT_ADDRESSED`.
+   */
+  intent?: MessageIntent;
+  /**
    * The caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes
    * nothing this op does — only what the result is willing to claim about
    * waiting for the reply. See `channel-wake-guidance.ts`.
    */
   runtime?: string | null;
-}
-
-/** Options for opOpen — a normal channel, or a `direct` message with `member`. */
-interface OpenOptions {
-  direct?: boolean;
-  member?: string;
-  name?: string;
-  topic?: string;
-  visibility?: ChannelVisibility;
-}
-
-export async function opOpen(
-  client: DoplClient,
-  opts: OpenOptions,
-): Promise<ToolResponse> {
-  // Direct branch: open (or dedup-return) a 1:1 channel with `member`. The
-  // server dedups a repeat DM to the same peer, so this is idempotent.
-  if (opts.direct) {
-    const member = await resolveMemberOr(client, opts.member as string);
-    if (isErr(member)) return member;
-    const channel = await client.createChannel({
-      direct: true,
-      memberUserId: member.userId,
-    });
-    return ok(
-      [
-        `Opened a direct message with ${member.label} (id: \`${channel.id}\` · slug: \`${channel.slug}\`).`,
-        `Post with dopl_channel(op="post", channel="${channel.id}", body="...").`,
-      ].join("\n"),
-    );
-  }
-
-  const name = opts.name as string;
-  let channel;
-  try {
-    channel = await client.createChannel({
-      name,
-      topic: opts.topic,
-      visibility: opts.visibility,
-    });
-  } catch (e) {
-    if (isAlreadyExists(e)) {
-      // NOT a duplicate-name collision: duplicate names auto-dedupe via slug
-      // suffixing. A 409 here is a transient same-derived-slug insert race
-      // between two concurrent opens — nothing was created, and a retry
-      // (which derives the next free slug) succeeds.
-      return err(
-        `Hit a transient naming conflict creating "${name}" (a rare concurrent-open race on the derived slug). Nothing was created — just retry the same open and it should succeed.`,
-      );
-    }
-    throw e;
-  }
-  const visNote =
-    channel.visibility === "private"
-      ? "Private — only invited members can see it."
-      : "Public — visible to the whole workspace.";
-  return ok(
-    [
-      // The caller's own name, one argument old — neutralized on the same flat
-      // rule as everything else rather than on a per-site judgement about who
-      // could have authored it. Judging per site is what left close_thread raw.
-      `Created channel **${inlineOr(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}`,
-      `Post with dopl_channel(op="post", channel="${channel.slug}", body="..."); add members with op="invite".`,
-    ].join("\n"),
-  );
-}
-
-export async function opInvite(
-  client: DoplClient,
-  channelRef: string,
-  memberRef: string,
-): Promise<ToolResponse> {
-  const ch = await resolveChannelOr(client, channelRef);
-  if (isErr(ch)) return ch;
-  const chName = inlineOr(ch.name, NO_NAME);
-  const member = await resolveMemberOr(client, memberRef);
-  if (isErr(member)) return member;
-  let added;
-  try {
-    added = await client.inviteToChannel(ch.id, member.userId);
-  } catch (e) {
-    if (isAlreadyExists(e)) {
-      return err(`${member.label} is already a member of **${chName}**.`);
-    }
-    throw e;
-  }
-  return ok(`Added ${member.label} to **${chName}** as ${added.role}.`);
 }
 
 export async function opPost(
@@ -217,6 +163,15 @@ export async function opPost(
   body: string,
   opts: PostOptions = {},
 ): Promise<ToolResponse> {
+  // FIRST, and before any round-trip: a contradictory post has nothing to
+  // resolve. Refusing here rather than letting the route do it means "nothing
+  // was sent" is trivially true and the caller is told which two params fight.
+  if (
+    opts.intent === "chat" &&
+    (opts.to || opts.toAgent || (opts.toAgents?.length ?? 0) > 0)
+  ) {
+    return err(CHAT_ADDRESSED_REFUSAL);
+  }
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
   const chName = inlineOr(ch.name, NO_NAME);
@@ -242,6 +197,7 @@ export async function opPost(
     ch.id,
     opts.toAgent,
     opts.asAgent,
+    opts.toAgents,
   );
   if (isErr(agentAddr)) return agentAddr;
 
@@ -264,8 +220,21 @@ export async function opPost(
       summary: opts.summary,
       // Ids, not the caller's strings: the handle was already resolved to a row
       // of THIS channel above, and the route stamps what it is given.
+      //
+      // The SINGLE address still goes out as `toAgent` alone, byte for byte the
+      // request this tool has always sent — the server treats `toAgent` as a
+      // one-element `toAgents` and merges them, so `toAgents` is added only when
+      // there is genuinely more than one and nothing about a one-agent post
+      // changes shape.
       toAgent: agentAddr.to?.id,
+      toAgents:
+        agentAddr.tos.length > 1
+          ? agentAddr.tos.map((a) => a.id)
+          : undefined,
       authorAgentId: agentAddr.as?.id,
+      // Absent unless the caller said so: an omitted `intent` means `request`
+      // and stamps no metadata key at all (service-writes-metadata.ts).
+      intent: opts.intent,
     });
   } catch (e) {
     // Q9 — map the route's 400s off the CODE, not off which params happened to
@@ -300,6 +269,21 @@ export async function opPost(
           return err(
             `The agent you named is not an agent of **${chName}**, so nothing was sent.${serverDetail(e)} Re-read the room's agents with dopl_channel(op="agents", channel="${ch.id}") and address one of those — a handle only ever names an agent inside ONE channel.`,
           );
+        // SHOULD-FIX-4 — THE 400 THIS TOOL'S OWN SURFACE INVITES. The schema
+        // publishes `to_agents.max(8)` and never says `to_agent` counts toward
+        // the same eight, while the server caps the DEDUPED MERGE of the two.
+        // Without this arm the refusal fell through to `unknown` — "the server
+        // did not name a cause this tool recognizes" — for the one cause the
+        // tool is best placed to explain.
+        case "too_many_agents":
+          return err(
+            `That post addressed too many agents, so nothing was sent.${serverDetail(e)} ${AGENT_CAP_NOTE}`,
+          );
+        // The local guard at the top of this op already refuses this pair, so
+        // reaching here means the two disagree — answer with the RULE, not with
+        // "the server named a cause this tool does not recognize".
+        case "chat_addressed":
+          return err(CHAT_ADDRESSED_REFUSAL);
         // `self_target` is a create_thread-only rejection — `post to=self` is
         // deliberately NOT guarded server-side (the receiving desktop already
         // classifies a self-addressed post as noise, and a post is not a
@@ -362,49 +346,30 @@ export async function opPost(
   }
 
   const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
-  // Both agent notes render the handle WITH its id (`agentLabel`) — a handle
-  // alone is the owner's claim about a name, and two rooms' agents may share
-  // one. `toLabel` is a member label, already render-safe from its resolver.
+  // `toLabel` is a member label, already render-safe from its resolver. The two
+  // agent clauses are assembled next door, where the rest of the addressing
+  // narration lives.
   const toNote = toLabel ? `, addressed to ${toLabel}` : "";
-  const toAgentNote = agentAddr.to
-    ? `, addressed to agent ${agentLabel(agentAddr.to)}`
-    : "";
-  const asNote = agentAddr.as ? `, as agent ${agentLabel(agentAddr.as)}` : "";
-  // N-PARTY — the silent drop this feature exists to prevent, in its addressing
-  // form: an unaddressed post used to read exactly like an addressed one, so the
-  // sender walked away believing an agent had it.
-  //
-  // WHAT IT MAY NOT CLAIM (2026-07-31). The first version of this note asserted
-  // "nobody was woken by it" for every non-direct channel and offered a re-post
-  // with `to=` as the remedy. That is false whenever the post THREADED: the
-  // receiving desktop routes a first-class thread tag into a live session before
-  // `classify` ever sees the addressing, so the note rendered "nobody was woken"
-  // directly above `threadLinkageNote`'s "the other side reads this as a
-  // continuation", and its remedy manufactured a duplicate request. The rule and
-  // both of its shapes live in `channel-addressing.ts`; `landedThread` is read
-  // back off the STORED message for the same reason the linkage note is (what
-  // actually landed, not what was asked for).
-  const landedThread = metaString(message, "taskId");
-  const addressingNote = unaddressedPostNote({
-    ref: ch.id,
+  const { toAgentNote, asNote } = agentAttributionNotes(
+    agentAddr.tos,
+    agentAddr.as,
+  );
+  // THE ADDRESSING LINES — the conflict note, the multi-address note, and the
+  // addressed/chat/unaddressed line. All three live in `channel-post-notes.ts`
+  // (SHOULD-FIX-6) beside the two result-line modules this op already delegated
+  // to. `landedThread` is read back off the STORED message for the same reason
+  // the linkage note is: what actually landed, not what was asked for.
+  const addressLines = postAddressLines({
+    channelId: ch.id,
+    safeChannelName: chName,
     isDirect: ch.isDirect,
-    // An agent address IS an address: the server stamps the addressed agent's
-    // OWNER as `to_user_id`, which is the field the receiving listener triggers
-    // on, so a `to_agent` post wakes a machine exactly as a `to` post does.
-    addressed: !!toLabel || !!agentAddr.to,
-    landedThread,
+    intent: opts.intent,
+    toAgents: agentAddr.tos,
+    toUserId,
+    toLabel,
+    seq: message.seq,
+    landedThread: metaString(message, "taskId"),
   });
-  // WHEN BOTH ADDRESSES ARE SET AND THEY DISAGREE, THE AGENT'S OWNER WINS. The
-  // server stamps `to_user_id` from the addressed agent's owner and it takes
-  // precedence over `to` (a handle names one machine unambiguously; a
-  // disagreeing pair names none). Silently, until this line: a caller that
-  // passed both would otherwise believe it had notified the person it named.
-  const addressConflict =
-    agentAddr.to && toUserId && agentAddr.to.ownerUserId !== toUserId
-      ? [
-          `NOTE: you set both \`to\` and \`to_agent\`, and they name different people. The AGENT's owner is who this reached — ${toLabel ?? "the member you named in \`to\`"} was not notified. Post again addressed to them alone if they also need it.`,
-        ]
-      : [];
   // Q7: second line, right under the confirmation — a sender cannot otherwise
   // tell continuation from new request, and the tag drop it catches is silent.
   const linkage = await threadLinkageNote(
@@ -418,8 +383,7 @@ export async function opPost(
     ok(
     [
       `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}${toAgentNote}${asNote}). Readers watching with op="await" will pick it up.`,
-      ...addressConflict,
-      ...(addressingNote ? [addressingNote] : []),
+      ...addressLines,
       ...(linkage ? [linkage] : []),
       // WAKE-V1 teaching: a posted request that no one is waiting on is where
       // the exchange dies. WHETHER the await outlives this turn is not ours to

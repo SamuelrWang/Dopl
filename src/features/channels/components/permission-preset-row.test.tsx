@@ -119,7 +119,7 @@ describe("RequestPermissionRowView (both dropdowns, kit-only)", () => {
     expect((markup.match(/aria-haspopup="menu"/g) ?? []).length).toBe(2);
     expect(markup).toContain(">Tools</span>");
     expect(markup).toContain(">Messages</span>");
-    expect(markup).toContain('aria-label="What this session&#x27;s agent may do"');
+    expect(markup).toContain('aria-label="What this thread&#x27;s agent may do"');
     expect(markup).toContain('aria-label="Which messages cross without asking"');
   });
 

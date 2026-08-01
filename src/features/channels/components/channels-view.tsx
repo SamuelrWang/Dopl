@@ -9,6 +9,7 @@ import {
   addTrustRule,
   ChannelApiError,
   closeChannelThread,
+  createChannelThread,
   reopenChannelThread,
   decideConsent,
   deleteChannel as apiDeleteChannel,
@@ -213,7 +214,17 @@ export function ChannelsView({
     try {
       await postMessage(
         selected.id,
-        { body, toUserId: opts?.toUserId, summary: opts?.summary },
+        {
+          body,
+          // Chat mode says so explicitly rather than leaving the server to
+          // infer "no addressee, probably chat" from missing fields.
+          intent: opts?.intent,
+          // The agents the body @-mentioned, and chat's ONLY addressing: these
+          // act, nobody else is reached. `toUserId` / `summary` are gone from
+          // `SendOptions` entirely rather than left forwarded-but-unset (see
+          // `lib/composer-mode.ts` — that live wire is how the bug returns).
+          toAgents: opts?.toAgents,
+        },
         workspaceId
       );
       await refetchMessages();
@@ -243,6 +254,24 @@ export function ChannelsView({
       busyRef.current -= 1;
       coordinatorRef.current.settle(busyRef.current > 0);
     }
+  }
+
+  /**
+   * The composer's REQUEST mode: open a titled thread addressed to one member.
+   * Goes through the same `runThreadMutation` envelope as close / reopen, so
+   * the opening message, the thread overlay and the channel list all refetch
+   * together and a failure surfaces as one toast rather than a half-drawn card.
+   */
+  async function handleCreateThread(input: {
+    title: string;
+    body: string;
+    toUserId: string;
+  }) {
+    if (!selected) return;
+    await runThreadMutation(
+      () => createChannelThread(selected.id, input, workspaceId),
+      "Couldn't open the thread"
+    );
   }
 
   async function handleCloseThread(
@@ -471,6 +500,7 @@ export function ChannelsView({
           trustBusyIds={trustBusyIds}
           consentBusyIds={consentBusyIds}
           onSend={handleSend}
+          onCreateThread={handleCreateThread}
           onCloseThread={handleCloseThread}
           onReopenThread={handleReopenThread}
           onInvite={() => setInviteOpen(true)}

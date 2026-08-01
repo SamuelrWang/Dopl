@@ -185,6 +185,125 @@ const textOf = (res) => res.content.map((c) => c.text).join("\n");
         (0, vitest_1.expect)(textOf(res)).not.toContain("they name different people");
     });
 });
+(0, vitest_1.describe)('op="post" — to_agents (the multi-address) and intent', () => {
+    (0, vitest_1.it)("sends EVERY addressed agent as ids, in the caller's order, and names them all", async () => {
+        // ORDER IS LOAD-BEARING: the server stamps the FIRST agent's owner as
+        // `to_user_id` and mirrors the first id into the compat scalar
+        // `metadata.to_agent_id` (service-writes-agents.ts). Sorting or set-ifying
+        // here would silently re-point which machine the message is delivered to.
+        const client = stubClient();
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "work together on X", {
+            toAgents: ["@Onyx", "quartz"],
+        });
+        const post = client.postChannelMessage;
+        const [, input] = post.mock.calls[0];
+        (0, vitest_1.expect)(input.toAgents).toEqual(["agent-2", "agent-1"]);
+        // The compat scalar still names the head, so nothing about the single-agent
+        // wire had to change for the multi case to exist.
+        (0, vitest_1.expect)(input.toAgent).toBe("agent-2");
+        const text = textOf(res);
+        (0, vitest_1.expect)(text).toContain("addressed to 2 agents `onyx` (`agent-2`), `quartz` (`agent-1`)");
+    });
+    (0, vitest_1.it)("a ONE-agent to_agents sends the same request a to_agent always did", async () => {
+        // No `toAgents` on the wire at all for a single address: the server treats
+        // `toAgent` as a one-element list, so a one-agent post keeps the exact shape
+        // it has had, and the result line keeps saying "agent", not "1 agents".
+        const client = stubClient();
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "take this", { toAgents: ["onyx"] });
+        const post = client.postChannelMessage;
+        const [, input] = post.mock.calls[0];
+        (0, vitest_1.expect)(input.toAgent).toBe("agent-2");
+        (0, vitest_1.expect)(input.toAgents).toBeUndefined();
+        (0, vitest_1.expect)(textOf(res)).toContain("addressed to agent `onyx` (`agent-2`)");
+    });
+    (0, vitest_1.it)("merges `to_agent` with `to_agents` and collapses a duplicate to ONE address", async () => {
+        const client = stubClient();
+        await (0, channel_ops_write_1.opPost)(client, "general", "both of you", {
+            toAgent: "quartz",
+            toAgents: ["agent-1", "onyx"],
+        });
+        const post = client.postChannelMessage;
+        const [, input] = post.mock.calls[0];
+        // `quartz` and `agent-1` are the same row — one address, not two — and the
+        // dedupe is by RESOLVED ID, so a handle and an id collapse.
+        (0, vitest_1.expect)(input.toAgents).toEqual(["agent-1", "agent-2"]);
+    });
+    (0, vitest_1.it)("ALL OR NOTHING: one unknown ref refuses the whole post before it is sent", async () => {
+        // A partial address is the worse failure by far: the caller believes N
+        // machines are working and fewer are, and nothing in the result says which.
+        const client = stubClient();
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "both of you", {
+            toAgents: ["onyx", "topaz"],
+        });
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        (0, vitest_1.expect)(textOf(res)).toContain("No agent `topaz` in this channel");
+        (0, vitest_1.expect)(client.postChannelMessage).not.toHaveBeenCalled();
+    });
+    (0, vitest_1.it)("a multi-address tells the sender to expect ONE thread, with the derived key", async () => {
+        const res = await (0, channel_ops_write_1.opPost)(stubClient(), "general", "work together", {
+            toAgents: ["onyx", "quartz"],
+        });
+        const text = textOf(res);
+        (0, vitest_1.expect)(text).toContain("ADDRESSED 2 AGENTS");
+        (0, vitest_1.expect)(text).toContain("reached on ITS OWN owner's machine, separately");
+        (0, vitest_1.expect)(text).toContain('client_msg_id="thread-open-chan-1-12"');
+        (0, vitest_1.expect)(text).toContain("expect ONE thread back, not 2");
+    });
+    (0, vitest_1.it)("carries `intent` through to the client, and stamps nothing when it is absent", async () => {
+        const client = stubClient();
+        await (0, channel_ops_write_1.opPost)(client, "general", "sounds good", { intent: "chat" });
+        await (0, channel_ops_write_1.opPost)(client, "general", "please do X", {});
+        const post = client.postChannelMessage;
+        (0, vitest_1.expect)(post.mock.calls[0][1].intent).toBe("chat");
+        // ABSENT, not "request": an omitted intent stamps no metadata key at all
+        // server-side, so an existing caller's wire is unchanged.
+        (0, vitest_1.expect)(post.mock.calls[1][1].intent).toBeUndefined();
+    });
+    (0, vitest_1.it)("a CHAT post is not told to re-post with `to` — it is unaddressed on purpose", async () => {
+        // `unaddressedPostNote`'s remedy is "re-post it with to=<one member>", which
+        // is exactly what an intent="chat" caller decided against. Rendering it here
+        // would talk every deliberate chat message into becoming a request.
+        const res = await (0, channel_ops_write_1.opPost)(stubClient(), "general", "morning all", {
+            intent: "chat",
+        });
+        const text = textOf(res);
+        (0, vitest_1.expect)(text).toContain("CHAT — you posted this as `intent`=\"chat\"");
+        (0, vitest_1.expect)(text).toContain("NOT a delivery failure to repair");
+        (0, vitest_1.expect)(text).not.toContain("NOT ADDRESSED —");
+    });
+    (0, vitest_1.it)("CHAT plus an address is refused BEFORE anything is sent", async () => {
+        for (const addressed of [
+            { to: "bob@x.com" },
+            { toAgent: "onyx" },
+            { toAgents: ["onyx"] },
+        ]) {
+            const client = stubClient();
+            const res = await (0, channel_ops_write_1.opPost)(client, "general", "hi", {
+                intent: "chat",
+                ...addressed,
+            });
+            (0, vitest_1.expect)(res.isError).toBe(true);
+            (0, vitest_1.expect)(textOf(res)).toContain("cannot be addressed — nothing was sent");
+            (0, vitest_1.expect)(client.postChannelMessage).not.toHaveBeenCalled();
+            // Not even a roster read: a contradictory post has nothing to resolve.
+            (0, vitest_1.expect)(client.listChannelAgents).not.toHaveBeenCalled();
+        }
+    });
+    (0, vitest_1.it)("the route's CHANNEL_CHAT_ADDRESSED 400 answers with the RULE, not with 'unrecognized'", async () => {
+        // Unreachable while the local guard holds — classified anyway, because
+        // "unreachable" is the assumption the status-only branch this replaced was
+        // built on. Reaching it means the tool and the route disagree, and the
+        // caller still needs the rule rather than an opaque 400.
+        const client = stubClient({
+            postChannelMessage: vitest_1.vi.fn(async () => {
+                throw apiError(400, "CHANNEL_CHAT_ADDRESSED");
+            }),
+        });
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "hi", {});
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        (0, vitest_1.expect)(textOf(res)).toContain('A message with `intent`="chat" cannot be addressed');
+    });
+});
 (0, vitest_1.describe)('op="create_thread" — participants (the breakout room)', () => {
     const created = {
         thread: { id: "thread-1", title: "Ship it", mode: "interactive" },

@@ -39,12 +39,19 @@ import {
   formatThreadDetail,
   formatThreadLine,
 } from "./channel-render";
+// Whether anything in a page names an AGENT — the predicate that keeps the
+// roster read off the hot path (BLOCKER-3).
+import { anyAgentAddressed } from "./channel-render-agents";
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 import { rosterAddressingRule } from "./channel-addressing";
 // Breakout-room membership: the set a thread read now carries, and the handles
 // that name the agents in it. Both fail soft.
-import { agentNamesById, participantLines } from "./channel-agent-refs";
+import {
+  agentAddressIndex,
+  agentNamesById,
+  participantLines,
+} from "./channel-agent-refs";
 
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
@@ -141,7 +148,15 @@ export async function opRead(
     // caveat placed under them is read after the injected line it warns about.
     `${UNTRUSTED_BODY_HEADER}\n`,
   ];
-  lines.push(...formatMessages(messages, ref, selfUserId));
+  // BLOCKER-3 — the handles for any agents these messages ADDRESS. Fetched
+  // ONLY when something in the page actually names one, so an ordinary
+  // transcript (and the poll loop behind it) pays nothing: this is the hot
+  // path, and the whole reason `read` skips `resolveChannelOr`. Fails soft —
+  // an unreadable roster renders the ids bare, never an error.
+  const agentNames = anyAgentAddressed(messages)
+    ? (await agentAddressIndex(client, ref, selfUserId)).names
+    : undefined;
+  lines.push(...formatMessages(messages, ref, selfUserId, agentNames));
   const lastSeq = messages[messages.length - 1].seq;
   lines.push(
     scope

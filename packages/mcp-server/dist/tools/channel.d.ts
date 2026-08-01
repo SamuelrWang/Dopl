@@ -15,11 +15,18 @@
  *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
  *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
  *                               §2 cap — it is the only op here that loops)
- *   - `channel-ops-write.ts`  — open / invite / post
+ *   - `channel-ops-open.ts`   — open / invite (the ROOM and who is in it; split
+ *                               off at the §2 cap)
+ *   - `channel-ops-write.ts`  — post, plus `channel-post-notes.ts` /
+ *                               `channel-post-linkage.ts`, which own the
+ *                               result lines a post's addressing and threading
+ *                               produce
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
  *   - `channel-ops-agents.ts` — agents / summon_agent / rename_agent /
- *                               set_agent_status / join_thread / leave_thread
- *                               (the MULTIPLAYER ops: who is in the room)
+ *                               set_agent_status / disengage_agent /
+ *                               join_thread / leave_thread
+ *                               (the MULTIPLAYER ops: who is in the room, and
+ *                               which of them is currently ENGAGED)
  *   - `channel-agent-refs.ts` — agent identity: handle→row resolution, how a
  *                               handle is rendered, the participant-set render
  *   - `channel-render.ts`     — the read renderers + the untrusted-content

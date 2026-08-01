@@ -82,12 +82,46 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
 // plain agent bubbles, outside any session. Reserved keys (to_user_id/summary)
 // are stripped server-side, so taskId is the only key we set here.
 async function postResult(entry, m, text, metadata) {
-  const body = {
+  return postWithRetry(entry, {
     body: consent.clampBody(text),
     authorKind: 'agent',
     clientMsgId: `agent-${entry.channel.id}-${m.seq}`,
     ...(metadata ? { metadata } : {}),
-  };
+  });
+}
+
+// D2 — THE AGENT'S OWN VOICE. A message this machine posts on behalf of one of the
+// operator's `channel_agents` rows: the summon greeting today (session-greeting.js), and
+// anything else the desktop itself has to say AS a named agent.
+//
+// `authorAgentId` is a TOP-LEVEL wire field, never a metadata key: the server strips
+// `metadata.author_agent_id` unconditionally and re-stamps it only from the validated
+// top-level value (service-writes-metadata.resolvePostMetadata), and the validation is
+// ownership — posting as an agent the caller does not own is a 403
+// (service-writes-agents.resolveAgentAddressing). This machine owns the row it summons,
+// and the fetch carries that operator's own cookies, so the claim is true by construction.
+//
+// `toUserId` is normally ABSENT: an unaddressed agent post is what keeps the loop brake
+// armed (targeting.classify). It is passed only where the server would otherwise address
+// the message for us — see session-greeting.directAddressee.
+//
+// The caller owns the `clientMsgId`, because the idempotency unit here is neither the
+// message nor the thread: for a greeting it is (channel, agent, row stamp).
+async function postAgentMessage(entry, a) {
+  return postWithRetry(entry, {
+    body: consent.clampBody(a && a.text),
+    authorKind: 'agent',
+    authorAgentId: a && a.agentId,
+    clientMsgId: a && a.clientMsgId,
+    ...(a && a.toUserId ? { toUserId: a.toUserId } : {}),
+    ...(a && a.metadata ? { metadata: a.metadata } : {}),
+  });
+}
+
+// M5a: bounded retry with backoff, shared by both agent-authored writers. The caller's
+// `clientMsgId` is what makes it safe — the server dedupes, so a retry can never
+// double-post. Returns true only on a confirmed post; never throws.
+async function postWithRetry(entry, body) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await io.apiFetch(`/api/channels/${entry.channel.id}/messages`, {
@@ -119,4 +153,4 @@ function notifyLocal(title, body) {
   } catch (_) { /* best-effort */ }
 }
 
-module.exports = { postTaskEvent, postResult, notifyLocal };
+module.exports = { postTaskEvent, postResult, postAgentMessage, notifyLocal };

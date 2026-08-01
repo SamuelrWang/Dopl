@@ -24,7 +24,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opInvite, opOpen, opPost } from "./channel-ops-write";
+import { opInvite, opOpen } from "./channel-ops-open";
+import { opPost } from "./channel-ops-write";
 import {
   opCloseThread,
   opCreateThread,

@@ -4,13 +4,12 @@
 // side-effect-free effect descriptors. v2.0 added the CONSENT REFLOW (item 8: a pre-consent window
 // running NO agent work until Accept, then ADOPTED by launchResponderSession) and REOPEN (item 10:
 // live windows hide-on-close + tray reopen; render-process-gone is the crash signal). Renderer->main
-// IPC lives in session-ipc.js (§O-8). SEAM: never imports electron.BrowserWindow (an injected factory
-// creates windows); reads electron only for Notification. SECURITY: settingSources:[] always, so the
+// IPC lives in session-ipc.js (§O-8). SEAM: this file imports NO electron at all — an injected
+// factory creates windows and session-shell.js owns the rest of the window plumbing. SECURITY: settingSources:[] always, so the
 // global allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
 // object (never logged, never on argv, never on disk since C1).
 
 const crypto = require('crypto');
-const { Notification } = require('electron');
 const { diag } = require('./diag');
 const io = require('./session-io');
 const store = require('./session-store');
@@ -26,11 +25,10 @@ const sessionQuery = require('./session-query'); // §3 split: SDK options + the
 const { buildSdkOptions, startQuery, consume } = sessionQuery;
 const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
-const channelDirs = require('./channel-dirs');
-const replay = require('./session-replay');
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
 const sessionHistory = require('./session-history'); // v2.5 D3: reopened-shell history
 const sessionTeam = require('./session-team'); // D2: summoned, room-bound TEAM sessions
+const sessionShell = require('./session-shell'); // §2 split: the electron window plumbing
 
 // settings.js owns the window-mode switch + caps; required defensively so the engine still
 // loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
@@ -72,10 +70,14 @@ sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: de
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 sessionHistory.bind({ emit });
-// D2: the TEAM lane (summon -> a room-bound parked shell, and the pair/room feed predicate). Same
-// injection discipline as session-park / session-gate — it gets the engine's private registry and
-// its single construction site, and requires nothing back.
+// D2: the TEAM lane (a summon greets the CHANNEL and opens NO window; a later wake opens the
+// room-bound parked shell, and the pair/room feed predicate). Same injection discipline as
+// session-park / session-gate — it gets the engine's private registry and its single
+// construction site, and requires nothing back.
 sessionTeam.bind({ sessions, startSession, getSdk, emit, windowModeEnabled, atWindowCap: sessionPark.atCapAfterEvict, windowFactoryReady: () => !!windowFactory, getSelfId: () => selfUserId });
+// §2 split: the electron window plumbing (replay wiring, hide-on-close, the crash signal, the
+// folder label). It gets `emit` rather than owning it — the RESHOW rule is session policy.
+sessionShell.bind({ dispatch, refreshTray, emit });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
 sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell });
 
@@ -162,16 +164,6 @@ function emitQuiet(s, payload) {
   if (!s.win || s.win.isDestroyed()) return;
   s.replay.deliver(payload);
 }
-function safeSend(s, payload) {
-  try { s.win.webContents.send('session:event', payload); }
-  catch (err) { diag('session-engine: send failed', err && err.message); }
-}
-
-// Item 5/7: the REAL resolved folder LABEL (short-form, never the abs path §H-9).
-function emitFolder(s) {
-  try { emit(s, { type: 'folder', label: channelDirs.resolvedDirLabel(s.channelId) }); } catch (_) { /* best effort */ }
-}
-
 function scheduleIdle(s) {
   if (s.idleTimer) clearTimeout(s.idleTimer);
   s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: 'idle_timeout' }); }, nextIdleMs(s.state));
@@ -220,27 +212,6 @@ function settle(s, outcome) {
   sessions.delete(s.key);
   if (s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
   refreshTray();
-}
-
-function bindWindow(s) {
-  const wc = s.win.webContents;
-  // Item 3: the replay owns the transcript ring + sent cursor; a reload (did-start-loading rewinds,
-  // did-finish-load re-sends) is NEITHER close nor crash below. C5: `init` is its sticky head.
-  s.replay = replay.createReplay(wc, (p) => safeSend(s, p));
-  wc.on('did-start-loading', s.replay.onReload);
-  wc.on('did-finish-load', s.replay.onLoad);
-  if (!wc.isLoading()) s.replay.onLoad();
-  // Item 10: hide-on-close keeps a closed LIVE window's renderer + transcript for a tray reopen (destroyed only on settle); render-process-gone is the crash signal.
-  s.win.on('close', (e) => {
-    // Hide for a tray Reopen, but never veto during app Quit (or it can't exit).
-    if (!s.settled && !require('electron').app.isQuitting) {
-      e.preventDefault();
-      s.win.hide();
-      s.windowHidden = true;
-      refreshTray();
-    }
-  });
-  wc.on('render-process-gone', () => { if (!s.settled) dispatch(s, { type: 'crash' }); });
 }
 
 function getSessionBySender(sender) { // renderer->main resolution for session-ipc
@@ -350,8 +321,8 @@ async function startSession(spec, sdk) {
     diag('session-engine: window factory failed', err && err.message);
     return null;
   }
-  bindWindow(s);
-  emitFolder(s);
+  sessionShell.bindWindow(s);
+  sessionShell.emitFolder(s);
   emit(s, { type: 'modes', tool: state.toolMode, message: state.messageMode }); // v3.1: the header must state the PRESET posture, not the defaults
   // Item 1/5/6 + C5: avatars reach the renderer ONLY as `avatars` events (the replay ring splits a warm one off `init`).
   s.selfAvatar = avatarCache.cachedForUser(selfUserId);
@@ -485,7 +456,8 @@ module.exports = {
   launchRequesterSession,
   hasLiveSession,
   counterpartyFor,
-  summonTeamSession: sessionTeam.summon, // D2 — my own /new-agent row becomes a room-bound shell
+  summonTeamSession: sessionTeam.summon, // D2 — /new-agent GREETS the channel; it opens no window
+  wakeTeamSession: sessionTeam.ensureSession, // D2 — being addressed is what opens the shell
   acceptsInboundFrom: sessionTeam.acceptsInboundFrom, // D2 — the pair fence vs the room binding
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell

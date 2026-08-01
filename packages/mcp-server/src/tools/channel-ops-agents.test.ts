@@ -1,19 +1,32 @@
 /**
- * THE MULTIPLAYER OPS — `dopl_channel` agents / summon_agent / rename_agent /
- * set_agent_status / join_thread / leave_thread.
+ * THE AGENT ROW — `dopl_channel` agents / summon_agent / rename_agent /
+ * set_agent_status / disengage_agent.
  *
  * Two things are pinned here, and the second is a security property:
  *
  *  1. WHAT EACH OP DOES. A handle resolves to a row of THIS channel (so
  *     `rename_agent` sends an agent ID even though the caller typed `@quartz`),
- *     a join sends the right `{kind, id}` pair, and every refusal says what did
- *     NOT happen — an agent that reads "nothing changed" does not retry blind.
+ *     and every refusal says what did NOT happen — an agent that reads "nothing
+ *     changed" does not retry blind. The refusals are also not
+ *     interchangeable: rename/park is OWNER-ONLY, disengage is
+ *     OWNER-OR-ENGAGER, and borrowing one line for the other op talks a caller
+ *     out of the one write they are entitled to make.
  *  2. NARRATION. An agent HANDLE is member-typed and an agent's OWNER NAME is
  *     `profiles.display_name`, which nothing in the product validates. Both
  *     land in lines this tool wrote, outside any untrusted-content framing, so
  *     both go through the neutralizer — and NO handle is ever rendered without
  *     its immutable id, because the handle is the owner's claim and the id is
  *     the server's record.
+ *
+ * THE OTHER HALF: `join_thread` / `leave_thread` are in
+ * `channel-ops-participants.test.ts`, split out of here at the §2 500-line cap.
+ * The seam is the row being written: everything below mutates the AGENT row
+ * (`channel_agents`, via `createChannelAgent` / `updateChannelAgent`) under the
+ * owner rule, while join/leave mutate the PARTICIPANT SET
+ * (`channel_task_participants`, via `addThreadParticipant` /
+ * `removeThreadParticipant`) under the thread-curation rule — a different
+ * table, a different authority, and a 403 that means something else. The
+ * harness both halves need is `agent-ops-fixtures.ts`.
  *
  * The forgery payload and its assertions are the SHARED ones
  * (`narration-fixtures.ts`) — a private copy is how an assertion drifts into
@@ -22,11 +35,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient } from "@dopl/client";
 import {
   opAgents,
-  opJoinThread,
-  opLeaveThread,
+  opDisengageAgent,
   opRenameAgent,
   opSetAgentStatus,
   opSummonAgent,
@@ -36,44 +47,7 @@ import {
   expectContained,
   expectNoForgedStructure,
 } from "./narration-fixtures";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-const QUARTZ = {
-  id: "agent-1",
-  channelId: "chan-1",
-  workspaceId: "ws-1",
-  ownerUserId: "u-me",
-  name: "quartz",
-  status: "active",
-  createdAt: "2026-07-31T00:00:00Z",
-  updatedAt: "2026-07-31T00:00:00Z",
-};
-
-const ONYX = { ...QUARTZ, id: "agent-2", ownerUserId: "u-bob", name: "onyx", status: "parked" };
-
-const BOB = { userId: "u-bob", email: "bob@x.com", displayName: "Bob", status: "active" };
-
-function stubClient(overrides: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    listChannelMembers: vi.fn(async () => [
-      { userId: "u-me", displayName: "Me", role: "owner" },
-      { userId: "u-bob", displayName: "Bob", role: "member" },
-    ]),
-    listChannelAgents: vi.fn(async () => [QUARTZ, ONYX]),
-    listWorkspaceMembers: vi.fn(async () => [BOB]),
-    ...overrides,
-  } as unknown as DoplClient;
-}
-
-/** An HTTP-shaped rejection, duck-typed exactly like @dopl/client's errors. */
-function apiError(status: number, code?: string): unknown {
-  return Object.assign(new Error(`HTTP ${status}`), { status, code });
-}
-
-const textOf = async (res: Promise<{ content: Array<{ text: string }> }>) =>
-  (await res).content.map((c) => c.text).join("\n");
+import { ONYX, QUARTZ, apiError, stubClient, textOf } from "./agent-ops-fixtures";
 
 describe('op="agents" — the room\'s roster', () => {
   it("names every agent by handle AND id, with status and owner", async () => {
@@ -242,186 +216,113 @@ describe('op="rename_agent" / op="set_agent_status" — owner-only writes', () =
   });
 });
 
-describe('op="join_thread" / op="leave_thread" — breakout-room membership', () => {
-  it("an AGENT participant is sent as {kind:'agent', id}", async () => {
-    const addThreadParticipant = vi.fn(async () => ({
-      id: "p-1",
-      threadId: "thread-1",
-      kind: "agent",
-      userId: null,
-      agentId: "agent-1",
+describe('op="disengage_agent" — ending an engagement', () => {
+  it("resolves a HANDLE to the agent ID and sends the payload-free disengage op", async () => {
+    const updateChannelAgent = vi.fn(async () => ({
+      ...QUARTZ,
+      engagedAt: null,
+      engagedBy: null,
     }));
-    const client = stubClient({ addThreadParticipant });
+    const client = stubClient({ updateChannelAgent });
 
-    const text = await textOf(
-      opJoinThread(client, "general", "thread-1", { agent: "quartz" }),
-    );
+    const text = await textOf(opDisengageAgent(client, "general", "@Quartz"));
 
-    expect(addThreadParticipant.mock.calls[0]).toEqual([
+    expect(updateChannelAgent.mock.calls[0]).toEqual([
       "chan-1",
-      "thread-1",
-      { kind: "agent", id: "agent-1" },
+      "agent-1",
+      { op: "disengage" },
     ]);
-    expect(text).toContain("Added `quartz` (`agent-1`) to thread `thread-1`");
-    expect(text).toContain("BREAKOUT ROOM");
-    // The law holds inside a breakout room too.
-    expect(text).toContain("acts only when ADDRESSED");
+    expect(text).toContain("Disengaged `quartz` (`agent-1`)");
+    // The STATE it leaves behind, in the terms the law uses — an agent told only
+    // "disengaged" does not know whether it may still answer anything.
+    expect(text).toContain("IDLE again");
+    expect(text).toContain('acts only on messages that ADDRESS it (to_agent="<handle>")');
   });
 
-  it("a MEMBER participant is sent as {kind:'user', id} and is told NOBODY was notified", async () => {
-    // B3. `joinThreadParticipant` (src/features/channels/server/
-    // service-participants.ts) inserts ONE row: it posts no message, and
-    // `channel_task_participants` is deliberately NOT in the realtime
-    // publication, so nothing reaches the person on any surface. This line used
-    // to say "Admitting a PERSON notifies them", under a test named "notifies,
-    // never spawns" — a promise nothing in the product keeps.
-    const addThreadParticipant = vi.fn(async () => ({
-      id: "p-2",
-      threadId: "thread-1",
-      kind: "user",
-      userId: "u-bob",
-      agentId: null,
-    }));
-    const client = stubClient({ addThreadParticipant });
-
-    const text = await textOf(
-      opJoinThread(client, "general", "thread-1", { member: "bob@x.com" }),
-    );
-
-    expect(addThreadParticipant.mock.calls[0]).toEqual([
-      "chan-1",
-      "thread-1",
-      { kind: "user", id: "u-bob" },
-    ]);
-    expect(text).toContain("notifies NOBODY");
-    expect(text).not.toContain("notifies them");
-    // The true half survives, and the remedy is the one thing that DOES reach
-    // a person: an addressed post in the thread.
-    expect(text).toContain("never spawns their agent");
-    expect(text).toContain('thread="thread-1"');
-    expect(text).toContain('to="<them>"');
-  });
-
-  it("an AGENT participant is told it must claim itself with as_agent to post", async () => {
-    // S1. `mayWriteThread` lets an agent participant write only when the call
-    // supplied `authorAgentId`, i.e. `as_agent`. Admitting the agent is half
-    // the job; the other half is a param nothing used to mention.
+  it("says it is IDEMPOTENT, so a no-op read is not mistaken for evidence of an exchange", async () => {
     const client = stubClient({
-      addThreadParticipant: vi.fn(async () => ({
-        id: "p-1",
-        threadId: "thread-1",
-        kind: "agent",
-        userId: null,
-        agentId: "agent-1",
-      })),
+      updateChannelAgent: vi.fn(async () => ({ ...QUARTZ, engagedAt: null, engagedBy: null })),
     });
 
-    const text = await textOf(
-      opJoinThread(client, "general", "thread-1", { agent: "quartz" }),
-    );
+    const text = await textOf(opDisengageAgent(client, "general", "quartz"));
 
-    expect(text).toContain("as_agent");
-    expect(text).toContain("the server checks the set against the agent a post CLAIMS");
+    expect(text).toContain("Idempotent");
   });
 
-  it("a CURATION 403 does not tell the caller they left the channel", async () => {
-    // The curation rule (service-participants.ts) refuses anyone who is not the
-    // thread's creator, its target, or an existing user participant —
-    // TaskForbiddenError → 403 TASK_FORBIDDEN. Mapping every 403 to "you are
-    // not a member of that channel" turned an ordinary refusal into an alarming
-    // false claim about the caller's own membership.
+  it("never offers the caller a RE-ENGAGE — its own posts cannot cause one", async () => {
+    // THE FALSE SENTENCE THIS REPLACES, and it was pinned HERE, by this suite:
+    // "To pick the exchange back up, address it by handle again — that
+    // re-engages it." `recordAgentEngagement`
+    // (src/features/channels/server/service-writes-agents.ts) opens with
+    // `if (ctx.source === "agent") return;` — engagement needs a HUMAN
+    // CREDENTIAL, since `authorKind` is caller-assertable and `ctx.source` is
+    // derived from the token — and every post made through this tool carries an
+    // agent token. So the remedy the op handed its reader was an effect the
+    // reader cannot produce: the tag would deliver, the agent would answer that
+    // one message, and it would be idle again on the next turn with nothing
+    // saying why. A test that pins a sentence is only as good as the sentence.
     const client = stubClient({
-      addThreadParticipant: vi.fn(async () => {
-        throw apiError(403, "TASK_FORBIDDEN");
+      updateChannelAgent: vi.fn(async () => ({ ...QUARTZ, engagedAt: null, engagedBy: null })),
+    });
+
+    const text = await textOf(opDisengageAgent(client, "general", "quartz"));
+
+    expect(text).not.toContain("re-engages it");
+    expect(text).toContain("YOU CANNOT RE-ENGAGE IT");
+    expect(text).toContain("engagement is stamped only for a HUMAN author");
+    // …and it names the mechanism the reader CAN cause instead of leaving it
+    // with a denial and no route: a thread's participant set is sustained
+    // attention that never goes through engagement at all.
+    expect(text).toContain('op="create_thread"');
+    expect(text).toContain('participants=["agent:<its handle>"]');
+  });
+
+  it("a 403 states the OWNER-OR-ENGAGER rule, never the owner-only one", async () => {
+    // THE REFUSAL THIS OP MAY NOT BORROW. `agentWriteError`'s line ("an agent
+    // belongs to the member who summoned it, and only that member may rename or
+    // park it") is true of rename/park and FALSE here: the server also allows
+    // the human recorded in `engaged_by` (service-agents.ts#disengageAgent). An
+    // engager told they must own the agent stops asking for the one agent write
+    // they are entitled to make.
+    const client = stubClient({
+      updateChannelAgent: vi.fn(async () => {
+        throw apiError(403, "CHANNEL_AGENT_FORBIDDEN");
       }),
     });
 
-    const res = await opJoinThread(client, "general", "thread-1", { agent: "quartz" });
+    const res = await opDisengageAgent(client, "general", "onyx");
 
     expect(res.isError).toBe(true);
     const text = res.content[0].text;
-    expect(text).not.toContain("you are not a member");
-    expect(text).toContain("curated by the member who OPENED that thread");
-    expect(text).toContain("have NOT been removed");
-    // And it must not send the caller off to manufacture a duplicate room.
-    expect(text).not.toContain('op="create_thread"');
+    expect(text).toContain("SUMMONED it or by the human who ENGAGED it");
+    expect(text).toContain("nothing changed");
+    expect(text).not.toContain("only that member may rename or park it");
   });
 
-  it("a CHANNEL 403 still says the caller is not a member", async () => {
-    const client = stubClient({
-      addThreadParticipant: vi.fn(async () => {
-        throw apiError(403, "CHANNEL_FORBIDDEN");
-      }),
-    });
-
-    const res = await opJoinThread(client, "general", "thread-1", { agent: "quartz" });
-
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("you are not a member of that channel");
-  });
-
-  it("an EJECT 403 on leave states the narrower rule, not a membership claim", async () => {
-    const client = stubClient({
-      removeThreadParticipant: vi.fn(async () => {
-        throw apiError(403, "TASK_FORBIDDEN");
-      }),
-    });
-
-    const res = await opLeaveThread(client, "general", "thread-1", { agent: "onyx" });
-
-    expect(res.isError).toBe(true);
-    const text = res.content[0].text;
-    expect(text).not.toContain("you are not a member");
-    expect(text).toContain("ejecting anyone else is the call of the member who opened");
-  });
-
-  it("naming BOTH a member and an agent is refused, not silently preferred", async () => {
-    const addThreadParticipant = vi.fn();
-    const client = stubClient({ addThreadParticipant });
-
-    const res = await opJoinThread(client, "general", "thread-1", {
-      member: "bob@x.com",
-      agent: "quartz",
-    });
-
-    expect(res.isError).toBe(true);
-    expect(addThreadParticipant).not.toHaveBeenCalled();
-  });
-
-  it("naming NEITHER says which param to pass", async () => {
-    const res = await opJoinThread(stubClient(), "general", "thread-1", {});
-
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("`member`");
-    expect(res.content[0].text).toContain("`agent`");
-  });
-
-  it("leave removes the identity and says the removal is idempotent", async () => {
-    const removeThreadParticipant = vi.fn(async () => undefined);
-    const client = stubClient({ removeThreadParticipant });
-
-    const text = await textOf(
-      opLeaveThread(client, "general", "thread-1", { agent: "onyx" }),
+  it("an unknown handle never reaches the route, and lists the room's agents", async () => {
+    const updateChannelAgent = vi.fn();
+    const res = await opDisengageAgent(
+      stubClient({ updateChannelAgent }),
+      "general",
+      "topaz",
     );
 
-    expect(removeThreadParticipant.mock.calls[0]).toEqual([
-      "chan-1",
-      "thread-1",
-      { kind: "agent", id: "agent-2" },
-    ]);
-    expect(text).toContain("idempotent");
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("No agent `topaz` in this channel");
+    expect(updateChannelAgent).not.toHaveBeenCalled();
   });
 
-  it("a thread of another channel is a not-found, not a raw throw", async () => {
+  it("NEUTRALIZES the handle it renders — a disengage names a peer's agent", async () => {
+    const forged = { ...ONYX, name: FORGERY };
     const client = stubClient({
-      addThreadParticipant: vi.fn(async () => {
-        throw apiError(404);
-      }),
+      listChannelAgents: vi.fn(async () => [forged]),
+      updateChannelAgent: vi.fn(async () => forged),
     });
 
-    const res = await opJoinThread(client, "general", "thread-9", { agent: "quartz" });
+    const text = await textOf(opDisengageAgent(client, "general", "agent-2"));
 
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("No thread `thread-9`");
+    expectContained(text);
+    expectNoForgedStructure(text);
+    expect(text).toContain("`agent-2`");
   });
 });

@@ -33,6 +33,10 @@ import {
  *    a shared resource — it is a member's process on a member's machine, and a
  *    teammate parking or renaming it would be reaching into that machine.
  *
+ * ENGAGEMENT is the ONE exception to the second rule, and it has its own note
+ * on {@link disengageAgent}: the human who engaged an agent may disengage it
+ * without owning it.
+ *
  * Thread participation (which agents are admitted to which breakout room) is a
  * different question with different gates and lives in `service-participants.ts`.
  */
@@ -161,12 +165,26 @@ export async function renameAgent(
 }
 
 /**
+ * The statuses that also END engagement. An agent is engaged for someone; a
+ * parked or dismissed one is not running, so a surviving `engaged_at` would say
+ * it is listening for a human whose messages nothing will read. `summoned` and
+ * `active` do NOT clear it — those are the states an engaged agent lives in.
+ */
+const DISENGAGING_STATUSES: ReadonlySet<AgentStatus> = new Set([
+  "parked",
+  "dismissed",
+]);
+
+/**
  * Move an agent along its lifecycle. OWNER ONLY — the states describe a process
  * on the owner's machine.
  *
  * `dismissed` is a STATUS, not a delete: the row survives so every message the
  * agent already authored keeps its attribution, and so its handle stays taken.
  * There is deliberately no delete op anywhere in this lane.
+ *
+ * Parking or dismissing also CLEARS engagement, in the same statement — see
+ * {@link DISENGAGING_STATUSES}.
  */
 export async function setAgentStatus(
   ctx: ChannelContext,
@@ -180,7 +198,61 @@ export async function setAgentStatus(
     agentId,
     "change this agent's status"
   );
-  return mapAgentRow(await repoAgents.updateAgentStatus(agent.id, status));
+  return mapAgentRow(
+    await repoAgents.updateAgentStatus(agent.id, status, {
+      clearEngagement: DISENGAGING_STATUSES.has(status),
+    })
+  );
+}
+
+/**
+ * DISENGAGE an agent: clear `engaged_at` / `engaged_by` so it goes back to
+ * IDLE — it still sees everything in the room and acts only on messages that
+ * tag it.
+ *
+ * WHO MAY. The owner, OR the human recorded in `engaged_by`. This is the one
+ * agent write that is deliberately NOT owner-only, and the asymmetry is the
+ * point: engagement is a relationship between an agent and the person who
+ * addressed it, so the person who created it can end it. Ending an agent's
+ * attention to YOUR messages is not the same act as parking someone else's
+ * process, which stays owner-only. Anyone else is a 403 — an agent's attention
+ * is not a channel-wide setting.
+ *
+ * Idempotent: an already-idle agent clears to the same two nulls and returns
+ * the same row rather than erroring, so a double-tap is not a failure. When it
+ * IS already idle nobody but the owner can call it, which is correct — there is
+ * no engager to inherit the permission from.
+ *
+ * WHY THE GATE IS VISIBILITY + IDENTITY, NOT MEMBERSHIP. It matches every other
+ * agent write in this file: {@link renameAgent} and {@link setAgentStatus} go
+ * through {@link loadOwnedAgent}, which is `loadVisibleChannel` plus ownership
+ * and never re-checks membership either. (`createAgent` is the one that does,
+ * and must — it ADDS to the room.) Adding a membership check here would make
+ * disengaging STRICTER than parking the same agent, which is the heavier act,
+ * and it would take the ability away from precisely the person most likely to
+ * need it: someone whose engagement outlived their membership. `removeMember`
+ * now sweeps those on the way out (`service-writes-members.ts`), so the case
+ * should not arise going forward — but rows engaged before that landed still
+ * exist, and letting their engager clear them is a repair, not a hole. Both
+ * identities are checked against the agent ROW regardless, so visibility alone
+ * grants nothing.
+ */
+export async function disengageAgent(
+  ctx: ChannelContext,
+  ref: string,
+  agentId: string
+): Promise<ChannelAgent> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  const agent = await repoAgents.findAgentById(agentId);
+  if (!agent || agent.channel_id !== channel.id) {
+    throw new ChannelAgentNotFoundError(agentId);
+  }
+  const mayDisengage =
+    agent.owner_user_id === ctx.userId || agent.engaged_by === ctx.userId;
+  if (!mayDisengage) {
+    throw new ChannelAgentForbiddenError("disengage this agent");
+  }
+  return mapAgentRow(await repoAgents.clearAgentEngagement(agent.id));
 }
 
 /**

@@ -91,6 +91,8 @@ function agentRow(overrides: Partial<ChannelAgentRow> = {}): ChannelAgentRow {
     owner_user_id: USER,
     name: "quartz",
     status: "summoned",
+    engaged_at: null,
+    engaged_by: null,
     created_at: "2026-07-31T00:00:00Z",
     updated_at: "2026-07-31T00:00:00Z",
     ...overrides,
@@ -296,9 +298,13 @@ describe("renameAgent / setAgentStatus — owner only", () => {
   it("parks the caller's own agent", async () => {
     const agent = await setAgentStatus(ctx, "room", AGENT_ID, "parked");
 
+    // Parking also ENDS engagement, in the same statement — a stopped process
+    // must not keep reading as "listening for <someone>". Which statuses clear
+    // is pinned in `service-agents-engagement.test.ts`.
     expect(repoAgents.updateAgentStatus).toHaveBeenCalledWith(
       AGENT_ID,
-      "parked"
+      "parked",
+      { clearEngagement: true }
     );
     expect(agent.status).toBe("parked");
   });

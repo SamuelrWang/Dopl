@@ -38,6 +38,10 @@ const channel_render_1 = require("./channel-render");
 // server cannot see. One module decides what may be claimed about it.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 const channel_errors_1 = require("./channel-errors");
+// BLOCKER-1 — the handshake `client_msg_id` is canonicalized against the
+// RESOLVED channel id before it is sent. See that module for why the teeth are
+// a rewrite rather than a refusal.
+const channel_handshake_key_1 = require("./channel-handshake-key");
 /** Fallbacks for peer text that neutralized to nothing — never an empty span. */
 const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
@@ -84,6 +88,17 @@ participants) {
     const member = await (0, channel_shared_1.resolveMemberOr)(client, to);
     if ((0, channel_shared_1.isErr)(member))
         return member;
+    // BLOCKER-1 — the handshake key, anchored on the id the SERVER will parse.
+    // This op resolved slug-or-id one call ago, so it holds the uuid the agent
+    // was told to put here and may not have had; a key built from the slug
+    // derives no participant set and locks the co-addressed agent out of the
+    // thread it was told to join, silently and on the OTHER machine. Refused
+    // only when there is nothing to repair (no `<seq>` tail).
+    const handshake = (0, channel_handshake_key_1.normalizeHandshakeKey)(clientMsgId, ch.id);
+    if (handshake.status === "malformed") {
+        return (0, respond_1.err)((0, channel_handshake_key_1.malformedHandshakeKey)(clientMsgId, ch.id));
+    }
+    const sentMsgId = handshake.status === "ok" ? handshake.key : clientMsgId;
     // Resolved BEFORE the create: a bad participant must not leave a live thread
     // behind. The server seeds its set before the opening post for the same
     // reason — a half-built room would judge its own first message.
@@ -101,7 +116,7 @@ participants) {
             body,
             toUserId: member.userId,
             mode,
-            clientMsgId,
+            clientMsgId: sentMsgId,
             participants: seed.length > 0 ? seed : undefined,
         });
     }
@@ -179,8 +194,16 @@ participants) {
             `BREAKOUT ROOM: ${seed.length} extra participant${seed.length === 1 ? "" : "s"} admitted alongside you and ${member.label}. Its participant set — not the creator/target pair — is now who may post into it; see it with dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}"). Agents in the set still act only when ADDRESSED.`,
         ]
         : [];
+    // BLOCKER-1 — a rewritten key is REPORTED, never silent. An idempotency key
+    // the tool changed under the caller is exactly the kind of helpfulness that
+    // has to be visible: the agent has to mint the same string next turn, and a
+    // silent repair teaches it nothing.
+    const keyNote = handshake.status === "ok" && handshake.rewritten
+        ? [(0, channel_handshake_key_1.rewrittenHandshakeKeyNote)(clientMsgId, handshake.key)]
+        : [];
     return (0, respond_1.ok)([
         `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. Thread every follow-up post with thread="${thread.id}".`,
+        ...keyNote,
         ...breakout,
         ...(0, channel_wake_guidance_1.createThreadReplyLines)(cursor, member.label, runtime, `Keep re-arming while the exchange is alive; ${member.label}'s agent may work for a long stretch before answering. Every ~3 empty holds, check first: dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}") for status, and op="read" for progress milestones. STOP and report to your operator when the thread is closed or failed, or when nothing at all has come from them for ~30+ minutes.`),
     ].join("\n"));

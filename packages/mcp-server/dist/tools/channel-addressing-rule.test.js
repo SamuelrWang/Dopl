@@ -35,6 +35,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const node_fs_1 = require("node:fs");
 const vitest_1 = require("vitest");
 const channel_addressing_1 = require("./channel-addressing");
+const channel_errors_1 = require("./channel-errors");
+const channel_schema_1 = require("./channel-schema");
 const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_write_1 = require("./channel-ops-write");
@@ -92,6 +94,50 @@ function rosterClient(userIds) {
         const declared = /GROUP_CHANNEL_MIN_MEMBERS = (\d+)/.exec(web);
         (0, vitest_1.expect)(declared, "the web constant moved or was renamed").not.toBeNull();
         (0, vitest_1.expect)(Number(declared[1])).toBe(channel_addressing_1.GROUP_CHANNEL_MIN_MEMBERS);
+    });
+    (0, vitest_1.it)("matches the route schema's MAX_ADDRESSED_AGENTS", () => {
+        // Same doctrine, second constant (SHOULD-FIX-4). This one is worse to drift
+        // on than the threshold above: the tool PUBLISHES it as `to_agents.max()`,
+        // so a copy that is one higher than the server's turns the declared surface
+        // into a promise the route refuses.
+        const web = (0, node_fs_1.readFileSync)("../../src/features/channels/schema.ts", "utf8");
+        const declared = /MAX_ADDRESSED_AGENTS = (\d+)/.exec(web);
+        (0, vitest_1.expect)(declared, "the route constant moved or was renamed").not.toBeNull();
+        (0, vitest_1.expect)(Number(declared[1])).toBe(channel_addressing_1.MAX_ADDRESSED_AGENTS);
+    });
+});
+// ── the cap the tool advertised and could not explain ────────────────
+(0, vitest_1.describe)("the agent cap is MERGED, and the surface now says so", () => {
+    (0, vitest_1.it)("publishes the cap on `to_agents` and states that `to_agent` counts too", () => {
+        // THE DEFECT: `to_agents.max(8)` was published with no word about
+        // `to_agent`, while the server caps the DEDUPED MERGE of the two
+        // (`resolveAgentAddressing`). A caller that read the surface literally sent
+        // `to_agent` + eight and got a 400 for a rule nothing had stated.
+        const to_agents = channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.description ?? "";
+        const to_agent = channel_schema_1.CHANNEL_INPUT_SHAPE.to_agent.description ?? "";
+        (0, vitest_1.expect)(to_agents).toContain(`${channel_addressing_1.MAX_ADDRESSED_AGENTS} IN TOTAL`);
+        (0, vitest_1.expect)(to_agents).toContain("`to_agent` INCLUDED");
+        (0, vitest_1.expect)(to_agent).toContain(`${channel_addressing_1.MAX_ADDRESSED_AGENTS} agents in total`);
+        (0, vitest_1.expect)(to_agent).toContain("`to_agent` included");
+    });
+    (0, vitest_1.it)("classifies CHANNEL_TOO_MANY_AGENTS instead of dropping it into `unknown`", () => {
+        // It landed in the arm that says "the server did not name a cause this tool
+        // recognizes" — for a 400 the tool's own published surface provoked.
+        (0, vitest_1.expect)((0, channel_errors_1.classifyBadRequest)({ status: 400, code: "CHANNEL_TOO_MANY_AGENTS" })).toBe("too_many_agents");
+    });
+    (0, vitest_1.it)("explains the merge in the message, not just the number", () => {
+        // "At most eight" alone sends a caller back to count the same eight.
+        (0, vitest_1.expect)(channel_errors_1.AGENT_CAP_NOTE).toContain("in total");
+        (0, vitest_1.expect)(channel_errors_1.AGENT_CAP_NOTE).toContain("merged and deduped");
+        (0, vitest_1.expect)(channel_errors_1.AGENT_CAP_NOTE).toContain("`to_agent` counts as one");
+    });
+    (0, vitest_1.it)("REFUSES `to_agents: []` here, where the route has always refused it", () => {
+        // SHOULD-FIX-5. The route is `.min(1)`; this schema had no minimum, so an
+        // empty list posted a successfully UNADDRESSED message with a "NOT
+        // ADDRESSED" note under it that the caller reads as its own forgotten `to`.
+        (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.safeParse([]).success).toBe(false);
+        (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.safeParse(["quartz"]).success).toBe(true);
+        (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.safeParse(Array.from({ length: channel_addressing_1.MAX_ADDRESSED_AGENTS + 1 }, () => "quartz")).success).toBe(false);
     });
 });
 // ── which thread tags actually route ─────────────────────────────────

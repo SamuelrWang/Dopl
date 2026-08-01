@@ -114,7 +114,7 @@ export function RequestPermissionRowView({
         onChange={(tools) => onChange({ tools })}
         prefix="Tools"
         icon={<Wrench size={12} className="shrink-0" />}
-        ariaLabel="What this session's agent may do"
+        ariaLabel="What this thread's agent may do"
         disabled={busy}
       />
       <SelectMenu<MessageMode>

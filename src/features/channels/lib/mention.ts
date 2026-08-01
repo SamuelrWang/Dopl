@@ -1,17 +1,28 @@
 /**
- * Composer @-MENTION autocomplete — pure query detection, candidate building,
- * and text insertion.
+ * Composer @-MENTION — pure query detection, candidate building, text
+ * insertion, and (at send time) RESOLUTION of the typed handles into the agents
+ * a chat message addresses.
  *
- * v1 SCOPE, stated once so nothing downstream assumes more: a mention inserted
- * here is TEXT. It is what a human or an agent READS in the transcript; it does
- * NOT change how a send routes. Addressing still travels on the composer's
- * existing `toUserId` (the address picker) and nothing here writes it. The
- * server-side resolution of `@handle` → `to_agent_id` lands in a later lane —
- * until then, typing `@quartz` composes a message that says `@quartz`.
+ * TWO HALVES, and the seam between them is the fix for the operator's core
+ * flow. The POPUP half is unchanged and still only writes TEXT: accepting a
+ * candidate inserts `@quartz ` into the draft and touches no addressing state.
+ * The RESOLUTION half ({@link extractMentionedAgents}) runs on the COMPOSED BODY
+ * at send time and is what turns those characters into `toAgents`.
+ *
+ * Resolving from the BODY rather than from popup state is the deliberate
+ * choice: a handle typed straight through without ever opening the popup, one
+ * pasted in, and one picked from the list must all mean the same thing, and a
+ * handle the user DELETED must stop meaning anything. Popup state cannot say
+ * that — it only knows what was accepted, never what survived the next edit.
  */
 
+import { MAX_ADDRESSED_AGENTS } from "../schema";
 import type { AgentStatus, ChannelAgent, ChannelMember } from "../types";
-import { AGENT_STATUS_LABEL, isAddressableAgent } from "./agent-display";
+import {
+  AGENT_STATUS_LABEL,
+  isAddressableAgent,
+  normalizeAgentHandle,
+} from "./agent-display";
 // The human label is shared with the address picker (`channel-display.ts`) so a
 // mention inserts exactly the name the picker shows.
 import { memberLabel } from "./channel-display";
@@ -156,6 +167,98 @@ export function buildMentionCandidates(params: {
     }));
 
   return [...agentRows, ...memberRows].slice(0, MENTION_LIMIT);
+}
+
+/**
+ * A `@handle` token in a composed body. THE WHOLE LEXER, stated as a regex so
+ * there is nothing to guess:
+ *
+ *   - the `@` must start the body or follow whitespace, so `ada@example.com` is
+ *     an email address and not a mention (the same rule the popup's
+ *     {@link findMentionQuery} uses, for the same reason);
+ *   - the handle is the run of `[A-Za-z0-9-]` after it. That charset is exactly
+ *     what {@link AGENT_HANDLE_RE} permits plus uppercase, so any character a
+ *     handle cannot contain ENDS the token — which is how trailing punctuation
+ *     falls off for free: `@quartz,` `@quartz.` `@quartz?` `@quartz's` all lex
+ *     to `quartz`.
+ *
+ * Deliberately NOT a parser. It does not know about markdown emphasis, links,
+ * or block quotes, and it does not need to: an unresolvable token is simply not
+ * a mention, and the composer's helper line shows the operator exactly which
+ * handles resolved before they press Enter.
+ */
+const MENTION_TOKEN_RE = /(?:^|\s)@([A-Za-z0-9-]+)/g;
+
+/**
+ * Backtick-delimited runs, blanked before the lexer sees the body, so
+ * `` `@quartz` `` in a code span does not summon anybody. Cheap on purpose: any
+ * run of backticks to the next run of backticks, which covers inline spans and
+ * fenced blocks alike. An UNCLOSED backtick matches nothing and the mentions
+ * after it still count — the failure direction that keeps a normal sentence
+ * containing one stray backtick working.
+ */
+const CODE_SPAN_RE = /`+[^`]*`+/g;
+
+/**
+ * The agents a composed body ADDRESSES: every `@handle` that names an
+ * addressable agent of this channel, in first-appearance order, deduped, capped
+ * at {@link MAX_ADDRESSED_AGENTS}.
+ *
+ * MATCHED AGAINST THE CURRENT ROSTER, case-folded through
+ * {@link normalizeAgentHandle} — the same fold the server's handle lookup uses
+ * (`lower(name)`), so `@Quartz` and `@quartz` reach the one agent. A token that
+ * matches nothing on the roster is left alone as TEXT: a typo'd handle must
+ * visibly fail to resolve rather than quietly addressing something near it.
+ *
+ * ADDRESSABLE ONLY (`summoned` / `active`), which is the same population the
+ * popup offers and the same predicate that documents why: those are the states
+ * a mention can make ACT. A parked or dismissed agent's handle therefore does
+ * not resolve here even though the SERVER would accept it (it resolves any
+ * status by design, so a handle does not break the instant its owner parks the
+ * session). The divergence is deliberate and one-directional — the web only
+ * ever addresses a subset of what the server allows — and it is visible, since
+ * an unresolved handle drops out of the helper line before the send.
+ *
+ * The cap is the schema's own constant rather than a restated 8: a tenth handle
+ * is dropped on the client so the send still works, instead of building a
+ * payload the server rejects whole.
+ */
+export function extractMentionedAgents(
+  body: string,
+  agents: readonly ChannelAgent[]
+): ChannelAgent[] {
+  const byHandle = new Map<string, ChannelAgent>();
+  for (const agent of agents) {
+    if (!isAddressableAgent(agent)) continue;
+    const handle = normalizeAgentHandle(agent.name);
+    // Handles are unique per channel (case-folded), so a collision can only be
+    // a stale duplicate in the loaded roster. First one wins.
+    if (!byHandle.has(handle)) byHandle.set(handle, agent);
+  }
+  if (byHandle.size === 0) return [];
+
+  const scannable = body.replace(CODE_SPAN_RE, " ");
+  const out: ChannelAgent[] = [];
+  const seen = new Set<string>();
+  for (const match of scannable.matchAll(MENTION_TOKEN_RE)) {
+    // A handle may CONTAIN hyphens but never end in one, so a trailing run is
+    // punctuation (`@quartz-` in "ping @quartz- then wait"), not part of it.
+    const handle = normalizeAgentHandle(match[1].replace(/-+$/, ""));
+    const agent = byHandle.get(handle);
+    if (!agent || seen.has(handle)) continue;
+    seen.add(handle);
+    out.push(agent);
+    if (out.length >= MAX_ADDRESSED_AGENTS) break;
+  }
+  return out;
+}
+
+/** {@link extractMentionedAgents}, as the ids the `toAgents` wire field takes. */
+export function extractMentionedAgentIds(
+  body: string,
+  agents: readonly ChannelAgent[]
+): string[] {
+  return extractMentionedAgents(body, agents).map((agent) => agent.id);
 }
 
 /** The draft after accepting a candidate: `@insert ` replaces the typed token. */

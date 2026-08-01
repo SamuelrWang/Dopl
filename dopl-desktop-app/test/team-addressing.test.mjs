@@ -42,19 +42,20 @@ function extractFn(name) {
   return SRC.slice(start, i);
 }
 
-function extractBlock(begin, end) {
-  const a = SRC.indexOf(begin);
-  const b = SRC.indexOf(end);
-  assert.notEqual(a, -1, `block sentinel ${begin} not found`);
-  assert.ok(b > a, `block sentinel ${end} not found after ${begin}`);
-  return SRC.slice(a, b);
-}
-const LEGACY = extractBlock("// ─── BEGIN LEGACY-THREADS", "// ─── END LEGACY-THREADS");
+// §2 SPLIT (2026-07-31): the LEGACY-THREADS registry classify calls into moved to its own
+// module when targeting.js went past the 500-line cap; classify's body did not change, so only
+// the FILE this block is sliced out of did. It carries module state, hence the whole-block cut.
+const LEGACY_SRC = readFileSync(join(HERE, "..", "main", "legacy-threads.js"), "utf8");
+const LEGACY = LEGACY_SRC.slice(
+  LEGACY_SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
+  LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
+);
+assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 
 const build = () =>
   new Function(
     `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("classify")}\n` +
-      `return { classify };`
+      `return { classify, noteMyLegacyThread, knownLegacyReply };`
   )();
 
 const ME = "me-uuid";
@@ -206,6 +207,44 @@ test("S1: a task-reply in a DM is still claimed BEFORE any of this (no regressio
   assert.equal(classify(reply, entryWith(0, { isDirect: true }), ME), "task-reply");
 });
 
+// ── 3c. `intent: 'chat'` — a post that declared it addresses nobody ──────────────
+// The server has stamped this marker since the composer gained a chat mode; the desktop had
+// ZERO consumers of it. Under chat the server also stamps no `to_user_id` from the DM peer, so
+// an ordinary "sounds good" in a DM fell past every addressed rule into the implicit 2-member
+// rule and spawned an ASSIST session. Two humans talking behaved as if the feature never shipped.
+
+test("CHAT triggers nobody, at any member count and for any author kind", () => {
+  const { classify } = build();
+  const chat = (over = {}) => msg({ metadata: { intent: "chat" }, ...over });
+  assert.equal(classify(chat(), dm(), ME), "fyi", "the implicit 2-member trigger is suppressed");
+  assert.equal(classify(chat(), entryWith(0), ME), "fyi");
+  assert.equal(classify(chat({ authorKind: "agent" }), dm(), ME), "fyi");
+  // Even an ADDRESSED chat post: the server does not manufacture that address in chat mode, so
+  // one that carries it was aimed at an AGENT, and channel-agents.js claims those first.
+  assert.equal(classify(chat({ metadata: { intent: "chat", to_user_id: ME } }), dm(), ME), "fyi");
+  // A non-member sees nothing at all, the same way every other 'fyi' branch answers.
+  assert.equal(classify(chat(), entryWith(0, { isMember: false }), ME), "ignore");
+});
+
+test("CHAT does not suppress the PASSIVE notices, which spawn nothing anyway", () => {
+  const { classify } = build();
+  // The branch sits AFTER the escalation and the two task-reply branches on purpose: those are
+  // banners, so chat has nothing to suppress there, and swallowing them would lose real news.
+  const escalation = msg({
+    authorKind: "agent",
+    metadata: { intent: "chat", to_user_id: ME, author_agent_id: AGENT_ROW },
+  });
+  assert.equal(classify(escalation, entryWith(1, { memberCount: 5 }), ME), "agent-escalation");
+});
+
+test("only the EXACT string suppresses; anything else is today's behaviour", () => {
+  const { classify } = build();
+  for (const junk of [undefined, null, "", "request", "CHAT", " chat", "chat ", 0, 1, true, {}]) {
+    assert.equal(classify(msg({ metadata: { intent: junk } }), dm(), ME), "trigger", JSON.stringify(junk));
+  }
+  assert.equal(classify(msg({ metadata: {} }), dm(), ME), "trigger", "an ABSENT intent is a request");
+});
+
 // ── 4. the verdicts are WIRED, behaviorally, through the real dispatch body ──────
 // This used to be a set of greps over listener-messages.js, which is exactly the kind of
 // probe that survives a semantic break: deleting a `return` (double-dispatching a message
@@ -233,7 +272,11 @@ function extractAsyncFn(src, name) {
 // one branch it expected to fire.
 function dispatcher(cfg = {}) {
   const calls = { routed: [], feed: [], open: [], surface: [], trigger: [], fyi: [], reply: [], escalate: [], dismissed: [], diag: [] };
-  const { classify } = build();
+  // The REAL classify AND the REAL legacy registry it shares with the dispatcher. The
+  // registry moved to the top of dispatchMessage when my own messages started routing to my
+  // own agents (an engaged agent claims the message before classify ever sees it), so a fake
+  // that only carried `classify` no longer stands in for `targeting` at all.
+  const { classify, noteMyLegacyThread, knownLegacyReply } = build();
   const api = new Function(
     "versionSkew", "channelAgents", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
     `${extractAsyncFn(LISTENER, "dispatchMessage")}\n return { dispatchMessage };`
@@ -248,7 +291,10 @@ function dispatcher(cfg = {}) {
       maybeOpenRequesterSession: async (e, m) => { calls.open.push(m.seq); return false; },
       maybeSurfaceRequesterReply: async (e, m) => { calls.surface.push(m.seq); return false; },
     },
-    { classify, metaStr: (m, k) => (m && m.metadata && typeof m.metadata[k] === "string" ? m.metadata[k].trim() : "") },
+    {
+      classify, noteMyLegacyThread,
+      metaStr: (m, k) => (m && m.metadata && typeof m.metadata[k] === "string" ? m.metadata[k].trim() : ""),
+    },
     { handleTrigger: async (e, m) => calls.trigger.push(m.seq), sendFyi: (e, m) => calls.fyi.push(m.seq) },
     {
       notifyTaskReply: (e, m) => calls.reply.push(m.seq),
@@ -257,7 +303,7 @@ function dispatcher(cfg = {}) {
     },
     (...a) => calls.diag.push(a.join(" "))
   );
-  return { dispatch: (e, m) => api.dispatchMessage(e, m, ME), calls };
+  return { dispatch: (e, m) => api.dispatchMessage(e, m, ME), calls, knownLegacyReply };
 }
 
 const listenerEntry = (over = {}) => ({
@@ -308,6 +354,42 @@ test("an EMPTY verdict is the only one that falls through to the ordinary dispat
   await d.dispatch(listenerEntry({ memberCount: 2 }), msg({ metadata: { to_user_id: ME } }));
   assert.deepEqual(d.calls.feed, [5], "the routes below still run");
   assert.deepEqual(d.calls.trigger, [5], "and the verdict is reached");
+});
+
+// ── 5. the legacy-thread registry, now that MY OWN messages get claimed above classify ──
+
+const CHAN = "cccccccc-1111-2222-3333-444444444444";
+const legacyId = (seq) => `task-${CHAN}-${seq}`;
+const agentReply = (seq, taskId, author) => ({
+  kind: "message", seq, authorUserId: author, authorKind: "agent",
+  metadata: { to_user_id: ME, taskId },
+});
+
+test("a message of mine CLAIMED by the agent route still records the thread it opened", async () => {
+  // The regression the move exists for. classify used to be the one place every message this
+  // operator posts went past, so it recorded the opener. It is not any more: an untagged line
+  // of mine taken by my own engaged agent returns 'fed' and short-circuits. Losing the record
+  // costs a spurious consent prompt on the peer's eventual reply to my own question.
+  const d = dispatcher({ routed: "fed" });
+  const mine = msg({ authorUserId: ME, seq: 7, metadata: { to_user_id: PEER } });
+  await d.dispatch(listenerEntry(), mine);
+  assert.deepEqual(d.calls.trigger, [], "my own message still triggers nothing itself");
+  assert.equal(
+    d.knownLegacyReply(agentReply(9, legacyId(7), PEER), ME), true,
+    "…and the peer's reply to it is recognized as MY outstanding request"
+  );
+});
+
+test("the registry refuses to open a thread on somebody ELSE's message", async () => {
+  // Called from the dispatcher it sees every message, not just mine, so the authorship
+  // conjunct classify used to supply implicitly is now inside noteMyLegacyThread. Without it a
+  // PEER addressing a THIRD member banks owner=me/target=third, and a later message from that
+  // third member carrying the same caller-settable legacy id would classify 'task-reply' — a
+  // passive banner with no consent row and no Accept.
+  const d = dispatcher({ routed: "" });
+  const theirs = msg({ authorUserId: PEER, seq: 7, metadata: { to_user_id: "third-uuid" } });
+  await d.dispatch(listenerEntry(), theirs);
+  assert.equal(d.knownLegacyReply(agentReply(9, legacyId(7), "third-uuid"), ME), false);
 });
 
 test("B1: dispatch says so when the law is evaluated against an UNREAD roster", async () => {

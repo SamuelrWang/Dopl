@@ -8,10 +8,13 @@ import {
   TaskNotFoundError,
   TaskSelfTargetError,
 } from "./errors";
+import type { ChannelTaskRow } from "./dto";
 import { mapTaskRow } from "./dto";
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { seedThreadParticipants } from "./service-participants";
+import { deriveHandshakeParticipants } from "./service-thread-handshake";
 import { postMessage } from "./service-writes";
 import {
   loadVisibleChannel,
@@ -89,6 +92,37 @@ async function postOpeningMessage(
 }
 
 /**
+ * The seq of a thread's opening message as ALREADY STORED — a pure READ of the
+ * derived key, never a post.
+ *
+ * This is what a caller that converged on SOMEONE ELSE's thread gets instead of
+ * a re-post. It used to get `null`, which was honest but useless: an agent that
+ * lost the two-agent open race (see `service-thread-handshake.ts`) held the
+ * right thread id and no cursor, so its only way to arm `await` was
+ * `read limit=1` — the exact round-trip-and-race WAKE-V1 removed, and one that
+ * mis-fires precisely when the winner has already said something.
+ *
+ * Reading is safe where posting is not: the opening message is in a channel the
+ * caller is a member of and would come back from an ordinary `read`. What must
+ * not happen is the loser POSTING into the winner's thread, and it does not.
+ *
+ * Still `null` when there is genuinely no stored opening message (the winner
+ * crashed between its insert and its post). Never a fabricated number — a
+ * caller with no cursor must find one another way rather than arm one on a
+ * guess, which is the failure this field exists to prevent.
+ */
+async function storedOpeningSeq(
+  channelId: string,
+  taskId: string
+): Promise<number | null> {
+  const stored = await repoMessages.findMessageByClientId(
+    channelId,
+    openingMessageClientId(taskId)
+  );
+  return stored?.seq ?? null;
+}
+
+/**
  * What `createTask` hands back: the thread, plus the seq of its opening message
  * — the cursor a requester passes straight to `dopl_channel(op="await")`.
  *
@@ -98,12 +132,79 @@ async function postOpeningMessage(
  * "newest message" its reply, so the await starts one message too late and the
  * requester waits forever for something already delivered.
  *
- * `null` only on the idempotent short-circuit that returns SOMEONE ELSE's
- * thread (their opening message is not ours to re-post, so no seq is produced).
+ * `null` only when no opening message exists to name: the creator re-posts its
+ * own (idempotently), and a caller that converged on someone else's thread READS
+ * that thread's stored opening seq — see {@link storedOpeningSeq}.
  */
 export interface TaskCreateResult {
   thread: ChannelThread;
   openingSeq: number | null;
+}
+
+/**
+ * Finish a create that landed on an EXISTING thread — the `client_msg_id`
+ * short-circuit and the lost-insert race, which are the same situation reached
+ * two ways and must therefore answer identically.
+ *
+ * THE CALLER GETS THE WINNER'S THREAD, always. Not an error, not a second row:
+ * two agents woken by one instruction both call `create_thread`, and the one
+ * that arrives second has to come away holding the same thread as the first.
+ *
+ * What differs is what it may WRITE:
+ *  - **The creator** (a plain retry of its own create) re-drives its opening
+ *    post and its own `participants`, because both are repairs of a create that
+ *    may have half-landed.
+ *  - **Anyone else** posts NOTHING and seeds only the SERVER-DERIVED set. A
+ *    colliding key from another member must not put a message into their thread,
+ *    and — this is the newer half — must not let a caller's `participants` array
+ *    add identities to a thread they do not curate. That would be the join
+ *    route's curation rule reached through the create route, which is exactly
+ *    what the derived set is shaped to avoid needing.
+ */
+async function convergeOnThread(
+  ctx: ChannelContext,
+  channelId: string,
+  task: ChannelTaskRow,
+  input: TaskCreateInput
+): Promise<TaskCreateResult> {
+  const isCreator = task.created_by === ctx.userId;
+  await seedParticipants(ctx, channelId, task, input, isCreator);
+  const openingSeq = isCreator
+    ? await postOpeningMessage(ctx, channelId, task, input.body)
+    : await storedOpeningSeq(channelId, task.id);
+  return { thread: mapTaskRow(task), openingSeq };
+}
+
+/**
+ * Seed a thread's participant set from BOTH sources: the caller's explicit
+ * `participants` (when it is theirs to give) and the set the server DERIVES
+ * from a handshake `client_msg_id` (`service-thread-handshake.ts`).
+ *
+ * The two compose and neither replaces the other. An ordinary create — no
+ * handshake key, no `participants` — derives `[]`, seeds nothing, and writes no
+ * participant rows at all, which is what keeps every ordinary thread on the
+ * creator/target pair gate.
+ *
+ * ALWAYS BEFORE THE OPENING POST: the post runs the thread-write gate, and once
+ * a thread has a participant set that set is what the gate reads. Seeding
+ * afterwards would judge the creator's own opening message against a half-built
+ * room.
+ */
+async function seedParticipants(
+  ctx: ChannelContext,
+  channelId: string,
+  task: ChannelTaskRow,
+  input: TaskCreateInput,
+  includeCallerExtras: boolean
+): Promise<void> {
+  const derived = await deriveHandshakeParticipants(channelId, input.clientMsgId);
+  const extras = includeCallerExtras
+    ? [...(input.participants ?? []), ...derived]
+    : derived;
+  if (extras.length === 0) return;
+  // Idempotent all the way down (`insertParticipant` converges on 23505), so
+  // the race, the retry and the loser's own attempt all seed the same rows.
+  await seedThreadParticipants(ctx, channelId, task, extras);
 }
 
 /**
@@ -118,6 +219,14 @@ export interface TaskCreateResult {
  * extras. Absent, NO participant rows are written and the thread keeps the
  * creator/target pair gate — see `service-participants.ts` for why that
  * asymmetry is deliberate.
+ *
+ * THE TWO-AGENT HANDSHAKE rides on the idempotency envelope below. One human
+ * message can address two agents, both machines wake, and both may call this —
+ * so the `client_msg_id` short-circuit is what makes ONE thread, and a
+ * server-DERIVED participant set (`service-thread-handshake.ts`) is what makes
+ * that one thread writable by the agent that lost the race. Both are keyed on
+ * the same `client_msg_id`, so both callers converge on the same row AND the
+ * same set. A create with no handshake key derives nothing and is unchanged.
  */
 export async function createTask(
   ctx: ChannelContext,
@@ -151,24 +260,17 @@ export async function createTask(
   }
 
   // Idempotency: a re-sent client_msg_id returns the already-created task
-  // WITHOUT inserting a second row. It still re-drives the initiating post —
-  // which is a no-op when that message already landed (its own key dedups) and
-  // the repair when it did not, so a retry can never leave a thread with no
-  // request in it. Restricted to the task's own creator: a colliding key from
-  // another member must not put a message into their thread (the post would be
-  // refused anyway, turning a benign dedup into a 403).
+  // WITHOUT inserting a second row. What the caller may then write into it —
+  // the re-driven opening post, its own `participants`, the derived set —
+  // depends on whether the caller IS that thread's creator; see
+  // {@link convergeOnThread}, which is also the 23505 branch's answer so the
+  // two ways of losing a race cannot drift apart.
   if (input.clientMsgId) {
     const existing = await repoTasks.findTaskByClientId(
       channel.id,
       input.clientMsgId
     );
-    if (existing) {
-      const openingSeq =
-        existing.created_by === ctx.userId
-          ? await postOpeningMessage(ctx, channel.id, existing, input.body)
-          : null;
-      return { thread: mapTaskRow(existing), openingSeq };
-    }
+    if (existing) return convergeOnThread(ctx, channel.id, existing, input);
   }
 
   let task;
@@ -191,25 +293,12 @@ export async function createTask(
         channel.id,
         input.clientMsgId
       );
-      if (raced) {
-        const openingSeq =
-          raced.created_by === ctx.userId
-            ? await postOpeningMessage(ctx, channel.id, raced, input.body)
-            : null;
-        return { thread: mapTaskRow(raced), openingSeq };
-      }
+      if (raced) return convergeOnThread(ctx, channel.id, raced, input);
     }
     throw err;
   }
 
-  // BEFORE the opening post: the post runs the thread-write gate, and once a
-  // thread has a participant set that set is what the gate reads. Seeding
-  // afterwards would leave a window in which the creator's own opening message
-  // is judged against a half-built room.
-  if (input.participants && input.participants.length > 0) {
-    await seedThreadParticipants(ctx, channel.id, task, input.participants);
-  }
-
+  await seedParticipants(ctx, channel.id, task, input, true);
   const openingSeq = await postOpeningMessage(ctx, channel.id, task, input.body);
 
   return { thread: mapTaskRow(task), openingSeq };

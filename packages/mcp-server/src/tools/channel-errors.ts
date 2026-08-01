@@ -23,6 +23,9 @@
  */
 
 import { neutralizeInline } from "./channel-shared";
+// The merged agent-address cap has ONE statement in this package — see
+// channel-addressing.ts for why it is not the array's `.max()`.
+import { MAX_ADDRESSED_AGENTS } from "./channel-addressing";
 
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 export function isBadRequest(e: unknown): boolean {
@@ -59,6 +62,20 @@ export function isForbidden(e: unknown): boolean {
  *   - `agent_not_in_channel` — an agent id/handle that names no agent OF THIS
  *     CHANNEL, as a participant seed or as a post's `to_agent` / `as_agent`.
  *     Same late-arrival property as above on the create path.
+ *   - `too_many_agents`     — more addressed agents than {@link MAX_ADDRESSED_AGENTS}
+ *     allows. ITS OWN KIND BECAUSE THE TOOL PROVOKES IT: the schema publishes
+ *     `to_agents.max(8)` and says nothing about `to_agent` counting toward the
+ *     same eight, while the server enforces the cap on the DEDUPED MERGE of the
+ *     two (`resolveAgentAddressing`). So `to_agent` + a full eight is a 400 the
+ *     tool's own surface invited — and it landed in the `unknown` arm ("the
+ *     server did not name a cause this tool recognizes") for the one 400 this
+ *     tool is best placed to explain.
+ *   - `chat_addressed`       — a post that said `intent:"chat"` AND named an
+ *     addressee. The two mean opposite things and the route refuses the pair
+ *     rather than picking one (`ChannelChatAddressedError`). The tool refuses it
+ *     BEFORE the call too, so this arm should be unreachable in practice — it is
+ *     classified anyway, because "unreachable" is exactly the assumption the
+ *     status-only branch this module replaced was built on.
  *   - `workspace`            — no usable workspace on the call.
  *   - `unknown`              — a 400 with no code we recognize (or no code at
  *     all, e.g. an edge/proxy error page). Say so; do not invent a cause.
@@ -70,6 +87,8 @@ export type BadRequestKind =
   | "invalid_request"
   | "participant_not_member"
   | "agent_not_in_channel"
+  | "too_many_agents"
+  | "chat_addressed"
   | "workspace"
   | "unknown";
 
@@ -96,6 +115,10 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
       return "participant_not_member";
     case "CHANNEL_AGENT_NOT_IN_CHANNEL":
       return "agent_not_in_channel";
+    case "CHANNEL_TOO_MANY_AGENTS":
+      return "too_many_agents";
+    case "CHANNEL_CHAT_ADDRESSED":
+      return "chat_addressed";
     case "WORKSPACE_REQUIRED":
     case "WORKSPACE_INVALID":
       return "workspace";
@@ -168,3 +191,13 @@ export function serverDetail(e: unknown): string {
  */
 export const FIELD_CAPS_NOTE =
   "Field caps: title <=200 characters, body <=16000, a post's summary <=200, a close summary <=2000, client_msg_id <=200.";
+
+/**
+ * The MERGED agent cap, said the way the surface should have said it all along.
+ *
+ * The sentence has to carry the merge, not just the number: a caller that hit
+ * this read `to_agents.max(8)` on the schema, counted eight entries, and was
+ * refused — because `to_agent` was the ninth. Telling them "at most eight" and
+ * stopping there sends them back to count the same eight again.
+ */
+export const AGENT_CAP_NOTE = `One post may address at most ${MAX_ADDRESSED_AGENTS} agents in total — \`to_agent\` and \`to_agents\` are ONE address between them, merged and deduped before the limit is applied, so \`to_agent\` counts as one of the ${MAX_ADDRESSED_AGENTS}. Naming the same agent twice (by handle and by id) collapses to one. To reach more than ${MAX_ADDRESSED_AGENTS}, post twice.`;

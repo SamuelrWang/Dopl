@@ -1,6 +1,6 @@
 /**
  * THE MULTIPLAYER OPS — `dopl_channel` agents / summon_agent / rename_agent /
- * set_agent_status / join_thread / leave_thread.
+ * set_agent_status / disengage_agent / join_thread / leave_thread.
  *
  * Two things are pinned here, and the second is a security property:
  *

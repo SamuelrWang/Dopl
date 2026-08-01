@@ -8,6 +8,7 @@
     "smoke": "electron scripts/smoke-test.js",
     "lint": "eslint .",
     "test": "node --test 'test/**/*.mjs'",
+    "test:live": "node test/live/run.js",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
     "release": "electron-builder --mac --publish always",

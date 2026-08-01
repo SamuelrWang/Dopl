@@ -3,22 +3,31 @@
 import { useMemo } from "react";
 import { PanelRightClose, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import type { ChannelThread } from "../types";
+import type { ChannelAgent, ChannelThread } from "../types";
 import {
   participantCountLabel,
   readThreadParticipants,
   sortRoomThreads,
 } from "../lib/rooms";
+import {
+  threadAgentEntries,
+  threadAgentsLabel,
+  type ThreadAgentEntry,
+} from "../lib/thread-agents";
 
 /**
  * The ROOMS SIDEBAR — the channel's threads as a persistent column.
  *
  * A breakout room is a THREAD with a participant set, so the room list is the
- * thread list: title, whether it is still open, and how many participants it
- * has once the server serves them. OPEN rooms sit above closed ones (a closed
- * room is history; an open one is where work is), and clicking a row scrolls to
- * that thread's card through the transcript's existing `session:<threadId>`
- * anchor — the same navigation the thread popover uses.
+ * thread list: title, whether it is still open, how many participants it has
+ * once the server serves them, and — the thing an operator actually scans for —
+ * WHICH AGENTS are working in it. Two agents collaborating inside one thread is
+ * the feature; a row that only counted heads never said so.
+ *
+ * OPEN rooms sit above closed ones (a closed room is history; an open one is
+ * where work is), and clicking a row scrolls to that thread's card through the
+ * transcript's existing `session:<threadId>` anchor — the same navigation the
+ * thread popover uses.
  *
  * ADDITIVE: the header's thread popover still works and is still the only place
  * a room is closed / reopened. Small channels never need a permanent column, so
@@ -27,11 +36,18 @@ import {
 export function RoomsSidebar({
   threads,
   threadsLoading,
+  agents,
   onSelectThread,
   onCollapse,
 }: {
   threads: ChannelThread[];
   threadsLoading: boolean;
+  /**
+   * The channel's agent roster, joined against each thread's participants for
+   * handles + live status. Omitted (or still loading) degrades to handles-only
+   * fallbacks, never to an error or an empty claim.
+   */
+  agents?: ChannelAgent[];
   onSelectThread: (threadId: string) => void;
   onCollapse: () => void;
 }) {
@@ -73,6 +89,7 @@ export function RoomsSidebar({
             <RoomRow
               key={room.id}
               room={room}
+              agents={agents ?? []}
               onSelect={() => onSelectThread(room.id)}
             />
           ))}
@@ -82,16 +99,23 @@ export function RoomsSidebar({
   );
 }
 
-function RoomRow({
+/**
+ * One room row. Exported so the participant/agent join can be asserted on real
+ * markup without a DOM (the sidebar's other rows are unaffected).
+ */
+export function RoomRow({
   room,
+  agents,
   onSelect,
 }: {
   room: ChannelThread;
+  agents: readonly ChannelAgent[];
   onSelect: () => void;
 }) {
   const open = room.status === "open";
   const failed = room.status === "closed" && room.outcome === "failed";
   const participants = participantCountLabel(readThreadParticipants(room).length);
+  const agentEntries = threadAgentEntries(room, agents);
 
   return (
     <button
@@ -126,6 +150,54 @@ function RoomRow({
           </span>
         )}
       </span>
+      <ThreadAgentsRow entries={agentEntries} />
     </button>
+  );
+}
+
+/**
+ * The agents seated in a thread, as compact handle pills with a live dot.
+ *
+ * RENDERS NOTHING when there are none. Today's legacy threads carry no
+ * participant set at all, and an empty set means "we don't know", so the row
+ * stays silent rather than asserting "0 agents" over a thread that may well
+ * have two.
+ */
+export function ThreadAgentsRow({
+  entries,
+}: {
+  entries: readonly ThreadAgentEntry[];
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <span
+      className="flex flex-wrap items-center gap-1 pl-3"
+      title={threadAgentsLabel(entries) ?? undefined}
+    >
+      {entries.map((entry) => (
+        <span
+          key={entry.agentId}
+          className={cn(
+            "inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-px text-micro font-medium",
+            entry.live
+              ? "border-border-strong bg-bg-elevated text-text-primary"
+              : "border-border-default bg-bg-inset text-text-secondary"
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "h-1 w-1 shrink-0 rounded-full",
+              entry.live ? "bg-success" : "bg-text-disabled"
+            )}
+          />
+          <span className="truncate">@{entry.handle}</span>
+          {/* The live word, so "working" never rests on the dot's color alone. */}
+          {entry.live && (
+            <span className="shrink-0 text-text-secondary">working</span>
+          )}
+        </span>
+      ))}
+    </span>
   );
 }

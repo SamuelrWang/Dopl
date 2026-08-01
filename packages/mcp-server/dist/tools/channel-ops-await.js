@@ -26,6 +26,12 @@ exports.opAwait = opAwait;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
+// WHICH AGENTS a message names — half of the unnamed-notice predicate below,
+// and the reason this op reads the roster at all (BLOCKER-3).
+const channel_render_agents_1 = require("./channel-render-agents");
+// The room's agents, indexed for a read: what each addressed agent is CALLED,
+// and which of them are the caller's. Fails soft to an empty index.
+const channel_agent_refs_1 = require("./channel-agent-refs");
 const channel_await_budget_1 = require("./channel-await-budget");
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
@@ -228,7 +234,15 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         // has to be read BEFORE them, not as a footnote underneath.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
+    // BLOCKER-3 — one roster read, and ONLY when something that arrived names an
+    // agent. It serves both halves of the fix: the handles the lines render, and
+    // the ownership the unnamed-notice predicate needs below. Fetched here rather
+    // than inside the hold so it never lengthens a wait, and fail-soft so a
+    // roster failure cannot turn an arrived message into an error.
+    const agents = (0, channel_render_agents_1.anyAgentAddressed)(messages)
+        ? await (0, channel_agent_refs_1.agentAddressIndex)(client, ref, selfUserId)
+        : channel_agent_refs_1.NO_AGENT_INDEX;
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, agents.names));
     const lastSeq = messages[messages.length - 1].seq;
     // N-PARTY — `await` is CHANNEL-WIDE and unfiltered: every message wakes every
     // armed listener, including one addressed to a different member or to nobody.
@@ -249,9 +263,22 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     // NAMES you" about its own request. Defense in depth — `opAwait` already
     // passes `excludeAuthor`, so own posts should not reach here at all — but the
     // notice must be false-free on whatever it is handed.
+    //
+    // BLOCKER-3 — AND AN AGENT ADDRESS IS A NAMING. The old predicate read
+    // `to_user_id` alone, and the server stamps that from the FIRST addressed
+    // agent's owner: "@quartz @onyx work on X" therefore names onyx's owner
+    // NOWHERE in that field, so onyx's machine woke to a message naming its agent
+    // by handle and was told "NONE of the messages above NAMES you as its
+    // addressee" — the precise instruction not to act on the message it had just
+    // been assigned. A message names this side if it names the caller OR any
+    // agent the caller owns; `agents.mine` is empty when the roster read failed,
+    // which leaves the notice firing exactly as before rather than suppressing it
+    // on a guess.
     if (selfUserId !== null) {
+        const namesMe = (m) => (0, channel_render_1.addresseeOf)(m) === selfUserId ||
+            (0, channel_render_agents_1.addressedAgentIdsOf)(m).some((id) => agents.mine.has(id));
         const foreign = messages.filter((m) => m.authorUserId !== selfUserId);
-        if (foreign.length > 0 && !foreign.some((m) => (0, channel_render_1.addresseeOf)(m) === selfUserId)) {
+        if (foreign.length > 0 && !foreign.some(namesMe)) {
             lines.push(`\n${channel_addressing_1.AWAIT_UNNAMED_NOTICE}`);
         }
     }

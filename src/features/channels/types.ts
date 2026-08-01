@@ -96,6 +96,22 @@ export type ChannelAgent = {
   /** The handle as typed in an @-mention: `^[a-z][a-z0-9-]{1,30}$`. */
   name: string;
   status: AgentStatus;
+  /**
+   * ENGAGEMENT — when a HUMAN last addressed this agent, or null while it is
+   * IDLE. An idle agent sees everything in the room and acts on nothing; an
+   * engaged one also acts on UNTAGGED messages from humans in that channel.
+   *
+   * It is a FACT, not a state. The server records it and never expires it: the
+   * DESKTOP applies `ENGAGEMENT_TTL_MS` (`constants.ts`) against this timestamp
+   * and refreshes engagement by ACTING. So a stamp older than the window is
+   * still a stamp — read it through the TTL, never as a boolean.
+   *
+   * An AGENT-AUTHORED message never sets it. That is the loop brake and it is
+   * absolute (`server/service-writes-agents.ts`).
+   */
+  engagedAt: string | null;
+  /** The human who engaged it — audit, and the one non-owner who may disengage. */
+  engagedBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -209,6 +225,25 @@ export type ChannelMessageKind =
   | "task_finished"
   | "task_failed"
   | "system";
+
+/**
+ * Whether a post is allowed to REACH AN AGENT.
+ *
+ *  - `request` — the DEFAULT and the whole of today's behaviour: a post into a
+ *    DM with no `to` is auto-addressed to the peer server-side, which is what
+ *    makes a reply deliverable and what wakes the receiving listener.
+ *  - `chat` — HUMAN TALK. The auto-address is skipped entirely, so nothing is
+ *    manufactured for the far side to read as an ask. Everything else about the
+ *    message is normal.
+ *
+ * ABSENCE means `request`, and an absent field stamps NO metadata key — so an
+ * existing caller's wire is unchanged. `chat` beside an explicit address is a
+ * contradiction and is refused 400 `CHANNEL_CHAT_ADDRESSED`.
+ *
+ * ONE DEFINITION. `MessageIntentSchema` (`schema.ts`) validates against this
+ * union and `client/api.ts` imports it; do not restate the two literals.
+ */
+export type MessageIntent = "chat" | "request";
 
 /** List-level channel: header + caller-relative membership + activity. */
 export type Channel = {

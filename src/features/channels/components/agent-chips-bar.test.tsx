@@ -2,11 +2,16 @@
  * The chips bar is where a channel states that agents are members of the room,
  * and where their owner (and ONLY their owner) can act on them. Rendered
  * statically, like every other channels component test.
+ *
+ * WHICH of them is listening is the other half, and it is big enough to be its
+ * own file (§2): `agent-chips-bar-engagement.test.tsx`.
  */
 
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentChipMenu, AgentChipsBar } from "./agent-chips-bar";
+import { deriveAgentEngagement } from "../lib/agent-engagement";
+import type { AgentEngagement } from "../lib/agent-engagement";
 import type { AgentStatus, ChannelAgent, ChannelMember } from "../types";
 
 const ME = "u-me";
@@ -34,9 +39,14 @@ function member(over: Partial<ChannelMember> & { userId: string }): ChannelMembe
   };
 }
 
+/**
+ * Both desktops CONNECTED, which is the condition under which an engaged agent
+ * actually acts. The offline roster (and what the chip does with it) lives in
+ * the engagement file.
+ */
 const MEMBERS = [
-  member({ userId: ME, displayName: "Me" }),
-  member({ userId: ADA, displayName: "Ada" }),
+  member({ userId: ME, displayName: "Me", agentOnline: true }),
+  member({ userId: ADA, displayName: "Ada", agentOnline: true }),
 ];
 
 function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
@@ -47,6 +57,8 @@ function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
     ownerUserId: ME,
     name: "quartz",
     status: "active",
+    engagedAt: null,
+    engagedBy: null,
     createdAt: "2026-07-31T00:00:00.000Z",
     updatedAt: "2026-07-31T00:00:00.000Z",
     ...over,
@@ -55,11 +67,11 @@ function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
 
 const noopAsync = async () => {};
 
-function render(agents: ChannelAgent[]) {
+function render(agents: ChannelAgent[], members: ChannelMember[] = MEMBERS) {
   return renderToStaticMarkup(
     <AgentChipsBar
       agents={agents}
-      members={MEMBERS}
+      members={members}
       memberNames={NAMES}
       currentUserId={ME}
       onRename={noopAsync}
@@ -153,14 +165,27 @@ describe("AgentChipsBar ownership", () => {
  * The popover body renders only once opened, so the owner gate is driven
  * directly here — the same split the invite dialog uses for its routing note.
  */
-function menu(over: { owned: boolean; agent?: ChannelAgent }) {
+function menu(over: {
+  owned: boolean;
+  agent?: ChannelAgent;
+  /** The bar resolves this (clock + owner presence); default = derive by time. */
+  engagement?: AgentEngagement;
+  canDisengage?: boolean;
+  engagedByLabel?: string | null;
+  onDisengage?: (agentId: string) => Promise<unknown>;
+}) {
+  const row = over.agent ?? agent();
   return renderToStaticMarkup(
     <AgentChipMenu
-      agent={over.agent ?? agent()}
+      agent={row}
       owned={over.owned}
+      engagement={over.engagement ?? deriveAgentEngagement(row)}
+      canDisengage={over.canDisengage}
       ownerLabel={over.owned ? "Your agent" : "Ada's agent"}
+      engagedByLabel={over.engagedByLabel ?? null}
       onRename={noopAsync}
       onSetStatus={noopAsync}
+      onDisengage={over.onDisengage ?? noopAsync}
       onDone={() => {}}
     />
   );
@@ -216,3 +241,4 @@ describe("AgentChipMenu — owner-only affordances", () => {
     expect(menu({ owned: true })).not.toContain("Lowercase letters");
   });
 });
+

@@ -48,15 +48,42 @@ export declare function agentLabel(a: ChannelAgent): string;
 export declare function resolveAgentOr(client: DoplClient, channelId: string, ref: string): Promise<ChannelAgent | ToolResponse>;
 /** The agent identities on one post: who it is FOR, and who it is FROM. */
 interface PostAgents {
-    /** `to_agent` — the addressed agent. Addressing it is what makes it act. */
+    /**
+     * EVERY addressed agent, in the order the caller named them, deduped —
+     * `to_agent` first, then `to_agents`. Empty when the post addresses no agent.
+     *
+     * The ORDER is load-bearing and is the caller's: the server stamps the FIRST
+     * one's owner as `metadata.to_user_id` (the owner bridge) and mirrors the
+     * first id into the compat scalar `metadata.to_agent_id`
+     * (`service-writes-agents.ts`). Re-sorting here would silently re-point which
+     * machine a multi-address message is delivered to.
+     */
+    tos: ChannelAgent[];
+    /**
+     * The FIRST addressed agent, i.e. `tos[0]`. Kept as its own field because it
+     * is what the result's addressing lines and the `to`/`to_agent` conflict note
+     * are ABOUT — the head is the one whose owner the server addresses.
+     */
     to?: ChannelAgent;
     /** `as_agent` — the caller's OWN agent, the one this post is attributed to. */
     as?: ChannelAgent;
 }
 /**
- * Resolve `to_agent` / `as_agent` for a post, both against THIS channel's
- * roster, in ONE round-trip whichever of them is set (and none at all when
- * neither is — an ordinary post pays nothing for this).
+ * Resolve `to_agent` / `to_agents` / `as_agent` for a post, all against THIS
+ * channel's roster, in ONE round-trip whichever of them is set (and none at all
+ * when none is — an ordinary post pays nothing for this).
+ *
+ * MULTI-ADDRESS. `to_agents` is the N-agent form of `to_agent` ("@quartz @onyx
+ * work together"), and `to_agent` is exactly its one-element case, so the two
+ * are concatenated and resolved by the SAME matcher. ALL OR NOTHING, mirroring
+ * `resolveAgentAddressing` on the server: one ref that names no agent of this
+ * channel fails the whole post, naming that ref. A partial address is the worse
+ * outcome by far — the caller believes N machines are working and fewer are.
+ *
+ * DEDUPE IS BY RESOLVED ID, not by string, so naming one agent by handle and by
+ * id is one address rather than two. The server dedupes again (it must — it is
+ * the boundary); doing it here as well is what keeps the RESULT's "addressed to
+ * agents ..." line equal to what was actually sent.
  *
  * WHY RESOLVE `as_agent` HERE when the route wants a uuid anyway: an agent knows
  * its own HANDLE — that is the name it was summoned under and the name the room
@@ -66,7 +93,7 @@ interface PostAgents {
  * server's alone: this turns a name into an id, it does not decide whose agent
  * it is, and a non-owner is refused with a 403 at the route.
  */
-export declare function resolvePostAgentsOr(client: DoplClient, channelId: string, toAgent?: string, asAgent?: string): Promise<PostAgents | ToolResponse>;
+export declare function resolvePostAgentsOr(client: DoplClient, channelId: string, toAgent?: string, asAgent?: string, toAgents?: string[]): Promise<PostAgents | ToolResponse>;
 /**
  * The prefix form `participants` takes on `create_thread`: `agent:<handle or
  * id>` or `user:<email or user id>`, resolved here into the `{kind, id}` refs
@@ -108,4 +135,37 @@ export declare function participantLines(
 participants: ThreadParticipant[] | undefined, view: MemberView, agentNames: Map<string, string>): string[];
 /** The channel's agent handles by id, for naming participants. Fails soft. */
 export declare function agentNamesById(client: DoplClient, channelId: string): Promise<Map<string, string>>;
+/**
+ * The two things a READ needs to know about a channel's agents (BLOCKER-3):
+ * what each addressed agent is CALLED, and which of them are the caller's.
+ */
+export interface AgentAddressIndex {
+    /** `agentId → handle`, for {@link import("./channel-render").agentRef}. */
+    names: Map<string, string>;
+    /**
+     * The ids of the agents this caller OWNS. Ownership is the only notion of
+     * "mine" available here and it is the right one: an agent runs on its
+     * owner's machine, and this connection speaks for that machine. A message
+     * naming ANY of these named this side, whoever `to_user_id` points at.
+     */
+    mine: Set<string>;
+}
+/** Empty index — every agent renders as a bare id and none is the caller's. */
+export declare const NO_AGENT_INDEX: AgentAddressIndex;
+/**
+ * The channel's agents, indexed for the read path. FAILS SOFT, on the same rule
+ * as `memberNames`: this is ENRICHMENT, and a roster that 404s, 403s or times
+ * out must degrade to bare ids rather than turn a successful read into an error
+ * the agent might retry. The op that calls it has already established the
+ * channel is visible (its own call would have 404'd first).
+ *
+ * `ref` may be a slug or an id — the agents route resolves either
+ * (`loadVisibleChannel`), so the hot read path does not have to pre-resolve.
+ *
+ * The empty `mine` set on failure is the SAFE direction for the one predicate
+ * that reads it: an unknown owner means "this message may not name you", which
+ * leaves `AWAIT_UNNAMED_NOTICE` firing as it did before. A guessed one would
+ * suppress the notice on somebody else's exchange.
+ */
+export declare function agentAddressIndex(client: DoplClient, ref: string, selfUserId: string | null): Promise<AgentAddressIndex>;
 export {};

@@ -20,7 +20,8 @@ import type { ChannelContext } from "./service-shared";
  * and what does the server stamp itself.
  *
  * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`, `taskMode`,
- * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `author_agent_id`,
+ * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `to_agent_ids`,
+ * `author_agent_id`, `intent`,
  * and the five calm-terminal flags) are ALWAYS stripped from caller metadata
  * and re-added only from server-validated values. `taskId` stays
  * caller-settable — but EVERY thread id, first-class or legacy, now has to
@@ -225,6 +226,16 @@ async function isLegacyThreadParticipant(
  *    via the validated top-level fields: a raw metadata copy would bypass both
  *    the addressee-membership check and the schema's summary length cap
  *    (consent-prompt spoofing on non-members).
+ * 1b. **Intent (chat vs. request).** `intent` is reserved and re-stamped only
+ *    from the validated top-level field, and it is stamped ONLY WHEN THE CALLER
+ *    SUPPLIED IT — an absent field stamps no key at all, so every existing
+ *    caller's metadata is byte-for-byte what it was. `chat` is the whole reason
+ *    the field exists: it turns fold (2) OFF, so two humans can talk in a DM
+ *    without each line poking the other's machine. It is stamped rather than
+ *    merely acted on because the receiving side has to be able to tell a
+ *    deliberately-unaddressed CHAT from a message that simply forgot to
+ *    address — the first is not a delivery failure and must never be repaired
+ *    as one.
  * 2. **DM auto-address.** In a DIRECT channel with no caller `to`, the peer is
  *    stamped as `to_user_id`. The MCP `post` path could not be relied on to
  *    pass `to`, and an UNADDRESSED agent message is deliberately ignorable on
@@ -233,7 +244,17 @@ async function isLegacyThreadParticipant(
  *    web composer already does for a DM (v1.6); doing it server-side means the
  *    model cannot forget the parameter. NEVER auto-addressed in a non-direct
  *    channel: with 3+ members the intended recipient is ambiguous, and a wrong
- *    guess would prompt the wrong operator.
+ *    guess would prompt the wrong operator. **SKIPPED ENTIRELY under
+ *    `intent:"chat"`** — the peer is not even resolved, so nothing downstream
+ *    can fall back to it. That is the operator's report ("if I send a message
+ *    it's just going as a message to the channel... doesn't prompt an agent")
+ *    made true, without giving back the delivery guarantee a `request` needs.
+ *    **A chat post that ADDRESSES AGENTS still stamps `to_user_id` — from the
+ *    OWNER BRIDGE in (4b), never from the peer.** The two are not the same
+ *    fallback: the bridge names the machine an explicitly-named agent runs on,
+ *    which is the whole point of naming it, while the peer fallback is the guess
+ *    chat exists to suppress. So `@quartz` in a DM reaches quartz's owner and
+ *    stops there, and an untagged aside in the same DM reaches nobody.
  * 3. **Task keys.** The reserved four are stripped and re-stamped from the
  *    resolved task row, so `taskMode` reflects the latest `set_task_mode` and
  *    cannot be spoofed. `taskId` itself stays caller-settable (a responder
@@ -278,14 +299,19 @@ async function isLegacyThreadParticipant(
  *    safe is the CURATION RULE on the set itself (`service-participants.ts`) —
  *    only the thread's creator, its target, or an existing user participant may
  *    add a row — so a bystander cannot manufacture a set to be admitted by.
- * 4b. **Agent addressing (multiplayer).** `to_agent_id` and `author_agent_id`
- *    join the reserved set: stripped from caller metadata unconditionally, then
- *    re-stamped only from the validated top-level `toAgent` / `authorAgentId`
- *    fields (`service-writes-agents.ts` owns that validation — an agent of
- *    another channel is a 400, another member's agent as AUTHOR is a 403).
- *    Addressing an agent ALSO stamps its owner as `to_user_id`: the v1 bridge
- *    to the existing delivery path, since the listener triggers on the
- *    addressed user and the agent runs on that user's machine. The message's
+ * 4b. **Agent addressing (multiplayer).** `to_agent_ids`, `to_agent_id` and
+ *    `author_agent_id` join the reserved set: stripped from caller metadata
+ *    unconditionally, then re-stamped only from the validated top-level
+ *    `toAgent` / `toAgents` / `authorAgentId` fields
+ *    (`service-writes-agents.ts` owns that validation — an agent of another
+ *    channel is a 400, another member's agent as AUTHOR is a 403, and EVERY
+ *    addressed agent's owner must be a member).
+ *    **`to_agent_ids` is the address; `to_agent_id` is a COMPAT MIRROR of its
+ *    head** — installed desktop 1.7.17 reads only the scalar, so a
+ *    multi-address has to keep saying something it understands. Addressing an
+ *    agent ALSO stamps the FIRST one's owner as `to_user_id`: the v1 bridge to
+ *    the existing delivery path, since the listener triggers on the addressed
+ *    user and the agent runs on that user's machine. The message's
  *    `author_user_id` is untouched — an agent id supplements an author, it
  *    never replaces one.
  * 5. **Runtime stamp (WAKE-V1).** `runtime` is reserved: stripped from caller
@@ -324,8 +350,15 @@ export async function resolvePostMetadata(
   delete metadata.runtime;
   delete metadata.appVersion;
   delete metadata.to_agent_id;
+  delete metadata.to_agent_ids;
   delete metadata.author_agent_id;
+  delete metadata.intent;
   const calmFlags = takeCalmFlags(metadata);
+
+  // Stamped only when the caller SUPPLIED it. An absent field stamps no key —
+  // the wire an existing caller produces is unchanged, and absence reads as
+  // `request`, the same discipline `runtime` gets one fold down.
+  if (input.intent) metadata.intent = input.intent;
 
   // Server-stamped from the request's own header, never from the payload.
   if (ctx.runtime === DESKTOP_SESSION_RUNTIME) {
@@ -338,9 +371,19 @@ export async function resolvePostMetadata(
   // `authorAgentId` the caller does not own is a 403.
   const agents = await resolveAgentAddressing(ctx, channel.id, input);
   if (agents.authorAgentId) metadata.author_agent_id = agents.authorAgentId;
+  if (agents.toAgentIds) metadata.to_agent_ids = agents.toAgentIds;
+  // COMPAT MIRROR of `to_agent_ids[0]`, not a second address. Installed desktop
+  // 1.7.17 reads only this key and `to_user_id`; drop it once every desktop in
+  // the field routes on the array (see `service-writes-agents.ts`).
   if (agents.toAgentId) metadata.to_agent_id = agents.toAgentId;
 
-  const peerUserId = await resolveDirectPeer(channel, ctx.userId);
+  // CHAT never resolves a peer at all. Not "resolves one and discards it" — the
+  // fallback below reads whatever `peerUserId` holds, so the only way a chat
+  // post can never be auto-addressed is for there to be nothing to fall back to.
+  const peerUserId =
+    input.intent === "chat"
+      ? undefined
+      : await resolveDirectPeer(channel, ctx.userId);
   // THE OWNER BRIDGE (v1). An addressed agent's OWNER is stamped as
   // `to_user_id`, because that is still the only thing the delivery path reads:
   // the desktop listener triggers on the addressed USER, and the agent runs on

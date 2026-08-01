@@ -104,20 +104,118 @@ export async function listAgentsByChannel(
  * Flip an agent's lifecycle status. `updated_at` is bumped. The patch never
  * touches `workspace_id` / `channel_id`, so the workspace-consistency guard
  * (which fires only on UPDATE OF those columns) is never re-triggered.
+ *
+ * `clearEngagement` folds the disengage into the SAME statement rather than
+ * chasing it with a second write: parking an agent while it is still recorded
+ * as engaged would leave a row that reads "listening for Sam" about a process
+ * that is not running, and a two-statement version can stop halfway there.
+ * WHICH statuses clear is the service's call, not this one's.
  */
 export async function updateAgentStatus(
   agentId: string,
-  status: string
+  status: string,
+  opts: { clearEngagement?: boolean } = {}
 ): Promise<ChannelAgentRow> {
   const db = supabaseAdmin();
+  const patch: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (opts.clearEngagement) {
+    patch.engaged_at = null;
+    patch.engaged_by = null;
+  }
   const { data, error } = await db
     .from("channel_agents")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq("id", agentId)
     .select("*")
     .single();
   if (error) throw error;
   return data as ChannelAgentRow;
+}
+
+/**
+ * ENGAGE every named agent for `engagedBy` — one statement for the whole
+ * addressed set, because "@quartz @onyx work together" is ONE decision by ONE
+ * human and a partial application of it is a room where half the agents are
+ * listening.
+ *
+ * `engaged_at` is stamped from the SERVER's clock, never a caller's. It is a
+ * FACT (when a human last addressed this agent), not a state: nothing here or
+ * anywhere else on the server expires it — the desktop applies
+ * `ENGAGEMENT_TTL_MS` against the timestamp and refreshes it by acting.
+ */
+export async function markAgentsEngaged(
+  agentIds: string[],
+  engagedBy: string
+): Promise<void> {
+  if (agentIds.length === 0) return;
+  const db = supabaseAdmin();
+  const now = new Date().toISOString();
+  const { error } = await db
+    .from("channel_agents")
+    .update({ engaged_at: now, engaged_by: engagedBy, updated_at: now })
+    .in("id", agentIds);
+  if (error) throw error;
+}
+
+/**
+ * Clear one agent's engagement. Idempotent by construction — clearing an
+ * already-idle agent writes the same two nulls and returns the same row, so a
+ * double-tapped "Disengage" is not an error.
+ */
+export async function clearAgentEngagement(
+  agentId: string
+): Promise<ChannelAgentRow> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_agents")
+    .update({
+      engaged_at: null,
+      engaged_by: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", agentId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as ChannelAgentRow;
+}
+
+/**
+ * Clear engagement for every agent in a channel that `engagedBy` engaged.
+ *
+ * The DEPARTURE sweep. An agent outlives the engager's membership
+ * (`channel_agents` has no FK to `channel_members`), so a member who tagged
+ * `@quartz` and then left the room left it engaged — acting on the untagged
+ * messages of everyone still there for the rest of the TTL — and could not undo
+ * it: `disengageAgent` starts at `loadVisibleChannel`, which reads a private
+ * channel as not-found to a non-member. The exit is the only moment at which
+ * anyone can still clean this up, so it is cleaned up there
+ * (`service-writes-members.ts` `removeMember`).
+ *
+ * Scoped to ONE channel, matching the row that was removed: engagement in a
+ * room the member is still in is untouched. Set-based rather than row-by-row
+ * for the same reason `markAgentsEngaged` is — one departure is one decision,
+ * and half a room still listening for someone who left is not a state anybody
+ * asked for. A no-op when they engaged nothing.
+ */
+export async function clearEngagementByEngager(
+  channelId: string,
+  engagedBy: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("channel_agents")
+    .update({
+      engaged_at: null,
+      engaged_by: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("channel_id", channelId)
+    .eq("engaged_by", engagedBy);
+  if (error) throw error;
 }
 
 /**

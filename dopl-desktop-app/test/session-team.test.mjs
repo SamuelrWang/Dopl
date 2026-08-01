@@ -1,18 +1,23 @@
-// D2 — the TEAM session: what a summon actually constructs, and what the ROOM binding means.
+// D2 — the TEAM lane: what a SUMMON does (and what it must never do), what a WAKE
+// constructs, and what the ROOM binding means.
 //
-// TWO claims are load-bearing and both are pinned here:
-//   1. A SUMMON OPENS A PARKED SHELL, keyed (channel, AGENT), bound 'room', with NO thread.
-//      Parked because the law is "nothing acts unless addressed": the window is real, no SDK
-//      query runs, no turn is spent, and the first addressed message wakes it. Keyed on the
-//      agent because an agent runs ONE session per channel whatever thread it works, and a
-//      team session in the main room has no thread to key on at all.
-//   2. THE BINDING IS THE FEED PREDICATE. 'pair' is FIX L1 byte for byte (only the bound
+// THREE claims are load-bearing and all three are pinned here:
+//   1. A SUMMON OPENS NO WINDOW. It starts no session, spends no window budget and touches
+//      neither the window factory nor the SDK. It hands the arrival to session-greeting,
+//      which posts it into the CHANNEL — the chat is the interface, and the way an operator
+//      knows an agent came online is that the agent says so in the room.
+//   2. A WAKE (ensureSession) OPENS THE PARKED SHELL, keyed (channel, AGENT), bound 'room',
+//      with NO thread. Parked because the law is "nothing acts unless addressed": the window
+//      is real, no SDK query runs, no turn is spent. Keyed on the agent because an agent runs
+//      ONE session per channel whatever thread it works, and a team session in the main room
+//      has no thread to key on at all.
+//   3. THE BINDING IS THE FEED PREDICATE. 'pair' is FIX L1 byte for byte (only the bound
 //      counterparty feeds); 'room' accepts any member but the operator. Nothing infers it —
 //      it is an explicit persisted field, and it defaults to the NARROWER value everywhere.
 //
 // METHOD: the session-park / session-gate idiom. The SESSION-TEAM-PURE block is sliced and
-// driven with fakes for its module bindings (store, sessionHistory, diag) and for the engine
-// handles it is injected with.
+// driven with fakes for its module bindings (store, sessionHistory, greeting, diag) and for
+// the engine handles it is injected with.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -41,7 +46,7 @@ const PEER = "peer-uuid";
 const THIRD = "third-uuid";
 
 function harness(cfg = {}) {
-  const calls = { started: [], history: [], emit: [], diag: [] };
+  const calls = { started: [], history: [], emit: [], diag: [], greeted: [], factory: 0 };
   const sessions = new Map();
   const store = {
     sessionKey: (c, t) => `${c}:${t}`,
@@ -55,11 +60,19 @@ function harness(cfg = {}) {
     },
   };
   const diag = (...a) => calls.diag.push(a.join(" "));
+  // The arrival lane. A summon may reach NOTHING else — the assertions below prove it by
+  // watching `calls.started` (the engine's single construction site) stay empty.
+  const greeting = {
+    greet: async (a) => {
+      calls.greeted.push(a);
+      return cfg.greetFails ? { skipped: "post-failed" } : { greeted: true };
+    },
+  };
 
   const api = new Function(
-    "store", "sessionHistory", "diag",
-    `${BLOCK}\n return { bind, summon, hasSession, acceptsInboundFrom, summonNotice };`
-  )(store, sessionHistory, diag);
+    "store", "sessionHistory", "greeting", "diag",
+    `${BLOCK}\n return { bind, summon, ensureSession, hasSession, acceptsInboundFrom, summonNotice };`
+  )(store, sessionHistory, greeting, diag);
 
   api.bind({
     sessions,
@@ -76,8 +89,14 @@ function harness(cfg = {}) {
     },
     emit: (s, p) => calls.emit.push(p),
     windowModeEnabled: () => cfg.windowMode !== false,
-    atWindowCap: () => cfg.atCap === true,
-    windowFactoryReady: () => cfg.factory !== false,
+    atWindowCap: () => {
+      calls.factory += 1; // asking about the window BUDGET is itself a window-lane act
+      return cfg.atCap === true;
+    },
+    windowFactoryReady: () => {
+      calls.factory += 1;
+      return cfg.factory !== false;
+    },
     // FIX S6: the engine resolves this from the listener, so it can legitimately be null on a
     // cold start (or after a sign-out). `cfg.selfId` drives that state.
     getSelfId: () => (Object.prototype.hasOwnProperty.call(cfg, "selfId") ? cfg.selfId : ME),
@@ -90,11 +109,45 @@ const spec = () => ({
   ownerName: "Samuel", channelName: "Ops", toolProfile: "full",
 });
 
-// ── 1. what a summon constructs ──────────────────────────────────────────────────
+// ── 1. THE SUMMON: a message in the room, and nothing else ───────────────────────
 
-test("a summon opens a PARKED, ROOM-bound shell keyed (channel, agent) with NO thread", async () => {
+test("a summon opens NO WINDOW: no session is constructed, no window budget is touched", async () => {
   const h = harness();
   const res = await h.summon(spec());
+  assert.deepEqual(res, { greeted: true });
+  assert.equal(h.calls.started.length, 0, "startSession — the ONE construction site — is never called");
+  assert.equal(h.calls.factory, 0, "…and neither the window factory nor the window budget is consulted");
+  assert.equal(h.calls.emit.length, 0, "nothing is emitted into a window, because there is no window");
+  assert.equal(h.calls.history.length, 0, "and no channel history is painted into one either");
+});
+
+test("a summon hands the arrival to the greeting lane, with the agent's whole identity", async () => {
+  const h = harness();
+  await h.summon(spec());
+  assert.equal(h.calls.greeted.length, 1, "exactly one arrival per summon");
+  assert.deepEqual(h.calls.greeted[0], spec(), "the spec goes through untouched — same room, same agent");
+});
+
+test("window-mode OFF refuses the summon rather than promising a handle nobody can reach", async () => {
+  // The switch gates the whole TEAM lane: with it off, routeAddressedAgent short-circuits, so
+  // "address me by handle" would be a promise this machine cannot keep.
+  const h = harness({ windowMode: false });
+  assert.deepEqual(await h.summon(spec()), { skipped: "disabled" });
+  assert.equal(h.calls.greeted.length, 0);
+  assert.equal(h.calls.started.length, 0);
+});
+
+test("a greeting that could NOT be posted is a skip, so the row stays summoned for a retry", async () => {
+  const h = harness({ greetFails: true });
+  assert.deepEqual(await h.summon(spec()), { skipped: "post-failed" });
+  assert.equal(h.calls.started.length, 0, "a failed arrival still opens nothing");
+});
+
+// ── 2. THE WAKE: what being addressed constructs ─────────────────────────────────
+
+test("a wake opens a PARKED, ROOM-bound shell keyed (channel, agent) with NO thread", async () => {
+  const h = harness();
+  const res = await h.ensureSession(spec());
   assert.equal(res.sessionId, "sess-1");
   const s = h.calls.started[0];
   assert.equal(s.parkedShell, true, "no SDK query runs: nothing acts unless addressed");
@@ -109,7 +162,7 @@ test("a summon opens a PARKED, ROOM-bound shell keyed (channel, agent) with NO t
 
 test("the agent's OWN identity rides the spawn context (the way channel + workspace do)", async () => {
   const h = harness();
-  await h.summon(spec());
+  await h.ensureSession(spec());
   const ctx = h.calls.started[0].context;
   assert.equal(ctx.agentId, AGENT, "this is what becomes as_agent in the delivery call");
   assert.equal(ctx.agentName, "quartz");
@@ -120,7 +173,7 @@ test("the agent's OWN identity rides the spawn context (the way channel + worksp
 
 test("the shell says why it is open and why it is quiet, then loads the ROOM history", async () => {
   const h = harness();
-  await h.summon(spec());
+  await h.ensureSession(spec());
   const notice = h.calls.emit.find((p) => p.type === "notice");
   assert.ok(notice, "the operator gets a line");
   assert.match(notice.text, /@quartz/);
@@ -128,9 +181,9 @@ test("the shell says why it is open and why it is quiet, then loads the ROOM his
   assert.deepEqual(h.calls.history, [{ bind: "room", taskId: "", counterpartyId: undefined }]);
 });
 
-test("a history read that throws does not take the summon down with it", async () => {
+test("a history read that throws does not take the wake down with it", async () => {
   const h = harness({ historyThrows: true });
-  const res = await h.summon(spec());
+  const res = await h.ensureSession(spec());
   assert.equal(res.sessionId, "sess-1");
 });
 
@@ -142,7 +195,7 @@ test("every refusal is named, and NONE of them constructs a session", async () =
     [{ sdkThrows: true }, "no-sdk"],
   ]) {
     const h = harness(cfg);
-    const res = await h.summon(spec());
+    const res = await h.ensureSession(spec());
     assert.equal(res.skipped, reason, JSON.stringify(cfg));
     assert.equal(h.calls.started.length, 0);
   }
@@ -150,28 +203,33 @@ test("every refusal is named, and NONE of them constructs a session", async () =
 
 test("a slot that already holds a session is BUSY: one agent is never started twice", async () => {
   const h = harness();
-  await h.summon(spec());
-  const again = await h.summon(spec());
+  await h.ensureSession(spec());
+  const again = await h.ensureSession(spec());
   assert.equal(again.skipped, "busy");
   assert.equal(h.calls.started.length, 1);
-  // A SETTLED session in the slot is not a session: the agent can be summoned again.
+  // A SETTLED session in the slot is not a session: the agent can be woken again.
   h.sessions.get(`${CH}:${AGENT}`).settled = true;
-  assert.equal((await h.summon(spec())).sessionId, "sess-1");
+  assert.equal((await h.ensureSession(spec())).sessionId, "sess-1");
 });
 
-// ── 2. the binding predicate ─────────────────────────────────────────────────────
+// ── 3. the binding predicate ─────────────────────────────────────────────────────
 
 function withSession(h, over = {}) {
   h.sessions.set(`${CH}:${AGENT}`, { settled: false, bind: "room", counterpartyId: null, ...over });
   return { channelId: CH, agentId: AGENT };
 }
 
-test("ROOM: any member but the operator may feed a turn", () => {
+test("ROOM: any member may feed a turn, THE OPERATOR INCLUDED", () => {
+  // 2026-07-31: the owner used to be the ONE author this refused, which made the product's
+  // primary flow impossible — you summon your own agent and then cannot speak to it. An
+  // agent's own output is authored by its OWNER'S account too, so this comparison never
+  // separated the human from the machine; `engagement.humanAuthored` at the route does, and
+  // that is where the loop brake lives.
   const h = harness();
   const slot = withSession(h);
   assert.equal(h.acceptsInboundFrom(slot, PEER), true);
   assert.equal(h.acceptsInboundFrom(slot, THIRD), true, "a THIRD member too — that is the room");
-  assert.equal(h.acceptsInboundFrom(slot, ME), false, "my own output is not an inbound turn");
+  assert.equal(h.acceptsInboundFrom(slot, ME), true, "the operator who summoned it may drive it");
   assert.equal(h.acceptsInboundFrom(slot, ""), false);
 });
 
@@ -203,15 +261,13 @@ test("no session, or a settled one, accepts nobody", () => {
 
 test("FIX S6: ROOM fails CLOSED while the operator identity is unresolved", () => {
   // The engine resolves selfUserId from the listener, and a summon can beat that on a cold
-  // start. The room branch used to answer `author !== String(getSelfId() || '')`, which with
-  // no self id is `author !== ''` — TRUE for everybody, including this machine's own output,
-  // the one author the room binding exists to exclude. The fence answered yes to every id it
-  // was asked about. With no identity there is no room membership to reason about.
+  // start. With no identity there is no room membership to reason about at all, so room mode
+  // refuses rather than guessing; the caller retries on the next message.
   for (const missing of [null, undefined, "", 0, false]) {
     const h = harness({ selfId: missing });
     const slot = withSession(h);
     assert.equal(h.acceptsInboundFrom(slot, PEER), false, JSON.stringify(missing));
-    assert.equal(h.acceptsInboundFrom(slot, ME), false, "and MY OWN words least of all");
+    assert.equal(h.acceptsInboundFrom(slot, ME), false, "and the operator's own words too");
   }
   // A missing getSelfId handle entirely (a mid-wave engine that never bound it) is the same.
   const bare = harness();
@@ -230,7 +286,7 @@ test("FIX S6: the PAIR binding is untouched — it never consulted the self id",
   assert.equal(h.acceptsInboundFrom(slot, THIRD), false);
 });
 
-// ── 3. the field really is persisted, and really does default narrow ─────────────
+// ── 4. the field really is persisted, and really does default narrow ─────────────
 
 test("bind + agentId survive into the durable record, defaulting to the NARROW binding", () => {
   const STORE = readFileSync(join(HERE, "..", "main", "session-store.js"), "utf8");
