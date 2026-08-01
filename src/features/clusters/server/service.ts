@@ -1,6 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isUuid } from "@/shared/lib/id/uuid";
+import type { Role } from "@/features/workspaces/types";
+import { filterTeamVisibleWorkflows } from "@/features/workflows/server/service";
 import { slugifyClusterName } from "../slug";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
 
@@ -25,9 +27,14 @@ export interface ClusterRow {
   description: string | null;
   created_at: string;
   updated_at: string;
-  /** Count of workflows assigned to this cluster. */
+  /**
+   * Count of workflows assigned to this cluster AND VISIBLE TO THE CALLER —
+   * the same population `dopl_workflow(op="list")` returns. A count taken over
+   * rows the caller cannot open is itself a disclosure: it says how many
+   * team-scoped workflows exist and lets a caller probe for them.
+   */
   workflow_count: number;
-  /** Names of assigned workflows, for at-a-glance summaries. */
+  /** Names of those visible workflows, for at-a-glance summaries. */
   workflow_names: string[];
 }
 
@@ -48,6 +55,8 @@ export interface ClusterUpdateRequest {
 export interface ClusterScope {
   workspaceId: string;
   userId: string;
+  /** Caller's workspace role — resolves team access without refetching membership. */
+  role: Role;
   source: "user" | "agent";
 }
 
@@ -70,14 +79,30 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
 
   const { data: wfRows, error: wfErr } = await db
     .from("workflows")
-    .select("name, cluster_id")
+    .select("id, name, cluster_id, access_mode, user_id")
     .in("cluster_id", ids)
     .eq("workspace_id", scope.workspaceId)
     .is("deleted_at", null);
   if (wfErr) throw wfErr;
 
+  // Same visibility rule `dopl_workflow(op="list")` applies (one definition —
+  // `filterTeamVisibleWorkflows`). Without it this rollup disclosed the names
+  // AND the count of team-scoped workflows the caller cannot open, so the two
+  // tools contradicted each other on the same rows. `deleted_at IS NULL` above
+  // keeps trashed workflows out of the rollup, matching the workflows service.
+  const visible = await filterTeamVisibleWorkflows(
+    (wfRows || []) as Array<{
+      id: string;
+      name: string;
+      cluster_id: string | null;
+      access_mode: "workspace" | "teams";
+      user_id: string | null;
+    }>,
+    scope
+  );
+
   const namesByCluster = new Map<string, string[]>();
-  for (const w of wfRows || []) {
+  for (const w of visible) {
     if (!w.cluster_id) continue;
     const arr = namesByCluster.get(w.cluster_id) || [];
     arr.push(w.name);
@@ -107,19 +132,42 @@ export async function getCluster(
 
   const { data: workflows, error: wfErr } = await db
     .from("workflows")
-    .select("id, name, slug, description")
+    .select("id, name, slug, description, access_mode, user_id")
     .eq("cluster_id", cluster.id)
     .eq("workspace_id", scope.workspaceId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
   if (wfErr) throw wfErr;
 
-  const list = workflows || [];
+  // A cluster is a workspace-scoped CONTAINER — it carries no `access_mode` of
+  // its own, so every member may open it. Only its contents are filtered, and a
+  // cluster whose every workflow is invisible comes back with an empty rollup
+  // rather than a 404: 404 is reserved for a resource the caller cannot see AT
+  // ALL (`requireEffectiveAccess`), and the same house pattern governs
+  // `getWorkflow`, which returns the workflow with its unreadable KB
+  // attachments filtered out instead of pretending the workflow is gone.
+  const list = await filterTeamVisibleWorkflows(
+    (workflows || []) as Array<
+      ClusterWorkflowSummary & {
+        access_mode: "workspace" | "teams";
+        user_id: string | null;
+      }
+    >,
+    scope
+  );
+  // Project back to the public summary: `access_mode` / `user_id` were
+  // selected to run the filter, not to be handed out.
+  const summaries: ClusterWorkflowSummary[] = list.map((w) => ({
+    id: w.id,
+    name: w.name,
+    slug: w.slug,
+    description: w.description,
+  }));
   return {
     ...cluster,
-    workflow_count: list.length,
-    workflow_names: list.map((w) => w.name),
-    workflows: list,
+    workflow_count: summaries.length,
+    workflow_names: summaries.map((w) => w.name),
+    workflows: summaries,
   };
 }
 

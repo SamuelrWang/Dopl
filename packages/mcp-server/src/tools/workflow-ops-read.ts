@@ -17,9 +17,30 @@ import {
   type GraphEdge,
 } from "./workflow-render";
 
+/**
+ * `listWorkflows` drops teams-mode rows the caller holds no grant on
+ * (features/workflows/server/service.ts) and excludes soft-deleted ones, and
+ * the rendered list said neither. "No workflows found." in particular was an
+ * assertion about the WORKSPACE produced by a per-caller query.
+ */
+const LIST_SCOPE_NOTE = `_Workflows you can read. Team-scoped ones you hold no grant on are not listed, and soft-deleted ones are in op="list_trash" — so this is not the workspace's workflow count._`;
+
+/** The trash read is scoped harder than the live one; see the op description. */
+const TRASH_SCOPE_NOTE = `_Trashed workflows you can see. A trashed TEAMS-SCOPED workflow is visible only to its creator and to admins/owners, so a grantee's empty trash is not proof the workspace's is empty._`;
+
+/**
+ * How many of an attachment's entries get rendered. The header printed the
+ * INDEX'S FULL LENGTH and then listed at most this many rows, so a base with
+ * 300 indexed entries announced 300 and showed 50 with nothing in between —
+ * and the index itself is already capped server-side before it arrives.
+ */
+const KB_ENTRY_ROWS = 50;
+
 export async function opList(client: DoplClient): Promise<ToolResponse> {
   const { workflows } = await client.listWorkflows();
-  if (workflows.length === 0) return ok("No workflows found.");
+  if (workflows.length === 0) {
+    return ok(`No workflows visible to you in this workspace.\n\n${LIST_SCOPE_NOTE}`);
+  }
   const lines = workflows.map((w) => {
     const steps = w.step_count ?? 0;
     const kbs = w.knowledge_base_count ?? 0;
@@ -32,7 +53,7 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
     const summary = parts.length === 0 ? "empty" : parts.join(" · ");
     return `- ${inlineOr(w.name, NO_NAME)} (slug: \`${w.slug}\`) — ${summary}`;
   });
-  return ok(lines.join("\n"));
+  return ok([...lines, "", LIST_SCOPE_NOTE].join("\n"));
 }
 
 export async function opGet(
@@ -142,11 +163,21 @@ export async function opGet(
       lines.push(`slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\``);
       if (kb.description) lines.push(inlineOr(kb.description, ""));
       if (kb.entries_index.length > 0) {
-        lines.push(`\nEntries (${kb.entries_index.length}):`);
-        for (const e of kb.entries_index.slice(0, 50)) {
+        const shown = kb.entries_index.slice(0, KB_ENTRY_ROWS);
+        lines.push(`\nEntries (${kb.entries_index.length} indexed):`);
+        for (const e of shown) {
           const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
           lines.push(`- ${inlineOr(path, NO_TITLE)}  \`(entry_id: ${e.entry_id})\``);
         }
+        // The count above is the INDEX's length, and the index is itself
+        // capped server-side across all attached bases before it gets here —
+        // so neither number is the base's entry count. Say which is which
+        // rather than let the header stand as a total.
+        lines.push(
+          kb.entries_index.length > shown.length
+            ? `_Listing ${shown.length} of ${kb.entries_index.length} INDEXED entries, and the index is capped server-side across all attached bases. Neither number is this base's entry count: dopl_kb(op="get_tree", base="${kb.slug}") is._`
+            : `_This is the attachment INDEX, capped server-side across all attached bases. For the base's real contents: dopl_kb(op="get_tree", base="${kb.slug}")._`,
+        );
       }
       lines.push("");
     }
@@ -234,7 +265,9 @@ export async function opStep(
 
 export async function opListTrash(client: DoplClient): Promise<ToolResponse> {
   const { workflows } = await client.listWorkflowTrash();
-  if (workflows.length === 0) return ok("Workflow trash is empty.");
+  if (workflows.length === 0) {
+    return ok(`Nothing in workflow trash that you can see.\n\n${TRASH_SCOPE_NOTE}`);
+  }
   const lines: string[] = [
     `## Workflow trash (${plural(workflows.length, "workflow")})\n`,
   ];
@@ -245,5 +278,6 @@ export async function opListTrash(client: DoplClient): Promise<ToolResponse> {
   lines.push(
     `Restore one with \`dopl_workflow(op='restore_workflow', slug='<slug or id>')\`.`,
   );
+  lines.push("", TRASH_SCOPE_NOTE);
   return ok(lines.join("\n"));
 }

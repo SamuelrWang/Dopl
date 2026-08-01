@@ -4,6 +4,8 @@ import type { GraphLayout } from "@/shared/graph";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
 import type { Role } from "@/features/workspaces/types";
+import { listEffectiveAccess, resolveLevel } from "@/features/teams/server/access";
+import type { EffectiveAccessResult } from "@/features/teams/types";
 import type { WorkflowGraph } from "./graph";
 import {
   listAttachedKnowledgeBasesById,
@@ -132,6 +134,64 @@ export async function assertClusterInWorkspace(
   if (!data) {
     throw new HttpError(404, "CLUSTER_NOT_FOUND", "Cluster not found");
   }
+}
+
+/**
+ * The rows any caller needs to decide whether a workflow is visible: its id,
+ * its access mode, and its creator. Deliberately structural rather than
+ * `WorkflowRow` — the trash listing and the cluster rollup both select narrow
+ * projections, and neither should have to over-select to reuse the rule.
+ */
+export interface WorkflowVisibilityRow {
+  id: string;
+  access_mode: "workspace" | "teams";
+  user_id: string | null;
+}
+
+/**
+ * THE workflow visibility rule — one definition, every listing.
+ *
+ * Drops teams-mode workflows the caller holds no grant on (the creator and
+ * admins always pass). It was written out by hand in three places
+ * (`listWorkflows`, `listTrash`, and — not at all — the cluster rollup), and
+ * the copy that was never written is exactly the disclosure that shipped:
+ * `dopl_cluster` handed back the names, slugs and descriptions of team-scoped
+ * workflows that `dopl_workflow(op="list")` hides. Two implementations of a
+ * visibility rule drift, and the one that drifts is the one that stops
+ * filtering — so callers import this and there is nothing left to drift.
+ *
+ * Mirrors `filterTeamVisibleBases` in the knowledge feature. Soft-delete is NOT
+ * this function's job: `deleted_at` lives in the query each caller already
+ * writes, and the trash listing deliberately selects the deleted rows.
+ */
+export async function filterTeamVisibleWorkflows<T extends WorkflowVisibilityRow>(
+  rows: T[],
+  scope: { workspaceId: string; userId: string; role?: Role }
+): Promise<T[]> {
+  if (rows.length === 0) return [];
+  const access = await listEffectiveAccess(scope.workspaceId, scope.userId, {
+    role: scope.role,
+  });
+  return rows.filter((r) => workflowVisibleTo(access, r, scope.userId));
+}
+
+/**
+ * The rule itself, as a pure predicate against an already-batched access
+ * result. `listWorkflows` needs that batch anyway (to filter attached KB
+ * names), so it resolves access once and calls this directly rather than
+ * paying a second `listEffectiveAccess` round trip for the same answer.
+ * `null` access = not an active member: nothing team-scoped is reachable.
+ */
+export function workflowVisibleTo(
+  access: EffectiveAccessResult | null,
+  row: WorkflowVisibilityRow,
+  userId: string
+): boolean {
+  if (access === null) return row.access_mode !== "teams";
+  return (
+    row.user_id === userId ||
+    resolveLevel(access, "workflow", row.id, row.access_mode) !== null
+  );
 }
 
 /** Live attachment counts/names for a workflow row (list-shape fields). */

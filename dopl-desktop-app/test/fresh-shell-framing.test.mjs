@@ -63,8 +63,8 @@ test("FIX F2: a fresh shell's FIRST typed turn carries the DELIVERY instruction"
   const s = freshShell({ pendingHistory: THREAD() });
   const turn = io.withSeed(s, "what did they end up sending?");
   // The one line whose absence made the whole feature silent: without it the agent has no
-  // idea the peer only ever sees a dopl_channel post.
-  assert.match(turn, /post your reply into this channel with the dopl_channel MCP tool/);
+  // idea the peer only ever sees an mcp__dopl__dopl_channel post.
+  assert.match(turn, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool/);
   assert.match(turn, /there is no other capture/);
   assert.ok(turn.endsWith("what did they end up sending?"), "the operator's words come last");
 });
@@ -84,7 +84,7 @@ test("v2.x: that first turn also carries the CONCRETE channel + workspace ids", 
 test("v2.x: a record with NO ids still frames (an older durable record)", () => {
   const s = freshShell({ context: { channelName: "Ops", authorName: "David" } });
   const turn = io.withSeed(s, "hello");
-  assert.match(turn, /post your reply into this channel with the dopl_channel MCP tool \(op "post",/);
+  assert.match(turn, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool\s\(op "post",/);
   assert.ok(!/undefined/.test(turn), "no placeholder reaches the agent");
   assert.match(turn, /SECURITY RULES/);
 });
@@ -123,7 +123,7 @@ test("FIX F2: NO history at all still frames the turn (the failure that matters 
   // pendingHistory unset. The agent still needs its role and its delivery instruction.
   for (const over of [{}, { pendingHistory: [] }, { pendingHistory: null }]) {
     const turn = io.withSeed(freshShell(over), "hello");
-    assert.match(turn, /post your reply into this channel with the dopl_channel MCP tool/, JSON.stringify(over));
+    assert.match(turn, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool/, JSON.stringify(over));
     assert.match(turn, /SECURITY RULES/);
     assert.ok(turn.endsWith("hello"));
   }

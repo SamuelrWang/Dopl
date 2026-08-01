@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMapTool = registerMapTool;
 const narration_1 = require("./narration");
+const partial_read_1 = require("./partial-read");
 const respond_1 = require("./respond");
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
 /**
@@ -30,15 +31,56 @@ const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
  * rendered as content.
  */
 const NO_NAME = "`(unnamed)`";
-const MAP_DESCRIPTION = `Compact manifest of the active workspace — every knowledge base, skill, workflow cluster, and ontology cluster with one-line descriptions and stable handles. Cheap; call at task start to decide where to look, then drill in with dopl_kb / dopl_skill / dopl_workflow / dopl_ontology. No parameters.`;
+/**
+ * THE SCOPE LINE, AND WHY IT IS NOT A NICETY.
+ *
+ * This description used to open "every knowledge base, skill, workflow cluster,
+ * and ontology cluster". It is not every one of them and never was:
+ * `listSkills` is visibility-filtered server-side and this file then drops
+ * everything that is not `status === "active"` (below); `listWorkflows` drops
+ * teams-mode workflows the caller has no grant on; `listKbBases` drops bases
+ * the caller cannot read. Two agents on two machines compared their `dopl_map`
+ * results, found "10 knowledge bases, 6 skills" against "4 KBs, 1 skill",
+ * believed the word "every", and jointly escalated a server-side `dopl_map`
+ * bug to the operator. There was no bug — one caller was the owner and the
+ * other a member, and five of six skills were owner-private. The tool told
+ * them the counts were totals. They were a view.
+ *
+ * So the description states its own scope, and {@link SCOPE_NOTE} restates it
+ * on the RESULT, where an agent that never read the description still meets it.
+ * Both name the authoritative alternative rather than leaving "then what does
+ * answer this?" as an exercise.
+ */
+const MAP_DESCRIPTION = `Curated routing manifest of the active workspace: the ACTIVE, caller-visible knowledge bases, skills, workflows and ontology clusters, with one-line descriptions and stable handles. It is a VIEW, not an inventory, so the counts here are not workspace totals: draft skills, trashed items, and anything scoped to a team you have no grant on are absent, and a domain that fails to load is NAMED in a PARTIAL READ notice on the result rather than passing as an empty section. For the authoritative inventory across every status and visibility use dopl_members(op="access_matrix"), which for an admin or owner enumerates every knowledge base, workflow and skill. Cheap; call at task start to decide where to look, then drill in with dopl_kb / dopl_skill / dopl_workflow / dopl_ontology. No parameters.`;
+/** Domains fanned out below — the denominator the PARTIAL READ notice reports against. */
+const DOMAIN_COUNT = 5;
+/**
+ * The same fact on the result. Costs nothing: every clause is a property of the
+ * query we already ran, so no second round trip is needed to state it. It names
+ * the FILTER rather than a hidden count for exactly that reason — "how many did
+ * you not show me" is a second query, "drafts are not shown" is free.
+ *
+ * The failure clause used to end "renders as an empty section rather than as an
+ * error", which was true and is now the opposite of what we want it to say: an
+ * unreadable domain is named in the PARTIAL READ prefix this line carries, so
+ * the ABSENCE of that prefix is itself the reader's evidence that every section
+ * below was actually read. Leaving the old wording would have kept telling
+ * agents they cannot tell — which is the entire thing being fixed.
+ */
+const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills, trashed items, and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
 function registerMapTool(register, client) {
     register("dopl_map", MAP_DESCRIPTION, {}, async () => {
+        // Still fail-soft — one broken domain must not fail the manifest — but the
+        // failure is now recorded instead of swallowed. The labels match the
+        // section headings below so "Skills" in the notice names the section the
+        // reader can see is empty.
+        const reads = (0, partial_read_1.partialRead)();
         const [bases, skills, clusters, workflows, ontology] = await Promise.all([
-            client.listKbBases().catch(() => []),
-            client.listSkills().catch(() => []),
-            client.listClusters().then((r) => r.clusters).catch(() => []),
-            client.listWorkflows().then((r) => r.workflows).catch(() => []),
-            client.getOntology().catch(() => EMPTY_ONTOLOGY),
+            reads.soft("Knowledge bases", client.listKbBases(), []),
+            reads.soft("Skills", client.listSkills(), []),
+            reads.soft("Clusters", client.listClusters().then((r) => r.clusters), []),
+            reads.soft("Workflows", client.listWorkflows().then((r) => r.workflows), []),
+            reads.soft("Ontology", client.getOntology(), EMPTY_ONTOLOGY),
         ]);
         const lines = ["# Workspace map"];
         lines.push("", `## Knowledge bases (${bases.length}) — dopl_kb`);
@@ -77,6 +119,10 @@ function registerMapTool(register, client) {
         }
         if (ontology.clusters.length === 0)
             lines.push("_None._");
+        // One footer line, not two: the partial-read notice prefixes the scope
+        // note it belongs to. On the healthy path `notice()` is "" and this line
+        // is byte-for-byte the scope note alone.
+        lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${SCOPE_NOTE}_`);
         return (0, respond_1.ok)(lines.join("\n"));
     });
 }

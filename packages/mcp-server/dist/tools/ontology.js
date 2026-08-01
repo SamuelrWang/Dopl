@@ -24,9 +24,9 @@ const ontology_ops_write_1 = require("./ontology-ops-write");
 const ONTOLOGY_DESCRIPTION = `The workspace ontology — objects organized in clusters of columns, with attributes, relationships, and actions. An object IS whatever its column is named (a "Sales Rep" column holds sales reps). LOOK UP identity, context, and how work gets done here instead of inferring; AUTHOR it the same way (no web UI needed). Objects are referenced by id (preferred) or exact name; clusters by slug/id/name.
 
 READ — set \`op\` to:
-- "map" — clusters and their columns. Call first to route.
-- "anchor" — the object representing the CALLER. Start here for any "my/me" request.
-- "resolve" — find objects by name/description match (query). Returns ids.
+- "map" — the clusters and their COLUMNS, with each column's direct members named. TWO LEVELS ONLY: objects nested below a column's own children, and objects that belong to no column at all, never appear here, and trashed clusters/objects are never listed by any read. So it routes, it does not inventory — op="resolve" and op="get" reach what it does not show. Call first to route.
+- "anchor" — the object representing the CALLER. Start here for any "my/me" request. At most one object is returned even if the data holds several anchored to you.
+- "resolve" — find objects whose NAME or SUBTITLE contains the query (substring, case-insensitive; attributes, relationships and actions are not matched). Returns ids, capped at 20 matches, and the result says when it truncated.
 - "get" — one object in full: attributes (linked knowledge/skills resolved to openable handles), OUTBOUND relationships plus an inbound "Referenced by" backlink list, nested objects, action recipes. Also returns a Version token — pass it back as \`expected_version\` on a later write so a concurrent edit can't silently clobber yours. Requires: object.
 
 WRITE — set \`op\` to:

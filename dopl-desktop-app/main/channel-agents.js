@@ -48,45 +48,28 @@
 // SPLIT NOTE (§2, 2026-07-31): the roster itself — the cache, the GET, the PATCH and the
 // predicates that read a row — moved to channel-roster.js when the routing rule grew its
 // second way in. This file is what the machine DOES; that one is what the server SAID.
+//
+// SPLIT NOTE (§2, 2026-08-01): the DELIVERY — the agent spec, the lazy wake, the self-echo
+// filter and the hand-off to the inbound gate — moved to channel-deliver.js when the self-echo
+// filter came out of routeThread and became one filter for every lane. This file decides WHICH
+// agent a message is for; that one decides whether and how it reaches one.
 
-const io = require('./listener-io'); // the listener's authenticated fetch (cookie + ws header)
-const targeting = require('./targeting');
 const settings = require('./settings');
-const sessionEngine = require('./session-engine');
+const targeting = require('./targeting');
 const engagement = require('./channel-engagement'); // WHO an untagged message is for
 const roster = require('./channel-roster'); // WHAT the server says about this channel's agents
 const threads = require('./channel-threads'); // WHO is in a breakout room
+const deliver = require('./channel-deliver'); // HOW a message reaches one agent of mine
+const sessionEngine = require('./session-engine');
 const { diag } = require('./diag');
 
 // ─── BEGIN CHANNEL-AGENTS-PURE (injectable; unit-tested via source extraction) ────
 // EVERY dependency in this block is either its own module state (`inFlight`, `lastIdentity`)
-// or one of the module-top requires referenced as a FREE VARIABLE — io, targeting, settings,
-// sessionEngine, engagement, roster, diag. That is the session-dispatch idiom: the truth
-// tables slice this block whole and drive the REAL summon flow and the REAL routing rule with
-// fakes standing in for HTTP and for the host-bound engine, so what is tested is what ships.
-
-// ── What every lane needs to know about one agent of mine ────────────────────────
-// One shape, two consumers (the greeting and the window), so the two can never disagree
-// about which agent, which room, or whose machine.
-//   `direct` / `ownerUserId` exist for the greeting alone: in a DM the server addresses
-//   every post for you, so the arrival has to name an addressee the loop brake reads as
-//   noise (session-greeting.directAddressee).
-//   `agentStamp` is the row's own `updatedAt` — the greeting's idempotency unit, so a
-//   retry dedupes while a row summoned again after a dismissal greets again.
-function agentSpec(entry, row, myId) {
-  return {
-    channelId: entry.channel.id,
-    workspaceId: entry.workspaceId,
-    agentId: row.id,
-    agentName: row.name,
-    agentStamp: row.updatedAt || '',
-    ownerName: io.displayNameFor(myId),
-    ownerUserId: myId,
-    channelName: entry.channel.name,
-    direct: !!(entry.channel && entry.channel.isDirect === true),
-    toolProfile: targeting.resolveToolProfile(entry.channel),
-  };
-}
+// or one of the module-top requires referenced as a FREE VARIABLE — settings, targeting,
+// engagement, roster, threads, deliver, sessionEngine, diag. That is the session-dispatch
+// idiom: the truth tables slice this block whole and drive the REAL summon flow and the REAL
+// routing rule with fakes standing in for HTTP and for the host-bound engine, so what is
+// tested is what ships.
 
 // ── Summon → GREET THE CHANNEL → status ──────────────────────────────────────────
 // A summoned row of mine announces itself IN THE ROOM (session-greeting.js). No window is
@@ -98,29 +81,12 @@ function agentSpec(entry, row, myId) {
 // the row `summoned`, so the next reconcile pass retries it; the post is idempotent per
 // (channel, agent, row stamp), so that retry can never produce a second arrival message.
 async function greetSummoned(entry, row, myId) {
-  const res = await sessionEngine.summonTeamSession(agentSpec(entry, row, myId));
+  const res = await sessionEngine.summonTeamSession(deliver.agentSpec(entry, row, myId));
   if (res && res.greeted) {
     await roster.setStatus(entry, row.id, roster.ACTIVE);
     return true;
   }
   diag('agents: summon did not greet', String(row.name || row.id).slice(0, 24), (res && res.skipped) || 'unknown');
-  return false;
-}
-
-// ── A message reached this agent → open its session ──────────────────────────────
-// The other half, and the ONLY caller that opens a window for a team agent besides the
-// operator's own "Open session" click: a message is FOR this agent — named, or untagged
-// while it is engaged — and nothing is running here, so the room-bound parked shell is
-// created now (session-team.ensureSession) and the row is put back to `active`. A refusal
-// starts nothing at all — see the four verdicts on routeAddressedAgent — because a pair
-// session standing in for a named agent is the failure FIX S2 closed.
-async function wakeTeamAgent(entry, row, myId) {
-  const res = await sessionEngine.wakeTeamSession(agentSpec(entry, row, myId));
-  if (res && res.sessionId) {
-    await roster.setStatus(entry, row.id, roster.ACTIVE);
-    return true;
-  }
-  diag('agents: wake not started', String(row.name || row.id).slice(0, 24), (res && res.skipped) || 'unknown');
   return false;
 }
 
@@ -297,10 +263,11 @@ function myOwnAgentSpoke(m, myUserId) {
 //     an existing HUMAN participant may add anybody (service-participants: there is no
 //     self-join, and owning an agent confers no curation), and the set is read over an
 //     authenticated call, never off the message. An agent cannot talk its way into a room.
-//   THE SELF-ECHO FILTER. A message is never delivered back into the agent that wrote it
-//     (`metadata.author_agent_id`, server-stamped from an ownership-checked field). Without
-//     this a single agent in a thread would answer itself, which is a one-agent infinite loop
-//     and needs no second party at all.
+//   THE SELF-ECHO FILTER. A message is never delivered back into the agent that wrote it. It
+//     no longer lives in this loop — it is channel-deliver.selfEcho, the one place every lane's
+//     delivery passes — and it no longer needs `metadata.author_agent_id` to be present to
+//     answer. Without it a single agent in a thread answers itself, which is a one-agent
+//     infinite loop and needs no second party at all.
 //   THE INBOUND GATE. Every delivery goes through session-gate, and a team session starts at
 //     manual/ask (session-reducer's defaults; startSession refuses to carry a posture into a
 //     parked shell). So by default each hop of an agent-to-agent exchange raises a card the
@@ -328,12 +295,12 @@ async function routeThread(entry, m, myUserId) {
   if (!rows.some((row) => roster.isMyLiveAgent(row, myUserId))) return '';
   const participants = await threads.participantsFor(entry, threadId);
   if (!participants) return ''; // unknown participation routes nobody
-  const authorAgentId = targeting.metaStr(m, 'author_agent_id');
   let verdict = '';
   for (const row of threads.myAgentParticipants(participants, rows, myUserId)) {
-    if (row.id === authorAgentId) continue; // never feed an agent its own post
+    // The self-echo filter is NOT here any more: it is channel-deliver.selfEcho, which every
+    // lane's delivery passes through (and which no longer needs `author_agent_id` to be there).
     if (!roster.isMyLiveAgent(row, myUserId)) continue; // a retired row is in no room
-    if ((await deliverToAgent(entry, m, myUserId, row)) === 'fed') verdict = 'fed';
+    if ((await deliver.deliverToAgent(entry, m, myUserId, row)) === 'fed') verdict = 'fed';
   }
   if (verdict) diag('agents: thread', String(threadId).slice(0, 8), 'delivered seq', m.seq);
   return verdict;
@@ -365,7 +332,7 @@ async function routeOneAddressed(entry, m, myUserId, toAgent) {
     diag('agents: addressed row not live', named, String(row.status || '?'), '- nothing started');
     return 'refused';
   }
-  return deliverToAgent(entry, m, myUserId, row);
+  return deliver.deliverToAgent(entry, m, myUserId, row);
 }
 
 // ── THE ENGAGED LANE: an UNTAGGED human message, taken by an agent already in play ─
@@ -386,7 +353,7 @@ async function routeOneAddressed(entry, m, myUserId, toAgent) {
 // team agent with no consent row either): the operator summoned the agent and a human engaged
 // it, and re-approving each line of a live exchange is the thing engagement exists to remove.
 // A refusal still falls through to the prompt, and the window really is 60 minutes and not
-// forever — which is only true because the refresh in deliverToAgent is HUMAN-gated.
+// forever — which is only true because the refresh in channel-deliver is HUMAN-gated.
 //
 // THE AUTHOR IS PART OF THE QUESTION, not just the agent: `engagedTargets` is scoped to the
 // human who engaged each row (plus that row's owner), so one person engaging my agent in a
@@ -398,68 +365,9 @@ async function routeEngaged(entry, m, myUserId) {
   let verdict = '';
   for (const row of targets) {
     if (!roster.isMyLiveAgent(row, myUserId)) continue; // a retired row is engaged by nothing
-    if ((await deliverToAgent(entry, m, myUserId, row)) === 'fed') verdict = 'fed';
+    if ((await deliver.deliverToAgent(entry, m, myUserId, row)) === 'fed') verdict = 'fed';
   }
   return verdict;
-}
-
-// ── THE DELIVERY, shared by both lanes ────────────────────────────────────────────
-// Wake if nothing is running, check the binding, feed. The only thing the two lanes disagree
-// about is how they got here.
-async function deliverToAgent(entry, m, myUserId, row) {
-  const named = String(row.name || row.id).slice(0, 24);
-  const slot = { channelId: entry.channel.id, agentId: row.id };
-  if (!sessionEngine.hasLiveSession(slot)) {
-    // No session on this machine — the NORMAL state of a greeted agent, since a summon
-    // starts nothing. THIS is where the session (and its window) comes from. Also covers a
-    // restart, an evicted shell, or a row that arrived while push was down.
-    if (!(await wakeTeamAgent(entry, row, myUserId))) {
-      diag('agents: could not start', named, 'for seq', m.seq, '- nothing started');
-      return 'refused';
-    }
-    const cached = roster.rowsFor(entry.channel.id);
-    if (cached.length) roster.noteRoster(entry, cached, myUserId);
-  }
-  // The ROOM binding decides whose words this session may carry. It fails closed, so a
-  // pair-bound session that somehow occupies this slot refuses rather than widening.
-  if (!sessionEngine.acceptsInboundFrom(slot, m.authorUserId)) {
-    diag('agents: refused inbound for', named, '(binding)');
-    return 'refused';
-  }
-  const fed = sessionEngine.feedInbound({
-    channelId: entry.channel.id,
-    agentId: row.id,
-    message: m.body,
-    authorName: io.displayNameFor(m.authorUserId),
-    // THE INBOUND GATE HAS NOBODY TO ASK ABOUT MY OWN WORDS. Every other message through this
-    // path is somebody else's, and holding it for an Accept is the point of the gate. A
-    // message this operator TYPED into the channel, routed to this operator's own agent, has
-    // already been approved by the act of sending it, and a card asking them to approve their
-    // own sentence would make the primary flow read as broken. session-gate.enqueue reads
-    // this and feeds straight through; an AUTH-HELD session still holds it, because there is
-    // no agent to feed. Nothing else about the gate moves.
-    //
-    // TYPED, and the `humanAuthored` conjunct is what makes that word true. My own AGENT's
-    // posts carry my user id too, so identity alone would hand every agent-to-agent hop INSIDE
-    // A THREAD a free pass through the gate — on the one path that deliberately carries
-    // agent-authored traffic, and therefore the one place where the gate is the bound that
-    // keeps two of my own agents from running at each other unattended. Only a person's own
-    // sentence bypasses; anything an agent wrote is gated like anybody else's words.
-    selfAuthored: m.authorUserId === myUserId && engagement.humanAuthored(m),
-  });
-  // ACTING IS WHAT REFRESHES ENGAGEMENT, and it is refreshed LOCALLY (channel-engagement.js
-  // explains why this is not a PATCH). Only a message that really reached the session
-  // counts — a refusal started no work, so it is not activity.
-  //
-  // HUMAN-AUTHORED ONLY, and this conjunct is what makes "the window is 60 minutes, not
-  // forever" true. This delivery is shared with the ADDRESSED lane, which has no author-kind
-  // brake by design (agent-to-agent addressing across machines IS the product) — so a peer's
-  // agent @-tagging mine refreshed my sliding window with no human at any hop, and repeating
-  // that every 59 minutes held the engagement open indefinitely. The server only ever engages
-  // on a human's post; the local slide now agrees with it.
-  if (fed && engagement.humanAuthored(m)) engagement.noteAgentActed(entry.channel.id, row.id);
-  diag('agents: routed to', named, 'seq', m.seq, fed ? 'fed' : 'REFUSED');
-  return fed ? 'fed' : 'refused';
 }
 
 // An id that names no agent of this channel's CACHED roster. Usually that is a peer's agent

@@ -34,6 +34,25 @@ const SUPABASE_ANON_KEY =
 // Project ref drives the Supabase auth cookie name: `sb-<ref>-auth-token`.
 const SUPABASE_REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 
+// ── Auto-update tuning ────────────────────────────────────────────────────────
+// How often the running app looks for a published build. 4h is right for a
+// machine that is already current and wrong for the publish loop: an app that is
+// already running will not look again for up to four hours after a release, which
+// is half of why "close and reopen" does not pick up a new build.
+//
+// DOPL_UPDATE_CHECK_MS overrides it (minutes-scale for a fast iteration loop).
+// The value is CLAMPED to [60s, 24h] and falls back to the 4h default when it is
+// absent or unparseable, so a typo like `=5` becomes 60s rather than a 5ms hot
+// loop against GitHub Releases. See main/update-policy.js for the resolver.
+const updatePolicy = require('./update-policy');
+
+const UPDATER = {
+  DEFAULT_CHECK_INTERVAL_MS: updatePolicy.DEFAULT_CHECK_INTERVAL_MS,
+  MIN_CHECK_INTERVAL_MS: updatePolicy.MIN_CHECK_INTERVAL_MS,
+  MAX_CHECK_INTERVAL_MS: updatePolicy.MAX_CHECK_INTERVAL_MS,
+  CHECK_INTERVAL_MS: updatePolicy.resolveCheckIntervalMs(process.env.DOPL_UPDATE_CHECK_MS),
+};
+
 // ── Listener tuning (judgment calls, documented in the build report) ──────────
 const LISTENER = {
   // Re-list channels this often so newly-joined channels start being watched.
@@ -103,4 +122,5 @@ module.exports = {
   SUPABASE_REF,
   LISTENER,
   REALTIME,
+  UPDATER,
 };

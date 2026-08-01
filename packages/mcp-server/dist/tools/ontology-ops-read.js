@@ -16,6 +16,20 @@ const identity_1 = require("./identity");
 const ontology_render_1 = require("./ontology-render");
 /** Same rule as ontology-render.ts: a graph name is a value. */
 const NO_NAME = "`(unnamed)`";
+/**
+ * WHAT op="map" WALKS, AND WHERE IT STOPS.
+ *
+ * The snapshot it renders from is genuinely the whole live graph: no status
+ * filter, no visibility filter, no cap, every member sees the same rows. The
+ * reduction is in this file — `opMap` walks clusters, then their columns, then
+ * one level of `childIds`, and stops. Objects nested deeper, and objects with
+ * no membership at all, are IN the snapshot and are not rendered. The old
+ * `op="resolve"` miss message even told the agent `op="map" shows everything`,
+ * which was the shape of this whole audit in one sentence.
+ */
+const MAP_SCOPE_NOTE = `_Clusters and their columns, with each column's DIRECT members only. Objects nested deeper, and objects belonging to no column, are not shown here; trashed clusters and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
+/** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
+const RESOLVE_CAP = 20;
 async function opMap(client) {
     const snapshot = await client.getOntology();
     if (snapshot.clusters.length === 0) {
@@ -38,6 +52,7 @@ async function opMap(client) {
         lines.push("");
     }
     lines.push(`Drill in with op="get" (object id or exact name).`);
+    lines.push("", MAP_SCOPE_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
@@ -72,20 +87,28 @@ async function opResolve(client, query) {
     const needle = query.toLowerCase();
     const hits = Object.values(snapshot.objects).filter((o) => o.name.toLowerCase().includes(needle) || o.subtitle.toLowerCase().includes(needle));
     if (hits.length === 0) {
-        return (0, respond_1.ok)(`No objects match ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. op="map" shows everything.`);
+        // Was `op="map" shows everything.` — it does not: op="map" renders two
+        // levels and skips objects in no column, which is exactly the set an agent
+        // that struck out on resolve is most likely to be hunting for.
+        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).`);
     }
     const containerOf = (id) => {
         // The "kind" is the containing OBJECT'S NAME, member-typed like any other.
         const name = Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
         return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "column";
     };
-    const lines = hits
-        .slice(0, 20)
-        .map((o) => {
+    const shown = hits.slice(0, RESOLVE_CAP);
+    const lines = shown.map((o) => {
         const subtitle = o.subtitle ? ` — ${(0, narration_1.inlineOr)(o.subtitle, "")}` : "";
         return `- ${(0, narration_1.inlineOr)(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`;
     });
-    return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}\n\nRead one with op="get".`);
+    // Both numbers are already in hand — the cap is applied here, over a snapshot
+    // already loaded — so the truncation costs nothing to state and used to cost
+    // the caller everything: 21 matches rendered exactly like 20.
+    const truncated = hits.length > shown.length
+        ? `\n\n_Showing ${shown.length} of ${hits.length} matches. Narrow the query for the rest._`
+        : "";
+    return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}\n\nRead one with op="get".`);
 }
 async function opGet(client, ref) {
     const snapshot = await client.getOntology();

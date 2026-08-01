@@ -11,6 +11,14 @@
  * `setups.ts`):
  *   - `dopl_skill`       — reads + non-destructive writes.
  *   - `dopl_skill_admin` — DESTRUCTIVE deletes, split out on purpose.
+ *
+ * This file is the thin registrar: it owns the two tool descriptions + schemas
+ * + op routing and delegates each op to a handler in a sibling module —
+ *   - `skills-shared.ts`    — NO_NAME, the op="list" scope line, error mappers
+ *   - `skills-ops-read.ts`  — list/get/read
+ *   - `skills-ops-write.ts` — write/create/update/set_visibility + the delete
+ * Split at the §2 500-line cap on the same seam `knowledge.ts` and
+ * `workflow.ts` use; the `skills-` prefix is what the parity split-scan groups on.
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

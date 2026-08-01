@@ -20,9 +20,29 @@ import { err, ok, isNotFound, missingParams, type RegisterTool, type ToolRespons
  */
 const NO_NAME = "`(unnamed)`";
 
+/**
+ * THE ONE PLACE IN THIS SWEEP WHERE THE LISTING SHOWED TOO MUCH, NOT TOO LITTLE
+ * — and it was a real disclosure, not a wording problem.
+ *
+ * `clusters` carries no `access_mode` and no `deleted_at`, so the cluster rows
+ * really are all of them. But the workflow rollup underneath
+ * (features/clusters/server/service.ts) applied NO effective-access filter
+ * while `dopl_workflow(op="list")` applied one, so a cluster's
+ * `workflow_count` / `workflow_names` included team-scoped workflows the
+ * caller could not open and op="get" handed back their names, slugs and
+ * descriptions. The count leaked on its own: it said how many existed.
+ *
+ * FIXED SERVER-SIDE. Both tools now run the SAME rule
+ * (`filterTeamVisibleWorkflows`, workflows/server/service-shared.ts), so this
+ * note no longer warns of an overcount — it states the filter, which is what
+ * every other listing in this surface does, and it says the two tools agree so
+ * an agent that spots a difference treats it as news rather than as noise.
+ */
+const WORKFLOW_SCOPE_NOTE = `_Workflow names and counts here are filtered to what YOU CAN READ, by the same rule as dopl_workflow(op="list") — the two agree — and trashed workflows are excluded. Team-scoped workflows you hold no grant on are absent and are not counted, so this is not the cluster's total._`;
+
 const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (containers that group related workflows). Set \`op\` to one of:
-- "list" — discover all clusters and how many workflows each holds. Cheap metadata call; run it proactively to show the user their workspace.
-- "get" — retrieve a cluster's metadata plus the workflows assigned to it. Inspect a workflow's steps + knowledge/skills with dopl_workflow(op="get", slug).
+- "list" — every cluster in the workspace (clusters carry no visibility of their own) and how many workflows each holds THAT YOU CAN READ. The workflow COUNTS and NAMES are filtered by the same rule as dopl_workflow(op="list"), and exclude trashed workflows: team-scoped workflows you hold no grant on are neither named nor counted, so a cluster's count is not its total. Cheap metadata call; run it proactively to show the user their workspace.
+- "get" — a cluster's metadata plus the workflows assigned to it that YOU CAN READ. Same filter as op="list", so a cluster whose workflows are all team-scoped away from you comes back with an empty list rather than as not-found — the cluster itself is visible to every member. Inspect a workflow's steps + knowledge/skills with dopl_workflow(op="get", slug).
 - "create" — create a new, empty cluster by name. Assign workflows to it with dopl_workflow(op="set_cluster").
 - "update" — rename a cluster (\`name\`) and/or set its \`description\`.
 
@@ -125,10 +145,20 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
     const names = c.workflow_names?.length
       ? ` (${c.workflow_names.map((n) => inlineOr(n, NO_NAME)).join(", ")})`
       : "";
-    const summary = count === 0 ? "empty" : `${plural(count, "workflow")}${names}`;
+    // "empty" was safe while the rollup was unfiltered. Now that a cluster's
+    // team-scoped workflows are correctly withheld, a bare "empty" would be the
+    // same lie one layer down: zero VISIBLE is not zero.
+    const summary =
+      count === 0
+        ? "no workflows visible to you"
+        : `${plural(count, "workflow")}${names}`;
     return `- ${inlineOr(c.name, NO_NAME)} (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
   });
-  return ok(lines.join("\n"));
+  // Only worth saying when a workflow was actually named or counted.
+  const anyWorkflows = clusters.some((c) => (c.workflow_count ?? 0) > 0);
+  return ok(
+    anyWorkflows ? [...lines, "", WORKFLOW_SCOPE_NOTE].join("\n") : lines.join("\n"),
+  );
 }
 
 async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
@@ -153,7 +183,11 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
 
   const workflows = cluster.workflows ?? [];
   if (workflows.length === 0) {
-    lines.push("_No workflows in this cluster yet._");
+    // Same reason as op="list": with the rollup filtered, an empty list means
+    // "none you can read", which is not the same claim as "none exist".
+    lines.push(
+      "_No workflows in this cluster that you can read. Team-scoped workflows you hold no grant on, and trashed ones, are not listed._"
+    );
   } else {
     lines.push(`## Workflows (${workflows.length})`);
     for (const w of workflows) {
@@ -164,6 +198,7 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
     lines.push(
       `Read a workflow's steps + knowledge/skills with \`dopl_workflow({ op: "get", slug: "<workflow-slug>" })\`.`
     );
+    lines.push("", WORKFLOW_SCOPE_NOTE);
   }
 
   return ok(lines.join("\n"));

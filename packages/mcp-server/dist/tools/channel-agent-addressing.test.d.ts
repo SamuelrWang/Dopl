@@ -1,7 +1,6 @@
 /**
- * AGENT ADDRESSING ON THE EXISTING OPS — `post`'s `to_agent` / `as_agent`,
- * `create_thread`'s `participants`, and the participant set `get_thread` now
- * renders.
+ * AGENT ADDRESSING ON `op="post"` — `to_agent` / `as_agent`, the `to_agents`
+ * multi-address, and `intent`.
  *
  * What these pin, and why each one is worth a test:
  *
@@ -19,6 +18,16 @@
  *    "nothing put this in front of an agent" warning.
  *  - AND WHEN BOTH ADDRESSES ARE SET, the agent's owner wins — silently at the
  *    route, so the result has to say it.
+ *
+ * THE OTHER HALF: the thread PARTICIPANT SET — `create_thread`'s `participants`
+ * seed and the set `get_thread` renders — is `channel-thread-participants.test.ts`,
+ * split out of here at the §2 500-line cap along the line the ops already draw.
+ * Addressing decides who ONE MESSAGE reaches and is resolved per post; a
+ * participant set decides who may write in a ROOM at all and is seeded once,
+ * server-side, against a different roster. Neither half's refusals are reachable
+ * from the other's code path. The harness both need is
+ * `agent-addressing-fixtures.ts` — shared, because the channel-vs-workspace
+ * roster asymmetry it encodes is the subject of one half's tests.
  *
  * The @dopl/client is hand-stubbed; nothing transports.
  */

@@ -37,8 +37,8 @@ import {
 } from "./workflow-ops-write";
 
 const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a graph of steps connected by branch-conditioned edges; the agent-followable unit). Set \`op\` to one of:
-- "list" — discover all workflows. Cheap metadata call; run it proactively to resolve a slug another op needs.
-- "get" — retrieve a workflow's metadata, its topologically-ordered steps (each step's id, READ knowledge, ACTION skills, user input, agent output, next), the branch conditions on its edges, and attached knowledge bases + skills. Step ids returned here are what update_node/remove_node/connect take.
+- "list" — the workflows YOU CAN READ in this workspace. Cheap metadata call; run it proactively to resolve a slug another op needs. Team-scoped workflows you hold no grant on are dropped silently (they are not "missing" — they are not yours), and soft-deleted ones live in op="list_trash", so this count is your view and not the workspace's.
+- "get" — retrieve a workflow's metadata, its topologically-ordered steps (each step's id, READ knowledge, ACTION skills, user input, agent output, next), the branch conditions on its edges, and attached knowledge bases + skills. Steps and edges are COMPLETE. The ATTACHMENTS are not: each attached base's entry index is capped server-side and again when rendered, and attached bases/skills you cannot read are dropped — so treat the entry lists as an index, and use dopl_kb(op="get_tree") for a base's real contents. Attached skill bodies are truncated and labelled as such. Step ids returned here are what update_node/remove_node/connect take.
 - "step" — read ONE step's full detail as you walk the workflow (\`step\` = a step id or ref): its reads/actions/user-input/agent-output/next + its outgoing edges (with branch conditions) and incoming-edge count. The paced-disclosure surface — fetch a step when you reach it.
 - "create" — create a new workflow by name.
 - "update" — rename (\`name\`) and/or set \`description\`.
@@ -48,7 +48,7 @@ const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a graph of steps c
 - "remove_node" — delete a step (\`node_id\` = step id or ref); its edges go with it.
 - "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = step id or ref). connect takes an optional branch \`condition\`.
 - "set_cluster" — group this workflow under a cluster (\`cluster\` = slug or id from dopl_cluster(op='list')); omit \`cluster\` to ungroup.
-- "list_trash" — list soft-deleted workflows in this workspace (the recovery surface). Each shows name, slug, and when it was deleted. Run it before "restore_workflow" to find the slug/id.
+- "list_trash" — the soft-deleted workflows YOU CAN SEE (the recovery surface). Each shows name, slug, and when it was deleted. A trashed TEAMS-SCOPED workflow is visible here only to its creator and to admins/owners: the effective-access index it would be resolved through excludes deleted rows, so a grantee cannot see or restore it. Run this before "restore_workflow" to find the slug/id.
 - "restore_workflow" — restore a soft-deleted workflow (recovery, not deletion; brings its steps + edges back). Use after op="list_trash"; \`slug\` accepts the trashed workflow's slug or id. If a live workflow already reused the slug, the restored one gets a fresh suffixed slug.
 
 Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Step reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public. There is no "header" — entry steps are simply the ones with no incoming edge.`;

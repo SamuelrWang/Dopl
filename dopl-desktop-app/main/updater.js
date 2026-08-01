@@ -1,35 +1,81 @@
 // Auto-update via electron-updater against GitHub Releases (SamuelrWang/Dopl),
 // mirroring the study-notes app's proven setup: zip + dmg + latest-mac.yml feed.
 //
-// Behavior: check at startup and every 4h; download silently; when an update is
-// downloaded, show one notification and add an "Update ready — restart to
-// install" tray item. Never force-restarts on its own — install happens on
-// normal quit (autoInstallOnAppQuit) or the explicit tray click. A background
-// listener app must not yank itself out from under an active spawned session.
+// Behavior: check at startup and on an interval (4h by default, overridable via
+// DOPL_UPDATE_CHECK_MS and clamped to [60s, 24h] — see update-policy.js);
+// download silently with progress on the tray; when the download completes,
+// offer a one-click restart. Never force-restarts on its own: install happens on
+// normal quit (autoInstallOnAppQuit) or an explicit click. A background listener
+// app must not yank itself out from under an active spawned session.
 //
 // Q10: THE STAGED INSTALL IS THE FAILURE MODE. "Installs on quit" plus "never
 // quits" equals a Mac running a build nobody believes it is running — on
 // 2026-07-31 a peer sat on 1.7.14 all evening and the 1.7.15 fix read as broken.
-// So the download event has to reach a HUMAN surface, not just the log: the
-// notification names the action (restart), the tray item is the click that does
-// it, and the tray tooltip carries it without the menu being opened. The
-// operator still decides when — a restart mid-turn kills a live session.
+// So the download event has to reach a HUMAN surface, not just the log.
+//
+// WHAT "CLOSE AND REOPEN DOES NOT GET THE NEW BUILD" ACTUALLY IS (2026-08-01).
+// The operator's report was "it takes several tries over a few minutes". Nothing
+// is flaky: the cycle is START (download ~200MB in the background) → QUIT
+// (install) → START (new build), so ONE close-and-reopen can never suffice, and
+// quitting mid-download discards the partial copy, which is why it takes tries.
+// Three things were missing and are now here:
+//   1. the moment the download lands, an actionable RESTART prompt (one click),
+//   2. `download-progress` on a visible surface, so a long download stops looking
+//      like nothing happening (the reason people quit halfway),
+//   3. a manual "Check for updates now", because 4h after a publish is forever.
+// The one thing deliberately NOT added is an automatic restart. The operator may
+// be mid-exchange with a live agent; the prompt names any live session and
+// defaults to "Later".
 
-const { app, Notification } = require('electron');
+const { app, Notification, dialog } = require('electron');
 const { diag } = require('./diag');
-
-const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4h
+const { UPDATER } = require('./config');
+const policy = require('./update-policy');
+const appVersion = require('./app-version');
 
 let autoUpdater = null;
 let readyVersion = null; // set once an update is downloaded
 let onReadyCb = null;
+let onNoteCb = null; // tray.setUpdateNote — the "what is the updater doing" line
+let getLiveSessions = null; // injected: sessionEngine.listLiveSessions
 let notified = false;
+let downloading = false;
+let manualPending = false; // a manual check is in flight -> failures ARE surfaced
+let promptOpen = false; // single-flight: never two restart dialogs
+let promptedThisRun = false; // the auto prompt fires at most once per run
+
+// The tray note. Also mirrored into diag, so the field log tells the same story
+// the menu bar does.
+function note(outcome, ctx) {
+  const n = policy.checkNote(outcome, ctx);
+  diag('updater:', outcome, n.text ? `(${n.text})` : '');
+  if (!onNoteCb) return;
+  try { onNoteCb(n.text, { busy: n.busy }); } catch (_) { /* tray may be gone */ }
+}
+
+function liveSessions() {
+  if (!getLiveSessions) return [];
+  try {
+    const list = getLiveSessions();
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    // Never let an accounting read block a restart prompt; an unknown answer is
+    // treated as "none", and the prompt still says a restart ends what is running.
+    diag('updater: live-session read failed', err && err.message);
+    return [];
+  }
+}
 
 function init(opts) {
   onReadyCb = (opts && opts.onReady) || null;
+  onNoteCb = (opts && opts.onNote) || null;
+  getLiveSessions = (opts && opts.getLiveSessions) || null;
 
-  // Dev runs aren't signed against the feed and would just error.
+  // Dev runs aren't signed against the feed and would just error. The note is set
+  // anyway so the tray's "Check for updates now" says WHY it does nothing here
+  // instead of reading as a dead button.
   if (!app.isPackaged) {
+    note('unsupported');
     diag('updater: skip (not packaged)');
     return;
   }
@@ -37,6 +83,7 @@ function init(opts) {
   try {
     autoUpdater = require('electron-updater').autoUpdater;
   } catch (err) {
+    note('unsupported');
     diag('updater: module load failed', err && err.message);
     return;
   }
@@ -47,54 +94,188 @@ function init(opts) {
   // the interesting transitions through diag instead.
   autoUpdater.logger = null;
 
+  autoUpdater.on('checking-for-update', () => {
+    note('checking');
+  });
   autoUpdater.on('update-available', (info) => {
-    diag('updater: update available', info && info.version);
+    downloading = true;
+    manualPending = false; // the outcome is now the download, not a check result
+    note('downloading', { version: info && info.version });
   });
   autoUpdater.on('update-not-available', () => {
-    diag('updater: up to date');
+    downloading = false;
+    manualPending = false;
+    note('up-to-date', { version: appVersion.appVersion() });
+  });
+  // A ~200MB download over a slow link used to be invisible. This is what makes
+  // "it is working, wait" a thing the operator can see (item 2).
+  autoUpdater.on('download-progress', (info) => {
+    downloading = true;
+    if (!onNoteCb) return;
+    const n = policy.checkNote('downloading', { percent: policy.progressPercent(info) });
+    try { onNoteCb(n.text, { busy: n.busy }); } catch (_) { /* tray may be gone */ }
   });
   autoUpdater.on('error', (err) => {
     // Common benign case: no release published yet / offline. Log, never surface.
+    // The ONE exception is a check the operator asked for by hand: silence there
+    // would read as a broken button, so that failure is reported once and the
+    // global swallow is left exactly as strict as it was.
+    downloading = false;
     diag('updater: error', err && err.message);
+    if (manualPending) {
+      manualPending = false;
+      note('error', { message: err && err.message });
+    } else {
+      note('idle'); // clear any stale "Checking…" so the menu never wedges busy
+    }
   });
   autoUpdater.on('update-downloaded', (info) => {
     readyVersion = (info && info.version) || 'new version';
+    downloading = false;
+    manualPending = false;
     diag('updater: downloaded', readyVersion);
+    note('ready', { version: readyVersion });
     if (onReadyCb) {
       try { onReadyCb(readyVersion); } catch (_) { /* tray may be gone */ }
     }
+    const sessions = liveSessions();
     if (!notified) {
       notified = true;
-      try {
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'Dopl update ready',
-            body: `Version ${readyVersion} is downloaded. It installs when you restart Dopl `
-              + `(menu bar icon, "Update ready"). Until then this Mac keeps running the old build.`,
-            silent: true,
-          }).show();
-        }
-      } catch (_) { /* best-effort */ }
+      showDownloadedNotification(readyVersion, sessions);
+    }
+    // ITEM 1: the restart is one click away the moment the bits are on disk.
+    // With a live session we do NOT throw a modal over a running agent turn:
+    // the notification and the tray item carry it, and both routes come back
+    // through promptRestart(), which names the session before it kills it.
+    if (!promptedThisRun && !sessions.length) {
+      promptedThisRun = true;
+      promptRestart();
     }
   });
 
-  const check = () => {
-    try {
-      autoUpdater.checkForUpdates().catch((err) => {
-        diag('updater: check failed', err && err.message);
-      });
-    } catch (err) {
-      diag('updater: check threw', err && err.message);
-    }
-  };
   check();
-  const timer = setInterval(check, CHECK_INTERVAL_MS);
+  const timer = setInterval(check, UPDATER.CHECK_INTERVAL_MS);
   if (timer.unref) timer.unref();
-  diag('updater: armed (4h interval)');
+  diag('updater: armed (interval', UPDATER.CHECK_INTERVAL_MS + 'ms)');
 }
 
-// Tray "Restart to install" action. quitAndInstall runs the normal quit path
-// (before-quit fires → listener teardown), then relaunches updated.
+// The notification carries the announcement when the dialog is suppressed, and
+// survives being missed (a dialog behind another Space does not).
+//
+// `actions` is accepted on darwin in Electron 43, but macOS only RENDERS the
+// button when the notification is delivered as an alert (a per-user System
+// Settings choice; in banner style it appears on hover at best). So it is a
+// bonus path, never the load-bearing one: the dialog and the tray item are.
+// Clicking the banner body works everywhere and opens the same prompt.
+function showDownloadedNotification(version, sessions) {
+  try {
+    if (!Notification.isSupported()) return;
+    const copy = policy.downloadedNotification({ version, sessions });
+    const n = new Notification({
+      title: copy.title,
+      body: copy.body,
+      silent: true,
+      actions: [{ type: 'button', text: 'Restart now' }],
+    });
+    n.on('action', () => requestRestart());
+    n.on('click', () => promptRestart());
+    n.show();
+  } catch (_) { /* best-effort */ }
+}
+
+// ITEM 3: the manual check. Called from the tray, and never a no-op click: every
+// path here ends in a note the operator can read (checking / up to date /
+// downloading / ready / failed / off in this build).
+function check(opts) {
+  const manual = !!(opts && opts.manual);
+  if (manual) diag('updater: manual check requested');
+  if (!autoUpdater) {
+    if (manual) note('unsupported');
+    return;
+  }
+  // Already staged: the answer is "ready", and a manual ask is an explicit ask,
+  // so it goes straight to the prompt instead of re-checking a settled question.
+  if (readyVersion) {
+    note('ready', { version: readyVersion });
+    if (manual) promptRestart();
+    return;
+  }
+  // Mid-download: re-checking would either be ignored or start a second fetch.
+  // Report the state instead.
+  if (downloading) {
+    if (manual) note('downloading');
+    return;
+  }
+  if (manual) manualPending = true;
+  try {
+    autoUpdater.checkForUpdates().catch((err) => {
+      diag('updater: check failed', err && err.message);
+      if (manualPending) {
+        manualPending = false;
+        note('error', { message: err && err.message });
+      }
+    });
+  } catch (err) {
+    diag('updater: check threw', err && err.message);
+    if (manualPending) {
+      manualPending = false;
+      note('error', { message: err && err.message });
+    }
+  }
+}
+
+function checkNow() {
+  check({ manual: true });
+}
+
+// The restart prompt. NOTHING here restarts on its own: the dialog defaults to
+// "Later" (button 0, also the cancel action), and only an explicit click on
+// "Restart now" reaches quitAndInstall. Single-flight, because the tray item, the
+// notification body and its action button all lead here.
+//
+// Windowless on purpose: the app is usually a hidden background listener, and a
+// modal parented to a hidden window would be invisible. claude-auth.js already
+// shows a windowless message box on the same reasoning.
+function promptRestart() {
+  if (!readyVersion || promptOpen) return Promise.resolve(false);
+  promptOpen = true;
+  const sessions = liveSessions();
+  const opts = policy.restartPrompt({ version: readyVersion, sessions });
+  diag('updater: restart prompt (live sessions:', sessions.length + ')');
+  return dialog
+    .showMessageBox(opts)
+    .then(({ response }) => {
+      if (!policy.isRestartChoice(response)) {
+        diag('updater: restart deferred by operator');
+        return false;
+      }
+      quitAndInstall();
+      return true;
+    })
+    .catch((err) => {
+      diag('updater: restart prompt failed', err && err.message);
+      return false;
+    })
+    .finally(() => { promptOpen = false; });
+}
+
+// The tray "Update ready" click. With nothing live it does what the label says
+// and restarts; with a live session it goes through the prompt first, so an
+// agent mid turn is never killed without the operator being told.
+function requestRestart() {
+  if (!readyVersion) {
+    checkNow();
+    return;
+  }
+  if (liveSessions().length) {
+    promptRestart();
+    return;
+  }
+  quitAndInstall();
+}
+
+// The install itself. quitAndInstall runs the normal quit path (before-quit fires
+// → listener teardown), then relaunches updated.
 function quitAndInstall() {
   if (!autoUpdater || !readyVersion) return;
   diag('updater: quitAndInstall', readyVersion);
@@ -119,4 +300,12 @@ function isUpdateReady() {
   return !!readyVersion;
 }
 
-module.exports = { init, quitAndInstall, updateReadyVersion, isUpdateReady };
+module.exports = {
+  init,
+  checkNow,
+  promptRestart,
+  requestRestart,
+  quitAndInstall,
+  updateReadyVersion,
+  isUpdateReady,
+};

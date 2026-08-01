@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { Role } from "@/features/workspaces/types";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
@@ -25,12 +26,13 @@ function toErrorResponse(err: unknown): NextResponse {
 
 async function handleGet(
   _request: NextRequest,
-  { userId, workspaceId, agentTokenId }: { userId: string; workspaceId: string; agentTokenId?: string }
+  { userId, workspaceId, role, agentTokenId }: { userId: string; workspaceId: string; role: Role; agentTokenId?: string }
 ) {
   try {
     const clusters = await listClusters({
       userId,
       workspaceId,
+      role,
       source: agentTokenId ? "agent" : "user",
     });
     return NextResponse.json({ clusters });
@@ -41,13 +43,13 @@ async function handleGet(
 
 async function handlePost(
   request: NextRequest,
-  { userId, workspaceId, agentTokenId }: { userId: string; workspaceId: string; agentTokenId?: string }
+  { userId, workspaceId, role, agentTokenId }: { userId: string; workspaceId: string; role: Role; agentTokenId?: string }
 ) {
   try {
     const input = await parseJson(request, ClusterCreateSchema);
     const cluster = await createCluster(
       { name: input.name, description: input.description },
-      { userId, workspaceId, source: agentTokenId ? "agent" : "user" }
+      { userId, workspaceId, role, source: agentTokenId ? "agent" : "user" }
     );
     return NextResponse.json(cluster, { status: 201 });
   } catch (err) {

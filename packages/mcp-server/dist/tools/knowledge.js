@@ -27,8 +27,8 @@ const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 const knowledge_ops_admin_1 = require("./knowledge-ops-admin");
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
-- "list_bases" — list the bases the caller can access in the active workspace. Returns slugs to address with subsequent ops.
-- "get_tree" — full folder/entry tree for a base (metadata only, bodies stripped). First call when exploring a base; for a body follow up with op=read_file.
+- "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private, bases scoped to a team you have no grant on, and trashed bases (op="list_trash") are absent, so this is your view and not the workspace's base count.
+- "get_tree" — folder/entry tree for a base (metadata only, bodies stripped). FOLDERS ship in full; ENTRIES are paged, 400 per call by default, and the result says so and hands back an entry_cursor when there are more. Trashed folders/entries are excluded. First call when exploring a base; for a body follow up with op=read_file.
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
 - "create_base" — create a new base. New bases are private to the creator by default.
 - "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here.
@@ -38,10 +38,10 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk t
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
 - "write_file" — upsert an entry. Pass \`path\` to target an existing entry (or a new one at that path); for a brand-new entry you may instead pass just \`title\` and it becomes the addressable path. Titles can't contain \`/\` — it's the path separator. Pass \`excerpt\` to set the entry's short agent-facing summary (shown in get_tree/list_dir); on an update, \`excerpt\` is only changed when provided. Parents mkdir-p'd. Overwriting an existing entry REQUIRES \`expected_version\` from a prior read_file (412 without it) so a concurrent edit can't be silently overwritten; \`force=true\` skips the check. Creates need no version.
 - "move_file" — move + rename an entry; parents mkdir-p'd, leaf becomes the new title.
-- "list_trash" — list soft-deleted bases/folders/entries. Optional \`base\` scopes to one base; omit for workspace-wide.
+- "list_trash" — soft-deleted bases/folders/entries YOU CAN SEE. Scoped by the same visibility rules as op="list_bases", so another member's trashed private base is not here (admins and owners see more than members do). Optional \`base\` scopes to one base; omit for the workspace-wide view.
 - "restore_file" — restore a soft-deleted entry by id (from op=list_trash).
 - "restore_folder" — restore a soft-deleted folder by id (from op=list_trash).
-- "search" — full-text search across the workspace's bases. Returns ranked entries with snippet + path for op=read_file. Optional \`base\` narrows to one base.
+- "search" — hybrid keyword + semantic search over the entry BODIES of the bases you can read. Returns ranked entries with snippet + path for op=read_file. A RANKED SAMPLE, not an exhaustive scan: the backend considers a bounded candidate set per leg before fusing, drops semantically distant entries, caps at \`limit\` (default 20), and removes hits in bases you cannot read AFTER ranking — so fewer hits than \`limit\` is normal and never means "there are no others". Zero hits is not proof of absence; try op="get_tree" or a different phrasing. Optional \`base\` narrows to one base.
 - "set_visibility" — publish a base you created (\`visibility="public"\`: workspace-visible + referenceable in workflows). One-way — un-publishing and team scope are human-only (Dopl web UI).
 
 Destructive deletes live in the separate \`dopl_kb_admin\` tool.`;

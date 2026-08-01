@@ -4,6 +4,7 @@ import { DESCRIPTION_MAX } from "@/config";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { ClusterNameSchema } from "@/features/clusters/schema";
+import type { Role } from "@/features/workspaces/types";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import {
   deleteCluster,
@@ -14,6 +15,7 @@ import {
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -43,6 +45,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    role: ctx.role,
     source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }

@@ -170,11 +170,16 @@ function harness(over = {}) {
     feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
+  // 2026-08-01: a fed message is titled with its AUTHOR (channel-roster.authorLabel), which is
+  // not the same string as the account's display name when an AGENT wrote the post.
+  const roster = {
+    authorLabel: (channelId, m) => (m.authorKind === "agent" ? `agent-of:${m.authorUserId}` : `name:${m.authorUserId}`),
+  };
   const notifyLocal = (title, body) => calls.notifyLocal.push({ title, body });
   const routes = new Function(
-    "settings", "targeting", "sessionEngine", "io", "notifyLocal", "diag",
+    "settings", "targeting", "sessionEngine", "io", "roster", "notifyLocal", "diag",
     `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };`
-  )(settings, targeting, sessionEngine, io, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
+  )(settings, targeting, sessionEngine, io, roster, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
 
   // channel-listener.js:152-168 verbatim in shape (pinned by STATIC PIN 1 above).
   async function dispatch(entry, m) {

@@ -30,10 +30,28 @@ import { isErr, resolveBaseOr } from "./knowledge-shared";
  */
 const NO_NAME = "`(unnamed)`";
 
+/**
+ * WHOSE VIEW THIS IS, stated on the result rather than only in the description.
+ *
+ * `listBases` is filtered twice server-side before a row reaches us
+ * (`canSeeBase` drops another member's private bases; `filterTeamVisibleBases`
+ * drops teams-mode bases with no grant, and FAILS CLOSED to an empty list),
+ * and trashed bases are excluded unconditionally. None of that left a trace in
+ * the output, so "## Knowledge bases" over four rows read as the workspace
+ * having four — the same inference that had two agents escalate a nonexistent
+ * `dopl_map` bug after comparing "10 KBs" with "4 KBs".
+ *
+ * Names the FILTERS, not a hidden count: counting what you were not shown is a
+ * second query on every list call.
+ */
+const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases, bases scoped to a team you have no grant on, and trashed bases (op="list_trash") are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+
 export async function opListBases(client: DoplClient): Promise<ToolResponse> {
   const bases = await client.listKbBases();
   if (bases.length === 0)
-    return ok("No knowledge bases yet. Create one with `dopl_kb(op='create_base')`.");
+    return ok(
+      `No knowledge bases visible to you. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
+    );
   const lines = ["## Knowledge bases\n"];
   for (const b of bases) {
     // Surface the immutable id alongside the slug (the slug changes on
@@ -44,6 +62,7 @@ export async function opListBases(client: DoplClient): Promise<ToolResponse> {
       `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
     );
   }
+  lines.push("", BASES_SCOPE_NOTE);
   return ok(lines.join("\n"));
 }
 
@@ -106,6 +125,15 @@ export async function opGetTree(
     lines.push(
       "",
       `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`
+    );
+  } else {
+    // The paging notice above only fires when there IS a next page, so the
+    // complete case said nothing at all about its own scope — and a tree with
+    // no trashed items looks identical to one whose deletions were hidden.
+    // Folders genuinely ship in full; say which half is which.
+    lines.push(
+      "",
+      `_Folders complete; entries complete for this base. Trashed folders and entries are excluded — op="list_trash" lists what is recoverable._`
     );
   }
   return ok(lines.join("\n"));
@@ -178,7 +206,10 @@ export async function opListTrash(client: DoplClient, ref?: string): Promise<Too
   const trash = await client.listKbTrash(baseId);
   const total =
     trash.bases.length + trash.folders.length + trash.entries.length;
-  if (total === 0) return ok("Trash is empty.");
+  // "Trash is empty" was an assertion about the workspace made from a
+  // visibility-filtered read: trash is scoped by the same `canSeeBase` rule as
+  // op="list_bases", and admins resolve teams-mode bases a member cannot.
+  if (total === 0) return ok(`Nothing in trash that you can see. ${TRASH_SCOPE_NOTE}`);
   const lines: string[] = [`## Trash (${total} item${total === 1 ? "" : "s"})\n`];
   if (trash.bases.length > 0) {
     lines.push("### Bases");
@@ -197,8 +228,12 @@ export async function opListTrash(client: DoplClient, ref?: string): Promise<Too
     for (const e of trash.entries)
       lines.push(`- ${inlineOr(e.title, NO_NAME)} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
   }
+  lines.push("", TRASH_SCOPE_NOTE);
   return ok(lines.join("\n"));
 }
+
+/** Trash is visibility-scoped exactly like `list_bases`, and said nothing about it. */
+const TRASH_SCOPE_NOTE = `_Scoped like op="list_bases": deleted items in bases you cannot read are not listed, and admins see more here than members do._`;
 
 export async function opSearch(client: DoplClient, query: string, base?: string, limit?: number): Promise<ToolResponse> {
   // F-16: `base` accepts a slug OR a UUID, like every other op. Resolve it
@@ -214,7 +249,7 @@ export async function opSearch(client: DoplClient, query: string, base?: string,
   const hits = await client.searchKb(query, { baseSlug, limit });
   const shownQuery = inlineOr(query, "`(unreadable query)`");
   if (hits.length === 0) {
-    return ok(`No matches for ${shownQuery}.`);
+    return ok(`No matches for ${shownQuery}. ${SEARCH_SCOPE_NOTE}`);
   }
   const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for ${shownQuery}\n`];
   for (const h of hits) {
@@ -227,5 +262,23 @@ export async function opSearch(client: DoplClient, query: string, base?: string,
       `- ${inlineOr(h.title, NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`
     );
   }
+  lines.push("", SEARCH_SCOPE_NOTE);
   return ok(lines.join("\n"));
 }
+
+/**
+ * WHY A SHORT RESULT LIST IS NOT AN ANSWER.
+ *
+ * The heading counts the hits that survived, and nothing said what they
+ * survived. Three separate reductions apply and none is visible: the ranking
+ * RPC caps its CANDIDATE set per leg before fusing them, drops chunks past a
+ * semantic-distance cutoff, and then `search.ts` removes hits in bases this
+ * caller cannot read AFTER ranking — so `limit` is an upper bound the result
+ * routinely falls short of for reasons that have nothing to do with how much
+ * matched. An agent reading "2 matches" as "there are two" is reading a
+ * recall-capped, visibility-filtered sample as a census.
+ *
+ * States the shape, not a number: the true match count is not something this
+ * layer can obtain without another query.
+ */
+const SEARCH_SCOPE_NOTE = `_A ranked SAMPLE of the bases you can read, not an exhaustive scan: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking. Fewer hits than \`limit\` does not mean there are no others, and zero hits is not proof of absence — try op="get_tree" or different wording._`;

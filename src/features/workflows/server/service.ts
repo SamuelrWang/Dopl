@@ -21,6 +21,7 @@ import {
   assertClusterInWorkspace,
   attachmentSummary,
   normalizeWorkflowName,
+  workflowVisibleTo,
   type WorkflowCreateRequest,
   type WorkflowDetail,
   type WorkflowRow,
@@ -47,9 +48,9 @@ export async function listWorkflows(
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  // Team scoping: drop teams-mode workflows the caller can't read, and
-  // remember which KBs they can read so hidden KB names don't leak into
-  // knowledge_base_names. One batch query covers both resource types.
+  // Team scoping: drop teams-mode workflows the caller can't read (the shared
+  // rule — see `filterTeamVisibleWorkflows`), and remember which KBs they can
+  // read so hidden KB names don't leak into knowledge_base_names.
   const allRows = (data || []) as Array<
     Omit<
       WorkflowRow,
@@ -63,14 +64,7 @@ export async function listWorkflows(
   const access = await listEffectiveAccess(scope.workspaceId, scope.userId, {
     role: scope.role,
   });
-  const rows =
-    access === null
-      ? allRows.filter((r) => r.access_mode !== "teams")
-      : allRows.filter(
-          (r) =>
-            r.user_id === scope.userId ||
-            resolveLevel(access, "workflow", r.id, r.access_mode) !== null
-        );
+  const rows = allRows.filter((r) => workflowVisibleTo(access, r, scope.userId));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
@@ -368,6 +362,12 @@ export type {
   WorkflowScope,
   WorkflowTrashRow,
   TrashedWorkflow,
+} from "./service-shared";
+
+export {
+  filterTeamVisibleWorkflows,
+  workflowVisibleTo,
+  type WorkflowVisibilityRow,
 } from "./service-shared";
 
 export {

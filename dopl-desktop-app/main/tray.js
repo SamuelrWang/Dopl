@@ -10,6 +10,7 @@ let currentStatus = 'Listener: starting…';
 let signedOutNow = false; // the listener's own signed-out fact (never parsed from the string)
 let handlers = {};
 let updateReadyVersion = null; // staged-update version; see refreshUpdateReady()
+let updateNote = null; // { text, busy } — what the updater is doing right now
 let peerSkew = null; // Q10: the newest older-build peer seen this run ({ peer, mine, who })
 let windowMode = true; // v1.9: reflect the "Run sessions in a window" setting (default ON)
 let pendingCount = 0; // Round B: number of pending consent requests (inbound + review)
@@ -126,12 +127,36 @@ function updateMenuState(readyVersion) {
     : { ready: false, version: '', label: '' };
 }
 
+// The manual check, and the line that reports what it did.
+//
+// 2026-08-01: publishing a build and then waiting up to four hours for the
+// running app to notice is the operator's actual complaint. The click is the
+// answer, and the NOTE is what keeps it from being a button that appears to do
+// nothing: "Checking for updates…" → "Up to date (v1.7.18)" / "Downloading
+// update… 43%" / "Update ready: v1.7.19" / "Update check failed: …". The same
+// note is how a long download stops looking like a hung app.
+//
+// `busy` disables the item while a check or download is in flight, so a second
+// click cannot start a second fetch or read as a no-op.
+function checkMenuState(note) {
+  const text = note && typeof note.text === 'string' ? note.text.trim() : '';
+  const busy = !!(note && note.busy);
+  return { label: 'Check for updates now', enabled: !busy, note: text };
+}
+
 // The hover text. The tray icon is the ONLY always-visible surface this app has,
-// so a staged update says so there rather than only inside the menu.
-function trayTooltip(status, readyVersion) {
+// so a staged update says so there rather than only inside the menu — and so
+// does an in-flight download, which is the state the operator most needs to see
+// without clicking anything (quitting halfway is what throws the copy away).
+// Settled notes ("Up to date") stay in the menu: a tooltip that keeps asserting
+// them hours later would be stale.
+function trayTooltip(status, readyVersion, note) {
   const head = status || 'Dopl';
   const u = updateMenuState(readyVersion);
-  return u.ready ? head + '\n' + u.label : head;
+  const lines = [head];
+  if (u.ready) lines.push(u.label);
+  if (note && note.busy && note.text) lines.push(String(note.text));
+  return lines.join('\n');
 }
 
 // Q10(b): the other half of a version mismatch, stated as a fact and nothing
@@ -203,6 +228,15 @@ function buildMenu() {
   );
   const skewLabel = skewMenuLabel(peerSkew);
   if (skewLabel) template.push({ label: skewLabel, enabled: false });
+  // The manual check sits with the version lines it is about, and its outcome is
+  // printed directly beneath so the click always visibly does something.
+  const checkItem = checkMenuState(updateNote);
+  template.push({
+    label: checkItem.label,
+    enabled: checkItem.enabled,
+    click: () => handlers.onCheckUpdates && handlers.onCheckUpdates(),
+  });
+  if (checkItem.note) template.push({ label: checkItem.note, enabled: false });
   template.push(
     { label: 'Sessions', submenu: sessionsSubmenu() },
     { label: 'Channel folders', submenu: channelFoldersSubmenu() },
@@ -217,7 +251,7 @@ function buildMenu() {
   template.push({ label: 'Quit Dopl', click: () => handlers.onQuit && handlers.onQuit() });
   const menu = Menu.buildFromTemplate(template);
   tray.setContextMenu(menu);
-  tray.setToolTip(trayTooltip(currentStatus, updateReadyVersion));
+  tray.setToolTip(trayTooltip(currentStatus, updateReadyVersion, updateNote));
 }
 
 function create(opts) {
@@ -245,6 +279,21 @@ function update(status, meta) {
 // refreshUpdateReady() overrides it from the updater on every rebuild.
 function setUpdateReady(version) {
   updateReadyVersion = version || null;
+  if (tray) buildMenu();
+}
+
+// The updater's running commentary (checking / downloading N% / up to date /
+// ready / failed). Rebuilds only on a real change, so a `download-progress`
+// event that lands on the same whole percent does not redraw the menu ~200 times
+// during a download. An empty text clears the line.
+function setUpdateNote(text, opts) {
+  const next = typeof text === 'string' && text.trim()
+    ? { text: text.trim(), busy: !!(opts && opts.busy) }
+    : null;
+  const same = (updateNote && updateNote.text) === (next && next.text)
+    && (updateNote && updateNote.busy) === (next && next.busy);
+  if (same) return;
+  updateNote = next;
   if (tray) buildMenu();
 }
 
@@ -285,5 +334,6 @@ function destroy() {
 }
 
 module.exports = {
-  create, update, setUpdateReady, setPeerSkew, setWindowMode, setPendingCount, refresh, destroy,
+  create, update, setUpdateReady, setUpdateNote, setPeerSkew, setWindowMode, setPendingCount,
+  refresh, destroy,
 };

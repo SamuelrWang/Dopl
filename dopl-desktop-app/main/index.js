@@ -284,7 +284,11 @@ if (!gotLock) {
     tray.create({
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
-      onUpdate: () => updater.quitAndInstall(),
+      // "Update ready — restart to install": restarts straight away when nothing
+      // is live, and asks first (naming the session) when an agent is mid turn.
+      onUpdate: () => updater.requestRestart(),
+      // "Check for updates now": the publish loop's answer to a 4h interval.
+      onCheckUpdates: () => updater.checkNow(),
       // Q4 fix 3: the escape hatch. "Sign in…" appears only while the listener
       // reports signed out and runs the same CSRF-gated external OAuth flow the
       // web login page does; "Sign out" clears the blob AND the cookie jar, then
@@ -340,11 +344,18 @@ if (!gotLock) {
     // and is rebuilt on reopen.
     channelDirIpc.register({ onChanged: () => tray.refresh(), getMainWindow: () => mainWindow });
 
-    // Auto-update (electron-updater ↔ GitHub Releases). Silent download; the
-    // tray gains an "Update ready — restart to install" item (plus the tooltip)
-    // when one is staged. Never auto-restarts: the operator decides, because a
-    // restart mid-turn kills a live spawned session (Q10c).
-    updater.init({ onReady: (version) => tray.setUpdateReady(version) });
+    // Auto-update (electron-updater ↔ GitHub Releases). Silent download with
+    // progress on the tray; the tray gains an "Update ready — restart to
+    // install" item (plus the tooltip) when one is staged, and the download
+    // completing offers a one-click restart. Never auto-restarts: the operator
+    // decides, because a restart mid-turn kills a live spawned session (Q10c) —
+    // which is why the prompt is handed the live-session list rather than
+    // guessing that nothing is running.
+    updater.init({
+      onReady: (version) => tray.setUpdateReady(version),
+      onNote: (text, opts) => tray.setUpdateNote(text, opts),
+      getLiveSessions: () => sessionEngine.listLiveSessions(),
+    });
 
     // Q10b: a peer running an OLDER build is the standing explanation for "the
     // fix works here and not there". version-skew.js reads the server-stamped

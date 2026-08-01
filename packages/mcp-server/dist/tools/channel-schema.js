@@ -197,7 +197,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="read": max messages to return (1-200).'),
+        .describe('op="read": max messages to return (1-200, DEFAULT 100). Omitted with no `since`, that is the NEWEST 100 — older messages are absent, not reported as absent.'),
     timeout_ms: zod_1.z.coerce
         .number()
         .int()

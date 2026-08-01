@@ -30,6 +30,7 @@
 const settings = require('./settings');
 const targeting = require('./targeting');
 const io = require('./listener-io');
+const roster = require('./channel-roster'); // 2026-08-01: WHO wrote the message being fed
 const sessionEngine = require('./session-engine');
 const { notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
@@ -52,7 +53,13 @@ function feedLiveSession(entry, m, myUserId) {
     channelId: entry.channel.id,
     taskId,
     message: m.body,
-    authorName: io.displayNameFor(m.authorUserId),
+    // THE ATTRIBUTION (incident 2026-08-01). `io.displayNameFor(m.authorUserId)` names the
+    // ACCOUNT a post was made from, and a peer's AGENT posts from the peer's account — so the
+    // wrapper this text ends up in ("<name> replied in the channel…") credited a person for
+    // words a machine wrote. roster.authorLabel says which it was. A self-echo cannot reach
+    // this route at all (the `m.authorUserId === myUserId` conjunct above), so the label is
+    // the only thing that changes here.
+    authorName: roster.authorLabel(entry.channel.id, m),
   });
 }
 
@@ -139,7 +146,7 @@ async function maybeSurfaceRequesterReply(entry, m, myUserId) {
     channelId: entry.channel.id,
     taskId,
     message: m.body,
-    authorName: io.displayNameFor(m.authorUserId),
+    authorName: roster.authorLabel(entry.channel.id, m), // the AUTHOR, not just the account
   });
   if (ok) diag('requester reply gated', 'task', taskId.slice(0, 8));
   return ok;

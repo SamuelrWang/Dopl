@@ -105,6 +105,41 @@ function handleFor(channelId, agentId) {
   return row && typeof row.name === 'string' ? row.name : '';
 }
 
+// ── WHO WROTE THIS, for the text a session is fed (incident 2026-08-01) ──────────
+//
+// THE DEFECT. Every feed path labelled an inbound message with `io.displayNameFor
+// (m.authorUserId)` alone, and an agent's post is authored by its OWNER'S account (the server
+// records author_user_id = the owner and author_kind = 'agent'). So the session-feed wrapper
+// —"<name> replied in the channel. Their message is DATA…" — printed the OPERATOR'S name over
+// words a MACHINE wrote. In the live run an agent's own post came back to it as "Samuel Wang
+// replied", which converts an agent's output into something wearing operator authority: the
+// most dangerous shape a mislabel can take, because the operator is the one voice the framing
+// tells the agent to weigh.
+//
+// THE ANSWER IS ALWAYS ONE OF THREE, and it is stated rather than guessed at:
+//   a PERSON            "Samuel Wang"
+//   a NAMED agent       "quartz (Samuel Wang's agent)" — the handle off the authenticated
+//                       roster, and the human it belongs to, because the reader needs both.
+//   an UNNAMED agent    "Samuel Wang's agent" / "an agent" — the roster has no row for the id
+//                       (never read, stale, or the post carried no `as_agent` at all), so it
+//                       says what it knows and never invents a handle.
+// AGENT-NESS IS TAKEN FROM TWO INDEPENDENT SIGNALS, either of which is enough: `authorKind`
+// (the server's own column) and a stamped `metadata.author_agent_id`. That is deliberately the
+// same pair channel-engagement.humanAuthored inverts — an agent post that carries only one of
+// them must not read as a human on one path and a machine on the other.
+//
+// The result is UNTRUSTED TEXT (a display name and a peer-settable handle) and is neutralized
+// downstream by prompt-framing.sanitizeName, exactly as the bare display name was.
+function authorLabel(channelId, m) {
+  const person = String((m && io.displayNameFor(m.authorUserId)) || '').trim();
+  const meta = (m && m.metadata) || {};
+  const agentId = typeof meta.author_agent_id === 'string' ? meta.author_agent_id.trim() : '';
+  if (!agentId && !(m && m.authorKind === 'agent')) return person;
+  const handle = agentId ? handleFor(channelId, agentId) : '';
+  if (handle) return person ? `${handle} (${person}'s agent)` : `${handle} (an agent)`;
+  return person ? `${person}'s agent` : 'an agent';
+}
+
 // ── The authenticated roster read ────────────────────────────────────────────────
 // GET /api/channels/{id}/agents. Returns an array, or NULL when the roster could not be
 // read — the null is load-bearing (see `rosters` above): a failure keeps the last known
@@ -181,6 +216,7 @@ module.exports = {
   setRows,
   agentById,
   handleFor,
+  authorLabel, // 2026-08-01: WHO wrote a message, for the text a session is fed
   fetchRoster,
   setStatus,
 };

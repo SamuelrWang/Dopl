@@ -1,8 +1,12 @@
 // Shared source-extraction harness for the channel-agents suites (no tests of its own).
 //
-// FOUR real modules, wired to each other exactly as they are in the app, with fakes only at
+// FIVE real modules, wired to each other exactly as they are in the app, with fakes only at
 // the two edges that need a host (HTTP and the session engine):
-//   channel-roster.js      CHANNEL-ROSTER-PURE — the cached rows, the GET, the PATCH.
+//   channel-roster.js      CHANNEL-ROSTER-PURE — the cached rows, the GET, the PATCH, and the
+//                          author label a fed message is titled with.
+//   channel-deliver.js     CHANNEL-DELIVER-PURE — the lazy wake, the SELF-ECHO filter and the
+//                          hand-off to the inbound gate. Injected REAL, so the routing suites
+//                          drive the shipped delivery rule rather than a restatement of it.
 //   channel-engagement.js  CHANNEL-ENGAGEMENT-PURE — the TTL, the addressee list, the local
 //                          sliding window. Injected REAL, so the routing tests drive the
 //                          shipped engagement policy rather than a restatement of it.
@@ -37,6 +41,7 @@ function slice(file, name) {
 }
 
 export const AGENTS = slice("channel-agents.js", "CHANNEL-AGENTS-PURE");
+export const DELIVER = slice("channel-deliver.js", "CHANNEL-DELIVER-PURE");
 export const ROSTER = slice("channel-roster.js", "CHANNEL-ROSTER-PURE");
 export const ENGAGEMENT = slice("channel-engagement.js", "CHANNEL-ENGAGEMENT-PURE");
 export const THREADS = slice("channel-threads.js", "CHANNEL-THREADS-PURE");
@@ -156,17 +161,24 @@ export function harness(cfg = {}) {
   const roster = new Function(
     "io", "diag",
     `${ROSTER.block}\n return { SUMMONED, ACTIVE, DISMISSED, isMyLiveAgent, teamAgentCount,` +
-      ` summonTargets, noteRoster, rowsFor, setRows, agentById, handleFor, fetchRoster, setStatus };`
+      ` summonTargets, noteRoster, rowsFor, setRows, agentById, handleFor, authorLabel,` +
+      ` fetchRoster, setStatus };`
   )(io, diag);
+  // THE DELIVERY, real: the self-echo filter and the author label the routing suites assert on
+  // are the shipped ones, driven through the same fake engine.
+  const deliver = new Function(
+    "io", "targeting", "sessionEngine", "engagement", "roster", "diag",
+    `${DELIVER.block}\n return { agentSpec, wakeTeamAgent, selfEcho, deliverToAgent };`
+  )(io, targeting, sessionEngine, engagement, roster, diag);
 
   const api = new Function(
-    "io", "targeting", "settings", "sessionEngine", "engagement", "roster", "threads", "diag",
-    `${AGENTS.block}\n return { agentSpec, reconcileChannel, reconcileAll, wakeChannel,` +
+    "settings", "targeting", "engagement", "roster", "threads", "deliver", "sessionEngine", "diag",
+    `${AGENTS.block}\n return { reconcileChannel, reconcileAll, wakeChannel,` +
       ` routeAddressedAgent, routeThread, myOwnAgentSpoke, strongest };`
-  )(io, targeting, settings, sessionEngine, engagement, roster, threads, diag);
+  )(settings, targeting, engagement, roster, threads, deliver, sessionEngine, diag);
 
   // What channel-listener.js seeds a fresh loop entry with (io.getTeamAgentCount).
-  return { ...roster, ...engagement, ...threads, ...api, calls, live, durable, getTeamAgentSeed: io.getTeamAgentCount };
+  return { ...roster, ...engagement, ...threads, ...deliver, ...api, calls, live, durable, getTeamAgentSeed: io.getTeamAgentCount };
 }
 
 /** Seed the roster the router reads, then forget the summon that did it. */

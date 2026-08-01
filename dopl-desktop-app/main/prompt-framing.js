@@ -13,8 +13,18 @@
 // blocker into the shared channel as an ask. The blocker rule below is the fix.
 //
 // v2.x addition (deliverySection): the framing also tells the agent WHERE IT LIVES —
-// the concrete channel + workspace UUIDs, as the exact dopl_channel call to make — so a
-// spawn no longer has to guess an id it was never given (see deliverySection).
+// the concrete channel + workspace UUIDs, as the exact mcp__dopl__dopl_channel call to make —
+// so a spawn no longer has to guess an id it was never given (see deliverySection).
+//
+// THE TOOL NAME IS THE FULLY QUALIFIED ONE, EVERYWHERE (incident 2026-08-01). This text used
+// to name the tool `dopl_channel`, which is what the dopl MCP SERVER registers and NOT what
+// the agent's tool list contains: the CLI namespaces every MCP tool as
+// `mcp__<server>__<tool>`, so the list says `mcp__dopl__dopl_channel` (tool-profiles.js has
+// always used that form, which is why the grants worked while the prompt did not). Two agents
+// in one live run searched their list for the bare name, found nothing, and declared a hard
+// blocker — "I have no dopl_channel tool and can't post" — with the tool sitting right there
+// under its real name. Every occurrence below is therefore the qualified name, and TOOL_LOOKUP
+// covers the second half of the same failure (a DEFERRED schema).
 //
 // Fence discipline: this text lives outside `BEGIN-REQUEST-<nonce>` /
 // `END-REQUEST-<nonce>`, so it must never itself carry those tokens. The name is
@@ -101,7 +111,8 @@ function idToken(value) {
     .slice(0, 64);
 }
 
-// The EXACT dopl_channel call this session must make, or '' when either id is missing.
+// The EXACT mcp__dopl__dopl_channel call this session must make, or '' when either id is
+// missing.
 // WORKSPACE UUID, never the slug: a prod anomaly has two workspaces sharing a slug, so a
 // slug can address the wrong one.
 //
@@ -114,7 +125,8 @@ function idToken(value) {
 // validates (and can only reject) a taskId that is a UUID, so a legacy value threads the
 // message without ever touching thread resolution. idToken bounds it like the other two.
 //
-// FIX S1 (Q5 review). This printed `task "<id>"` — a parameter dopl_channel DOES NOT HAVE.
+// FIX S1 (Q5 review). This printed `task "<id>"` — a parameter mcp__dopl__dopl_channel DOES
+// NOT HAVE.
 // The 1.7.11 hard cutover made the agent-facing argument `thread` (packages/mcp-server/src/
 // tools/channel.ts) and kept `taskId` only as the STORAGE key the op folds it into
 // (channel-ops-write.ts). So every window-mode session was taught an argument the MCP server
@@ -150,13 +162,29 @@ const THREAD_TAG = [
   `there as a brand new request and starts a second agent run against your own reply.`,
 ];
 
+// THE TOOL MAY NOT BE IN THE LIST YET (incident 2026-08-01, the compounding half). Claude Code
+// DEFERS MCP tool schemas once a session carries many tools: the deferred tool is a NAME in a
+// system-reminder list and cannot be invoked until `ToolSearch` loads its schema. Nothing in
+// this prompt said so, so even an agent that spotted the qualified name could read "not in my
+// callable tools" as "unavailable" and stop. Stated ONCE, in the delivery section, because that
+// is where the tool is first taught and every line here competes for attention.
+const TOOL_LOOKUP = [
+  `If mcp__dopl__dopl_channel is not in your tool list yet, load it with ToolSearch`,
+  `("select:mcp__dopl__dopl_channel") before you conclude it is unavailable, because a session`,
+  `with many tools defers MCP schemas until they are looked up. Never report that you have no`,
+  `channel tool without doing that first.`,
+];
+
 // The DELIVERY section, which NAMES the call (v2.x "the spawned agent does not know where
-// it lives"). A spawn used to be told only the channel's DISPLAY NAME, so the agent could
-// not fill dopl_channel's required `channel=` and hunted for it with op "list"; and because
-// the device token spans several workspaces with no connection default, every unqualified
-// dopl call came back asking for a `workspace=`. Both ids ride the spawn context now, so the
-// prompt states the concrete call and says discovery is unnecessary. When either id is
-// missing (a mid-wave spawn shape) the section degrades to the wording it had before.
+// it lives"). A spawn used to be told only the channel's DISPLAY NAME, so the agent could not
+// fill mcp__dopl__dopl_channel's required `channel=` and hunted for it with op "list"; and
+// because the device token spans several workspaces with no connection default, every
+// unqualified dopl call came back asking for a `workspace=`. Both ids ride the spawn context
+// now, so the prompt states the concrete call and says discovery is unnecessary. When either id
+// is missing (a mid-wave spawn shape) the section degrades to the wording it had before.
+//
+// TOOL_LOOKUP is appended to EVERY branch — one section, one copy of the line, whichever shape
+// this session is.
 function deliverySection(side, ctx) {
   const call = deliveryCall(ctx);
   const own = [
@@ -168,28 +196,34 @@ function deliverySection(side, ctx) {
   if (side === 'requester') {
     if (!call) {
       return [
-        `Deliver every message to the peer by posting into this channel with the dopl_channel`,
-        `MCP tool (op "post", this channel). That is how the peer's agent receives you.`,
+        `Deliver every message to the peer by posting into this channel with the`,
+        `mcp__dopl__dopl_channel MCP tool (op "post", this channel). That is how the peer's`,
+        `agent receives you.`,
+        ...TOOL_LOOKUP,
       ];
     }
     return [
-      `Deliver every message to the peer by posting into this channel with the dopl_channel`,
-      `MCP tool. Make the call exactly like this: ${call}.`,
+      `Deliver every message to the peer by posting into this channel with the`,
+      `mcp__dopl__dopl_channel MCP tool. Make the call exactly like this: ${call}.`,
       ...own,
       `That is how the peer's agent receives you.`,
+      ...TOOL_LOOKUP,
     ];
   }
   if (!call) {
     return [
-      `DELIVERY: post your reply into this channel with the dopl_channel MCP tool (op "post",`,
-      `this channel); that is how the counterparty receives it, and there is no other capture.`,
+      `DELIVERY: post your reply into this channel with the mcp__dopl__dopl_channel MCP tool`,
+      `(op "post", this channel); that is how the counterparty receives it, and there is no`,
+      `other capture.`,
+      ...TOOL_LOOKUP,
     ];
   }
   return [
-    `DELIVERY: post your reply into this channel with the dopl_channel MCP tool. Make the`,
-    `call exactly like this: ${call}.`,
+    `DELIVERY: post your reply into this channel with the mcp__dopl__dopl_channel MCP tool.`,
+    `Make the call exactly like this: ${call}.`,
     ...own,
     `That is how the counterparty receives your reply; there is no other capture.`,
+    ...TOOL_LOOKUP,
   ];
 }
 
@@ -202,8 +236,8 @@ function deliverySection(side, ctx) {
 // that does. Anything the agent scopes "for this session" (a standing grant, a mode) dies
 // with the session; anything it says about the THREAD is visible to the other member.
 //
-// FIX S1: this used to teach `task=<id>` as the tool ARGUMENT. dopl_channel has no such
-// parameter — the 1.7.11 cutover made the agent-facing argument `thread=<id>` and left the
+// FIX S1: this used to teach `task=<id>` as the tool ARGUMENT. mcp__dopl__dopl_channel has no
+// such parameter — the 1.7.11 cutover made the agent-facing argument `thread=<id>` and left the
 // older word only on the post KINDS (`kind="task_*"`) and the storage key (`metadata.taskId`),
 // which the agent never types. The split is stated below exactly that way.
 const VOCABULARY = [
@@ -224,15 +258,16 @@ const VOCABULARY = [
 // (full / terminal-full). Without a posting tool (read_only / dopl_only, which
 // reply from stdout) -> '' so the caller appends nothing. Kept separate from the
 // framing because the terminal-restricted branch shares the framing but not this.
-// FIX S1: the `task_progress` KIND is a wire name and is passed through byte-for-byte, but
-// the thread ARGUMENT is `thread=<id>` — this line used to say `task=<id>`, which dopl_channel
-// does not accept, so a milestone written exactly as instructed landed unthreaded.
+// FIX S1: the `task_progress` KIND is a wire name and is passed through byte-for-byte, but the
+// thread ARGUMENT is `thread=<id>` — this line used to say `task=<id>`, which
+// mcp__dopl__dopl_channel does not accept, so a milestone written exactly as instructed landed
+// unthreaded.
 function milestoneGuidance({ hasPostingTool } = {}) {
   if (!hasPostingTool) return '';
   return (
     'MILESTONES: for multi-step work carried by a thread, post a task_progress ' +
-    '(via dopl_channel, kind="task_progress", thread=<id>) the moment each concrete ' +
-    'step lands, so the requester sees progress without waiting for the final reply.'
+    '(via mcp__dopl__dopl_channel, kind="task_progress", thread=<id>) the moment each ' +
+    'concrete step lands, so the requester sees progress without waiting for the final reply.'
   );
 }
 
@@ -341,7 +376,7 @@ function stripFence(text, begin, end) {
 //
 //   side:'responder' — the framed inbound request. Reuses counterpartyFraming
 //     (who you answer, they are NOT your operator, the machine-local blocker rule);
-//     delivery is via the pre-approved dopl_channel tool (no stdout capture in a
+//     delivery is via the pre-approved mcp__dopl__dopl_channel tool (no stdout capture in a
 //     session), plus task_progress milestones.
 //   side:'requester' — the thread GOAL you are driving. You loop on the peer's replies
 //     until the goal is met, then close the thread with a summary.
@@ -417,5 +452,5 @@ module.exports = {
   buildFencedTurn,
   buildTeamTurn, // D2: the room-bound first turn (identity + the room model + THE LAW)
   THE_LAW, // D2: the five rules, exported so the truth table asserts the shipped text
-  deliveryCall, // D2: the exact dopl_channel call, now carrying as_agent for a team session
+  deliveryCall, // D2: the exact mcp__dopl__dopl_channel call, carrying as_agent for a team session
 };

@@ -20,6 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
@@ -34,6 +35,11 @@ const { updateMenuState, trayTooltip, skewMenuLabel } = new Function(
   `${between(TRAY, "// ─── BEGIN TRAY-UPDATE", "// ─── END TRAY-UPDATE", "tray-update block")}
    return { updateMenuState, trayTooltip, skewMenuLabel };`
 )();
+
+// The download / manual-check copy moved OUT of updater.js into a pure module on
+// 2026-08-01 (main/update-policy.js), so the strings below are asserted on the
+// real functions rather than on the source text that used to hold them.
+const POLICY = createRequire(import.meta.url)(join(HERE, "..", "main", "update-policy.js"));
 
 // ── State transitions ───────────────────────────────────────────────────────
 
@@ -71,7 +77,22 @@ test("the TOOLTIP carries it, so the menu need not be opened to find out", () =>
   assert.match(withUpdate, /Update ready — restart to install v1\.7\.16/);
   assert.equal(trayTooltip("", "1.7.16").startsWith("Dopl"), true, "never an empty tooltip");
   // …and the tray actually uses it (the old code set the bare status string).
-  assert.match(TRAY, /tray\.setToolTip\(trayTooltip\(currentStatus, updateReadyVersion\)\);/);
+  assert.match(
+    TRAY,
+    /tray\.setToolTip\(trayTooltip\(currentStatus, updateReadyVersion, updateNote\)\);/
+  );
+});
+
+test("an IN-FLIGHT download rides the tooltip too, a settled note does not", () => {
+  // The download is the state you need to see without clicking: quitting halfway
+  // is what discards the staged copy and produces "it took several tries".
+  const status = "Listener: watching 3 channels";
+  const busy = trayTooltip(status, null, { text: "Downloading update… 43%", busy: true });
+  assert.match(busy, /Downloading update… 43%/);
+  assert.match(busy, /^Listener: watching 3 channels\n/, "the status stays first");
+  // A settled outcome would still be true hours later, so it stays in the menu.
+  assert.equal(trayTooltip(status, null, { text: "Up to date (v1.7.18)", busy: false }), status);
+  assert.equal(trayTooltip(status, null, null), status);
 });
 
 test("the peer-skew line states a fact and offers no action", () => {
@@ -115,29 +136,44 @@ test("setPeerSkew keeps ONE line and only redraws on a real change", () => {
 test("the download event is what drives the affordance, and it is wired", () => {
   assert.match(UPDATER, /autoUpdater\.on\('update-downloaded', \(info\) => \{/);
   assert.match(UPDATER, /if \(onReadyCb\) \{/);
-  assert.match(INDEX, /updater\.init\(\{ onReady: \(version\) => tray\.setUpdateReady\(version\) \}\)/);
-  assert.match(INDEX, /onUpdate: \(\) => updater\.quitAndInstall\(\)/);
+  assert.match(INDEX, /onReady: \(version\) => tray\.setUpdateReady\(version\)/);
+  assert.match(INDEX, /onUpdate: \(\) => updater\.requestRestart\(\)/);
 });
 
 test("NEVER auto-restarts: the operator decides when a live session may die", () => {
-  // autoInstallOnAppQuit stays on (a normal quit still applies it), but nothing
-  // calls quitAndInstall except the tray click.
+  // autoInstallOnAppQuit stays on (a normal quit still applies it). The install
+  // itself is reachable from exactly two places, and both of them are downstream
+  // of a click: the restart dialog's explicit button, and the tray item.
   assert.match(UPDATER, /autoUpdater\.autoInstallOnAppQuit = true;/);
-  const auto = /quitAndInstall\(\)/g;
-  const inUpdater = (UPDATER.match(auto) || []).length;
-  assert.equal(inUpdater, 2, "declared once, called once — inside the exported action only");
   assert.match(fnOf(UPDATER, "quitAndInstall"), /if \(!autoUpdater \|\| !readyVersion\) return;/);
-  // No timer, no listener, no message path reaches it.
+  const callers = ["promptRestart", "requestRestart"];
+  for (const name of callers) {
+    assert.match(fnOf(UPDATER, name), /quitAndInstall\(\)/, `${name} is one of the two paths`);
+  }
+  // Everything else in the module — including the event handlers and the
+  // interval — must be unable to reach it.
+  const bodies = ["init", "check", "showDownloadedNotification", "checkNow"];
+  for (const name of bodies) {
+    assert.equal(
+      /quitAndInstall\(\)/.test(fnOf(UPDATER, name)),
+      false,
+      `${name} must not be able to restart the app on its own`
+    );
+  }
+  // And the dialog result is the gate on the prompt's path.
+  assert.match(fnOf(UPDATER, "promptRestart"), /if \(!policy\.isRestartChoice\(response\)\)/);
+  // No timer, no listener, no message path reaches it either.
   for (const f of ["channel-listener.js", "listener-messages.js", "version-skew.js", "trigger.js"]) {
     assert.equal(/quitAndInstall/.test(M(f)), false, `${f} can restart the app`);
   }
 });
 
 test("the notification says what the operator has to DO about it", () => {
-  const body = /body: `Version \$\{readyVersion\} is downloaded\./;
-  assert.match(UPDATER, body);
-  assert.match(UPDATER, /restart Dopl/i);
-  assert.match(UPDATER, /keeps running the old build/, "names the consequence of doing nothing");
+  const { title, body } = POLICY.downloadedNotification({ version: "1.7.19" });
+  assert.equal(title, "Dopl update ready");
+  assert.match(body, /^Version 1\.7\.19 is downloaded\./);
+  assert.match(body, /restart Dopl/i);
+  assert.match(body, /keeps running the old build/, "names the consequence of doing nothing");
   assert.match(UPDATER, /silent: true/, "quiet: news, not a decision prompt");
   assert.match(UPDATER, /if \(!notified\) \{/, "one banner per run, never a nag");
 });

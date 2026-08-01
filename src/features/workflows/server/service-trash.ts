@@ -3,16 +3,13 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { HttpError } from "@/shared/lib/http-error";
-import {
-  listEffectiveAccess,
-  requireEffectiveAccess,
-  resolveLevel,
-} from "@/features/teams/server/access";
+import { requireEffectiveAccess } from "@/features/teams/server/access";
 import { slugifyWorkflowName } from "../slug";
 import { countSteps, hardDeleteWorkflow } from "./repository";
 import {
   SELECT_COLS,
   attachmentSummary,
+  filterTeamVisibleWorkflows,
   type TrashedWorkflow,
   type WorkflowRow,
   type WorkflowScope,
@@ -176,17 +173,9 @@ export async function listTrash(
   }>;
   if (allRows.length === 0) return [];
 
-  const access = await listEffectiveAccess(scope.workspaceId, scope.userId, {
-    role: scope.role,
-  });
-  const rows =
-    access === null
-      ? allRows.filter((r) => r.access_mode !== "teams")
-      : allRows.filter(
-          (r) =>
-            r.user_id === scope.userId ||
-            resolveLevel(access, "workflow", r.id, r.access_mode) !== null
-        );
+  // Same visibility rule as the live listing and the cluster rollup — one
+  // definition, in `service-shared.ts`.
+  const rows = await filterTeamVisibleWorkflows(allRows, scope);
 
   return rows.map((r) => ({
     id: r.id,

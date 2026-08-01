@@ -67,7 +67,7 @@ const CHATS_DESCRIPTION = `The user's chat archive — exported conversation rec
 - "append" — add messages to an already-exported chat (mid-session incremental export). Requires: chat_id, messages.
 - "update" — update a chat's header (title, overview, project, session_date, deliverables, learnings, folder, pinned) or share/unshare it (visibility). Owner-only. Requires: chat_id plus the fields to change. NOTE: a chat filed in a folder inherits the folder's sharing — moving it into a folder re-scopes it, and setting visibility on a filed chat is rejected (unfile first or use op="update_folder").
 - "restore" — restore a soft-deleted chat from the trash (recovery, not deletion). Owner-only. Requires: chat_id (from op="list_trash").
-- "list" — list chats the user can read (their own + workspace-shared), newest first, with id/title/date/source/visibility/owner. Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive title/overview filter).
+- "list" — chats the user can read (their own, workspace-shared ones, and team-shared ones granted to a team they are on), newest first, with id/title/date/source/visibility/owner. On the FREE PLAN a 90-day history window hides older chats from this listing — nothing is deleted, and the result says so whenever any are hidden. Soft-deleted chats are in op="list_trash". Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive filter on TITLE and OVERVIEW only — transcripts are not searched, and neither is the archive by dopl_search).
 - "get" — read one chat in full: header, deliverables, learnings, and the summarized transcript. Requires: chat_id. Use this to pull past-session context the user references.
 - "list_trash" — list the caller's soft-deleted chats (newest-trashed first) with id/title/date and when each was deleted, so you can pick one to op="restore".
 - "folders" — list the user's chat folders with their sharing scope.
@@ -313,8 +313,8 @@ async function opList(client, scope, query) {
     });
     if (chats.length === 0) {
         const empty = query || scope !== "all"
-            ? "No chats match that filter."
-            : "The archive is empty — no chats exported yet. Use op=\"export\" to save this session.";
+            ? `No chats match that filter. The filter runs over TITLE and OVERVIEW only — transcripts are not searched.`
+            : "No chats visible to you. The archive holds your own chats plus ones shared with you, so this is not proof the workspace has none. Use op=\"export\" to save this session.";
         return (0, respond_1.ok)(hiddenCount > 0 ? `${empty}\n\n${(0, chats_render_1.hiddenNote)(hiddenCount)}` : empty);
     }
     const lines = [];
@@ -329,6 +329,14 @@ async function opList(client, scope, query) {
     }
     if (hiddenCount > 0) {
         lines.push(`\n${(0, chats_render_1.hiddenNote)(hiddenCount)}`);
+    }
+    // The retention note above is already honest AND free (`hiddenCount` rides
+    // the same response), but it only fires when something was hidden by the
+    // PLAN. The `query` filter is a second, always-silent reduction: it matches
+    // title and overview only, so a term that appears solely in a transcript
+    // produces "No chats match that filter" from an archive that contains it.
+    if (q) {
+        lines.push(`\n_Filtered on TITLE and OVERVIEW only — transcripts are not searched, so a term that appears only inside one will not match here._`);
     }
     lines.push(`\nUse dopl_chats(op="get", chat_id=...) to read a transcript.`);
     return (0, respond_1.ok)(lines.join("\n"));

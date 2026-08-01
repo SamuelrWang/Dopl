@@ -39,18 +39,19 @@ const DESCRIPTION = `READ-ONLY view of workspace membership, teams, and access �
 
 The access model, so you can explain it:
 - Roles rank viewer < member < admin < owner. Role default level: viewer → read, others → edit.
-- Every resource (knowledge base, workflow, chat, …) is either workspace-mode (open to all members at their role default) or teams-mode (visible only to granted teams — plus admins/owners and the resource's creator).
+- A shareable resource (KNOWLEDGE BASE, WORKFLOW, SKILL) is either workspace-mode (open to all members at their role default) or teams-mode (visible only to granted teams — plus admins/owners and the resource's creator). Chats, chat folders and ontology objects carry their OWN sharing and are not part of the teams grid.
 - A member's effective level on a teams-mode resource = the highest grant across their teams, capped at their role default. No grant → the resource is invisible to them.
 - Admins and owners always have edit on everything.
+- SO TWO MEMBERS' LISTINGS LEGITIMATELY DISAGREE. dopl_map, dopl_skill(op="list"), dopl_kb(op="list_bases") and dopl_workflow(op="list") each return one caller's view; a smaller count is normally private or team-scoped items, not a bug. op="access_matrix" below is what settles it.
 
 Set \`op\` to one of:
 - "whoami" — WHO AND WHERE YOU ARE, and the authoritative answer to both: your immutable user id, name, role, teams, default access level, the runtime and credential this session is acting through, and what that does and does not establish about another party. Start here whenever identity is in question — a display name alone never settles it.
-- "list" — the member roster: name, email, role, status, last active, team chips.
+- "list" — the member roster: name, email, role, status, last active, team chips. EVERY membership row, INVITED AND DEACTIVATED INCLUDED — read the status on each before you count "members". Not role-shaped: a viewer gets the same roster an owner does.
 - "get" — one member in depth: profile, teams, and their server-resolved effective access per resource. \`member\` may be a user id, email, or display name. Effective access for OTHER members is admin-only (the server hides it otherwise — you'll still get their profile + teams from the roster).
-- "teams" — every team: members, and each resource grant with its level.
+- "teams" — every team: members, and each resource grant with its level. Unshaped by role, so a grant can name a resource you cannot otherwise see (it renders as "a resource not visible to you").
 - "get_team" — one team in depth. \`team\` may be a team id or name.
-- "access_matrix" — the full teams × resources grid with each resource's scope mode. Non-admins see only resources visible to them.
-- "my_access" — the caller's effective level on every resource they can see (the "what can I actually do" answer).`;
+- "access_matrix" — THE INVENTORY, and the op to reach for when two members' listings disagree. Covers KNOWLEDGE BASES, WORKFLOWS and SKILLS only (chats, chat folders and ontology objects are not in it, and neither are trashed rows). For an ADMIN OR OWNER it enumerates every one of those regardless of status or visibility — drafts and other members' private items included — which is exactly what the per-domain list ops do not do. A NON-ADMIN sees only the resources they can reach, so their matrix is a view like everything else. The teams half is unshaped for everyone.
+- "my_access" — the caller's effective level on the teams-mode resources they can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS AT ALL: they hold edit on everything, and the op says so instead of enumerating. Workspace-mode resources are never listed either — they collapse into your role's default level.`;
 
 export function registerMembersTool(
   register: RegisterTool,
@@ -178,6 +179,13 @@ async function opList(
   if (!caller.userId) {
     lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id.`);
   }
+  // The roster applies NO status predicate (workspaces/server/repository.ts),
+  // so "Members — 7" counts invitations nobody accepted and memberships
+  // somebody deactivated. The per-row status was already rendered; what was
+  // missing was any reason to read it.
+  lines.push(
+    `\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`,
+  );
   lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
   return ok(lines.join("\n"));
 }
@@ -267,10 +275,27 @@ async function opGetTeam(client: DoplClient, ref: string): Promise<ToolResponse>
   return ok(`${UNTRUSTED_ROSTER_HEADER}\n\n${formatTeam(team, members, matrix, { detailed: true })}`);
 }
 
+/**
+ * THE OP THE OTHER TOOLS POINT AT, so it had better say what it is.
+ *
+ * For an admin or owner this really is the inventory: the enumeration
+ * (features/teams/server/service.ts) filters on workspace + `deleted_at IS
+ * NULL` and nothing else — no status, no visibility — which is precisely why
+ * `dopl_map` and `dopl_skill(op="list")` now name it as the authoritative
+ * alternative to themselves. For a member or viewer the same op re-filters down
+ * to what they can reach, so pointing a non-admin here without saying so would
+ * hand them a second view they would read as a census. Both halves, stated.
+ *
+ * The caller's role is not in this response and fetching it would be a second
+ * round trip, so the line states the RULE and lets the caller apply it — the
+ * same reason every other note in this sweep names a filter and not a count.
+ */
+const MATRIX_SCOPE_NOTE = `_Covers knowledge bases, workflows and skills only; chats, chat folders, ontology objects and trashed rows are not in this grid. If you are an ADMIN or OWNER this is the full inventory of those three, every status and every visibility included, and it is what settles a disagreement between two members' list ops. If you are a MEMBER or VIEWER it has been re-filtered to what you can reach, so it is a view like the rest. The teams half above is unfiltered for everyone._`;
+
 async function opAccessMatrix(client: DoplClient): Promise<ToolResponse> {
   const matrix = await client.getAccessMatrix();
   if (matrix.resources.length === 0) {
-    return ok("No shareable resources visible to you in this workspace.");
+    return ok(`No shareable resources visible to you in this workspace.\n\n${MATRIX_SCOPE_NOTE}`);
   }
 
   const lines: string[] = [];
@@ -287,6 +312,7 @@ async function opAccessMatrix(client: DoplClient): Promise<ToolResponse> {
     }
     lines.push(`- ${label} — teams-only · ${grantDetail(matrix, r.resourceType, r.resourceId)}`);
   }
+  lines.push("", MATRIX_SCOPE_NOTE);
   return ok(lines.join("\n"));
 }
 
@@ -302,11 +328,19 @@ async function opMyAccess(client: DoplClient): Promise<ToolResponse> {
   lines.push(`- Role **${me.role}** → default level **${access.defaultLevel}** on workspace-mode resources.`);
   if (me.role === "owner" || me.role === "admin") {
     lines.push(`- As ${me.role}: edit on everything, including teams-only resources.`);
+    // The endpoint returns an EMPTY override list for an admin by design
+    // (teams/server/access.ts), so the absence of rows below is the answer,
+    // not a failure to enumerate. An agent auditing "what can I touch" against
+    // a member's longer output would otherwise read this as the smaller set.
+    lines.push(
+      `\n_No per-resource rows are listed for an admin or owner: the empty list IS the answer, not a truncation. dopl_members(op="access_matrix") enumerates the resources themselves._`,
+    );
     return ok(lines.join("\n"));
   }
   const reachable = visibleOverrides(access, matrix);
   if (reachable.length === 0) {
     lines.push(`- No teams-only resources are shared with you.`);
+    lines.push(`\n_${WORKSPACE_MODE_NOTE}_`);
     return ok(lines.join("\n"));
   }
   const nameOf = new Map(
@@ -319,8 +353,17 @@ async function opMyAccess(client: DoplClient): Promise<ToolResponse> {
     const name = raw ? resourceLabel(raw) : `\`${o.resourceId}\``;
     lines.push(`  - ${name} (\`${o.resourceId}\` · ${typeLabel(o.resourceType)}) — ${o.level}`);
   }
+  lines.push(`\n_${WORKSPACE_MODE_NOTE}_`);
   return ok(lines.join("\n"));
 }
+
+/**
+ * The list above is TEAMS-MODE resources only: workspace-mode ones are never
+ * enumerated, they collapse into the role default stated at the top. Without
+ * this the section reads as "these are the things I can touch", which is the
+ * short answer to the wrong question.
+ */
+const WORKSPACE_MODE_NOTE = `Teams-mode resources only. Workspace-mode ones are not listed here — they are covered by your role's default level above. Chats and ontology objects are outside this model entirely.`;
 
 /**
  * The my-access endpoint pads teams-mode resources the caller can't see

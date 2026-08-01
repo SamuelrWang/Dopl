@@ -132,7 +132,7 @@ Use the Dopl tools to read and organize the user's workspace: their knowledge ba
 
 ## Session start — preload the user's workspace
 
-At the very start of every new session, before your first substantive reply, call dopl_map (one cheap call: every knowledge base, skill, workflow, and ontology cluster with one-liners). For "my/me" requests also call dopl_ontology(op='anchor') for the workspace object linked to the caller — CONTEXT about them, not their identity (any agent can re-point that link). Ground answers in that real state, not stale local files.
+At the very start of every new session, before your first substantive reply, call dopl_map (one cheap call: the active, caller-visible knowledge bases, skills, workflows and ontology clusters with one-liners). It is a routing VIEW, not an inventory, so never report its counts as workspace totals: drafts, trashed items and team-scoped items you have no grant on are absent from it. dopl_members(op="access_matrix") is the inventory. For "my/me" requests also call dopl_ontology(op='anchor') for the workspace object linked to the caller — CONTEXT about them, not their identity (any agent can re-point that link). Ground answers in that real state, not stale local files.
 
 ## Who you are
 
