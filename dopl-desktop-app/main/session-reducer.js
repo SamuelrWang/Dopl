@@ -68,10 +68,21 @@ function inboundAutoAccepted(state) {
 // as a `counterparty` bubble, push it as the next user turn, clear the activity back to `working`
 // (statused only on change). A PARKED session wakes FIRST (resumeQuery) so the push lands on the
 // fresh iterator (P1 lazy resume).
+// The push effect for ONE inbound turn. `threadId` is the thread that turn arrived in — carried
+// from channel-deliver through the gate so the FIRST turn of a room-bound shell can be told to
+// read the exchange it is joining (prompt-framing.firstActions, via session-seed.takeFraming).
+// It rides ONLY when there is one, so a thread-less turn produces the exact effect object it
+// always did and the shapes pinned across the reducer suites do not move.
+function pushInboundEffect(event) {
+  const eff = { type: 'pushInbound', message: event.message, authorName: event.authorName };
+  if (event.threadId) eff.threadId = String(event.threadId);
+  return eff;
+}
+
 function feedInboundEffects(state, event) {
   const effects = wakeEffects(state);
   effects.push({ type: 'emit', payload: { type: 'counterparty', from: event.authorName, text: event.message } });
-  effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName });
+  effects.push(pushInboundEffect(event));
   if (state.activity !== 'working') {
     effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
   }
@@ -252,7 +263,7 @@ function sessionReducer(state, event) {
   // which a park now clears (C9).
   if (type === 'inbound_accept' || type === 'inbound_accept_for_task' || type === 'inbound_released') {
     const effects = wakeEffects(state);
-    effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName });
+    effects.push(pushInboundEffect(event));
     effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
     if (event.pendingId) {
       effects.push({ type: 'emit', payload: { type: 'inbound_resolved', pendingId: event.pendingId, decision: type === 'inbound_accept_for_task' ? 'accepted-task' : 'accepted' } });

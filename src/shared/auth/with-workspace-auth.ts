@@ -9,6 +9,7 @@ import { meetsMinRole } from "@/features/workspaces/types";
 import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
 import { readAppVersionHeader } from "./app-version-header";
 import { readRuntimeHeader, type DoplRuntime } from "./runtime-header";
+import { readSessionIdHeader } from "./session-header";
 import { withUserAuth } from "./with-auth";
 
 export interface WorkspaceAuthContext {
@@ -45,6 +46,14 @@ export interface WorkspaceAuthContext {
    * authz signal (see `app-version-header.ts`).
    */
   appVersion?: string;
+  /**
+   * The `X-Dopl-Session-Id` this request carried (the desktop's slot key for the
+   * session making the call), or undefined for every other caller. Read once
+   * here — never off the raw request in a feature — so the channels write path
+   * has ONE source for the reserved `metadata.session_id` stamp. An ATTRIBUTION
+   * hint, never an authz signal (see `session-header.ts`).
+   */
+  sessionId?: string;
   params?: Record<string, string>;
 }
 
@@ -193,6 +202,7 @@ export function withWorkspaceAuth(
         role: membership.role,
         runtime: readRuntimeHeader(request),
         appVersion: readAppVersionHeader(request),
+        sessionId: readSessionIdHeader(request),
         params: ctx.params,
       });
     } catch (err) {

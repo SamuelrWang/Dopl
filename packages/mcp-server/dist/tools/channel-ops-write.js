@@ -242,6 +242,12 @@ async function opPost(client, channelRef, body, opts = {}) {
         `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}${toAgentNote}${asNote}). Readers watching with op="await" will pick it up.`,
         ...addressLines,
         ...(linkage ? [linkage] : []),
+        // F6 — read off the SERVER's answer, not off anything this tool guessed.
+        // A closed thread still accepts the post (decided: warn, never refuse —
+        // a 403 would break the legitimate final-word-after-the-close-echo
+        // pattern), so this is the only thing that tells the sender the exchange
+        // it just posted into has stopped routing.
+        ...(message.threadClosed ? [(0, channel_post_linkage_1.closedThreadNote)(ch.id)] : []),
         // WAKE-V1 teaching: a posted request that no one is waiting on is where
         // the exchange dies. WHETHER the await outlives this turn is not ours to
         // assert — `channel-wake-guidance.ts` owns that, off the caller's observed

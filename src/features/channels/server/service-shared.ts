@@ -5,6 +5,7 @@ import {
   DESKTOP_SESSION_RUNTIME,
   type DoplRuntime,
 } from "@/shared/auth/runtime-header";
+import { narrowSessionId } from "@/shared/auth/session-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { ChannelNotFoundError } from "./errors";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
@@ -39,6 +40,15 @@ export interface ChannelContext {
    * machine can explain a behavior gap instead of guessing at one (Q10).
    */
   appVersion?: string;
+  /**
+   * WHICH SESSION of an agent this request speaks for (the desktop's slot key),
+   * or undefined for a caller that sends no stamp. Server-resolved from the
+   * `X-Dopl-Session-Id` header by the auth layer; the write path stamps it onto
+   * a message as the reserved `metadata.session_id` key so a reader can tell two
+   * concurrent sessions of ONE agent handle apart (F2). A LABEL, never a lock —
+   * nothing enforces one live session per agent.
+   */
+  sessionId?: string;
 }
 
 export interface AuthLike {
@@ -48,6 +58,7 @@ export interface AuthLike {
   agentTokenId?: string | null;
   runtime?: string | null;
   appVersion?: string | null;
+  sessionId?: string | null;
 }
 
 export function buildChannelContext(auth: AuthLike): ChannelContext {
@@ -66,6 +77,9 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     // Same reason, same shape: re-run the header's own predicate so a version
     // that reaches an operator's screen is a version, whatever built this ctx.
     appVersion: narrowAppVersion(auth.appVersion),
+    // And again for the session stamp (F2) — it is rendered into a message line
+    // on the OTHER member's screen, so it is an id-shaped token or it is nothing.
+    sessionId: narrowSessionId(auth.sessionId),
   };
 }
 

@@ -147,9 +147,18 @@ function selfBypass(s, a) {
   return st.authHeld !== true;
 }
 
+// The THREAD a queued message arrived in, bounded and normalized to a string. It rides the ITEM
+// rather than the session because the queue can hold several messages from several threads: the
+// framing built when the operator finally accepts the HEAD must describe the head's thread, not
+// whichever message happened to arrive last. Empty for every main-room turn.
+function itemThread(a) {
+  const id = a && typeof a.threadId === 'string' ? a.threadId.trim() : '';
+  return id.slice(0, 64);
+}
+
 function enqueue(s, a) {
   const auto = autoInbound(s) || selfBypass(s, a);
-  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName };
+  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, threadId: itemThread(a) };
   const disp = io.queueInbound(s, item, !auto);
   // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this
   // early return, so a reply that overflowed the queue (MAX_PENDING_INBOUND) fell through to
@@ -171,6 +180,7 @@ function enqueue(s, a) {
     const hadFocus = windowHasFocus(s);
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
+      threadId: item.threadId, // the thread this turn arrived in (the framing's per-turn context)
       selfAuthored: a.selfAuthored === true, // the reducer decides again, on the same rule
     });
     if (!auto) surface(s, item, hadFocus);
@@ -253,6 +263,7 @@ function decideInbound(s, pendingId, decision) {
     deps.dispatch(s, {
       type: d === 'accept-task' ? 'inbound_accept_for_task' : 'inbound_accept',
       pendingId: head.pendingId, message: head.message, authorName: head.authorName,
+      threadId: head.threadId, // THIS message's thread, not the queue's latest
     });
   }
   drainQueue(s);
@@ -266,7 +277,7 @@ function drainQueue(s) {
   const next = s.pendingInbound[0];
   if (!next) return;
   const hadFocus = windowHasFocus(s); // FIX #8: before the reshow the dispatch can trigger
-  deps.dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
+  deps.dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName, threadId: next.threadId });
   surface(s, next, hadFocus);
 }
 
@@ -282,7 +293,7 @@ function drainInbound(s) {
   if (!deps || !s || s.settled || !autoInbound(s)) return false;
   let next = io.shiftInbound(s);
   while (next) {
-    deps.dispatch(s, { type: 'inbound_accept', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
+    deps.dispatch(s, { type: 'inbound_accept', pendingId: next.pendingId, message: next.message, authorName: next.authorName, threadId: next.threadId });
     next = io.shiftInbound(s);
   }
   return true;

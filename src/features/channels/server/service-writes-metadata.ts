@@ -1,15 +1,19 @@
 import "server-only";
 import { DESKTOP_SESSION_RUNTIME } from "@/shared/auth/runtime-header";
 import { isUuid } from "@/shared/lib/id/uuid";
-import { parseLegacyTaskSeq } from "../lib/group-thread";
 import type { ChannelMessageCreateInput } from "../schema";
 import type { ChannelRow, ChannelTaskRow } from "./dto";
 import { ChannelTaskNotInChannelError, TaskForbiddenError } from "./errors";
 import * as repo from "./repository";
-import * as repoMessages from "./repository-messages";
-import * as repoParticipants from "./repository-participants";
 import * as repoTasks from "./repository-tasks";
 import { resolveAgentAddressing } from "./service-writes-agents";
+// The thread half — who may write into a thread (both id shapes) and what the
+// thread row says about accepting the post — is its own module (§2 split).
+import {
+  isLegacyThreadParticipant,
+  isThreadClosed,
+  mayWriteThread,
+} from "./service-writes-metadata-thread";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -19,13 +23,18 @@ import type { ChannelContext } from "./service-shared";
  * stamping all answer the same question — what may a caller put in metadata,
  * and what does the server stamp itself.
  *
- * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`, `taskMode`,
+ * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`,
+ * `session_id`, `taskMode`,
  * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `to_agent_ids`,
  * `author_agent_id`, `intent`,
  * and the five calm-terminal flags) are ALWAYS stripped from caller metadata
  * and re-added only from server-validated values. `taskId` stays
  * caller-settable — but EVERY thread id, first-class or legacy, now has to
  * BELONG to the poster (see {@link resolvePostMetadata}).
+ *
+ * The THREAD half — `mayWriteThread`, `isLegacyThreadParticipant` and the
+ * closed-status read — moved to `service-writes-metadata-thread.ts` at the §2
+ * cap when the session stamp and the closed-thread notice landed (F2 + F6).
  *
  * **The legacy gate is CLOSED (F-083 bullet 3 / audit Q10, 2026-07-31).** A
  * non-UUID `task-{channelId}-{seq}` id used to skip the participation check
@@ -127,92 +136,21 @@ function takeCalmFlags(
   return requested;
 }
 
-/** The two people a first-class thread belongs to (creator + addressee). */
-function isThreadParticipant(task: ChannelTaskRow, userId: string): boolean {
-  return task.created_by === userId || task.target_user_id === userId;
-}
-
 /**
- * May this post write into `task`? The PARTICIPANT-AWARE gate (multiplayer),
- * which SUPERSEDES the pair check for a thread that has a participant set.
+ * What a post's metadata fold produced: the stored `metadata` itself, plus the
+ * one NOTICE the fold is in a position to raise and nothing downstream could
+ * re-derive without a second query.
  *
- * Two regimes, and the split is "does this thread have rows in
- * `channel_task_participants`":
- *  - **No rows (every thread created before this wave, and every thread created
- *    without `participants`): today's pair gate, unchanged.** Creator or
- *    target, nothing else.
- *  - **Rows present (a BREAKOUT ROOM): the set decides, and the original pair
- *    stays valid.** A user participant may post as themselves; an agent
- *    participant may post when the caller SUPPLIED `authorAgentId` (already
- *    validated as the caller's own agent of this channel — see
- *    `service-writes-agents.ts`). The creator / target keep their access
- *    because they are the thread's two original parties: a set that admitted
- *    collaborators must not evict the person who opened the exchange.
- *
- * The agent half requires the caller to CLAIM the identity rather than
- * inferring it from ownership. Inferring would mean "any member who owns any
- * agent in the set may post into the thread as themselves", which quietly
- * widens a human's write access on the strength of a process they started.
- *
- * WHAT KEEPS AN ORDINARY THREAD'S AUTHORIZATION FIXED is NOT "participants are
- * seeded only when a create asks for them" — that was true of `createTask` and
- * said nothing about the join route, so a bystander could write themselves a
- * set and be admitted here. It is the CURATION RULE in
- * `service-participants.ts`: only a thread's creator, its target, or an
- * existing user participant may add a row at all. So a thread's set can only
- * ever grow by the decision of someone already inside it, and a thread nobody
- * inside it curated stays a two-party thread forever.
- *
- * ONE query, and only for a caller-supplied first-class id (an inherited id's
- * pair is {author, peer} by construction and never reaches here).
+ * F6 — `threadClosed` is the whole reason this is an object rather than a bare
+ * record. The thread row is resolved here and nowhere else on the write path, so
+ * this is the only place that can see a post landing in a CLOSED thread. It
+ * rides OUT as a notice rather than being stamped INTO `metadata`: the message
+ * is not different for having been posted late, only the caller's report is.
  */
-async function mayWriteThread(
-  task: ChannelTaskRow,
-  userId: string,
-  authorAgentId: string | undefined
-): Promise<boolean> {
-  const participants = await repoParticipants.listParticipantsByTask(task.id);
-  if (participants.length === 0) return isThreadParticipant(task, userId);
-  if (isThreadParticipant(task, userId)) return true;
-  return participants.some(
-    (row) =>
-      (row.kind === "user" && row.user_id === userId) ||
-      (row.kind === "agent" &&
-        authorAgentId !== undefined &&
-        row.agent_id === authorAgentId)
-  );
-}
-
-/**
- * Whether `userId` is one of the two participants of a LEGACY
- * `task-{channelId}-{seq}` exchange. A legacy session has no `channel_tasks`
- * row, so the only server-side record of who it belongs to is its opening
- * request: the message at that seq, whose author is the requester and whose
- * `metadata.to_user_id` is the responder — exactly the pair `groupThread`
- * joins on.
- *
- * This is the ONE legacy resolver: the thread-write gate and the calm-flag
- * stamp both go through it (the flags ride on whether the TAG survived, so
- * there is exactly one lookup per post, not one per concern). Fails CLOSED at
- * every step — an id that does not name THIS channel, a seq that is not a
- * positive integer, a missing opener, or an unaddressed opener whose author is
- * someone else, all answer "not a participant".
- */
-async function isLegacyThreadParticipant(
-  channelId: string,
-  taskId: string,
-  userId: string
-): Promise<boolean> {
-  const seq = parseLegacyTaskSeq(taskId, channelId);
-  // `parseLegacyTaskSeq` already pins the prefix to this channel and the tail
-  // to digits; seqs start at 1, and a digit run long enough to lose precision
-  // is not a seq either.
-  if (seq === null || seq < 1 || !Number.isSafeInteger(seq)) return false;
-  const opener = await repoMessages.findMessageBySeq(channelId, seq);
-  if (!opener) return false;
-  if (opener.author_user_id === userId) return true;
-  const meta = (opener.metadata ?? {}) as Record<string, unknown>;
-  return meta.to_user_id === userId;
+export interface PostMetadataResult {
+  metadata: Record<string, unknown>;
+  /** True when the post landed in a thread whose row is no longer open. */
+  threadClosed: boolean;
 }
 
 /**
@@ -331,6 +269,22 @@ async function isLegacyThreadParticipant(
  *    listener never quits, so a peer can run a stale build indefinitely with
  *    nothing on either machine saying so — a shipped fix then reads as broken.
  *    Purely diagnostic: nothing may gate on it (see `app-version-header.ts`).
+ * 6b. **Session stamp (F2).** `session_id` joins the reserved set on EXACTLY
+ *    the terms `runtime` and `appVersion` are on: stripped from caller metadata
+ *    unconditionally, then re-stamped only from the REQUEST's
+ *    `X-Dopl-Session-Id` header (resolved by the auth layer into
+ *    `ctx.sessionId`, and shape-checked there). Absent header → no key at all.
+ *    It exists because ONE `channel_agents` row can be claimed by any number of
+ *    concurrent processes holding the owner's credential — `as_agent` is
+ *    per-call and ownership-checked only, and on the desktop a ROOM slot
+ *    `(channel, agent)` and a PAIR slot `(channel, thread)` are disjoint by
+ *    design, so three live sessions of one handle is the documented behavior.
+ *    With nothing on the wire naming a session, "flint said X" was not a
+ *    well-formed statement, and two sessions of one handle issued a peer
+ *    contradictory instructions 79 seconds apart with no way to attribute
+ *    either. A LABEL, NOT A LOCK: nothing here enforces one live session per
+ *    agent id, which would break the three-slot design and would not touch an
+ *    external CLI session passing `as_agent` at all.
  * 7. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
  *    re-stamped only when the post ends up carrying a thread tag the poster is
  *    entitled to — which, since (4), is exactly "a `taskId` survived". Both
@@ -338,12 +292,19 @@ async function isLegacyThreadParticipant(
  *    own and cost no second read. A flag on a thread that is not the poster's
  *    is dropped with the tag that carried it, so the victim's card keeps
  *    rendering the outcome its OWN session produced.
+ * 8. **Closed-thread notice (F6).** The resolved thread row's `status` is READ
+ *    at last — it was written on close and cleared on reopen and consulted
+ *    nowhere on the write path, so a closed thread accepted posts in silence.
+ *    It changes NOTHING about the message: the post lands, the metadata is
+ *    identical, and the fact rides out on {@link PostMetadataResult} for the
+ *    caller's report. See {@link isThreadClosed} for why this warns instead of
+ *    refusing.
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
   channel: ChannelRow,
   input: ChannelMessageCreateInput
-): Promise<Record<string, unknown>> {
+): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
   delete metadata.to_user_id;
   delete metadata.summary;
@@ -353,6 +314,11 @@ export async function resolvePostMetadata(
   delete metadata.to_agent_ids;
   delete metadata.author_agent_id;
   delete metadata.intent;
+  // F2 — stripped UNCONDITIONALLY, before anything decides whether a stamp is
+  // coming. A caller that could set this could attribute its own post to
+  // somebody else's session, which is the exact forensic question the key
+  // exists to answer.
+  delete metadata.session_id;
   const calmFlags = takeCalmFlags(metadata);
 
   // Stamped only when the caller SUPPLIED it. An absent field stamps no key —
@@ -365,6 +331,10 @@ export async function resolvePostMetadata(
     metadata.runtime = DESKTOP_SESSION_RUNTIME;
   }
   if (ctx.appVersion) metadata.appVersion = ctx.appVersion;
+  // F2, same rule again: the header or nothing. Stamped verbatim — the value is
+  // the caller's own slot key and the server has no opinion about its content
+  // beyond the shape check `session-header.ts` already applied.
+  if (ctx.sessionId) metadata.session_id = ctx.sessionId;
 
   // Both agent identities are validated before anything is stamped: a
   // `toAgent` that names no agent of this channel is a 400, and an
@@ -457,5 +427,9 @@ export async function resolvePostMetadata(
     for (const key of calmFlags) metadata[key] = true;
   }
 
-  return metadata;
+  // F6 — the notice, read off the row the folds above already resolved. An
+  // INHERITED task can never be closed (`resolveInheritableTask` filters to
+  // `open`), so in practice this fires only for a caller-supplied first-class
+  // id — the exact shape of "I closed this thread and kept posting into it".
+  return { metadata, threadClosed: isThreadClosed(task) };
 }

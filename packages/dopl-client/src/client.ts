@@ -77,6 +77,7 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
+  ChannelMessagePosted,
   ChannelThread,
   ChannelThreadClosed,
   ChannelThreadCreated,
@@ -615,7 +616,7 @@ export class DoplClient extends ChannelAgentsClient {
   postChannelMessage(
     channelId: string,
     input: ChannelMessageInput
-  ): Promise<ChannelMessage> {
+  ): Promise<ChannelMessagePosted> {
     return channel.postMessage(this.transport, channelId, input);
   }
 

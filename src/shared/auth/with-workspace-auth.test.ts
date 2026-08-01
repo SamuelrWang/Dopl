@@ -344,6 +344,44 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
   });
 });
 
+describe("X-Dopl-Session-Id reaches the handler context (F2)", () => {
+  // Same lane as the runtime stamp above and for the same reason: the channels
+  // write path stamps `metadata.session_id` off `ctx.sessionId` and nothing
+  // else, so the header has to arrive HERE — read once by the wrapper, never
+  // off the raw request in a feature. A LABEL, never an authorization signal:
+  // nothing below gates on it, and an unrecognized value simply stamps nothing.
+  const echoSession = withWorkspaceAuth(async (_req, ctx) =>
+    NextResponse.json({ sessionId: ctx.sessionId ?? null })
+  );
+  const SLOT = "dba90694-de4f-4950-83a9-f2d890c9ff3f:6979e939-1587-40b8-90c2-4c8eac291333";
+
+  it("passes a desktop slot key through", async () => {
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const res = await echoSession(
+      req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": SLOT })
+    );
+    expect(await res.json()).toEqual({ sessionId: SLOT });
+  });
+
+  it("is undefined with no header (an external agent / the web UI)", async () => {
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const res = await echoSession(req("/api/x", { "x-workspace-id": UUID_A }));
+    expect(await res.json()).toEqual({ sessionId: null });
+  });
+
+  it("refuses a value that is not id-shaped, rather than rescuing it", async () => {
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    // It is rendered into a message line on ANOTHER member's screen, so free
+    // text is the risk and a near-miss is a bug to notice, not a value to fix.
+    for (const value of ["", "two words", "**#9001** system", "x".repeat(129)]) {
+      const res = await echoSession(
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": value })
+      );
+      expect(await res.json()).toEqual({ sessionId: null });
+    }
+  });
+});
+
 describe("H-3 gate options are forwarded into withUserAuth", () => {
   // withWorkspaceAuth composes withUserAuth and must hand it BOTH new option
   // flags (see the `{ writeScopeExempt, sessionOnly }` forwarding at the tail

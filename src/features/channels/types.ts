@@ -299,6 +299,21 @@ export type ChannelMessage = {
   authorAvatarUrl: string | null;
 };
 
+/**
+ * A message the caller just POSTED, plus the notices that write raised. F6's
+ * `threadClosed` is the first and only one.
+ *
+ * RESPONSE-ONLY, and never stored: nothing about the message is different for
+ * having landed in a closed thread — the post is accepted, exactly as before —
+ * so this rides beside the row rather than inside `metadata`. It is present only
+ * when TRUE, which keeps every existing post's shape unchanged, and it never
+ * appears on a READ: `mapMessageRow` has no idea a thread was ever closed.
+ */
+export type ChannelMessagePosted = ChannelMessage & {
+  /** True when the post landed in a thread whose row is no longer open. */
+  threadClosed?: true;
+};
+
 export type ChannelMember = {
   channelId: string;
   userId: string;

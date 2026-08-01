@@ -17,6 +17,21 @@
  * enforced before the call is made at all. `.trim()` where — and only where —
  * the route trims before measuring, so the two agree on what "200 characters"
  * counts.
+ *
+ * F5 (2026-08-01) — THE MINIMUMS MIRROR TOO, and the agent-ref cap is published
+ * at last. `body` / `client_msg_id` / `title` carried a maximum and no minimum
+ * while the route required `.min(1)` on all three, and `to_agent` / `to_agents`
+ * items carried NO bound against the route's 64 — so an empty body, a blank
+ * idempotency key, a whitespace-only title and an over-long handle each passed
+ * the tool and died at the route as an opaque 400 that the write ops then
+ * mis-narrated (see `channel-errors.ts`). A client-side refusal is a -32602 that
+ * names the field.
+ *
+ * `summary` IS DELIBERATELY NOT SPLIT and its declared 2000 stays. One param
+ * serves two routes with two caps (post 200, close_thread 2000) and this schema
+ * declares the LOOSER one so a legitimate close summary is never refused
+ * client-side; the tighter number is stated in its `.describe()`. See the note
+ * above the field.
  */
 
 import { z } from "zod";
@@ -105,12 +120,24 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
   to_agent: z
     .string()
+    // F5 — the route caps an agent REF at 64 (`schema.ts`
+    // `toAgent: z.string().trim().min(1).max(64)`) and this schema published no
+    // bound at all, so a long handle reached the route and came back as an
+    // opaque 400 the write ops mis-narrated. `.max()` only: `.trim()` here would
+    // change what is SENT (the route trims before measuring, we do not), and the
+    // emptiness of a blank ref is already the route's to refuse.
+    .max(64)
     .optional()
     .describe(
       `op="post" (optional): address this message to ONE named AGENT — its handle or agent id, in THIS channel. Addressing an agent is what makes it ACT. When the author is a HUMAN it also ENGAGES that agent — for roughly the next hour, or until op="disengage_agent" or a park/dismiss, it acts on that person's UNADDRESSED messages here as well, so a human tags to START an exchange rather than on every turn. A post of YOURS is agent-authored: it addresses and delivers, and it engages nothing. To address SEVERAL agents at once, use \`to_agents\` — \`to_agent\` is exactly the one-element form of it, and the two are ONE address: the cap is ${MAX_ADDRESSED_AGENTS} agents in total, \`to_agent\` included, so \`to_agent\` plus a full \`to_agents\` of ${MAX_ADDRESSED_AGENTS} is refused. Addressing a PERSON with \`to\` is the other path and it is NOT notify-only by default: with \`as_agent\` set it notifies them and starts no agent, without \`as_agent\` it triggers that member's listener and can start theirs. The FIRST addressed agent's OWNER is the machine this reaches, so setting both \`to\` and \`to_agent\` addresses the agent's owner, not the member in \`to\`.`,
     ),
   to_agents: z
-    .array(z.string())
+    // F5 — the PER-ITEM cap the route has always applied
+    // (`items .trim().min(1).max(64)`) and this schema never published, so a
+    // single over-long handle in an otherwise valid list failed the whole
+    // all-or-nothing post with an opaque 400. Same `.max()`-only discipline as
+    // `to_agent` above.
+    .array(z.string().max(64))
     // `.min(1)` MIRRORS THE ROUTE, which has always required it: an EMPTY array
     // is a 400 there, not a synonym for absence. This schema had no minimum, so
     // `to_agents: []` passed the tool, reached a route that folds the field away
@@ -154,6 +181,12 @@ export const CHANNEL_INPUT_SHAPE = {
   // the two agree on what "200 characters" counts.
   body: z
     .string()
+    // F5 — `.min(1)` mirrors the route (`body: z.string().min(1).max(16000)`,
+    // on BOTH the post and the create_thread schemas). Without it an empty body
+    // passed the tool and died at the route as a 400 the caller then read as a
+    // membership or thread problem; refused here it is a plain -32602 naming
+    // the field.
+    .min(1)
     .max(16000)
     .optional()
     .describe(
@@ -198,6 +231,10 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
   client_msg_id: z
     .string()
+    // F5 — `.min(1)` mirrors the route. An idempotency key of "" is not a key:
+    // the route refuses it, and a client-side refusal keeps the caller from
+    // believing a blank key deduped anything.
+    .min(1)
     .max(200)
     .optional()
     .describe(
@@ -206,6 +243,11 @@ export const CHANNEL_INPUT_SHAPE = {
   title: z
     .string()
     .trim()
+    // F5 — `.min(1)` mirrors the route (`title: z.string().trim().min(1)
+    // .max(200)`), and it is measured AFTER the trim on both sides, so a
+    // whitespace-only title is refused here rather than 400ing at the route
+    // with a thread half-implied.
+    .min(1)
     .max(200)
     .optional()
     .describe(

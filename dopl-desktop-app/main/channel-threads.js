@@ -28,6 +28,8 @@
 // (migration 20260731130000) — `kind` 'user' | 'agent', with `agentId` a `channel_agents.id`.
 // OWNERSHIP IS STILL NOT TAKEN FROM THERE: a participant row says an agent is in the thread,
 // and the authenticated ROSTER (channel-roster.js) is what says the agent is MINE.
+// The same read carries `task.status`, which is why the CLOSED verdict is decided here too —
+// see threadIsClosed: a thread that has ended routes nobody, which is what closing one promises.
 //
 // F-072: BOUNDED, CACHED, SINGLE-FLIGHT. This read sits on the message path, so it is the
 // exact shape of a read storm if written naively. Three bounds:
@@ -112,9 +114,49 @@ function myAgentParticipants(participants, rows, myUserId) {
   return out;
 }
 
+// A CLOSED THREAD ROUTES NOBODY (2026-08-01, the adversarial review of F1-F7).
+//
+// The close copy promises it in words — "closing stops the thread routing; no session is woken"
+// (the MCP tool's own description) — and nothing implemented it. This read consumed
+// `task.participants` and never looked at `task.status`, so a thread the operator had closed
+// kept feeding every one of its participating agents, and F1 had just made the milestone stream
+// take the same lane: closing the room a pair of agents were working in did not quiet it.
+//
+// IT IS DECIDED HERE, in the one authenticated read, rather than at the route: the status is a
+// FACT OFF THE SERVER (`channel_tasks.status`, ThreadStatus = 'open' | 'closed'), it arrives on
+// the same call as the participant set, and putting it here means it is cached, single-flighted
+// and backed off exactly like everything else on the message path (F-072).
+//
+//   ANY status that is not 'open'  -> null, the established "routes nobody" sentinel. routeThread
+//                                     answers '' for it, which is the contract every other null
+//                                     already has, so no lane changes shape.
+//   NO status at all               -> unchanged. A server that predates the field says nothing
+//                                     about the lifecycle, and a guess is not a fact.
+//
+// WHAT THE CACHE COSTS BOTH WAYS, stated plainly. The verdict lands in the SAME cache as a
+// failed read (rows === null -> FAIL_BACKOFF_MS), so:
+//   after a CLOSE   the thread can keep routing for up to CACHE_TTL_MS, until the good entry
+//                   ages out. Five minutes of lag, in the direction the server is still safe in
+//                   (a post into a closed thread is ACCEPTED server-side — that is F6, and it is
+//                   untouched: this stops the local WAKE, never the write).
+//   after a REOPEN  the CLOSED verdict is re-read after FAIL_BACKOFF_MS, so the room comes back
+//                   within 30 seconds instead of staying dead until something evicts it.
+// A busy closed thread therefore costs one read every 30 seconds and no more — the same bound a
+// 500 or a 404 has had since this module was written.
+//
+// WHAT THIS DOES NOT TOUCH, checked rather than assumed (test/channel-thread-closed.test.mjs):
+// the ADDRESSED lane never asks who is in a thread, so `to_agent_ids` still reaches the agent it
+// names inside a closed thread. An explicit address is an explicit ask; only the PASSIVE thread
+// lane goes quiet.
+function threadIsClosed(task) {
+  const status = task && typeof task.status === 'string' ? task.status.trim() : '';
+  return !!status && status !== 'open';
+}
+
 // The authenticated read. Returns the participant array, or NULL when the thread could not be
-// read — the null is load-bearing everywhere it travels: unknown participation routes NOBODY,
-// which leaves the message on exactly the path it took before this module existed.
+// read — or is CLOSED. The null is load-bearing everywhere it travels: unknown (or ended)
+// participation routes NOBODY, which leaves the message on exactly the path it took before this
+// module existed.
 async function fetchParticipants(entry, threadId) {
   let res;
   try {
@@ -139,6 +181,10 @@ async function fetchParticipants(entry, threadId) {
     // way here (nobody is routed), but only one of them is a fact, so the absent field is
     // reported as unknown.
     if (!task || !Array.isArray(task.participants)) return null;
+    if (threadIsClosed(task)) {
+      diag('threads: thread', String(threadId).slice(0, 8), 'is', String(task.status).slice(0, 16), '- routing nobody');
+      return null;
+    }
     return task.participants;
   } catch (err) {
     diag('threads: participant parse error', err && err.message);
@@ -174,6 +220,7 @@ module.exports = {
   FAIL_BACKOFF_MS,
   CACHE_CAP,
   myAgentParticipants,
+  threadIsClosed, // a closed thread routes nobody (the close promise, implemented)
   fetchParticipants,
   participantsFor,
 };

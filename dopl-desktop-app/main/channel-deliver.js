@@ -133,6 +133,25 @@ async function deliverToAgent(entry, m, myUserId, row) {
     channelId: entry.channel.id,
     agentId: row.id,
     message: m.body,
+    // THE THREAD THIS TURN ARRIVED IN (2026-08-01, the adversarial review of F1-F7).
+    //
+    // A TEAM session's SLOT is (channel, agent) and its spawn context is keyed `taskId: ''` on
+    // purpose (session-team.js): an agent lives in the ROOM and works whatever thread it is
+    // asked in, so keying the slot on a thread would collapse every agent of a channel onto one
+    // session. The cost of that — invisible until F1 started thread-routing milestones into team
+    // sessions — is that prompt-framing.firstActions gates the "SECOND action: read thread=<id>"
+    // order on `ctx.taskId`, so the one session shape that wakes up INSIDE an exchange it has
+    // none of was the one shape never told to read it.
+    //
+    // So the thread rides the DELIVERY, not the slot: it is a fact about THIS TURN (which
+    // message woke the agent), it is carried the same way `message` and `authorName` are, and it
+    // reaches the framing as per-turn context (session-seed.takeFraming) without moving the
+    // `firstClassTaskId` is UUID-gated, which is deliberate and is the SAME gate the thread lane
+    // selects on (channel-agents.routeThread): the id handed to the framing is exactly the id the
+    // routing keyed on, and a legacy `task-<channel>-<seq>` tag — which selects no lane and names
+    // no `channel_tasks` row to read — carries nothing here. '' for every main-room turn, which
+    // is byte for byte what those turns already were.
+    threadId: targeting.firstClassTaskId(m),
     // THE ATTRIBUTION (incident 2026-08-01). This was `io.displayNameFor(m.authorUserId)`, and
     // an agent's posts are authored by its OWNER'S account — so the wrapper the session is fed
     // ("<name> replied in the channel…") named the OPERATOR over words a machine wrote, and an

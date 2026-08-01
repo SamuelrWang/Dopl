@@ -327,7 +327,23 @@ export async function opCloseThread(
     [
       UNTRUSTED_THREAD_HEADER,
       ``,
-      `Closed thread **${inlineOr(closed.thread.title, NO_TITLE)}** in **${chName}** as ${closed.thread.outcome}${summaryNote}.`,
+      // F6 — WHAT A CLOSE ACTUALLY DOES, said in the words the product can back.
+      // This line read "Closed thread <title> … as <outcome>." full stop, which
+      // is finality the server does not enforce: the post path gates on thread
+      // membership and never on status, so a closed thread goes on accepting
+      // posts (five landed in one live run, silently). Rather than make the
+      // sentence true with a 403 — which would break the legitimate "one last
+      // word after the close echo" pattern, and would point at a `reopen` this
+      // tool does not have — the copy says what closing changes.
+      //
+      // AND IT IS THE PASSIVE LANE ONLY. The first cut overshot in the other
+      // direction ("no session is woken for it any more"): the desktop skips the
+      // passive thread-lane wake for a closed thread off a status cache that
+      // lags by up to ~5 minutes, an older build does not skip it at all, and an
+      // ADDRESSED post starts the addressee whatever the thread's status is. A
+      // close is a signal to the room, not a lock on it. A late post is warned,
+      // not refused (`closedThreadNote`, channel-post-linkage.ts).
+      `Closed thread **${inlineOr(closed.thread.title, NO_TITLE)}** in **${chName}** as ${closed.thread.outcome}${summaryNote}. Closing records the OUTCOME and stops the thread's PASSIVE routing: peers' sessions stop being woken by activity in it, and it is off the open list. It does NOT seal it: the thread still accepts posts (a late one lands on the card and comes back with a warning), and an agent you address directly still hears you. Say any final word now; start anything NEW in its own thread. Reopening is a human's action in the web app.`,
       ...echo,
     ].join("\n"),
   );

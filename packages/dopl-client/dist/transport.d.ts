@@ -41,6 +41,17 @@ export interface DoplTransportOptions {
      */
     runtime?: string;
     /**
+     * WHICH SESSION of an agent this client acts for, echoed on every request as
+     * `X-Dopl-Session-Id` (F2). The ONLY consumer is the server's reserved
+     * `metadata.session_id` stamp, which is what lets a reader tell two concurrent
+     * sessions of ONE agent handle apart — `as_agent` is ownership-checked and
+     * per-call, so it never said which process was speaking. Set by the in-app MCP
+     * route, which forwards the value it was called with; unset stamps nothing.
+     *
+     * A LABEL, NOT A LOCK: nothing gates on it, and no session count is enforced.
+     */
+    sessionId?: string;
+    /**
      * CALLER-LIFETIME cancellation (Q14). The in-app MCP route passes the
      * incoming `Request.signal` here, so an MCP client hanging up mid-call (an
      * ESC during a `dopl_channel(op="await")` hold) stops the work instead of
@@ -74,8 +85,8 @@ export interface RequestOptions {
     /**
      * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
      * concurrency). Reserved headers (Authorization, Content-Type, the
-     * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Workspace-Id) cannot be
-     * overridden.
+     * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Dopl-Session-Id,
+     * X-Workspace-Id) cannot be overridden.
      */
     customHeaders?: Record<string, string>;
     /**
@@ -94,6 +105,7 @@ export declare class DoplTransport {
     private readonly toolHeaderName;
     private readonly clientIdentifier;
     private readonly runtime;
+    private readonly sessionId;
     private readonly signal;
     private workspaceId;
     constructor(baseUrl: string, apiKey: string, opts?: DoplTransportOptions);

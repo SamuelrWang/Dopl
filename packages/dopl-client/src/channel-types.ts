@@ -103,6 +103,24 @@ export interface ChannelMessage {
   authorAvatarUrl?: string | null;
 }
 
+/**
+ * What a POST resolves to: the stored message plus the notices that write
+ * raised. F6's `threadClosed` is the first and only one.
+ *
+ * NON-OPTIONAL BY CONSTRUCTION, on the same additive-field discipline as
+ * `openingSeq` / `echoSeq` / `participants`: the server sends the envelope key
+ * only when the post landed in a CLOSED thread, and an OLDER deployment sends no
+ * key at all. Both must read as `false`, never as `undefined` for a caller to
+ * re-decide — so `postMessage` normalizes it on the way out.
+ *
+ * A closed thread still ACCEPTS the post. This is a report, not a failure: the
+ * message landed, and the caller is told where.
+ */
+export interface ChannelMessagePosted extends ChannelMessage {
+  /** True when the post landed in a thread whose row is no longer open. */
+  threadClosed: boolean;
+}
+
 export interface ChannelMember {
   channelId: string;
   userId: string;

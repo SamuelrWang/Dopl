@@ -183,6 +183,33 @@ async function setup(ctx, who, tg) {
     clientMsgId: `harness-${tg.stamp}-noise`,
   }), 'post agent-noise');
 
+  // ── THE MILESTONE PAIR (F1) — the kind the product's own prompts ask agents to post ──
+  // `kind="task_progress"` is what `channel-description.ts` and `prompt-framing.js` tell every
+  // spawned session to log its progress as, and until 2026-08-01 the desktop refused every one
+  // of them before it read a single addressee. These two posts differ in ONE field, `toAgents`:
+  // the addressed one is the shape that was silently undeliverable for a whole two-agent run,
+  // and the unaddressed twin is check 9's CONTROL, because "the addressed milestone routed"
+  // only means something if the unaddressed one did not.
+  //
+  // POSTED SOFT (no `must`): a server that refuses the kind or this shape SKIPs check 9 rather
+  // than aborting the eight checks that have nothing to do with it.
+  const milestone = async (key, body, extra) => {
+    const res = await api.post(ctx.channel.id, {
+      body,
+      kind: 'task_progress',
+      authorKind: 'agent',
+      authorAgentId: ctx.agents.a.id,
+      clientMsgId: `harness-${tg.stamp}-${key}`,
+      ...extra,
+    });
+    if (res.ok) posted[key] = res.json.message;
+    else ctx.milestoneError = `${key}: HTTP ${res.status} ${res.text.slice(0, 300)}`;
+  };
+  await milestone('milestone', `live harness: milestone for @${ctx.agents.b.name} — automated probe, no action needed.`, {
+    toAgents: [ctx.agents.b.name],
+  });
+  await milestone('milestoneLoose', 'live harness: milestone addressed to nobody — the control.', {});
+
   ctx.handshakeSeq = posted.two.seq;
 
   // ── THREADS. Three, because they answer three different questions ─────────────

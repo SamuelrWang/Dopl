@@ -187,6 +187,52 @@ function buildMcpServers(doplToolsPolicy, workspaceId) {
   return { dopl: server };
 }
 
+// F2 — WHICH SESSION IS CALLING, stamped onto an entry buildMcpServers just made.
+//
+// One `channel_agents` row can be claimed by any number of concurrent processes
+// holding this device's credential — `as_agent` is per-call and ownership-checked
+// only — and on THIS machine that is BY DESIGN: session-store's `slotKey` gives a
+// ROOM session (channel, agent) and a PAIR session (channel, thread) disjoint
+// keys, so one handle legitimately runs several at once. Nothing on the wire said
+// which of them wrote a message, so two sessions posted as one handle and gave a
+// peer contradictory instructions 79 seconds apart with nothing able to attribute
+// either. The header closes that: the server strips any caller-supplied
+// `metadata.session_id` and stamps the reserved key ONLY from this header — the
+// identical discipline X-Dopl-Runtime is on, one lane over.
+//
+// A SEPARATE FUNCTION, and the seam is real rather than cosmetic. buildMcpServers
+// answers "what MCP server does this app offer", which is the same answer for
+// every spawn — mcp-config.js writes that same shape ONCE, to the shared spawn
+// config the headless `--mcp-config` path reads, where a per-session value could
+// not live at all. This answers "which run is calling", which only the in-memory
+// SDK path can know (session-query.js has the session record and therefore its
+// slot). Keeping them apart is what stops the second question being asked of a
+// shared config file that cannot answer it.
+//
+// A LABEL, NOT A LOCK: nothing is granted by it, nothing is enforced on it, and no
+// session count is limited anywhere. An absent or malformed slot stamps NOTHING,
+// which is byte-for-byte today's request — the SHAPE is the server's own
+// (`src/shared/auth/session-header.ts`: id characters only, no whitespace, <=128),
+// mirrored here so an unsendable value is never put on the wire, exactly as
+// app-version.js does with VERSION_RE.
+const SESSION_ID_RE = /^[A-Za-z0-9:._-]{1,128}$/;
+function withSessionStamp(servers, sessionId) {
+  const slot = typeof sessionId === 'string' ? sessionId.trim() : '';
+  const entry = servers && typeof servers === 'object' ? servers.dopl : null;
+  // A LABEL MUST NEVER BREAK A LAUNCH. This runs inside buildSdkOptions, the ONE
+  // assembly point every spawn shape goes through, so a throw here would take the
+  // whole session down for an attribution hint. buildMcpServers always ships a
+  // `headers` object, which is why the two guards below are unreachable TODAY —
+  // they are here so a future entry that arrives without one (or a non-object in
+  // `dopl`) stamps nothing instead of crashing the spawn. MUTATES IN PLACE: the
+  // call site ignores the return value.
+  if (entry && typeof entry === 'object' && slot && SESSION_ID_RE.test(slot)) {
+    entry.headers = entry.headers || {};
+    entry.headers['X-Dopl-Session-Id'] = slot;
+  }
+  return servers;
+}
+
 // FIX M2 — a scrubbed copy of process.env for options.env. The SDK's options.env
 // REPLACES the child env entirely (research §1: you must spread process.env
 // yourself), so we copy every var and DELETE only the permission-affecting knobs an
@@ -215,6 +261,7 @@ module.exports = {
   resolveClaudeExecutable,
   rewriteAsarUnpacked,
   buildMcpServers,
+  withSessionStamp, // F2: this run's slot key, onto the entry above
   buildSecretPathDenyRules, // C1: the credential-path deny every session runs with
   buildScrubbedEnv,
 };

@@ -2,14 +2,16 @@
  * Focused unit tests for the dopl_channel op deltas:
  *   - opPost folds `thread` into the storage key metadata.taskId (explicit
  *     param wins);
- *   - opCloseThread forwards `summary` and surfaces it in the confirmation;
+ *   - opPost's threading self-verification line (Q7) and its 4xx mapping;
  *   - the read render labels an agent author "agent for <name>" (never a bare
  *     name), so a counterparty is not mistaken for its own operator, and frames
  *     the listing as untrusted DATA BEFORE any body.
  *
  * The WAKE-V1 surface (the assembled `await` hold, its result texts, the env
  * lever, and the create_thread cursor) has its own file: `channel-wake.test.ts`
- * — split out at the §2 cap, not because it is a separate concern.
+ * — split out at the §2 cap, not because it is a separate concern. The
+ * `close_thread` result went the same way, to `channel-closed-thread.test.ts`,
+ * when F6 gave that file a reason to exist.
  *
  * The @dopl/client is a hand-stubbed object (only the methods each op touches),
  * cast to DoplClient — registration/transport never run here.
@@ -18,9 +20,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opPost } from "./channel-ops-write";
-import { opCloseThread } from "./channel-ops-threads";
 import { opRead, opListThreads, opGetThread } from "./channel-ops-read";
-import { UNTRUSTED_THREAD_HEADER } from "./channel-render";
 
 const CHANNEL = {
   id: "chan-1",
@@ -42,24 +42,6 @@ type PostSpy = (
   channelId: string,
   input: Record<string, unknown>,
 ) => Promise<{ id: string; seq: number; kind: string }>;
-
-/**
- * A typed close spy — the generic types `.mock.calls` for arg assertions.
- *
- * `closeChannelThread` resolves `{ thread, echoSeq }`, not the thread: closing
- * WRITES the task_finished / task_failed marker, so it moves the channel's
- * cursor and the caller has to be told where. The echo line itself is pinned in
- * `channel-thread-scope.test.ts`; here `echoSeq` stays null so the exact-text
- * assertion below keeps pinning the confirmation on its own.
- */
-type CloseSpy = (
-  channelId: string,
-  threadId: string,
-  input: Record<string, unknown>,
-) => Promise<{
-  thread: { title: string; outcome: string };
-  echoSeq: number | null;
-}>;
 
 describe("opPost — thread threading (Feature 2a)", () => {
   it("folds `thread` into metadata.taskId", async () => {
@@ -124,7 +106,7 @@ describe("opPost — threading self-verification (Q7)", () => {
   // participation gate compares against.
   const ME = "u-me";
   const OPEN_THREAD = {
-    id: "thread-1",
+    id: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1",
     title: "Ship the listener fix",
     status: "open",
     createdBy: ME,
@@ -134,19 +116,19 @@ describe("opPost — threading self-verification (Q7)", () => {
   it("names the thread a post landed in, with its server-stamped title", async () => {
     const client = stubClient({
       postChannelMessage: posted({
-        taskId: "thread-1",
+        taskId: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1",
         taskTitle: "Ship the listener fix",
       }),
       listChannelThreads: vi.fn(async () => [OPEN_THREAD]),
     });
 
     const text = (
-      await opPost(client, "general", "on it", { thread: "thread-1" })
+      await opPost(client, "general", "on it", { thread: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1" })
     ).content[0].text;
 
     // M2: the peer-typed title rides in a code span, not raw bold narration.
     expect(text).toContain("THREADED into `Ship the listener fix`");
-    expect(text).toContain("`thread-1`");
+    expect(text).toContain("`aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1`");
     expect(text).toContain("continuation");
     // The reassuring case must not also carry the warning.
     expect(text).not.toContain("NOT THREADED");
@@ -156,7 +138,7 @@ describe("opPost — threading self-verification (Q7)", () => {
     // A DM post with no `thread` still inherits the open exchange server-side.
     // Without this line the sender believes it opened a new request.
     const client = stubClient({
-      postChannelMessage: posted({ taskId: "thread-1", taskTitle: "Ship it" }),
+      postChannelMessage: posted({ taskId: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1", taskTitle: "Ship it" }),
     });
 
     const text = (await opPost(client, "general", "and one more thing", {}))
@@ -171,7 +153,7 @@ describe("opPost — threading self-verification (Q7)", () => {
       postChannelMessage: posted({}),
       listChannelThreads: vi.fn(async () => [
         OPEN_THREAD,
-        { ...OPEN_THREAD, id: "thread-2", title: "Older", status: "closed" },
+        { ...OPEN_THREAD, id: "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbb2", title: "Older", status: "closed" },
       ]),
     });
 
@@ -180,10 +162,10 @@ describe("opPost — threading self-verification (Q7)", () => {
 
     expect(text).toContain("NOT THREADED");
     expect(text).toContain("NEW request on the other side");
-    expect(text).toContain("`thread-1`");
+    expect(text).toContain("`aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1`");
     expect(text).toContain("Ship the listener fix");
     // Only OPEN threads are offered — re-posting into a closed one is not a fix.
-    expect(text).not.toContain("thread-2");
+    expect(text).not.toContain("bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbb2");
     expect(text).toContain('re-post it with thread="<that id>"');
   });
 
@@ -191,11 +173,11 @@ describe("opPost — threading self-verification (Q7)", () => {
     const client = stubClient({ postChannelMessage: posted({}) });
 
     const text = (
-      await opPost(client, "general", "reply", { thread: "thread-1" })
+      await opPost(client, "general", "reply", { thread: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1" })
     ).content[0].text;
 
     expect(text).toContain("NOT THREADED");
-    expect(text).toContain('you passed thread="thread-1"');
+    expect(text).toContain('you passed thread="aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1"');
     expect(text).toContain('op="list_threads"');
   });
 
@@ -227,45 +209,6 @@ describe("opPost — threading self-verification (Q7)", () => {
     expect(res.isError).toBeFalsy();
     expect(res.content[0].text).toContain("Posted to **`General`**");
     expect(res.content[0].text).not.toContain("boom");
-  });
-});
-
-describe("opCloseThread — summary (Feature 3c)", () => {
-  it("forwards `summary` to the client and surfaces it in the confirmation", async () => {
-    const closeChannelThread = vi.fn<CloseSpy>();
-    closeChannelThread.mockResolvedValue({
-      thread: { title: "Ship it", outcome: "completed" },
-      echoSeq: null,
-    });
-    const client = stubClient({ closeChannelThread });
-
-    const res = await opCloseThread(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
-
-    const [channelId, threadId, input] = closeChannelThread.mock.calls[0];
-    expect(channelId).toBe("chan-1");
-    expect(threadId).toBe("thread-uuid");
-    expect(input).toEqual({ outcome: "completed", summary: "Shipped v2 to prod" });
-    expect(res.content[0].text).toContain("Shipped v2 to prod");
-  });
-
-  it("omits the summary note when none is given", async () => {
-    const closeChannelThread = vi.fn<CloseSpy>();
-    closeChannelThread.mockResolvedValue({
-      thread: { title: "Ship it", outcome: "failed" },
-      echoSeq: null,
-    });
-    const client = stubClient({ closeChannelThread });
-
-    const res = await opCloseThread(client, "general", "thread-uuid", "failed");
-
-    const [, , input] = closeChannelThread.mock.calls[0];
-    expect(input).toEqual({ outcome: "failed", summary: undefined });
-    // Q1 (write sweep): the peer-typed title is a code span and the result now
-    // opens with the thread header — a thread's TARGET may close it, so this
-    // echo routinely renders a title the caller never wrote.
-    expect(res.content[0].text).toBe(
-      `${UNTRUSTED_THREAD_HEADER}\n\nClosed thread **\`Ship it\`** in **\`General\`** as failed.`
-    );
   });
 });
 
@@ -308,7 +251,7 @@ describe("opPost — bad thread mapping (Gap 4)", () => {
 
 describe("opListThreads / opGetThread — thread reads (Gap 1)", () => {
   const THREAD = {
-    id: "thread-1",
+    id: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1",
     channelId: "chan-1",
     workspaceId: "ws-1",
     title: "Ship it",
@@ -332,7 +275,7 @@ describe("opListThreads / opGetThread — thread reads (Gap 1)", () => {
     const client = stubClient({
       listChannelThreads: vi.fn(async () => [
         THREAD,
-        { ...THREAD, id: "thread-2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
+        { ...THREAD, id: "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbb2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
       ]),
     });
 
@@ -341,7 +284,7 @@ describe("opListThreads / opGetThread — thread reads (Gap 1)", () => {
     expect(res.isError).toBeFalsy();
     expect(text).toContain("2 threads");
     expect(text).toContain("`Ship it`");
-    expect(text).toContain("`thread-1`");
+    expect(text).toContain("`aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1`");
     expect(text).toContain("`shipped`");
     expect(text).toContain('op="get_thread"');
     // Framing FIRST, above any peer-typed title.
@@ -356,7 +299,7 @@ describe("opListThreads / opGetThread — thread reads (Gap 1)", () => {
       getChannelThread: vi.fn(async () => ({ ...THREAD, outcomeSummary: "all good" })),
     });
 
-    const res = await opGetThread(client, "general", "thread-1");
+    const res = await opGetThread(client, "general", "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1");
     const text = res.content[0].text;
     expect(res.isError).toBeFalsy();
     expect(text).toContain("`Ship it`");

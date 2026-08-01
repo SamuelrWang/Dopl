@@ -171,12 +171,12 @@ function wakeChannel(entry) {
 // A dismissed agent's message therefore started a session, which is the exact opposite of
 // what the dismissal means and of what this file's own comment claims.
 //
-//   ''           NOT THIS LANE — fall through, unchanged and correct. Window-mode off, not
-//                a message, a message MY OWN AGENTS wrote outside a thread (see the self brake
-//                below), an agent this operator does not own (somebody else's agent, on
-//                somebody else's machine; ownership comes off the authenticated roster, never
-//                off the message), or no agent addressing at all with no thread of mine and
-//                nothing of mine engaged to take it.
+//   ''           NOT THIS LANE — fall through, unchanged and correct. Window-mode off, a kind
+//                this lane does not carry (see MILESTONE_KINDS), a post MY OWN AGENTS wrote
+//                outside a thread (see the self brake below), an agent this operator does not
+//                own (somebody else's agent, on somebody else's machine; ownership comes off
+//                the authenticated roster, never off the message), or no agent addressing at
+//                all with no thread of mine and nothing of mine engaged to take it.
 //   'fed'        delivered into that agent's own session.
 //   'dismissed'  the row is retired. It keeps its handle for attribution and starts NOTHING;
 //                the operator is told passively (listener-messages -> task-notify), because
@@ -225,10 +225,45 @@ function wakeChannel(entry) {
 // bounded, human-curated, server-side list that no agent can add itself to — and two of my
 // own agents collaborating in a breakout room is the feature, not the failure. routeThread
 // states the three bounds that replace the brake there.
+//
+// ── WHICH KINDS THIS LANE CARRIES (F1, 2026-08-01) ───────────────────────────────
+// It used to carry exactly one. `if (m.kind !== 'message') return ''` sat in FRONT of all
+// three lanes, while the MCP tool description (channel-description.ts) and this app's own
+// spawn prompt (prompt-framing.milestoneGuidance) both tell every agent to log its progress
+// as `kind="task_progress"`. The product asked for a kind the product then refused to
+// deliver: in the 2026-08-01 two-agent run every undelivered seq was a task_* and every
+// delivered one was a 'message', with no exception across seq 340-368.
+//
+// A MILESTONE IS NOT A TURN, so it does not get all three lanes — only the two somebody had
+// to ASK for. ADDRESSED (`to_agent_ids` names one of my agents: a person or a peer agent
+// pointed at it) and IN THREAD (it lands in a breakout room that agent participates in, the
+// same lane and the same participant fence a 'message' takes). NOT the ENGAGED lane: an
+// unaddressed milestone in the main room reaches nobody, because a milestone stream is
+// chatter and waking a session per progress line is the cost failure. The engaged lane
+// refuses it twice over — `engagement.mayEngage` needs `humanAuthored`, which is kind-gated —
+// but it is refused HERE too, so the rule does not live in a predicate three modules away.
+//
+// THE BRAKES ARE THE SAME BRAKES, checked against this path rather than assumed:
+//   `myOwnAgentSpoke` reads `!engagement.humanAuthored(m)`, and `humanAuthored` is FALSE for
+//     every non-'message' kind — so my own account's milestone never routes in the main room.
+//   `channel-deliver.selfEcho` refuses the authoring agent by `author_agent_id`, and refuses
+//     ALL of mine when an agent-authored post carries none. An agent's own task_started /
+//     task_finished can therefore never echo into its own session, in either lane.
+//   The INBOUND GATE still holds it: `selfAuthored` needs `humanAuthored` too, so a milestone
+//     is never gate-bypassed and the auto-posture bound stated on routeThread is unchanged.
+//   `engagement.noteAgentActed` also needs it, so a milestone never slides the window either.
+// `targeting.classify` is deliberately NOT widened alongside this (it still answers 'ignore'
+// for a non-message kind at targeting.js:64): the consent/trigger path must stay shut, or
+// every peer milestone would raise a consent card.
+const MILESTONE_KINDS = new Set(['task_started', 'task_progress', 'task_finished', 'task_failed']);
+
 async function routeAddressedAgent(entry, m, myUserId) {
   if (!settings.getWindowMode()) return '';
-  if (!m || m.kind !== 'message') return '';
-  if (!myUserId) return '';
+  if (!m || !myUserId) return '';
+  const turn = m.kind === 'message';
+  // Anything that is neither a turn nor a milestone is server-emitted ('system') or comes
+  // from a build this one does not know: refused whole, exactly as the blanket gate did.
+  if (!turn && !MILESTONE_KINDS.has(m.kind)) return '';
   const ids = engagement.addressedAgentIds(m);
   if (ids.length) {
     if (myOwnAgentSpoke(m, myUserId)) return '';
@@ -238,6 +273,7 @@ async function routeAddressedAgent(entry, m, myUserId) {
   }
   const inThread = await routeThread(entry, m, myUserId);
   if (inThread) return inThread;
+  if (!turn) return ''; // a milestone nobody named, in no thread of mine: nothing wakes
   if (myOwnAgentSpoke(m, myUserId)) return '';
   return routeEngaged(entry, m, myUserId);
 }
@@ -253,8 +289,9 @@ function myOwnAgentSpoke(m, myUserId) {
 
 // ── THE THREAD LANE: a breakout room where nobody has to be tagged ────────────────
 //
-// A message with NO agent addressing, carrying a FIRST-CLASS thread id, delivered to every one
-// of my agents that the thread's participant set names. This is the lane that makes THE LAW's
+// A post with NO agent addressing, carrying a FIRST-CLASS thread id, delivered to every one
+// of my agents that the thread's participant set names — a turn or a MILESTONE alike, since a
+// task_* logged into a room is the room's own progress. This is the lane that makes THE LAW's
 // "no tagging between participants" true on this machine, and it is the only lane that carries
 // an AGENT-authored, unaddressed post — which is exactly the shape the main-room loop brake
 // exists to refuse, so the three things standing in for that brake are named here:

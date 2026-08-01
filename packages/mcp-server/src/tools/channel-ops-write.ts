@@ -48,7 +48,7 @@ import { ok, err, withCallerAgent, type ToolResponse } from "./respond";
 import { agentLabel, resolvePostAgentsOr } from "./channel-agent-refs";
 // A post's result lines each live in their own module — this one answers "did
 // it thread?", which is the question a sender cannot otherwise settle.
-import { threadLinkageNote } from "./channel-post-linkage";
+import { closedThreadNote, threadLinkageNote } from "./channel-post-linkage";
 // …and this one answers "what did the ADDRESSING do?" — the conflict note, the
 // multi-address note, and the addressed/chat/unaddressed line. Split out at the
 // §2 cap (SHOULD-FIX-6) beside its two existing siblings.
@@ -385,6 +385,12 @@ export async function opPost(
       `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}${toAgentNote}${asNote}). Readers watching with op="await" will pick it up.`,
       ...addressLines,
       ...(linkage ? [linkage] : []),
+      // F6 — read off the SERVER's answer, not off anything this tool guessed.
+      // A closed thread still accepts the post (decided: warn, never refuse —
+      // a 403 would break the legitimate final-word-after-the-close-echo
+      // pattern), so this is the only thing that tells the sender the exchange
+      // it just posted into has stopped routing.
+      ...(message.threadClosed ? [closedThreadNote(ch.id)] : []),
       // WAKE-V1 teaching: a posted request that no one is waiting on is where
       // the exchange dies. WHETHER the await outlives this turn is not ours to
       // assert — `channel-wake-guidance.ts` owns that, off the caller's observed

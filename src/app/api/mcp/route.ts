@@ -4,6 +4,7 @@ import { bootServer, clientIdentifier } from "@dopl/mcp-server/factory";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
 import { readRuntimeHeader } from "@/shared/auth/runtime-header";
+import { readSessionIdHeader } from "@/shared/auth/session-header";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
 
 // Node runtime (SDK uses node:crypto); never Edge. Per-request auth ⇒ no
@@ -79,6 +80,13 @@ async function handle(request: Request): Promise<Response> {
   // it. Only the recognized value survives `readRuntimeHeader`, so an
   // arbitrary caller-set header cannot be laundered through this hop.
   const callerRuntime = readRuntimeHeader(request);
+  // F2: forward the caller's SESSION stamp onto the loopback for the same
+  // reason and on the same terms — one agent handle can be claimed by several
+  // concurrent sessions, and nothing else on the wire says which one wrote a
+  // message. Only the recognized shape survives `readSessionIdHeader`, so an
+  // arbitrary caller-set header cannot be laundered through this hop, and an
+  // absent one forwards nothing (the pre-fix wire, byte for byte).
+  const callerSessionId = readSessionIdHeader(request);
   // FIX Q14 (2026-07-31) — HAND THE CALLER'S DISCONNECT TO THE LOOPBACK.
   // Without this, nothing downstream ever learns the client hung up: neither
   // `withSseKeepAlive`'s `cancel` nor the SDK's stream teardown aborts the
@@ -105,6 +113,7 @@ async function handle(request: Request): Promise<Response> {
     clientIdentifier,
     workspaceId,
     runtime: callerRuntime,
+    sessionId: callerSessionId,
     signal: request.signal,
   });
 

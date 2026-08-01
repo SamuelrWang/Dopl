@@ -16,7 +16,7 @@
  * deliberate, cursor-preserving one, never a blind transport retry.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -26,7 +26,17 @@ export declare function readMessages(t: DoplTransport, channelId: string, opts?:
 export declare function awaitMessages(t: DoplTransport, channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
-export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
+/**
+ * Post a message. Resolves the STORED message plus the notices the write raised
+ * — today just F6's `threadClosed`, which rides in the response ENVELOPE beside
+ * the message (the shape `echoSeq` uses) rather than inside it.
+ *
+ * `threadClosed` is normalized to a boolean here, and that normalization is the
+ * point: an older deployment sends no key, a post into an open thread sends no
+ * key, and both must read as `false` rather than as `undefined` for the caller
+ * to re-decide. Same additive-field discipline as {@link withParticipants}.
+ */
+export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
 export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThreadDetail[]>;
 export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThreadDetail>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;

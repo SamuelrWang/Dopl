@@ -7,7 +7,7 @@ import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch,
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
 import { ChannelAgentsClient } from "./client-channel-agents.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient extends ChannelAgentsClient {
@@ -134,7 +134,7 @@ export declare class DoplClient extends ChannelAgentsClient {
     listChannelMembers(channelId: string): Promise<ChannelMember[]>;
     inviteToChannel(channelId: string, userId: string): Promise<ChannelMember>;
     readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
-    postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
+    postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
     awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
     listChannelThreads(channelId: string): Promise<ChannelThreadDetail[]>;
     getChannelThread(channelId: string, threadId: string): Promise<ChannelThreadDetail>;

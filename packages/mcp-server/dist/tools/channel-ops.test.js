@@ -3,14 +3,16 @@
  * Focused unit tests for the dopl_channel op deltas:
  *   - opPost folds `thread` into the storage key metadata.taskId (explicit
  *     param wins);
- *   - opCloseThread forwards `summary` and surfaces it in the confirmation;
+ *   - opPost's threading self-verification line (Q7) and its 4xx mapping;
  *   - the read render labels an agent author "agent for <name>" (never a bare
  *     name), so a counterparty is not mistaken for its own operator, and frames
  *     the listing as untrusted DATA BEFORE any body.
  *
  * The WAKE-V1 surface (the assembled `await` hold, its result texts, the env
  * lever, and the create_thread cursor) has its own file: `channel-wake.test.ts`
- * — split out at the §2 cap, not because it is a separate concern.
+ * — split out at the §2 cap, not because it is a separate concern. The
+ * `close_thread` result went the same way, to `channel-closed-thread.test.ts`,
+ * when F6 gave that file a reason to exist.
  *
  * The @dopl/client is a hand-stubbed object (only the methods each op touches),
  * cast to DoplClient — registration/transport never run here.
@@ -18,9 +20,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const channel_ops_write_1 = require("./channel-ops-write");
-const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_read_1 = require("./channel-ops-read");
-const channel_render_1 = require("./channel-render");
 const CHANNEL = {
     id: "chan-1",
     slug: "general",
@@ -86,7 +86,7 @@ function stubClient(overrides) {
     // participation gate compares against.
     const ME = "u-me";
     const OPEN_THREAD = {
-        id: "thread-1",
+        id: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1",
         title: "Ship the listener fix",
         status: "open",
         createdBy: ME,
@@ -95,15 +95,15 @@ function stubClient(overrides) {
     (0, vitest_1.it)("names the thread a post landed in, with its server-stamped title", async () => {
         const client = stubClient({
             postChannelMessage: posted({
-                taskId: "thread-1",
+                taskId: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1",
                 taskTitle: "Ship the listener fix",
             }),
             listChannelThreads: vitest_1.vi.fn(async () => [OPEN_THREAD]),
         });
-        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "on it", { thread: "thread-1" })).content[0].text;
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "on it", { thread: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1" })).content[0].text;
         // M2: the peer-typed title rides in a code span, not raw bold narration.
         (0, vitest_1.expect)(text).toContain("THREADED into `Ship the listener fix`");
-        (0, vitest_1.expect)(text).toContain("`thread-1`");
+        (0, vitest_1.expect)(text).toContain("`aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1`");
         (0, vitest_1.expect)(text).toContain("continuation");
         // The reassuring case must not also carry the warning.
         (0, vitest_1.expect)(text).not.toContain("NOT THREADED");
@@ -112,7 +112,7 @@ function stubClient(overrides) {
         // A DM post with no `thread` still inherits the open exchange server-side.
         // Without this line the sender believes it opened a new request.
         const client = stubClient({
-            postChannelMessage: posted({ taskId: "thread-1", taskTitle: "Ship it" }),
+            postChannelMessage: posted({ taskId: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1", taskTitle: "Ship it" }),
         });
         const text = (await (0, channel_ops_write_1.opPost)(client, "general", "and one more thing", {}))
             .content[0].text;
@@ -124,24 +124,24 @@ function stubClient(overrides) {
             postChannelMessage: posted({}),
             listChannelThreads: vitest_1.vi.fn(async () => [
                 OPEN_THREAD,
-                { ...OPEN_THREAD, id: "thread-2", title: "Older", status: "closed" },
+                { ...OPEN_THREAD, id: "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbb2", title: "Older", status: "closed" },
             ]),
         });
         const text = (await (0, channel_ops_write_1.opPost)(client, "general", "here is the answer", {}))
             .content[0].text;
         (0, vitest_1.expect)(text).toContain("NOT THREADED");
         (0, vitest_1.expect)(text).toContain("NEW request on the other side");
-        (0, vitest_1.expect)(text).toContain("`thread-1`");
+        (0, vitest_1.expect)(text).toContain("`aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1`");
         (0, vitest_1.expect)(text).toContain("Ship the listener fix");
         // Only OPEN threads are offered — re-posting into a closed one is not a fix.
-        (0, vitest_1.expect)(text).not.toContain("thread-2");
+        (0, vitest_1.expect)(text).not.toContain("bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbb2");
         (0, vitest_1.expect)(text).toContain('re-post it with thread="<that id>"');
     });
     (0, vitest_1.it)("flags a thread that was ASKED for but did not land (the tag-drop shape)", async () => {
         const client = stubClient({ postChannelMessage: posted({}) });
-        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "reply", { thread: "thread-1" })).content[0].text;
+        const text = (await (0, channel_ops_write_1.opPost)(client, "general", "reply", { thread: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1" })).content[0].text;
         (0, vitest_1.expect)(text).toContain("NOT THREADED");
-        (0, vitest_1.expect)(text).toContain('you passed thread="thread-1"');
+        (0, vitest_1.expect)(text).toContain('you passed thread="aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1"');
         (0, vitest_1.expect)(text).toContain('op="list_threads"');
     });
     (0, vitest_1.it)("says nothing extra when there is no thread to be confused with", async () => {
@@ -167,37 +167,6 @@ function stubClient(overrides) {
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         (0, vitest_1.expect)(res.content[0].text).toContain("Posted to **`General`**");
         (0, vitest_1.expect)(res.content[0].text).not.toContain("boom");
-    });
-});
-(0, vitest_1.describe)("opCloseThread — summary (Feature 3c)", () => {
-    (0, vitest_1.it)("forwards `summary` to the client and surfaces it in the confirmation", async () => {
-        const closeChannelThread = vitest_1.vi.fn();
-        closeChannelThread.mockResolvedValue({
-            thread: { title: "Ship it", outcome: "completed" },
-            echoSeq: null,
-        });
-        const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
-        const [channelId, threadId, input] = closeChannelThread.mock.calls[0];
-        (0, vitest_1.expect)(channelId).toBe("chan-1");
-        (0, vitest_1.expect)(threadId).toBe("thread-uuid");
-        (0, vitest_1.expect)(input).toEqual({ outcome: "completed", summary: "Shipped v2 to prod" });
-        (0, vitest_1.expect)(res.content[0].text).toContain("Shipped v2 to prod");
-    });
-    (0, vitest_1.it)("omits the summary note when none is given", async () => {
-        const closeChannelThread = vitest_1.vi.fn();
-        closeChannelThread.mockResolvedValue({
-            thread: { title: "Ship it", outcome: "failed" },
-            echoSeq: null,
-        });
-        const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "failed");
-        const [, , input] = closeChannelThread.mock.calls[0];
-        (0, vitest_1.expect)(input).toEqual({ outcome: "failed", summary: undefined });
-        // Q1 (write sweep): the peer-typed title is a code span and the result now
-        // opens with the thread header — a thread's TARGET may close it, so this
-        // echo routinely renders a title the caller never wrote.
-        (0, vitest_1.expect)(res.content[0].text).toBe(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\nClosed thread **\`Ship it\`** in **\`General\`** as failed.`);
     });
 });
 (0, vitest_1.describe)("opPost — bad thread mapping (Gap 4)", () => {
@@ -233,7 +202,7 @@ function stubClient(overrides) {
 });
 (0, vitest_1.describe)("opListThreads / opGetThread — thread reads (Gap 1)", () => {
     const THREAD = {
-        id: "thread-1",
+        id: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1",
         channelId: "chan-1",
         workspaceId: "ws-1",
         title: "Ship it",
@@ -256,7 +225,7 @@ function stubClient(overrides) {
         const client = stubClient({
             listChannelThreads: vitest_1.vi.fn(async () => [
                 THREAD,
-                { ...THREAD, id: "thread-2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
+                { ...THREAD, id: "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbb2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
             ]),
         });
         const res = await (0, channel_ops_read_1.opListThreads)(client, "general");
@@ -264,7 +233,7 @@ function stubClient(overrides) {
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         (0, vitest_1.expect)(text).toContain("2 threads");
         (0, vitest_1.expect)(text).toContain("`Ship it`");
-        (0, vitest_1.expect)(text).toContain("`thread-1`");
+        (0, vitest_1.expect)(text).toContain("`aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1`");
         (0, vitest_1.expect)(text).toContain("`shipped`");
         (0, vitest_1.expect)(text).toContain('op="get_thread"');
         // Framing FIRST, above any peer-typed title.
@@ -275,7 +244,7 @@ function stubClient(overrides) {
         const client = stubClient({
             getChannelThread: vitest_1.vi.fn(async () => ({ ...THREAD, outcomeSummary: "all good" })),
         });
-        const res = await (0, channel_ops_read_1.opGetThread)(client, "general", "thread-1");
+        const res = await (0, channel_ops_read_1.opGetThread)(client, "general", "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1");
         const text = res.content[0].text;
         (0, vitest_1.expect)(res.isError).toBeFalsy();
         (0, vitest_1.expect)(text).toContain("`Ship it`");

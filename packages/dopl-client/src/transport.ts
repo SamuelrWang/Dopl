@@ -65,6 +65,17 @@ export interface DoplTransportOptions {
    */
   runtime?: string;
   /**
+   * WHICH SESSION of an agent this client acts for, echoed on every request as
+   * `X-Dopl-Session-Id` (F2). The ONLY consumer is the server's reserved
+   * `metadata.session_id` stamp, which is what lets a reader tell two concurrent
+   * sessions of ONE agent handle apart — `as_agent` is ownership-checked and
+   * per-call, so it never said which process was speaking. Set by the in-app MCP
+   * route, which forwards the value it was called with; unset stamps nothing.
+   *
+   * A LABEL, NOT A LOCK: nothing gates on it, and no session count is enforced.
+   */
+  sessionId?: string;
+  /**
    * CALLER-LIFETIME cancellation (Q14). The in-app MCP route passes the
    * incoming `Request.signal` here, so an MCP client hanging up mid-call (an
    * ESC during a `dopl_channel(op="await")` hold) stops the work instead of
@@ -99,8 +110,8 @@ export interface RequestOptions {
   /**
    * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
    * concurrency). Reserved headers (Authorization, Content-Type, the
-   * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Workspace-Id) cannot be
-   * overridden.
+   * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Dopl-Session-Id,
+   * X-Workspace-Id) cannot be overridden.
    */
   customHeaders?: Record<string, string>;
   /**
@@ -120,6 +131,7 @@ export class DoplTransport {
   private readonly toolHeaderName: string;
   private readonly clientIdentifier: string | null;
   private readonly runtime: string | null;
+  private readonly sessionId: string | null;
   private readonly signal: AbortSignal | undefined;
   private workspaceId: string | null;
 
@@ -129,6 +141,7 @@ export class DoplTransport {
     this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
     this.clientIdentifier = opts.clientIdentifier ?? null;
     this.runtime = opts.runtime ?? null;
+    this.sessionId = opts.sessionId ?? null;
     this.signal = opts.signal;
     this.workspaceId = opts.workspaceId ?? null;
   }
@@ -380,6 +393,9 @@ export class DoplTransport {
     // Server-read, never caller-writable (it is on the reserved list below):
     // the runtime label the server turns into `metadata.runtime`.
     if (this.runtime) headers["X-Dopl-Runtime"] = this.runtime;
+    // Same discipline, same reserved list below: the session label the server
+    // turns into `metadata.session_id` (F2).
+    if (this.sessionId) headers["X-Dopl-Session-Id"] = this.sessionId;
     // Resolution order: explicit per-call override > AsyncLocalStorage
     // (set by the MCP `registerTool` wrapper for one tool call) > the
     // transport's stored workspaceId (session default). Falling through
@@ -396,6 +412,7 @@ export class DoplTransport {
         this.toolHeaderName.toLowerCase(),
         "x-dopl-client",
         "x-dopl-runtime",
+        "x-dopl-session-id",
         "x-workspace-id",
       ]);
       for (const [key, value] of Object.entries(customHeaders)) {

@@ -112,6 +112,7 @@ export type {
   ChannelMemberRole,
   ChannelMessage,
   ChannelMessageInput,
+  ChannelMessagePosted,
   ChannelMessageKind,
   ChannelThread,
   ChannelThreadClosed,

@@ -13,12 +13,23 @@
 // loads its schema. Nothing in the prompt said so, so even spotting the qualified name could
 // still read as "present but unavailable".
 //
+// FIX F3 (the fix that did not take). The first attempt DID state that, as a conditional aside
+// at the BOTTOM of the delivery section: "If mcp__dopl__dopl_channel is not in your tool list
+// yet…". It shipped in 1.7.19 and an agent still posted "CONFIRMED: I do not have the
+// mcp__dopl__dopl_channel tool" 64 seconds into its session, through that very tool — a
+// condition reads as agreement to an agent that has already concluded the tool is missing. The
+// line is now an ORDER at the TOP of the turn, which is what the ordering assertions below pin.
+//
+// FIX F7 rides in the same block: a fresh responder spawn gets no thread history at all, so its
+// SECOND action is the thread-scoped `op "read"`.
+//
 // WHAT IS PINNED HERE, over EVERY composed agent-facing turn this app builds:
 //   1. no BARE `dopl_channel` occurrence survives anywhere — every one is preceded by
 //      `mcp__dopl__`. Same rule for every other dopl tool the prompt might ever name.
 //   2. the qualified name IS present (a regex that only forbids cannot notice a prompt that
 //      stopped naming the tool at all).
-//   3. the ToolSearch line is there, and says the two things it has to say.
+//   3. the ToolSearch order is there, once, imperative, and ABOVE the delivery section.
+//   4. a responder that knows its thread is told to read it before it answers.
 // The modules are dependency-free, so this drives the REAL text that ships.
 
 import { test } from "node:test";
@@ -95,19 +106,80 @@ test("…and the QUALIFIED name really is stated, in every turn that teaches del
   }
 });
 
-test("the DEFERRED-SCHEMA hint is present, once, and says both halves", () => {
+// The first line of the delivery section, in each of its two voices. FIRST ACTIONS has to sit
+// ABOVE this, which is the whole of FIX F3: the old text was appended to the section's four
+// branches, so it could only ever be read after them.
+const DELIVERY = /Deliver every message to the peer|DELIVERY: post your reply/;
+
+// EVERY DELIVERY BRANCH: both sides with the concrete call, both sides degraded to the id-less
+// wording, and the room-bound turn.
+function deliveryBranches() {
+  const out = [];
   for (const side of ["responder", "requester"]) {
-    const out = framing.buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx() });
-    assert.match(out, /load it with ToolSearch/, `${side}: the recovery action is named`);
-    assert.ok(out.includes('("select:mcp__dopl__dopl_channel")'), `${side}: the exact query to run`);
-    assert.match(out, /Never report that you have no\nchannel tool without doing that first\./,
-      `${side}: and the failure it forbids`);
-    // ONE copy. This prompt is long and a repeated instruction costs attention everywhere else.
-    assert.equal(out.split("load it with ToolSearch").length - 1, 1, `${side}: stated exactly once`);
+    for (const over of [{}, { taskId: TASK }, { channelId: "" }, { workspaceId: null }]) {
+      out.push([
+        `${side} ${JSON.stringify(over)}`,
+        framing.buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx(over) }),
+      ]);
+    }
   }
-  const team = framing.buildTeamTurn({ message: "x", nonce: "n6", context: ctx({ agentId: AGENT }) });
-  assert.match(team, /load it with ToolSearch/, "a room-bound agent needs it just as much");
-  assert.equal(team.split("load it with ToolSearch").length - 1, 1, "team: stated exactly once");
+  out.push(["team", framing.buildTeamTurn({ message: "x", nonce: "n6", context: ctx({ agentId: AGENT }) })]);
+  return out;
+}
+
+test("FIX F3: the ToolSearch ORDER is present, once, and ABOVE the delivery section", () => {
+  for (const [label, out] of deliveryBranches()) {
+    assert.ok(out.includes('ToolSearch("select:mcp__dopl__dopl_channel")'), `${label}: the exact query to run`);
+    // IMPERATIVE, never a condition an agent that already decided can read as agreement.
+    assert.match(out, /Your FIRST action is ToolSearch/, `${label}: stated as this turn's first action`);
+    assert.ok(!/If mcp__dopl__dopl_channel is not in your tool list/.test(out), `${label}: the aside is gone`);
+    assert.match(out, /It is deferred, not absent\./, `${label}: names the real state of the tool`);
+    assert.match(out, /do not report that you have no\n\s+dopl tools at all/, `${label}: forbids the #345 sentence`);
+    // ONE copy. This prompt is long and a repeated instruction costs attention everywhere else.
+    assert.equal(out.split("ToolSearch(").length - 1, 1, `${label}: stated exactly once`);
+    // ORDER, which is the half the first fix got wrong.
+    const first = out.indexOf("FIRST ACTIONS THIS TURN");
+    assert.ok(first >= 0, `${label}: the block is in the turn`);
+    const delivery = out.search(DELIVERY);
+    assert.ok(delivery > 0, `${label}: found the delivery section`);
+    assert.ok(first < delivery, `${label}: FIRST ACTIONS precedes the delivery section`);
+    assert.ok(first < out.indexOf("VOCABULARY"), `${label}: and the vocabulary too`);
+  }
+});
+
+test("FIX F7: a responder that knows its thread is ordered to READ it before it answers", () => {
+  const out = framing.buildFencedTurn({ side: "responder", message: "x", nonce: "f7", context: ctx({ taskId: TASK }) });
+  assert.match(out, /Your SECOND action is to read the exchange you are joining/, "stated as an order too");
+  assert.ok(
+    out.includes(`with op "read", channel "${CH}", workspace "${WS}", thread "${TASK}"`),
+    `the whole scoped call, ids and all:\n${out}`
+  );
+  assert.match(out, /filtered to this one thread/, "says the read is scoped, not the whole channel");
+  assert.match(out, /none of its earlier messages/, "and why a fresh spawn needs it at all");
+  assert.equal(out.split('op "read"').length - 1, 1, "one read instruction");
+  assert.ok(out.indexOf('op "read"') < out.indexOf('op "post", channel "'), "read first, then deliver");
+  // A LEGACY `task-<channel>-<seq>` id threads posts, so it filters a read the same way.
+  const legacy = framing.buildFencedTurn({
+    side: "responder", message: "x", nonce: "f7", context: ctx({ taskId: `task-${CH}-42` }),
+  });
+  assert.ok(legacy.includes(`thread "task-${CH}-42"`), "legacy ids seed too");
+  assert.equal(legacy.split('op "read"').length - 1, 1, "still once");
+});
+
+test("FIX F7: no thread (or a half-known address) prints no read, and the requester never does", () => {
+  const shapes = [{}, { taskId: "" }, { taskId: null }, { taskId: TASK, channelId: "" }, { taskId: TASK, workspaceId: null }];
+  for (const over of shapes) {
+    const label = JSON.stringify(over);
+    const out = framing.buildFencedTurn({ side: "responder", message: "x", nonce: "f7b", context: ctx(over) });
+    assert.ok(!out.includes('op "read"'), `${label}: never a half-addressed read`);
+    assert.ok(!/SECOND action/.test(out), `${label}: and no orphan step`);
+    assert.ok(!/undefined|null/.test(out), `${label}: no placeholder leaks`);
+    assert.match(out, /Your FIRST action is ToolSearch/, `${label}: the lookup order still rides alone`);
+  }
+  // The requester OPENED this thread and has been driving it; it is not the session with a hole.
+  const req = framing.buildFencedTurn({ side: "requester", message: "x", nonce: "f7c", context: ctx({ taskId: TASK }) });
+  assert.ok(!req.includes('op "read"'), "no seed for the side that already has the thread");
+  assert.match(req, /Your FIRST action is ToolSearch/, "but it still gets the lookup order");
 });
 
 test("the granted identifier and the taught identifier are the SAME string", () => {

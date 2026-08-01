@@ -102,13 +102,23 @@ async function inviteToChannel(t, channelId, userId) {
     });
     return data.member;
 }
+/**
+ * Post a message. Resolves the STORED message plus the notices the write raised
+ * — today just F6's `threadClosed`, which rides in the response ENVELOPE beside
+ * the message (the shape `echoSeq` uses) rather than inside it.
+ *
+ * `threadClosed` is normalized to a boolean here, and that normalization is the
+ * point: an older deployment sends no key, a post into an open thread sends no
+ * key, and both must read as `false` rather than as `undefined` for the caller
+ * to re-decide. Same additive-field discipline as {@link withParticipants}.
+ */
 async function postMessage(t, channelId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/messages`, {
         method: "POST",
         body: input,
         toolName: "channel_post",
     });
-    return data.message;
+    return { ...data.message, threadClosed: data.threadClosed === true };
 }
 // ─── Threads ────────────────────────────────────────────────────────
 //

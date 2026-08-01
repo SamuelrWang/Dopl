@@ -42,8 +42,20 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMessageCreateSchema);
     const ctx = buildChannelContext(auth);
-    const message = await postMessage(ctx, requireChannelId(auth.params), input);
-    return NextResponse.json({ message }, { status: 201 });
+    // F6 — `threadClosed` is a notice about THIS POST, not a field of the
+    // message, so it rides in the ENVELOPE beside it (the shape `echoSeq` uses
+    // on the close route) rather than inside the message object a read would
+    // never carry it in. Additive on the wire: an older deployment omits the key
+    // and every existing client reads exactly what it read before.
+    const { threadClosed, ...message } = await postMessage(
+      ctx,
+      requireChannelId(auth.params),
+      input
+    );
+    return NextResponse.json(
+      threadClosed ? { message, threadClosed: true } : { message },
+      { status: 201 }
+    );
   } catch (err) {
     return toChannelErrorResponse(err);
   }

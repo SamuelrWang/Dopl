@@ -18,13 +18,50 @@
  * renders them.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.closedThreadNote = closedThreadNote;
 exports.threadLinkageNote = threadLinkageNote;
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
+// THE one predicate for "is this id a real thread" — shared with the read
+// render so the two lanes cannot disagree about what a `task-…` id is (F4).
+const channel_render_threads_1 = require("./channel-render-threads");
 /** Fallback for peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 /** Open thread ids listed in the not-threaded warning before it truncates. */
 const OPEN_THREAD_WARN_MAX = 5;
+/**
+ * F6 — THE POST LANDED IN A CLOSED THREAD, and until now nothing said so.
+ *
+ * The write path gated on thread MEMBERSHIP and never on thread STATUS, so a
+ * thread closed at #355 accepted five further posts with no refusal and no
+ * notice; the closer believed the exchange was over and the poster believed it
+ * was still live. The server now reads the row's status on the post path and
+ * hands the fact back (`threadClosed` on the post response); this is the
+ * sentence that spends it.
+ *
+ * IT IS A WARNING, NOT A FAILURE, and the wording has to carry that or the agent
+ * will retry a post that already landed. The post IS stored, it IS attributed,
+ * and it IS inside the thread's card.
+ *
+ * WHAT A CLOSE ACTUALLY CHANGES IS THE PASSIVE LANE, and the copy is scoped to
+ * exactly that. The first cut here said a closed thread "has stopped ROUTING:
+ * nobody's session is being woken by it", which is more than any layer enforces:
+ * an updated desktop skips the passive thread-lane wake for a closed thread (off
+ * a status cache that lags by up to ~5 minutes), an older build still wakes on
+ * it, an explicitly ADDRESSED post delivers either way, and the server accepts
+ * the post regardless of status. So the sentence tells the agent the useful,
+ * true thing — stop expecting an UNPROMPTED reply in there — instead of claiming
+ * a silence nothing guarantees.
+ *
+ * REOPEN IS NAMED AS A HUMAN ACTION, deliberately. There is no `reopen` op on
+ * this tool — the route exists (`PATCH /tasks/[id] {op:"reopen"}`) and the web
+ * drives it, and the MCP surface deliberately has no counterpart — so telling an
+ * agent to "reopen it" full stop would send it hunting for an op that does not
+ * exist. Opening a NEW thread is the action it can actually take.
+ */
+function closedThreadNote(channelId) {
+    return `THAT THREAD IS CLOSED, and the post landed anyway (it is stored, attributed, and on the thread's card). Closing records the OUTCOME and stops the thread's PASSIVE routing: peers' sessions stop being woken by activity in it, so an unaddressed post here can sit unread. It does NOT stop the thread accepting posts, and addressing somebody still reaches them: to_agent="<handle>" starts that agent, to="<member>" triggers their machine. If this was a final word after the close echo, you are done. If it is new work, open a new thread with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="..."), or ask a human to reopen the closed one (reopening is a web action; this tool has no reopen op).`;
+}
 /**
  * Q7 — the SELF-VERIFICATION line for a post: did this land as a continuation
  * of an existing thread, or as a new request on the other side?
@@ -36,11 +73,12 @@ const OPEN_THREAD_WARN_MAX = 5;
  * on, so it reports what actually landed rather than what was asked for.
  *
  * FIX L3 — the id alone is NOT proof of a real thread. A first-class thread id
- * is validated against `channel_tasks`, but a legacy `task-<uuid>-<seq>` id is
- * still caller-settable with no participation check (F-083). `taskTitle` is the
- * half that cannot be faked: the server stamps it from the thread row and
- * strips any caller copy. So a THREADED note that names a title is backed by a
- * real row, and one that can only show a bare id is the tell that it is not.
+ * is validated against `channel_tasks`; a legacy `task-<uuid>-<seq>` id names no
+ * row at all, and since F-083 it survives the write only when it is the caller's
+ * OWN exchange in THIS channel. `taskTitle` is the half that cannot be faked:
+ * the server stamps it from the thread row and strips any caller copy. So a
+ * THREADED note that names a title is backed by a real row, and one that can
+ * only show a bare id is the tell that it is not.
  *
  * Three shapes, in descending urgency:
  *   1. asked for a thread and got none  — the 1.7.14 tag-drop signature;
@@ -64,35 +102,68 @@ safeChannelName, message, askedThread) {
         const title = (0, channel_shared_1.metaString)(message, "taskTitle");
         const safeTitle = title ? (0, channel_shared_1.neutralizeInline)(title) : null;
         // Q1-E — the ID needs the span as much as the title does. `landedThread` is
-        // `metadata.taskId` read back off the STORED message, and a non-UUID taskId
-        // is stored verbatim with no charset rule anywhere on the path
-        // (service-writes-metadata.ts:236-245, `metadata` is z.record(z.unknown())).
-        // This one is our own post so the bytes are ours, but a hand-built code span
-        // is not a container either way, and the read side's legend renders exactly
-        // this field from a PEER's message — same field, same treatment, one rule.
+        // `metadata.taskId` read back off the STORED message, and the route's
+        // `metadata` is `z.record(z.unknown())` with no charset rule of its own.
+        //
+        // NOT because the write path stores any non-UUID verbatim, which is what
+        // this note used to say: since F-083 the non-uuid branch runs
+        // `isLegacyThreadParticipant` and DELETES the tag unless it is exactly
+        // `task-<this channel's id>-<digits>` and the caller is a party to the
+        // message at that seq (`service-writes-metadata.ts`). So the span is
+        // defence in depth for the pre-F-083 rows a channel still carries, and for
+        // the rule that a hand-built code span is not a container whatever it is
+        // handed — the read side's legend renders exactly this field from a PEER's
+        // message, same field, same treatment, one rule.
         const safeLanded = (0, channel_shared_1.inlineOr)(landedThread, NO_ID);
-        const named = safeTitle
-            ? `${safeTitle} (thread ${safeLanded})`
-            : `thread ${safeLanded}`;
         // `askedThread` stays raw, deliberately: it is the caller's own argument
         // from THIS call, it never round-tripped through storage where a peer could
         // reach it, and quoting it back verbatim is what makes the mismatch legible.
         const mismatch = askedThread && askedThread !== landedThread
             ? ` NOTE: you asked for thread \`${askedThread}\` — it resolved to a different one.`
             : "";
+        // F4 — AN AD-HOC ID IS NOT A THREAD, and this line used to call it one. A
+        // non-UUID tag names no `channel_tasks` row, so "THREADED into thread
+        // <task-…>" told the sender its post had landed in a shared, titled exchange
+        // when it had landed in one machine's local grouping label. L3's tell — an
+        // id with NO title — was the only signal, and it is ambiguous (a real thread
+        // the server could not name looks identical). The label settles it.
+        //
+        // TWO WAYS TO LAND HERE, AND THEY NEED OPPOSITE ADVICE. The desktop's own
+        // prompt (`main/prompt-framing.js` THREAD_TAG) orders a session to keep its
+        // `thread` argument on EVERY post, and for a legacy-tagged exchange that
+        // argument is exactly this `task-<channel>-<seq>` id. Telling every such
+        // post "if this work needs a real thread, open one" reads as "drop the tag",
+        // and dropping it forks the exchange: the requester's card keeps grouping on
+        // the legacy id while a fresh thread carries a different participant set. So
+        // the branch splits on who chose the id. Passed it (`askedThread` came back
+        // unchanged, which also means the server's legacy participation check let it
+        // through): the grouping is working, keep it. Passed nothing: the receiving
+        // machine minted it, and THAT is where opening a real thread is the upgrade.
+        if (!(0, channel_render_threads_1.isFirstClassThreadId)(landedThread)) {
+            const what = `GROUPED into the ad-hoc exchange ${safeLanded}, which is NOT a thread. That id is the label a receiving machine mints for an untagged request so a reply groups with it on that machine's card; there is no thread row behind it, so it has no title, no status, and nothing to close or join. The post landed and is attributed.`;
+            if (askedThread === landedThread) {
+                return `${what} You passed that id and it survived, so the grouping worked: KEEP passing thread=${safeLanded} on every post in this exchange. Drop it and your next post arrives as a brand-new request, which forks the exchange.`;
+            }
+            if (askedThread)
+                return `${what}${mismatch}`;
+            return `${what} You passed no thread, so the receiving side grouped this for you. If this work needs a real thread, open one with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="...").`;
+        }
+        const named = safeTitle
+            ? `${safeTitle} (thread ${safeLanded})`
+            : `thread ${safeLanded}`;
         return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}`;
     }
     if (askedThread) {
-        // The old comment here claimed "the route validates `thread` and 400s an
-        // unresolvable one". FALSE for every NON-UUID id: `resolvePostMetadata`
-        // runs its lookup + participation gate only inside `if (isUuid(taskId))`
-        // (service-writes-metadata.ts:236-245), so a legacy `task-<uuid>-<seq>` id
-        // — or a plain typo — is never checked and is stored VERBATIM, which means
-        // it comes back as `landedThread` above and never reaches this branch at
-        // all. What actually lands here is a tag the server dropped (e.g. a
-        // whitespace-only `thread`, which the route treats as absent), so the
-        // advice below — re-post with a real id — is right; the reason given for it
-        // was not.
+        // WHAT REACHES THIS BRANCH is a tag the SERVER DROPPED, and since F-083
+        // that is a real set rather than the empty one an older note here implied.
+        // A first-class id that failed lookup or the thread gate 404s/403s before
+        // any of this. A non-uuid id is not stored blindly either: the else branch
+        // runs `isLegacyThreadParticipant` and deletes anything that is not exactly
+        // `task-<this channel's id>-<digits>` opened by, or addressed to, the
+        // caller (`service-writes-metadata.ts`) — so a typo, another pair's legacy
+        // id, or a legacy id from a DIFFERENT channel all land here silently, as
+        // does a whitespace-only `thread` the route treats as absent. One remedy
+        // fits all of them: re-post with an id the caller can actually write into.
         return `NOT THREADED — you passed thread="${askedThread}" but the stored message carries no thread, so this reads as a NEW request on the other side. Re-post with a thread id from dopl_channel(op="list_threads", channel="${channelId}").`;
     }
     // Best-effort: the warning is worth one read, but a listing failure must not

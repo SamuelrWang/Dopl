@@ -1,6 +1,6 @@
 import "server-only";
 import { slugify } from "@/shared/lib/slug/slugify";
-import type { Channel, ChannelMessage } from "../types";
+import type { Channel, ChannelMessage, ChannelMessagePosted } from "../types";
 import type {
   ChannelCreateInput,
   ChannelMessageCreateInput,
@@ -305,12 +305,21 @@ export async function deleteChannel(
  *
  * What a replay re-drives is read from the STORED ROW, never the retry's input:
  * a re-send cannot re-address a message or change who it engaged for.
+ *
+ * F6 — THE RETURN CARRIES ONE NOTICE, `threadClosed`, and it is a notice about
+ * THIS CALL rather than a property of the message. A closed thread still ACCEPTS
+ * the post (the decided behaviour — see `isThreadClosed`), so nothing about the
+ * stored row changes; what changes is that the caller is told. It is set only on
+ * the path that actually resolved the thread, which means an IDEMPOTENT REPLAY
+ * does not carry it: a replay re-posts nothing and re-resolves nothing, and
+ * inventing the flag there would mean re-reading a thread row to describe a
+ * write that already happened.
  */
 export async function postMessage(
   ctx: ChannelContext,
   ref: string,
   rawInput: ChannelMessageCreateInput
-): Promise<ChannelMessage> {
+): Promise<ChannelMessagePosted> {
   const input = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
@@ -341,7 +350,11 @@ export async function postMessage(
   // and the task-key stamping all live in `service-writes-metadata.ts` — one
   // place decides what a caller may put in `metadata` and what the server
   // stamps itself (jsonb, no schema change).
-  const metadata = await resolvePostMetadata(ctx, channel, input);
+  const { metadata, threadClosed } = await resolvePostMetadata(
+    ctx,
+    channel,
+    input
+  );
 
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included — the agent
@@ -381,7 +394,10 @@ export async function postMessage(
 
   // Surface the channel as active (list sorts by updated_at).
   await repo.touchChannel(ctx.workspaceId, channel.id);
-  return hydrateOne(row);
+  const message = await hydrateOne(row);
+  // F6: the flag is ADDED ONLY WHEN TRUE, so a post into an open thread (or no
+  // thread at all) returns byte-for-byte the object it always did.
+  return threadClosed ? { ...message, threadClosed: true } : message;
 }
 
 /**

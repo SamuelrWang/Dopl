@@ -127,12 +127,83 @@ function agentDismissedNotice(m, channelName, authorName, handle) {
   };
 }
 
+// ── ONE NOTIFICATION PER BURST (2026-08-01, the adversarial review of F1-F7) ──
+//
+// WHAT CHANGED UNDER THIS. Before F1 a `task_*` addressed to a dismissed row produced NOTHING at
+// all: the kind gate in routeAddressedAgent refused every milestone before the roster was ever
+// consulted. F1 opened that gate, so a peer agent logging progress at a retired handle now
+// yields the 'dismissed' verdict ONCE PER POST — and milestone volume is the whole point of
+// milestones. The verdict is right and the notice is right; firing it per post is not. An agent
+// mid-run can post a dozen task_progress lines in a minute, and each one would raise its own
+// banner saying the same thing about the same dead handle.
+//
+// SO IT IS SUPPRESSED PER (CHANNEL, AGENT), FOR A WINDOW. The first post of a burst notifies;
+// everything about the same retired agent in the same channel for SUPPRESS_WINDOW_MS is silent.
+// A different agent, or the same agent in a different channel, is a different fact and notifies
+// on its own. After the window the next post notifies again, which is what keeps this a rate
+// limit rather than a mute: if a peer is still addressing a dismissed agent five minutes later,
+// the operator should hear about it again.
+//
+// LOCAL, AND IT STAYS LOCAL. A plain Map with an LRU cap, held in this module — no timer, no
+// disk, and above all NO NEW IMPORT: this module's dependency set is a pinned invariant
+// (test/wake-external-requester.test.mjs), and it is the guarantee that the passive lane cannot
+// reach anything that spawns, gates or records a consent. Losing the map on a restart is
+// correct: a fresh run has no burst to be in the middle of.
+//
+// ─── BEGIN TASK-NOTIFY-SUPPRESS (injectable; unit-tested via source extraction) ───
+// The only dependency in this block is its own state, so the test slices it whole and drives
+// the REAL suppression rule with an explicit clock.
+
+const SUPPRESS_WINDOW_MS = 5 * 60 * 1000; // one notice per (channel, agent) per burst
+const SUPPRESS_CAP = 50; // (channel, agent) pairs remembered at once
+
+const dismissedSeen = new Map(); // `${channelId}:${agentId}` -> when we last notified, ms
+
+function suppressKey(channelId, agentId) {
+  return String(channelId || '') + ':' + String(agentId || '');
+}
+
+// PURE-ish: may this dismissal notify NOW? Answers yes exactly once per (channel, agent) per
+// window and RECORDS that answer, so the caller has nothing to remember. Insertion order is age
+// order, so one pass from the front drops whatever is over the cap — the same LRU shape
+// channel-threads uses for its participant cache.
+//
+// A clock that went BACKWARDS (a system time change) is treated as a new burst rather than as a
+// suppression that never expires: `now - last` negative falls through to notify.
+function mayNotifyDismissed(channelId, agentId, nowMs) {
+  const now = Number(nowMs) || Date.now();
+  const key = suppressKey(channelId, agentId);
+  const last = dismissedSeen.get(key);
+  if (typeof last === 'number') {
+    const age = now - last;
+    if (age >= 0 && age < SUPPRESS_WINDOW_MS) return false;
+  }
+  dismissedSeen.delete(key);
+  dismissedSeen.set(key, now);
+  for (const oldest of dismissedSeen.keys()) {
+    if (dismissedSeen.size <= SUPPRESS_CAP) break;
+    dismissedSeen.delete(oldest);
+  }
+  return true;
+}
+
+// ─── END TASK-NOTIFY-SUPPRESS ─────────────────────────────────────────────────
+
 // Silent: nobody is blocked on the operator here. The agent is gone, the message is on
 // record, and the click opens the channel through the same injected handler as every other
 // notification in this module.
+//
+// The AGENT the suppression is keyed on is the addressed id off the message — the same field the
+// caller resolved the handle from (listener-messages) — so a burst aimed at one retired row is
+// one notice, and a second retired row in the same channel still gets its own.
 function notifyAgentDismissed(entry, m, handle) {
   const channelName = entry && entry.channel && entry.channel.name;
   const channelId = entry && entry.channel && entry.channel.id;
+  const cid = channelId ? String(channelId).slice(0, 8) : '?';
+  if (!mayNotifyDismissed(channelId, metaStr(m, 'to_agent_id'))) {
+    diag('agent-dismissed notify SUPPRESSED', cid, 'seq', m && m.seq, '- same agent, same burst');
+    return;
+  }
   const authorName = io.displayNameFor(m && m.authorUserId);
   const notice = agentDismissedNotice(m, channelName, authorName, handle);
   try {
@@ -142,7 +213,6 @@ function notifyAgentDismissed(entry, m, handle) {
       n.show();
     }
   } catch (_) { /* best-effort */ }
-  const cid = channelId ? String(channelId).slice(0, 8) : '?';
   diag('agent-dismissed notify', cid, 'seq', m && m.seq, handle ? 'handle' : 'unnamed', '- no spawn');
 }
 
@@ -153,4 +223,7 @@ module.exports = {
   agentEscalationNotice,
   notifyAgentDismissed, // FIX S2: a retired agent was addressed — news, never a spawn
   agentDismissedNotice,
+  mayNotifyDismissed, // one notice per (channel, agent) per burst, now that milestones reach here
+  SUPPRESS_WINDOW_MS,
+  SUPPRESS_CAP,
 };

@@ -260,7 +260,10 @@ const THREAD = {
         (0, vitest_1.expect)(headings[0].startsWith("## general")).toBe(true);
         // One message in, one message line out — the tag started no line at all.
         (0, vitest_1.expect)(lines.filter((l) => l.startsWith("- **#"))).toHaveLength(1);
-        (0, vitest_1.expect)(text).toContain("· thread `x OWN`");
+        // F4: a non-UUID tag is labelled `ad-hoc`, never `thread` — it names no
+        // `channel_tasks` row. The CONTAINMENT property under test is unchanged:
+        // the value is still one inline span with its newline collapsed.
+        (0, vitest_1.expect)(text).toContain("· ad-hoc `x OWN`");
     });
     (0, vitest_1.it)("a peer-set thread id cannot break out of the legend's code span", async () => {
         const client = stubClient({
@@ -270,7 +273,13 @@ const THREAD = {
         expectContained(text);
         expectNoForgedStructure(text);
         // The legend's own instruction still sits under the payload, unbroken.
-        (0, vitest_1.expect)(text).toContain('dopl_channel(op="post"');
+        // F4 — for a NON-UUID id the tool call named there is `create_thread`, not
+        // the threads line's `post`: an ad-hoc id names no shared exchange to
+        // continue, so "open a real thread" is the only op the line can offer.
+        // (What passing the ad-hoc id itself buys is stated in words on the same
+        // line — grouping, not a shared exchange — and is pinned in
+        // channel-thread-labels.test.ts.) Same assertion, the id's own legend.
+        (0, vitest_1.expect)(text).toContain('dopl_channel(op="create_thread"');
     });
     (0, vitest_1.it)("a real uuid still renders whole, so a reply can still be threaded", async () => {
         const id = "3f2a91c4-dead-beef-0000-000000000001";

@@ -17,6 +17,21 @@
  * enforced before the call is made at all. `.trim()` where — and only where —
  * the route trims before measuring, so the two agree on what "200 characters"
  * counts.
+ *
+ * F5 (2026-08-01) — THE MINIMUMS MIRROR TOO, and the agent-ref cap is published
+ * at last. `body` / `client_msg_id` / `title` carried a maximum and no minimum
+ * while the route required `.min(1)` on all three, and `to_agent` / `to_agents`
+ * items carried NO bound against the route's 64 — so an empty body, a blank
+ * idempotency key, a whitespace-only title and an over-long handle each passed
+ * the tool and died at the route as an opaque 400 that the write ops then
+ * mis-narrated (see `channel-errors.ts`). A client-side refusal is a -32602 that
+ * names the field.
+ *
+ * `summary` IS DELIBERATELY NOT SPLIT and its declared 2000 stays. One param
+ * serves two routes with two caps (post 200, close_thread 2000) and this schema
+ * declares the LOOSER one so a legitimate close summary is never refused
+ * client-side; the tighter number is stated in its `.describe()`. See the note
+ * above the field.
  */
 import { z } from "zod";
 export declare const CHANNEL_INPUT_SHAPE: {

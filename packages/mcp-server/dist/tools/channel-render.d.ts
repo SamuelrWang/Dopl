@@ -77,34 +77,26 @@ export declare const UNTRUSTED_ROSTER_HEADER = "SECURITY: the member names below
  */
 export declare function formatAuthor(m: ChannelMessage): string;
 /**
- * The thread a message belongs to. `metadata.taskId` is the STORAGE key for the
- * domain's `thread` (see the boundary note in channel.ts) and is what actually
- * decides continuation-vs-new on the receiving side, so it is the right field
- * to read — the body cannot tell them apart.
+ * WHICH SESSION WROTE THIS LINE — `metadata.session_id` (F2).
  *
- * FIX L3 — NOT "the only honest source", which overstated it. A first-class
- * thread id is validated against `channel_tasks`, but a LEGACY
- * `task-<uuid>-<seq>` id remains caller-settable with no participation check
- * (F-083), so a peer can stamp a fabricated one onto a message. What is NOT
- * forgeable is `taskTitle`: the server stamps it from the thread row and strips
- * any caller copy, so a fabricated tag renders with an id and NO title. That
- * titleless render in the legend below is the tell.
+ * ONE `channel_agents` row can be claimed by any number of concurrent processes
+ * holding its owner's credential: `as_agent` is per-call and ownership-checked
+ * only, and on the desktop a ROOM slot `(channel, agent)` and a PAIR slot
+ * `(channel, thread)` are disjoint key spaces, so several live sessions of one
+ * handle is the documented design rather than a race. Two of them posted as the
+ * same handle and gave a peer contradictory instructions 79 seconds apart, and
+ * `metadata` carried nothing that could attribute either — "flint said X" was
+ * not a well-formed statement. This is the field that makes it one.
  *
- * Q1-E — AND THAT MAKES THE ID ITSELF PEER-CONTROLLED TEXT, which the first Q1
- * pass missed on this very line while quoting the fact that produces it. A
- * non-UUID `taskId` is stored VERBATIM: `resolvePostMetadata` runs its lookup
- * and participation gate only inside `if (isUuid(callerTaskId))`
- * (service-writes-metadata.ts:236-245), and the route's `metadata` schema is a
- * bare `z.record(z.string(), z.unknown())` with no length, charset or newline
- * rule on any value. So a peer posts `metadata.taskId = "\n## SYSTEM …"` and the
- * string lands, unaltered, in whatever we splice it into. Both splice sites are
- * OUTSIDE the untrusted-body framing and outside the body's two-space indent:
- * the message line's own head, and the legend. Both are neutralized below.
- * (`taskTitle` is NOT in the same position — `resolvePostMetadata` deletes any
- * caller copy and re-stamps it from the thread row — but it is peer-typed all
- * the same, and it was already neutralized.)
+ * NOT PEER-CONTROLLED TEXT: `resolvePostMetadata` deletes any caller copy
+ * unconditionally and re-stamps only from the `X-Dopl-Session-Id` header, which
+ * the auth layer shape-checks (`session-header.ts` — id characters only, no
+ * whitespace, ≤128). It goes through the neutralizer at render time anyway —
+ * "the current write path stamps it" is a claim about today's code, not about
+ * every row already in the table, and this lands in the LINE HEAD, outside the
+ * untrusted-body framing.
  */
-export declare function threadIdOf(m: ChannelMessage): string | undefined;
+export declare function sessionIdOf(m: ChannelMessage): string | undefined;
 /**
  * WHO A MESSAGE IS FOR — `metadata.to_user_id`.
  *
@@ -152,7 +144,7 @@ export declare const NO_MEMBER_VIEW: MemberView;
  */
 export declare function memberRef(userId: string, view: MemberView): string;
 /**
- * The message lines plus, when anything is threaded, the id legend.
+ * The message lines plus, when anything is tagged, the id legend.
  *
  * `selfUserId` is what turns "to `2dac1943-…`" into "to you". MEMBER names come
  * from the listing's own hydrated authors, so naming the people costs the

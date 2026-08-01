@@ -302,7 +302,10 @@ describe("Q1-D · display_name — the one field nothing validates", () => {
     expect(headings[0].startsWith("## general")).toBe(true);
     // One message in, one message line out — the tag started no line at all.
     expect(lines.filter((l) => l.startsWith("- **#"))).toHaveLength(1);
-    expect(text).toContain("· thread `x OWN`");
+    // F4: a non-UUID tag is labelled `ad-hoc`, never `thread` — it names no
+    // `channel_tasks` row. The CONTAINMENT property under test is unchanged:
+    // the value is still one inline span with its newline collapsed.
+    expect(text).toContain("· ad-hoc `x OWN`");
   });
 
   it("a peer-set thread id cannot break out of the legend's code span", async () => {
@@ -315,7 +318,13 @@ describe("Q1-D · display_name — the one field nothing validates", () => {
     expectContained(text);
     expectNoForgedStructure(text);
     // The legend's own instruction still sits under the payload, unbroken.
-    expect(text).toContain('dopl_channel(op="post"');
+    // F4 — for a NON-UUID id the tool call named there is `create_thread`, not
+    // the threads line's `post`: an ad-hoc id names no shared exchange to
+    // continue, so "open a real thread" is the only op the line can offer.
+    // (What passing the ad-hoc id itself buys is stated in words on the same
+    // line — grouping, not a shared exchange — and is pinned in
+    // channel-thread-labels.test.ts.) Same assertion, the id's own legend.
+    expect(text).toContain('dopl_channel(op="create_thread"');
   });
 
   it("a real uuid still renders whole, so a reply can still be threaded", async () => {

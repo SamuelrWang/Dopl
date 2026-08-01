@@ -112,8 +112,10 @@ function runEffect(s, eff) {
     case 'pushTurn':
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, eff.text), eff.priority === 'now' ? 'now' : undefined));
       break;
+    // `eff.threadId` is the thread THIS turn arrived in: a fresh room-bound shell's first turn is
+    // framed with it, so the agent is ordered to read the exchange it is being woken into.
     case 'pushInbound':
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName))));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName), eff.threadId)));
       break;
     case 'interruptQuery':
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }

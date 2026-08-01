@@ -89,10 +89,18 @@ export function harness(cfg = {}) {
       // The breakout room's participant set: GET /api/channels/<id>/tasks/<threadId>.
       // `cfg.participants` undefined means the test never opened a thread, so the read fails
       // the way a 404 does — which is also the assertion that an unknown set routes nobody.
+      //
+      // TWO DIFFERENT "STATUS" WORDS, deliberately kept apart. `cfg.threadStatus` is the HTTP
+      // one (a 500 / 404 read failure). `cfg.threadState` is the THREAD's own lifecycle field —
+      // `task.status`, ThreadStatus 'open' | 'closed' — and it is ABSENT unless a test sets it,
+      // which is exactly the shape a server that predates the field sends. Read at CALL time, so
+      // a test can close (or reopen) a thread between two reads.
       if (pathname.includes("/tasks/")) {
         if (cfg.threadStatus && cfg.threadStatus !== 200) return { ok: false, status: cfg.threadStatus };
         if (cfg.participants === undefined) return { ok: false, status: 404 };
-        return { ok: true, status: 200, json: async () => ({ task: { id: THREAD, participants: cfg.participants } }) };
+        const task = { id: THREAD, participants: cfg.participants };
+        if (cfg.threadState !== undefined) task.status = cfg.threadState;
+        return { ok: true, status: 200, json: async () => ({ task }) };
       }
       if (cfg.rosterStatus && cfg.rosterStatus !== 200) return { ok: false, status: cfg.rosterStatus };
       return { ok: true, status: 200, json: async () => ({ agents: rosterRows }) };
@@ -156,7 +164,7 @@ export function harness(cfg = {}) {
   const threads = new Function(
     "io", "diag",
     `${THREADS.block}\n return { CACHE_TTL_MS, FAIL_BACKOFF_MS, CACHE_CAP, myAgentParticipants,` +
-      ` fetchParticipants, participantsFor };`
+      ` threadIsClosed, fetchParticipants, participantsFor };`
   )(io, diag);
   const roster = new Function(
     "io", "diag",

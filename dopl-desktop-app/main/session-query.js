@@ -23,7 +23,7 @@ const channelDirs = require('./channel-dirs');
 const sessionAuth = require('./session-auth');
 const sessionOutbound = require('./session-outbound');
 const { buildSessionToolConfig } = require('./session-profiles');
-const { resolveClaudeExecutable, buildMcpServers, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
+const { resolveClaudeExecutable, buildMcpServers, withSessionStamp, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
 
 let deps = null; // { dispatch, emitQuiet }
 
@@ -56,6 +56,15 @@ function buildSdkOptions(s) {
     // `hooks` option is ever set — a PreToolUse hook could rewrite the input the card already painted.
     includePartialMessages: false,
   };
+  // F2 — THIS RUN'S SLOT KEY onto the dopl entry (X-Dopl-Session-Id), which the server turns into
+  // the reserved `metadata.session_id`. `store.slotKey` is the ONE definition of a slot — (channel,
+  // agent) for a team session, (channel, thread) for every other shape — so the stamp names exactly
+  // the registry slot this run occupies, and two concurrent sessions of ONE agent handle stamp two
+  // DIFFERENT values (which is the whole point: nothing on the wire could tell them apart). Applied
+  // here rather than inside buildMcpServers because that builder is shared with the headless spawn
+  // config, which has no session to name. A LABEL, not a lock: nothing here limits how many run, and
+  // a missing slot stamps nothing.
+  withSessionStamp(options.mcpServers, store.slotKey(s));
   if (cfg.builtinTools.length) options.tools = cfg.builtinTools; // positive bound; [] => full offers all, gated
   const bin = resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;

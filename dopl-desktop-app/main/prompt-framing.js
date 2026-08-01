@@ -23,8 +23,8 @@
 // always used that form, which is why the grants worked while the prompt did not). Two agents
 // in one live run searched their list for the bare name, found nothing, and declared a hard
 // blocker — "I have no dopl_channel tool and can't post" — with the tool sitting right there
-// under its real name. Every occurrence below is therefore the qualified name, and TOOL_LOOKUP
-// covers the second half of the same failure (a DEFERRED schema).
+// under its real name. Every occurrence below is therefore the qualified name, and FIRST ACTIONS
+// (firstActions) covers the second half of the same failure (a DEFERRED schema).
 //
 // Fence discipline: this text lives outside `BEGIN-REQUEST-<nonce>` /
 // `END-REQUEST-<nonce>`, so it must never itself carry those tokens. The name is
@@ -162,18 +162,50 @@ const THREAD_TAG = [
   `there as a brand new request and starts a second agent run against your own reply.`,
 ];
 
-// THE TOOL MAY NOT BE IN THE LIST YET (incident 2026-08-01, the compounding half). Claude Code
-// DEFERS MCP tool schemas once a session carries many tools: the deferred tool is a NAME in a
-// system-reminder list and cannot be invoked until `ToolSearch` loads its schema. Nothing in
-// this prompt said so, so even an agent that spotted the qualified name could read "not in my
-// callable tools" as "unavailable" and stop. Stated ONCE, in the delivery section, because that
-// is where the tool is first taught and every line here competes for attention.
-const TOOL_LOOKUP = [
-  `If mcp__dopl__dopl_channel is not in your tool list yet, load it with ToolSearch`,
-  `("select:mcp__dopl__dopl_channel") before you conclude it is unavailable, because a session`,
-  `with many tools defers MCP schemas until they are looked up. Never report that you have no`,
-  `channel tool without doing that first.`,
-];
+// FIRST ACTIONS — what a spawned session must DO before it plans anything, stated at the TOP
+// of the turn as imperatives rather than as an aside near the bottom of it.
+//
+// FIX F3 (incident 2026-08-01, the compounding half, and the first fix that did not take).
+// Claude Code DEFERS MCP tool schemas once a session carries many tools: the deferred tool is
+// a NAME in a system-reminder list and cannot be invoked until `ToolSearch` loads its schema.
+// The first fix said so, but as a CONDITIONAL aside at the end of the delivery section ("If
+// mcp__dopl__dopl_channel is not in your tool list yet"), and an agent that had already
+// searched its list and concluded the tool was missing read that condition as CONFIRMATION:
+// it posted "CONFIRMED: I do not have the mcp__dopl__dopl_channel tool" through the very tool
+// it was reporting absent. Same facts, no condition, and first: look, THEN report.
+//
+// FIX F7 (same run). A fresh responder spawn carries NONE of the thread it is answering — the
+// channel-history seed (session-engine loadHistory) is wired only for a recreated / reopened
+// shell (session-park.js:193 and :233) — so it answered into an exchange it could not see.
+// op "read" takes a `thread` FILTER now (packages/mcp-server/src/tools/channel-schema.ts), so
+// one scoped call is the whole seed. Printed only when the channel + workspace + thread triple
+// is really known, and never for the requester: that session opened the thread and drives it.
+//
+// STATED ONCE per turn (the single-statement rule): the block is emitted by the turn builders,
+// above the delivery section, so no delivery branch can print a second copy of it.
+function firstActions(side, ctx) {
+  const lines = [
+    `FIRST ACTIONS THIS TURN, before you plan or answer anything:`,
+    `- Your FIRST action is ToolSearch("select:mcp__dopl__dopl_channel"). This session DEFERS`,
+    `  MCP schemas: until that lookup runs, mcp__dopl__dopl_channel is only a name in a`,
+    `  system-reminder list, so it is granted to you even when your callable tools do not show`,
+    `  it. Do not report that you have no dopl channel tool, and do not report that you have no`,
+    `  dopl tools at all. It is deferred, not absent.`,
+  ];
+  const channelId = idToken(ctx && ctx.channelId);
+  const workspaceId = idToken(ctx && ctx.workspaceId);
+  const taskId = idToken(ctx && ctx.taskId);
+  if (side !== 'requester' && channelId && workspaceId && taskId) {
+    lines.push(
+      `- Your SECOND action is to read the exchange you are joining: mcp__dopl__dopl_channel`,
+      `  with op "read", channel "${channelId}", workspace "${workspaceId}", thread "${taskId}".`,
+      `  That read is filtered to this one thread. You start with none of its earlier messages`,
+      `  in context, so it is the only way to see what has already been said. Do it before you`,
+      `  write your reply.`
+    );
+  }
+  return lines;
+}
 
 // The DELIVERY section, which NAMES the call (v2.x "the spawned agent does not know where
 // it lives"). A spawn used to be told only the channel's DISPLAY NAME, so the agent could not
@@ -183,8 +215,9 @@ const TOOL_LOOKUP = [
 // now, so the prompt states the concrete call and says discovery is unnecessary. When either id
 // is missing (a mid-wave spawn shape) the section degrades to the wording it had before.
 //
-// TOOL_LOOKUP is appended to EVERY branch — one section, one copy of the line, whichever shape
-// this session is.
+// FIX F3: the deferred-schema line no longer lives HERE. It moved to firstActions above, at the
+// top of the turn, where it is an order rather than a footnote to a section the agent reads
+// only once it has already decided the tool is missing.
 function deliverySection(side, ctx) {
   const call = deliveryCall(ctx);
   const own = [
@@ -199,7 +232,6 @@ function deliverySection(side, ctx) {
         `Deliver every message to the peer by posting into this channel with the`,
         `mcp__dopl__dopl_channel MCP tool (op "post", this channel). That is how the peer's`,
         `agent receives you.`,
-        ...TOOL_LOOKUP,
       ];
     }
     return [
@@ -207,7 +239,6 @@ function deliverySection(side, ctx) {
       `mcp__dopl__dopl_channel MCP tool. Make the call exactly like this: ${call}.`,
       ...own,
       `That is how the peer's agent receives you.`,
-      ...TOOL_LOOKUP,
     ];
   }
   if (!call) {
@@ -215,7 +246,6 @@ function deliverySection(side, ctx) {
       `DELIVERY: post your reply into this channel with the mcp__dopl__dopl_channel MCP tool`,
       `(op "post", this channel); that is how the counterparty receives it, and there is no`,
       `other capture.`,
-      ...TOOL_LOOKUP,
     ];
   }
   return [
@@ -223,7 +253,6 @@ function deliverySection(side, ctx) {
     `Make the call exactly like this: ${call}.`,
     ...own,
     `That is how the counterparty receives your reply; there is no other capture.`,
-    ...TOOL_LOOKUP,
   ];
 }
 
@@ -334,6 +363,8 @@ function buildTeamTurn({ message, context, nonce } = {}) {
     `one of those people and running on that person's machine. You see the room's messages;`,
     `you never see another agent's session.`,
     ``,
+    ...firstActions('responder', ctx), // FIX F3 / F7: the lookup, then the scoped read
+    ``,
     ...VOCABULARY,
     ``,
     ...THE_LAW,
@@ -405,6 +436,8 @@ function buildFencedTurn({ side, bind, message, context, nonce } = {}) {
       `Respond and loop until the goal is met, then close the THREAD with a short summary.`,
       `Do not loop past a met goal. Closing the thread settles it for both members.`,
       ``,
+      ...firstActions('requester', ctx), // FIX F3: the deferred-schema lookup, stated as an order
+      ``,
       ...VOCABULARY,
       ``,
       ...deliverySection('requester', ctx),
@@ -424,6 +457,8 @@ function buildFencedTurn({ side, bind, message, context, nonce } = {}) {
     `You are a Dopl agent replying on behalf of your operator in the shared channel "${channel}".`,
     `${who} posted the request delimited below. Fulfill it as a concise, helpful teammate.`,
     `You are working ONE thread of that channel, in YOUR OWN session on this machine.`,
+    ``,
+    ...firstActions('responder', ctx), // FIX F3 / F7: the lookup, then the scoped thread read
     ``,
     ...VOCABULARY,
     ``,

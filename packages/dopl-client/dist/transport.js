@@ -37,6 +37,7 @@ class DoplTransport {
     toolHeaderName;
     clientIdentifier;
     runtime;
+    sessionId;
     signal;
     workspaceId;
     constructor(baseUrl, apiKey, opts = {}) {
@@ -45,6 +46,7 @@ class DoplTransport {
         this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
         this.clientIdentifier = opts.clientIdentifier ?? null;
         this.runtime = opts.runtime ?? null;
+        this.sessionId = opts.sessionId ?? null;
         this.signal = opts.signal;
         this.workspaceId = opts.workspaceId ?? null;
     }
@@ -211,6 +213,10 @@ class DoplTransport {
         // the runtime label the server turns into `metadata.runtime`.
         if (this.runtime)
             headers["X-Dopl-Runtime"] = this.runtime;
+        // Same discipline, same reserved list below: the session label the server
+        // turns into `metadata.session_id` (F2).
+        if (this.sessionId)
+            headers["X-Dopl-Session-Id"] = this.sessionId;
         // Resolution order: explicit per-call override > AsyncLocalStorage
         // (set by the MCP `registerTool` wrapper for one tool call) > the
         // transport's stored workspaceId (session default). Falling through
@@ -227,6 +233,7 @@ class DoplTransport {
                 this.toolHeaderName.toLowerCase(),
                 "x-dopl-client",
                 "x-dopl-runtime",
+                "x-dopl-session-id",
                 "x-workspace-id",
             ]);
             for (const [key, value] of Object.entries(customHeaders)) {
