@@ -11,6 +11,7 @@ import {
 import { mapTaskRow } from "./dto";
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
+import { seedThreadParticipants } from "./service-participants";
 import { postMessage } from "./service-writes";
 import {
   loadVisibleChannel,
@@ -111,6 +112,12 @@ export interface TaskCreateResult {
  * member of THAT channel. The requester's initial request (`body`) is posted
  * as the task's first message, tagged `metadata.taskId` so it groups into the
  * task card and the server stamps the reserved task keys onto it.
+ *
+ * `input.participants` (multiplayer) turns the thread into a BREAKOUT ROOM: the
+ * creator and the target are seeded as user participants alongside the caller's
+ * extras. Absent, NO participant rows are written and the thread keeps the
+ * creator/target pair gate — see `service-participants.ts` for why that
+ * asymmetry is deliberate.
  */
 export async function createTask(
   ctx: ChannelContext,
@@ -193,6 +200,14 @@ export async function createTask(
       }
     }
     throw err;
+  }
+
+  // BEFORE the opening post: the post runs the thread-write gate, and once a
+  // thread has a participant set that set is what the gate reads. Seeding
+  // afterwards would leave a window in which the creator's own opening message
+  // is judged against a half-built room.
+  if (input.participants && input.participants.length > 0) {
+    await seedThreadParticipants(ctx, channel.id, task, input.participants);
   }
 
   const openingSeq = await postOpeningMessage(ctx, channel.id, task, input.body);

@@ -12,6 +12,10 @@ import "server-only";
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
  *                            the server stamps (addressing, DM auto-address, task keys)
  *   - `service-tasks.ts`   — first-class task lifecycle (create / close / mode / reopen)
+ *   - `service-agents.ts`  — channel agents (summon / list / rename / status)
+ *   - `service-participants.ts` — thread participant sets (breakout membership)
+ *   - `service-writes-agents.ts` — agent addressing on a post (`toAgent` /
+ *                            `authorAgentId` resolution + authorization)
  *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
  *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
@@ -52,6 +56,20 @@ export {
   setTaskMode,
   reopenTask,
 } from "./service-tasks";
+
+export {
+  createAgent,
+  listAgents,
+  renameAgent,
+  setAgentStatus,
+} from "./service-agents";
+
+export {
+  joinThreadParticipant,
+  leaveThreadParticipant,
+  listThreadParticipants,
+} from "./service-participants";
+export type { ParticipantJoinResult } from "./service-participants";
 
 export {
   createConsentRequest,

@@ -76,6 +76,7 @@ let client = null;
 let getToken = null;
 let getTokenInfo = null;
 let onInsertCb = null;
+let onAgentInsertCb = null; // D2: the channel_agents roster doorbell
 let onHealthCb = null;
 let coalescer = null;
 let started = false;
@@ -251,6 +252,16 @@ function onInsert(wsId, payload) {
   if (chId && coalescer) coalescer.mark(chId);
 }
 
+// D2: the roster doorbell. Same extraction point, same routing-key-only rule; NOT
+// coalesced through the message coalescer, because that one owns the message loop's wake
+// and a roster read is a different (and far rarer) event. channel-agents.js is
+// single-flight per channel, so a burst of summons costs at most one read in flight.
+function onAgentInsert(wsId, payload) {
+  const chId = wakeChannelId(payload);
+  diag('realtime agent insert', String(wsId).slice(0, 8), 'ch', chId ? String(chId).slice(0, 8) : '-');
+  try { if (chId && onAgentInsertCb) onAgentInsertCb(chId); } catch (_) { /* one doorbell must not kill the rest */ }
+}
+
 // The per-ws subscribe outcome. On failure this logs the CONCRETE cause: the
 // server's own reason, which credential kind we used, and whether rotating the
 // token could fix it. Repeats collapse to one short line so a permanent failure
@@ -312,6 +323,61 @@ function removeChannel(wsId) {
   subs.delete(wsId);
 }
 
+// ── D2: the ROSTER doorbell, on its OWN realtime channel ─────────────────────
+//
+// `channel_agents` is in the publication (migration 20260731120000) and its RLS SELECT
+// mirrors channel_messages, so this is the same authenticated subscriber pattern with no
+// new credential and no server change. It obeys the WAKE-ONLY TRUST MODEL identically: the
+// only field read is `channel_id` (wakeChannelId), and the listener answers by re-reading
+// the roster over the authenticated API. INSERT only — a row APPEARING is the summon;
+// status flips are this machine's own writes.
+//
+// WHY A SEPARATE CHANNEL AND NOT A SECOND BINDING ON THE MESSAGE ONE. Realtime authorizes
+// postgres_changes bindings at JOIN time and fails the WHOLE channel if any one of them is
+// refused. Sharing would therefore make the message wake path — the core of the listener —
+// depend on this table being published and readable on whatever server this build talks to.
+// A desktop that ships ahead of its migration would silently drop every workspace back to
+// the 45s long-poll. On its own channel, a refusal costs exactly the roster doorbell, and
+// the reconcile pass (channel-agents.reconcileAll, every 5 minutes and on every wake) is
+// already the backstop for it.
+//
+// It is deliberately OUTSIDE the breaker and the health calculation: `isWorkspaceHealthy`
+// answers "may the message loop trust push", and a roster subscription has no business
+// changing that answer. A failure is logged once and left to the reconcile pass; there is no
+// resubscribe ladder here, so it can never contribute to reconnect churn (F-072).
+const agentSubs = new Map(); // wsId -> realtime channel (roster doorbell only)
+
+function addAgentChannel(wsId) {
+  if (agentSubs.has(wsId)) return;
+  agentSubs.set(wsId, null);
+  try {
+    const ch = client
+      .channel(`dopl-desktop-agents:${wsId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'channel_agents', filter: `workspace_id=eq.${wsId}` },
+        (payload) => onAgentInsert(wsId, payload)
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') { diag('realtime agents sub', String(wsId).slice(0, 8), 'SUBSCRIBED'); return; }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          diag('realtime agents sub', String(wsId).slice(0, 8), status,
+            `reason=${describeSubscribeError(err)}`,
+            '- summons fall back to the reconcile pass; message push is unaffected');
+        }
+      });
+    agentSubs.set(wsId, ch);
+  } catch (err) {
+    diag('realtime agents subscribe failed', err && err.message);
+  }
+}
+
+function removeAgentChannel(wsId) {
+  const ch = agentSubs.get(wsId);
+  agentSubs.delete(wsId);
+  try { if (client && ch) client.removeChannel(ch); } catch (_) { /* already gone */ }
+}
+
 // Bounded re-subscribe for an errored/closed ws sub: re-apply the JWT then rejoin
 // just that one channel. Guarded so it can never storm (F-072): at most ONE
 // pending retry per ws, and only while the breaker is CLOSED — an OPEN breaker
@@ -330,7 +396,7 @@ function scheduleResubscribe(wsId) {
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
-function start({ getAccessToken, getAccessTokenInfo, onInsert: onInsertHandler, onHealthChange } = {}) {
+function start({ getAccessToken, getAccessTokenInfo, onInsert: onInsertHandler, onAgentInsert: onAgentInsertHandler, onHealthChange } = {}) {
   if (started) return;
   // Prefer the metadata-bearing reader: it tells us WHICH source the JWT came from
   // and how long it has left, which is what the auth diagnostics print. The plain
@@ -338,6 +404,7 @@ function start({ getAccessToken, getAccessTokenInfo, onInsert: onInsertHandler, 
   getTokenInfo = getAccessTokenInfo || null;
   getToken = getAccessToken || null;
   onInsertCb = onInsertHandler || null;
+  onAgentInsertCb = onAgentInsertHandler || null; // D2
   onHealthCb = onHealthChange || null;
   coalescer = createWakeCoalescer(REALTIME.WAKE_COALESCE_MS, (id) => {
     try { if (onInsertCb) onInsertCb(id); } catch (_) { /* one wake must not kill the rest */ }
@@ -369,7 +436,8 @@ function reconcileChannels() {
     diag('realtime subscribe deferred', `${desiredWorkspaces.size} ws`, 'waiting for a user JWT');
   }
   for (const wsId of Array.from(subs.keys())) if (!desired.has(wsId)) removeChannel(wsId);
-  for (const wsId of desired) addChannel(wsId);
+  for (const wsId of Array.from(agentSubs.keys())) if (!desired.has(wsId)) removeAgentChannel(wsId);
+  for (const wsId of desired) { addChannel(wsId); addAgentChannel(wsId); } // D2: messages + roster
   emitHealth(); // snapshot the transport even when no sub ever calls back (cred=none)
 }
 
@@ -393,10 +461,12 @@ function refreshAuth() {
 function stop() {
   started = false;
   for (const wsId of Array.from(subs.keys())) removeChannel(wsId);
+  for (const wsId of Array.from(agentSubs.keys())) removeAgentChannel(wsId); // D2
   try { if (client) client.disconnect(); } catch (_) { /* best-effort */ }
   client = null;
   clientReady = null;
   coalescer = null;
+  onAgentInsertCb = null; // D2
   desiredWorkspaces = new Set();
   cred = { kind: 'none', fresh: false, secondsLeft: null };
   wakeCount = 0;

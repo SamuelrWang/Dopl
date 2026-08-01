@@ -32,6 +32,9 @@ const channel_render_1 = require("./channel-render");
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 const channel_addressing_1 = require("./channel-addressing");
+// Breakout-room membership: the set a thread read now carries, and the handles
+// that name the agents in it. Both fail soft.
+const channel_agent_refs_1 = require("./channel-agent-refs");
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 async function opList(client) {
@@ -176,7 +179,19 @@ async function opGetThread(client, ref, threadId, selfUserId = null) {
     // under it. The product tells a waiting agent to call this op every ~3 empty
     // holds, so it is a peer-typed title an agent re-reads on a timer.
     const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
-    return (0, respond_1.ok)(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\n${(0, channel_render_1.formatThreadDetail)(thread, view)}`);
+    // MULTIPLAYER — the PARTICIPANT SET, which is the fact this op exists to
+    // answer for an agent under the law "act on your own room": a thread with a
+    // set is a breakout room and the set is who may post into it. Rendered here
+    // rather than inside `formatThreadDetail` because naming the agents in it
+    // needs a roster the pure renderer has no way to fetch. Both lookups fail
+    // soft — an unreadable roster degrades to ids, never to an error.
+    const agentNames = await (0, channel_agent_refs_1.agentNamesById)(client, ref);
+    return (0, respond_1.ok)([
+        channel_render_1.UNTRUSTED_THREAD_HEADER,
+        ``,
+        (0, channel_render_1.formatThreadDetail)(thread, view),
+        ...(0, channel_agent_refs_1.participantLines)(thread.participants, view, agentNames),
+    ].join("\n"));
 }
 /**
  * The channel ROSTER — who is actually in here.

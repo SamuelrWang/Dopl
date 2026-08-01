@@ -7,7 +7,9 @@ import type { ChannelRow, ChannelTaskRow } from "./dto";
 import { ChannelTaskNotInChannelError, TaskForbiddenError } from "./errors";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
+import * as repoParticipants from "./repository-participants";
 import * as repoTasks from "./repository-tasks";
+import { resolveAgentAddressing } from "./service-writes-agents";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -18,11 +20,31 @@ import type { ChannelContext } from "./service-shared";
  * and what does the server stamp itself.
  *
  * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`, `taskMode`,
- * `taskCreatedBy`, `taskTitle`, `taskTarget`, and the five calm-terminal
- * flags) are ALWAYS stripped from caller metadata and re-added only from
- * server-validated values. `taskId` stays caller-settable — but a first-class
- * thread id now also has to BELONG to the poster (see
- * {@link resolvePostMetadata}).
+ * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `author_agent_id`,
+ * and the five calm-terminal flags) are ALWAYS stripped from caller metadata
+ * and re-added only from server-validated values. `taskId` stays
+ * caller-settable — but EVERY thread id, first-class or legacy, now has to
+ * BELONG to the poster (see {@link resolvePostMetadata}).
+ *
+ * **The legacy gate is CLOSED (F-083 bullet 3 / audit Q10, 2026-07-31).** A
+ * non-UUID `task-{channelId}-{seq}` id used to skip the participation check
+ * entirely and be stored verbatim, so any channel member could stamp another
+ * pair's exchange onto their own message and have it render inside that pair's
+ * card (and, with a lifecycle kind, flip its outcome). It is now validated
+ * against the same opening-request pair the calm flags use, and a caller who
+ * is not one of the two parties has the tag SILENTLY STRIPPED — the message
+ * still posts, untagged. Strip and not 403 is deliberate and is the plan's
+ * recorded decision (`docs/MULTIPLAYER-PLAN.md`, "judgment calls"): installed
+ * desktop 1.7.16 posts legacy ids for its lifecycle events, some against
+ * pre-v1.6 openers that carry no `to_user_id` at all, and a hard refusal there
+ * would reject real posts from a build already in the field. The first-class
+ * (UUID) branch keeps its 403: those ids only ever come from a caller that
+ * chose them, and an invisible un-threading is worse than an error.
+ *
+ * Consequence for the DESKTOP lane (do not do it here): the two-party session
+ * history fence — `pairRows` in `session-history.js` — was blocked on exactly
+ * this gate (ENGINEERING §8, "close the legacy-id gate FIRST, then widen"). It
+ * is now UNBLOCKED; widening it is the desktop lane's later work.
  */
 
 /**
@@ -110,13 +132,70 @@ function isThreadParticipant(task: ChannelTaskRow, userId: string): boolean {
 }
 
 /**
+ * May this post write into `task`? The PARTICIPANT-AWARE gate (multiplayer),
+ * which SUPERSEDES the pair check for a thread that has a participant set.
+ *
+ * Two regimes, and the split is "does this thread have rows in
+ * `channel_task_participants`":
+ *  - **No rows (every thread created before this wave, and every thread created
+ *    without `participants`): today's pair gate, unchanged.** Creator or
+ *    target, nothing else.
+ *  - **Rows present (a BREAKOUT ROOM): the set decides, and the original pair
+ *    stays valid.** A user participant may post as themselves; an agent
+ *    participant may post when the caller SUPPLIED `authorAgentId` (already
+ *    validated as the caller's own agent of this channel — see
+ *    `service-writes-agents.ts`). The creator / target keep their access
+ *    because they are the thread's two original parties: a set that admitted
+ *    collaborators must not evict the person who opened the exchange.
+ *
+ * The agent half requires the caller to CLAIM the identity rather than
+ * inferring it from ownership. Inferring would mean "any member who owns any
+ * agent in the set may post into the thread as themselves", which quietly
+ * widens a human's write access on the strength of a process they started.
+ *
+ * WHAT KEEPS AN ORDINARY THREAD'S AUTHORIZATION FIXED is NOT "participants are
+ * seeded only when a create asks for them" — that was true of `createTask` and
+ * said nothing about the join route, so a bystander could write themselves a
+ * set and be admitted here. It is the CURATION RULE in
+ * `service-participants.ts`: only a thread's creator, its target, or an
+ * existing user participant may add a row at all. So a thread's set can only
+ * ever grow by the decision of someone already inside it, and a thread nobody
+ * inside it curated stays a two-party thread forever.
+ *
+ * ONE query, and only for a caller-supplied first-class id (an inherited id's
+ * pair is {author, peer} by construction and never reaches here).
+ */
+async function mayWriteThread(
+  task: ChannelTaskRow,
+  userId: string,
+  authorAgentId: string | undefined
+): Promise<boolean> {
+  const participants = await repoParticipants.listParticipantsByTask(task.id);
+  if (participants.length === 0) return isThreadParticipant(task, userId);
+  if (isThreadParticipant(task, userId)) return true;
+  return participants.some(
+    (row) =>
+      (row.kind === "user" && row.user_id === userId) ||
+      (row.kind === "agent" &&
+        authorAgentId !== undefined &&
+        row.agent_id === authorAgentId)
+  );
+}
+
+/**
  * Whether `userId` is one of the two participants of a LEGACY
  * `task-{channelId}-{seq}` exchange. A legacy session has no `channel_tasks`
  * row, so the only server-side record of who it belongs to is its opening
  * request: the message at that seq, whose author is the requester and whose
  * `metadata.to_user_id` is the responder — exactly the pair `groupThread`
- * joins on. Fails CLOSED (unknown id shape, missing opener, or an
- * unaddressed opener → not a participant).
+ * joins on.
+ *
+ * This is the ONE legacy resolver: the thread-write gate and the calm-flag
+ * stamp both go through it (the flags ride on whether the TAG survived, so
+ * there is exactly one lookup per post, not one per concern). Fails CLOSED at
+ * every step — an id that does not name THIS channel, a seq that is not a
+ * positive integer, a missing opener, or an unaddressed opener whose author is
+ * someone else, all answer "not a participant".
  */
 async function isLegacyThreadParticipant(
   channelId: string,
@@ -124,7 +203,10 @@ async function isLegacyThreadParticipant(
   userId: string
 ): Promise<boolean> {
   const seq = parseLegacyTaskSeq(taskId, channelId);
-  if (seq === null) return false;
+  // `parseLegacyTaskSeq` already pins the prefix to this channel and the tail
+  // to digits; seqs start at 1, and a digit run long enough to lose precision
+  // is not a seq either.
+  if (seq === null || seq < 1 || !Number.isSafeInteger(seq)) return false;
   const opener = await repoMessages.findMessageBySeq(channelId, seq);
   if (!opener) return false;
   if (opener.author_user_id === userId) return true;
@@ -157,24 +239,55 @@ async function isLegacyThreadParticipant(
  *    cannot be spoofed. `taskId` itself stays caller-settable (a responder
  *    legitimately replies within a task); a UUID that resolves to no task in
  *    THIS channel is rejected (v1.7 server-validated threading), while a
- *    legacy `task-<uuid>-<seq>` id is not a UUID, never resolves, and stamps
- *    nothing. A caller-supplied taskId also SUPPRESSES inheritance — an
- *    explicit thread (or an explicit legacy id) is the caller's decision.
+ *    legacy `task-<uuid>-<seq>` id never resolves to a row and so stamps none
+ *    of the four (a legacy card renders titleless — that is the tell, and the
+ *    MCP surface says so). A caller-supplied taskId also SUPPRESSES
+ *    inheritance — an explicit thread (or an explicit legacy id) is the
+ *    caller's decision.
  *    Inheritance only fires for a plain `message` in a DM addressed to the
  *    peer: it exists so a session reply reaches the requester's waiting window
  *    (the desktop routes by taskId), and stamping a task id onto a lifecycle
  *    marker would let an unrelated `task_failed` land on that task's card.
- * 4. **Thread participation (v2.9).** Resolving in this channel is not enough:
- *    in a 3+ member channel every member can read every thread id, and a
- *    stamped `taskId` is what puts a message inside that thread's card AND
- *    routes it to the responder's session window. So a caller-supplied
- *    first-class id must belong to the poster (`created_by` / `target_user_id`)
- *    — otherwise the post is REFUSED (403), not silently unthreaded: a message
- *    the author believes landed in a thread and the recipient never sees is the
- *    invisible-delivery failure this whole feature exists to prevent. Closing
- *    and reopening were already gated this way; writing into a thread now is
- *    too. Inherited ids need no check — inheritance only resolves a task whose
+ * 4. **Thread participation (v2.9; legacy half closed 2026-07-31).** Resolving
+ *    in this channel is not enough: in a 3+ member channel every member can
+ *    read every thread id, and a stamped `taskId` is what puts a message inside
+ *    that thread's card AND routes it to the responder's session window. So a
+ *    caller-supplied id must belong to the poster, and the two id shapes fail
+ *    DIFFERENTLY on purpose:
+ *    - **First-class (UUID):** must be `created_by` / `target_user_id` of the
+ *      resolved task, else the post is REFUSED (403), not silently unthreaded —
+ *      a message the author believes landed in a thread and the recipient never
+ *      sees is the invisible-delivery failure this whole feature exists to
+ *      prevent. Closing and reopening were already gated this way.
+ *    - **Legacy (`task-<channelId>-<seq>`):** validated by
+ *      {@link isLegacyThreadParticipant} — this channel's id, a positive seq,
+ *      and a poster inside the opener's {author, to_user_id} pair, either
+ *      direction. Anything else (a foreign channel's id, a malformed seq, a
+ *      missing or unaddressed opener, another pair's exchange) has the tag
+ *      STRIPPED and the post proceeds untagged. It NEVER throws: the installed
+ *      desktop posts legacy ids for lifecycle events and a 403 would break it.
+ *      Stripping never blocks the post — the message stays visible and
+ *      attributable, it simply stops landing in a thread that is not the
+ *      poster's.
+ *    Inherited ids need no check — inheritance only resolves a task whose
  *    participants are {author, peer} by construction.
+ *    **Multiplayer:** the first-class check is now {@link mayWriteThread}, not
+ *    the bare pair test. A thread with rows in `channel_task_participants` is a
+ *    BREAKOUT ROOM and its SET decides (the original pair stays valid); a
+ *    thread with no rows keeps the pair gate exactly as it was. What makes that
+ *    safe is the CURATION RULE on the set itself (`service-participants.ts`) —
+ *    only the thread's creator, its target, or an existing user participant may
+ *    add a row — so a bystander cannot manufacture a set to be admitted by.
+ * 4b. **Agent addressing (multiplayer).** `to_agent_id` and `author_agent_id`
+ *    join the reserved set: stripped from caller metadata unconditionally, then
+ *    re-stamped only from the validated top-level `toAgent` / `authorAgentId`
+ *    fields (`service-writes-agents.ts` owns that validation — an agent of
+ *    another channel is a 400, another member's agent as AUTHOR is a 403).
+ *    Addressing an agent ALSO stamps its owner as `to_user_id`: the v1 bridge
+ *    to the existing delivery path, since the listener triggers on the
+ *    addressed user and the agent runs on that user's machine. The message's
+ *    `author_user_id` is untouched — an agent id supplements an author, it
+ *    never replaces one.
  * 5. **Runtime stamp (WAKE-V1).** `runtime` is reserved: stripped from caller
  *    metadata unconditionally, then re-stamped as `desktop-session` only when
  *    the REQUEST carried `X-Dopl-Runtime: desktop-session` (resolved by the
@@ -193,12 +306,12 @@ async function isLegacyThreadParticipant(
  *    nothing on either machine saying so — a shipped fix then reads as broken.
  *    Purely diagnostic: nothing may gate on it (see `app-version-header.ts`).
  * 7. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
- *    re-stamped only for a thread participant: the first-class case is already
- *    covered by (4), and a legacy `task-{channel}-{seq}` id (no task row, but
- *    the shape the installed desktop still posts most of its lifecycle events
- *    with) is checked against its opening request's {author, to_user_id} pair.
- *    A flag on a thread that is not the poster's is dropped, so the victim's
- *    card keeps rendering the outcome its OWN session produced.
+ *    re-stamped only when the post ends up carrying a thread tag the poster is
+ *    entitled to — which, since (4), is exactly "a `taskId` survived". Both
+ *    shapes are already decided by then, so the flags need no check of their
+ *    own and cost no second read. A flag on a thread that is not the poster's
+ *    is dropped with the tag that carried it, so the victim's card keeps
+ *    rendering the outcome its OWN session produced.
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
@@ -210,6 +323,8 @@ export async function resolvePostMetadata(
   delete metadata.summary;
   delete metadata.runtime;
   delete metadata.appVersion;
+  delete metadata.to_agent_id;
+  delete metadata.author_agent_id;
   const calmFlags = takeCalmFlags(metadata);
 
   // Server-stamped from the request's own header, never from the payload.
@@ -218,8 +333,23 @@ export async function resolvePostMetadata(
   }
   if (ctx.appVersion) metadata.appVersion = ctx.appVersion;
 
+  // Both agent identities are validated before anything is stamped: a
+  // `toAgent` that names no agent of this channel is a 400, and an
+  // `authorAgentId` the caller does not own is a 403.
+  const agents = await resolveAgentAddressing(ctx, channel.id, input);
+  if (agents.authorAgentId) metadata.author_agent_id = agents.authorAgentId;
+  if (agents.toAgentId) metadata.to_agent_id = agents.toAgentId;
+
   const peerUserId = await resolveDirectPeer(channel, ctx.userId);
-  const toUserId = input.toUserId ?? peerUserId;
+  // THE OWNER BRIDGE (v1). An addressed agent's OWNER is stamped as
+  // `to_user_id`, because that is still the only thing the delivery path reads:
+  // the desktop listener triggers on the addressed USER, and the agent runs on
+  // that user's machine. Without it a `@quartz` post would carry a perfectly
+  // valid `to_agent_id` and wake nobody. It takes precedence over an explicit
+  // `toUserId` because a handle names ONE machine unambiguously while a
+  // disagreeing pair of addressees names none. Remove this line only once the
+  // listener routes on `to_agent_id` directly (the desktop lane's later work).
+  const toUserId = agents.toAgentOwnerUserId ?? input.toUserId ?? peerUserId;
   if (toUserId) metadata.to_user_id = toUserId;
   if (input.summary) metadata.summary = input.summary;
 
@@ -232,6 +362,9 @@ export async function resolvePostMetadata(
     typeof metadata.taskId === "string" && metadata.taskId.trim().length > 0
       ? metadata.taskId
       : undefined;
+  // A blank or non-string tag is not a thread id. Dropping it here is what
+  // lets everything below read `metadata.taskId` as "an ACCEPTED thread tag".
+  if (!callerTaskId) delete metadata.taskId;
 
   let task: ChannelTaskRow | null = null;
   if (callerTaskId) {
@@ -239,9 +372,17 @@ export async function resolvePostMetadata(
       task = await repoTasks.findTaskByChannelAndId(channel.id, callerTaskId);
       if (!task) throw new ChannelTaskNotInChannelError(callerTaskId);
       // Membership in the channel is not membership in the THREAD.
-      if (!isThreadParticipant(task, ctx.userId)) {
+      if (!(await mayWriteThread(task, ctx.userId, agents.authorAgentId))) {
         throw new TaskForbiddenError("post into this task");
       }
+    } else if (
+      !(await isLegacyThreadParticipant(channel.id, callerTaskId, ctx.userId))
+    ) {
+      // Q10 / F-083 bullet 3: a legacy id that is not the poster's own
+      // exchange is stripped, never refused — the post lands untagged. Silent
+      // to the wire by design: there is no diag lane on this path, and the
+      // installed desktop that sends these ids has nowhere to show one.
+      delete metadata.taskId;
     }
   } else if (
     peerUserId &&
@@ -262,22 +403,15 @@ export async function resolvePostMetadata(
     if (task.target_user_id) metadata.taskTarget = task.target_user_id;
   }
 
-  // Re-stamp the calm-terminal flags only for the thread's own participants. A
-  // resolved first-class task already passed the participation gate above; a
-  // legacy id is checked against its opening request's pair. Anything else
-  // (a foreign thread, an unresolvable id, no thread at all) keeps the strip.
-  if (calmFlags.length > 0) {
-    const mayStamp =
-      task !== null ||
-      (callerTaskId !== undefined &&
-        (await isLegacyThreadParticipant(
-          channel.id,
-          callerTaskId,
-          ctx.userId
-        )));
-    if (mayStamp) {
-      for (const key of calmFlags) metadata[key] = true;
-    }
+  // Re-stamp the calm-terminal flags only for the thread's own participants —
+  // which is now the same question as "did a thread tag survive the gate
+  // above". A first-class id got there by passing the 403 gate (or by
+  // inheritance, whose pair is {author, peer} by construction), a legacy id by
+  // matching its opener's pair. Anything else (a foreign thread, an
+  // unresolvable id, no thread at all) has no `taskId` left and keeps the
+  // strip, so a fabricated outcome has nothing to attach to.
+  if (calmFlags.length > 0 && typeof metadata.taskId === "string") {
+    for (const key of calmFlags) metadata[key] = true;
   }
 
   return metadata;

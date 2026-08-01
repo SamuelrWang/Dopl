@@ -45,12 +45,28 @@ function showLive(s) {
   deps.refreshTray();
 }
 
+// PURE READ — the tray's "Sessions" submenu source (item 10) and, since D1, the accounting
+// surface a chips UI will list from. One row PER KEY, never per channel: with N concurrent
+// sessions in one channel the channel name alone no longer identifies a row, so the key and
+// its (channel, thread/agent) parts ride along with the live `status`.
+//   status = the reducer's phase for a live session ('launching' / 'running' / 'awaiting_*' /
+//            'parked'), so a parked shell reads as parked instead of as work in flight.
+// Nothing here mutates, and no live handle (window, query, iterator) is exposed.
 function listLiveSessions() {
   const out = [];
   if (!deps.sessions) return out;
   for (const s of deps.sessions.values()) {
     if (s.settled) continue;
-    out.push({ sessionId: s.sessionId, channelName: (s.context && s.context.channelName) || null, hidden: !!s.windowHidden });
+    out.push({
+      sessionId: s.sessionId,
+      key: s.key,
+      channelId: s.channelId || null,
+      taskId: s.taskId || '',
+      channelName: (s.context && s.context.channelName) || null,
+      taskTitle: (s.context && s.context.taskTitle) || null,
+      status: (s.state && s.state.phase) || null,
+      hidden: !!s.windowHidden,
+    });
   }
   return out;
 }

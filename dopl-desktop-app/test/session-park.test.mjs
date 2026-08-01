@@ -46,7 +46,12 @@ function harness(over = {}) {
   const sessions = new Map();
   const store = {
     sessionKey: (c, t) => `${c}:${t}`,
-    getRecord: () => cfg.record,
+    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
+    // thread for every other), so the fake mirrors the real store's slotKey too.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+    // FIX N2: keyed, so a test can prove WHICH slot a reopen looks the record up under.
+    // `cfg.record` (key-blind) is kept for every test that does not care.
+    getRecord: (key) => (cfg.records ? cfg.records[key] || null : cfg.record),
     getSdkSessionId: () => cfg.sdkId,
   };
   const crypto = { randomBytes: () => ({ toString: () => "deadbeef" }) };
@@ -135,6 +140,35 @@ test("recreateParkedShell: a record + a retained sdkSessionId recreates a parked
   assert.equal(spec.resumeSdkId, "sdk-1", "the retained sdk id is threaded for the eventual resume");
   assert.equal(spec.counterpartyId, "peer-1", "the feed stays counterparty-bound (FIX L1)");
   assert.equal(spec.side, "requester");
+});
+
+test("FIX N2: a TEAM record reopens on its AGENT slot, which a thread key could never find", async () => {
+  // recreateParkedShell keyed on (channel, thread) alone, so a summoned agent's record —
+  // agentId set, taskId '' — was looked up under `c1:`, where it has never been written. A
+  // team shell could not be reopened at all, and the lookup could collide with a real
+  // thread's record in the same channel.
+  const rec = {
+    channelId: "c1", taskId: "", agentId: "agent-1", bind: "room", workspaceId: "w1",
+    side: "responder", profile: "full", mode: "autonomous",
+  };
+  const h = harness({ records: { "c1:agent-1": rec }, sdkId: null });
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "" }), { ok: false },
+    "the thread slot holds nothing, and must not");
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "", agentId: "agent-1" }), { ok: true });
+  const spec = h.calls.startSession[0];
+  assert.equal(spec.key, "c1:agent-1", "the shell reopens on the record's OWN slot");
+  assert.equal(spec.agentId, "agent-1", "…as its agent, or its next saveRecord erases that identity");
+  assert.equal(spec.bind, "room", "…and with its room binding, not the narrow default");
+});
+
+test("FIX N2: a PAIR record is unchanged — no agentId, so slotKey IS the thread key", async () => {
+  const rec = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "requester", profile: "full", mode: "autonomous" };
+  const h = harness({ records: { "c1:t1": rec }, sdkId: "sdk-1" });
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
+  const spec = h.calls.startSession[0];
+  assert.equal(spec.key, "c1:t1");
+  assert.equal(spec.agentId, null);
+  assert.equal(spec.bind, "pair", "the widening is never reached by forgetting the field");
 });
 
 test("recreateParkedShell: NO record -> {ok:false}, no window created", async () => {

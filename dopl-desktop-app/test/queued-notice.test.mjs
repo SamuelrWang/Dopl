@@ -11,9 +11,12 @@
 //
 // SOURCE EXTRACTION with INJECTION (the SESSION-DISPATCH idiom): main/queued-notice.js
 // requires channel-post -> electron, so the BEGIN/END QUEUED-NOTICE-PURE block references
-// postTaskEvent / diag as FREE variables. We slice it, prove it holds no electron/fs/require,
-// and drive the REAL `announce` with fakes. Each harness evaluates the block afresh, so the
-// module-scope `announced` set starts empty per test rather than leaking across them.
+// postTaskEvent / sessionKey / diag as FREE variables. We slice it, prove it holds no
+// electron/fs/require, and drive the REAL `announce` with fakes. Each harness evaluates the
+// block afresh, so the module-scope `announced` set starts empty per test rather than leaking
+// across them. D1 (2026-07-31): the dedupe key is no longer a local `${channel}:${task}`
+// concat — it is the shared sessionKey (session-store.js), injected here, so the notice, the
+// spawn pool and the engine registry all name a session the same way.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -35,6 +38,17 @@ assert.notEqual(to, -1, "END QUEUED-NOTICE-PURE sentinel missing");
 assert.ok(to > from, "queued-notice sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
+// The REAL sessionKey (session-store's own pure block), so this suite drives the shipped key
+// rather than a lookalike — a divergent second definition would show up here as a changed
+// dedupe scope, not as a green test.
+const STORE_SRC = readFileSync(join(HERE, "..", "main", "session-store.js"), "utf8");
+const sFrom = STORE_SRC.indexOf("// ─── BEGIN SESSION-STORE-PURE");
+const sTo = STORE_SRC.indexOf("// ─── END SESSION-STORE-PURE");
+assert.ok(sFrom !== -1 && sTo > sFrom, "SESSION-STORE-PURE sentinels missing or out of order");
+const { sessionKey } = new Function(
+  `${STORE_SRC.slice(sFrom, sTo)}\n return { sessionKey };`
+)();
+
 const CHANNEL = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const TASK = "11111111-2222-3333-4444-555555555555";
 const OTHER_TASK = "99999999-8888-7777-6666-555555555555";
@@ -55,9 +69,10 @@ function harness(over = {}) {
   const diag = (...a) => calls.diag.push(a.join(" "));
   const api = new Function(
     "postTaskEvent",
+    "sessionKey",
     "diag",
     `${BLOCK}\n return { announce, QUEUED_BODY, QUEUED_SUMMARY, MAX_ANNOUNCED };`
-  )(postTaskEvent, diag);
+  )(postTaskEvent, sessionKey, diag);
   return { api, calls, cfg };
 }
 

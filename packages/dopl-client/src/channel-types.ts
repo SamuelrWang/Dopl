@@ -161,7 +161,110 @@ export interface ChannelThreadCreateInput {
    * the responder's window). Mirrors `ChannelMessageInput.clientMsgId`.
    */
   clientMsgId?: string;
+  /**
+   * MULTIPLAYER: the EXTRA identities admitted to the thread — which is what
+   * turns it into a BREAKOUT ROOM. The creator and `toUserId` are seeded by the
+   * server, so this carries only the extras (max 20). Omitted (or empty) means
+   * no participant rows at all, and the thread keeps the creator/target pair
+   * gate — "has participants" is exactly what "is a breakout room" means.
+   */
+  participants?: ThreadParticipantRef[];
 }
+
+/**
+ * MULTIPLAYER — an agent's lifecycle inside a channel. `summoned` = created,
+ * not yet running; `active` = a session is working; `parked` = suspended but
+ * resumable; `dismissed` = retired (the row survives, so the messages it
+ * already authored keep their attribution and its handle stays taken).
+ */
+export type AgentStatus = "summoned" | "active" | "parked" | "dismissed";
+
+/**
+ * A first-class named agent inside a channel, summoned by its owner and
+ * running on THAT owner's machine. It is addressed by HANDLE (`@quartz`) under
+ * the one law: nothing acts unless addressed. The handle matches
+ * `^[a-z][a-z0-9-]{1,30}$`, is unique per channel case-folded, and is
+ * renameable by its owner alone.
+ */
+export interface ChannelAgent {
+  id: string;
+  channelId: string;
+  workspaceId: string;
+  /** The member who summoned it; the only one who may rename or park it. */
+  ownerUserId: string;
+  /** The handle as typed in an @-mention. */
+  name: string;
+  status: AgentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A thread participant is either a human member or a summoned agent. */
+export type ParticipantKind = "user" | "agent";
+
+/**
+ * One identity in a thread's participant set — the breakout room's membership.
+ * Exactly one of `userId` / `agentId` is set, matching `kind` (a DB CHECK
+ * enforces the pairing in both directions).
+ */
+export interface ThreadParticipant {
+  id: string;
+  threadId: string;
+  workspaceId: string;
+  kind: ParticipantKind;
+  /** Set iff `kind === "user"`. */
+  userId: string | null;
+  /** Set iff `kind === "agent"`. */
+  agentId: string | null;
+  addedBy: string | null;
+  createdAt: string;
+}
+
+/**
+ * How a participant is NAMED on the wire: `kind` plus the id of that identity
+ * (a user id for `user`, an agent id for `agent`). One `id` field rather than
+ * two nullable ones because the row itself is discriminated — a two-field body
+ * could say otherwise.
+ */
+export interface ThreadParticipantRef {
+  kind: ParticipantKind;
+  id: string;
+}
+
+/**
+ * A thread as the READ paths return it: the row plus its participant set.
+ *
+ * The set is `[]` for every thread that has none — a legacy (pair-gated)
+ * thread is not a thread with a MISSING set, it is a thread whose set is
+ * empty. Kept as its own type rather than an optional field on
+ * {@link ChannelThread} because the WRITE paths (create / close / set mode)
+ * return the row alone, and an optional `participants` would make every
+ * consumer ask whether `undefined` meant "none" or "not loaded".
+ */
+export interface ChannelThreadDetail extends ChannelThread {
+  participants: ThreadParticipant[];
+}
+
+/** `POST /agents` — summon one. Omit `name` to take the next pooled handle. */
+export interface ChannelAgentCreateInput {
+  /**
+   * An explicit handle. Normally ABSENT: the server picks the next free handle
+   * from its curated pool, which is what keeps a room's names collision-free.
+   * A handle already taken in the channel is a 409 rather than a silent
+   * alternative — a caller that asked for `quartz` and got `onyx` would go on
+   * to address the wrong agent.
+   */
+  name?: string;
+}
+
+/**
+ * `PATCH /agents/[agentId]` — rename it, or move it along its lifecycle. A
+ * discriminated union so the two ops cannot bleed fields into each other.
+ * BOTH are OWNER-ONLY; the server enforces that (403), not this type.
+ */
+export type ChannelAgentUpdateInput =
+  | { op: "rename"; name: string }
+  | { op: "set_status"; status: AgentStatus };
 
 /**
  * What `createChannelThread` returns: the thread plus `openingSeq`, the seq of
@@ -215,6 +318,22 @@ export interface ChannelMessageInput {
   toUserId?: string;
   /** One-line intent (<=200 chars) surfaced in the receiver's notification. */
   summary?: string;
+  /**
+   * MULTIPLAYER — WHO THE MESSAGE IS FOR, when that is an AGENT: an agent id
+   * or its handle (`@quartz` minus the `@`), resolved case-folded against THIS
+   * channel's agents. Stamped by the server as `metadata.to_agent_id`; an
+   * agent of another channel is a 400 about the address, never a silent stamp.
+   * Addressing an agent is what makes it ACT.
+   */
+  toAgent?: string;
+  /**
+   * MULTIPLAYER — WHO THE MESSAGE IS FROM, when that is one of the CALLER'S
+   * OWN agents: the agent id (`metadata.author_agent_id`). It SUPPLEMENTS the
+   * author, it never replaces one — `author_user_id` stays the calling human
+   * on every path. Identity is server-verified: an agent belonging to someone
+   * else is a 403, not a silent drop.
+   */
+  authorAgentId?: string;
 }
 
 export interface ReadMessagesOptions {

@@ -3,11 +3,16 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
+  ChannelAgentForbiddenError,
+  ChannelAgentNameConflictError,
+  ChannelAgentNotFoundError,
+  ChannelAgentNotInChannelError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
   ChannelMemberExistsError,
   ChannelNotFoundError,
+  ChannelParticipantNotMemberError,
   ChannelSlugConflictError,
   ChannelTaskNotInChannelError,
   ConsentAlreadyDecidedError,
@@ -50,6 +55,21 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
+  }
+  if (err instanceof ChannelAgentNotFoundError) {
+    return new HttpError(404, "CHANNEL_AGENT_NOT_FOUND", err.message);
+  }
+  if (err instanceof ChannelAgentNotInChannelError) {
+    return new HttpError(400, "CHANNEL_AGENT_NOT_IN_CHANNEL", err.message);
+  }
+  if (err instanceof ChannelAgentNameConflictError) {
+    return new HttpError(409, "CHANNEL_AGENT_NAME_CONFLICT", err.message);
+  }
+  if (err instanceof ChannelAgentForbiddenError) {
+    return new HttpError(403, "CHANNEL_AGENT_FORBIDDEN", err.message);
+  }
+  if (err instanceof ChannelParticipantNotMemberError) {
+    return new HttpError(400, "CHANNEL_PARTICIPANT_NOT_MEMBER", err.message);
   }
   if (err instanceof ConsentNotFoundError) {
     return new HttpError(404, "CONSENT_NOT_FOUND", err.message);

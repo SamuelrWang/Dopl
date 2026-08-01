@@ -30,6 +30,7 @@ const channelDirs = require('./channel-dirs');
 const replay = require('./session-replay');
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
 const sessionHistory = require('./session-history'); // v2.5 D3: reopened-shell history
+const sessionTeam = require('./session-team'); // D2: summoned, room-bound TEAM sessions
 
 // settings.js owns the window-mode switch + caps; required defensively so the engine still
 // loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
@@ -71,6 +72,10 @@ sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: de
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 sessionHistory.bind({ emit });
+// D2: the TEAM lane (summon -> a room-bound parked shell, and the pair/room feed predicate). Same
+// injection discipline as session-park / session-gate — it gets the engine's private registry and
+// its single construction site, and requires nothing back.
+sessionTeam.bind({ sessions, startSession, getSdk, emit, windowModeEnabled, atWindowCap: sessionPark.atCapAfterEvict, windowFactoryReady: () => !!windowFactory, getSelfId: () => selfUserId });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
 sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell });
 
@@ -301,6 +306,12 @@ async function startSession(spec, sdk) {
     profileLabel: require('./tool-profiles').profileLabel(spec.profile),
     mode: state.mode,
     counterpartyId: spec.counterpartyId || null, // FIX L1: the task's other party
+    // D2 — THE BINDING. 'pair' is every shape that exists today and is the default by
+    // construction: only a launch that explicitly asks for 'room' widens the inbound feed
+    // and the window history past one counterparty. `agentId` is the channel_agents row a
+    // TEAM session runs as; it is half of the slot key and rides into the framing.
+    bind: spec.bind === 'room' ? 'room' : 'pair',
+    agentId: spec.agentId || null,
     // H2: is this session's channel a DIRECT (1:1) one? The server addresses an
     // unaddressed post there (`resolveDirectPeer`), so the outbound card names the
     // recipient instead of saying none was named. `=== true` only — a launch shape that
@@ -362,12 +373,18 @@ async function startSession(spec, sdk) {
 
 async function launch(a) {
   if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
-  const key = store.sessionKey(a.channelId, a.taskId);
+  const key = store.slotKey(a);
+  // FIX N1: the busy checks must ask about the SAME slot `key` names. They were rebuilding
+  // `{ channelId, taskId }` by hand, stripping `agentId` — the latent bug D2 fixed in
+  // session-park.startResume: for a team-shaped call (agentId set, taskId '') the key says
+  // (channel, agent) while the checks ask about (channel, ''), so launch could report a free
+  // slot for an agent that is running and then have startSession overwrite it.
+  const slot = { channelId: a.channelId, taskId: a.taskId, agentId: a.agentId || null };
   // H1 (LOW): distinguish "a session is working here" from "a session is HELD here waiting for
   // a sign-in" so the caller can post the truth instead of asking the peer to resend into a
   // slot nothing will ever free on its own.
-  if (isAuthHeldSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'auth-hold' };
-  if (hasLiveSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'busy' };
+  if (isAuthHeldSession(slot)) return { skipped: 'auth-hold' };
+  if (hasLiveSession(slot)) return { skipped: 'busy' };
   // Adopting a pre-consent window is net-zero on the budget; only a FRESH window counts against the shared cap.
   // AUDIT D4: at the cap, free an untouched parked shell first (sessionPark.atCapAfterEvict) instead of
   // degrading a REAL inbound trigger to headless. Fail-restrictive: still a cap skip if nothing frees.
@@ -378,7 +395,7 @@ async function launch(a) {
     diag('session-engine: SDK unavailable', err && err.message);
     return { skipped: 'no-sdk' };
   }
-  if (hasLiveSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'busy' }; // FIX #7: re-check after await — do not overwrite a racing creator's session
+  if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — do not overwrite a racing creator's session
   const s = await startSession({
     key,
     channelId: a.channelId,
@@ -408,7 +425,7 @@ function launchRequesterSession(a) {
 }
 
 function hasLiveSession(a) {
-  const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
+  const s = sessions.get(store.slotKey(a));
   return !!(s && !s.settled);
 }
 
@@ -417,14 +434,14 @@ function hasLiveSession(a) {
 // caller's "busy" copy ("I'm still finishing a previous request") is a lie when the truth is
 // "nothing is running and nobody can start it until someone signs in on that Mac".
 function isAuthHeldSession(a) {
-  const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
+  const s = sessions.get(store.slotKey(a));
   return !!(s && !s.settled && s.state && s.state.authHeld === true);
 }
 
 // FIX L1: the counterparty whose replies this session may consume; the listener checks it
 // before feeding, so a third party can never inject a turn.
 function counterpartyFor(a) {
-  const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
+  const s = sessions.get(store.slotKey(a));
   return s && !s.settled ? (s.counterpartyId || null) : null;
 }
 
@@ -468,6 +485,8 @@ module.exports = {
   launchRequesterSession,
   hasLiveSession,
   counterpartyFor,
+  summonTeamSession: sessionTeam.summon, // D2 — my own /new-agent row becomes a room-bound shell
+  acceptsInboundFrom: sessionTeam.acceptsInboundFrom, // D2 — the pair fence vs the room binding
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell
   openConsentWindow, // consent reflow (item 8) — called by trigger.js

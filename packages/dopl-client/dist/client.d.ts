@@ -6,11 +6,11 @@ import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./sk
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import { ChannelAgentsClient } from "./client-channel-agents.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
-export declare class DoplClient {
-    private transport;
+export declare class DoplClient extends ChannelAgentsClient {
     constructor(baseUrl: string, apiKey: string, opts?: ConstructorParameters<typeof DoplTransport>[2]);
     getBaseUrl(): string;
     /**
@@ -136,8 +136,8 @@ export declare class DoplClient {
     readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
     postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
     awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
-    listChannelThreads(channelId: string): Promise<ChannelThread[]>;
-    getChannelThread(channelId: string, threadId: string): Promise<ChannelThread>;
+    listChannelThreads(channelId: string): Promise<ChannelThreadDetail[]>;
+    getChannelThread(channelId: string, threadId: string): Promise<ChannelThreadDetail>;
     createChannelThread(channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
     closeChannelThread(channelId: string, threadId: string, input: {
         outcome: ThreadOutcome;

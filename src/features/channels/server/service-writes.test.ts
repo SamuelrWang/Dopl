@@ -15,10 +15,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
+vi.mock("./repository-participants");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
+import * as repoParticipants from "./repository-participants";
 import { postMessage } from "./service-writes";
 import {
   ChannelAddresseeNotMemberError,
@@ -103,6 +105,11 @@ function wireMembership(addresseeIsMember: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Multiplayer: every thread-tagged post runs the participant-aware write
+  // gate, and every thread read hydrates a participant set. No participants =
+  // the pair gate, which is what these suites are about.
+  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
+  vi.mocked(repoParticipants.listParticipantsByTasks).mockResolvedValue(new Map());
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
@@ -245,7 +252,12 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
-  it("a non-UUID taskId never hits the DB and stamps nothing (old task-<uuid>-<seq> ids)", async () => {
+  it("a non-UUID taskId never hits the TASK table, and an unowned one is stripped", async () => {
+    // Q10 / F-083 bullet 3: a legacy `task-<channelId>-<seq>` id resolves no
+    // task row (so none of the four task keys are stamped) and is now checked
+    // against its opening request's pair instead — unresolvable here, so the
+    // tag is stripped and the post lands untagged. The kept/stripped matrix is
+    // pinned in `service-writes-metadata-thread.test.ts`.
     await postMessage(ctx, "general", {
       body: "reply",
       metadata: { taskId: "task-chan-1-7", taskMode: "interactive" },
@@ -253,8 +265,9 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
 
     expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
     const meta = capturedMetadata();
-    expect(meta.taskId).toBe("task-chan-1-7");
+    expect(Object.prototype.hasOwnProperty.call(meta, "taskId")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(meta, "taskMode")).toBe(false);
+    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 
   it("SECURITY (B3): a member who is neither creator nor target cannot post into the thread", async () => {

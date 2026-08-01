@@ -26,17 +26,27 @@
  *     time it arrives: `resolveMemberOr` neutralizes at the source, so the label
  *     is spliced directly here and must NOT be neutralized twice.
  *
- * Peer TITLES (thread names) render in `threadLinkageNote` below and across
+ * Peer TITLES (thread names) render in `channel-post-linkage.ts` — the post's
+ * did-it-thread line, split out of this file at the §2 cap — and across
  * `channel-ops-threads.ts`; the untrusted-content headers they carry live in
  * `channel-render.ts` with the read side's, one definition each.
+ *
+ * MULTIPLAYER: `to_agent` / `as_agent` are resolved through
+ * `channel-agent-refs.ts`, which also owns how an agent handle is rendered (as a
+ * value, and never without the immutable agent id beside it).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opOpen = opOpen;
 exports.opInvite = opInvite;
 exports.opPost = opPost;
 const respond_1 = require("./respond");
+// Agent identity (handle→row resolution, and how a handle is rendered) is one
+// module for the whole tool — post, create_thread and get_thread share it.
+const channel_agent_refs_1 = require("./channel-agent-refs");
+// A post's result lines each live in their own module — this one answers "did
+// it thread?", which is the question a sender cannot otherwise settle.
+const channel_post_linkage_1 = require("./channel-post-linkage");
 const channel_shared_1 = require("./channel-shared");
-const channel_render_1 = require("./channel-render");
 // The addressing rule has ONE statement, in one module, because stating it per
 // site is how three files came to agree with each other and disagree with
 // `classify`. See channel-addressing.ts for what each fact is verified against.
@@ -48,9 +58,8 @@ const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // channel-errors.ts for why the old status-only branch answered every failure
 // with "invite them first".
 const channel_errors_1 = require("./channel-errors");
-/** Fallbacks for peer text that neutralized to nothing — never an empty span. */
+/** Fallback for peer text that neutralized to nothing — never an empty span. */
 const NO_NAME = "(unnamed)";
-const NO_ID = "(unreadable id)";
 async function opOpen(client, opts) {
     // Direct branch: open (or dedup-return) a 1:1 channel with `member`. The
     // server dedups a repeat DM to the same peer, so this is idempotent.
@@ -117,127 +126,6 @@ async function opInvite(client, channelRef, memberRef) {
     }
     return (0, respond_1.ok)(`Added ${member.label} to **${chName}** as ${added.role}.`);
 }
-/** Open thread ids listed in the not-threaded warning before it truncates. */
-const OPEN_THREAD_WARN_MAX = 5;
-/**
- * Q7 — the SELF-VERIFICATION line for a post: did this land as a continuation
- * of an existing thread, or as a new request on the other side?
- *
- * Reported by the responder agent during live testing: it had no way to tell,
- * and neither did the requester (await/read rendered bodies only, so confirming
- * a thread tag meant raw SQL). The answer is read back off the STORED message,
- * not off the request: `metadata.taskId` is what the receiving desktop routes
- * on, so it reports what actually landed rather than what was asked for.
- *
- * FIX L3 — the id alone is NOT proof of a real thread. A first-class thread id
- * is validated against `channel_tasks`, but a legacy `task-<uuid>-<seq>` id is
- * still caller-settable with no participation check (F-083). `taskTitle` is the
- * half that cannot be faked: the server stamps it from the thread row and
- * strips any caller copy. So a THREADED note that names a title is backed by a
- * real row, and one that can only show a bare id is the tell that it is not.
- *
- * Three shapes, in descending urgency:
- *   1. asked for a thread and got none  — the 1.7.14 tag-drop signature;
- *   2. no thread, but the caller has open ones — will read as a NEW request;
- *   3. threaded — name the thread so the sender can check it is the right one.
- * A channel with no open threads and an unthreaded post says nothing at all;
- * one whose only open threads belong to OTHER pairs says so without offering
- * them (Q13).
- */
-async function threadLinkageNote(client, channelId, 
-/** ALREADY neutralized by the caller — splice it, do not re-wrap it. */
-safeChannelName, message, askedThread) {
-    const landedThread = (0, channel_shared_1.metaString)(message, "taskId");
-    if (landedThread) {
-        // FIX M2 — the title is server-STAMPED, not server-AUTHORED: whichever
-        // member opened the thread typed it, up to 200 chars with newlines allowed,
-        // and this confirmation line is our own narration with no untrusted framing
-        // around it. Rendered as one inline code span (same discipline as the read
-        // side's legend) so it can only read as the thread's name, never as
-        // structure or as instructions from the tool.
-        const title = (0, channel_shared_1.metaString)(message, "taskTitle");
-        const safeTitle = title ? (0, channel_shared_1.neutralizeInline)(title) : null;
-        // Q1-E — the ID needs the span as much as the title does. `landedThread` is
-        // `metadata.taskId` read back off the STORED message, and a non-UUID taskId
-        // is stored verbatim with no charset rule anywhere on the path
-        // (service-writes-metadata.ts:236-245, `metadata` is z.record(z.unknown())).
-        // This one is our own post so the bytes are ours, but a hand-built code span
-        // is not a container either way, and the read side's legend renders exactly
-        // this field from a PEER's message — same field, same treatment, one rule.
-        const safeLanded = (0, channel_shared_1.inlineOr)(landedThread, NO_ID);
-        const named = safeTitle
-            ? `${safeTitle} (thread ${safeLanded})`
-            : `thread ${safeLanded}`;
-        // `askedThread` stays raw, deliberately: it is the caller's own argument
-        // from THIS call, it never round-tripped through storage where a peer could
-        // reach it, and quoting it back verbatim is what makes the mismatch legible.
-        const mismatch = askedThread && askedThread !== landedThread
-            ? ` NOTE: you asked for thread \`${askedThread}\` — it resolved to a different one.`
-            : "";
-        return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}`;
-    }
-    if (askedThread) {
-        // The old comment here claimed "the route validates `thread` and 400s an
-        // unresolvable one". FALSE for every NON-UUID id: `resolvePostMetadata`
-        // runs its lookup + participation gate only inside `if (isUuid(taskId))`
-        // (service-writes-metadata.ts:236-245), so a legacy `task-<uuid>-<seq>` id
-        // — or a plain typo — is never checked and is stored VERBATIM, which means
-        // it comes back as `landedThread` above and never reaches this branch at
-        // all. What actually lands here is a tag the server dropped (e.g. a
-        // whitespace-only `thread`, which the route treats as absent), so the
-        // advice below — re-post with a real id — is right; the reason given for it
-        // was not.
-        return `NOT THREADED — you passed thread="${askedThread}" but the stored message carries no thread, so this reads as a NEW request on the other side. Re-post with a thread id from dopl_channel(op="list_threads", channel="${channelId}").`;
-    }
-    // Best-effort: the warning is worth one read, but a listing failure must not
-    // turn a SUCCESSFUL post into an error the agent might retry.
-    let open;
-    try {
-        open = (await client.listChannelThreads(channelId)).filter((t) => t.status === "open");
-    }
-    catch {
-        return null;
-    }
-    if (open.length === 0)
-        return null;
-    // Q13 — RECOMMEND ONLY WHAT THE CALLER CAN ACTUALLY WRITE INTO. `open` is the
-    // channel's threads, and thread reads are channel-transparent by design
-    // (`listChannelTasks` is unfiltered) while thread WRITES are pair-only:
-    // `resolvePostMetadata` 403s any post into a thread whose creator or target
-    // the caller is not. So this line used to name other pairs' threads and then
-    // instruct "re-post it with thread=<that id>" — an action the tool knew would
-    // be refused, at the cost of a burned operator approval and two agent turns
-    // per unthreaded post, plus every other pair's thread titles landing in the
-    // caller's context as apparent suggestions. Invisible at N=2; constant at N=5.
-    //
-    // The caller's own id comes free: the message we just posted is theirs, and
-    // the route stamps `author_user_id = ctx.userId` — the SAME id the
-    // participation gate compares against. No extra round-trip, and no way for it
-    // to disagree with the gate. (Whether `list_threads` should still SHOW others'
-    // threads read-only is a product decision, P1 — untouched here.)
-    const me = message.authorUserId;
-    const mine = me
-        ? open.filter((t) => t.createdBy === me || t.targetUserId === me)
-        : [];
-    if (mine.length === 0) {
-        // Names a COUNT, never another pair's title — nothing peer-authored is
-        // rendered on this branch beyond the channel name, so it needs no header.
-        return `NOT THREADED — this reads as a NEW request on the other side, not a continuation. **${safeChannelName}** has ${open.length} open thread${open.length === 1 ? "" : "s"}, but ${open.length === 1 ? "it belongs" : "they belong"} to other members — a thread accepts posts only from its creator or the member it is addressed to, so re-posting into one would be refused. Leave this standalone, or open your own with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="...").`;
-    }
-    // M2 again: same peer-typed title, same unframed narration line.
-    const shown = mine.slice(0, OPEN_THREAD_WARN_MAX).map((t) => {
-        const named = (0, channel_shared_1.neutralizeInline)(t.title);
-        return named ? `\`${t.id}\` (${named})` : `\`${t.id}\``;
-    });
-    const more = mine.length > shown.length ? `; +${mine.length - shown.length} more` : "";
-    // Q1 (write side) — THIS branch is framed, and the two above are not, because
-    // this is the only one that renders peer TEXT. `mine` is "threads I created OR
-    // am the target of", and a thread I am merely the target of was opened AND
-    // TITLED by the peer. So a post that happens to be unthreaded pulls up to five
-    // peer-typed titles into the confirmation of my own write — a surface the
-    // agent never chose to read. Header FIRST, above the titles it frames.
-    return `${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\nNOT THREADED — this reads as a NEW request on the other side, not a continuation, and you have ${mine.length} open thread${mine.length === 1 ? "" : "s"} in **${safeChannelName}** you can post into: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
-}
 async function opPost(client, channelRef, body, opts = {}) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
@@ -254,6 +142,14 @@ async function opPost(client, channelRef, body, opts = {}) {
         toUserId = member.userId;
         toLabel = member.label;
     }
+    // MULTIPLAYER: resolve the agent identities this post names — who it is FOR
+    // (`to_agent`) and who it is FROM (`as_agent`) — against this channel's
+    // roster, in one round-trip, and none at all when neither is set. Resolving
+    // by HANDLE is the point: an agent knows the name the room addresses it by,
+    // not a uuid. Ownership is still the server's check, not ours.
+    const agentAddr = await (0, channel_agent_refs_1.resolvePostAgentsOr)(client, ch.id, opts.toAgent, opts.asAgent);
+    if ((0, channel_shared_1.isErr)(agentAddr))
+        return agentAddr;
     // Thread the post under a thread when `thread` is passed: fold the id into
     // the STORAGE key `metadata.taskId` (the explicit param wins over any
     // metadata copy). The route then server-validates it resolves to a thread
@@ -270,6 +166,10 @@ async function opPost(client, channelRef, body, opts = {}) {
             clientMsgId: opts.clientMsgId,
             toUserId,
             summary: opts.summary,
+            // Ids, not the caller's strings: the handle was already resolved to a row
+            // of THIS channel above, and the route stamps what it is given.
+            toAgent: agentAddr.to?.id,
+            authorAgentId: agentAddr.as?.id,
         });
     }
     catch (e) {
@@ -289,26 +189,73 @@ async function opPost(client, channelRef, body, opts = {}) {
                     return (0, respond_1.err)(`That post was rejected as INVALID before it reached **${chName}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and post again.`);
                 case "workspace":
                     return (0, respond_1.err)(`The post was rejected because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
+                // `to_agent` / `as_agent` are resolved against THIS channel's roster
+                // before the call, so the route agreeing that an agent is foreign means
+                // the two reads disagree — say what the server said and re-read the
+                // roster, rather than repeating a claim it just refused.
+                case "agent_not_in_channel":
+                    return (0, respond_1.err)(`The agent you named is not an agent of **${chName}**, so nothing was sent.${(0, channel_errors_1.serverDetail)(e)} Re-read the room's agents with dopl_channel(op="agents", channel="${ch.id}") and address one of those — a handle only ever names an agent inside ONE channel.`);
                 // `self_target` is a create_thread-only rejection — `post to=self` is
                 // deliberately NOT guarded server-side (the receiving desktop already
                 // classifies a self-addressed post as noise, and a post is not a
                 // thread), so this arm is unreachable and exists to keep the switch
                 // exhaustive rather than to invent a cause the post never has.
+                // `participant_not_member` is the same: only a thread CREATE (or a
+                // join) seeds a participant set, so a post never raises it.
                 case "self_target":
+                case "participant_not_member":
                 case "unknown":
                     return (0, respond_1.err)(`The post to **${chName}** was rejected (HTTP 400) and the server did not name a cause this tool recognizes.${(0, channel_errors_1.serverDetail)(e)} Nothing was sent.`);
             }
         }
-        // v3.1 B3: the route now 403s a post into a thread the caller is not a party
-        // to (only its creator or its target may write into one). Without this the
-        // agent sees a raw error string and cannot tell it from a transport failure.
-        if ((0, channel_errors_1.isForbidden)(e) && opts.thread) {
-            return (0, respond_1.err)(`That thread belongs to two other members, so you can't post into it. Post without \`thread\`, or open your own with op="create_thread".`);
+        // THE TWO 403s A POST CAN GET, TOLD APART BY THEIR CODE rather than by
+        // which params happened to be set. They can be raised by the same call —
+        // `as_agent` + `thread` is the normal breakout-room shape — and the old
+        // param-order guess reported the agent-ownership refusal for both, so a
+        // thread-authorization failure came back as "that agent is not yours".
+        if ((0, channel_errors_1.isForbidden)(e)) {
+            const kind = (0, channel_errors_1.classifyForbidden)(e);
+            // AN AGENT IDENTITY IS NOT ASSUMABLE. The server refuses `as_agent`
+            // naming an agent the caller does not own; it never silently strips the
+            // claim, so nothing was posted and the fix is to post as YOUR own agent
+            // (op="agents" lists the room's, with their owners).
+            if (kind === "agent_owner" || (kind === "unknown" && agentAddr.as && !opts.thread)) {
+                return (0, respond_1.err)(`You can't post as ${agentAddr.as ? (0, channel_agent_refs_1.agentLabel)(agentAddr.as) : "that agent"} — an agent may only be spoken for by the member who summoned it, and the server verified this one is not yours. Nothing was posted. Post as your own agent, or without \`as_agent\`.`);
+            }
+            if (opts.thread && kind !== "not_a_member") {
+                // S1 — THE REMEDY THAT MANUFACTURED A DUPLICATE ROOM. This arm used to
+                // say "that thread belongs to two other members … open your own with
+                // op=create_thread", which is wrong for the commonest cause: the write
+                // gate (`mayWriteThread`, service-writes-metadata.ts) lets an AGENT
+                // participant of a breakout thread post only when the call CLAIMS that
+                // agent with `as_agent`. A thread the agent legitimately belongs to
+                // therefore 403s on the missing param, and the advice sent it away to
+                // open a second room for the same work. Name the missing param first.
+                // The thread id is NOT echoed into these lines. It is the caller's own
+                // argument, but it round-trips: an agent copies an id out of a `read`
+                // legend, and a legend id is `metadata.taskId`, which a peer sets
+                // verbatim for any non-UUID value (Q1-E, the same reason close_thread
+                // neutralizes it). "the id you just passed" needs no escaping and the
+                // caller has the value in hand.
+                return (0, respond_1.err)(agentAddr.as
+                    ? `You can't post into that thread as ${(0, channel_agent_refs_1.agentLabel)(agentAddr.as)} — nothing was posted. A thread with a participant set is a BREAKOUT ROOM and its SET decides who may write: check it with dopl_channel(op="get_thread", channel="${ch.id}", thread=<the id you just passed>). If you are not in it, ask the member who opened it (or the one it is addressed to) to admit you — do NOT open a second thread for the same work.`
+                    : `You can't post into that thread — nothing was posted. FIRST TRY \`as_agent\`: if what admits you to that thread is one of YOUR AGENTS being in its participant set, the server checks the set against the agent you CLAIM, so the post is refused until you name it. Re-send the same post with as_agent="<your handle>". If you are not in the set at all — dopl_channel(op="get_thread", channel="${ch.id}", thread=<the id you just passed>) shows it — ask the member who opened the thread, or the one it is addressed to, to admit you with op="join_thread". Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
+            }
+            if (kind === "not_a_member") {
+                return (0, respond_1.err)(`You can't post to **${chName}** — you are not a member of that channel. Nothing was posted.`);
+            }
         }
         throw e;
     }
     const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
+    // Both agent notes render the handle WITH its id (`agentLabel`) — a handle
+    // alone is the owner's claim about a name, and two rooms' agents may share
+    // one. `toLabel` is a member label, already render-safe from its resolver.
     const toNote = toLabel ? `, addressed to ${toLabel}` : "";
+    const toAgentNote = agentAddr.to
+        ? `, addressed to agent ${(0, channel_agent_refs_1.agentLabel)(agentAddr.to)}`
+        : "";
+    const asNote = agentAddr.as ? `, as agent ${(0, channel_agent_refs_1.agentLabel)(agentAddr.as)}` : "";
     // N-PARTY — the silent drop this feature exists to prevent, in its addressing
     // form: an unaddressed post used to read exactly like an addressed one, so the
     // sender walked away believing an agent had it.
@@ -327,14 +274,28 @@ async function opPost(client, channelRef, body, opts = {}) {
     const addressingNote = (0, channel_addressing_1.unaddressedPostNote)({
         ref: ch.id,
         isDirect: ch.isDirect,
-        addressed: !!toLabel,
+        // An agent address IS an address: the server stamps the addressed agent's
+        // OWNER as `to_user_id`, which is the field the receiving listener triggers
+        // on, so a `to_agent` post wakes a machine exactly as a `to` post does.
+        addressed: !!toLabel || !!agentAddr.to,
         landedThread,
     });
+    // WHEN BOTH ADDRESSES ARE SET AND THEY DISAGREE, THE AGENT'S OWNER WINS. The
+    // server stamps `to_user_id` from the addressed agent's owner and it takes
+    // precedence over `to` (a handle names one machine unambiguously; a
+    // disagreeing pair names none). Silently, until this line: a caller that
+    // passed both would otherwise believe it had notified the person it named.
+    const addressConflict = agentAddr.to && toUserId && agentAddr.to.ownerUserId !== toUserId
+        ? [
+            `NOTE: you set both \`to\` and \`to_agent\`, and they name different people. The AGENT's owner is who this reached — ${toLabel ?? "the member you named in \`to\`"} was not notified. Post again addressed to them alone if they also need it.`,
+        ]
+        : [];
     // Q7: second line, right under the confirmation — a sender cannot otherwise
     // tell continuation from new request, and the tag drop it catches is silent.
-    const linkage = await threadLinkageNote(client, ch.id, chName, message, opts.thread);
-    return (0, respond_1.ok)([
-        `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
+    const linkage = await (0, channel_post_linkage_1.threadLinkageNote)(client, ch.id, chName, message, opts.thread);
+    return (0, respond_1.withCallerAgent)((0, respond_1.ok)([
+        `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}${toAgentNote}${asNote}). Readers watching with op="await" will pick it up.`,
+        ...addressConflict,
         ...(addressingNote ? [addressingNote] : []),
         ...(linkage ? [linkage] : []),
         // WAKE-V1 teaching: a posted request that no one is waiting on is where
@@ -347,5 +308,9 @@ async function opPost(client, channelRef, body, opts = {}) {
         // abandon a peer that is legitimately heads-down for 20+ minutes. The exit
         // is the THREAD's state, checked periodically.
         ...(0, channel_wake_guidance_1.postReplyLines)(ch.id, message.seq, opts.runtime ?? null, `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first (op="read" for new activity — a working agent posts task_progress as it goes; op="get_thread" for status). Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when the thread is closed or failed, or when nothing has come from that member for ~30+ minutes.`),
-    ].join("\n"));
+    ].join("\n")), 
+    // LOCUS: this call spoke as an agent, so the `_dopl_status` footer says so.
+    // Threaded through the RESULT rather than stamped on the session identity —
+    // `as_agent` is per call, and a session may hold several agents.
+    agentAddr.as ? { id: agentAddr.as.id, name: agentAddr.as.name } : null);
 }

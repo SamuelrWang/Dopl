@@ -25,6 +25,9 @@ import {
   resolveAwaitHoldCeilingMs,
   resolveAwaitHoldMs,
 } from "./channel-await-budget";
+// The tool's file set is DISCOVERED (shared with parity.test.ts), never typed
+// out here — see the M3 scan below.
+import { sourceOf, toolGroupFiles } from "./tool-group-files.js";
 
 
 // ── The env-tunable hold (incident lever) ───────────────────────────────
@@ -84,10 +87,26 @@ describe("await hold margin", () => {
   it("FIX M3: the tool schema and its description advertise the same cap", () => {
     // Three literals used to say 240000 independently. A cap the schema accepts
     // but the deadline chain does not cover is the bug this pins shut.
-    const toolSrc = readFileSync(
-      path.resolve(process.cwd(), "src", "tools", "channel.ts"),
-      "utf8",
+    //
+    // THE FILE LIST IS DISCOVERED, NOT TYPED (N6). It used to name the three
+    // files the multiplayer §2 split had produced — routing (`channel.ts`), the
+    // published param shape (`channel-schema.ts`), the description
+    // (`channel-description.ts`) — so the NEXT split would have carried the cap
+    // into a file this scan does not read, and passed. `toolGroupFiles` is the
+    // same auto-discovery `parity.test.ts` uses, and the two now share it.
+    //
+    // `channel-await-budget.ts` is excluded, and only it: the constant LIVES
+    // there, and its docblock quotes the retired `timeout_ms=240000` while
+    // explaining why the cap moved. Every OTHER file in the group must reach
+    // the number through the constant.
+    const surface = toolGroupFiles("channel.ts").filter(
+      (f) => f !== "channel-await-budget.ts",
     );
+    // Sanity: discovery actually found the declared surface. A rename that
+    // dropped the `channel-` prefix would otherwise empty this scan silently.
+    expect(surface).toContain("channel-schema.ts");
+    expect(surface).toContain("channel-description.ts");
+    const toolSrc = surface.map(sourceOf).join("\n");
     expect(toolSrc).toMatch(/\.max\(AWAIT_HOLD_CAP_MS\)/);
     expect(toolSrc).not.toMatch(/240_000|240000/);
     // The agent-facing text is generated from the constants, not retyped.

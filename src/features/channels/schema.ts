@@ -5,6 +5,27 @@ import {
   MAX_AWAIT_TIMEOUT_MS,
   MAX_MESSAGE_LIMIT,
 } from "./constants";
+import { ThreadParticipantSeedSchema } from "./schema-agents";
+
+/**
+ * The multiplayer schemas (agents + thread participants) live in
+ * `schema-agents.ts` for the §2 size cap and are re-exported here, so every
+ * caller still imports channel request schemas from ONE module.
+ */
+export {
+  AGENT_HANDLE_RE,
+  ChannelAgentCreateSchema,
+  ChannelAgentUpdateSchema,
+  ThreadParticipantMutateSchema,
+  ThreadParticipantRefSchema,
+  ThreadParticipantSeedSchema,
+} from "./schema-agents";
+export type {
+  ChannelAgentCreateInput,
+  ChannelAgentUpdateInput,
+  ThreadParticipantMutateInput,
+  ThreadParticipantRef,
+} from "./schema-agents";
 
 const VisibilitySchema = z.enum(["private", "public"]);
 
@@ -124,6 +145,14 @@ export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
  * service validates it is an active member, else 400) and `summary` is a
  * one-line intent used in the receiver's notification. Both are persisted
  * into `metadata` as `{to_user_id, summary}`.
+ *
+ * AGENT ADDRESSING (multiplayer): `toAgent` names the agent a message is FOR —
+ * an agent id or its handle (`@quartz` minus the `@`), resolved case-folded
+ * against THIS channel's agents. `authorAgentId` names the agent a message is
+ * FROM, and is honoured only for that agent's own owner (an agent identity is
+ * not assumable). Both are stamped as reserved metadata by the server; neither
+ * is settable through `metadata` (`server/service-writes-metadata.ts`).
+ * `toAgent` is deliberately NOT `.uuid()` — a handle is the point.
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
@@ -133,6 +162,8 @@ export const ChannelMessageCreateSchema = z.object({
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
   summary: z.string().trim().min(1).max(200).optional(),
+  toAgent: z.string().trim().min(1).max(64).optional(),
+  authorAgentId: z.string().uuid().optional(),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
@@ -161,6 +192,14 @@ export const TaskCreateSchema = z.object({
   body: z.string().min(1).max(16000),
   toUserId: z.string().uuid(),
   clientMsgId: z.string().min(1).max(200).optional(),
+  /**
+   * The extra identities admitted to the thread — teammates and/or their agents
+   * — which is what turns it into a BREAKOUT ROOM. The creator and `toUserId`
+   * are added by the service, so this carries only the EXTRAS. Absent (or
+   * empty) means no participant rows at all, which leaves the thread on today's
+   * creator/target pair gate.
+   */
+  participants: ThreadParticipantSeedSchema.optional(),
 });
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
 

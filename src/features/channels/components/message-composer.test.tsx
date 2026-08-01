@@ -1,12 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   MessageComposer,
+  performComposerSubmit,
   resolveSendOptions,
   type SendOptions,
 } from "./message-composer";
 import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
-import type { ChannelMember } from "../types";
+import type { ChannelAgent, ChannelMember } from "../types";
 
 const ME = "me";
 const PEER = "peer";
@@ -245,5 +246,157 @@ describe("MessageComposer chrome (shared with the desktop session window)", () =
       />
     );
     expect(channel).not.toContain("One-line intent");
+  });
+});
+
+/**
+ * `/new-agent` is the ONE place a keystroke stops being chat. The decision is a
+ * pure function (`performComposerSubmit`) precisely so it can be pinned without
+ * a DOM: a command must summon and NEVER post, and everything else must post
+ * exactly as it did before.
+ */
+describe("performComposerSubmit — /new-agent summons instead of posting", () => {
+  function spies() {
+    return {
+      onSend: vi.fn(async () => {}),
+      onCreateAgent: vi.fn(async () => {}),
+    };
+  }
+
+  const base = {
+    isDirect: false,
+    peerId: null,
+    toUserId: null,
+    summary: "",
+  };
+
+  it("calls create, and does NOT post, on a bare /new-agent", async () => {
+    const { onSend, onCreateAgent } = spies();
+    const result = await performComposerSubmit({
+      ...base,
+      body: "/new-agent",
+      onSend,
+      onCreateAgent,
+    });
+    expect(result).toBe("created");
+    expect(onCreateAgent).toHaveBeenCalledWith(undefined);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("passes an explicit handle through to create", async () => {
+    const { onSend, onCreateAgent } = spies();
+    await performComposerSubmit({
+      ...base,
+      body: "/new-agent scout",
+      onSend,
+      onCreateAgent,
+    });
+    expect(onCreateAgent).toHaveBeenCalledWith("scout");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("posts an ordinary message, with today's addressing options", async () => {
+    const { onSend, onCreateAgent } = spies();
+    const result = await performComposerSubmit({
+      ...base,
+      toUserId: PEER,
+      body: "review the plan",
+      onSend,
+      onCreateAgent,
+    });
+    expect(result).toBe("sent");
+    expect(onCreateAgent).not.toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledWith("review the plan", {
+      toUserId: PEER,
+      summary: "review the plan",
+    });
+  });
+
+  it("posts a slash that is not a whole command (prose stays prose)", async () => {
+    const { onSend, onCreateAgent } = spies();
+    await performComposerSubmit({
+      ...base,
+      body: "try /new-agent when you can",
+      onSend,
+      onCreateAgent,
+    });
+    expect(onCreateAgent).not.toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalled();
+  });
+
+  it("posts an UNKNOWN command rather than swallowing it", async () => {
+    const { onSend, onCreateAgent } = spies();
+    await performComposerSubmit({
+      ...base,
+      body: "/deploy now",
+      onSend,
+      onCreateAgent,
+    });
+    expect(onCreateAgent).not.toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledWith("/deploy now", undefined);
+  });
+
+  it("posts the command as text on a surface with no create path wired", async () => {
+    const { onSend } = spies();
+    const result = await performComposerSubmit({
+      ...base,
+      body: "/new-agent",
+      onSend,
+    });
+    expect(result).toBe("sent");
+    expect(onSend).toHaveBeenCalled();
+  });
+
+  it("propagates a failed create so the composer keeps the draft", async () => {
+    const onSend = vi.fn(async () => {});
+    const onCreateAgent = vi.fn(async () => {
+      throw new Error("nope");
+    });
+    await expect(
+      performComposerSubmit({ ...base, body: "/new-agent", onSend, onCreateAgent })
+    ).rejects.toThrow("nope");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageComposer — the slash-command hint (discoverability)", () => {
+  function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
+    return {
+      id: "a1",
+      channelId: "c1",
+      workspaceId: "w1",
+      ownerUserId: ME,
+      name: "quartz",
+      status: "active",
+      createdAt: "2026-07-31T00:00:00.000Z",
+      updatedAt: "2026-07-31T00:00:00.000Z",
+      ...over,
+    };
+  }
+
+  function composer(over: {
+    onCreateAgent?: (name?: string) => Promise<unknown>;
+    agents?: ChannelAgent[];
+  }) {
+    return renderToStaticMarkup(
+      <MessageComposer
+        onSend={noop}
+        members={roster}
+        currentUserId={ME}
+        isDirect
+        agents={over.agents}
+        onCreateAgent={over.onCreateAgent}
+      />
+    );
+  }
+
+  it("stays silent on an empty draft (the hint is typed into, not always on)", () => {
+    expect(composer({ onCreateAgent: async () => {} })).not.toContain(
+      "/new-agent"
+    );
+  });
+
+  it("renders no mention popup until an @ is typed", () => {
+    expect(composer({ agents: [agent()] })).not.toContain("quartz");
   });
 });

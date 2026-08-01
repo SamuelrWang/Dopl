@@ -6,6 +6,7 @@
  * required params for the chosen op at runtime via `missingParams`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.withCallerAgent = withCallerAgent;
 exports.ok = ok;
 exports.err = err;
 exports.isConflict = isConflict;
@@ -13,6 +14,10 @@ exports.isNotFound = isNotFound;
 exports.isAlreadyExists = isAlreadyExists;
 exports.entitlementDenied = entitlementDenied;
 exports.missingParams = missingParams;
+/** Tag a response with the agent identity this call spoke as (or null). */
+function withCallerAgent(response, agent) {
+    return agent ? { ...response, _callerAgent: agent } : response;
+}
 function ok(text) {
     return { content: [{ type: "text", text }] };
 }

@@ -72,6 +72,73 @@ export type ChannelThread = {
   outcomeSummary: string | null;
 };
 
+/**
+ * An agent's lifecycle inside a channel. `summoned` = created, not yet running;
+ * `active` = a session is working; `parked` = suspended but resumable;
+ * `dismissed` = retired (the row survives so the messages it already authored
+ * keep their attribution). `summoned` + `active` are the ADDRESSABLE states.
+ */
+export type AgentStatus = "summoned" | "active" | "parked" | "dismissed";
+
+/**
+ * A first-class named agent inside a channel, summoned by its owner and running
+ * on THAT owner's machine. It is addressed by handle (`@quartz`) under the one
+ * law: nothing acts unless addressed. The handle is auto-picked from a curated
+ * pool (`server/agent-names.ts`), unique per channel case-folded, and
+ * renameable by its owner.
+ */
+export type ChannelAgent = {
+  id: string;
+  channelId: string;
+  workspaceId: string;
+  /** The member who summoned it; the only one who may rename or dismiss it. */
+  ownerUserId: string;
+  /** The handle as typed in an @-mention: `^[a-z][a-z0-9-]{1,30}$`. */
+  name: string;
+  status: AgentStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A thread participant is either a human member or a summoned agent. */
+export type ParticipantKind = "user" | "agent";
+
+/**
+ * One identity admitted to a thread's participant set — the breakout room's
+ * membership. Exactly one of `userId` / `agentId` is set, matching `kind` (a DB
+ * CHECK enforces the pairing in both directions).
+ *
+ * BOUNDARY: the storage table is `channel_task_participants` and its column is
+ * `task_id`; `threadId` is the domain spelling of the same id.
+ */
+export type ThreadParticipant = {
+  id: string;
+  threadId: string;
+  workspaceId: string;
+  kind: ParticipantKind;
+  /** Set iff `kind === "user"`. */
+  userId: string | null;
+  /** Set iff `kind === "agent"`. */
+  agentId: string | null;
+  addedBy: string | null;
+  createdAt: string;
+};
+
+/**
+ * A thread as the READ paths return it: the row plus its participant set. The
+ * set is `[]` for every thread that has none — a legacy (pair-gated) thread is
+ * not a thread with a missing set, it is a thread whose set is empty, and the
+ * wire says so rather than making a client distinguish absent from empty.
+ *
+ * Kept separate from {@link ChannelThread} instead of adding an optional field:
+ * the write paths (create / close / set mode / reopen) return the thread row
+ * alone, and an optional `participants` would make every consumer ask whether
+ * `undefined` means "none" or "not loaded".
+ */
+export type ChannelThreadDetail = ChannelThread & {
+  participants: ThreadParticipant[];
+};
+
 /** Channel-scoped role: the creator is `owner`, everyone added is `member`. */
 export type ChannelRole = "owner" | "member";
 

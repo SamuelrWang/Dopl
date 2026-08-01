@@ -30,6 +30,7 @@
  * `LOCUS_NOTE`. An agent confidently wrong about where it is running is worse
  * than one that knows it cannot tell.
  */
+import type { CallerAgent } from "./respond";
 /**
  * The recognized `X-Dopl-Runtime` value (`src/shared/auth/runtime-header.ts`).
  * Restated rather than imported: `packages/*` cannot import from the app's
@@ -72,8 +73,15 @@ export declare const UNKNOWN_CALLER: CallerIdentity;
  * it belongs in an answer the agent asked for, not stapled to every tool result
  * where it is both a per-response token cost and one careless paste away from a
  * channel message. Both live in `whoami`.
+ *
+ * `agent` is the MULTIPLAYER locus: the agent identity THIS ONE CALL spoke as
+ * (`dopl_channel` `as_agent`). It is a per-call fact, not a session one — a
+ * session may speak for several agents — so it arrives on the result rather
+ * than on the identity record (see `ToolResponse._callerAgent`). Rendered as
+ * handle AND id, because a handle is its owner's claim and the id is the
+ * server's record; neutralized, because the handle is member-typed.
  */
-export declare function callerStatusLine(identity: CallerIdentity): string;
+export declare function callerStatusLine(identity: CallerIdentity, agent?: CallerAgent | null): string;
 /**
  * The caller's own session, for the surfaces that answer "who am I" in full.
  * Returns [] when nothing is known, so a caller can drop the section rather

@@ -6,8 +6,9 @@ import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { isUuid } from "@/shared/lib/id/uuid";
-import type { ChannelMessage, ChannelThread } from "../types";
+import type { ChannelAgent, ChannelMessage, ChannelThread } from "../types";
 import { groupThread, type ThreadOverlay } from "../lib/group-thread";
+import { agentAttributionFor } from "../lib/agent-display";
 import {
   deriveMessageReceipt,
   RECEIPT_LABEL,
@@ -62,10 +63,17 @@ export function ChannelTranscript({
   currentUserId,
   highlightedThreadId,
   onCloseThread,
+  agents,
 }: {
   messages: ChannelMessage[];
   /** userId -> display name, for rendering addressing targets. */
   memberNames: Map<string, string>;
+  /**
+   * The channel's agents, for attributing an agent-authored message to the
+   * agent that wrote it. Omitted / unresolvable falls back to today's plain
+   * "agent" pill.
+   */
+  agents?: ChannelAgent[];
   /** The channel's first-class threads — the status / title / mode overlay. */
   threads: ChannelThread[];
   /** True while the thread overlay is still loading (see the flicker note below). */
@@ -138,6 +146,7 @@ export function ChannelTranscript({
             messages={messages}
             memberNames={memberNames}
             currentUserId={currentUserId}
+            agents={agents}
           />
         ) : (
           <ActivityEventRow key={item.key} message={message} />
@@ -156,12 +165,14 @@ function MessageBubble({
   messages,
   memberNames,
   currentUserId,
+  agents,
 }: {
   message: ChannelMessage;
   /** The full transcript, for deriving this message's outgoing receipt. */
   messages: ChannelMessage[];
   memberNames: Map<string, string>;
   currentUserId: string;
+  agents?: ChannelAgent[];
 }) {
   const isHuman = message.authorKind === "user";
   // Chat-style side: only MY OWN human message goes right. Everything else goes
@@ -173,6 +184,16 @@ function MessageBubble({
   const summary = readString(message.metadata.summary);
   const toName = toUserId ? memberNames.get(toUserId) ?? "a teammate" : null;
   const receipt = deriveMessageReceipt(message, messages, currentUserId);
+  // Named-agent attribution: a message stamped with `metadata.author_agent_id`
+  // that resolves to a loaded agent says WHICH agent wrote it ("quartz ·
+  // Ada's agent"). Unstamped, unresolvable, or a non-agent author keeps the
+  // plain pill — the metadata key is display only and is never trusted further.
+  const attribution = agentAttributionFor(
+    message,
+    agents ?? [],
+    memberNames,
+    currentUserId
+  );
 
   // A summary promotes to the prominent line; the full body collapses behind a
   // chevron (default collapsed), mirroring the SessionCard per-entry pattern. A
@@ -223,7 +244,20 @@ function MessageBubble({
         </span>
         {!isHuman && (
           <span className="rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium text-text-secondary">
-            {message.authorKind === "agent" ? "agent" : "system"}
+            {message.authorKind === "agent" ? (
+              attribution ? (
+                <>
+                  <span className="font-semibold text-text-primary">
+                    {attribution.handle}
+                  </span>
+                  {` · ${attribution.ownerLabel}`}
+                </>
+              ) : (
+                "agent"
+              )
+            ) : (
+              "system"
+            )}
           </span>
         )}
       </div>

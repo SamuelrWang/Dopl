@@ -29,6 +29,7 @@ import type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
+  ChannelThreadDetail,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
@@ -182,27 +183,40 @@ export async function postMessage(
 // STORAGE names and stay put — renaming them means a migration plus every
 // read and write path. Everything above this line speaks `thread`.
 
+/**
+ * MULTIPLAYER: a thread READ now carries its PARTICIPANT SET — the breakout
+ * room's membership. `withParticipants` is what makes the field safe to type
+ * as non-optional: the server sends `[]` for a thread that has none, and an
+ * OLDER deployment sends no field at all. Both must read as "no participants",
+ * never as `undefined` for a caller to re-decide — the same additive-field
+ * discipline `openingSeq` / `echoSeq` get below.
+ */
+function withParticipants(task: ChannelThread): ChannelThreadDetail {
+  const raw = (task as Partial<ChannelThreadDetail>).participants;
+  return { ...task, participants: Array.isArray(raw) ? raw : [] };
+}
+
 export async function listChannelThreads(
   t: DoplTransport,
   channelId: string
-): Promise<ChannelThread[]> {
+): Promise<ChannelThreadDetail[]> {
   const data = await t.request<{ tasks: ChannelThread[] }>(
     `/api/channels/${enc(channelId)}/tasks`,
     { toolName: "channel_list_threads" }
   );
-  return data.tasks;
+  return data.tasks.map(withParticipants);
 }
 
 export async function getChannelThread(
   t: DoplTransport,
   channelId: string,
   threadId: string
-): Promise<ChannelThread> {
+): Promise<ChannelThreadDetail> {
   const data = await t.request<{ task: ChannelThread }>(
     `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
     { toolName: "channel_get_thread" }
   );
-  return data.task;
+  return withParticipants(data.task);
 }
 
 export async function createChannelThread(

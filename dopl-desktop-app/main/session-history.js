@@ -224,7 +224,17 @@ function inTaskScope(r, taskId, span) {
 //     conversation, and an empty body has nothing to show. An UNATTRIBUTABLE row (author_user_id
 //     is nulled when the account is deleted) counts as hidden: it is still not this session's,
 //     and dropping it silently is the whole defect.
-function pairRows(rows, taskId, selfId, peerId, span, stats) {
+//   - D2 `room`: the TEAM binding keeps EVERY author instead of two. It is a separate
+//     argument rather than a separate function so "the pair fence is unchanged" is a
+//     behavioral fact about one body of code: with `room` falsy this reads byte for byte as
+//     it did. The widening is safe now and was not before — pairRows is narrow because a
+//     LEGACY `task-<channel>-<seq>` tag used to skip the participation check, so any member
+//     could stamp another pair's exchange onto their own post (ENGINEERING §8: close that
+//     gate FIRST, then widen). Lane Q closed it. What stays fenced in room mode: ONE channel
+//     (the fetch is per-channel and authenticated as the operator), real `message` rows only,
+//     and the 'me' lane still reserved for the operator's own rows. Nothing is hidden, so the
+//     caller reports nothing hidden.
+function pairRows(rows, taskId, selfId, peerId, span, stats, room) {
   const out = [];
   for (const r of rows || []) {
     if (!r || r.kind !== 'message') continue;
@@ -238,7 +248,7 @@ function pairRows(rows, taskId, selfId, peerId, span, stats) {
     // An empty author matches neither id, so an unattributable row still never guesses a lane.
     const isSelf = !!author && !!selfId && author === selfId;
     const isPeer = !!author && !!peerId && author === peerId;
-    if (!isSelf && !isPeer) { // a third member (or nobody we can name) is not this conversation
+    if (!room && !isSelf && !isPeer) { // a third member (or nobody we can name) is not this conversation
       if (stats) stats.hidden.push(rowSeq(r));
       continue;
     }
@@ -287,6 +297,14 @@ function historyRead(rows, opts) {
   const cap = Number.isFinite(o.cap) && o.cap > 0 ? o.cap : ENTRY_CAP;
   const stats = { kept: [], hidden: [] };
   let list;
+  // D2: a ROOM-bound session reads the room. `bind` must say 'room' EXACTLY — absent, junk
+  // and 'pair' all take the two-party fence, so the widening is opt-in per session.
+  if (o.bind === 'room') {
+    const roomSpan = taskId ? taskWindow(rows, taskId, o.channelId) : null;
+    if (taskId && !roomSpan) return { entries: [], othersHidden: 0 };
+    const all = pairRows(rows, taskId, selfId, '', roomSpan, null, true);
+    return { entries: all.slice(-cap), othersHidden: 0 };
+  }
   if (taskId) {
     const span = taskWindow(rows, taskId, o.channelId);
     if (!span) return { entries: [], othersHidden: 0 };
@@ -376,7 +394,11 @@ async function load(s) {
   // divider either: it would introduce a history that is not there. With ONE of the two known,
   // the rows THAT side wrote are attributable, so the window paints those and states what it is
   // not showing (the group-thread case, which used to open an empty box).
-  if (!s.counterpartyId && !selfId) {
+  // D2: a ROOM-bound session has NO counterparty by construction, so the pair-fence bail
+  // does not apply. It lanes every row by its own author; an unknown operator id costs only
+  // the 'me' lane.
+  const room = s.bind === 'room';
+  if (!room && !s.counterpartyId && !selfId) {
     deps.emit(s, { type: 'notice', level: 'info', text: copy.NO_PEER_NOTE });
     return false;
   }
@@ -394,7 +416,7 @@ async function load(s) {
   // well — a held or declined body cannot walk back in through the widened taskId condition.
   const read = historyRead(rows, {
     taskId: s.taskId, channelId: s.channelId, peerUserId: s.counterpartyId,
-    selfUserId: selfId, cap: ENTRY_CAP,
+    selfUserId: selfId, cap: ENTRY_CAP, bind: s.bind, // D2: 'room' widens; anything else fences
   });
   const entries = read.entries.filter((e) => !io.isGatedEntry(e, (s && s.gatedBodies) || []));
   // FIX N1: what the author rule hid. '' when it hid nothing, so a DM (where there IS no third

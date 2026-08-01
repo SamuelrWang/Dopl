@@ -25,6 +25,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const vitest_1 = require("vitest");
+// The auto-discovering "which files make up one tool" scan. It lived here and
+// moved to its own module when `channel-deadlines.test.ts` needed the same
+// discovery (it had hardcoded its file list, which a §2 split would have
+// silently truncated). ONE definition, two suites.
+const tool_group_files_js_1 = require("./tool-group-files.js");
 const zod_1 = require("zod");
 const cluster_js_1 = require("./cluster.js");
 const workflow_js_1 = require("./workflow.js");
@@ -65,29 +70,12 @@ const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 // so source files are addressed relative to it. This avoids both
 // `import.meta` (disallowed in the package's CommonJS tsc target) and
 // `__dirname` (not guaranteed under the ESM-transformed test).
+//
+// The param-drift scans below MUST read a tool's WHOLE file set, not just its
+// registrar, or a handler that reads an undeclared arg (the get_tree
+// `entry_limit` bug class) inside a split-out module slips past the guard.
+// `toolGroupSource` is that scan — see `tool-group-files.ts`.
 const SRC_DIR = node_path_1.default.resolve(process.cwd(), "src");
-const TOOLS_DIR = node_path_1.default.join(SRC_DIR, "tools");
-function sourceOf(file) {
-    return (0, node_fs_1.readFileSync)(node_path_1.default.join(TOOLS_DIR, file), "utf8");
-}
-// A tool's handlers were split out of its registrar into sibling modules
-// (e.g. ontology.ts -> ontology-ops-read.ts / ontology-ops-write.ts /
-// ontology-render.ts; workflow.ts and knowledge.ts likewise). The param-drift
-// scans below MUST read the tool's WHOLE file set, not just the registrar, or
-// a handler that reads an undeclared arg (the get_tree `entry_limit` bug
-// class) inside a split-out module slips past the guard. Map each registrar to
-// itself PLUS every `<stem>-*.ts` sibling (e.g. ontology.ts + ontology-*.ts).
-// Auto-discovered from disk so a future split is covered without editing here.
-function toolGroupFiles(registrarFile) {
-    const stem = registrarFile.replace(/\.ts$/, "");
-    return (0, node_fs_1.readdirSync)(TOOLS_DIR).filter((f) => f.endsWith(".ts") &&
-        !f.endsWith(".test.ts") &&
-        (f === registrarFile || f.startsWith(`${stem}-`)));
-}
-/** Concatenated source of a registrar plus its split-out sibling modules. */
-function toolGroupSource(registrarFile) {
-    return toolGroupFiles(registrarFile).map(sourceOf).join("\n");
-}
 function opEnum(t) {
     const op = t.schema.op;
     if (op instanceof zod_1.z.ZodEnum)
@@ -141,7 +129,20 @@ const READ_OPS = {
     // `members` is a roster READ: `opMembers` calls only `listChannelMembers`
     // (GET /api/channels/[id]/members) and renders it. Channel membership is
     // changed by op="invite" (a write, gated below) and in the web UI.
-    dopl_channel: ["list", "read", "await", "members", "list_threads", "get_thread"],
+    // `agents` is a roster READ, exactly like `members`: `opAgents` calls only
+    // `listChannelAgents` (GET /api/channels/[id]/agents) plus the fail-soft
+    // member-name enrichment, and renders them. The roster is CHANGED by
+    // op="summon_agent" / "rename_agent" / "set_agent_status" — all gated as
+    // writes in server.ts.
+    dopl_channel: [
+        "list",
+        "read",
+        "await",
+        "members",
+        "list_threads",
+        "get_thread",
+        "agents",
+    ],
 };
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────
 // Write ops absent from server.ts WRITE_OPS (read-only-token write holes)
@@ -278,7 +279,7 @@ const KNOWN_DESCRIPTION_DRIFT = {};
         for (const tool of TOOLS) {
             // Scan the registrar AND its split-out ops/render/shared modules — a
             // param consumed only in a sibling handler must still count as used.
-            const src = toolGroupSource(tool.sourceFile);
+            const src = (0, tool_group_files_js_1.toolGroupSource)(tool.sourceFile);
             for (const key of Object.keys(tool.schema)) {
                 if (key === "op")
                     continue;
@@ -304,7 +305,7 @@ const KNOWN_DESCRIPTION_DRIFT = {};
             keysByFile.set(tool.sourceFile, set);
         }
         for (const [file, allowed] of keysByFile) {
-            const src = toolGroupSource(file);
+            const src = (0, tool_group_files_js_1.toolGroupSource)(file);
             const accessed = [...src.matchAll(/\bargs\.([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1]);
             for (const id of accessed) {
                 (0, vitest_1.expect)(allowed.has(id), `${file} (or a split-out sibling module) reads args.${id} but no tool in that group declares "${id}" as a schema param (get_tree entry_limit bug class)`).toBe(true);

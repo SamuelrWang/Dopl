@@ -21,6 +21,9 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const vitest_1 = require("vitest");
 const channel_await_budget_1 = require("./channel-await-budget");
+// The tool's file set is DISCOVERED (shared with parity.test.ts), never typed
+// out here — see the M3 scan below.
+const tool_group_files_js_1 = require("./tool-group-files.js");
 // ── The env-tunable hold (incident lever) ───────────────────────────────
 (0, vitest_1.describe)("resolveAwaitHoldMs — DOPL_AWAIT_HOLD_MS", () => {
     (0, vitest_1.it)("defaults to the 215s default hold for anything unparseable", () => {
@@ -70,7 +73,24 @@ const channel_await_budget_1 = require("./channel-await-budget");
     (0, vitest_1.it)("FIX M3: the tool schema and its description advertise the same cap", () => {
         // Three literals used to say 240000 independently. A cap the schema accepts
         // but the deadline chain does not cover is the bug this pins shut.
-        const toolSrc = (0, node_fs_1.readFileSync)(node_path_1.default.resolve(process.cwd(), "src", "tools", "channel.ts"), "utf8");
+        //
+        // THE FILE LIST IS DISCOVERED, NOT TYPED (N6). It used to name the three
+        // files the multiplayer §2 split had produced — routing (`channel.ts`), the
+        // published param shape (`channel-schema.ts`), the description
+        // (`channel-description.ts`) — so the NEXT split would have carried the cap
+        // into a file this scan does not read, and passed. `toolGroupFiles` is the
+        // same auto-discovery `parity.test.ts` uses, and the two now share it.
+        //
+        // `channel-await-budget.ts` is excluded, and only it: the constant LIVES
+        // there, and its docblock quotes the retired `timeout_ms=240000` while
+        // explaining why the cap moved. Every OTHER file in the group must reach
+        // the number through the constant.
+        const surface = (0, tool_group_files_js_1.toolGroupFiles)("channel.ts").filter((f) => f !== "channel-await-budget.ts");
+        // Sanity: discovery actually found the declared surface. A rename that
+        // dropped the `channel-` prefix would otherwise empty this scan silently.
+        (0, vitest_1.expect)(surface).toContain("channel-schema.ts");
+        (0, vitest_1.expect)(surface).toContain("channel-description.ts");
+        const toolSrc = surface.map(tool_group_files_js_1.sourceOf).join("\n");
         (0, vitest_1.expect)(toolSrc).toMatch(/\.max\(AWAIT_HOLD_CAP_MS\)/);
         (0, vitest_1.expect)(toolSrc).not.toMatch(/240_000|240000/);
         // The agent-facing text is generated from the constants, not retyped.

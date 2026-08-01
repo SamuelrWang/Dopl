@@ -83,7 +83,12 @@ function harness(over = {}) {
     counterpartyId: "user-peer", counterpartyName: "David" }, atCap: false, resolver: true, ...over };
   const calls = { startSession: [], history: [], query: [], consume: [], resolve: [], emit: [] };
   const io = { makePushIterator: () => ({ push() {}, close() {} }), noteGatedBody: () => {} };
-  const store = { sessionKey: (c, t) => `${c}:${t}`, getRecord: () => cfg.record, getSdkSessionId: () => cfg.sdkId };
+  const store = {
+    sessionKey: (c, t) => `${c}:${t}`, getRecord: () => cfg.record, getSdkSessionId: () => cfg.sdkId,
+    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
+    // thread for every other), so the fake mirrors the real store's slotKey too.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+  };
   const sessions = new Map();
   const deps = {
     sessions,

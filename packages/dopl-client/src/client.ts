@@ -68,6 +68,7 @@ import type {
   WorkspaceTeam,
 } from "./member-types.js";
 import * as channel from "./channel.js";
+import { ChannelAgentsClient } from "./client-channel-agents.js";
 import type {
   AwaitMessagesOptions,
   AwaitResult,
@@ -80,6 +81,7 @@ import type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
+  ChannelThreadDetail,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
@@ -88,15 +90,13 @@ import type {
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 
-export class DoplClient {
-  private transport: DoplTransport;
-
+export class DoplClient extends ChannelAgentsClient {
   constructor(
     baseUrl: string,
     apiKey: string,
     opts: ConstructorParameters<typeof DoplTransport>[2] = {}
   ) {
-    this.transport = new DoplTransport(baseUrl, apiKey, opts);
+    super(new DoplTransport(baseUrl, apiKey, opts));
   }
 
   getBaseUrl(): string {
@@ -582,6 +582,8 @@ export class DoplClient {
   // Cross-user, agent-to-agent collaboration threads. Messages carry a
   // monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals
   // past a cursor so a listener can watch a channel without busy-looping.
+  // The MULTIPLAYER half — channel agents + thread participants — is a method
+  // group this class INHERITS: client-channel-agents.ts, §2's per-domain split.
 
   listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {
     return channel.listChannels(this.transport, opts);
@@ -624,11 +626,11 @@ export class DoplClient {
     return channel.awaitMessages(this.transport, channelId, opts);
   }
 
-  listChannelThreads(channelId: string): Promise<ChannelThread[]> {
+  listChannelThreads(channelId: string): Promise<ChannelThreadDetail[]> {
     return channel.listChannelThreads(this.transport, channelId);
   }
 
-  getChannelThread(channelId: string, threadId: string): Promise<ChannelThread> {
+  getChannelThread(channelId: string, threadId: string): Promise<ChannelThreadDetail> {
     return channel.getChannelThread(this.transport, channelId, threadId);
   }
 

@@ -142,6 +142,67 @@ export class TaskSelfTargetError extends ChannelError {
   }
 }
 
+/**
+ * An agent id that resolves to no `channel_agents` row at all. 404, collapsed
+ * like every other not-found in this file so an id can't be probed. Distinct
+ * from {@link ChannelAgentNotInChannelError}, which is the ADDRESSING failure.
+ */
+export class ChannelAgentNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Agent not found: ${ref}`);
+  }
+}
+
+/**
+ * A message addressed (`toAgent`) to — or a participant naming — an agent that
+ * is not an agent of THIS channel. 400, exactly like
+ * {@link ChannelTaskNotInChannelError} and {@link ChannelAddresseeNotMemberError}:
+ * the caller named something real-looking that this room cannot route to, and
+ * the fix is the address, not the permission. Refused rather than stamped
+ * silently — a `to_agent_id` nobody in the room owns would route to no machine
+ * while looking delivered.
+ */
+export class ChannelAgentNotInChannelError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Agent is not in this channel: ${ref}`);
+  }
+}
+
+/**
+ * The handle is already taken in this channel (case-folded — `@Quartz` and
+ * `@quartz` are one agent). 409, mirroring {@link ChannelSlugConflictError}.
+ */
+export class ChannelAgentNameConflictError extends ChannelError {
+  constructor(public readonly name: string) {
+    super(`An agent named "${name}" already exists in this channel`);
+  }
+}
+
+/**
+ * Caller lacks the agent-scoped permission. 403. TWO uses, one rule — an agent
+ * belongs to the member who summoned it:
+ *   - rename / set status: OWNER only.
+ *   - `authorAgentId`: posting AS an agent is the owner's alone. A non-owner
+ *     supplying another member's agent id is attempting to author under an
+ *     identity that is not theirs, so it is refused rather than ignored.
+ */
+export class ChannelAgentForbiddenError extends ChannelError {
+  constructor(action: string) {
+    super(`Not allowed to ${action}`);
+  }
+}
+
+/**
+ * A thread participant of `kind:"user"` who is not a member of the thread's
+ * channel. 400, on the same reasoning as {@link ChannelAddresseeNotMemberError}:
+ * a participant set may only admit people who can already read the room.
+ */
+export class ChannelParticipantNotMemberError extends ChannelError {
+  constructor(public readonly userId: string) {
+    super(`User is not a member of this channel: ${userId}`);
+  }
+}
+
 /** A direct channel would target the caller themselves — a self-DM is refused. */
 export class DirectSelfTargetError extends ChannelError {
   constructor() {

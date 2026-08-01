@@ -4,7 +4,7 @@ import type {
   ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
-  ChannelThread,
+  ChannelThreadDetail,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
 import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
@@ -21,6 +21,10 @@ import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
 import type { DerivedPresence } from "./repository-collab";
+import {
+  listThreadParticipants,
+  participantsByThread,
+} from "./service-participants";
 import {
   loadVisibleChannel,
   profilesById,
@@ -325,14 +329,23 @@ export async function pollChannelMessages(
  * `Map<taskId, overlay>` that layers authoritative status / title / mode onto
  * the message thread. Read access is gated by the same visibility rule as the
  * transcript (public channel, or the caller is a member).
+ *
+ * Each thread carries its PARTICIPANT SET (`[]` when it has none) — the
+ * breakout room's membership, hydrated in ONE grouped query for the whole page
+ * rather than one per card. Participant sets are channel-visible for the same
+ * reason threads are: breakouts separate attention, not visibility (§8).
  */
 export async function listChannelTasks(
   ctx: ChannelContext,
   ref: string
-): Promise<ChannelThread[]> {
+): Promise<ChannelThreadDetail[]> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repoTasks.listTasksByChannel(channel.id);
-  return rows.map(mapTaskRow);
+  const participants = await participantsByThread(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...mapTaskRow(row),
+    participants: participants.get(row.id) ?? [],
+  }));
 }
 
 /**
@@ -345,9 +358,12 @@ export async function getChannelTask(
   ctx: ChannelContext,
   ref: string,
   taskId: string
-): Promise<ChannelThread> {
+): Promise<ChannelThreadDetail> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const row = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
   if (!row) throw new TaskNotFoundError(taskId);
-  return mapTaskRow(row);
+  return {
+    ...mapTaskRow(row),
+    participants: await listThreadParticipants(row.id),
+  };
 }

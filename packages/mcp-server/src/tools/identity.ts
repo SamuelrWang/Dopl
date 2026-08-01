@@ -32,6 +32,11 @@
  */
 
 import { inlineOr } from "./narration";
+// ONE spelling of the "this handle did not survive neutralization" fallback:
+// the footer renders the SAME agent handle the channel roster does, and two
+// literals for one tell is how the two surfaces drift apart.
+import { NO_HANDLE } from "./channel-agent-refs";
+import type { CallerAgent } from "./respond";
 
 /**
  * The recognized `X-Dopl-Runtime` value (`src/shared/auth/runtime-header.ts`).
@@ -97,12 +102,25 @@ function runtimeWord(identity: CallerIdentity): string {
  * it belongs in an answer the agent asked for, not stapled to every tool result
  * where it is both a per-response token cost and one careless paste away from a
  * channel message. Both live in `whoami`.
+ *
+ * `agent` is the MULTIPLAYER locus: the agent identity THIS ONE CALL spoke as
+ * (`dopl_channel` `as_agent`). It is a per-call fact, not a session one — a
+ * session may speak for several agents — so it arrives on the result rather
+ * than on the identity record (see `ToolResponse._callerAgent`). Rendered as
+ * handle AND id, because a handle is its owner's claim and the id is the
+ * server's record; neutralized, because the handle is member-typed.
  */
-export function callerStatusLine(identity: CallerIdentity): string {
+export function callerStatusLine(
+  identity: CallerIdentity,
+  agent: CallerAgent | null = null,
+): string {
   const id = identity.userId
     ? `id=\`${identity.userId}\``
     : "id=(unresolved — this connection could not confirm who you are)";
-  return `  caller: ${id} · runtime=${runtimeWord(identity)}`;
+  const as = agent
+    ? ` · as ${inlineOr(agent.name, NO_HANDLE)} (\`${agent.id}\`)`
+    : "";
+  return `  caller: ${id} · runtime=${runtimeWord(identity)}${as}`;
 }
 
 /**

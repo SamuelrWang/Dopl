@@ -27,6 +27,7 @@ exports.FIELD_CAPS_NOTE = void 0;
 exports.isBadRequest = isBadRequest;
 exports.isForbidden = isForbidden;
 exports.classifyBadRequest = classifyBadRequest;
+exports.classifyForbidden = classifyForbidden;
 exports.serverDetail = serverDetail;
 const channel_shared_1 = require("./channel-shared");
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
@@ -56,9 +57,25 @@ function classifyBadRequest(e) {
         case "INVALID_JSON":
         case "BAD_REQUEST":
             return "invalid_request";
+        case "CHANNEL_PARTICIPANT_NOT_MEMBER":
+            return "participant_not_member";
+        case "CHANNEL_AGENT_NOT_IN_CHANNEL":
+            return "agent_not_in_channel";
         case "WORKSPACE_REQUIRED":
         case "WORKSPACE_INVALID":
             return "workspace";
+        default:
+            return "unknown";
+    }
+}
+function classifyForbidden(e) {
+    switch (apiErrorCode(e)) {
+        case "CHANNEL_FORBIDDEN":
+            return "not_a_member";
+        case "TASK_FORBIDDEN":
+            return "thread_authorization";
+        case "CHANNEL_AGENT_FORBIDDEN":
+            return "agent_owner";
         default:
             return "unknown";
     }

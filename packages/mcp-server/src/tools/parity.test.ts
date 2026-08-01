@@ -18,9 +18,14 @@
  * copy that could itself drift.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
+// The auto-discovering "which files make up one tool" scan. It lived here and
+// moved to its own module when `channel-deadlines.test.ts` needed the same
+// discovery (it had hardcoded its file list, which a §2 split would have
+// silently truncated). ONE definition, two suites.
+import { toolGroupSource } from "./tool-group-files.js";
 import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
 
@@ -81,35 +86,12 @@ const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 // so source files are addressed relative to it. This avoids both
 // `import.meta` (disallowed in the package's CommonJS tsc target) and
 // `__dirname` (not guaranteed under the ESM-transformed test).
+//
+// The param-drift scans below MUST read a tool's WHOLE file set, not just its
+// registrar, or a handler that reads an undeclared arg (the get_tree
+// `entry_limit` bug class) inside a split-out module slips past the guard.
+// `toolGroupSource` is that scan — see `tool-group-files.ts`.
 const SRC_DIR = path.resolve(process.cwd(), "src");
-const TOOLS_DIR = path.join(SRC_DIR, "tools");
-
-function sourceOf(file: string): string {
-  return readFileSync(path.join(TOOLS_DIR, file), "utf8");
-}
-
-// A tool's handlers were split out of its registrar into sibling modules
-// (e.g. ontology.ts -> ontology-ops-read.ts / ontology-ops-write.ts /
-// ontology-render.ts; workflow.ts and knowledge.ts likewise). The param-drift
-// scans below MUST read the tool's WHOLE file set, not just the registrar, or
-// a handler that reads an undeclared arg (the get_tree `entry_limit` bug
-// class) inside a split-out module slips past the guard. Map each registrar to
-// itself PLUS every `<stem>-*.ts` sibling (e.g. ontology.ts + ontology-*.ts).
-// Auto-discovered from disk so a future split is covered without editing here.
-function toolGroupFiles(registrarFile: string): string[] {
-  const stem = registrarFile.replace(/\.ts$/, "");
-  return readdirSync(TOOLS_DIR).filter(
-    (f) =>
-      f.endsWith(".ts") &&
-      !f.endsWith(".test.ts") &&
-      (f === registrarFile || f.startsWith(`${stem}-`)),
-  );
-}
-
-/** Concatenated source of a registrar plus its split-out sibling modules. */
-function toolGroupSource(registrarFile: string): string {
-  return toolGroupFiles(registrarFile).map(sourceOf).join("\n");
-}
 
 function opEnum(t: CapturedTool): string[] | null {
   const op = t.schema.op;
@@ -167,7 +149,20 @@ const READ_OPS: Record<string, string[]> = {
   // `members` is a roster READ: `opMembers` calls only `listChannelMembers`
   // (GET /api/channels/[id]/members) and renders it. Channel membership is
   // changed by op="invite" (a write, gated below) and in the web UI.
-  dopl_channel: ["list", "read", "await", "members", "list_threads", "get_thread"],
+  // `agents` is a roster READ, exactly like `members`: `opAgents` calls only
+  // `listChannelAgents` (GET /api/channels/[id]/agents) plus the fail-soft
+  // member-name enrichment, and renders them. The roster is CHANGED by
+  // op="summon_agent" / "rename_agent" / "set_agent_status" — all gated as
+  // writes in server.ts.
+  dopl_channel: [
+    "list",
+    "read",
+    "await",
+    "members",
+    "list_threads",
+    "get_thread",
+    "agents",
+  ],
 };
 
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────

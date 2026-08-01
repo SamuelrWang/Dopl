@@ -50,7 +50,12 @@ function harness(over = {}) {
     noteGatedBody: realIo.noteGatedBody,
   };
   const sessions = new Map();
-  const store = { sessionKey: (c, t) => `${c}:${t}` };
+  // D2: the gate keys on store.slotKey now — (channel, agent) for a TEAM session,
+  // (channel, thread) for every other — so the fake mirrors both builders.
+  const store = {
+    sessionKey: (c, t) => `${c}:${t}`,
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+  };
   const sessionPark = { recreateParkedShell: async () => ({ ok: false }) };
   const diag = () => {};
 

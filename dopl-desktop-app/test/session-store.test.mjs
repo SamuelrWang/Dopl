@@ -90,9 +90,9 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     costUsd: 0.42,
   });
   assert.deepEqual(Object.keys(rec).sort(), [
-    "channelId", "channelName", "costUsd", "counterpartyId", "counterpartyName", "direct",
-    "key", "mode", "phase", "profile", "sdkSessionId", "sessionId", "side", "startedAt",
-    "taskId", "taskTitle", "turns", "workspaceId",
+    "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
+    "counterpartyName", "direct", "key", "mode", "phase", "profile", "sdkSessionId",
+    "sessionId", "side", "startedAt", "taskId", "taskTitle", "turns", "workspaceId",
   ]);
   assert.equal(rec.counterpartyId, "u2");
   assert.equal(rec.direct, true);

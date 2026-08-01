@@ -39,12 +39,40 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `invalid_request`      — the route's own zod schema (or JSON parse)
  *     rejected the body BEFORE any channel logic ran. Almost always a field
  *     over its cap. Emphatically NOT a membership problem.
+ *   - `participant_not_member` — a `user:` participant who is not a member of
+ *     the CHANNEL. Its own kind because of WHEN it arrives (B2): `createTask`
+ *     seeds the participant set AFTER inserting the thread row, so this 400 is
+ *     one of the two that can land with a live thread already behind it.
+ *   - `agent_not_in_channel` — an agent id/handle that names no agent OF THIS
+ *     CHANNEL, as a participant seed or as a post's `to_agent` / `as_agent`.
+ *     Same late-arrival property as above on the create path.
  *   - `workspace`            — no usable workspace on the call.
  *   - `unknown`              — a 400 with no code we recognize (or no code at
  *     all, e.g. an edge/proxy error page). Say so; do not invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "participant_not_member" | "agent_not_in_channel" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
+/**
+ * What a 403 from a channels route MEANS. Same doctrine as
+ * {@link classifyBadRequest} and the same reason: the write ops caught a bare
+ * `status === 403` and answered with one fixed sentence, so the ONE cause that
+ * sentence named got reported for every other cause too.
+ *
+ *   - `not_a_member`         — `CHANNEL_FORBIDDEN`: the caller is not a member
+ *     of the channel at all.
+ *   - `thread_authorization` — `TASK_FORBIDDEN`: the caller IS in the channel
+ *     and is not authorized on THIS THREAD. Three different rules raise it —
+ *     the write gate (creator / target / participant set), the CURATION rule on
+ *     join (creator, target, or an existing user participant), and the narrower
+ *     eject rule on leave — so the arm that reports it has to say which write it
+ *     was refusing. It emphatically does NOT mean the caller left the channel,
+ *     which is what the participant arms used to tell them.
+ *   - `agent_owner`          — `CHANNEL_AGENT_FORBIDDEN`: an agent identity the
+ *     caller does not own (`as_agent`, rename, park).
+ *   - `unknown`              — a 403 with no code we recognize. Say so.
+ */
+export type ForbiddenKind = "not_a_member" | "thread_authorization" | "agent_owner" | "unknown";
+export declare function classifyForbidden(e: unknown): ForbiddenKind;
 /**
  * The server's own human message for an error, as a trailing clause — or "" when
  * there is nothing useful to add.

@@ -139,7 +139,13 @@ async function startResumedConsumer(s) {
 // intent: a thread with NO durable record here opens too, from the channel (openFromChannel).
 async function recreateParkedShell(a) {
   if (!deps || !deps.windowFactoryReady()) return { ok: false };
-  const key = store.sessionKey(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
+  // FIX N2: the record's OWN slot, exactly as startResume resolves it. Keying on
+  // (channel, thread) alone meant a TEAM record — agentId set, taskId '' — was looked up
+  // under `channelId + ':'`, where its record has never been written, so a summoned agent's
+  // shell could never be reopened and the lookup could collide with a real thread's record.
+  // slotKey is byte-for-byte sessionKey(channelId, taskId) when no agentId is present, so
+  // every existing caller is unchanged.
+  const key = store.slotKey(a);
   const existing = deps.sessions.get(key);
   if (existing && !existing.settled) return { ok: true };
   const rec = store.getRecord(key);
@@ -160,6 +166,10 @@ async function recreateParkedShell(a) {
     // a missing/unknown stored profile resumes as read_only, never the permissive
     // `full` that normalizeProfile would pick (its global fallback is unchanged).
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
+    // FIX N2 (with the slotKey above, and mirroring startResume): a reopened TEAM record has
+    // to come back AS its agent and with its room binding, or the shell would re-key onto the
+    // thread slot and its next saveRecord would erase the record's own agent identity.
+    agentId: rec.agentId || null, bind: rec.bind === 'room' ? 'room' : 'pair',
     counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // FIX L1 binding + (H2) the DM flag the outbound card names from
     context: contextFromRecord(rec), resumeSdkId: sdkId || null, // D1: restore the header identity
     // FIX #9: rehydrate the running cap budget so a turn/cost-capped session reopened via
@@ -288,7 +298,10 @@ function emitParkedShell(s) {
   // as "look elsewhere" directly above the thread. This line states the shell's actual
   // state instead; session-history owns the two cases where no history lands (no bound
   // counterparty / a failed fetch) and says where to read it there.
-  deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. Nothing is running yet, so send a message to continue.' });
+  // D2: a SUMMONED team shell is not a REOPEN. It was never open before, nothing was
+  // interrupted, and session-team emits its own line naming the handle and the law. Saying
+  // "Reopened" over it would describe a restore that did not happen.
+  if (s.bind !== 'room') deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. Nothing is running yet, so send a message to continue.' });
   deps.emit(s, { type: 'status', phase: 'parked' });
 }
 
@@ -311,16 +324,24 @@ function offerResume(rec, sdkSessionId) {
 
 // Shared resume: reopen a settled task resuming its SDK session with a given first turn.
 async function startResume(rec, sdkSessionId, rawFirstTurn) {
-  if (!deps.windowFactoryReady() || deps.hasLiveSession({ channelId: rec.channelId, taskId: rec.taskId })) return false;
+  // D2: the record's OWN slot. A team record carries an agentId and an empty taskId, so
+  // re-deriving the key from (channel, task) alone would resume it onto the thread slot —
+  // a different session from the one that crashed. `slotKey` reads the record's agentId
+  // when there is one and is byte-for-byte `sessionKey(channelId, taskId)` when there is not.
+  const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: rec.agentId || null };
+  if (!deps.windowFactoryReady() || deps.hasLiveSession(slot)) return false;
   let sdk;
   try { sdk = await deps.getSdk(); } catch (_) { return false; }
   // FIX #7: re-check AFTER the await — a reopen shell (or a racing launch/resume) may have
   // created this (channel,task) during getSdk; bail so startSession does not overwrite the
   // Map entry and orphan that window (startSession sets the Map before its own first await).
-  if (deps.hasLiveSession({ channelId: rec.channelId, taskId: rec.taskId })) return false;
+  if (deps.hasLiveSession(slot)) return false;
   const s = await deps.startSession({
-    key: store.sessionKey(rec.channelId, rec.taskId),
+    key: store.slotKey(slot),
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
+    // D2: a resumed TEAM session keeps its identity and its room binding, or it would come
+    // back as a pair-bound responder with no agent to post as.
+    agentId: rec.agentId || null, bind: rec.bind === 'room' ? 'room' : 'pair',
     // C7 (MEDIUM-4): FAIL RESTRICTIVE, matching recreateParkedShell. This path passed the
     // stored profile RAW, so a missing / corrupt / future-version value fell through
     // normalizeProfile's global fallback and resumed the session at FULL access — the most

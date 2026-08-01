@@ -3,8 +3,9 @@
 // THE HOLE THIS FILLS. The desktop defers an ACCEPTED trigger whenever the slot it needs
 // is already working: the engine refuses a second session for the SAME (channel, thread)
 // (session-engine.launch -> skipped 'busy'), and the headless fallback refuses a second
-// spawn anywhere in the CHANNEL (session-spawner.runForChannel -> skipped 'busy', the
-// one-active-spawn-per-channel guard). Both defers answered with the RESEND bubble ALONE,
+// spawn for the same session key or one past the machine's concurrency cap
+// (session-spawner.runForChannel -> skipped 'busy'; D1 2026-07-31 replaced the old
+// one-active-spawn-per-CHANNEL guard with the session-pool). Both defers answered with the RESEND bubble ALONE,
 // and that bubble is posted through postResult with NO metadata — which by design lands
 // OUTSIDE every thread (see channel-post.js). So the person watching the THREAD saw
 // nothing at all while the resend loop ran (measured live: 2m13s to pickup against 15s for
@@ -26,11 +27,12 @@
 // and let the RESEND bubble be the whole answer, exactly as before.
 
 const { postTaskEvent } = require('./channel-post');
+const { sessionKey } = require('./session-store'); // D1: THE (channel, thread) key definition
 const { diag } = require('./diag');
 
 // ─── BEGIN QUEUED-NOTICE-PURE (announce; unit-tested via source extraction) ────
-// Free vars: postTaskEvent / diag (required above, faked by the test), so the behavior
-// below is driven with no host binding of its own.
+// Free vars: postTaskEvent / sessionKey / diag (required above, faked by the test), so the
+// behavior below is driven with no host binding of its own.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // House copy voice: no em dashes, states the situation and what happens next, and leaks
@@ -41,7 +43,9 @@ const QUEUED_SUMMARY = 'Queued behind an active session';
 // Bounded: a listener runs for weeks and must not grow this set without a ceiling.
 const MAX_ANNOUNCED = 256;
 
-const announced = new Set(); // `${channelId}:${taskId}` already claimed
+// Keyed by the SAME sessionKey the pool and the engine registry use (D1) — one definition,
+// no second spelling of the (channel, thread) identity anywhere in main/.
+const announced = new Set(); // sessionKey already claimed
 
 function remember(key) {
   announced.add(key);
@@ -58,7 +62,7 @@ async function announce(entry, m, taskId, where) {
     diag('queued notice skipped: not a first-class thread id', where);
     return false;
   }
-  const key = `${entry.channel.id}:${id}`;
+  const key = sessionKey(entry.channel.id, id);
   if (announced.has(key)) {
     diag('queued notice skipped: already announced', where, id.slice(0, 8));
     return false;

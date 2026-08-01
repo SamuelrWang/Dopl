@@ -25,7 +25,13 @@
  *     neutralizes it at the source (see `memberLabel` in channel-shared.ts).
  */
 
-import type { DoplClient, ThreadMode, ThreadOutcome } from "@dopl/client";
+import type {
+  DoplClient,
+  ThreadMode,
+  ThreadOutcome,
+  ThreadParticipantRef,
+} from "@dopl/client";
+import { resolveParticipantSeedOr } from "./channel-agent-refs";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { inlineOr, isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
 import { UNTRUSTED_THREAD_HEADER } from "./channel-render";
@@ -45,6 +51,32 @@ const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
 const NO_ID = "(unreadable id)";
 
+/**
+ * S2 — `as_agent` ON `create_thread` IS REFUSED, NOT DROPPED.
+ *
+ * The flat input schema declares `as_agent` for the whole tool, and the
+ * registrar routed it to `post` alone: passing it here did nothing, said
+ * nothing, and left the caller believing its opening request was attributed to
+ * its agent when the row says the bare human wrote it. Silent divergence
+ * between what the surface accepts and what the code does is the exact bug
+ * class this round exists to close, so it is answered rather than ignored.
+ *
+ * REFUSE rather than wire it through, because the attribution is not the only
+ * thing that would change. `TaskCreateSchema` carries no `authorAgentId`, so
+ * wiring it is server work — and the receiving desktop classifies an
+ * agent-authored message addressed to a PERSON with no addressed agent as
+ * `agent-escalation`, a notification that deliberately spawns nothing
+ * (dopl-desktop-app/main/targeting.js). An agent-attributed opening request
+ * would therefore stop starting the responder's side, which is the one thing
+ * create_thread exists to do. The refusal costs one retry; wiring it would cost
+ * the op its purpose.
+ */
+export function asAgentNotOnCreateThread(): ToolResponse {
+  return err(
+    `create_thread does not take \`as_agent\` — nothing was created. A thread's OPENING message is your operator's request, not your agent's: it is what starts the responder's side, and an agent-attributed message addressed to a person is treated as a NOTIFICATION there rather than a request, so attributing this one would stop the thread waking anybody. Open the thread without \`as_agent\`, then post as yourself inside it: dopl_channel(op="post", thread="<the new thread id>", as_agent="<your handle>", body="...").`,
+  );
+}
+
 export async function opCreateThread(
   client: DoplClient,
   channelRef: string,
@@ -56,12 +88,30 @@ export async function opCreateThread(
   // The caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes
   // nothing this op does — only what the result claims about waiting.
   runtime: string | null = null,
+  /**
+   * MULTIPLAYER — the EXTRA identities admitted to the thread, in the prefix
+   * form `agent:<handle>` / `user:<email>` (see `channel-agent-refs.ts`).
+   * Passing any of them is what makes this a BREAKOUT ROOM: the participant
+   * set then decides who may post, instead of the creator/target pair. Last
+   * positional on purpose — every existing call site keeps its shape.
+   */
+  participants?: string[],
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
   const chName = inlineOr(ch.name, NO_NAME);
   const member = await resolveMemberOr(client, to);
   if (isErr(member)) return member;
+
+  // Resolved BEFORE the create: a bad participant must not leave a live thread
+  // behind. The server seeds its set before the opening post for the same
+  // reason — a half-built room would judge its own first message.
+  let seed: ThreadParticipantRef[] = [];
+  if (participants && participants.length > 0) {
+    const resolved = await resolveParticipantSeedOr(client, ch.id, participants);
+    if (isErr(resolved)) return resolved;
+    seed = resolved;
+  }
 
   let created;
   try {
@@ -71,6 +121,7 @@ export async function opCreateThread(
       toUserId: member.userId,
       mode,
       clientMsgId,
+      participants: seed.length > 0 ? seed : undefined,
     });
   } catch (e) {
     // Q9 — `to` is REQUIRED for create_thread, so the old bare `isBadRequest`
@@ -97,6 +148,24 @@ export async function opCreateThread(
         case "invalid_request":
           return err(
             `That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${serverDetail(e)} ${FIELD_CAPS_NOTE} Shorten the field that is over and open the thread again.`,
+          );
+        // B2 — THE TWO 400s THAT CAN ARRIVE WITH A LIVE THREAD BEHIND THEM.
+        // `createTask` inserts the thread row FIRST, then seeds the participant
+        // set, then posts the opening message (the ordering is deliberate: the
+        // opening post runs the thread-write gate, which reads the set). So a
+        // participant the route refuses fails AFTER the insert, and the thread
+        // exists — titled, empty, and unanswerable until somebody notices.
+        // Saying "no thread was opened" here was false twice over, and a blind
+        // retry with the same `client_msg_id` short-circuits on the stored row
+        // and never repairs the set, so the caller has to LOOK before retrying.
+        // The MCP side now resolves both halves against this channel's own
+        // rosters (`channel-agent-refs.ts`), so this arm is the residue: a
+        // membership that changed between the resolve and the call, or a route
+        // rule this tool does not mirror.
+        case "participant_not_member":
+        case "agent_not_in_channel":
+          return err(
+            `The thread's PARTICIPANT SET was rejected: one of the identities you named does not belong to **${chName}**.${serverDetail(e)} A participant must already be in the channel — a person as a MEMBER (op="members"), an agent as an agent OF THIS CHANNEL (op="agents"). A THREAD MAY HAVE BEEN OPENED ANYWAY, with no request in it: the row is inserted BEFORE the set is seeded, so DO NOT retry blind — check dopl_channel(op="list_threads", channel="${ch.id}") first. If the thread is there, repair it in place: admit the identity with op="join_thread" (once it really belongs to the channel), then post the request into it with thread="<that id>". Re-sending create_thread with the same client_msg_id returns that same thread and re-posts the opening request, but it does NOT re-seed the participant set; sending it with a NEW client_msg_id (or none) opens a SECOND thread for the same work.`,
           );
         case "workspace":
           return err(
@@ -131,9 +200,21 @@ export async function opCreateThread(
     created.openingSeq === null
       ? `dopl_channel(op="read", channel="${ch.id}", limit=1) reports the highest seq (your request is the newest message), then call dopl_channel(op="await", channel="${ch.id}", since=<that seq>)`
       : `call dopl_channel(op="await", channel="${ch.id}", since=${created.openingSeq}) — that since is your request's own seq, so the reply is the very next message it returns`;
+  // The set is reported as a COUNT plus what it means, not as a roster: the
+  // caller just named these identities itself, and the authoritative set (with
+  // the server's own seeded creator/target rows) is what op="get_thread"
+  // renders. Saying it at all matters — a breakout room and an ordinary thread
+  // are governed by different rules, and nothing else on this line says which.
+  const breakout =
+    seed.length > 0
+      ? [
+          `BREAKOUT ROOM: ${seed.length} extra participant${seed.length === 1 ? "" : "s"} admitted alongside you and ${member.label}. Its participant set — not the creator/target pair — is now who may post into it; see it with dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}"). Agents in the set still act only when ADDRESSED.`,
+        ]
+      : [];
   return ok(
     [
       `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. Thread every follow-up post with thread="${thread.id}".`,
+      ...breakout,
       ...createThreadReplyLines(
         cursor,
         member.label,

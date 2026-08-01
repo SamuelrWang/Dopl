@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Hash, ListTodo, UserPlus } from "lucide-react";
+import { Hash, PanelRight, UserPlus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -24,33 +23,18 @@ import {
   channelDisplayName,
   channelDisplayPeerPerson,
 } from "../lib/channel-display";
+import { useChannelAgents } from "../hooks/use-channel-agents";
 import { ChannelTranscript } from "./channel-transcript";
 import { MessageComposer, type SendOptions } from "./message-composer";
 import { ConsentCard } from "./consent-card";
 import { ChannelActionsMenu } from "./channel-actions-menu";
-import { ThreadPanel } from "./thread-panel";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
-
-/** The three per-channel notification choices, shown in the bell popover. */
-const NOTIFY_OPTIONS: Array<{
-  scope: NotifyScope;
-  label: string;
-  description: string;
-}> = [
-  {
-    scope: "all",
-    label: "All activity",
-    description: "Requests to you prompt; other activity notifies quietly.",
-  },
-  {
-    scope: "addressed",
-    label: "Addressed to me only",
-    description: "Notify only when a request names you.",
-  },
-  { scope: "none", label: "Muted", description: "No notifications from this channel." },
-];
+import { AgentChipsBar } from "./agent-chips-bar";
+import { NotifyScopeButton } from "./notify-scope-button";
+import { RoomsSidebar } from "./rooms-sidebar";
+import { ThreadsButton } from "./threads-button";
 
 /** How long a thread's grouped card keeps its navigation ring after a panel click. */
 const THREAD_HIGHLIGHT_MS = 2200;
@@ -135,13 +119,25 @@ export function ChannelPane({
   onJoin,
   onLeave,
 }: Props) {
-  const [notifyOpen, setNotifyOpen] = useState(false);
-  const [threadPanelOpen, setThreadPanelOpen] = useState(false);
+  const [roomsOpen, setRoomsOpen] = useState(false);
   const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManage = channel.role === "owner";
+  // The agent roster is fetched HERE rather than threaded down from
+  // `channels-view`: three of this pane's children need it (chips bar, composer
+  // mentions, transcript attribution), it is scoped to exactly this channel,
+  // and the view file is already over the §2 cap. Skipped entirely for a
+  // non-member (the route would refuse, and there is nothing to draw).
+  const {
+    agents,
+    createAgent,
+    renameAgent,
+    setAgentStatus,
+  } = useChannelAgents(channel.id, channel.workspaceId, {
+    enabled: channel.isMember,
+  });
   // Direct-channel rendering: the header + composer speak to the resolved peer
   // (name / avatar live from the roster), never the stored channel name/slug.
   // Resolve defensively so an unresolved `directPeer` still shows a real name +
@@ -215,11 +211,11 @@ export function ChannelPane({
     []
   );
 
-  // Thread-panel navigation: close the panel, ring the thread's grouped card,
-  // and scroll it into view. An open thread with no grouped card has no element,
-  // so the scroll is a no-op while the highlight still arms (harmless).
+  // Thread navigation (from the header popover OR the rooms sidebar): ring the
+  // thread's grouped card and scroll it into view. An open thread with no
+  // grouped card has no element, so the scroll is a no-op while the highlight
+  // still arms (harmless).
   function handleSelectThread(threadId: string) {
-    setThreadPanelOpen(false);
     setHighlightedThreadId(threadId);
     document
       .getElementById(`session:${threadId}`)
@@ -281,70 +277,42 @@ export function ChannelPane({
         </span>
 
         {channel.isMember && (
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setThreadPanelOpen((v) => !v)}
-              aria-label="Threads"
-              title="Threads"
-              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-            >
-              <ListTodo size={16} />
-            </button>
-            <Popover
-              open={threadPanelOpen}
-              onClose={() => setThreadPanelOpen(false)}
-              align="right"
-              className="w-80"
-            >
-              <ThreadPanel
-                threads={threads}
-                threadsLoading={threadsLoading}
-                members={members}
-                memberNames={memberNames}
-                latestMilestone={latestMilestone}
-                onSelectThread={handleSelectThread}
-                currentUserId={currentUserId}
-                onCloseThread={onCloseThread}
-                onReopenThread={onReopenThread}
-              />
-            </Popover>
-          </div>
+          <ThreadsButton
+            threads={threads}
+            threadsLoading={threadsLoading}
+            members={members}
+            memberNames={memberNames}
+            latestMilestone={latestMilestone}
+            currentUserId={currentUserId}
+            onSelectThread={handleSelectThread}
+            onCloseThread={onCloseThread}
+            onReopenThread={onReopenThread}
+          />
+        )}
+
+        {/* The rooms column is OPTIONAL — collapsed by default, because a
+            channel running one or two threads reads fine without it. */}
+        {channel.isMember && (
+          <button
+            type="button"
+            onClick={() => setRoomsOpen((v) => !v)}
+            aria-label="Rooms"
+            aria-pressed={roomsOpen}
+            title={roomsOpen ? "Hide rooms" : "Show rooms"}
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary",
+              roomsOpen && "concave-sel text-text-primary"
+            )}
+          >
+            <PanelRight size={16} />
+          </button>
         )}
 
         {channel.isMember && (
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setNotifyOpen((v) => !v)}
-              aria-label="Notification settings"
-              title="Notification settings"
-              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-            >
-              {notifyScope === "none" ? <BellOff size={16} /> : <Bell size={16} />}
-            </button>
-            <Popover
-              open={notifyOpen}
-              onClose={() => setNotifyOpen(false)}
-              align="right"
-              className="min-w-[248px]"
-            >
-              {NOTIFY_OPTIONS.map((option) => (
-                <MenuItem
-                  key={option.scope}
-                  showCheck
-                  active={notifyScope === option.scope}
-                  description={option.description}
-                  onSelect={() => {
-                    setNotifyOpen(false);
-                    if (option.scope !== notifyScope) onSetNotifyScope(option.scope);
-                  }}
-                >
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Popover>
-          </div>
+          <NotifyScopeButton
+            notifyScope={notifyScope}
+            onSetNotifyScope={onSetNotifyScope}
+          />
         )}
 
         {channel.isMember && (
@@ -384,82 +352,116 @@ export function ChannelPane({
         />
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-14 pt-6">
-        <div className="mx-auto flex max-w-[760px] flex-col gap-2.5 pb-2">
-          {messages.length === 0 ? (
-            loading || consentRequests.length === 0 ? (
-              <p className="py-10 text-center text-caption text-text-muted">
-                {loading ? "Loading messages…" : "No messages yet."}
-              </p>
-            ) : null
-          ) : (
-            <ChannelTranscript
-              messages={messages}
-              memberNames={memberNames}
-              threads={threads}
-              threadsLoading={threadsLoading}
-              currentUserId={currentUserId}
-              highlightedThreadId={highlightedThreadId}
-              onCloseThread={onCloseThread}
-            />
-          )}
-
-          {/* Pending decisions live at the bottom of the chain, in the scroller,
-              so an inbound ask reads as the newest row. A decided or expired
-              request drops out of `consentRequests` upstream and leaves here. */}
-          {consentRequests.length > 0 && (
-            <section
-              aria-label="Pending requests"
-              className="flex flex-col gap-2.5"
-            >
-              {consentRequests.map((request) => (
-                <ConsentCard
-                  key={request.id}
-                  request={request}
-
-                  busy={consentBusyIds.has(request.id)}
-                  onAllow={() => onDecideConsent(request.id, "allow")}
-                  onDeny={() => onDecideConsent(request.id, "deny")}
-                />
-              ))}
-            </section>
-          )}
-        </div>
-      </div>
-
-      {channel.isMember ? (
-        <MessageComposer
-          onSend={onSend}
+      {/* Who else is in the room: one chip per non-dismissed agent, directly
+          under the header so agents read as part of the membership, not as a
+          transcript event. Renders nothing when the channel has none. */}
+      {channel.isMember && (
+        <AgentChipsBar
+          agents={agents}
           members={members}
+          memberNames={memberNames}
           currentUserId={currentUserId}
-          isDirect={channel.isDirect}
-          disabled={channel.archivedAt !== null}
-          placeholder={
-            channel.archivedAt
-              ? "This channel is archived"
-              : channel.isDirect
-                ? `Message ${peerName}`
-                : `Message #${channel.slug}`
-          }
+          onRename={renameAgent}
+          onSetStatus={setAgentStatus}
         />
-      ) : (
-        <div className="shrink-0 px-14 pb-6 pt-2">
-          <div className="mx-auto flex max-w-[760px] items-center justify-between gap-3 rounded-[12px] border border-border-default bg-bg-elevated px-4 py-3">
-            <span className="text-caption text-text-secondary">
-              You are viewing this public channel.
-            </span>
-            <button
-              type="button"
-              onClick={onJoin}
-              className={cn(
-                "btn-light shrink-0 rounded-[8px] px-3 py-1.5 text-small font-medium text-text-primary"
-              )}
-            >
-              Join channel
-            </button>
-          </div>
-        </div>
       )}
+
+      {/* Body row: the conversation column, plus the optional rooms column. */}
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div
+            ref={scrollRef}
+            className="min-h-0 flex-1 overflow-y-auto px-14 pt-6"
+          >
+            <div className="mx-auto flex max-w-[760px] flex-col gap-2.5 pb-2">
+              {messages.length === 0 ? (
+                loading || consentRequests.length === 0 ? (
+                  <p className="py-10 text-center text-caption text-text-muted">
+                    {loading ? "Loading messages…" : "No messages yet."}
+                  </p>
+                ) : null
+              ) : (
+                <ChannelTranscript
+                  messages={messages}
+                  memberNames={memberNames}
+                  threads={threads}
+                  threadsLoading={threadsLoading}
+                  currentUserId={currentUserId}
+                  highlightedThreadId={highlightedThreadId}
+                  onCloseThread={onCloseThread}
+                  agents={agents}
+                />
+              )}
+
+              {/* Pending decisions live at the bottom of the chain, in the
+                  scroller, so an inbound ask reads as the newest row. A decided
+                  or expired request drops out of `consentRequests` upstream and
+                  leaves here. */}
+              {consentRequests.length > 0 && (
+                <section
+                  aria-label="Pending requests"
+                  className="flex flex-col gap-2.5"
+                >
+                  {consentRequests.map((request) => (
+                    <ConsentCard
+                      key={request.id}
+                      request={request}
+                      busy={consentBusyIds.has(request.id)}
+                      onAllow={() => onDecideConsent(request.id, "allow")}
+                      onDeny={() => onDecideConsent(request.id, "deny")}
+                    />
+                  ))}
+                </section>
+              )}
+            </div>
+          </div>
+
+          {channel.isMember ? (
+            <MessageComposer
+              onSend={onSend}
+              members={members}
+              currentUserId={currentUserId}
+              isDirect={channel.isDirect}
+              agents={agents}
+              onCreateAgent={createAgent}
+              disabled={channel.archivedAt !== null}
+              placeholder={
+                channel.archivedAt
+                  ? "This channel is archived"
+                  : channel.isDirect
+                    ? `Message ${peerName}`
+                    : `Message #${channel.slug}`
+              }
+            />
+          ) : (
+            <div className="shrink-0 px-14 pb-6 pt-2">
+              <div className="mx-auto flex max-w-[760px] items-center justify-between gap-3 rounded-[12px] border border-border-default bg-bg-elevated px-4 py-3">
+                <span className="text-caption text-text-secondary">
+                  You are viewing this public channel.
+                </span>
+                <button
+                  type="button"
+                  onClick={onJoin}
+                  className={cn(
+                    "btn-light shrink-0 rounded-[8px] px-3 py-1.5 text-small font-medium text-text-primary"
+                  )}
+                >
+                  Join channel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {channel.isMember && roomsOpen && (
+          <RoomsSidebar
+            threads={threads}
+            threadsLoading={threadsLoading}
+            onSelectThread={handleSelectThread}
+            onCollapse={() => setRoomsOpen(false)}
+          />
+        )}
+      </div>
 
       <ConfirmDialog
         open={confirmDelete}

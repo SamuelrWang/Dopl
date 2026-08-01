@@ -1,0 +1,251 @@
+"use strict";
+/**
+ * AGENT IDENTITY for `dopl_channel`: how an agent is NAMED in a result, how a
+ * caller-supplied agent reference is resolved to a row, and how a thread's
+ * participant set is rendered.
+ *
+ * Split from `channel-ops-agents.ts` (which owns the six roster/participant OPS)
+ * because these are used by ops in three other files — `post` resolves
+ * `to_agent` / `as_agent`, `create_thread` resolves its `participants` seed,
+ * `get_thread` renders the set. Same seam `channel-shared.ts` already draws
+ * between resolvers and handlers. The `channel-` filename prefix is required by
+ * the parity split-scan (parity.test.ts).
+ *
+ * NARRATION — the rule, stated once for every agent-named line in the tool. An
+ * agent HANDLE is member-typed: its owner picks it at summon time and renames it
+ * at will. It is charset-bounded in the database (`^[a-z][a-z0-9-]{1,30}$`), and
+ * that is NOT a licence to splice it raw — deciding per site whether a value is
+ * "really" attacker-reachable is the exact reasoning that left `close_thread`
+ * rendering a raw peer title through a whole audit. So every handle goes through
+ * `inlineOr`, every owner name through `memberRef` (which neutralizes and
+ * carries the id), and NO handle is ever rendered without the immutable id
+ * beside it: the handle is the claim, the id is the server's record of it.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AGENT_STATUSES = exports.NO_AGENT_ID = exports.NO_HANDLE = void 0;
+exports.agentLabel = agentLabel;
+exports.resolveAgentOr = resolveAgentOr;
+exports.resolvePostAgentsOr = resolvePostAgentsOr;
+exports.resolveParticipantSeedOr = resolveParticipantSeedOr;
+exports.participantLines = participantLines;
+exports.agentNamesById = agentNamesById;
+const respond_1 = require("./respond");
+const channel_shared_1 = require("./channel-shared");
+const channel_render_1 = require("./channel-render");
+/** Fallbacks for member-typed text that neutralized to nothing. */
+exports.NO_HANDLE = "(unreadable handle)";
+exports.NO_AGENT_ID = "(unreadable id)";
+/** The lifecycle states `set_agent_status` accepts (mirrors the route's enum). */
+exports.AGENT_STATUSES = [
+    "summoned",
+    "active",
+    "parked",
+    "dismissed",
+];
+/**
+ * How an agent is NAMED in output: the handle as a value, and ALWAYS the
+ * immutable id beside it. The handle is what a human types and what a rename
+ * changes; the id is what the server issued and what a claim can be checked
+ * against. Rendering the handle alone would let one member's agent wear
+ * another's name for a turn — which is exactly what `as_agent` is verified
+ * against server-side.
+ */
+function agentLabel(a) {
+    return `${(0, channel_shared_1.inlineOr)(a.name, exports.NO_HANDLE)} (\`${a.id}\`)`;
+}
+/** "No such agent here" — and the handles that ARE here, so the next call works. */
+function agentNotFound(ref, roster, channelId) {
+    const known = roster.length
+        ? ` This channel's agents: ${roster.map(agentLabel).join(", ")}.`
+        : ` This channel has no agents yet — summon one with dopl_channel(op="summon_agent", channel="${channelId}").`;
+    return (0, respond_1.err)(`No agent ${(0, channel_shared_1.inlineOr)(ref, exports.NO_AGENT_ID)} in this channel.${known}`);
+}
+/**
+ * Match an agent reference — an id OR a handle, with or without a leading `@` —
+ * against a roster already in hand. Handles are folded to lowercase, matching
+ * the `(channel_id, lower(name))` unique index, so `@Quartz` and `quartz` reach
+ * the same agent.
+ */
+function pickAgent(roster, ref) {
+    const trimmed = ref.trim();
+    const wanted = trimmed.replace(/^@/, "").toLowerCase();
+    return (roster.find((a) => a.id === trimmed) ??
+        roster.find((a) => a.name.toLowerCase() === wanted));
+}
+/**
+ * Resolve one agent reference against THIS channel's roster, or a ToolResponse
+ * error naming the agents the channel does have.
+ *
+ * Resolving here rather than posting the raw string is what lets every op that
+ * names an agent report a miss as "this room has no such agent, here are its
+ * agents" instead of an opaque 400 — the same reason `resolveMemberOr` exists.
+ */
+async function resolveAgentOr(client, channelId, ref) {
+    const roster = await client.listChannelAgents(channelId);
+    return pickAgent(roster, ref) ?? agentNotFound(ref, roster, channelId);
+}
+/**
+ * Resolve `to_agent` / `as_agent` for a post, both against THIS channel's
+ * roster, in ONE round-trip whichever of them is set (and none at all when
+ * neither is — an ordinary post pays nothing for this).
+ *
+ * WHY RESOLVE `as_agent` HERE when the route wants a uuid anyway: an agent knows
+ * its own HANDLE — that is the name it was summoned under and the name the room
+ * addresses it by — and nothing hands it a uuid. Requiring the id would put a
+ * lookup call in front of every self-attributed post, which is the surest way to
+ * have agents skip attribution entirely. The OWNERSHIP check remains the
+ * server's alone: this turns a name into an id, it does not decide whose agent
+ * it is, and a non-owner is refused with a 403 at the route.
+ */
+async function resolvePostAgentsOr(client, channelId, toAgent, asAgent) {
+    if (!toAgent && !asAgent)
+        return {};
+    const roster = await client.listChannelAgents(channelId);
+    const out = {};
+    if (toAgent) {
+        const found = pickAgent(roster, toAgent);
+        if (!found)
+            return agentNotFound(toAgent, roster, channelId);
+        out.to = found;
+    }
+    if (asAgent) {
+        const found = pickAgent(roster, asAgent);
+        if (!found)
+            return agentNotFound(asAgent, roster, channelId);
+        out.as = found;
+    }
+    return out;
+}
+/**
+ * Resolve a `user:` participant seed against THIS CHANNEL's roster.
+ *
+ * NOT `resolveMemberOr` (B2, 2026-07-31). That resolver reads the WORKSPACE
+ * roster, and the route requires CHANNEL membership: `seedThreadParticipants`
+ * runs `assertIdentityBelongs`, which 400s `CHANNEL_PARTICIPANT_NOT_MEMBER` for
+ * a colleague who is in the workspace and not in the room. The commonest
+ * possible mistake — naming a teammate you have not invited yet — therefore
+ * resolved cleanly here and failed at the server, AFTER `createTask` had
+ * already inserted the thread row (participants are seeded between the insert
+ * and the opening post), leaving a live, titled, empty, unanswerable thread
+ * while the tool reported "No thread was opened". Resolving against the roster
+ * the ROUTE checks means that case never reaches the route at all.
+ *
+ * Matching mirrors `resolveMemberOr`: an exact user id, else a
+ * case-insensitive email, with an ambiguous email refused rather than guessed.
+ * There is no status check — a channel member IS an active workspace member
+ * (the invite path enforces it), so the roster row is the answer.
+ */
+async function resolveChannelMemberOr(client, channelId, ref) {
+    const trimmed = ref.trim();
+    const lower = trimmed.toLowerCase();
+    const members = await client.listChannelMembers(channelId);
+    const byId = members.find((m) => m.userId === trimmed);
+    const byEmail = lower.length > 0
+        ? members.filter((m) => (m.email ?? "").toLowerCase() === lower)
+        : [];
+    if (!byId && byEmail.length > 1) {
+        return (0, respond_1.err)(`${(0, channel_shared_1.inlineOr)(ref, "(unreadable member)")} matches ${byEmail.length} members of this channel by email — pass a user id instead to disambiguate. Nothing was created.`);
+    }
+    const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
+    if (!match) {
+        return (0, respond_1.err)(`No member ${(0, channel_shared_1.inlineOr)(ref, "(unreadable member)")} in this channel. A thread participant must ALREADY belong to the channel the thread lives in — list who does with dopl_channel(op="members", channel="${channelId}"), and if they are in the workspace but not this channel, add them with op="invite" first. Nothing was created.`);
+    }
+    return match;
+}
+/**
+ * The prefix form `participants` takes on `create_thread`: `agent:<handle or
+ * id>` or `user:<email or user id>`, resolved here into the `{kind, id}` refs
+ * the route stores.
+ *
+ * Both halves resolve against THIS CHANNEL — agents through
+ * {@link resolveAgentOr}, people through {@link resolveChannelMemberOr} — which
+ * is the same roster the route's own `assertIdentityBelongs` checks. That is
+ * deliberate and it is B2's fix: a seed the route would reject must be rejected
+ * HERE, because by the time the route rejects it the thread row already exists.
+ *
+ * WHY A STRING FORM rather than the route's object shape: the route needs
+ * UUIDs, and an agent in a room knows HANDLES and EMAILS — the two things the
+ * room actually uses to name people. A uuid-only object array would put a lookup
+ * call in front of every breakout room, and a nested-object array is the shape
+ * MCP clients most often mangle. The prefix is mandatory precisely because a
+ * bare id is ambiguous: it could name either kind.
+ */
+async function resolveParticipantSeedOr(client, channelId, specs) {
+    const refs = [];
+    for (const spec of specs) {
+        const raw = spec.trim();
+        const match = /^(agent|user):(.+)$/i.exec(raw);
+        if (!match) {
+            return (0, respond_1.err)(`Bad participant ${(0, channel_shared_1.inlineOr)(raw, exports.NO_AGENT_ID)} — each one must be "agent:<handle or agent id>" or "user:<email or user id>". A bare id is ambiguous: it could name either.`);
+        }
+        const [, kind, ref] = match;
+        if (kind.toLowerCase() === "agent") {
+            const agent = await resolveAgentOr(client, channelId, ref);
+            if ((0, channel_shared_1.isErr)(agent))
+                return agent;
+            refs.push({ kind: "agent", id: agent.id });
+        }
+        else {
+            const member = await resolveChannelMemberOr(client, channelId, ref);
+            if ((0, channel_shared_1.isErr)(member))
+                return member;
+            refs.push({ kind: "user", id: member.userId });
+        }
+    }
+    return refs;
+}
+/**
+ * A thread's participant set, rendered for `get_thread` — the surface that
+ * answers "is this MY breakout room?".
+ *
+ * An empty set is stated OUTRIGHT rather than omitted: a thread with no
+ * participants is not a thread whose set failed to load, it is a thread still on
+ * the creator/target pair rule, and those are different facts to act on.
+ *
+ * `agentNames` is best-effort (its fetch fails soft), so an agent that cannot be
+ * named still renders by id — never a handle with no id, and never an id
+ * silently dropped.
+ */
+function participantLines(
+/**
+ * The set. `undefined` is NOT the same as empty and is not rendered at all:
+ * `@dopl/client` normalizes a missing field to `[]`, so undefined here means
+ * the set never loaded, and claiming "none" would assert the pair gate on a
+ * thread we know nothing about. Saying nothing is the honest render.
+ */
+participants, view, agentNames) {
+    if (!participants)
+        return [];
+    if (participants.length === 0) {
+        return [
+            `- participants: none — this thread is not a breakout room; only the member who opened it and the member it is addressed to may post into it.`,
+        ];
+    }
+    const rendered = participants.map((p) => {
+        if (p.kind === "user" && p.userId)
+            return (0, channel_render_1.memberRef)(p.userId, view);
+        if (p.kind === "agent" && p.agentId) {
+            const id = (0, channel_shared_1.inlineOr)(p.agentId, exports.NO_AGENT_ID);
+            const name = agentNames.get(p.agentId);
+            return name ? `agent ${(0, channel_shared_1.inlineOr)(name, exports.NO_HANDLE)} (${id})` : `agent ${id}`;
+        }
+        return (0, channel_shared_1.inlineOr)(p.id, exports.NO_AGENT_ID);
+    });
+    return [
+        `- participants (${participants.length}): ${rendered.join(", ")}`,
+        `- BREAKOUT ROOM: these are the identities admitted to this thread. If you are one of them, messages here are yours to act on; if you are not, this thread is context.`,
+    ];
+}
+/** The channel's agent handles by id, for naming participants. Fails soft. */
+async function agentNamesById(client, channelId) {
+    const names = new Map();
+    try {
+        for (const a of await client.listChannelAgents(channelId)) {
+            names.set(a.id, a.name);
+        }
+    }
+    catch {
+        // Enrichment only — an id still renders, and it is the half that matters.
+    }
+    return names;
+}

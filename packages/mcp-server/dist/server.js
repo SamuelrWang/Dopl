@@ -165,10 +165,14 @@ ${skill_authoring_guide_js_1.SKILL_AUTHORING_GUIDE}`;
  *     meta-tools when the caller has no session default).
  */
 async function appendDoplStatus(response, effective, caller) {
-    if (response.isError)
-        return response;
+    // The per-call agent locus (`as_agent`) rides the RESULT, not the session
+    // identity, and is stripped here on every path — it is our plumbing, and the
+    // MCP result shape does not carry it.
+    const { _callerAgent: agent = null, ...res } = response;
+    if (res.isError)
+        return res;
     if (!effective)
-        return response;
+        return res;
     // The name goes through the neutralizer and the immutable id joins the slug.
     // This footer is the agent's targeting check, so it is exactly the line worth
     // forging: the name was interpolated raw inside double quotes, and a name is
@@ -188,14 +192,14 @@ async function appendDoplStatus(response, effective, caller) {
         "",
         "---",
         "_dopl_status:",
-        (0, identity_js_1.callerStatusLine)(caller),
+        (0, identity_js_1.callerStatusLine)(caller, agent),
         `  active_workspace: ${(0, narration_js_1.inlineOr)(effective.name, UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
         `  workspace_source: ${effective.source}`,
     ].join("\n");
     // Append to the final text block so the agent sees the footer at the
     // end of a rendered response. If the response has no text content
     // (rare — tools always return text), add a new block.
-    const content = [...response.content];
+    const content = [...res.content];
     const lastIdx = content.length - 1;
     if (lastIdx >= 0 && content[lastIdx]?.type === "text") {
         content[lastIdx] = {
@@ -206,7 +210,7 @@ async function appendDoplStatus(response, effective, caller) {
     else {
         content.push({ type: "text", text: footer.trimStart() });
     }
-    return { ...response, content };
+    return { ...res, content };
 }
 /**
  * Run a tool handler, converting an over-free-cap entitlement denial
@@ -331,6 +335,8 @@ function createServer(client, options = {}) {
             "create_thread",
             "close_thread",
             "set_thread_mode",
+            // Multiplayer: roster + breakout-room membership writes.
+            "summon_agent", "rename_agent", "set_agent_status", "join_thread", "leave_thread",
         ]),
     };
     // Session default workspace — resolved once at boot (factory.ts), never

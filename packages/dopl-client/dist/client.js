@@ -41,12 +41,12 @@ const ontology = __importStar(require("./ontology.js"));
 const chats = __importStar(require("./chats.js"));
 const members = __importStar(require("./members.js"));
 const channel = __importStar(require("./channel.js"));
+const client_channel_agents_js_1 = require("./client-channel-agents.js");
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
-class DoplClient {
-    transport;
+class DoplClient extends client_channel_agents_js_1.ChannelAgentsClient {
     constructor(baseUrl, apiKey, opts = {}) {
-        this.transport = new transport_js_1.DoplTransport(baseUrl, apiKey, opts);
+        super(new transport_js_1.DoplTransport(baseUrl, apiKey, opts));
     }
     getBaseUrl() {
         return this.transport.getBaseUrl();
@@ -316,6 +316,8 @@ class DoplClient {
     // Cross-user, agent-to-agent collaboration threads. Messages carry a
     // monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals
     // past a cursor so a listener can watch a channel without busy-looping.
+    // The MULTIPLAYER half — channel agents + thread participants — is a method
+    // group this class INHERITS: client-channel-agents.ts, §2's per-domain split.
     listChannels(opts) {
         return channel.listChannels(this.transport, opts);
     }

@@ -92,6 +92,10 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
   const deps = [...NOTIFY.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
   assert.deepEqual(deps, ["./diag", "./listener-io", "./targeting", "electron"],
     "task-notify reaches nothing that could spawn, gate or record a consent");
+  // D2 — the SECOND passive verdict rides the same module, so the same pin covers it. The
+  // agent handle is resolved by the CALLER and passed in precisely so that dependency set
+  // above cannot grow: looking it up here would drag the engine in behind channel-agents.
+  assert.match(LISTENER, /else if \(verdict === 'agent-escalation'\) taskNotify\.notifyAgentEscalation\(/);
 });
 
 // ── STATIC PIN 2: "no durable record" really is a FALSE, not a swallow ────────────

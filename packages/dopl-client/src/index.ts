@@ -99,9 +99,13 @@ export type {
   WorkspaceTeam,
 } from "./member-types.js";
 export type {
+  AgentStatus,
   AwaitMessagesOptions,
   AwaitResult,
   Channel,
+  ChannelAgent,
+  ChannelAgentCreateInput,
+  ChannelAgentUpdateInput,
   ChannelAuthorKind,
   ChannelCreateInput,
   ChannelMember,
@@ -113,10 +117,14 @@ export type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
+  ChannelThreadDetail,
   ChannelVisibility,
+  ParticipantKind,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
+  ThreadParticipant,
+  ThreadParticipantRef,
   ThreadStatus,
 } from "./channel-types.js";
 export type {

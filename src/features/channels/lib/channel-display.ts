@@ -15,6 +15,20 @@ import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
  * the real name + avatar still render.
  */
 
+/**
+ * How a human is NAMED in this feature's UI: display name, then email, then
+ * the raw user id as a last resort so a row is never blank.
+ *
+ * THE ONE definition — the address picker's selected/menu rows and the
+ * composer's @-mention candidates both read from here. They had drifted into
+ * two identical private copies, which is two places for the fallback order to
+ * change independently (and a mention that inserts a different string than the
+ * picker shows is a user-visible mismatch, not a cosmetic one).
+ */
+export function memberLabel(m: ChannelMember): string {
+  return m.displayName || m.email || m.userId;
+}
+
 /** The other member of a direct channel, from the roster; null when unknown. */
 function rosterPeer(
   members: ChannelMember[] | undefined,

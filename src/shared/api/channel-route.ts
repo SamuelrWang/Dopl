@@ -69,3 +69,31 @@ export function requireTaskId(
   }
   return taskId;
 }
+
+/**
+ * Extract + validate the `[agentId]` dynamic param (agent PATCH route). Same
+ * rationale as `requireTaskId`: a non-UUID would reach Postgres as a 22P02 cast
+ * failure (a 500 + a `system_events` row per call), so a malformed id collapses
+ * to the same 404 the service returns for an id that names no agent of this
+ * channel — an agent id still can't be probed across rooms.
+ */
+export function requireAgentId(
+  params: Record<string, string> | undefined
+): string {
+  const agentId = params?.agentId;
+  if (!agentId) {
+    throw new HttpError(
+      400,
+      "MISSING_AGENT_ID",
+      "Route param agentId is required"
+    );
+  }
+  if (!isUuid(agentId)) {
+    throw new HttpError(
+      404,
+      "CHANNEL_AGENT_NOT_FOUND",
+      `Agent not found: ${agentId}`
+    );
+  }
+  return agentId;
+}

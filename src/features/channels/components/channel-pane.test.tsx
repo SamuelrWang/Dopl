@@ -1,12 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ChannelPane } from "./channel-pane";
 import type {
   Channel,
+  ChannelAgent,
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
 } from "../types";
+
+/**
+ * The pane fetches its own agent roster (three of its children need it and the
+ * view file is already over the §2 cap), so the hook is mocked at the data
+ * layer — these cases render statically and are about layout, not fetching.
+ * `agentRows` is the knob a case turns to put agents in the room.
+ */
+const agentRows: ChannelAgent[] = [];
+vi.mock("../hooks/use-channel-agents", () => ({
+  useChannelAgents: () => ({
+    agents: agentRows,
+    createAgent: async () => undefined,
+    renameAgent: async () => undefined,
+    setAgentStatus: async () => undefined,
+  }),
+}));
+
+// Imported AFTER the mock declaration for readability; `vi.mock` is hoisted.
+import { ChannelPane } from "./channel-pane";
 
 const CHANNEL_ID = "22222222-2222-4222-8222-222222222222";
 const ME = "u-me";
@@ -217,5 +236,46 @@ describe("ChannelPane pending requests placement", () => {
     const markup = render([consent()], {}, []);
     expect(markup).not.toContain("No messages yet.");
     expect(markup).toContain("THE-PENDING-ASK");
+  });
+});
+
+describe("ChannelPane multiplayer surfaces", () => {
+  it("renders the agent chips bar under the header when the room has agents", () => {
+    agentRows.push({
+      id: "ag-1",
+      channelId: CHANNEL_ID,
+      workspaceId: "w1",
+      ownerUserId: ME,
+      name: "quartz",
+      status: "active",
+      createdAt: "2026-07-31T00:00:00.000Z",
+      updatedAt: "2026-07-31T00:00:00.000Z",
+    });
+    try {
+      const markup = render([]);
+      const chips = markup.indexOf('aria-label="Channel agents"');
+      expect(chips).toBeGreaterThan(-1);
+      // Under the header, above the transcript.
+      expect(chips).toBeLessThan(markup.indexOf("THE-LAST-MESSAGE"));
+      expect(markup).toContain("quartz");
+    } finally {
+      agentRows.length = 0;
+    }
+  });
+
+  it("renders no agent surface at all in a channel with no agents", () => {
+    expect(render([])).not.toContain('aria-label="Channel agents"');
+  });
+
+  it("keeps the rooms column collapsed by default, behind a toggle", () => {
+    const markup = render([]);
+    expect(markup).toContain('aria-label="Rooms"');
+    // The toggle exists; the column itself does not until it is pressed.
+    expect(markup).toContain('aria-pressed="false"');
+    expect(markup).not.toContain("No rooms yet.");
+  });
+
+  it("keeps the thread popover trigger (the sidebar is additive)", () => {
+    expect(render([])).toContain('aria-label="Threads"');
   });
 });

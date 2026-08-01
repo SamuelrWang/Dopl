@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChannelTranscript } from "./channel-transcript";
-import type { ChannelMessage } from "../types";
+import type { ChannelAgent, ChannelMessage } from "../types";
 
 const CHANNEL_ID = "33333333-3333-4333-8333-333333333333";
 const ME = "u-me";
@@ -184,5 +184,107 @@ describe("ChannelTranscript full-width rows (not chat bubbles)", () => {
     expect(markup).not.toContain("max-w-[66%]");
     expect(markup).not.toContain("self-end");
     expect(markup).not.toContain("self-start");
+  });
+});
+
+/**
+ * Agent attribution: a message stamped with `metadata.author_agent_id` says
+ * WHICH agent wrote it. The key is display only — anything unresolvable falls
+ * back to the plain "agent" pill this surface has always rendered.
+ */
+function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
+  return {
+    id: "ag-1",
+    channelId: CHANNEL_ID,
+    workspaceId: "w1",
+    ownerUserId: PEER,
+    name: "quartz",
+    status: "active",
+    createdAt: "2026-07-28T00:00:00.000Z",
+    updatedAt: "2026-07-28T00:00:00.000Z",
+    ...over,
+  };
+}
+
+function renderWithAgents(
+  messages: ChannelMessage[],
+  agents: ChannelAgent[]
+): string {
+  return renderToStaticMarkup(
+    <ChannelTranscript
+      messages={messages}
+      memberNames={MEMBER_NAMES}
+      threads={[]}
+      threadsLoading={false}
+      currentUserId={ME}
+      agents={agents}
+    />
+  );
+}
+
+/** An agent-authored plain message carrying the given metadata. */
+function agentMessage(metadata: Record<string, unknown>): ChannelMessage {
+  return message({
+    id: "am",
+    seq: 3,
+    authorUserId: PEER,
+    authorKind: "agent",
+    authorName: "Ada",
+    body: "AGENT-TEXT",
+    metadata,
+  });
+}
+
+describe("ChannelTranscript agent attribution", () => {
+  it("names the agent and whose it is when the id resolves", () => {
+    const markup = renderWithAgents(
+      [agentMessage({ author_agent_id: "ag-1" })],
+      [agent()]
+    );
+    expect(markup).toContain("quartz");
+    expect(markup).toContain("Ada&#x27;s agent");
+  });
+
+  it("says 'Your agent' for the viewer's own agent", () => {
+    const markup = renderWithAgents(
+      [agentMessage({ author_agent_id: "ag-1" })],
+      [agent({ ownerUserId: ME })]
+    );
+    expect(markup).toContain("Your agent");
+  });
+
+  it("falls back to today's plain pill when the id names no loaded agent", () => {
+    const markup = renderWithAgents(
+      [agentMessage({ author_agent_id: "ag-gone" })],
+      [agent()]
+    );
+    expect(markup).toContain(">agent<");
+    expect(markup).not.toContain("quartz");
+  });
+
+  it("falls back when the message carries no agent id at all", () => {
+    expect(renderWithAgents([agentMessage({})], [agent()])).toContain(">agent<");
+  });
+
+  it("falls back when the key is not a string (never trusted as more)", () => {
+    const markup = renderWithAgents(
+      [agentMessage({ author_agent_id: { id: "ag-1" } })],
+      [agent()]
+    );
+    expect(markup).toContain(">agent<");
+  });
+
+  it("renders unchanged when no agents are passed at all (agents still loading)", () => {
+    expect(render([agentMessage({ author_agent_id: "ag-1" })])).toContain(
+      ">agent<"
+    );
+  });
+
+  it("never attributes a HUMAN message to an agent", () => {
+    const markup = renderWithAgents(
+      [message({ metadata: { author_agent_id: "ag-1" } })],
+      [agent()]
+    );
+    expect(markup).not.toContain("quartz");
   });
 });

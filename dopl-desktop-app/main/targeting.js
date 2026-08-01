@@ -42,6 +42,13 @@ function metaStr(m, key) {
 //   3. absent + AGENT author → FYI (member) / ignore — never an implicit
 //      trigger. This is the LOOP BRAKE (see the classify body).
 //   4. absent + 3+ members → FYI only (documentation / chat), never a trigger.
+// D2 adds two multiplayer rules, both in the "notify, never spawn" direction:
+//   5. addressed to me as a HUMAN (to_user_id me, NO to_agent_id) by an AGENT author
+//      (metadata.author_agent_id) → 'agent-escalation'. A notification, never a spawn.
+//      NOT in a DIRECT channel, where the server addresses every post for you (FIX S1).
+//   6. the implicit rule 2 is DISABLED while `entry.teamAgents` is non-zero — while this
+//      operator has agents in the room, an unaddressed message triggers nobody. The count is
+//      a TRI-STATE (FIX B1): seeded from the last known roster, confirmed by a read.
 // authorKind must be 'user' or 'agent'; anything else (e.g. 'system') → ignore.
 // memberCount comes from the Channel DTO (refreshed on reconcile). The implicit
 // 2-member trigger FAILS CLOSED: it fires only on a known-exact count of 2 and
@@ -70,6 +77,9 @@ function classify(m, entry, myId) {
   // see but is not in — never prompt/FYI for those); a missing field degrades
   // to member so a DTO field drift can't silently stop 1:1 answering.
   const isMember = !(entry.channel && entry.channel.isMember === false);
+  // FIX S1: in a DIRECT channel the server addresses EVERY post automatically, so
+  // `to_user_id` there is not evidence that anybody addressed anybody.
+  const isDirect = !!(entry.channel && entry.channel.isDirect === true);
 
   const toUserId = metaStr(m, 'to_user_id');
   // TASK-REPLY (Feature 4, requester side): an inbound reply that belongs to an
@@ -129,6 +139,43 @@ function classify(m, entry, myId) {
     toUserId === myId &&
     knownLegacyReply(m, myId)
   ) return 'task-reply';
+  // D2 ESCALATION — AN AGENT ADDRESSING ME AS A HUMAN NOTIFIES, IT NEVER SPAWNS.
+  // Multiplayer gives agents a way to reach people: address the person. The server stamps
+  // metadata.author_agent_id from a validated authorAgentId, so this is one of my teammates'
+  // named agents asking a human for something, and the human it is asking is me. It must be
+  // NEWS, not a request: spawning here would answer a question meant for a person with
+  // another machine's agent, which is the loop this whole feature is built to avoid.
+  // The `to_agent_id` conjunct is what keeps it honest. The OWNER BRIDGE stamps
+  // to_user_id = the addressed agent's owner, so a message FOR my agent also names ME as
+  // the user; only a message with NO agent addressee is actually addressed to me the person.
+  // A message addressed to my AGENT is claimed earlier, by the routing route in
+  // channel-agents.js, and never reaches this line.
+  // FAILS toward today's behavior: no author_agent_id, or a to_agent_id present, and the
+  // addressed rule below returns 'trigger' exactly as before.
+  //
+  // FIX S1 — NOT IN A DIRECT CHANNEL, WHERE ADDRESSING IS NOT A CHOICE. In a DM the server
+  // auto-addresses every post to the peer (service-writes-metadata resolvePostMetadata:
+  // toUserId falls back to the resolved direct peer whenever the caller named nobody), and a
+  // team session always posts as_agent. So all four conjuncts below are satisfied by an
+  // ORDINARY reply from the peer's agent, and the escalation notification fired per message,
+  // NOT silent, saying somebody needs you when nobody said anything of the kind.
+  // The wire cannot tell the two apart: the server stamps the SAME `to_user_id` for an
+  // explicit `to` and for the DM fallback, and drops the caller's own copy first, so there is
+  // nothing on the message to distinguish deliberate addressing from the auto-address.
+  // A REAL agent-to-human escalation inside a DM therefore needs a server-side marker of its
+  // own (a reserved `to_user_notify` key is already sketched in docs/MULTIPLAYER-PLAN.md);
+  // that is a SERVER-lane follow-up, not something this file can invent. Until it exists a
+  // direct channel keeps today's peer-agent handling — the branches above claim a thread
+  // reply, and the addressed rule below returns 'trigger', which is consent-gated.
+  // Group channels are unaffected: there `to_user_id` is stamped only from an explicit
+  // address, so it IS the evidence this rule needs.
+  if (
+    m.authorKind === 'agent' &&
+    toUserId === myId &&
+    !isDirect &&
+    metaStr(m, 'author_agent_id') &&
+    !metaStr(m, 'to_agent_id')
+  ) return 'agent-escalation';
   if (toUserId) {
     // Explicit address always prompts — for USER *and* AGENT authors. This is
     // the fix: an agent addressed to me triggers a consented answering turn.
@@ -149,7 +196,29 @@ function classify(m, entry, myId) {
   // the user asked for silence. Explicitly addressed requests above are never
   // suppressed.
   const scope = (entry.channel && entry.channel.myNotifyScope) || 'all';
-  if (knownTwo && isMember) return scope === 'none' ? 'ignore' : 'trigger';
+  // D2 — ADDRESSING IS REQUIRED WHILE MY TEAM AGENTS ARE IN THE ROOM.
+  // The implicit 2-member trigger is the pre-multiplayer convenience: in a DM, anything a
+  // person says is for me, so no address is needed. That stops being true the moment this
+  // operator has summoned agents into the channel — the room now holds several workers, and
+  // an unaddressed message that spawns a session is precisely the "everyone answers at once"
+  // failure the law exists to prevent. So while I have team agents here, an UNADDRESSED
+  // human message triggers nobody. Explicit addressing is unaffected and still triggers
+  // above, which is the point: address to act.
+  // `entry.teamAgents` is a COUNT maintained by channel-agents.js off the channel's agent
+  // roster (my own rows, summoned or active). It rides on the loop ENTRY rather than on the
+  // channel DTO because reconcile replaces `entry.channel` wholesale each pass. Absent or
+  // unparseable reads as 0, so every path that never sets it — and every existing test
+  // harness — keeps today's behavior byte for byte.
+  // FIX B1 — IT IS A TRI-STATE NOW, and this line is why. A loop starts LIVE before the
+  // first reconcile pass reads any roster, and a roster read fails on a blip, a 5xx or a
+  // pre-deploy 404 — so an unarmed count read as ZERO here and an unaddressed DM message
+  // classified 'trigger', silently applying the pre-multiplayer rule. channel-listener now
+  // SEEDS the entry from the durable last-known count and channel-agents sets
+  // `entry.rosterKnown` only after a successful read, so "unknown" holds the last known
+  // value (fail CLOSED toward the law) instead of collapsing to zero. Nothing changes for a
+  // channel never known to hold agents: its seed is 0, exactly as before.
+  const teamAgents = Number(entry && entry.teamAgents) || 0;
+  if (knownTwo && isMember && teamAgents === 0) return scope === 'none' ? 'ignore' : 'trigger';
   return isMember ? 'fyi' : 'ignore';
 }
 

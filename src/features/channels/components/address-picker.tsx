@@ -5,6 +5,7 @@ import { AtSign, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { Popover } from "@/shared/ui/popover-menu";
+import { memberLabel } from "../lib/channel-display";
 import type { ChannelMember } from "../types";
 
 interface Props {
@@ -13,10 +14,6 @@ interface Props {
   /** Selected target user id, or null for a plain broadcast message. */
   value: string | null;
   onChange: (userId: string | null) => void;
-}
-
-function memberLabel(m: ChannelMember): string {
-  return m.displayName || m.email || m.userId;
 }
 
 /** Small online / offline status dot for a member's agent. */

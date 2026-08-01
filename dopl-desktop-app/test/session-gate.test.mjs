@@ -62,7 +62,13 @@ function harness(over = {}) {
     noteGatedBody: realIo.noteGatedBody, // FIX F1: the real seed-exclusion recorder
   };
   const sessions = new Map();
-  const store = { sessionKey: (c, t) => `${c}:${t}` };
+  // D2: the fake mirrors the real store's TWO key builders. `slotKey` is what feedInbound
+  // uses now — (channel, agent) for a TEAM session, (channel, thread) for every other — so
+  // the fake has to answer it the same way or the gate would look at an empty registry.
+  const store = {
+    sessionKey: (c, t) => `${c}:${t}`,
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+  };
   // The REAL recreateParkedShell registers the shell in the engine registry (via
   // startSession) before returning; the fake mirrors that so the gate can find it.
   const sessionPark = {

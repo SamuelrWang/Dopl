@@ -7,8 +7,22 @@ import { useAutoGrowTextarea } from "@/shared/ui/auto-grow-textarea";
 import { SendButton } from "@/shared/ui/send-button";
 import { FIELD_WELL } from "@/shared/ui/wells";
 import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
-import type { ChannelMember } from "../types";
+import type { ChannelAgent, ChannelMember } from "../types";
+import {
+  matchingSlashCommands,
+  NEW_AGENT_COMMAND,
+  parseSlashCommand,
+} from "../lib/composer-commands";
+import {
+  applyMention,
+  buildMentionCandidates,
+  findMentionQuery,
+  mentionPopupHeight,
+  type MentionCandidate,
+  type MentionQuery,
+} from "../lib/mention";
 import { AddressPicker } from "./address-picker";
+import { MentionPopup, SlashCommandHint } from "./mention-popup";
 
 /** Placeholder + accessible name for the optional one-liner that rides with an
  *  addressed send (the wire field is still `summary`). */
@@ -27,6 +41,13 @@ interface Props {
   /** Channel roster (with presence) for the addressing picker. */
   members: ChannelMember[];
   currentUserId: string;
+  /** The channel's agents — the second population of the @-mention list. */
+  agents?: ChannelAgent[];
+  /**
+   * Summon an agent (`/new-agent [name]`). Absent means the command is not
+   * available here and the text posts as an ordinary message.
+   */
+  onCreateAgent?: (name?: string) => Promise<unknown>;
   /**
    * True in a direct (1:1) channel. A DM has exactly one peer, so there is no
    * one to pick: the addressing row is hidden and every human send auto-targets
@@ -70,6 +91,47 @@ export function resolveSendOptions(params: {
 }
 
 /**
+ * What a submitted draft DID: summoned an agent, or posted a message.
+ *
+ * The decision lives here, pure, because it is the one place a keystroke stops
+ * being chat: a draft that parses as `/new-agent` calls the create mutation and
+ * NEVER posts, so a mistyped command can't leak into the transcript as text
+ * while also creating an agent. Anything else — prose, an unknown command, a
+ * slash mid-sentence — posts exactly as it did before.
+ *
+ * `onCreateAgent` absent means the surface has no create path wired, in which
+ * case the command posts as ordinary text rather than being silently dropped.
+ */
+export async function performComposerSubmit(params: {
+  /** The trimmed draft. */
+  body: string;
+  isDirect: boolean;
+  peerId: string | null;
+  toUserId: string | null;
+  summary: string;
+  onSend: (body: string, opts?: SendOptions) => Promise<void>;
+  onCreateAgent?: (name?: string) => Promise<unknown>;
+}): Promise<"created" | "sent"> {
+  const { body, onSend, onCreateAgent } = params;
+  const command = parseSlashCommand(body);
+  if (command?.name === NEW_AGENT_COMMAND && onCreateAgent) {
+    await onCreateAgent(command.arg ?? undefined);
+    return "created";
+  }
+  await onSend(
+    body,
+    resolveSendOptions({
+      isDirect: params.isDirect,
+      peerId: params.peerId,
+      toUserId: params.toUserId,
+      summary: params.summary,
+      body,
+    })
+  );
+  return "sent";
+}
+
+/**
  * Message composer pinned to the bottom of the thread. One unified input: a
  * concave-field well with an auto-submitting textarea (Enter sends, Shift+Enter
  * adds a newline) that AUTO-GROWS to three lines and then scrolls, exactly like
@@ -98,11 +160,20 @@ export function MessageComposer({
   members,
   currentUserId,
   isDirect,
+  agents,
+  onCreateAgent,
 }: Props) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
   const [toUserId, setToUserId] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
+  // The `@…` token under the caret, plus the input's measured top-left corner
+  // (the list opens UPWARD from it). Both are cleared on send, on dismiss, and
+  // whenever the token stops being a mention.
+  const [mention, setMention] = useState<MentionQuery | null>(null);
+  const [mentionOrigin, setMentionOrigin] = useState<
+    { x: number; y: number } | null
+  >(null);
   // Grows with the typed lines up to three, then scrolls (shared with the
   // session window's D7 math). Keyed on `value`, so clearing after a send snaps
   // the field back to one line.
@@ -139,22 +210,79 @@ export function MessageComposer({
   const showUnaddressedHint =
     !isDirect && !toUserId && members.length >= GROUP_CHANNEL_MIN_MEMBERS;
 
+  // The command hint is a discovery affordance: it shows the moment the draft
+  // starts with `/` and narrows as the name is typed.
+  const slashCommands = onCreateAgent ? matchingSlashCommands(value) : [];
+
+  const mentionCandidates = useMemo(
+    () =>
+      mention
+        ? buildMentionCandidates({
+            query: mention.query,
+            members,
+            agents: agents ?? [],
+            currentUserId,
+          })
+        : [],
+    [mention, members, agents, currentUserId]
+  );
+
+  // Opened UPWARD off the input's top edge, so the list never covers the text
+  // being typed (the composer is pinned to the bottom of the pane).
+  const mentionAnchor = mentionOrigin
+    ? {
+        x: mentionOrigin.x,
+        y: mentionOrigin.y - mentionPopupHeight(mentionCandidates.length) - 8,
+      }
+    : null;
+
+  /** Recompute the open mention token after any edit / caret move. */
+  function syncMention(el: HTMLTextAreaElement) {
+    const next = findMentionQuery(el.value, el.selectionStart ?? el.value.length);
+    setMention(next);
+    if (!next) {
+      setMentionOrigin(null);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    setMentionOrigin({ x: rect.left, y: rect.top });
+  }
+
+  function acceptMention(candidate: MentionCandidate) {
+    if (!mention) return;
+    const next = applyMention(value, mention, candidate.insert);
+    setValue(next.value);
+    setMention(null);
+    setMentionOrigin(null);
+    const el = textareaRef.current;
+    if (el) {
+      // Restore the caret after React commits the new value.
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(next.caret, next.caret);
+      });
+    }
+  }
+
   async function sendMessage() {
     if (!canSendMessage) return;
     const body = value.trim();
-    const opts = resolveSendOptions({
-      isDirect: Boolean(isDirect),
-      peerId,
-      toUserId,
-      summary,
-      body,
-    });
     setSending(true);
     try {
-      await onSend(body, opts);
+      await performComposerSubmit({
+        body,
+        isDirect: Boolean(isDirect),
+        peerId,
+        toUserId,
+        summary,
+        onSend,
+        onCreateAgent,
+      });
       setValue("");
       setSummary("");
       setToUserId(null);
+      setMention(null);
+      setMentionOrigin(null);
     } catch {
       // Keep the text so the user can retry; the caller surfaces the error.
     } finally {
@@ -222,6 +350,8 @@ export function MessageComposer({
           </div>
         )}
 
+        <SlashCommandHint commands={slashCommands} />
+
         <div className="concave-field flex items-end gap-2 rounded-[12px] px-3 py-2">
           {/* rows=1 + the min/max heights keep CSS and the growHeight() math in
               agreement: one line at rest, three lines then scroll. The inline
@@ -230,8 +360,20 @@ export function MessageComposer({
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              syncMention(e.currentTarget);
+            }}
+            // Caret moves (arrows, clicks) change which token is being typed,
+            // so the open mention is recomputed off selection too.
+            onSelect={(e) => syncMention(e.currentTarget)}
             onKeyDown={(e) => {
+              if (e.key === "Escape" && mention) {
+                e.preventDefault();
+                setMention(null);
+                setMentionOrigin(null);
+                return;
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 void sendMessage();
@@ -249,6 +391,19 @@ export function MessageComposer({
             label="Send message"
           />
         </div>
+
+        {/* v1: the accepted mention is TEXT for humans and agents to read. It
+            deliberately does NOT touch `toUserId` — server-side `@handle`
+            addressing lands in a later lane. */}
+        <MentionPopup
+          anchor={mentionAnchor}
+          candidates={mentionCandidates}
+          onSelect={acceptMention}
+          onClose={() => {
+            setMention(null);
+            setMentionOrigin(null);
+          }}
+        />
       </div>
     </div>
   );

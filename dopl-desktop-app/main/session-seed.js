@@ -154,7 +154,9 @@ function pendingTranscript(s) {
 function takeFraming(s, transcript) {
   if (!s || s.freshFraming !== true) return '';
   s.freshFraming = false;
-  return framing.buildFencedTurn({ side: s.side, message: transcript, context: s.context, nonce: s.nonce });
+  // D2: `bind` rides through, so a room-bound TEAM shell wakes with the team framing
+  // (identity + the room model + THE LAW) instead of the pair-bound responder framing.
+  return framing.buildFencedTurn({ side: s.side, bind: s.bind, message: transcript, context: s.context, nonce: s.nonce });
 }
 
 // Prepend the one-shot preamble to the NEXT user turn: the full framed turn on a fresh

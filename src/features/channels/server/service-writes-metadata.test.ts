@@ -8,9 +8,9 @@
  * had no task id to route it to the waiting session. The server now stamps
  * both, and it must do so WITHOUT weakening the anti-spoof strip.
  *
- * And the second half of that boundary: the calm-terminal flags
- * (declined/dropped/interrupted/capped/ended) decide how the OTHER side's card
- * reads, so they are stamped only for the thread's own participants.
+ * The other half of that boundary — who may TAG a thread at all (both id
+ * shapes) and the calm-terminal flags that ride on that decision — lives in
+ * `service-writes-metadata-thread.test.ts`, split off for the §2 size cap.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -18,10 +18,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
+vi.mock("./repository-participants");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
+import * as repoParticipants from "./repository-participants";
 import { postMessage } from "./service-writes";
 import type {
   ChannelMemberRow,
@@ -126,6 +128,11 @@ function has(meta: Record<string, unknown>, key: string): boolean {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Multiplayer: every thread-tagged post runs the participant-aware write
+  // gate, and every thread read hydrates a participant set. No participants =
+  // the pair gate, which is what these suites are about.
+  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
+  vi.mocked(repoParticipants.listParticipantsByTasks).mockResolvedValue(new Map());
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
     userId === USER || userId === PEER ? memberRow(userId) : null
@@ -274,6 +281,22 @@ describe("postMessage — DM task-id inheritance", () => {
 
   it("a legacy task-<uuid>-<seq> id suppresses inheritance and stamps nothing", async () => {
     vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    // The poster is the opening request's addressee, so the tag survives its
+    // own gate (see service-writes-metadata-thread.test.ts) — what this pins is
+    // that it still suppresses inheritance and resolves no task row.
+    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue({
+      id: "msg-open",
+      seq: 7,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      author_user_id: PEER,
+      author_kind: "user",
+      kind: "message",
+      body: "please do X",
+      metadata: { to_user_id: USER },
+      client_msg_id: null,
+      created_at: "2026-07-29T00:00:00Z",
+    });
 
     await postMessage(ctx, "dm", {
       body: "reply",
@@ -312,134 +335,6 @@ describe("postMessage — DM task-id inheritance", () => {
     await postMessage(ctx, "dm", { body: "note to self", toUserId: USER });
 
     expect(has(capturedMetadata(), "taskId")).toBe(false);
-  });
-});
-
-describe("postMessage — calm-terminal flags (anti-spoof)", () => {
-  /** A legacy `task-{channelId}-{seq}` id — the shape the desktop still posts. */
-  const LEGACY_ID = "task-chan-1-7";
-
-  /** The legacy exchange's opening request at seq 7. */
-  function opener(overrides: Partial<ChannelMessageRow> = {}): ChannelMessageRow {
-    return {
-      id: "msg-open",
-      seq: 7,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      author_user_id: PEER,
-      author_kind: "user",
-      kind: "message",
-      body: "please do X",
-      metadata: { to_user_id: USER },
-      client_msg_id: null,
-      created_at: "2026-07-29T00:00:00Z",
-      ...overrides,
-    };
-  }
-
-  it("stamps the flag for a participant of a LEGACY exchange (the desktop's decline echo)", async () => {
-    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(opener());
-
-    await postMessage(ctx, "dm", {
-      body: "Request declined",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, declined: true },
-    });
-
-    expect(capturedMetadata().declined).toBe(true);
-    expect(repoMessages.findMessageBySeq).toHaveBeenCalledWith("chan-1", 7);
-  });
-
-  it("stamps the flag for the AUTHOR of the legacy opening request", async () => {
-    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
-      opener({ author_user_id: USER, metadata: { to_user_id: THIRD } })
-    );
-
-    await postMessage(ctx, "dm", {
-      body: "Session ended",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, ended: true },
-    });
-
-    expect(capturedMetadata().ended).toBe(true);
-  });
-
-  it("SECURITY: strips the flag when the legacy exchange belongs to two OTHER people", async () => {
-    // The spoof: a third member of the channel stamps someone else's exchange
-    // id with `declined: true`, and their card renders "This request was
-    // declined." for work that was never declined.
-    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
-      opener({ author_user_id: PEER, metadata: { to_user_id: THIRD } })
-    );
-
-    await postMessage(ctx, "dm", {
-      body: "Request declined",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, declined: true, dropped: true },
-    });
-
-    const meta = capturedMetadata();
-    // Stripped, but the message itself still posts (visible, attributable).
-    expect(has(meta, "declined")).toBe(false);
-    expect(has(meta, "dropped")).toBe(false);
-    expect(meta.taskId).toBe(LEGACY_ID);
-    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
-  });
-
-  it("SECURITY: fails closed when the legacy opener cannot be resolved", async () => {
-    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(null);
-
-    await postMessage(ctx, "dm", {
-      body: "Request interrupted",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, interrupted: true },
-    });
-
-    expect(has(capturedMetadata(), "interrupted")).toBe(false);
-  });
-
-  it("stamps the flag on a FIRST-CLASS thread the poster participates in", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
-
-    await postMessage(ctx, "dm", {
-      body: "Turn limit reached",
-      kind: "task_failed",
-      metadata: { taskId: TASK_ID, capped: true },
-    });
-
-    const meta = capturedMetadata();
-    expect(meta.capped).toBe(true);
-    expect(meta.taskTitle).toBe("Wire the listener");
-    // A first-class id the poster does NOT participate in never gets this far —
-    // the post is refused (see service-writes.test.ts).
-    expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
-  });
-
-  it("strips a truthy-but-not-true flag even from a participant", async () => {
-    // The renderers read `=== true`; normalizing here keeps the stored wire
-    // clean instead of relying on every reader staying strict.
-    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(opener());
-
-    await postMessage(ctx, "dm", {
-      body: "Crashed",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, capped: "true", ended: 1 },
-    });
-
-    const meta = capturedMetadata();
-    expect(has(meta, "capped")).toBe(false);
-    expect(has(meta, "ended")).toBe(false);
-  });
-
-  it("strips flags on a post with no thread id at all", async () => {
-    await postMessage(ctx, "dm", {
-      body: "not a real outcome",
-      kind: "task_failed",
-      metadata: { declined: true },
-    });
-
-    expect(has(capturedMetadata(), "declined")).toBe(false);
-    expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 });
 

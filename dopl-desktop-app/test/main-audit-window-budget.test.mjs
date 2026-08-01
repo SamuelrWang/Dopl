@@ -35,7 +35,12 @@ function harness() {
   const calls = { settled: [] };
   const sessions = new Map();
   const io = { makePushIterator: () => ({ push() {}, close() {} }), noteGatedBody: () => {} };
-  const store = { sessionKey: (c, t) => `${c}:${t}`, getRecord: () => null, getSdkSessionId: () => null };
+  const store = {
+    sessionKey: (c, t) => `${c}:${t}`, getRecord: () => null, getSdkSessionId: () => null,
+    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
+    // thread for every other), so the fake mirrors the real store's slotKey too.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+  };
   const api = new Function(
     "io", "store", "crypto", "Notification", "diag",
     `${BLOCK}\n return { bind, atCapAfterEvict, evictIdleShell };`

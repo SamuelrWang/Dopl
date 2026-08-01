@@ -56,4 +56,101 @@ function notifyTaskReply(entry, m) {
   diag('task-reply notify', cid, 'seq', m && m.seq, metaStr(m, 'taskTitle') ? 'titled' : 'channel');
 }
 
-module.exports = { notifyTaskReply, taskReplyNotice };
+// ── D2: an AGENT addressing ME, the human (the escalation path) ──────────────
+//
+// Multiplayer gives agents one way to reach a person: address that person. classify returns
+// 'agent-escalation' for it, and the whole outcome is THIS notification. It must never
+// spawn: the agent asked a HUMAN, and answering with another machine's agent is both the
+// wrong answer and the loop the law forbids. There is no consent row, no watcher record and
+// no session — the same "news, not a decision" shape as a thread reply, one module over.
+//
+// The copy NAMES THE HANDLE, because "an agent needs you" is not actionable in a room that
+// holds several. The handle is RESOLVED BY THE CALLER (listener-messages, off
+// channel-agents' authenticated roster) and passed in, never looked up here and never read
+// off the message: this module's whole guarantee is that it cannot reach the spawn / gate /
+// consent machinery, and that guarantee is pinned as its DEPENDENCY SET
+// (test/wake-external-requester.test.mjs). An unresolved handle degrades to the owner's
+// name plus a generic word rather than printing a UUID at a person.
+//
+// Pure like its twin, and brace-free inside its strings/comments so the source-slicing
+// harness can evaluate it verbatim.
+function agentEscalationNotice(m, channelName, ownerName, handle) {
+  const who = handle ? '@' + handle : 'An agent';
+  const whose = ownerName ? ' (' + ownerName + "'s agent)" : '';
+  const where = channelName || 'a channel';
+  const detail = metaStr(m, 'summary') || truncate(m && m.body, 120);
+  return { title: who + whose + ' needs you in ' + where, body: detail };
+}
+
+// Fire it. NOT silent: unlike a thread reply, this is somebody waiting on a person — it is
+// the one passive path where the operator is the blocker. Click opens the channel through
+// the same injected handler every other notification uses.
+function notifyAgentEscalation(entry, m, handle) {
+  const channelName = entry && entry.channel && entry.channel.name;
+  const channelId = entry && entry.channel && entry.channel.id;
+  const ownerName = io.displayNameFor(m && m.authorUserId);
+  const notice = agentEscalationNotice(m, channelName, ownerName, handle);
+  try {
+    if (Notification.isSupported()) {
+      const n = new Notification({ title: notice.title, body: notice.body });
+      n.on('click', () => targeting.openChannelForEntry(entry));
+      n.show();
+    }
+  } catch (_) { /* best-effort */ }
+  const cid = channelId ? String(channelId).slice(0, 8) : '?';
+  diag('agent-escalation notify', cid, 'seq', m && m.seq, handle ? 'handle' : 'unnamed', '- no spawn');
+}
+
+// ── FIX S2: somebody addressed an agent of mine that is DISMISSED ────────────
+//
+// The routing rule refuses a `dismissed` row by design — the row keeps its handle so old
+// messages stay attributable, and it starts nothing. What that refusal ALSO used to do was
+// fall through to classify, where the owner bridge (to_user_id = the agent's owner = me)
+// turned it into a 'trigger': a consent card and a pair ASSIST session, spawned in place of
+// the agent that was named. A dismissed agent's message started a session.
+//
+// The refusal now stops at the route and produces THIS instead — the same shape as a thread
+// reply, one function up: news, silent, no consent row, no watcher record, no session. It
+// lives here rather than in channel-agents.js so this module's pinned DEPENDENCY SET stays
+// the guarantee it is (test/wake-external-requester.test.mjs): the passive lane still cannot
+// reach anything that could spawn, gate or record a consent.
+//
+// Pure like its twins, and brace-free inside its strings/comments for the slicing harness.
+function agentDismissedNotice(m, channelName, authorName, handle) {
+  const who = handle ? '@' + handle : 'an agent';
+  const where = channelName || 'a channel';
+  const asked = authorName || 'Someone';
+  const detail = metaStr(m, 'summary') || truncate(m && m.body, 120);
+  return {
+    title: asked + ' addressed ' + who + ' in ' + where,
+    body: 'That agent is dismissed, so nothing ran. ' + detail,
+  };
+}
+
+// Silent: nobody is blocked on the operator here. The agent is gone, the message is on
+// record, and the click opens the channel through the same injected handler as every other
+// notification in this module.
+function notifyAgentDismissed(entry, m, handle) {
+  const channelName = entry && entry.channel && entry.channel.name;
+  const channelId = entry && entry.channel && entry.channel.id;
+  const authorName = io.displayNameFor(m && m.authorUserId);
+  const notice = agentDismissedNotice(m, channelName, authorName, handle);
+  try {
+    if (Notification.isSupported()) {
+      const n = new Notification({ title: notice.title, body: notice.body, silent: true });
+      n.on('click', () => targeting.openChannelForEntry(entry));
+      n.show();
+    }
+  } catch (_) { /* best-effort */ }
+  const cid = channelId ? String(channelId).slice(0, 8) : '?';
+  diag('agent-dismissed notify', cid, 'seq', m && m.seq, handle ? 'handle' : 'unnamed', '- no spawn');
+}
+
+module.exports = {
+  notifyTaskReply,
+  taskReplyNotice,
+  notifyAgentEscalation,
+  agentEscalationNotice,
+  notifyAgentDismissed, // FIX S2: a retired agent was addressed — news, never a spawn
+  agentDismissedNotice,
+};

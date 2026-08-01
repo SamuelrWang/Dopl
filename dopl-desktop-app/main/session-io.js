@@ -311,7 +311,7 @@ function baseRecord(s) {
     mode: s.mode,
     phase: s.state.phase,
     startedAt: s.startedAt,
-    counterpartyId: s.counterpartyId || null, direct: s.direct === true, // FIX L1: the other party, and (H2) whether the server addresses posts for us
+    counterpartyId: s.counterpartyId || null, direct: s.direct === true, bind: s.bind === 'room' ? 'room' : 'pair', agentId: s.agentId || null, // FIX L1: the other party; (H2) whether the server addresses posts for us; (D2) the binding mode + the agent this session runs as
     // v1.7.5 D1: the HEADER IDENTITY, sourced from s.context/spec at startSession.
     // A parked record is the only thing a P2 recreate (or a post-restart resume) has
     // to rebuild the window from, so without these the reopened header lost the peer

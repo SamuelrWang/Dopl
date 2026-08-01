@@ -34,6 +34,9 @@ function harness() {
   const io = { makePushIterator: () => ({ push() {}, close() {} }), noteGatedBody: () => {} };
   const store = {
     sessionKey: (c, t) => `${c}:${t}`,
+    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
+    // thread for every other), so the fake mirrors the real store's slotKey too.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
     getRecord: () => null,
     getSdkSessionId: () => null,
   };

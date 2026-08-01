@@ -356,12 +356,17 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
 }
 
 // Headless mode: spawn, then (on a clean reply) open an outbound review. D4:
-// task_started fires from onStart, which runs only once the `active` slot is
-// claimed for a real spawn, so a busy/no-cli skip can never orphan a task_started.
+// task_started fires from onStart, which runs only once the pool slot is claimed for a
+// real spawn, so a busy/no-cli skip can never orphan a task_started.
 async function runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName }) {
   diag('spawn mode: headless', 'profile', rec.toolProfile);
   const result = await spawner.runForChannel({
     channelId: entry.channel.id,
+    // D1: the FIRST-CLASS thread id only, NOT taskIdFor's legacy fallback. It picks the pool
+    // slot AND the resume id, so two threads of one channel run concurrently, while a legacy
+    // inbound (undefined here) collapses to the channel's single slot exactly as before —
+    // `task-<channel>-<seq>` is per-MESSAGE, so keying on it would never reuse or resume one.
+    taskId: rec.taskId,
     message: m.body,
     context: { channelName: entry.channel.name, authorName: requesterName, authorKind: m.authorKind },
     toolProfile: rec.toolProfile,
@@ -369,7 +374,8 @@ async function runHeadlessApproved(entry, m, rec, { taskId, startedAt, requester
   });
 
   if (result.skipped === 'busy') {
-    await queued.announce(entry, m, taskId, 'headless'); // same notice; this defer is per-CHANNEL
+    // Same notice; D1 changed what defers it (this SESSION runs, or the pool is at its cap).
+    await queued.announce(entry, m, taskId, 'headless');
     await postResult(entry, m, RESEND);
     watcher.settle(rec.key, 'busy');
     return;

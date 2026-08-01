@@ -1,8 +1,10 @@
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
+  AgentStatus,
   AgentToolProfile,
   AgentTrustRule,
   Channel,
+  ChannelAgent,
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
@@ -254,6 +256,74 @@ export async function setChannelThreadMode(
     { method: "PATCH", body: { op: "set_mode", ...body }, workspaceId }
   );
   return data.task;
+}
+
+// ─── Agents ─────────────────────────────────────────────────────────
+//
+// CODED TO CONTRACT (multiplayer wave 2): these calls are written against the
+// agreed route surface, which lane S is building concurrently:
+//
+//   POST   /api/channels/[channelId]/agents { name? }  -> 201 { agent }
+//   PATCH  /api/channels/[channelId]/agents/[agentId]
+//            { op: "rename",     name }                -> { agent }
+//            { op: "set_status", status }              -> { agent }
+//
+// The WRITES only. `GET /api/channels/[channelId]/agents -> { agents }` has no
+// wrapper here on purpose: `use-channel-agents.ts` reads it through
+// `useApiQuery`, which owns the cache key, and a second entry point would be a
+// read the cache never sees.
+//
+// The agent's handle is picked SERVER-side from the curated pool when `name` is
+// omitted (`server/agent-names.ts`), so the composer's bare `/new-agent` sends
+// no name at all rather than inventing one.
+
+/** The path of one agent under its channel. */
+function agentPath(channelId: string, agentId: string): string {
+  return channelPath(
+    channelId,
+    `/agents/${encodeURIComponent(agentId)}`
+  );
+}
+
+/** Summon an agent of your own. Omit `name` to take the next pool handle. */
+export async function createChannelAgent(
+  channelId: string,
+  name: string | undefined,
+  workspaceId: string
+): Promise<ChannelAgent> {
+  const data = await request<{ agent: ChannelAgent }>(
+    channelPath(channelId, "/agents"),
+    { method: "POST", body: name ? { name } : {}, workspaceId }
+  );
+  return data.agent;
+}
+
+/** Rename your own agent (owner-only; the server re-checks). */
+export async function renameChannelAgent(
+  channelId: string,
+  agentId: string,
+  name: string,
+  workspaceId: string
+): Promise<ChannelAgent> {
+  const data = await request<{ agent: ChannelAgent }>(
+    agentPath(channelId, agentId),
+    { method: "PATCH", body: { op: "rename", name }, workspaceId }
+  );
+  return data.agent;
+}
+
+/** Park / resume / dismiss your own agent (owner-only; the server re-checks). */
+export async function setChannelAgentStatus(
+  channelId: string,
+  agentId: string,
+  status: AgentStatus,
+  workspaceId: string
+): Promise<ChannelAgent> {
+  const data = await request<{ agent: ChannelAgent }>(
+    agentPath(channelId, agentId),
+    { method: "PATCH", body: { op: "set_status", status }, workspaceId }
+  );
+  return data.agent;
 }
 
 // ─── Consent ────────────────────────────────────────────────────────

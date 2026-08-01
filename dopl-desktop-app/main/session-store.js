@@ -34,6 +34,25 @@ function sessionKey(channelId, taskId) {
   return String(channelId || '') + ':' + String(taskId || '');
 }
 
+// D2 — THE SLOT a session occupies in the engine's registry, from a call's own argument
+// object. Two shapes share one key space, and that is deliberate (see session-pool.js:
+// "the pool never parses the key, it only compares it"):
+//   PAIR  (channel, thread)  — every shape that exists today. An ASSIST session is one
+//                              member's run on one thread, so the thread identifies it.
+//   ROOM  (channel, agent)   — a summoned TEAM agent. An agent runs ONE session per
+//                              channel whatever thread it is working in, so the AGENT
+//                              identifies it; a team session usually has no thread at all
+//                              (`taskId` ''), which would collapse every agent of a
+//                              channel onto one slot if the thread still keyed it.
+// `agentId` WINS when present and is never blended with the thread id: a caller either
+// names an agent or it does not. Every existing call site passes no agentId and therefore
+// gets byte-for-byte `sessionKey(channelId, taskId)`.
+function slotKey(a) {
+  const x = a || {};
+  const agentId = String(x.agentId || '');
+  return sessionKey(String(x.channelId || ''), agentId || String(x.taskId || ''));
+}
+
 // A phase that means the session is finished and must never be resumed or
 // re-echoed. Everything else (launching / running / awaiting_* / interrupted) is a
 // live-or-crashed session that reloadDisposition treats as interrupted.
@@ -89,6 +108,17 @@ function durableSessionRecord(rec) {
     // shell posts too, and its approval card must name the same recipient the live one did.
     // Strict boolean: a hand-edited store can only ever make this FALSE, which understates.
     direct: r.direct === true,
+    // D2 — THE BINDING MODE, persisted. 'pair' fences the inbound feed and the window's
+    // history to ONE counterparty (every session shape that exists today); 'room' opens
+    // both to the whole channel, which is what a summoned TEAM agent needs. Whitelisted
+    // as a strict enum with 'pair' as the fallback, so a hand-edited store, an older
+    // record written before this field existed, or a mid-wave caller can only ever land
+    // on the NARROWER binding — a widened fence must be something a launch asked for.
+    bind: r.bind === 'room' ? 'room' : 'pair',
+    // The channel_agents row this session runs AS, or null for a pair session. It is half
+    // of the slot key (slotKey above) and the identity a team session posts under, so a
+    // recreated shell has to carry it or it would re-key onto the thread slot.
+    agentId: r.agentId || null,
     // v1.7.5 D1: the header identity (peer display name, channel name, task title).
     // Whitelisted as PLAIN STRINGS so a recreated/resumed shell can rebuild the header
     // instead of falling back to a bare "Session". Coerced + bounded the same way the
@@ -248,6 +278,7 @@ function clearSdkSessionId(key) {
 module.exports = {
   // pure core (also re-exported for the shell + tests)
   sessionKey,
+  slotKey, // D2: (channel, agent) for a TEAM session, (channel, thread) for every other
   isTerminalPhase,
   reloadDisposition,
   durableName,

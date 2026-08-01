@@ -15,6 +15,7 @@
 const targeting = require('./targeting');
 const trigger = require('./trigger');
 const taskNotify = require('./task-notify');
+const channelAgents = require('./channel-agents'); // D2: the @-addressed agent route
 const sessionDispatch = require('./session-dispatch');
 const versionSkew = require('./version-skew');
 const { diag } = require('./diag');
@@ -30,12 +31,38 @@ async function dispatchMessage(entry, m, myUserId) {
   // returns a value nobody reads here, swallows its own errors, and cannot
   // change a single verdict below.
   versionSkew.observe(entry, m, myUserId);
+  // D2 — ADDRESSING WINS, so it is checked FIRST. A message naming one of THIS operator's
+  // agents (`metadata.to_agent_id`) belongs to that agent's own session and to nothing
+  // else. Ahead of feedLiveSession deliberately: an addressed message that also carries a
+  // thread id must not be eaten as the next turn of a pair session that happens to be live
+  // on that thread.
+  //
+  // FIX S2 — A REFUSAL IS NOT A FALL-THROUGH. The route answers four verdicts (see
+  // channel-agents.js), and only the EMPTY one means "not this lane". A message that named
+  // one of my agents and could not be delivered used to fall through to classify, where the
+  // owner bridge's `to_user_id = me` made it a 'trigger' — a consent card and a pair ASSIST
+  // spawn, standing in for the agent that was actually addressed.
+  const routed = await channelAgents.routeAddressedAgent(entry, m, myUserId);
+  // 'dismissed' — a retired agent starts NOTHING, and the operator hears about it on the
+  // same passive news path as a thread reply (no consent row, no watcher record, no spawn).
+  if (routed === 'dismissed') {
+    taskNotify.notifyAgentDismissed(entry, m, channelAgents.handleFor(entry.channel.id, targeting.metaStr(m, 'to_agent_id')));
+    return;
+  }
+  if (routed) return; // 'fed' or 'refused': either way the message is spoken for
   // v2.2 session-window dispatch, checked BEFORE classify → consent (§A.2):
   //   1. feed a LIVE session's next turn; 2. auto-open a REQUESTER window on my
   //   own create_task; 3. reopen a SETTLED-yet-resumable requester on a peer reply.
   if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
   if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
   if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;
+  // FIX B1: say so when the "address to act" law is being evaluated against a roster this
+  // run has never successfully read. The count classify uses is then the durable last-known
+  // one (or 0 for a channel never known to hold agents), which fails CLOSED toward the law —
+  // but a field log has to be able to say that is what happened.
+  if (entry.rosterKnown !== true) {
+    diag('agents: classify on UNKNOWN roster', entry.channel.id.slice(0, 8), 'seq', m.seq, 'last known teamAgents', Number(entry.teamAgents) || 0);
+  }
   const verdict = targeting.classify(m, entry, myUserId);
   diag(
     'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,
@@ -50,6 +77,13 @@ async function dispatchMessage(entry, m, myUserId) {
   // Feature 4 (requester side): a reply in one of MY interactive tasks —
   // passive notify only. No consent row, no watcher record, no spawn.
   else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m);
+  // D2 (escalation): an agent addressed ME, the human. A notification and nothing else —
+  // no consent row, no watcher record, no spawn. Answering a person's question with a
+  // machine is the loop the law forbids.
+  // The HANDLE is resolved here, off the authenticated roster, and handed over: task-notify
+  // deliberately requires nothing that could spawn, gate or record a consent, and that
+  // dependency set is a pinned invariant.
+  else if (verdict === 'agent-escalation') taskNotify.notifyAgentEscalation(entry, m, channelAgents.handleFor(entry.channel.id, targeting.metaStr(m, 'author_agent_id')));
 }
 
 module.exports = { dispatchMessage };

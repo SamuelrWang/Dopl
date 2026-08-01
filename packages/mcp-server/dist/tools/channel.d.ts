@@ -17,6 +17,11 @@
  *                               §2 cap — it is the only op here that loops)
  *   - `channel-ops-write.ts`  — open / invite / post
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
+ *   - `channel-ops-agents.ts` — agents / summon_agent / rename_agent /
+ *                               set_agent_status / join_thread / leave_thread
+ *                               (the MULTIPLAYER ops: who is in the room)
+ *   - `channel-agent-refs.ts` — agent identity: handle→row resolution, how a
+ *                               handle is rendered, the participant-set render
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
  *                               headers, which the write side now shares
  *

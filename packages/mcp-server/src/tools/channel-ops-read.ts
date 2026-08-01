@@ -23,7 +23,7 @@
 import type {
   ChannelMember,
   ChannelMessage,
-  ChannelThread,
+  ChannelThreadDetail,
   DoplClient,
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
@@ -42,6 +42,9 @@ import {
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 import { rosterAddressingRule } from "./channel-addressing";
+// Breakout-room membership: the set a thread read now carries, and the handles
+// that name the agents in it. Both fail soft.
+import { agentNamesById, participantLines } from "./channel-agent-refs";
 
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
@@ -156,7 +159,7 @@ export async function opListThreads(
   // Hot-path parity with read/await: hand the ref straight to the route
   // (slug-or-id + visibility enforced there) and map a 404 to a clean
   // not-found, rather than pre-resolving via listChannels.
-  let threads: ChannelThread[];
+  let threads: ChannelThreadDetail[];
   try {
     threads = await client.listChannelThreads(ref);
   } catch (e) {
@@ -191,7 +194,7 @@ export async function opGetThread(
   threadId: string,
   selfUserId: string | null = null,
 ): Promise<ToolResponse> {
-  let thread: ChannelThread;
+  let thread: ChannelThreadDetail;
   try {
     thread = await client.getChannelThread(ref, threadId);
   } catch (e) {
@@ -216,7 +219,21 @@ export async function opGetThread(
   // under it. The product tells a waiting agent to call this op every ~3 empty
   // holds, so it is a peer-typed title an agent re-reads on a timer.
   const view = { selfUserId, names: await memberNames(client, ref) };
-  return ok(`${UNTRUSTED_THREAD_HEADER}\n\n${formatThreadDetail(thread, view)}`);
+  // MULTIPLAYER — the PARTICIPANT SET, which is the fact this op exists to
+  // answer for an agent under the law "act on your own room": a thread with a
+  // set is a breakout room and the set is who may post into it. Rendered here
+  // rather than inside `formatThreadDetail` because naming the agents in it
+  // needs a roster the pure renderer has no way to fetch. Both lookups fail
+  // soft — an unreadable roster degrades to ids, never to an error.
+  const agentNames = await agentNamesById(client, ref);
+  return ok(
+    [
+      UNTRUSTED_THREAD_HEADER,
+      ``,
+      formatThreadDetail(thread, view),
+      ...participantLines(thread.participants, view, agentNames),
+    ].join("\n"),
+  );
 }
 
 /**

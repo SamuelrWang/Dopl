@@ -103,7 +103,12 @@ function parkHarness(record) {
     frameContinuation: () => { throw new Error("a recreate must not frame a turn"); },
     noteGatedBody: (s, b) => { (s.gatedBodies = s.gatedBodies || []).push(b); },
   };
-  const store = { sessionKey: (c, t) => `${c}:${t}`, getRecord: () => record, getSdkSessionId: () => "sdk-1" };
+  const store = {
+    sessionKey: (c, t) => `${c}:${t}`, getRecord: () => record, getSdkSessionId: () => "sdk-1",
+    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
+    // thread for every other), so the fake mirrors the real store's slotKey too.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+  };
   const api = new Function(
     "io", "store", "crypto", "Notification", "diag",
     `${PARK}\n return { bind, recreateParkedShell, emitParkedShell };`

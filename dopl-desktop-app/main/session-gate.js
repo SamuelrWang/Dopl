@@ -156,7 +156,7 @@ function enqueue(s, a) {
 // session is not ours to gate — the caller falls through to classify.
 function feedInbound(a) {
   if (!deps || !deps.sessions) return false;
-  const s = deps.sessions.get(store.sessionKey(a.channelId, a.taskId));
+  const s = deps.sessions.get(store.slotKey(a)); // D2: (channel, agent) for a TEAM session
   if (!s || s.settled) return false;
   return enqueue(s, a);
 }

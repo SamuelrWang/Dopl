@@ -14,6 +14,469 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_presence: {
+        Row: {
+          last_seen_at: string
+          status: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          status?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          status?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_presence_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_trust_rules: {
+        Row: {
+          created_at: string
+          id: string
+          operator_user_id: string
+          trusted_user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          operator_user_id: string
+          trusted_user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          operator_user_id?: string
+          trusted_user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_trust_rules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_agents: {
+        Row: {
+          channel_id: string
+          created_at: string
+          id: string
+          name: string
+          owner_user_id: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          id?: string
+          name: string
+          owner_user_id: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_agents_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_agents_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_consent_requests: {
+        Row: {
+          body_preview: string
+          channel_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_seq: number | null
+          operator_user_id: string
+          proposed_reply: string | null
+          requester_user_id: string | null
+          status: string
+          summary: string
+          workspace_id: string
+        }
+        Insert: {
+          body_preview?: string
+          channel_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind: string
+          message_seq?: number | null
+          operator_user_id: string
+          proposed_reply?: string | null
+          requester_user_id?: string | null
+          status?: string
+          summary?: string
+          workspace_id: string
+        }
+        Update: {
+          body_preview?: string
+          channel_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          message_seq?: number | null
+          operator_user_id?: string
+          proposed_reply?: string | null
+          requester_user_id?: string | null
+          status?: string
+          summary?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_consent_requests_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_consent_requests_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_members: {
+        Row: {
+          added_by: string | null
+          agent_tool_profile: string
+          channel_id: string
+          joined_at: string
+          last_read_at: string | null
+          notify_scope: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          agent_tool_profile?: string
+          channel_id: string
+          joined_at?: string
+          last_read_at?: string | null
+          notify_scope?: string
+          role?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          added_by?: string | null
+          agent_tool_profile?: string
+          channel_id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          notify_scope?: string
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_members_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_messages: {
+        Row: {
+          author_kind: string
+          author_user_id: string | null
+          body: string
+          channel_id: string
+          client_msg_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          seq: number
+          workspace_id: string
+        }
+        Insert: {
+          author_kind?: string
+          author_user_id?: string | null
+          body?: string
+          channel_id: string
+          client_msg_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          seq?: never
+          workspace_id: string
+        }
+        Update: {
+          author_kind?: string
+          author_user_id?: string | null
+          body?: string
+          channel_id?: string
+          client_msg_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          seq?: never
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_task_participants: {
+        Row: {
+          added_by: string | null
+          agent_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          task_id: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          task_id: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          added_by?: string | null
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          task_id?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_participants_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "channel_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_task_participants_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_task_participants_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_tasks: {
+        Row: {
+          channel_id: string
+          client_msg_id: string | null
+          closed_at: string | null
+          created_at: string
+          created_by: string
+          id: string
+          mode: string
+          outcome: string | null
+          outcome_summary: string | null
+          status: string
+          target_user_id: string | null
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          client_msg_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          mode?: string
+          outcome?: string | null
+          outcome_summary?: string | null
+          status?: string
+          target_user_id?: string | null
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          client_msg_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          mode?: string
+          outcome?: string | null
+          outcome_summary?: string | null
+          status?: string
+          target_user_id?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channels: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          direct_key: string | null
+          id: string
+          is_direct: boolean
+          name: string
+          slug: string
+          topic: string
+          updated_at: string
+          visibility: string
+          workspace_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          direct_key?: string | null
+          id?: string
+          is_direct?: boolean
+          name: string
+          slug: string
+          topic?: string
+          updated_at?: string
+          visibility?: string
+          workspace_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          direct_key?: string | null
+          id?: string
+          is_direct?: boolean
+          name?: string
+          slug?: string
+          topic?: string
+          updated_at?: string
+          visibility?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channels_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_folders: {
         Row: {
           access_mode: string
@@ -2054,6 +2517,45 @@ export type Database = {
         Args: { p_deleted_at: string; p_folder_id: string }
         Returns: undefined
       }
+      channel_message_insert: {
+        Args: {
+          p_author_kind: string
+          p_author_user_id: string
+          p_body: string
+          p_channel_id: string
+          p_client_msg_id: string
+          p_kind: string
+          p_metadata: Json
+          p_workspace_id: string
+        }
+        Returns: {
+          author_kind: string
+          author_user_id: string | null
+          body: string
+          channel_id: string
+          client_msg_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          seq: number
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "channel_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      channels_last_message: {
+        Args: { p_channel_ids: string[] }
+        Returns: {
+          channel_id: string
+          last_at: string
+          last_seq: number
+        }[]
+      }
       chat_append_messages: {
         Args: { p_chat_id: string; p_messages: Json; p_workspace_id: string }
         Returns: number
@@ -2111,6 +2613,7 @@ export type Database = {
         Args: { user_id_input: string }
         Returns: undefined
       }
+      is_channel_member: { Args: { p_channel_id: string }; Returns: boolean }
       is_current_workspace_member: {
         Args: { p_min_role?: string; p_workspace_id: string }
         Returns: boolean

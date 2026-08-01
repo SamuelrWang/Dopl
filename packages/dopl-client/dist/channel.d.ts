@@ -16,7 +16,7 @@
  * deliberate, cursor-preserving one, never a blind transport retry.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -27,8 +27,8 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
-export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThread[]>;
-export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
+export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThreadDetail[]>;
+export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThreadDetail>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
 export declare function closeChannelThread(t: DoplTransport, channelId: string, threadId: string, input: {
     outcome: ThreadOutcome;

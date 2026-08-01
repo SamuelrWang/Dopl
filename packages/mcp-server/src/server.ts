@@ -16,7 +16,7 @@ import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerOntologyTool } from "./tools/ontology.js";
 import { registerChannelTool } from "./tools/channel.js";
-import { entitlementDenied } from "./tools/respond.js";
+import { entitlementDenied, type ToolResponse } from "./tools/respond.js";
 import { inlineOr } from "./tools/narration.js";
 import {
   callerStatusLine,
@@ -176,15 +176,6 @@ ${SKILL_AUTHORING_GUIDE}`;
 }
 
 /**
- * Tool-response shape the MCP SDK accepts. We re-declare it locally to
- * keep the wrapper typed without pulling the SDK's handler type.
- */
-type ToolResponse = {
-  content: Array<{ type: "text"; text: string }>;
-  isError?: boolean;
-};
-
-/**
  * Snapshot of the session's default workspace, resolved once at boot from
  * the caller's membership directory (a request X-Workspace-Id pin, else the
  * sole membership). Read by `appendDoplStatus`. Null when the caller has 0
@@ -227,8 +218,12 @@ async function appendDoplStatus(
   effective: EffectiveWorkspace | null,
   caller: CallerIdentity,
 ): Promise<ToolResponse> {
-  if (response.isError) return response;
-  if (!effective) return response;
+  // The per-call agent locus (`as_agent`) rides the RESULT, not the session
+  // identity, and is stripped here on every path — it is our plumbing, and the
+  // MCP result shape does not carry it.
+  const { _callerAgent: agent = null, ...res } = response;
+  if (res.isError) return res;
+  if (!effective) return res;
 
   // The name goes through the neutralizer and the immutable id joins the slug.
   // This footer is the agent's targeting check, so it is exactly the line worth
@@ -249,7 +244,7 @@ async function appendDoplStatus(
     "",
     "---",
     "_dopl_status:",
-    callerStatusLine(caller),
+    callerStatusLine(caller, agent),
     `  active_workspace: ${inlineOr(effective.name, UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
     `  workspace_source: ${effective.source}`,
   ].join("\n");
@@ -257,7 +252,7 @@ async function appendDoplStatus(
   // Append to the final text block so the agent sees the footer at the
   // end of a rendered response. If the response has no text content
   // (rare — tools always return text), add a new block.
-  const content = [...response.content];
+  const content = [...res.content];
   const lastIdx = content.length - 1;
   if (lastIdx >= 0 && content[lastIdx]?.type === "text") {
     content[lastIdx] = {
@@ -267,7 +262,7 @@ async function appendDoplStatus(
   } else {
     content.push({ type: "text", text: footer.trimStart() });
   }
-  return { ...response, content };
+  return { ...res, content };
 }
 
 /**
@@ -459,6 +454,8 @@ export function createServer(
       "create_thread",
       "close_thread",
       "set_thread_mode",
+      // Multiplayer: roster + breakout-room membership writes.
+      "summon_agent", "rename_agent", "set_agent_status", "join_thread", "leave_thread",
     ]),
   };
   // Session default workspace — resolved once at boot (factory.ts), never
