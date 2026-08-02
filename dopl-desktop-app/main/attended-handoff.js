@@ -12,13 +12,48 @@
 // it does today. Handing the request to the operator's own client is not a decision ON the
 // request; it is the operator taking the work off Dopl's hands.
 //
+// THE LADDER, top rung first (2026-08-02). 1. THE APP: `claude://code/new` opens the Claude
+// Code DESKTOP APP. 2. THE TERMINAL: `claude-cli://open` opens a terminal window. 3. THE
+// CLIPBOARD: copy the prompt and say so. Every rung falls to the next one on any uncertainty,
+// and the two open rungs carry DIFFERENT prompts (the app's parameter budget is a quarter of
+// the terminal's), which is why attended-prompt.js exports two templates.
+//
+// RUNG 1, THE APP ROUTE, and it is UNDOCUMENTED. `claude://` is registered by
+// /Applications/Claude.app (com.anthropic.claudefordesktop; 1.24012.9 is what this was
+// verified against on 2026-08-02). `code/new` takes `q` (or `prompt`) and `folder`, routes
+// into the ALREADY-RUNNING app instance rather than launching a second one, and leaves the
+// prompt in the composer UNSENT for the human to press Enter, exactly like the terminal rung.
+// Being undocumented, it can change between app versions with no notice: if it ever stops
+// working the failure is a rung that opens nothing, so the bundle probe and the length
+// pre-flight below are what keep that from becoming a dead button (openExternal itself cannot
+// tell us, same as rung 2).
+//
+// ITS BOUND IS PER-PARAMETER, AND IT TRUNCATES. `q` and `folder` are each cut at 1,024
+// characters. Truncation is the worse of the two failure modes on this file: the terminal
+// handler drops an over-long URL entirely (nothing opens, which is at least detectable by the
+// operator), while the app happily opens a session holding HALF A PROCEDURE and looking whole.
+// So the route is pre-flighted on the encoded length of both parameters and never relies on
+// the platform to tell us; over the bound the app rung is skipped and the terminal rung, with
+// its full-length prompt, is evaluated instead.
+//
 // THE DEEP LINK. `claude-cli://open?cwd=<dir>&q=<prompt>` is documented
 // (code.claude.com/docs/en/deep-links) and registered on macOS by "Claude Code URL
-// Handler.app". `q` is the URL-encoded prompt (max 5,000 characters) and it arrives in the
-// composer UNSUBMITTED, under a "Prompt from an external link" banner: the human presses
-// Enter. Every invocation opens a NEW terminal window; there is no IPC into a running REPL,
-// and no dedupe. `repo=` also exists and is NOT used: it resolves against the user's
-// githubRepoPaths rather than against a path we know.
+// Handler.app". `q` is the URL-encoded prompt and it arrives in the composer UNSUBMITTED,
+// under a "Prompt from an external link" banner: the human presses Enter. Every invocation
+// opens a NEW terminal window; there is no IPC into a running REPL, and no dedupe. `repo=`
+// also exists and is NOT used: it resolves against the user's githubRepoPaths rather than
+// against a path we know.
+//
+// ITS LENGTH LIMIT IS NOT THE ONE THE DOCS DESCRIBE, and believing the docs shipped a dead
+// button (measured live, 2026-08-02). The documentation caps `q` at 5,000 characters. The
+// handler actually drops any URL longer than 4,096 characters TOTAL, scheme and cwd and q
+// together: bisected on a real install, 4,096 is delivered and 4,097 is not. The documented
+// 5,000 on `q` is therefore unreachable. Worse, the drop is SILENT: openExternal resolves,
+// LaunchServices accepts the open, no terminal window appears, and no error reaches this
+// process or any log on the machine. There is nothing to detect after the fact, so the
+// pre-flight URL_MAX_CHARS check below is the only guard that exists. Routing therefore
+// measures the BUILT URL and never the prompt alone, and attended-prompt.js keeps the
+// prompt small enough to leave the cwd room inside the budget (a test pins that).
 //
 // SECURITY HISTORY, and the rules it leaves behind. This deep link had a real RCE (flag
 // smuggling through `q`, fixed in CLI 2.1.118). So: the URL is built with
@@ -43,7 +78,7 @@ const fs = require('fs');
 const os = require('os');
 const { shell, clipboard, Notification } = require('electron');
 const channelDirs = require('./channel-dirs');
-const { buildAttendedPrompt } = require('./attended-prompt');
+const { buildAttendedPrompt, buildAttendedPromptCompact } = require('./attended-prompt');
 const { diag } = require('./diag');
 
 // ─── BEGIN ATTENDED-HANDOFF-PURE (pure; unit-tested via source extraction) ────
@@ -51,11 +86,21 @@ const { diag } = require('./diag');
 // block and evaluates it verbatim (the WATCHER-PURE idiom).
 
 const SCHEME = 'claude-cli://open';
-// The platform's documented ceiling on `q`. Measured on the ENCODED value, because that is
-// what actually travels. Over it the deep link is not attempted at all: a truncated prompt
-// would teach a session half a procedure, which is worse than asking for one paste.
-const Q_MAX_CHARS = 5000;
+// The handler's REAL ceiling, and it is on the WHOLE URL rather than on `q`: scheme, cwd
+// and the encoded prompt all count against it. 4,096 characters are delivered, 4,097 are
+// silently discarded, and nothing anywhere reports the loss (see the docblock). Over it the
+// deep link is not attempted at all: a truncated prompt would teach a session half a
+// procedure, which is worse than asking for one paste.
+const URL_MAX_CHARS = 4096;
 const HANDLER_APP = 'Claude Code URL Handler.app';
+
+// RUNG 1's scheme, its bundle, and its bound. The cap here is PER PARAMETER and the platform
+// TRUNCATES past it rather than refusing, so both `q` and `folder` are measured before
+// anything is opened (see the docblock). attended-prompt.js keeps the compact template under
+// 1,000 encoded characters, which is the slack this number is chosen to leave.
+const APP_SCHEME = 'claude://code/new';
+const APP_PARAM_MAX_CHARS = 1024;
+const APP_BUNDLE = 'Claude.app';
 
 // Percent-encode one URL component, or null when the input cannot be encoded at all.
 // encodeURIComponent THROWS URIError on an unpaired surrogate. The prompt itself can no
@@ -89,14 +134,55 @@ function handlerAppPaths(home) {
   return out;
 }
 
-// THE FALLBACK DECISION, and it fails to the clipboard on every uncertainty: no handler
-// bundle, an unmeasurable prompt, an over-cap `q`. Only a present handler AND a `q` that
-// fits earns the deep link.
+// ...and where Claude.app can live, probed the same way and in the same order. `/Applications`
+// is the normal install, `~/Applications` a per-user one; a machine with neither has no app
+// route at all and the ladder simply starts at rung 2.
+function appBundlePaths(home) {
+  const h = String(home == null ? '' : home).replace(/\/+$/, '');
+  const out = [];
+  if (h) out.push(`${h}/Applications/${APP_BUNDLE}`);
+  out.push(`/Applications/${APP_BUNDLE}`);
+  return out;
+}
+
+// The app link, WITH the two lengths the route decision needs. It answers one object rather
+// than a bare string because the bound is on the PARAMETERS and not on the URL: measuring
+// them off the finished string later would mean parsing our own query back apart. `url` is ''
+// (and both lengths 0) when a component cannot be encoded, so an unencodable prompt fails the
+// same `fits` test an over-long one does and there is no second branch to forget.
+function appLink(cwd, prompt) {
+  const q = encodeQ(prompt);
+  const dir = encodeQ(cwd);
+  if (q === null || dir === null) return { url: '', appQChars: 0, appFolderChars: 0 };
+  return { url: `${APP_SCHEME}?q=${q}&folder=${dir}`, appQChars: q.length, appFolderChars: dir.length };
+}
+
+// A length that is measurable, real and inside `cap`. NaN, Infinity, a string, a negative, and
+// the 0 that a URL which could not be built reports are all a NO.
+function fits(n, cap) {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= cap;
+}
+
+// THE WHOLE LADDER, as one pure decision, and it steps DOWN on every uncertainty: a missing
+// bundle, an unmeasurable length, a URL that could not be built at all (the builders answer
+// '' / 0), or one past what the platform will carry.
+//
+// RUNG 1 is the app, and it needs Claude.app present AND both parameters inside the 1,024 the
+// scheme truncates at. RUNG 2 is the terminal handler, unchanged: its cap is on the WHOLE URL
+// (scheme, cwd and prompt together) because that is where the handler's real 4,096-character
+// ceiling sits, so `urlChars` is the length of the BUILT URL and the caller has to build it
+// before it can ask. RUNG 3 is the clipboard, and it is what "no" means everywhere else.
+//
+// OMITTING the app fields evaluates rung 2 exactly as it did before this rung existed, which
+// is also how open() re-asks after an app openExternal rejects.
 function chooseRoute(spec) {
   const s = spec || {};
+  if (s.hasApp === true && fits(s.appQChars, APP_PARAM_MAX_CHARS) && fits(s.appFolderChars, APP_PARAM_MAX_CHARS)) {
+    return 'app';
+  }
   if (s.hasHandler !== true) return 'clipboard';
-  const n = s.qChars;
-  if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0 || n > Q_MAX_CHARS) return 'clipboard';
+  const n = s.urlChars;
+  if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0 || n > URL_MAX_CHARS) return 'clipboard';
   return 'deep-link';
 }
 
@@ -116,6 +202,10 @@ function bundleExists(p) {
 
 function handlerInstalled() {
   return handlerAppPaths(os.homedir()).some(bundleExists);
+}
+
+function appInstalled() {
+  return appBundlePaths(os.homedir()).some(bundleExists);
 }
 
 // The cwd the deep link opens in: the channel's OWN working directory, the same source the
@@ -187,32 +277,54 @@ function copyFallback(prompt) {
 async function open(card) {
   const c = card || {};
   // THREE IDS, AND NOTHING ELSE (BLOCKER B-1). The card also holds display strings; none of
-  // them are passed, and the template has no parameter left that would take one.
-  const prompt = buildAttendedPrompt({
+  // them are passed, and neither template has a parameter left that would take one. One
+  // object, both templates: a field that cannot be added here cannot reach either prompt.
+  const ids = {
     channelId: c.channelId,
     workspaceId: c.workspaceId,
     threadId: c.taskId, // storage keeps the `task` spelling; this IS the thread id
-  });
+  };
+  const prompt = buildAttendedPrompt(ids); // rungs 2 and 3, the full procedure
+  const compact = buildAttendedPromptCompact(ids); // rung 1, inside the app's 1,024
   if (!prompt) {
     diag('attended: refused, the request ids did not narrow');
     return { ok: false, reason: 'bad-id' };
   }
-  const q = encodeQ(prompt);
-  const route = chooseRoute({ hasHandler: handlerInstalled(), qChars: q === null ? 0 : q.length });
+  // BOTH LINKS ARE BUILT BEFORE THE ROUTE IS CHOSEN, because both caps are measured on built
+  // output and not on the prompt: rung 2's counts the cwd inside the same 4,096 (a channel
+  // with a deep custom directory is exactly the case that overflows), and rung 1's is on the
+  // encoded parameters. Both builders answer '' / 0 when a component cannot be encoded, and
+  // 0 fails every `fits`, so there is no separate unencodable branch anywhere below.
+  const dir = cwdFor(c.channelId);
+  const url = handoffUrl(dir, prompt);
+  const app = appLink(dir, compact);
+  let route = chooseRoute({
+    hasApp: appInstalled(), appQChars: app.appQChars, appFolderChars: app.appFolderChars,
+    hasHandler: handlerInstalled(), urlChars: url.length,
+  });
   const short = String(c.channelId || '').slice(0, 8);
-  if (route === 'deep-link') {
-    const url = handoffUrl(cwdFor(c.channelId), prompt);
-    if (url) {
-      try {
-        await shell.openExternal(url);
-        diag('attended: deep link opened', short, 'q', q.length, 'chars');
-        return { ok: true, route: 'deep-link' };
-      } catch (err) {
-        diag('attended: openExternal failed', err && err.message, '- copying instead');
-      }
+  if (route === 'app') {
+    try {
+      await shell.openExternal(app.url);
+      diag('attended: app opened', short, 'url', app.url.length, 'chars');
+      return { ok: true, route: 'app' };
+    } catch (err) {
+      diag('attended: app openExternal failed', err && err.message, '- stepping down a rung');
+      // STEP DOWN, and re-ask WITHOUT the app fields: rung 2 has its own bundle and its own
+      // cap, and a rejection here says nothing about either.
+      route = chooseRoute({ hasHandler: handlerInstalled(), urlChars: url.length });
     }
   }
-  diag('attended: clipboard fallback', short, 'q', q === null ? 'unencodable' : `${q.length} chars`);
+  if (route === 'deep-link') {
+    try {
+      await shell.openExternal(url);
+      diag('attended: deep link opened', short, 'url', url.length, 'chars');
+      return { ok: true, route: 'deep-link' };
+    } catch (err) {
+      diag('attended: openExternal failed', err && err.message, '- copying instead');
+    }
+  }
+  diag('attended: clipboard fallback', short, 'url', url ? `${url.length} chars` : 'unencodable');
   return copyFallback(prompt);
 }
 
@@ -220,12 +332,17 @@ module.exports = {
   open,
   // pure core (exported for the truth table)
   handoffUrl,
+  appLink,
   handlerAppPaths,
+  appBundlePaths,
   chooseRoute,
   encodeQ,
   SCHEME,
-  Q_MAX_CHARS,
+  APP_SCHEME,
+  URL_MAX_CHARS,
+  APP_PARAM_MAX_CHARS,
   HANDLER_APP,
+  APP_BUNDLE,
   COPIED_TITLE,
   COPIED_BODY,
 };

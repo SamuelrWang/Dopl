@@ -13,9 +13,16 @@
 //      post, nothing fed to any session. The consent row stays PENDING so Accept still works.
 //      Pinned as the module's DEPENDENCY SET (the idiom test/wake-external-requester.test.mjs
 //      uses for the passive notify lane) plus a source scan of the one IPC handler.
-//   3. THE LADDER FAILS TO THE CLIPBOARD. No handler bundle, an over-cap `q`, an
+//   3. THE LADDER FAILS TO THE CLIPBOARD. No handler bundle, an over-cap URL, an
 //      unencodable prompt, or an openExternal that rejects: all four copy and notify rather
 //      than opening nothing and saying nothing.
+//   4. THE CAP IS ON THE URL, NOT ON `q` (the 2026-08-02 live bug). The docs cap `q` at
+//      5,000 characters; the handler silently drops any URL over 4,096 TOTAL, scheme and cwd
+//      included. The first release routed on `q` alone, built a 4,128-character URL, and the
+//      operator's click opened nothing at all: openExternal resolved, LaunchServices
+//      accepted, no window appeared and no error surfaced anywhere. openExternal CANNOT
+//      detect this, so the pre-flight length check is the only guard and the URL must
+//      therefore be built BEFORE the route is chosen. That ordering is pinned below.
 //
 // METHOD: attended-handoff.js is electron-bound (shell / clipboard / Notification), so the
 // functions under test are brace-matched out of the source and evaluated with fakes — the
@@ -28,6 +35,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { fnOf, between } from "./helpers/source-probe.mjs";
+// Fixtures and the source-extracted harness are shared with test/attended-app-route.test.mjs,
+// which drives the SAME open() over the app rung. One harness, so it cannot drift.
+import { CH, WS, TH, CARD, handoffHarness as harness } from "./helpers/attended.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -39,13 +49,6 @@ const PRELOAD = readFileSync(join(HERE, "..", "renderer", "session", "session-pr
 
 const { buildAttendedPrompt } = require("../main/attended-prompt.js");
 
-const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
-const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
-const TH = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
-// The display strings are on the fixture ON PURPOSE, and they are on nothing else: BLOCKER
-// B-1 took them off the consent entry AND out of the prompt, so a card that still carried
-// them must produce the same prompt as one that does not.
-const CARD = { channelId: CH, workspaceId: WS, taskId: TH, requesterName: "David Chen", channelName: "Ops" };
 const PROMPT = buildAttendedPrompt({ channelId: CH, workspaceId: WS, threadId: TH });
 
 // ── The pure block, sliced and evaluated verbatim ─────────────────────────────
@@ -57,8 +60,8 @@ const PROMPT = buildAttendedPrompt({ channelId: CH, workspaceId: WS, threadId: T
 const codeOnly = (src) => src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
 
 const BLOCK = between(SRC, "// ─── BEGIN ATTENDED-HANDOFF-PURE", "// ─── END ATTENDED-HANDOFF-PURE", "attended-handoff");
-const pure = new Function(`${BLOCK}\n return { encodeQ, handoffUrl, handlerAppPaths, chooseRoute, SCHEME, Q_MAX_CHARS, HANDLER_APP };`)();
-const { encodeQ, handoffUrl, handlerAppPaths, chooseRoute, Q_MAX_CHARS } = pure;
+const pure = new Function(`${BLOCK}\n return { encodeQ, handoffUrl, handlerAppPaths, chooseRoute, SCHEME, URL_MAX_CHARS, HANDLER_APP };`)();
+const { encodeQ, handoffUrl, handlerAppPaths, chooseRoute, URL_MAX_CHARS } = pure;
 
 test("the pure block really is pure (nothing electron-bound, nothing on disk)", () => {
   const code = codeOnly(BLOCK);
@@ -140,23 +143,34 @@ test("both install locations are probed, the per-user one first", () => {
 
 // ── 3. THE ROUTE DECISION ─────────────────────────────────────────────────────
 
-test("only a present handler AND a q that fits earns the deep link", () => {
-  assert.equal(Q_MAX_CHARS, 5000, "the platform's documented ceiling on q");
-  assert.equal(chooseRoute({ hasHandler: true, qChars: 1 }), "deep-link");
-  assert.equal(chooseRoute({ hasHandler: true, qChars: 5000 }), "deep-link", "5,000 is the last value that fits");
-  assert.equal(chooseRoute({ hasHandler: true, qChars: 5001 }), "clipboard", "5,001 is one too many");
+test("only a present handler AND a URL that fits earns the deep link", () => {
+  // 4,096 is MEASURED, not documented: bisected on a real install on 2026-08-02, where a
+  // 4,096-character URL opened a window and a 4,097-character one did nothing whatsoever.
+  // The documented 5,000 is on `q` alone and is unreachable, because the scheme and the cwd
+  // are inside the same budget. Routing on `q` is what shipped the dead button.
+  assert.equal(URL_MAX_CHARS, 4096, "the measured ceiling on the WHOLE url");
+  assert.ok(!/\bQ_MAX_CHARS\b|\bqChars\b/.test(SRC), "the q-only cap is gone, name and all");
+  assert.equal(chooseRoute({ hasHandler: true, urlChars: 1 }), "deep-link");
+  assert.equal(chooseRoute({ hasHandler: true, urlChars: 4095 }), "deep-link");
+  assert.equal(chooseRoute({ hasHandler: true, urlChars: 4096 }), "deep-link", "4,096 is the last value delivered");
+  assert.equal(chooseRoute({ hasHandler: true, urlChars: 4097 }), "clipboard", "4,097 is the one that vanishes");
+  // The old cap must not be honoured under the new name: a URL that clears 5,000 on `q` is
+  // exactly the shape that was silently dropped in production.
+  assert.equal(chooseRoute({ hasHandler: true, urlChars: 4200 }), "clipboard", "under 5,000 is not the question");
 });
 
 test("every uncertainty falls to the clipboard, never to a silent nothing", () => {
   const clipboardCases = [
-    ["no handler bundle", { hasHandler: false, qChars: 10 }],
-    ["handler unknown", { hasHandler: undefined, qChars: 10 }],
-    ["handler truthy but not true", { hasHandler: 1, qChars: 10 }],
-    ["over the cap", { hasHandler: true, qChars: 9999 }],
-    ["unmeasurable q", { hasHandler: true, qChars: NaN }],
-    ["unencodable q (0 chars)", { hasHandler: true, qChars: 0 }],
-    ["negative", { hasHandler: true, qChars: -1 }],
-    ["a string length", { hasHandler: true, qChars: "10" }],
+    ["no handler bundle", { hasHandler: false, urlChars: 10 }],
+    ["handler unknown", { hasHandler: undefined, urlChars: 10 }],
+    ["handler truthy but not true", { hasHandler: 1, urlChars: 10 }],
+    ["over the cap", { hasHandler: true, urlChars: 9999 }],
+    ["unmeasurable url", { hasHandler: true, urlChars: NaN }],
+    ["infinite", { hasHandler: true, urlChars: Infinity }],
+    ["unbuildable url ('' measures 0)", { hasHandler: true, urlChars: 0 }],
+    ["negative", { hasHandler: true, urlChars: -1 }],
+    ["a string length", { hasHandler: true, urlChars: "10" }],
+    ["the OLD key, now meaningless", { hasHandler: true, qChars: 10 }],
     ["nothing at all", {}],
     ["no spec", undefined],
   ];
@@ -172,59 +186,6 @@ test("every uncertainty falls to the clipboard, never to a silent nothing", () =
 test("open() is declared async, so the awaited openExternal really is awaited", () => {
   assert.match(SRC, /^async function open\(card\) \{$/m);
 });
-
-const CONSTS = ["SCHEME", "Q_MAX_CHARS", "HANDLER_APP", "COPIED_TITLE", "COPIED_BODY"]
-  .map((n) => {
-    const m = new RegExp(`^const ${n} = (.+);$`, "m").exec(SRC);
-    assert.ok(m, `attended-handoff must define ${n}`);
-    return `const ${n} = ${m[1]};`;
-  })
-  .join("\n");
-
-// The REAL functions, wired to fakes. Everything the module actually calls is recorded.
-function harness(over = {}) {
-  // `clicks` holds the banner's click handlers (L-4), so the notification can be driven the
-  // way the operator drives it; `throwOnCopy` lets a LATER write fail than the first one.
-  const log = { opened: [], copied: [], notified: [], diag: [], clicks: [], throwOnCopy: false };
-  const fakes = {
-    handlerPresent: true,
-    openExternal: () => Promise.resolve(),
-    prompt: buildAttendedPrompt,
-    dir: "/Users/sam/Downloads",
-    ...over,
-  };
-  const body = [
-    CONSTS,
-    fnOf(SRC, "encodeQ"),
-    fnOf(SRC, "handoffUrl"),
-    fnOf(SRC, "handlerAppPaths"),
-    fnOf(SRC, "chooseRoute"),
-    fnOf(SRC, "bundleExists"),
-    fnOf(SRC, "handlerInstalled"),
-    fnOf(SRC, "cwdFor"),
-    fnOf(SRC, "notifyCopied"),
-    fnOf(SRC, "copyFallback"),
-    "async " + fnOf(SRC, "open"),
-    "return open;",
-  ].join("\n");
-  const open = new Function("shell", "clipboard", "Notification", "channelDirs", "buildAttendedPrompt", "diag", "fs", "os", body)(
-    { openExternal: (url) => { log.opened.push(url); return fakes.openExternal(url); } },
-    { writeText: (t) => { if (fakes.clipboardThrows || log.throwOnCopy) throw new Error("no pasteboard"); log.copied.push(t); } },
-    Object.assign(
-      function Notice(o) {
-        log.notified.push(o);
-        return { show() {}, on(k, fn) { if (k === "click") log.clicks.push(fn); } };
-      },
-      { isSupported: () => true }
-    ),
-    { sessionSpawnDir: () => (fakes.dirThrows ? (() => { throw new Error("nope"); })() : fakes.dir) },
-    fakes.prompt,
-    (...parts) => log.diag.push(parts.join(" ")),
-    { statSync: () => ({ isDirectory: () => fakes.handlerPresent }) },
-    { homedir: () => "/Users/sam" }
-  );
-  return { open, log };
-}
 
 test("HAPPY PATH: the deep link opens, with this channel's own working directory as cwd", () => {
   const { open, log } = harness();
@@ -244,6 +205,9 @@ test("HAPPY PATH: the deep link opens, with this channel's own working directory
     assert.ok(q.includes(`thread "${TH}"`), "and it is addressed to this thread");
     // BLOCKER B-1, end to end: the card's display strings do not travel.
     assert.ok(!q.includes("David Chen") && !q.includes('"Ops"'), "no peer-typed byte on the wire");
+    // ...and the SHIPPED artifact fits, with room to spare for a cwd deeper than this one.
+    // The clipboard rung is a fallback, not the feature.
+    assert.ok(url.length < 4096 - 300, `the shipped URL is ${url.length} chars, too close to the 4,096 cap`);
   });
 });
 
@@ -297,14 +261,70 @@ test("L-4: the copied banner answers a click by re-copying, and contains a throw
   assert.ok(dead.log.diag.some((l) => l.includes("notify click failed")));
 });
 
+// The harness's cwd is "/Users/sam/Downloads", so this is the exact prefix every URL it
+// builds carries. Everything past it is the encoded prompt.
+const PREFIX = `claude-cli://open?cwd=${encodeURIComponent("/Users/sam/Downloads")}&q=`.length;
+
+test("THE ROUTE IS DECIDED ON THE BUILT URL, so the cwd counts against the cap", async () => {
+  // THE 2026-08-02 LIVE BUG, as a test. A prompt that clears the documented 5,000-character
+  // cap on `q` can still push the URL past the 4,096 the handler will carry, and the handler
+  // then drops it in silence: openExternal resolves, nothing opens, nothing errors. Routing
+  // on `q` alone declared success and the operator got a dead button.
+  const overflow = "x".repeat(URL_MAX_CHARS - PREFIX + 1); // one character too many, WITH cwd
+  assert.ok(overflow.length < 5000, "and it is comfortably inside the documented cap on q");
+  const { open, log } = harness({ prompt: () => overflow });
+  assert.deepEqual(await open(CARD), { ok: true, route: "clipboard" });
+  assert.deepEqual(log.opened, [], "a URL the handler would swallow is never handed to it");
+  assert.equal(log.copied[0], overflow, "the whole prompt, uncut, on the clipboard instead");
+
+  // One character shorter is EXACTLY at the cap, and that one does open.
+  const fits = "x".repeat(URL_MAX_CHARS - PREFIX);
+  const edge = harness({ prompt: () => fits });
+  assert.deepEqual(await edge.open(CARD), { ok: true, route: "deep-link" });
+  assert.equal(edge.log.opened[0].length, URL_MAX_CHARS, "4,096 on the nose is delivered");
+  assert.deepEqual(edge.log.copied, [], "and nothing lands on the clipboard");
+});
+
+test("A LONGER WORKING DIRECTORY is what pushes a fitting prompt over, and it routes too", async () => {
+  // The prompt is one term of the sum. attended-prompt.js holds its encoded length under
+  // 3,650 so an ordinary cwd fits; a deep enough custom channel directory still overflows,
+  // and that case must degrade to a paste rather than to nothing.
+  const prompt = "x".repeat(3600);
+  const near = harness({ prompt: () => prompt, dir: "/Users/sam/Downloads" });
+  assert.deepEqual(await near.open(CARD), { ok: true, route: "deep-link" }, "an ordinary cwd fits");
+  const deep = harness({ prompt: () => prompt, dir: `/Users/sam/${"nested/".repeat(80)}channel` });
+  assert.deepEqual(await deep.open(CARD), { ok: true, route: "clipboard" }, "a very deep one does not");
+  assert.deepEqual(deep.log.opened, []);
+  assert.equal(deep.log.copied[0], prompt, "the prompt is still intact on the clipboard");
+});
+
 test("AN OVER-CAP PROMPT: copied, not truncated, and the deep link is not attempted", async () => {
-  // Reachable in production only through an extreme display name, and the answer must be a
-  // paste rather than a prompt cut in half: half a procedure is worse than none.
+  // The answer must be a paste rather than a prompt cut in half: half a procedure is worse
+  // than none.
   const { open, log } = harness({ prompt: () => "x".repeat(5001) });
   const res = await open(CARD);
   assert.deepEqual(res, { ok: true, route: "clipboard" });
   assert.deepEqual(log.opened, []);
   assert.equal(log.copied[0].length, 5001, "the whole prompt, uncut");
+});
+
+test("open() builds the URL BEFORE it chooses a route, and routes on that URL's length", () => {
+  // The ordering IS the fix: a route chosen from the prompt cannot see the cwd, and the cwd
+  // is inside the same 4,096 characters. Pinned on the source because a later refactor that
+  // moved handoffUrl back under the `if` would pass every behavioural test above on this
+  // machine's short home directory and fail on someone's deep one.
+  const body = fnOf(SRC, "open");
+  const built = body.indexOf("const url = handoffUrl(");
+  const routed = body.indexOf("chooseRoute(");
+  const branch = body.indexOf("if (route === 'deep-link')");
+  assert.ok(built > -1, "open() must build the url into a const");
+  assert.ok(built < routed, "the url is built before the route is chosen");
+  assert.ok(routed < branch, "and the route is chosen before the branch that uses it");
+  // The terminal rung's two inputs, still read live and still measured on the BUILT url. The
+  // app rung's fields sit alongside them in the same call (attended-app-route.test.mjs pins
+  // those); what matters here is that neither of these two moved or went stale.
+  assert.match(body, /chooseRoute\(\{[\s\S]{0,200}?hasHandler: handlerInstalled\(\), urlChars: url\.length,?\s*\}\)/);
+  assert.ok(!/handoffUrl\(/.test(body.slice(branch)), "the url is not rebuilt inside the branch");
 });
 
 test("AN UNENCODABLE PROMPT: copied rather than thrown out of the click", async () => {
@@ -402,7 +422,11 @@ test("BLOCKER B-1: the handoff reads NO display string, and the entry holds none
   // keeps the names at all. They still reach the RENDERER (`from` / `channelName` on the
   // consent_request payload), where they are display data behind textContent.
   const open = fnOf(SRC, "open");
-  assert.match(open, /buildAttendedPrompt\(\{\n\s+channelId: c\.channelId,\n\s+workspaceId: c\.workspaceId,\n\s+threadId: c\.taskId,/);
+  // ONE object, read off the card once, and BOTH templates are built from it: a field that
+  // cannot be added here cannot reach either prompt.
+  assert.match(open, /const ids = \{\n\s+channelId: c\.channelId,\n\s+workspaceId: c\.workspaceId,\n\s+threadId: c\.taskId,/);
+  assert.match(open, /const prompt = buildAttendedPrompt\(ids\);/);
+  assert.match(open, /const compact = buildAttendedPromptCompact\(ids\);/);
   for (const gone of ["requesterName", "peerName", "bodyText", "bodyPreview"]) {
     assert.ok(!codeOnly(SRC).includes(gone), `attended-handoff still names ${gone}`);
   }
