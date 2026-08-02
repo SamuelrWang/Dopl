@@ -861,7 +861,10 @@ html, body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
 }
 .consent-note { font-size: var(--text-caption); color: var(--text-secondary); }
-.consent-actions { display: flex; gap: 8px; margin-top: 2px; }
+/* F-118: three controls now (Accept · Open in Claude Code · Deny), and Accept relabels to
+   "Start a Dopl session instead" after an attended handoff, so the row has to wrap rather
+   than squeeze the card's 560px. */
+.consent-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 
 /* ── Composer (steering) ─────────────────────────────────────────────────── */
 /* D4: NO horizontal padding. The 10px/side it used to carry (against .app's 8px)

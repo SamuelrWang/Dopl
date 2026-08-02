@@ -18,6 +18,7 @@
   // them, but a harness that stubs only VM / chrome / render degrades to today's composer.
   const mention = globalThis.DoplSessionMention || null;
   const mentionUi = globalThis.DoplSessionMentionUI || null;
+  const attendedUi = globalThis.DoplSessionAttendedUI || null; // F-118 consent-card button
   // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
   // session-mention.js (the view-model is at its 500-line cap) and run over its output.
   const reduce = mention ? (st, evt) => mention.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
@@ -108,6 +109,9 @@
     onConsentDecide(decision) {
       bridge.consentDecision(decision);
     },
+    // F-118: makeConsent calls this where the button belongs, beside Accept. The module owns
+    // the control, its copy and the handled-attended state; it decides nothing on the request.
+    attended: attendedUi ? (row, accept, note) => attendedUi.mount(row, accept, note, bridge) : null,
   };
   const FACTORY = render.makeFactories(ctx);
   // v2.8: GRAFTED on, not added to render.makeFactories (that file is at its cap too).

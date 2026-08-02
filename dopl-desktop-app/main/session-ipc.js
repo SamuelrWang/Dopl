@@ -16,6 +16,7 @@
 const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');
 const gate = require('./session-gate'); // v2.5 D1: the inbound gate owns the decision
+const attended = require('./attended-handoff'); // F-118: "Open in Claude Code" on the consent card
 // v2.9: the canonical mode tables live with the gate that resolves them (session-profiles).
 const { normalizeToolMode, normalizeMessageMode } = require('./session-profiles');
 const peerPost = require('./session-peer-post'); // v2.8: the operator's own peer-addressed post
@@ -135,6 +136,26 @@ function register(internals) {
     } catch (err) {
       diag('session-ipc: consent-decision error', err && err.message);
       return { ok: false };
+    }
+  });
+
+  // ── F-118 ATTENDED HANDOFF: answer this request with the operator's OWN Claude Code.
+  // Resolved from the pre-consent window like every other handler, and the payload carries
+  // NOTHING (there is no argument to forge): attended-handoff reads the card's own ids and
+  // display names off the registry entry.
+  //
+  // IT RESOLVES NOTHING ON THE SERVER. No decideConsent, no patchDecision, no watcher poke,
+  // no dispatch, no spawn. The consent row stays PENDING, so Accept is still answerable
+  // underneath and still behaves exactly as it does today; the renderer marks the card
+  // handled-attended locally on the {ok} this returns.
+  ipcMain.handle('session:attended-handoff', (e) => {
+    const c = engine.getConsentBySender && engine.getConsentBySender(e && e.sender);
+    if (!c) return { ok: false, reason: 'no-card' };
+    try {
+      return attended.open(c);
+    } catch (err) {
+      diag('session-ipc: attended-handoff error', err && err.message);
+      return { ok: false, reason: 'error' };
     }
   });
 

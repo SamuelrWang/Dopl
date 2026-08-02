@@ -124,6 +124,10 @@ function open(spec) {
     taskId: spec.taskId,
     workspaceId: spec.workspaceId,
     rowId: spec.rowId,
+    // F-118 / BLOCKER B-1: the entry deliberately carries NO display strings. It used to
+    // keep the requester and channel names for the attended prefill; that prompt now takes
+    // three ids and nothing else, and the names are peer-typed, so the entry does not hold
+    // them either. They still reach the RENDERER below, where they are display data.
     win,
     cstate: initialConsentState(),
     replay: null, // item 3: set in bind() — the transcript ring + reload re-send

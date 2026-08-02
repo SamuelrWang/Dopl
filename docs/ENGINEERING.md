@@ -1154,6 +1154,15 @@ The desktop half of §8's MULTIPLAYER v2. Three routing changes and a doorbell c
 
 ---
 
+### Desktop app — ATTENDED HANDOFF: "Open in Claude Code" on the consent card (2026-08-02, F-118)
+
+**The third answer to a peer request.** Beside Accept (spawn a Dopl session) and Deny, the pre-consent window offers "Open in Claude Code": the operator answers with their OWN Claude. `main/attended-handoff.js` builds `claude-cli://open?cwd=<channel dir>&q=<prompt>` and `shell.openExternal`s it — the deep link is DOCUMENTED (code.claude.com/docs/en/deep-links), opens the user's terminal with the prompt PREFILLED AND UNSUBMITTED, so pressing Enter is the consent gesture. Fallback ladder on any uncertainty (handler bundle absent from both Applications dirs, q > 5,000 encoded chars, unencodable, openExternal rejects): clipboard + notification. Card resolves LOCALLY — no spawn, no server write, Accept relabels to "Start a Dopl session instead" and stays live; the attended button joins the card's terminal `lock()`.
+
+- **THE INVARIANT: ZERO PEER BYTES IN THE PREFILL.** An attended session is the operator's personal Claude — full tools, none of the spawn path's containment — so `attended-prompt.buildAttendedPrompt` interpolates exactly THREE NARROWED IDS and nothing else. No names (deleted after a working injection via channel rename), no titles, no bodies; the consent registry entry deliberately holds no display strings for it to reach. The session learns real names from its own scoped `read`, inside the server's fencing. `narrowId` is pinned byte-identical to `prompt-framing.idToken` by differential test. Do not add a field to that template without treating it as the security boundary it is.
+- The prompt teaches the external-session contract: imperative ToolSearch first (deferred-not-absent), connector-not-set-up self-diagnosis then STOP (Dopl cannot detect connector auth from outside — the prompt is the detector), scoped read before replying, post with channel+workspace+thread on every op INCLUDING await, await re-arm cadence with no push promises.
+- Never let prompt text near a shell string: `encodeURIComponent` is the only encoder, there is no osascript/spawn rung in v1, and the deep link's own RCE history (flag smuggling via `q`, fixed CLI 2.1.118) is the reason.
+- Residuals and the open lane-priority question from the first live 1.7.20 test are F-118 / F-117 in REFACTOR-FINDINGS.md — read them before extending this surface (the window-budget hold, residual (a), is the sharpest).
+
 ## Appendix A — ESLint rules to add
 
 - `import/order` with groups: builtin, external, internal (`@/` alias), parent, sibling, index.

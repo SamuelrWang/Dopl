@@ -416,9 +416,12 @@
     accept.type = "button";
     const deny = el("button", "ctl btn-light ctl-danger", "Deny");
     deny.type = "button";
+    // F-118 FIX H-2: the hook's control, held so lock() can disable it with the pair below.
+    let attended = null;
     const lock = (msg) => {
       accept.disabled = true;
       deny.disabled = true;
+      if (attended) { attended.locked = true; attended.el.disabled = true; } // terminal means terminal
       if (msg != null) {
         note.textContent = msg;
         note.classList.remove("hidden");
@@ -433,6 +436,12 @@
       onDecide("deny");
     });
     actions.appendChild(accept);
+    // F-118: the third control, mounted by the controller's hook. Its NODE is kept because a
+    // decided card must not still hand the same request to a second answerer, and the hook is
+    // guarded because a throw here would cost the operator Accept and Deny as well.
+    try {
+      if (ctx && typeof ctx.attended === "function") attended = ctx.attended(actions, accept, note);
+    } catch (_err) { /* no third control; the pair still works */ }
     actions.appendChild(deny);
     body.appendChild(actions);
     root.appendChild(body);
@@ -477,23 +486,11 @@
     };
   }
 
+  // The module surface, in declaration order (packed: this file is at the §2 500-line cap,
+  // and each name is documented at the factory it exports, not here).
   return {
-    el,
-    cap,
-    pretty,
-    initial,
-    avatarNode,
-    makeTurn,
-    makeTool,
-    makeRequest, // FIX (v2.x): the initiating request item
-    makeCounterparty,
-    makeOutbound,
-    outboundLabel, // FIX F3
-    makeInboundPending,
-    makeHistory,
-    makeHistoryDivider,
-    makeConsent,
-    makeNotice,
-    makeFactories,
+    el, cap, pretty, initial, avatarNode,
+    makeTurn, makeTool, makeRequest, makeCounterparty, makeOutbound, outboundLabel,
+    makeInboundPending, makeHistory, makeHistoryDivider, makeConsent, makeNotice, makeFactories,
   };
 });

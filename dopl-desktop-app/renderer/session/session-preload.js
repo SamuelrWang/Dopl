@@ -135,6 +135,14 @@ contextBridge.exposeInMainWorld('doplSession', {
   consentDecision(decision) {
     return ipcRenderer.invoke('session:consent-decision', { decision: asConsent(decision) });
   },
+  // F-118 — the attended handoff: open the OPERATOR'S OWN Claude Code on this request,
+  // with a prefilled, unsubmitted prompt. NO ARGUMENT in either direction beyond main's
+  // {ok, route}: main re-derives the consent card from the window, exactly like
+  // consentDecision above, so there is no id to forge and no text this page can inject
+  // into the prompt. It decides nothing on the server, so Accept stays answerable.
+  attendedHandoff() {
+    return ipcRenderer.invoke('session:attended-handoff', {});
+  },
   // v2.9 AXIS A — per-session TOOL permissions (manual | accept_edits | auto | bypass).
   // What MY agent may do on THIS machine. It can never approve an outbound message or an
   // incoming one; hard-deny stays immovable in every mode, `bypass` included (§H-2).

@@ -191,6 +191,9 @@
        both BEFORE the controller that wires them. -->
   <script src="session-mention.js"></script>
   <script src="session-mention-ui.js"></script>
+  <!-- F-118: the attended-handoff button on the pre-consent card. Loaded BEFORE the
+       controller, which reads its global and hands it to session-render's makeConsent. -->
+  <script src="session-attended-ui.js"></script>
   <script src="session.js"></script>
   <!-- Q6: the sign-in banner owns its own element + its own narrow bridge sink, so it is
        independent of the transcript controller above and loads after it. -->
