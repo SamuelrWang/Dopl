@@ -19,6 +19,7 @@
   const mention = globalThis.DoplSessionMention || null;
   const mentionUi = globalThis.DoplSessionMentionUI || null;
   const attendedUi = globalThis.DoplSessionAttendedUI || null; // F-118 consent-card button
+  const modesUi = globalThis.DoplSessionModesUI || null; // FIX 2: the posture selects + their revert
   // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
   // session-mention.js (the view-model is at its 500-line cap) and run over its output.
   const reduce = mention ? (st, evt) => mention.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
@@ -33,7 +34,7 @@
   const bridge = window.doplSession || {
     sessionId: "", onEvent: noop, send: noop, permission: noop,
     inboundDecision: noop, interrupt: noop, end: noop, closeTask: noop,
-    consentDecision: noop, setToolMode: noop, setMessageMode: noop,
+    consentDecision: noop, setToolMode: noop, setMessageMode: noop, setModel: noop,
     folder: { get: resolved, choose: resolved, clear: resolved },
   };
   const folderBridge = bridge.folder || { get: resolved, choose: resolved, clear: resolved };
@@ -45,8 +46,8 @@
     peerAvatar: $("peerAvatar"), channelName: $("channelName"), taskTitle: $("taskTitle"),
     statusDot: $("statusDot"), statusLabel: $("statusLabel"), statusMeta: $("statusMeta"),
     permPosture: $("permPosture"), permWarn: $("permWarn"), folderLabel: $("folderLabel"),
-    toolMode: $("toolMode"), messageMode: $("messageMode"),
-    stream: $("stream"), dock: $("permissionDock"), permTool: $("permTool"),
+    toolMode: $("toolMode"), messageMode: $("messageMode"), modelMode: $("modelMode"), ctxMeter: $("ctxMeter"),
+    stream: $("stream"), dock: $("permissionDock"), permTool: $("permTool"), permWhy: $("permWhy"),
     permSummary: $("permSummary"), permPostLabel: $("permPostLabel"), permPostTo: $("permPostTo"),
     permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
     consentView: $("consentView"), endedBanner: $("endedBanner"), thinking: $("thinkingChip"),
@@ -146,19 +147,21 @@
     els.statusDot.className = "status-dot " + vm.statusDotKey(state.phase, state.activity);
     els.statusLabel.textContent = vm.statusText(state.phase, state.activity);
     const info = state.init || {};
-    els.statusMeta.textContent = info.model || "";
+    // The model REALLY running (init states it once, every turn end restates it), so a
+    // mid-session switch shows here. The picker shows the REQUESTED value: different facts.
+    els.statusMeta.textContent = state.liveModel || info.model || "";
     // v2.9 THE TWO AXES. The posture line always states BOTH (contract D) and the selects
     // reflect MAIN's echoed state, never the click: a park resets both axes, and the `modes`
     // echo is what drags the controls back to Manual / Ask so they cannot lie about what the
     // gate will do. `bypass` additionally lights the danger chip that says it is per session.
     els.permPosture.textContent = vm.permissionPostureText(state.toolMode, state.messageMode,
       info.profileLabel || info.profile);
-    els.toolMode.value = state.toolMode;
-    els.messageMode.value = state.messageMode;
     const warn = vm.bypassNoticeText(state.toolMode);
     els.permWarn.textContent = warn;
     els.permWarn.classList.toggle("hidden", !warn);
-    els.toolMode.classList.toggle("is-bypass", state.toolMode === "bypass");
+    // FIX 2: dead during the accept -> init adoption gap. It also owns the unconditional repaint
+    // of all three selects, the bypass tint and the context meter (its own strip, and §2 cap).
+    if (modesUi) modesUi.sync(els, state);
   }
 
   function renderFolder() {
@@ -275,6 +278,10 @@
     els.permTool.textContent = p.name || "";
     els.permSummary.textContent = p.inputSummary || "";
     els.permInput.textContent = pretty(p.inputFull);
+    // 2026-08-02: WHY the dock is asking (the inline post card has said so since the reason
+    // codes landed). Closed code table: an unknown or absent code renders no line, not a guess.
+    els.permWhy.textContent = render.gateReasonText(p.gateReason);
+    els.permWhy.classList.toggle("hidden", !els.permWhy.textContent);
     // v2.5 D2: an outbound post is gated now, so the dock shows the MESSAGE the agent is about
     // to send, in full, before the operator allows it. Any other tool hides the block and keeps
     // the existing summary + collapsible input only.
@@ -460,17 +467,11 @@
     $("btnAllowTask").addEventListener("click", () => decide("allow-task"));
     $("btnDeny").addEventListener("click", () => decide("deny"));
 
-    // v2.9 THE TWO AXES. Each select tells main about ITS OWN axis and nothing else; main
-    // coerces fail-closed, applies it, and echoes `modes` back, which is what actually repaints
-    // the controls (renderStatus). A preload without the method (version skew) leaves the select
-    // where the operator put it and main enforcing the restrictive default, which is the safe
-    // failure — never the reverse.
-    els.toolMode.addEventListener("change", () => {
-      if (typeof bridge.setToolMode === "function") bridge.setToolMode(els.toolMode.value);
-    });
-    els.messageMode.addEventListener("change", () => {
-      if (typeof bridge.setMessageMode === "function") bridge.setMessageMode(els.messageMode.value);
-    });
+    // v2.9 THE TWO AXES, v3.2 FIX 2: the selects live in session-modes-ui.js (this file is at
+    // the §2 cap) because the control now has to REVERT itself when main refuses the change.
+    if (modesUi) modesUi.mount({ els, bridge,
+      confirmed: () => ({ tool: state.toolMode, message: state.messageMode, model: state.modelChoice }),
+      notice: (text) => { state = reduce(state, { type: "notice", level: "error", text }); renderAll(); } });
 
     // The close-thread panel is gone (v3.1). Closing settles the SHARED thread for BOTH members,
     // so it belongs to the thread (the web thread card, or an agent via dopl_channel), not to one

@@ -59,8 +59,22 @@ function createRing(maxEntries, maxBytes) {
 //           moves it, while main keeps enforcing the real posture off `s.state` (session-io
 //           grantArgs). So an evicted `modes` made the header UNDERSTATE what is actually being
 //           allowed — a strictly worse failure than overstating it.
+//   `model` (2026-08-02) is the operator's PICK for this session. It is the same class of fact
+//           as `modes`: the renderer's initialState guesses 'default' and only this event moves
+//           it, so an evicted one leaves the third select claiming a model the session is not
+//           running. Emitted once at start and once per change, so last-wins bounds it.
+//   `context` (2026-08-02) is the meter. A reload with the meter evicted comes back blank until
+//           the next turn ENDS, which on a session waiting for a reply can be a long time — and
+//           blank reads as "nothing used", the wrong direction on a gauge whose whole job is to
+//           say when to stop. One entry, last-wins, like the two above.
+//   `request_status` (2026-08-02) is the REQUESTER shell's one-line lifecycle strip: sent ->
+//           accepted / declined / replied. Same class of fact as `modes` and `model` — the
+//           renderer's only source for it is this event, it is emitted at most once per
+//           transition (four in a whole exchange, last-wins), and a reload with it evicted comes
+//           back saying nothing about a request that HAS an outcome. Blank reads as "nothing has
+//           happened yet", the wrong direction on a line whose whole job is to say what did.
 // `folder` is display-only and is deliberately NOT pinned; so are the avatars (see below).
-const PINNED_TYPES = ['init', 'modes'];
+const PINNED_TYPES = ['init', 'modes', 'model', 'context', 'request_status'];
 
 function isPinned(payload) {
   return !!payload && PINNED_TYPES.indexOf(payload.type) !== -1;

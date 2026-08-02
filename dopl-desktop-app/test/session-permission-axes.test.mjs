@@ -268,6 +268,8 @@ test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the sessio
   canUse(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, { requestId: "r1", toolUseID: "t1" });
   assert.deepEqual(evs[0].payload, {
     type: "outbound_gate", requestId: "r1", toolUseId: "t1", ownChannel: true, text: "hi", to: "David",
+    // 2026-08-02: plus the reason code that explains the gate — AXIS B is at `ask` here.
+    gateReason: "message-approval-required",
   });
   // Addressed + lifecycle-kinded: the REAL recipient and the claimed kind ride the payload.
   canUse(DOPL_CHANNEL_TOOL, { op: "post", body: "done", to: "evil@x.com", kind: "task_finished" },
@@ -393,8 +395,10 @@ test("IPC: the fused channel is REPLACED by two, and the inbound drain moved to 
   assert.match(IPC, /ipcMain\.handle\('session:set-message-mode'/);
   assert.ok(!/set-auto-approve|set_auto_approve/.test(stripComments(IPC)), "the old channel is removed, not aliased");
   // Main re-coerces against the canonical tables (the preload is the first gate, not the only).
-  assert.match(IPC, /mode: normalizeToolMode\(p && p\.mode\)/);
-  assert.match(IPC, /mode: normalizeMessageMode\(p && p\.mode\)/);
+  // FIX 1 (2026-08-02) moved the shared resolution into `modeChange`, so the coercion is an
+  // ARGUMENT to it rather than a property in the dispatch literal; it is still main's own.
+  assert.match(IPC, /normalizeToolMode\(p && p\.mode\)/);
+  assert.match(IPC, /normalizeMessageMode\(p && p\.mode\)/);
   // v2.5 D4's drain lives on the MESSAGE handler only — the tool handler touches no messages.
   const code = stripComments(IPC);
   const toolHandler = code.slice(code.indexOf("'session:set-tool-mode'"), code.indexOf("'session:set-message-mode'"));
@@ -438,14 +442,27 @@ test("UI: two labeled selects, token classes only, no copy in CSS `content`", ()
 
 test("UI: the controller paints both axes from MAIN's echo, never from the click", () => {
   const JS = readFileSync(R("session.js"), "utf8");
-  assert.match(JS, /els\.toolMode\.value = state\.toolMode;/);
-  assert.match(JS, /els\.messageMode\.value = state\.messageMode;/);
+  const MODES_UI = readFileSync(R("session-modes-ui.js"), "utf8");
+  // 2026-08-02: the unconditional `.value` repaint moved from renderStatus into the same module
+  // that owns the change listeners (session.js hit the §2 cap when the model picker landed). The
+  // RULE is unchanged and is what this pins: the only writer of `.value` reads the view-model,
+  // which moves only on main's echo. Driven end to end in test/session-modes-dom.test.mjs.
+  assert.match(MODES_UI, /e\.toolMode\.value = s\.toolMode;/);
+  assert.match(MODES_UI, /e\.messageMode\.value = s\.messageMode;/);
+  assert.match(JS, /modesUi\.sync\(els, state\)/, "and renderStatus is what calls it, every render");
+  assert.ok(!/\.value = /.test(JS.slice(JS.indexOf("function renderStatus("), JS.indexOf("function renderFolder("))),
+    "renderStatus itself writes no control value");
   assert.match(JS, /vm\.permissionPostureText\(state\.toolMode, state\.messageMode,/);
-  assert.match(JS, /bridge\.setToolMode\(els\.toolMode\.value\)/);
-  assert.match(JS, /bridge\.setMessageMode\(els\.messageMode\.value\)/);
-  assert.ok(!/setAutoApprove|autoApprove/.test(JS), "no trace of the fused switch");
+  // FIX 2 (2026-08-02): the two `change` listeners live in session-modes-ui.js, because the
+  // control has to revert itself when main refuses. The bridge calls still carry the select's
+  // own value, and still nothing paints from the click.
+  assert.match(JS, /modesUi\.mount\(\{ els, bridge,/, "the controller hands the module the real bridge");
+  assert.match(MODES_UI, /send: bridge\.setToolMode/);
+  assert.match(MODES_UI, /send: bridge\.setMessageMode/);
+  assert.match(MODES_UI, /entry\.send\.call\(bridge, entry\.node\.value\)/, "the select's OWN value crosses");
+  assert.ok(!/setAutoApprove|autoApprove/.test(JS + MODES_UI), "no trace of the fused switch");
   // textContent only, everywhere (the §A.4 rule this window is built on).
-  assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML/.test(JS));
+  assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML/.test(JS + MODES_UI));
 });
 
 // ── H. C8 (MEDIUM-6): the counterparty name is bounded at BOTH decision surfaces ───

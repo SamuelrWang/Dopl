@@ -1,16 +1,14 @@
-// Dopl session window — DOM item factories (extracted from session.js so both
-// the controller and this file stay under the HARD 500-line cap).
+// Dopl session window — DOM item factories (extracted from session.js so both the controller and
+// this file stay under the HARD 500-line cap).
 //
-// SECURITY: every agent / counterparty / tool / consent string reaches the DOM
-// via textContent (or as a value on a form control) ONLY. There is NO innerHTML,
-// no template interpolation, no HTML parsing of untrusted text anywhere in this
-// file. The pure decision logic lives in session-viewmodel.js; this module is
-// the imperative DOM layer it feeds.
+// SECURITY: every agent / counterparty / tool / consent string reaches the DOM via textContent (or
+// as a value on a form control) ONLY. There is NO innerHTML, no template interpolation, no HTML
+// parsing of untrusted text anywhere in this file. The pure decision logic lives in
+// session-viewmodel.js; this module is the imperative DOM layer it feeds.
 //
-// UMD-wrapped like session-viewmodel.js: as a sandboxed-renderer <script> it
-// attaches `globalThis.DoplSessionRender`; under node --test it is require()d.
-// `document` is only ever touched INSIDE a factory (never at module load), so a
-// node require never needs a DOM — the tests assert this file structurally.
+// UMD-wrapped like session-viewmodel.js: as a sandboxed-renderer <script> it attaches
+// `globalThis.DoplSessionRender`; under node --test it is require()d. `document` is only ever
+// touched INSIDE a factory (never at module load), so a node require never needs a DOM.
 
 (function (global, factory) {
   const api = factory();
@@ -24,9 +22,9 @@
 
   const noop = function () {};
 
-  // The pure chrome layer owns the item-kind → chat-lane mapping. It is reached the
-  // same way session-chrome.js reaches the view-model: a require() under node, the
-  // renderer global in the sandbox (session.html loads session-chrome.js first).
+  // The pure chrome layer owns the item-kind → chat-lane mapping. It is reached the same way
+  // session-chrome.js reaches the view-model: a require() under node, the renderer global in the
+  // sandbox (session.html loads session-chrome.js first).
   const chrome =
     typeof module === "object" && typeof require === "function"
       ? require("./session-chrome.js")
@@ -44,11 +42,10 @@
     return s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : "";
   }
 
-  // The chat lane for a stream item: `base` plus the lane class from the pure
-  // kind→lane mapping (chrome.laneClass), or `base` alone when the item is not
-  // conversational. Each factory passes the KIND it renders (the reducer stamps
-  // the same one on every real item) so alignment can never key off item text.
-  // A missing chrome module degrades to the un-laned, full-width class list.
+  // The chat lane for a stream item: `base` plus the lane class from the pure kind→lane mapping
+  // (chrome.laneClass), or `base` alone when the item is not conversational. Each factory passes
+  // the KIND it renders, so alignment can never key off item text. A missing chrome module
+  // degrades to the un-laned class list.
   function lane(base, kindItem) {
     const cls = chrome && typeof chrome.laneClass === "function" ? chrome.laneClass(kindItem) : "";
     return cls ? base + " " + cls : base;
@@ -70,19 +67,17 @@
     return s ? s.charAt(0).toUpperCase() : "?";
   }
 
-  // The live per-author avatar for a role key ('self' | 'peer'), read from the
-  // controller-supplied ctx. Returns a bounded `data:` URI or null. ctx-optional
-  // so a factory called without a ctx (e.g. a mock/test) degrades to initials.
+  // The live per-author avatar for a role key ('self' | 'peer'), read from the controller-supplied
+  // ctx. Returns a bounded `data:` URI or null. ctx-optional, so a factory called without one
+  // (e.g. a mock/test) degrades to initials.
   function avatarForKey(ctx, key) {
     return ctx && typeof ctx.avatarFor === "function" ? ctx.avatarFor(key) : null;
   }
 
-  // The avatar node for a bubble (item 1/5/6). SECURITY: `img.src` is set to the
-  // passed value ONLY when it is a `data:` URI — a remote/http string can NEVER
-  // reach `img.src` (it falls through to the initials span), so the CSP
-  // `img-src 'self' data:` is never challenged and no URL from untrusted content
-  // is ever loaded. NEVER innerHTML. Falls back to the `.cp-avatar` initials
-  // recipe when no data URI is available yet (cold cache) or none exists.
+  // The avatar node for a bubble (item 1/5/6). SECURITY: `img.src` is set to the passed value ONLY
+  // when it is a `data:` URI — a remote/http string can NEVER reach `img.src` (it falls through to
+  // the initials span), so the CSP `img-src 'self' data:` is never challenged and no URL from
+  // untrusted content is ever loaded. NEVER innerHTML. Falls back to `.cp-avatar` initials.
   function avatarNode(dataUri, initialsText) {
     if (typeof dataUri === "string" && dataUri.slice(0, 5) === "data:") {
       const wrap = el("span", "av");
@@ -101,11 +96,10 @@
     operator: { who: "You", cls: "role-operator" },
   };
 
-  // The `.cp-head` line EVERY avatar-bearing bubble shares (item 1/5/6): the author's avatar
-  // then the `.who` name, appended to `root` in that order. The returned repaint(key) RE-APPLIES
-  // the avatar in place, which is how a late `avatars` event turns initials into the real photo
-  // without rebuilding the item. ONE implementation for makeTurn / makeCounterparty / makeHistory
-  // (v3.0 FIX Q2): a replayed bubble cannot drift from the live one it replays if they share this.
+  // The `.cp-head` line EVERY avatar-bearing bubble shares (item 1/5/6): the author's avatar then
+  // the `.who` name, appended to `root` in that order. The returned repaint(key) RE-APPLIES the
+  // avatar in place, so a late `avatars` event turns initials into the real photo without
+  // rebuilding the item. ONE implementation (v3.0 FIX Q2): a replayed bubble cannot drift.
   function makeHead(root, ctx, key, who, forInitials) {
     const node = root.appendChild(el("div", "cp-head"));
     const paint = (k) => avatarNode(avatarForKey(ctx, k === undefined ? key : k), initial(forInitials));
@@ -117,9 +111,8 @@
   // ── stream item factories: each returns { el, update(item) } ───────────────
   function makeTurn(item, ctx) {
     const role = ROLE[item.role] || { who: cap(item.role), cls: "role-agent" };
-    // v2.7 L1: BOTH turn roles take the RIGHT lane — the operator's typed steer and the agent's
-    // own text are this machine's output; only the peer's reply sits on the left. The lane class
-    // comes from chrome.laneClass; the surface recipes (F2) are what tell the two roles apart.
+    // v2.7 L1: BOTH turn roles take the RIGHT lane (this machine's output; only the peer's reply
+    // sits on the left). The surface recipes (F2) are what tell the two roles apart.
     const root = el("div", lane("bubble " + role.cls, { kind: "turn", role: item.role }));
     // agent/operator turns are both ME → the SELF photo (item 1/5/6).
     const repaint = makeHead(root, ctx, item.avatarKey, role.who, role.who);
@@ -134,8 +127,7 @@
     return { el: root, update };
   }
 
-  // The peer's inbound reply — a distinct left lane. The avatar is the PEER photo
-  // (item 1/5/6), falling back to the initials-on-token recipe (item 1).
+  // The peer's inbound reply: a distinct left lane, PEER photo (item 1/5/6) or its initials.
   function makeCounterparty(item, ctx) {
     const root = el("div", lane("bubble role-counterparty", { kind: "counterparty" }));
     const repaint = makeHead(root, ctx, "peer", item.from || "Counterparty", item.from);
@@ -143,14 +135,12 @@
     return { el: root, update: () => repaint() };
   }
 
-  // The banner label of the outbound COMPONENT (item 4): a banner band (self avatar + an
-  // uppercase label) over the posted body. textContent-only; the avatar is a `data:` <img>.
-  // FIX F3: it is painted while the tool_use streams, which is BEFORE the operator answers, so
-  // a denied or failed post flips to "Not sent" instead of claiming the peer received it.
-  // N-PARTY / H2: a PERSON is named when the CALL addressed one, or when the SERVER will —
-  // `directChannel` is a DM, where resolveDirectPeer stamps the other member onto a post with
-  // no `to`. A bare `to` with neither flag is main's bound-counterparty fill, and in a group
-  // channel that post reaches no agent, so it names the CHANNEL. Same rule as the dest line.
+  // The banner label of the outbound COMPONENT (item 4): a banner band (self avatar + an uppercase
+  // label) over the posted body. textContent-only; the avatar is a `data:` <img>. FIX F3: it is
+  // painted while the tool_use streams, BEFORE the operator answers, so a denied or failed post
+  // flips to "Not sent" instead of claiming the peer received it. N-PARTY / H2: a PERSON is named
+  // when the CALL addressed one, or when the SERVER will (`directChannel` is a DM). A bare `to`
+  // with neither flag is main's own fill, which reaches no agent in a group, so it names the CHANNEL.
   function outboundLabel(item) {
     if (item && item.status === "not_sent") return "Not sent";
     const named = item && (item.addressed === true || item.directChannel === true);
@@ -160,37 +150,55 @@
     return to ? "Sent to " + to : "Posted to channel";
   }
 
-  // v2.7 L3 — the destination of the drafted post ("To: this channel" / "To: another
-  // channel"), from the SAME pure v2.5 helpers the dock uses. Reached through ctx.vm like
-  // shortToolName; a factory called without a ctx degrades to no destination line at all
-  // (and therefore to no cross-channel marking, since there is nothing being claimed).
+  // v2.7 L3 — the destination of the drafted post ("To: this channel" / "To: another channel"),
+  // from the SAME pure v2.5 helpers the dock uses. Reached through ctx.vm like shortToolName; a
+  // factory called without a ctx degrades to no destination line at all.
   function destOf(ctx, item) {
     const fn = ctx && ctx.vm && ctx.vm.postDestinationText;
     return typeof fn === "function" ? fn(item) : "";
   }
-  // FAIL SUSPICIOUS, and note WHICH WAY this one fails: with no ctx.vm the destination line is
-  // not rendered at all (destOf returns ""), so returning false here marks nothing rather than
-  // marking a line that is not on screen. The suspicious default lives in the pure helper
-  // (vm.isCrossChannelPost treats anything but an explicit ownChannel===true as another
+  // FAIL SUSPICIOUS, and note WHICH WAY: with no ctx.vm the destination line is not rendered at
+  // all, so false marks nothing rather than marking a line that is not on screen. The suspicious
+  // default lives in the pure helper (anything but an explicit ownChannel===true is another
   // channel), so a card that DOES show a destination can never under-claim the exfil shape.
   function crossOf(ctx, item) {
     const fn = ctx && ctx.vm && ctx.vm.isCrossChannelPost;
     return typeof fn === "function" && fn(item) === true;
   }
 
-  // v2.7 L3 — the OUTBOUND DECISION CARD *is* the delivered record: ONE node, ONE stream
-  // item per post attempt. While the post waits on canUseTool the root also carries
-  // `outbound-pending` (its own accent band, the v2.5 destination line, and Send / Send for
-  // this session / Deny); the decision RESOLVES IT IN PLACE — update() drops that class and
-  // hides the row, so the node becomes exactly the delivered "Sent to X" bubble (or the
-  // muted "Not sent" one). Nothing is rebuilt and nothing is removed, which is what makes
-  // this safe under session.js's index-keyed renderStream (it only ever calls update()).
-  // The three decisions map to the EXISTING dock verbs, so main's fail-closed
+  // 2026-08-02 — WHY A CARD IS ASKING. main stamps a machine-readable `gateReason` code on every
+  // gate/deny payload (session-profiles GATE_REASONS); this is the ONLY place it becomes words.
+  // Without it an uncovered tool under `bypass` reads as a broken toggle and a slug-addressed post
+  // as a random refusal. Unknown or absent renders NO line; where there is a fix, the line names it.
+  const GATE_REASON = {
+    "hard-denied": "Blocked for this session.",
+    "not-covered-by-bypass": "Asking because the current tool setting does not cover this tool.",
+    "unclassified-tool": "Asking because Dopl does not recognise this tool, so every setting asks.",
+    "cross-channel-post": "Asking because this post names another channel. Address your own channel by id, not by slug.",
+    "malformed-post-fields": "Asking because this post has a recipient or a kind that is not text.",
+    "message-approval-required": "Asking because message approval is set to ask before each message.",
+    "channel-op-approval-required": "Asking because message approval covers replies, not this channel operation.",
+    "awaiting-approval": "Asking because tool approval is set to ask before each tool.",
+  };
+  // M1: OWN PROPERTY ONLY. A bare index on an object literal answers a FUNCTION for 'constructor'
+  // and 'toString', which `|| ""` does not catch, so those two words used to put source code into
+  // textContent. Same idiom as session-park.requestRank and session-request-ui's TEXT table.
+  function gateReasonText(reason) {
+    const k = String(reason == null ? "" : reason);
+    return Object.prototype.hasOwnProperty.call(GATE_REASON, k) ? GATE_REASON[k] : "";
+  }
+
+  // v2.7 L3 — the OUTBOUND DECISION CARD *is* the delivered record: ONE node, ONE stream item per
+  // post attempt. While the post waits on canUseTool the root also carries `outbound-pending` (its
+  // accent band, the destination + reason lines, and Send / Send for this session / Deny); the
+  // decision RESOLVES IT IN PLACE — update() drops that class and hides the row, so the node
+  // becomes exactly the delivered "Sent to X" bubble (or the muted "Not sent" one). Nothing is
+  // rebuilt and nothing is removed, which is what makes this safe under session.js's index-keyed
+  // renderStream. The three decisions map to the EXISTING dock verbs, so main's fail-closed
   // permission_decision mapping and the v2.5 scoped POST_GRANT are untouched.
-  // v3.0 VOCABULARY: the middle verb reads "for this SESSION", which is what the grant has
-  // always been — it lives on this session object and a park clears it (v2.9 FIX F1), while
-  // the thread outlives every session that works it. `allow-task` is the IPC wire value and
-  // is deliberately unchanged (wire name `task` == domain name `thread`).
+  // v3.0 VOCABULARY: the middle verb reads "for this SESSION" because that is what the grant has
+  // always been — a park clears it (v2.9 FIX F1) while the thread outlives every session that
+  // works it. `allow-task` is the IPC wire value and is deliberately unchanged.
   const OUT_BUTTONS = [
     { label: "Send", decision: "allow-once", cls: "ctl auth-btn-3d ctl-primary ctl-sm" },
     { label: "Send for this session", decision: "allow-task", cls: "ctl btn-light ctl-sm" },
@@ -201,9 +209,8 @@
     const onDecide = (ctx && ctx.onOutboundDecide) || noop;
     let cur = item; // the LIVE item, so a click always decides the current requestId
     // FIX F7: a click DISABLES all three buttons immediately, before the invoke resolves, so a
-    // fast double-click cannot send a second decision for the same requestId (main already
-    // refuses one — it only dispatches a requestId it is still tracking — this closes the
-    // window where nothing greys out). The next update() clears the flag, so the controller's
+    // fast double-click cannot send a second decision for the same requestId (main already refuses
+    // one; this closes the window where nothing greys out). The next update() clears the flag, so
     // renderAll() on an {ok:false} refusal hands the buttons back on a card still answerable.
     let clicked = false;
     const root = el("div", "outbound role-outbound");
@@ -216,6 +223,9 @@
     // FIX #9 (v2.5) carried onto the card: WHERE this is going, read BEFORE the body.
     const dest = el("div", "outbound-pending__to text-caption hidden");
     root.appendChild(dest);
+    // 2026-08-02: and WHY it is asking, on the same line class, under the destination.
+    const why = el("div", "outbound-pending__why text-caption hidden");
+    root.appendChild(why);
     root.appendChild(el("div", "outbound__body", item.text || ""));
     const row = el("div", "row");
     const buttons = OUT_BUTTONS.map((spec) => {
@@ -238,11 +248,10 @@
       cur = it || item;
       clicked = false;
       const pending = cur.status === "pending";
-      // FAIL CLOSED: a card main is not awaiting (no requestId) cannot be answered.
-      // FIX F3: and it does not show three DEAD buttons either. A post whose gate prediction
-      // said "will stop" but which canUseTool then auto-allowed has no requestId while it waits
-      // for main to resolve it (C6 now emits that resolution immediately; the tool_result is the
-      // backstop), so the row is HIDDEN meanwhile instead of rendering a broken control set.
+      // FAIL CLOSED: a card main is not awaiting (no requestId) cannot be answered. FIX F3: and it
+      // does not show three DEAD buttons either. A post whose gate prediction said "will stop" but
+      // which canUseTool then auto-allowed has no requestId while it waits for main to resolve it,
+      // so the row is HIDDEN meanwhile instead of rendering a broken control set.
       const answerable = pending && !!cur.requestId;
       label.textContent = outboundLabel(cur);
       root.classList.toggle("outbound-pending", pending);
@@ -250,6 +259,10 @@
       dest.textContent = pending ? destOf(ctx, cur) : "";
       dest.classList.toggle("hidden", !pending);
       dest.classList.toggle("is-cross", pending && crossOf(ctx, cur));
+      // The reason belongs to the WAIT, so it clears the moment the card resolves.
+      const reason = pending ? gateReasonText(cur.gateReason) : "";
+      why.textContent = reason;
+      why.classList.toggle("hidden", !reason);
       row.classList.toggle("hidden", !answerable);
       for (const btn of buttons) btn.disabled = !answerable;
     };
@@ -261,13 +274,12 @@
     return { el: el("div", "notice level-" + (item.level || "error"), item.text || ""), update: noop };
   }
 
-  // Item 8 (v2.x reshape): the tool card ITSELF is the native <details>, default CLOSED, and
-  // its <summary> IS the head line (name + op summary + status) — always visible AND the whole
-  // disclosure control, with a LEFT ::before arrow (session.css) instead of a separate "Show
-  // details" row + right chevron. The input + result live in the body wrapper after the summary,
-  // so long/scary output never blasts into the window until the user expands (and then SCROLLS:
-  // session.css caps the pre/.tool-result at 240px;overflow:auto). v2.7 L1: a tool card is MY
-  // agent's own activity, so it takes the RIGHT lane like the rest of this machine's output.
+  // Item 8 (v2.x reshape): the tool card ITSELF is the native <details>, default CLOSED, and its
+  // <summary> IS the head line (name + op summary + status) — always visible AND the whole
+  // disclosure control, with a LEFT ::before arrow instead of a separate "Show details" row. The
+  // input + result live in the body after the summary, so long/scary output never blasts into the
+  // window until the user expands it (and then SCROLLS: session.css caps them at 240px). v2.7 L1:
+  // a tool card is MY agent's own activity, so it takes the RIGHT lane.
   function makeTool(item, ctx) {
     const shortName = (ctx && ctx.vm && ctx.vm.shortToolName) || ((n) => n);
     const root = el("details", lane("tool-card", { kind: "tool" })); // <details>, default closed
@@ -299,14 +311,12 @@
     return { el: root, update };
   }
 
-  // FIX (v2.x): the INITIATING request, pinned at the TOP of the transcript so the operator
-  // sees the ask this session is answering — not just the reply + tool activity. DISPLAY ONLY:
-  // main emits it once at session start and never feeds this item to the agent. A responder
-  // shows the PEER's ask on the LEFT (counterparty recipe, peer avatar + name); a requester its
+  // FIX (v2.x): the INITIATING request, pinned at the TOP of the transcript so the operator sees
+  // the ask this session is answering. DISPLAY ONLY: main emits it once at session start and never
+  // feeds this item to the agent. A responder shows the PEER's ask on the LEFT, a requester its
   // OWN opening goal on the RIGHT ("You"). It reuses the live bubble factories, so avatars, lanes
-  // and the late-`avatars` repaint all behave identically; `is-request` marks it as the opener
-  // (FIX F3: that class now HAS a rule in session.css — an unfilled surface + a hairline — so
-  // the opener is visually distinguishable from a turn instead of being a dead marker).
+  // and the late-`avatars` repaint behave identically; `is-request` marks it as the opener (FIX
+  // F3: that class HAS a session.css rule now, so the opener is distinguishable from a turn).
   function makeRequest(item, ctx) {
     const rec =
       item.lane === "them"
@@ -316,14 +326,11 @@
     return rec;
   }
 
-  // v2.5 D1: the INBOUND GATE card. A counterparty message that has NOT reached the
-  // agent, shown with the three decisions the operator has: Accept (feed it once),
-  // Accept for this session (feed it and every later reply until this session parks or
-  // ends), Decline (drop it locally — nothing is posted back to the peer). The card locks
-  // and states the outcome once a decision lands, here or from an auto-accept echo. Same
-  // visual language as the old release card + the permission dock. textContent only.
-  // v3.0: the verb says SESSION because a park clears the grant (v2.9 FIX F1) while the
-  // thread carries on; `accept-task` / `accepted-task` stay as the IPC wire values.
+  // v2.5 D1: the INBOUND GATE card. A counterparty message that has NOT reached the agent, with
+  // the three decisions the operator has: Accept (once), Accept for this session (this and every
+  // later reply until the session parks or ends), Decline (drop it locally, nothing posted back).
+  // The card locks and states the outcome once a decision lands, here or from an auto-accept echo.
+  // textContent only. v3.0: SESSION because a park clears the grant; the wire values are unchanged.
   const GATE_DONE = { accepted: "Accepted", "accepted-task": "Accepted for this session", declined: "Declined" };
 
   function makeInboundPending(item, ctx) {
@@ -360,12 +367,11 @@
     return { el: root, update };
   }
 
-  // v2.5 D3 / v3.0 FIX Q2: a READ-ONLY history entry replayed from the channel thread. It is now
-  // the SAME bubble as the live one it replays: the view-model stamps `role` + `avatarKey`
-  // (counterparty for the peer; agent or operator for this side), so the live surface recipes and
-  // the shared head/avatar line apply and `.history-entry` only carries the age cue. It was a
-  // transparent, dashed, avatar-less twin before, which matched no live surface at all. FAIL TO
-  // THE PEER: an un-stamped `them` entry is still the counterparty. Read-only — no controls.
+  // v2.5 D3 / v3.0 FIX Q2: a READ-ONLY history entry replayed from the channel thread. It is the
+  // SAME bubble as the live one it replays: the view-model stamps `role` + `avatarKey`, so the
+  // live surface recipes and the shared head/avatar line apply and `.history-entry` only carries
+  // the age cue (it was a transparent, dashed, avatar-less twin before, matching no live surface).
+  // FAIL TO THE PEER: an un-stamped `them` entry is still the counterparty. Read-only.
   function makeHistory(item, ctx) {
     const them = item.lane === "them";
     const role = them ? "counterparty" : item.role === "agent" ? "agent" : "operator";
@@ -381,9 +387,8 @@
     return { el: el("div", "history-divider", item.text || ""), update: noop };
   }
 
-  // The pre-consent request card (item 8). Renders ONLY the request text +
-  // Accept/Deny — no agent content until Accept adopts the window. update()
-  // shows a terminal note (denied/expired) or the local "Starting…" state.
+  // The pre-consent request card (item 8). Renders ONLY the request text + Accept/Deny (no agent
+  // content until Accept adopts the window). update() shows a terminal note or "Starting…".
   function makeConsent(consent, ctx) {
     const onDecide = (ctx && ctx.onConsentDecide) || noop;
     const root = el("div", "consent-card bento");
@@ -446,8 +451,8 @@
     body.appendChild(actions);
     root.appendChild(body);
 
-    // Terminal note when a decision lands (here or elsewhere). accepted → the
-    // init/status events take over (this card is hidden by the controller).
+    // Terminal note when a decision lands (here or elsewhere). accepted → the init/status
+    // events take over (this card is hidden by the controller).
     const update = (decision) => {
       if (!decision) return;
       const text =
@@ -468,9 +473,8 @@
     return item;
   }
 
-  // The stream-item factory map, bound with the controller-supplied context
-  // (vm helpers + the release callback). Consent is NOT a stream item — it is a
-  // full render state — so it is not in this map.
+  // The stream-item factory map, bound with the controller-supplied context (vm helpers + the
+  // release callback). Consent is NOT a stream item (it is a full render state), so it is absent.
   function makeFactories(ctx) {
     const bind = (fn) => (item) => fn(item, ctx);
     return {
@@ -486,10 +490,10 @@
     };
   }
 
-  // The module surface, in declaration order (packed: this file is at the §2 500-line cap,
-  // and each name is documented at the factory it exports, not here).
+  // The module surface, in declaration order (packed: this file is AT the §2 cap, and each name
+  // is documented at the factory it exports).
   return {
-    el, cap, pretty, initial, avatarNode,
+    el, cap, pretty, initial, avatarNode, gateReasonText,
     makeTurn, makeTool, makeRequest, makeCounterparty, makeOutbound, outboundLabel,
     makeInboundPending, makeHistory, makeHistoryDivider, makeConsent, makeNotice, makeFactories,
   };

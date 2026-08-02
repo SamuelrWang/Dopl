@@ -183,6 +183,17 @@ async function ensureSession(a) {
     // addressed message, the shell starts dormant and the inbound gate decides whether the
     // turn runs — the window exists to show that decision, not to pre-empt it.
     parkedShell: true,
+    // FIX 4 (2026-08-02) — A TEAM SESSION CAN BE ARMED AT ALL NOW. `parkedShell: true` is
+    // unconditional here, and session-engine.startSession discarded `startModes` for ANY
+    // parked shell, so an operator-chosen posture could never reach a team agent: the two
+    // facts composed into "a team session always starts manual/ask, whatever was approved",
+    // with nothing anywhere saying so. This is the pass-through, and it is deliberately
+    // pass-through ONLY — nothing is read from a store here. `operatorArmed` is the engine's
+    // gate and a CALLER must set it explicitly, so the peer-driven wake that reaches this
+    // function today (channel-deliver.agentSpec, which carries neither field) is unchanged
+    // and still starts at manual/ask. A message from the room is not a human approving one.
+    startModes: a.startModes,
+    operatorArmed: a.operatorArmed === true,
     context: {
       channelName: a.channelName || null,
       channelId: a.channelId,

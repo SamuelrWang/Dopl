@@ -22,6 +22,7 @@ const { diag } = require('./diag');
 const channelDirs = require('./channel-dirs');
 const sessionAuth = require('./session-auth');
 const sessionOutbound = require('./session-outbound');
+const sessionModel = require('./session-model'); // the frozen model enum + the context meter
 const { buildSessionToolConfig } = require('./session-profiles');
 const { resolveClaudeExecutable, buildMcpServers, withSessionStamp, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
 
@@ -68,6 +69,13 @@ function buildSdkOptions(s) {
   if (cfg.builtinTools.length) options.tools = cfg.builtinTools; // positive bound; [] => full offers all, gated
   const bin = resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;
+  // THE PER-SESSION MODEL. `s.model` survives park/resume and the post-sign-in relaunch for
+  // free, because every one of those shapes re-enters through this one assembly point on the
+  // SAME session object. `modelArg` re-coerces against the frozen enum HERE, at the last step
+  // before the value becomes `--model` on a child process, so nothing upstream is trusted; a
+  // 'default' (or anything unrecognized) sets no field at all, which is the CLI's own pick.
+  const model = sessionModel.modelArg(s.model);
+  if (model) options.model = model;
   if (s.resumeSdkId) options.resume = s.resumeSdkId;
   return options;
 }
@@ -106,7 +114,11 @@ async function consume(s, q) {
     // FIX #1b: `q` tags this loop; a park->resume swaps s.query, so s.query !== q => SUPERSEDED (ignore its tail + late rejection).
     // Q6: an auth failure the CLI reports as CONTENT (its "Please run /login" line) is consumed here — the
     // dead-end bubble is REPLACED by the sign-in action, and this loop stops rather than rendering it.
-    for await (const msg of q) { if (s.query !== q) return; if (sessionAuth.holdIfAuthMessage(s, msg)) return; io.handleSdkMessage(s, msg, deps.dispatch, store); }
+    // THE CONTEXT METER reads the RAW stream, here rather than inside handleSdkMessage, because
+    // what it needs is the LAST assistant message's own usage block — the prompt the model just
+    // saw — and the render mapping deliberately drops everything that is not a render event.
+    // It observes only; the reducer decides (session-model.observe -> dispatch `context`).
+    for await (const msg of q) { if (s.query !== q) return; if (sessionAuth.holdIfAuthMessage(s, msg)) return; io.handleSdkMessage(s, msg, deps.dispatch, store); sessionModel.observe(s, msg, deps.dispatch); }
   } catch (err) {
     if (s.query !== q) return;
     if (!isAbortError(err)) {

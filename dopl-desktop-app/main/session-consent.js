@@ -131,6 +131,17 @@ function open(spec) {
     win,
     cstate: initialConsentState(),
     replay: null, // item 3: set in bind() — the transcript ring + reload re-send
+    // FIX 1 (2026-08-02) — THE POSTURE THE OPERATOR PICKS ON *THIS* CARD, before Accept.
+    // The two selects in the pre-consent window were live the whole time and wired to
+    // NOTHING: their IPC resolved from the live-session registry, which a consent window is
+    // not in, so main answered {ok:false} and the preload dropped it. They land here now
+    // (session-ipc falls back to this registry) and session-engine.startSession CONSUMES
+    // this on adopt, so the spawn starts on the pair the human was looking at when they
+    // clicked Accept. `null` = untouched, which is what keeps manual/ask the default.
+    modes: null,
+    // ...and the MODEL picked on this same card, by the same rule and for the same reason
+    // (armModel / takeStartModel below). `null` = untouched, which keeps 'default'.
+    model: null,
     decided: false,
     detach: null,
   };
@@ -202,6 +213,68 @@ function decide(sender, decision) {
   return { ok: true };
 }
 
+// FIX 1 — ARM the two axes on a PENDING card. session-ipc routes here when a mode change
+// arrives from a window no live session owns, which during the consent phase is every one of
+// them. This module is the only writer.
+//
+// BOTH AXES ARE ALWAYS STORED TOGETHER, the untouched one at its most restrictive member, so
+// a half-set pair can never read as more permissive than it is. The values are coerced by the
+// CALLER (session-ipc, against session-profiles' canonical tables, which is the same gate a
+// live session's change passes) — this stores what it is handed and echoes it straight back
+// to the card, so the select can only ever show a value main really recorded.
+//
+// A DECIDED (accepted / denied / parked / adopted) entry refuses: after Accept the posture is
+// already being consumed by the spawn, so a late change would silently not apply. The refusal
+// is what the renderer reverts on, which is FIX 2's whole point — the control never lies.
+function armModes(e, axis, mode) {
+  if (!e || e.decided) return null;
+  const cur = e.modes || { tools: 'manual', messages: 'ask' };
+  e.modes = axis === 'tools'
+    ? { tools: mode, messages: cur.messages }
+    : { tools: cur.tools, messages: mode };
+  sendToEntry(e, { type: 'modes', tool: e.modes.tools, message: e.modes.messages });
+  return { tools: e.modes.tools, messages: e.modes.messages };
+}
+
+// SINGLE USE, and scoped to the CONSENT ENTRY rather than to the channel. startSession calls
+// this at its adopt site: the pair applies to the spawn this exact card approves and to
+// nothing else, so a second request on the same channel — and every other agent of it — finds
+// nothing. That is deliberately NOT another channel-keyed arm (channel-prefs.js): the arm
+// dies with the card it was picked on, so there is no residue for a later launch to inherit
+// and no shared key for N agents to race over.
+function takeStartModes(key) {
+  const e = registry.get(key);
+  if (!e || !e.modes) return null;
+  const modes = e.modes;
+  e.modes = null;
+  return modes;
+}
+
+// THE MODEL PICKED ON *THIS* CARD, before Accept. A SIBLING of armModes rather than a third
+// member of its payload: the model is not a permission, so folding it into the pair that both
+// axes travel as would have made a posture echo carry something that is not a posture, and a
+// half-set pair would then have two different meanings. Everything else is identical — the
+// value is coerced by the CALLER (session-ipc, against the frozen enum in session-model), it is
+// echoed straight back so the select can only show what main recorded, and a DECIDED card
+// refuses, which is what the renderer reverts on.
+function armModel(e, model) {
+  if (!e || e.decided) return null;
+  e.model = model;
+  sendToEntry(e, { type: 'model', choice: e.model });
+  return { model: e.model };
+}
+
+// SINGLE USE and scoped to the CONSENT ENTRY, exactly like takeStartModes: the pick applies to
+// the spawn this one card approves and to nothing else, so there is no channel-keyed residue
+// for a later launch to inherit and no shared key for N agents to race over.
+function takeStartModel(key) {
+  const e = registry.get(key);
+  if (!e || !e.model) return null;
+  const model = e.model;
+  e.model = null;
+  return model;
+}
+
 // Adopt handoff (item 8 step 4): the engine reuses this window for the live session.
 // Detach our listeners and drop the entry so the engine's bindWindow owns it cleanly
 // (its close→hide + render-process-gone→crash replace our park-on-close).
@@ -240,6 +313,10 @@ module.exports = {
   open,
   decide,
   close,
+  armModes, // FIX 1: the pre-consent posture selects write here
+  takeStartModes, // ...and startSession consumes it, once, on adopt
+  armModel, // 2026-08-02: the pre-consent MODEL select, same entry, same single-use rule
+  takeStartModel,
   takeForAdopt,
   getBySender,
   has,

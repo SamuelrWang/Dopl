@@ -135,9 +135,9 @@ Tracked as F-041. Generated `src/shared/supabase/types.ts` and `*seed-fixtures*`
 
 **The desktop tree still has a CLUSTER SITTING ON THE CAP WITH ZERO HEADROOM (remeasured 2026-07-31, post-engagement wave).** **No `.js` file in `dopl-desktop-app/main/` or `renderer/` exceeds 500** — the single over-cap file in either tree is `renderer/session/session.css` at **990**, which the config does not lint. The cluster now reads:
 
-- **500 (at cap):** `main/session-profiles.js`.
-- **499:** `main/session-io.js`, `main/mcp-config.js`, `main/channel-listener.js`, `renderer/session/session-viewmodel.js`, `renderer/session/session-render.js`.
-- **498–493:** `main/trigger.js` 498, `main/channel-agents.js` 496, `renderer/session/session.js` 495, `main/session-history.js` 494.
+- **500 (at cap, ZERO headroom — next edit must split):** `renderer/session/session.js`, `renderer/session/session-render.js`. (Re-measured 2026-08-02 after the F-119 posture wave.)
+- **499:** `main/session-engine.js`, `main/mcp-config.js`, `main/channel-listener.js`.
+- **498–489:** `main/trigger.js` 498, `renderer/session/session-viewmodel.js` 497, `main/channel-agents.js` ~496, `main/session-history.js` 494, `main/session-io.js` 489. `main/session-profiles.js` went 500 → **354** via the `session-grant-keys.js` split.
 
 **Any edit to one of these is a split.** Do not repeat the pattern of trimming a comment to buy back the line you need — that is how eight files converged on the same two numbers.
 
@@ -1162,6 +1162,16 @@ The desktop half of §8's MULTIPLAYER v2. Three routing changes and a doorbell c
 - The prompt teaches the external-session contract: imperative ToolSearch first (deferred-not-absent), connector-not-set-up self-diagnosis then STOP (Dopl cannot detect connector auth from outside — the prompt is the detector), scoped read before replying, post with channel+workspace+thread on every op INCLUDING await, await re-arm cadence with no push promises.
 - Never let prompt text near a shell string: `encodeURIComponent` is the only encoder, there is no osascript/spawn rung in v1, and the deep link's own RCE history (flag smuggling via `q`, fixed CLI 2.1.118) is the reason.
 - Residuals and the open lane-priority question from the first live 1.7.20 test are F-118 / F-117 in REFACTOR-FINDINGS.md — read them before extending this surface (the window-budget hold, residual (a), is the sharpest).
+
+### Desktop app — THE POSTURE WAVE: arms, reasons, model, meter, requester shells (2026-08-02, F-119)
+
+The full story, root causes and residuals live in **F-119 in REFACTOR-FINDINGS.md** — read it before touching posture, the gate, the model plumbing, or the requester routes. The rules a future session must not re-break:
+
+- **Posture has exactly TWO write surfaces and ONE reader.** The web card's channel-keyed single-use arm (compat path) and the CONSENT-ENTRY arm (`session-consent.armModes`/`takeStartModes`, primary) both feed `s.state.toolMode`/`messageMode`, which is the ONLY thing the gate reads, per call. The consent arm is consumed ONLY by the launch that adopts that card — `spec.adoptsConsent` is threaded from `launch()`'s own adopt test and NOTHING else may set it (single-setter pinned): an unconditional read here was a shipped BLOCKER (a peer-driven wake racing an armed card started at bypass/auto_both).
+- **The idle timer means idle.** It re-arms on permission_request/decision, steer, feed, and inbound-accept — never park a session that has an open card or a running turn. A park that resets posture must SAY SO in the window.
+- **Gate verdicts carry a closed reason-code enum** (`grantDecisionDetail` wraps a byte-unchanged `grantDecision`; `session-gate-reason.js` explains, never decides). Copy lives in the renderer's own-property-guarded table — a wire payload can never put its own words on screen. Same rule for the requester strip's status words.
+- **The model value becomes child argv.** Frozen enum (`session-model.js`), coerced at every boundary (preload, ipc, durable-record read, spawn, `modelArg`), no silent `fallbackModel`, survives park (a model is not a permission). The CONTEXT METER never reads `result.usage` (session-cumulative — a tripwire test enforces this); it measures the raw stream's last main-lane turn against the frozen window map, unknown model → tokens with no percentage.
+- **A human-typed request auto-opens a PINNED requester shell** (listener route (4), `targeting.requesterShellOpen`: unstamped + authorKind user + no author_agent_id — UX routing on the operator's OWN posts, never a security gate). It never starts the agent, spawns read_only + counterparty-bound, is evictable, and its Sent/Accepted/Declined/Replied strip is a display-only observation (route (5)) that dispatches nothing. Q3b (external-created threads open NOTHING) is pinned in all three directions.
 
 ## Appendix A — ESLint rules to add
 

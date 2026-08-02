@@ -54,6 +54,7 @@ export function loadReducer() {
     `${BLOCK}
      return { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
               gatePhase, endedEmit, endLifecycle, endEffects, modesEmit, parkEffects,
+              postureWasReset, POSTURE_RESET_NOTE,
               wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode,
               DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD };`
   )();

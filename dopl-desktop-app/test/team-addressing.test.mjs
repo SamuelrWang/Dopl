@@ -271,7 +271,10 @@ function extractAsyncFn(src, name) {
 // is recorded, so a test can assert on the WHOLE result of one message rather than on the
 // one branch it expected to fire.
 function dispatcher(cfg = {}) {
-  const calls = { routed: [], feed: [], open: [], surface: [], trigger: [], fyi: [], reply: [], escalate: [], dismissed: [], diag: [] };
+  // `shell` is the 2026-08-02 fourth route (the operator's own typed request opens a pinned
+  // shell) and `strip` its lifecycle OBSERVATION, which runs ahead of every route and claims
+  // nothing — both are recorded so the assertions below still describe the WHOLE outcome.
+  const calls = { routed: [], feed: [], open: [], surface: [], shell: [], strip: [], trigger: [], fyi: [], reply: [], escalate: [], dismissed: [], diag: [] };
   // The REAL classify AND the REAL legacy registry it shares with the dispatcher. The
   // registry moved to the top of dispatchMessage when my own messages started routing to my
   // own agents (an engaged agent claims the message before classify ever sees it), so a fake
@@ -290,6 +293,8 @@ function dispatcher(cfg = {}) {
       feedLiveSession: (e, m) => { calls.feed.push(m.seq); return cfg.live === true; },
       maybeOpenRequesterSession: async (e, m) => { calls.open.push(m.seq); return false; },
       maybeSurfaceRequesterReply: async (e, m) => { calls.surface.push(m.seq); return false; },
+      maybeOpenRequesterShell: async (e, m) => { calls.shell.push(m.seq); return false; },
+      noteRequestLifecycle: (e, m) => { calls.strip.push(m.seq); return false; },
     },
     {
       classify, noteMyLegacyThread,

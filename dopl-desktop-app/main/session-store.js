@@ -132,6 +132,15 @@ function durableSessionRecord(rec) {
     // finite number so a hand-edited store can never inject NaN into the reducer.
     turns: Number(r.turns) || 0,
     costUsd: Number(r.costUsd) || 0,
+    // 2026-08-02 — THE MODEL THIS SESSION RUNS ON, whitelisted so a P2 recreate or a crash
+    // resume comes back on the operator's pick instead of silently reverting to the CLI
+    // default. Coerced against the frozen enum INLINE, the same shape `bind` above uses and
+    // for the same reason: this function is evaluated standalone by the extraction tests, so
+    // it may not reach into session-model (which is canonical, and pins this copy). The value
+    // becomes `--model <argv>` downstream, so a hand-edited store, a record written before
+    // this field existed, or a mid-wave caller can only ever land on 'default' — no model
+    // option at all. Frozen enum, spelled out, no normalization of near misses.
+    model: ['default', 'opus', 'sonnet', 'haiku', 'fable'].indexOf(r.model) === -1 ? 'default' : r.model,
   };
 }
 

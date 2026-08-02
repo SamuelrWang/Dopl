@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { loadReducer } from "./_reducer-block.mjs";
+import { fnOf, between } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -179,6 +180,70 @@ test("F1/F7: the renderer gates its optimistic stamp on that verdict", () => {
     "FIX F7: the click locks the card before the invoke resolves");
 });
 
+// ── L1 (2026-08-02): the same rule, on the POSTURE handlers ──────────────────────────
+// Same theme, found by the adversarial review of the posture wave. `session:set-tool-mode` and
+// `session:set-message-mode` ran ONE callback carrying both the reducer dispatch and AXIS B's
+// drainInbound, and answered {ok:false} whenever it threw. A drain that threw therefore reported
+// a refusal for a mode main had ALREADY applied, and the renderer's revert belt then pulled the
+// select back over a posture the gate was enforcing — the F1 defect, pointing the other way.
+// The two steps are separate arguments now: only the dispatch can fail the call.
+//
+// The REAL handlers and the real modeChange, sliced whole and given what register() is handed in
+// production. `drainThrows` / `dispatchThrows` decide which step blows up.
+
+function modeHarness({ drainThrows, dispatchThrows } = {}) {
+  const profiles = require(M("session-profiles.js"));
+  const handlers = new Map();
+  const drained = [];
+  const session = { key: "ch:th", senderId: 7, state: RED.initialSessionState({}) };
+  const engine = {
+    getSessionBySender: (sender) => (sender === session.senderId ? session : null),
+    getConsentBySender: () => null,
+    dispatch: (s, evt) => {
+      if (dispatchThrows) throw new Error("the reducer exploded");
+      s.state = RED.sessionReducer(s.state, evt).state;
+      return true;
+    },
+  };
+  const src = [
+    fnOf(IPC, "touch"),
+    fnOf(IPC, "modeChange"),
+    between(IPC, "ipcMain.handle('session:set-tool-mode'", "// ── Item 8: the pre-consent Accept", "session-ipc"),
+  ].join("\n");
+  const gate = { drainInbound: (s) => { drained.push(s.key); if (drainThrows) throw new Error("the gate exploded"); } };
+  new Function("ipcMain", "engine", "sessionConsent", "gate", "normalizeToolMode", "normalizeMessageMode", "diag", src)(
+    { handle: (channel, fn) => handlers.set(channel, fn) },
+    engine, null, gate, profiles.normalizeToolMode, profiles.normalizeMessageMode, () => {}
+  );
+  return {
+    session, drained,
+    tool: (mode) => handlers.get("session:set-tool-mode")({ sender: 7 }, { mode }),
+    message: (mode) => handlers.get("session:set-message-mode")({ sender: 7 }, { mode }),
+  };
+}
+
+test("L1: a DRAIN that throws after the dispatch still reports the mode main is enforcing", () => {
+  const h = modeHarness({ drainThrows: true });
+  assert.deepEqual(h.message("auto_both"), { ok: true, tool: "manual", message: "auto_both" });
+  assert.equal(h.session.state.messageMode, "auto_both", "the gate reads this field, and it moved");
+  assert.deepEqual(h.drained, ["ch:th"], "the drain really ran, and really threw");
+});
+
+test("L1: only a DISPATCH failure answers {ok:false} — that one really applied nothing", () => {
+  const h = modeHarness({ dispatchThrows: true });
+  assert.deepEqual(h.tool("bypass"), { ok: false });
+  assert.deepEqual(h.message("auto_both"), { ok: false });
+  assert.equal(h.session.state.toolMode, "manual", "so the renderer's revert is the truth here");
+  assert.equal(h.session.state.messageMode, "ask");
+  assert.deepEqual(h.drained, [], "and a dispatch that threw never reaches the drain");
+});
+
+test("L1: AXIS A has no drain step at all, so its answer cannot depend on one", () => {
+  const h = modeHarness({ drainThrows: true });
+  assert.deepEqual(h.tool("bypass"), { ok: true, tool: "bypass", message: "ask" });
+  assert.deepEqual(h.drained, [], "tool permissions still touch nothing about message flow");
+});
+
 // ── F4: the card body is the AUTHORIZED body ─────────────────────────────────────────
 
 const gating = { type: "outbound_post", toolUseId: "t1", to: "David", text: "the streamed copy", pending: true, ownChannel: true };
@@ -230,6 +295,9 @@ test("F4: main really sends those bytes, and `to` is the peer NAME (never an id)
   io.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "r1", toolUseID: "t1" });
   assert.deepEqual(events[0].payload, {
     type: "outbound_gate", requestId: "r1", toolUseId: "t1", ownChannel: true, text: POST.body, to: "David",
+    // 2026-08-02: plus the code that explains the gate. AXIS B is at its `ask` default here, so
+    // the card can say WHY it is holding the post instead of just holding it.
+    gateReason: "message-approval-required",
   });
   // A bodiless post still gates, with an empty body rather than an undefined one.
   const events2 = [];

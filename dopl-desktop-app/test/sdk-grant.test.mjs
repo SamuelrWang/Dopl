@@ -36,13 +36,19 @@ const BLOCK = SRC.slice(from, to);
 // the FULL digest, not a 12-hex prefix — 48 bits is minutes of search for a counterparty who
 // supplies the exact command/body text, and a grant key is a Set member, never a display string.
 const shaKey = (v) => createHash("sha256").update(String(v == null ? "" : v)).digest("hex");
+// §2 SPLIT (2026-08-02): the grant-key machinery lives in main/session-grant-keys.js, so the
+// block reads `makeGrantKeyFor` / `POST_GRANT` / `postFieldsOk` off the module head. Injected
+// like normalizeProfile, and the REAL implementations, so the block stays pinned to what ships.
+const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey);
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
+  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });

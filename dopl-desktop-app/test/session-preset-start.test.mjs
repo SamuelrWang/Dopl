@@ -47,12 +47,17 @@ const WIDE = { tools: "bypass", messages: "auto_both" };
 // sliced from the shipped engine and evaluated against the real initialSessionState.
 // This is what the old file should have exercised.
 
-function startModesFor(spec) {
-  const src = ENGINE.slice(ENGINE.indexOf("const startModes = spec.startModes"),
+// FIX 1 (2026-08-02) added a SECOND, tighter source: the posture the operator picks on the
+// pre-consent card itself, consumed by entry rather than by channel. `consentArm` stands in
+// for that registry — null (the default) is "the card was never touched", which is every
+// pre-existing case below, so all of them still drive the identical expression.
+function startModesFor(spec, consentArm) {
+  const src = ENGINE.slice(ENGINE.indexOf("const consentModes = sessionConsent.takeStartModes"),
     ENGINE.indexOf("const context = { ...(spec.context || {})"));
   assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
-  const state = new Function("spec", "initialSessionState", "readCaps",
-    `${src}\n return state;`)(spec, initialSessionState, () => ({}));
+  const sessionConsent = { takeStartModes: () => consentArm || null };
+  const state = new Function("spec", "initialSessionState", "readCaps", "sessionConsent",
+    `${src}\n return state;`)(spec, initialSessionState, () => ({}), sessionConsent);
   return { toolMode: state.toolMode, messageMode: state.messageMode };
 }
 

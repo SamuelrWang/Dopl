@@ -86,6 +86,7 @@ function feedInboundEffects(state, event) {
   if (state.activity !== 'working') {
     effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
   }
+  effects.push({ type: 'scheduleIdle' }); // FIX 3: a turn was just pushed — this session is not idle
   return effects;
 }
 
@@ -99,8 +100,11 @@ function sessionReducer(state, event) {
   // the idle timer, run the cap endEffects, or stash a resolver on a query-less session. Only the
   // wake triggers (inbound_arrived/inbound_released/steer), idle_timeout and the operator /
   // terminal controls act.
+  // `context` joins that list for the same reason `result` is on it: the meter describes a turn
+  // this session is running, and a parked shell is not running one — a measurement arriving from
+  // the drained tail would repaint a gauge for a query that no longer exists.
   if (state.parked === true && (type === 'assistant' || type === 'tool_use' || type === 'tool_result'
-      || type === 'outbound_post' || type === 'result' || type === 'permission_request')) {
+      || type === 'outbound_post' || type === 'result' || type === 'context' || type === 'permission_request')) {
     return { state: state, effects: [] };
   }
 
@@ -158,7 +162,8 @@ function sessionReducer(state, event) {
     // allowedTools mid-session silently drops the callback, §A.5, so this Set is the only home for a
     // task grant). `name` is the SCOPED grant key, never the bare tool name.
     if (state.allowForTask.indexOf(event.name) !== -1) {
-      return { state: state, effects: [{ type: 'resolvePermission', requestId: event.requestId, decision: 'allow' }] };
+      return { state: state, effects: [{ type: 'resolvePermission', requestId: event.requestId, decision: 'allow' },
+        { type: 'scheduleIdle' }] };
     }
     return {
       state: clone(state, {
@@ -166,7 +171,12 @@ function sessionReducer(state, event) {
         activity: 'awaiting_permission', // item 3: rides the awaiting_permission phase
         pendingPermissions: addUnique(state.pendingPermissions, event.requestId),
       }),
-      effects: [{ type: 'emit', payload: event.payload }],
+      // FIX 3 (2026-08-02) — RE-ARM THE IDLE TIMER. It was dispatched from `launched` and
+      // `result` and NOWHERE else, so the 15-minute TTL measured time since the last turn
+      // ENDED, not idleness. A card the operator was reading for sixteen minutes therefore
+      // parked underneath them: parkEffects deny-closed the very request on screen and reset
+      // both axes. A session with an open card is the opposite of idle; say so.
+      effects: [{ type: 'emit', payload: event.payload }, { type: 'scheduleIdle' }],
     };
   }
 
@@ -184,12 +194,18 @@ function sessionReducer(state, event) {
     // Back to the in-flight turn once the last button clears; the renderer already learns that
     // from permission_resolved, so no extra status emit here.
     const activity = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'working');
+    // FIX 3: answering a card IS activity, so the TTL restarts from the answer. Skipped for a
+    // PARKED session, which has no live turn to keep alive — a stale dock click must not
+    // re-arm a timer on a shell that is deliberately dormant (its idle_timeout is a no-op
+    // anyway, but arming one there would be arming it for nothing).
+    const effects = [
+      { type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision },
+      { type: 'emit', payload: { type: 'permission_resolved', requestId: event.requestId, decision: event.decision } },
+    ];
+    if (!state.parked) effects.push({ type: 'scheduleIdle' });
     return {
       state: clone(state, { phase: phase, activity: activity, allowForTask: nextAllow, pendingPermissions: nextPending }),
-      effects: [
-        { type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision },
-        { type: 'emit', payload: { type: 'permission_resolved', requestId: event.requestId, decision: event.decision } },
-      ],
+      effects: effects,
     };
   }
 
@@ -215,7 +231,12 @@ function sessionReducer(state, event) {
     const turnCost = Number(event.turnCostUsd) || 0;
     const turns = state.turns + 1;
     const costUsd = state.costUsd + turnCost;
-    const ns = clone(state, { turns: turns, costUsd: costUsd, postedThisTurn: false, postedToolUseIds: [] });
+    // 2026-08-02: `event.model` was computed by session-io and then thrown away here. It is the
+    // model that really served this turn, so a mid-session Query.setModel shows up on the header
+    // and in the meter's denominator at the NEXT turn end rather than waiting for a fresh `init`
+    // that a live switch never produces. Absent (an older event) keeps what we had.
+    const model = typeof event.model === 'string' && event.model ? event.model : state.model;
+    const ns = clone(state, { turns: turns, costUsd: costUsd, model: model, postedThisTurn: false, postedToolUseIds: [] });
     if (turnCapReached(ns)) {
       return { state: clone(ns, { phase: 'ended' }), effects: endEffects(ns, 'ended', 'turn_cap') };
     }
@@ -231,6 +252,24 @@ function sessionReducer(state, event) {
         { type: 'emit', payload: { type: 'status', phase: gatePhase(ns, 'running'), activity: activity } },
         { type: 'scheduleIdle' },
       ],
+    };
+  }
+
+  if (type === 'context') {
+    // THE CONTEXT METER (2026-08-02) — "how full is this session's window". session-model
+    // measured the prompt the model last saw and, when it knows that model, its window size.
+    // It is a SEPARATE event from `result` on purpose: the cost path is load-bearing for the
+    // caps, and a measurement that fails to arrive (an unknown usage shape, a turn with no
+    // assistant message) must change nothing about it. Coerced here as well as there, so a
+    // junk number can never reach the renderer as a percentage.
+    const tokens = Number(event.tokens) > 0 ? Number(event.tokens) : 0;
+    const window = Number(event.window) > 0 ? Number(event.window) : null;
+    const model = typeof event.model === 'string' && event.model ? event.model : state.model;
+    // After Claude Code auto-compacts, the next turn's prompt is SMALLER and this simply
+    // reports the smaller number: the meter corrects itself with no special handling.
+    return {
+      state: clone(state, { contextTokens: tokens, contextWindow: window, model: model }),
+      effects: [{ type: 'emit', payload: { type: 'context', tokens: tokens, window: window, model: model || null } }],
     };
   }
 
@@ -268,6 +307,9 @@ function sessionReducer(state, event) {
     if (event.pendingId) {
       effects.push({ type: 'emit', payload: { type: 'inbound_resolved', pendingId: event.pendingId, decision: type === 'inbound_accept_for_task' ? 'accepted-task' : 'accepted' } });
     }
+    // FIX 3: an accepted reply is a turn being pushed, so the TTL restarts. A HELD session
+    // is the exception for the same reason wakeEffects declines to resume it: nothing runs.
+    if (state.authHeld !== true) effects.push({ type: 'scheduleIdle' });
     // H1 belt: session-gate.decideInbound refuses an ACCEPT on a held session before the head
     // is shifted, so this is not normally reachable — but `inbound_released` is a legacy alias
     // other callers may still dispatch, and a held session must never come out of this branch
@@ -308,6 +350,7 @@ function sessionReducer(state, event) {
     if (state.activity !== 'working') {
       effects.push({ type: 'emit', payload: { type: 'status', phase: nextPhase, activity: 'working' } });
     }
+    effects.push({ type: 'scheduleIdle' }); // FIX 3: the operator just typed — restart the TTL
     return { state: clone(state, { phase: nextPhase, activity: 'working', parked: false }), effects: effects };
   }
 

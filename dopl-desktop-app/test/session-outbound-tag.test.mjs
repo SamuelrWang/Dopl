@@ -154,9 +154,11 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
 
 test("the decision is made BEFORE the tag can influence anything", () => {
   const fn = fnOf(IO, "makeCanUseTool");
-  const decide = fn.indexOf("const decision = grantDecision(grantArgs(");
+  // 2026-08-02: the verdict comes back as { decision, reason }; the ORDER pinned here is what
+  // matters, and it is unchanged — the decision (and now its explanation) is settled first.
+  const decide = fn.indexOf("const verdict = grantDecisionDetail(grantArgs(");
   const tagAt = fn.indexOf("const tag = isOutboundPost");
-  assert.ok(decide !== -1 && tagAt > decide, "grantDecision runs first and never sees the tag");
+  assert.ok(decide !== -1 && tagAt > decide, "the decision runs first and never sees the tag");
   assert.ok(!/grantArgs\([^)]*tag/.test(fn), "the tag is not an input to either axis");
 });
 

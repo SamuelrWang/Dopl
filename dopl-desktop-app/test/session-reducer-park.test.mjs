@@ -199,7 +199,7 @@ test("LAZY RESUME (b): operator steer wakes a parked session (resumeQuery, no in
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.parked, false);
   // A parked query has nothing live to interrupt, so a priority:'now' wake skips it.
-  assert.deepEqual(effTypes(r.effects), ["resumeQuery", "pushTurn", "emit"]);
+  assert.deepEqual(effTypes(r.effects), ["resumeQuery", "pushTurn", "emit", "scheduleIdle"]); // FIX 3
   assert.ok(!r.effects.some((e) => e.type === "interruptQuery"), "no interrupt while waking");
   const status = r.effects.find((e) => e.type === "emit" && e.payload.type === "status");
   assert.deepEqual(status.payload, { type: "status", phase: "running", activity: "working" });

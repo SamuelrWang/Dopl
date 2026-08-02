@@ -23,6 +23,7 @@ const { initialSessionState, sessionReducer, nextIdleMs } = require('./session-r
 const { getSdk } = require('./sdk-loader');
 const sessionQuery = require('./session-query'); // §3 split: SDK options + the query lifecycle (H1)
 const { buildSdkOptions, startQuery, consume } = sessionQuery;
+const sessionModel = require('./session-model'); // the frozen model enum (argv), coerced here too
 const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
@@ -50,8 +51,7 @@ function readCaps() {
 // Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).
 function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tray optional */ } }
 
-// Park + resume machinery (session-park.js) is fed the engine handles it can't require: the registry, SDK loader,
-// buildSdkOptions (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession/settle. Hoisted, so bind order does not matter.
+// Park + resume machinery (session-park.js) is fed the engine handles it can't require: the registry, SDK loader, buildSdkOptions (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession/settle. Hoisted, so bind order does not matter.
 sessionPark.bind({
   sessions, getSdk, buildSdkOptions, consume, dispatch, startSession, hasLiveSession,
   emit, windowFactoryReady: () => !!windowFactory,
@@ -236,22 +236,39 @@ function setLifecycleHandlers(h) {
 async function startSession(spec, sdk) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
-  // H2 — THE ONLY WAY A STORED POSTURE REACHES A SPAWN. This used to call
-  // channel-context.startingModes(spec.channelId), an AMBIENT read of a durable, channel-wide
-  // preference. startSession is the single construction site for EVERY spawn shape, so that read
-  // re-armed the posture on shapes that involve no human decision at all — a recreated parked
-  // shell woken by a peer reply, a crash resume, a requester auto-open — and a bypass/auto_both
-  // picked once on one consent card became a standing, cardless, clickless grant for the channel.
+  // H2 — THE ONLY WAY A STORED POSTURE REACHES A SPAWN. It used to be an AMBIENT read of a
+  // durable, channel-wide preference (channel-context.startingModes), and startSession is the
+  // single construction site for EVERY spawn shape, so that read re-armed the posture on shapes
+  // involving no human decision at all — a peer-driven wake, a crash resume, a requester
+  // auto-open — and bypass/auto_both picked once on one card became a standing, clickless grant
+  // for the whole channel. It is HANDED IN now, per launch, by a caller executing a decision a
+  // human is making right now; anything that passes nothing inherits the reducer's manual/ask.
   //
-  // Now the posture must be HANDED IN, per launch, by a caller that is executing a decision a
-  // human is making right now (trigger.js, which CONSUMES a single-use arm at the consent-approved
-  // launch). Anything that passes nothing — every other shape, and any future one — inherits
-  // session-reducer's own hard-coded manual/ask, which is the safe default by construction rather
-  // than by remembering to opt out. A parked shell is refused explicitly even if a caller did pass
-  // modes: it starts dormant and is woken later by something that is NOT the approving human, so
-  // it must never carry a posture forward into that wake.
-  const startModes = spec.startModes && !spec.parkedShell
-    ? { toolMode: spec.startModes.tools, messageMode: spec.startModes.messages }
+  // FIX 1 (2026-08-02) — THE PRE-CONSENT CARD IS ITSELF A POSTURE SOURCE, and the preferred one.
+  // Its two selects are live before Accept; session-ipc stores the pick on that card's OWN
+  // registry entry and it is consumed here, once, keyed by the entry rather than by the channel,
+  // so it applies to the spawn that exact card approves and no sibling launch can race it.
+  // `spec.startModes` (channel-prefs, from the web card) is now the COMPATIBILITY path.
+  //
+  // FIX 1b (BLOCKER, 2026-08-02) — ...AND ONLY THE SPAWN THAT ADOPTS THAT CARD MAY SPEND IT. The
+  // entry is keyed sessionKey(channelId, taskId), the SAME key recreateParkedShell,
+  // openFromChannel, startResume and openRequesterShell all spawn under, and this read ran on
+  // every one of them: a pending card armed a PEER-DRIVEN shell wake at bypass/auto_both (see
+  // `operatorArmed` below), and the operator's own later Accept then started at manual/ask
+  // because the arm was already spent. launch() alone sets `adoptsConsent`, off the same
+  // sessionConsent.has(key) it computes to decide whether this spawn ADOPTS the card's window.
+  // The gate rides the KEY, because the arm is entry-keyed: a null key takes nothing.
+  //
+  // FIX 4 — OPERATOR-ARMED, the one thing that reaches a PARKED SHELL. A shell is normally woken
+  // by something that is NOT the approving human, so it refuses a handed-in posture; but
+  // session-team.js spawns EVERY team session as a parked shell, which made a team session
+  // unarmable rather than careful. The gate opens for a consent card just accepted, or a caller
+  // that explicitly threads `operatorArmed`; a bare recreate, reopen, resume or wake sets neither.
+  const consentModes = sessionConsent.takeStartModes(spec.adoptsConsent === true ? spec.key : null);
+  const armedModes = consentModes || spec.startModes;
+  const operatorArmed = !!consentModes || spec.operatorArmed === true;
+  const startModes = armedModes && (!spec.parkedShell || operatorArmed)
+    ? { toolMode: armedModes.tools, messageMode: armedModes.messages }
     : {};
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(), ...startModes });
   // P2: a reopen fallback opens a PARKED SHELL — a live window, NO SDK query yet. It boots
@@ -292,6 +309,12 @@ async function startSession(spec, sdk) {
     direct: spec.direct === true,
     // O-6: the counterparty display name labels the agent's op=post ("Sent to X").
     counterpartyName: (spec.context && (spec.context.authorName || spec.context.targetName)) || null,
+    // THE MODEL (2026-08-02). Same precedence as the posture above and read behind the SAME
+    // `adoptsConsent` gate (FIX 1b), for the same reason: the pre-consent card the human was
+    // looking at WINS (single use, entry-scoped), and a durable record's stored pick is the
+    // fallback every other shape carries. Coerced against the frozen enum HERE, so a hand-edited
+    // store can only land on 'default'. NOT reducer state: buildSdkOptions is its one reader.
+    model: sessionModel.normalizeModel(sessionConsent.takeStartModel(spec.adoptsConsent === true ? spec.key : null) || spec.model),
     state,
     context, // display identity + the channel/workspace ids the framing addresses
     nonce,
@@ -326,6 +349,7 @@ async function startSession(spec, sdk) {
   sessionShell.bindWindow(s);
   sessionShell.emitFolder(s);
   emit(s, { type: 'modes', tool: state.toolMode, message: state.messageMode }); // v3.1: the header must state the PRESET posture, not the defaults
+  emit(s, { type: 'model', choice: s.model }); // ...and WHICH MODEL, so the third select never claims a pick nothing applied
   // Item 1/5/6 + C5: avatars reach the renderer ONLY as `avatars` events (the replay ring splits a warm one off `init`).
   s.selfAvatar = avatarCache.cachedForUser(selfUserId);
   s.peerAvatar = avatarCache.cachedForUser(s.counterpartyId);
@@ -385,6 +409,7 @@ async function launch(a) {
     // the operator's single-use arm. launchRequesterSession never sets it (no card was
     // shown for the operator's own goal), so a requester window starts at manual/ask.
     startModes: a.startModes,
+    adoptsConsent: adoptable, // FIX 1b: the ONLY spawn allowed to spend that card's single-use arm
   }, sdk);
   if (!s) return { skipped: 'disabled' };
   return { sessionId: s.sessionId };
@@ -418,9 +443,8 @@ function counterpartyFor(a) {
   return s && !s.settled ? (s.counterpartyId || null) : null;
 }
 
-// The inbound gate lives in session-gate.js (v2.5 D1): feedInbound (live or parked) and feedInboundForTask
-// (recreate the shell first) both HOLD the turn for an operator Accept unless auto-approve / the standing task
-// grant is on. Re-exported below.
+// The inbound gate lives in session-gate.js (v2.5 D1): feedInbound (live or parked) and feedInboundForTask (recreate
+// the shell first) both HOLD the turn for an operator Accept unless auto-approve / the standing task grant is on.
 // ── Consent reflow (item 8) — thin wrappers over session-consent.js. This one opens a pre-consent window that runs
 // NO agent work until Accept; the cap is gated HERE (session-consent cannot see the live sessions). decideConsent / closeConsentWindow / getConsentBySender are pass-throughs.
 function openConsentWindow(spec) {
@@ -463,6 +487,8 @@ module.exports = {
   acceptsInboundFrom: sessionTeam.acceptsInboundFrom, // D2 — the pair fence vs the room binding
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell
+  openRequesterShell: sessionPark.openRequesterShell, // 2026-08-02 — the operator's OWN typed request opens a PINNED shell
+  noteRequestStatus: sessionPark.noteRequestStatus, // ...and its lifecycle strip advances from wire events only
   openConsentWindow, // consent reflow (item 8) — called by trigger.js
   decideConsent: sessionConsent.decide,
   closeConsentWindow: sessionConsent.close,

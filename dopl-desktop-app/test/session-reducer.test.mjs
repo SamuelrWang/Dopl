@@ -131,7 +131,11 @@ test("permission_request (not granted): -> awaiting_permission, tracks requestId
   assert.equal(r.state.phase, "awaiting_permission");
   assert.equal(r.state.activity, "awaiting_permission"); // item 3
   assert.deepEqual(r.state.pendingPermissions, ["r1"]);
-  assert.deepEqual(effTypes(r.effects), ["emit"]);
+  // FIX 3 (2026-08-02): opening a card RE-ARMS the idle timer. It used to be dispatched from
+  // `launched` and `result` only, so the 15-minute TTL measured time since the last turn ENDED
+  // — and a card left on screen longer than that parked the session underneath the operator,
+  // deny-closing the request they were reading and resetting both axes.
+  assert.deepEqual(effTypes(r.effects), ["emit", "scheduleIdle"]);
 });
 
 test("permission_request short-circuits when the tool is already allowed for the task", () => {
@@ -139,7 +143,8 @@ test("permission_request short-circuits when the tool is already allowed for the
   const r = sessionReducer(s, { type: "permission_request", requestId: "r9", name: "Bash", payload: {} });
   // No button: the reducer resolves allow immediately and does NOT change phase.
   assert.equal(r.state.phase, "running");
-  assert.deepEqual(r.effects, [{ type: "resolvePermission", requestId: "r9", decision: "allow" }]);
+  assert.deepEqual(r.effects, [{ type: "resolvePermission", requestId: "r9", decision: "allow" },
+    { type: "scheduleIdle" }]);
 });
 
 test("permission_decision allow-once -> running + resolvePermission(allow) + permission_resolved", () => {
@@ -312,7 +317,8 @@ test("inbound_arrived with AXIS B auto-accepting: feeds the reply (counterparty 
   const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.activity, "working");
-  assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound"]);
+  // FIX 3: ...plus the idle re-arm, because a turn was just pushed.
+  assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound", "scheduleIdle"]);
   assert.deepEqual(findEff(r.effects, "emit").payload, { type: "counterparty", from: "Bob", text: "hi" });
   assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob" });
 });
@@ -321,7 +327,7 @@ test("inbound_arrived under the STANDING task grant from awaiting_peer clears ba
   const s = { ...running({ mode: "autonomous" }), inboundForTask: true, activity: "awaiting_peer" };
   const r = sessionReducer(s, { type: "inbound_arrived", message: "reply", authorName: "Bob" });
   assert.equal(r.state.activity, "working");
-  assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound", "emit"]);
+  assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound", "emit", "scheduleIdle"]);
   const status = r.effects.filter((e) => e.type === "emit").find((e) => e.payload.type === "status");
   assert.deepEqual(status.payload, { type: "status", phase: "running", activity: "working" });
 });
@@ -343,7 +349,7 @@ test("inbound_released: -> running, pushes the framed reply, clears the pending 
   const r = sessionReducer(s, { type: "inbound_released", message: "go", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.hasPendingInbound, false);
-  assert.deepEqual(effTypes(r.effects), ["pushInbound", "emit"]);
+  assert.deepEqual(effTypes(r.effects), ["pushInbound", "emit", "scheduleIdle"]); // FIX 3
 });
 
 // ── steer / interrupt ───────────────────────────────────────────────────────────
@@ -351,10 +357,11 @@ test("inbound_released: -> running, pushes the framed reply, clears the pending 
 test("steer priority 'now' interrupts first, then pushes; default just pushes next", () => {
   const s = running();
   const now = sessionReducer(s, { type: "steer", text: "stop", priority: "now" });
-  assert.deepEqual(effTypes(now.effects), ["interruptQuery", "pushTurn"]);
+  // FIX 3: a steer is the operator being present, so it restarts the idle TTL too.
+  assert.deepEqual(effTypes(now.effects), ["interruptQuery", "pushTurn", "scheduleIdle"]);
   assert.equal(findEff(now.effects, "pushTurn").priority, "now");
   const next = sessionReducer(s, { type: "steer", text: "later" });
-  assert.deepEqual(effTypes(next.effects), ["pushTurn"]);
+  assert.deepEqual(effTypes(next.effects), ["pushTurn", "scheduleIdle"]);
   assert.equal(findEff(next.effects, "pushTurn").priority, "next");
 });
 
@@ -362,7 +369,7 @@ test("steer / inbound_released from a waiting activity clear back to working (it
   // Steering while awaiting a peer reply re-activates the turn + emits a status.
   const steered = sessionReducer({ ...running(), activity: "awaiting_peer" }, { type: "steer", text: "nudge" });
   assert.equal(steered.state.activity, "working");
-  assert.deepEqual(effTypes(steered.effects), ["pushTurn", "emit"]);
+  assert.deepEqual(effTypes(steered.effects), ["pushTurn", "emit", "scheduleIdle"]);
   assert.deepEqual(steered.effects[1].payload, { type: "status", phase: "running", activity: "working" });
   // inbound_released always returns to working with a status carrying the activity.
   const released = sessionReducer(

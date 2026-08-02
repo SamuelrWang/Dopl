@@ -260,6 +260,48 @@ html, body {
 /* The per-session bypass callout beside it (copy owned by session-labels.js). */
 .perm-warn { color: var(--danger); font-weight: 600; flex: none; }
 
+/* ── THE MODEL PICKER (2026-08-02). Its own wrapper class rather than a third `.mode-select`,
+   because it is NOT a third permission axis: it approves nothing, and the two axes beside it
+   have to stay countable as exactly two (test/session-status-strip pins that). The control
+   itself reuses `.mode-select__input`, so the strip keeps ONE select recipe and there is no
+   second copy of the chrome to drift. `flex: none` for the same reason the axes have it: a
+   squeezed control whose current value is unreadable is worse than a row that wrapped. */
+.model-select {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--text-secondary); flex: none;
+  cursor: pointer; user-select: none;
+}
+
+/* ── THE CONTEXT METER (2026-08-02): "412k / 1M (41%)" beside the model it is measured
+   against. One unbreakable line, exactly like `.status-meta` and for the same reason — the
+   text is one token-ish quantity and letting it wrap would grow the strip. `flex: none` keeps
+   it off the shrink budget; empty content renders nothing at all, which is the pre-first-turn
+   state, so there is no chrome here to leave hanging. The two thresholds are token colours:
+   amber while there is still room to act, danger once there is not. */
+.ctx-meter {
+  color: var(--text-muted);
+  flex: none;
+  white-space: nowrap; overflow: hidden;
+}
+.ctx-meter.is-high { color: var(--warning); font-weight: 600; }
+.ctx-meter.is-full { color: var(--danger); font-weight: 600; }
+
+/* ── THE REQUEST LIFECYCLE STRIP (2026-08-02): "Request accepted" / "Reply received" beside the
+   meter. Same recipe as `.ctx-meter` and for the same reason — the copy is a closed four-word
+   table, so ONE unbreakable line plus `flex: none` keeps it off the shrink budget and it can
+   never grow the row by collapsing (test/session-status-strip pins that invariant for every
+   text child here). Empty content renders nothing at all, and the element also carries
+   `.hidden` until a status arrives, so a session that never sent a request shows no chrome.
+   The two OUTCOMES take a token colour; sent and accepted stay muted, because an in-flight
+   request is not news. */
+.request-status {
+  color: var(--text-muted);
+  flex: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.request-status.is-replied { color: var(--agent-on); font-weight: 600; }
+.request-status.is-declined { color: var(--warning); font-weight: 600; }
+
 /* ── Folder pill (item 5): ONE click-to-change control reading "Working
    Directory: <label>". LABEL only — the abs path never reaches here.
    `white-space: nowrap` closes the SAME trap the status strip had one level down: the
@@ -455,6 +497,13 @@ html, body {
   margin: 8px 12px 0;
   padding: 0 0 0 6px;
   border-left: 2px solid var(--danger);
+}
+/* 2026-08-02: WHY the card is asking, under the destination. Quiet by design — it explains
+   the wait, it does not warn about it, so it never competes with the cross-channel tint. */
+.outbound-pending__why {
+  display: block;
+  padding: 4px 12px 0;
+  color: var(--text-tertiary, var(--text-secondary));
 }
 /* The drafted body is the thing being approved: always visible, never a disclosure, and
    it scrolls past ~200px so a long draft cannot push the buttons out of reach. The cap
@@ -716,6 +765,14 @@ html, body {
 /* FIX #9: the destination line. Own channel reads as calm secondary text; anything else
    is the exfil shape the gate exists to catch, so it takes the danger tint + a rule. */
 .perm-post-to { color: var(--text-secondary); margin-bottom: 6px; display: block; }
+/* 2026-08-02: WHY the dock is asking. The same quiet recipe `.outbound-pending__why` uses on
+   the inline card, so one gate reason reads identically wherever it is shown: it explains the
+   wait, it does not warn about it, and it never competes with the cross-channel tint above. */
+.perm-why {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-tertiary, var(--text-secondary));
+}
 .perm-post-to.is-cross {
   color: var(--danger);
   font-weight: 600;

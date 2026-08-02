@@ -175,6 +175,11 @@ async function recreateParkedShell(a) {
     // FIX #9: rehydrate the running cap budget so a turn/cost-capped session reopened via
     // P2 continues from where it capped instead of getting a fresh budget.
     turns: rec.turns, costUsd: rec.costUsd,
+    // 2026-08-02: and the MODEL the operator picked. Carrying it is not a widening — a model
+    // is not a permission and reaches no gate — so unlike a posture it rides every recreate.
+    // startSession coerces it against the frozen enum: a corrupt record reopens on the CLI
+    // default, never on junk, and never on something a hand-edited store chose.
+    model: rec.model,
     parkedShell: true, // startSession opens the window but starts NO query (lazy resume)
   }, null);
   if (!s) return { ok: false };
@@ -234,6 +239,100 @@ async function openFromChannel(a, key) {
     try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
   }
   return { ok: true };
+}
+
+// ── THE REQUESTER SHELL (2026-08-02) ─────────────────────────────────────────────
+// The operator typed a request into the app's own web view, addressed to a peer, and their
+// OWN machine did nothing with it: no window, no session, and the peer's accept or decline
+// stayed invisible until a reply landed. This opens the same dormant shell the reopen path
+// builds — a window, the thread's transcript, and NO agent — so the request has somewhere
+// to live and somewhere to say what happened to it.
+//
+// DELIBERATELY THE RECREATE MACHINERY, NOT A NEW SHELL KIND. `parkedShell: true` is the one
+// flag that suppresses the query (startSession returns before it can start one), the shell
+// then wakes lazily on the operator's first turn or an accepted inbound exactly like every
+// other parked shell, and it is evictable while untouched, so a run of sent requests cannot
+// permanently own the window budget.
+//
+// IT KNOWS MORE THAN openFromChannel DOES, which is why it does not route through it: the
+// opening message already names the counterparty, the thread title and the workspace, so
+// nothing is re-resolved from the channel and the shell is bound to the right peer even in
+// a GROUP channel (where openFromChannel resolves no counterparty at all).
+//
+// FAIL RESTRICTIVE on the one thing it cannot know. A thread created seconds ago has no
+// durable record here, so there is no stored profile: it opens read_only, the same answer a
+// record-less shell and a corrupt record both get. `side` is 'requester' because the goal is
+// the operator's own, addressed outward.
+async function openRequesterShell(a) {
+  if (!deps || !deps.windowFactoryReady()) return { ok: false };
+  const channelId = String((a && a.channelId) || '');
+  const taskId = String((a && a.taskId) || '');
+  const key = store.sessionKey(channelId, taskId);
+  const existing = deps.sessions.get(key);
+  if (existing && !existing.settled) return { ok: true }; // one shell per thread
+  if (atCapAfterEvict()) return { ok: false, reason: 'busy' }; // the SAME shared window budget
+  const s = await deps.startSession({
+    key, channelId, taskId, workspaceId: (a && a.workspaceId) || null,
+    side: 'requester', profile: knownProfile(undefined), mode: 'interactive',
+    counterpartyId: (a && a.counterpartyId) || null, direct: !!(a && a.direct === true),
+    context: (a && a.context) || {},
+    resumeSdkId: null, turns: 0, costUsd: 0,
+    parkedShell: true, // the window opens; the agent starts on a typed turn or an accepted reply
+  }, null);
+  if (!s) return { ok: false };
+  armRequestStatus(s); // the strip opens at "sent" — the request is already on the wire
+  if (deps.loadHistory) {
+    try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
+  }
+  return { ok: true };
+}
+
+// ── THE REQUEST LIFECYCLE STRIP (2026-08-02) ─────────────────────────────────────
+// What happened to the request the operator sent, as one line in the window chrome. Every
+// state is read off events ALREADY on the wire and none of them starts anything: opening the
+// shell is 'sent', the peer's task_started is 'accepted', a task_failed carrying the calm
+// `declined` flag is 'declined', and the peer's first reply is 'replied'. The value rides the
+// session object and leaves as a display payload — no reducer event — so nothing on this path
+// can wake a parked shell, push a turn or resolve a permission.
+//
+// MONOTONIC, never a downgrade. Messages are read a page at a time and a milestone can be
+// seen after the reply that followed it, so an out-of-order task_started must not walk the
+// strip back from "Reply received". Only a strictly higher rank paints.
+//
+// ARMED, NOT AMBIENT. `requestStatus` is set ONLY by openRequesterShell above, so a
+// responder session, a summoned team shell and a plain reopened thread all read undefined
+// here and note nothing. That is what keeps the line meaning "the request I sent".
+const REQUEST_STATUS_RANK = { sent: 0, accepted: 1, declined: 2, replied: 3 };
+
+// The rank of a status word, or undefined for anything that is not one of the four. Read through
+// an OWN-PROPERTY check, not a bare index: a plain object literal answers a FUNCTION for
+// 'constructor' / 'toString', and a function is neither undefined nor `<=` any number, so a bare
+// lookup let those two words through the monotonic guard and stamp themselves onto the strip.
+function requestRank(status) {
+  if (typeof status !== 'string') return undefined;
+  return Object.prototype.hasOwnProperty.call(REQUEST_STATUS_RANK, status) ? REQUEST_STATUS_RANK[status] : undefined;
+}
+
+function armRequestStatus(s) {
+  s.requestStatus = 'sent';
+  deps.emit(s, { type: 'request_status', status: 'sent' });
+}
+
+// Advance the strip on a session that has one. TRUE only when it actually moved, so the
+// caller can log a transition and nothing else; an unarmed session, a settled one, an unknown
+// status and a backwards one all answer false and change nothing.
+function noteRequestStatus(a, status) {
+  if (!deps || !deps.sessions) return false;
+  const next = requestRank(status);
+  if (next === undefined) return false;
+  const key = store.sessionKey(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
+  const s = deps.sessions.get(key);
+  if (!s || s.settled) return false;
+  const now = requestRank(s.requestStatus);
+  if (now === undefined || next <= now) return false;
+  s.requestStatus = status;
+  deps.emit(s, { type: 'request_status', status });
+  return true;
 }
 
 // FIX #7 — the shared cap-relief check: TRUE when the window budget is still spent after an
@@ -355,6 +454,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // opt-in resume minted a fresh turn AND cost budget. The durable record already held the
     // real totals. (startSession applies these on every shape now, not only a parked shell.)
     turns: rec.turns, costUsd: rec.costUsd,
+    model: rec.model, // 2026-08-02: the operator's model pick, coerced by startSession
   }, sdk);
   return !!s;
 }
@@ -377,6 +477,8 @@ module.exports = {
   resumeParked,
   recreateParkedShell,
   openFromChannel, // Q6b: the record-less shell (exported for the test; recreateParkedShell is the caller)
+  openRequesterShell, // 2026-08-02: the pinned shell for the operator's OWN typed request
+  noteRequestStatus, // ...and the lifecycle strip that shell carries
   evictIdleShell, // FIX #7: LRU relief for the shared window budget
   atCapAfterEvict, // AUDIT D4: the engine's launch / openConsentWindow cap branches use it too
   emitParkedShell,

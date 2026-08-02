@@ -197,8 +197,61 @@
     return !perm || perm.ownChannel !== true;
   }
 
+  // ── THE CONTEXT METER (2026-08-02) ─────────────────────────────────────────────────────
+  // "How full is this session's window", from main's per-turn measurement. Two rules, and both
+  // are about NOT overstating what is known:
+  //   NO DENOMINATOR, NO PERCENTAGE. When this build does not know the running model's window
+  //     size main sends `window: null`, and the meter then shows the raw count and stops. The
+  //     operator uses this number to decide when to end a session and start a fresh one, and a
+  //     percentage invented from a guessed denominator would be worse than no gauge at all.
+  //   NOTHING BEFORE THE FIRST MEASUREMENT. No turn has ended, so there is nothing to say, and
+  //     an empty string renders as an empty span rather than as a confident "0%".
+  // Pure string work, no DOM: session-modes-ui.js paints the result via textContent.
+  function compactTokens(n) {
+    const v = Number(n);
+    if (!(v > 0)) return "0";
+    if (v >= 1000000) {
+      const m = v / 1000000;
+      return (m >= 10 ? Math.round(m) : Math.round(m * 10) / 10) + "M";
+    }
+    if (v >= 1000) return Math.round(v / 1000) + "k";
+    return String(Math.round(v));
+  }
+
+  // The occupancy as a whole percentage, or null when there is no honest denominator. Clamped
+  // at 100: a prompt that measured larger than the window we believe in is a fact about our
+  // table being wrong, and "104%" would only ever read as a bug.
+  function contextPercent(ctx) {
+    const c = ctx || {};
+    const tokens = Number(c.tokens);
+    const win = Number(c.window);
+    if (!(tokens >= 0) || !(win > 0)) return null;
+    return Math.min(100, Math.round((tokens / win) * 100));
+  }
+
+  function contextMeterText(ctx) {
+    const c = ctx || {};
+    const tokens = Number(c.tokens);
+    if (!(tokens > 0)) return "";
+    const pct = contextPercent(c);
+    if (pct === null) return compactTokens(tokens) + " context";
+    return compactTokens(tokens) + " / " + compactTokens(c.window) + " (" + pct + "%)";
+  }
+
+  // Amber past 75%, red past 90% — a warning early enough to act on (finish the exchange, end
+  // the session, open a fresh one) rather than one that arrives when there is no room left.
+  // No level without a percentage: an unknown window is never coloured as if it were full.
+  function contextMeterLevel(ctx) {
+    const pct = contextPercent(ctx);
+    if (pct === null) return "";
+    if (pct >= 90) return "is-full";
+    if (pct >= 75) return "is-high";
+    return "";
+  }
+
   return {
     statusText, statusDotKey, folderLabel,
+    compactTokens, contextPercent, contextMeterText, contextMeterLevel,
     // v2.9 (contract D): the two-axis posture + the bypass danger line. `permissionModeText`
     // is GONE, not aliased — one string can no longer describe two independent postures.
     toolPostureText, messagePostureText, permissionPostureText, bypassNoticeText,

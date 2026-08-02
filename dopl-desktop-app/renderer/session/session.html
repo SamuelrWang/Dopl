@@ -72,10 +72,42 @@
           <option value="auto_both">Both automatic</option>
         </select>
       </label>
+      <!-- THE MODEL (2026-08-02). It sits with the two axes because it belongs to the same
+           "what is this session doing" row, but it wears `model-select` rather than
+           `mode-select`: it is NOT a third permission axis, it approves and denies nothing,
+           and the pair above must stay countable as exactly two. The option VALUES are the
+           frozen enum from main/session-model.js (they become child argv), and the labels are
+           static markup like every other option in this strip. "Default" is the CLI's own
+           pick, which is what every session ran on before this control existed. -->
+      <label class="model-select">
+        <span class="mode-select__lbl text-label">Model</span>
+        <select class="mode-select__input" id="modelMode">
+          <option value="default">Default</option>
+          <option value="opus">Opus</option>
+          <option value="sonnet">Sonnet</option>
+          <option value="haiku">Haiku</option>
+          <option value="fable">Fable</option>
+        </select>
+      </label>
       <span class="perm-posture text-caption" id="permPosture"></span>
       <!-- The danger-token callout for `bypass`, and the only place that says it is per
            session. Empty + hidden in every other mode. -->
       <span class="perm-warn text-caption hidden" id="permWarn"></span>
+      <!-- THE CONTEXT METER (2026-08-02): how full this session's window is, measured by main
+           after every turn. Empty until the first turn ends, and tokens-only when this build
+           does not know the running model's window size (never a made-up percentage). The
+           title is the operator's actual question answered in one line: it is what to DO about
+           a full window, and it is static copy, so it lives in the markup like every other
+           fixed string here. The number itself arrives via textContent. -->
+      <span class="ctx-meter text-caption" id="ctxMeter"
+            title="How much of this session's context window the last turn used. Context does not shrink on its own. To clear it, end this session and open a fresh one."></span>
+      <!-- THE REQUEST LIFECYCLE STRIP (2026-08-02): what happened to the request the operator
+           SENT, in one word. Empty and hidden on every session that never sent one, which is
+           every responder and every summoned agent. The words arrive via textContent from
+           session-request-ui.js; the title is fixed copy, so it lives in the markup like the
+           context meter's does. -->
+      <span class="request-status text-caption hidden" id="requestStatus"
+            title="Where the request you sent has got to: sent, accepted or declined by the person you addressed, then replied."></span>
       <span class="status-spacer"></span>
       <button class="folder-pill" id="folderPill" type="button">Working Directory: <span class="folder-pill__label" id="folderLabel">~/Downloads</span></button>
     </div>
@@ -116,6 +148,12 @@
                like a normal reply, which is the exfil case the outbound gate exists to
                catch. Filled via textContent; the cross class carries the warning tint. -->
           <div class="perm-post-to text-caption hidden" id="permPostTo"></div>
+          <!-- 2026-08-02: WHY this card is on screen. The inline outbound card has carried the
+               gate reason since the reason codes landed; the dock (Bash / Write / a
+               CROSS-channel post) did not, so an uncovered tool under `bypass` still read as a
+               broken toggle there. One line, filled via textContent from a closed code table
+               (session-render.gateReasonText); an unknown code renders nothing. -->
+          <div class="perm-why text-caption hidden" id="permWhy"></div>
           <div class="perm-post concave-field hidden" id="permPost"></div>
           <details id="permDetails">
             <summary>Show full input</summary>
@@ -183,6 +221,9 @@
   <script src="session-labels.js"></script>
   <script src="session-format.js"></script>
   <script src="session-history-vm.js"></script>
+  <!-- §2 split: the outbound decision card's two transitions. The view-model requires it at
+       load and THROWS without it, so it must come first. -->
+  <script src="session-outbound-vm.js"></script>
   <script src="session-viewmodel.js"></script>
   <script src="session-chrome.js"></script>
   <script src="session-render.js"></script>
@@ -194,9 +235,16 @@
   <!-- F-118: the attended-handoff button on the pre-consent card. Loaded BEFORE the
        controller, which reads its global and hands it to session-render's makeConsent. -->
   <script src="session-attended-ui.js"></script>
+  <!-- FIX 2: the two posture selects below own their own refusal path (revert + one line)
+       and the enabled/disabled rule for the accept -> init adoption gap. Loaded BEFORE the
+       controller, which mounts it once and syncs it from renderStatus. -->
+  <script src="session-modes-ui.js"></script>
   <script src="session.js"></script>
   <!-- Q6: the sign-in banner owns its own element + its own narrow bridge sink, so it is
        independent of the transcript controller above and loads after it. -->
   <script src="session-auth-ui.js"></script>
+  <!-- 2026-08-02: the request lifecycle strip, on exactly the same terms as the banner above —
+       one element, one narrow sink, nothing added to the three at-cap files. -->
+  <script src="session-request-ui.js"></script>
 </body>
 </html>

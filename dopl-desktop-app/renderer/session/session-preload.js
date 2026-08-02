@@ -39,6 +39,16 @@ const asMessageMode = (v) => {
   const s = asStr(v);
   return s === 'auto_inbound' || s === 'auto_outbound' || s === 'auto_both' ? s : 'ask';
 };
+// 2026-08-02 THE MODEL. The renderer-side copy of main/session-model.MODEL_CHOICES (a sandboxed
+// preload cannot require main), pinned against it, session.html and session-store by
+// test/session-model.test.mjs. It matters MORE than the two above: this value becomes
+// `--model <argv>` on a child process, so a near-miss string must never survive. Fail-closed to
+// 'default', which sets no model option at all. Main re-coerces against the same list, so this
+// is the first of several identical gates and never the only one.
+const asModel = (v) => {
+  const s = asStr(v);
+  return s === 'opus' || s === 'sonnet' || s === 'haiku' || s === 'fable' ? s : 'default';
+};
 
 // The session id lives in the window URL (session.html?sid=…). Read-only; the
 // main process is authoritative and re-derives it from the window — this is a
@@ -78,10 +88,29 @@ function deliverAuth(payload) {
     /* never let a renderer callback throw back across the bridge */
   }
 }
+// 2026-08-02: the REQUEST LIFECYCLE STRIP is owned by session-request-ui.js on exactly the same
+// terms as the sign-in banner above — its own element, its own narrow sink — because session.js,
+// session-render.js and the view-model are all at the §2 500-line cap and this line needs none
+// of them. One payload type reaches it; the transcript view-model ignores that type (its
+// `default` case), so neither surface can steal the other's events.
+const REQUEST_TYPES = { request_status: true };
+let requestHandler = null;
+let requestBuffer = [];
+function deliverRequest(payload) {
+  try {
+    requestHandler(payload);
+  } catch (_err) {
+    /* never let a renderer callback throw back across the bridge */
+  }
+}
 ipcRenderer.on('session:event', (_evt, payload) => {
   if (payload && AUTH_TYPES[payload.type] === true) {
     if (typeof authHandler === 'function') deliverAuth(payload);
     else authBuffer.push(payload);
+  }
+  if (payload && REQUEST_TYPES[payload.type] === true) {
+    if (typeof requestHandler === 'function') deliverRequest(payload);
+    else requestBuffer.push(payload);
   }
   if (typeof handler === 'function') deliver(payload);
   else buffer.push(payload);
@@ -146,14 +175,25 @@ contextBridge.exposeInMainWorld('doplSession', {
   // v2.9 AXIS A — per-session TOOL permissions (manual | accept_edits | auto | bypass).
   // What MY agent may do on THIS machine. It can never approve an outbound message or an
   // incoming one; hard-deny stays immovable in every mode, `bypass` included (§H-2).
+  // FIX 2 (2026-08-02): the invoke PROMISE is RETURNED, like permission() and
+  // inboundDecision() already do. It was DISCARDED, so main's {ok:false} — every change made
+  // from a pre-consent window answered with one — reached nothing, and the select sat there
+  // showing a posture main had never taken. The renderer now reverts on a refusal.
   setToolMode(mode) {
-    ipcRenderer.invoke('session:set-tool-mode', { mode: asToolMode(mode) });
+    return ipcRenderer.invoke('session:set-tool-mode', { mode: asToolMode(mode) });
   },
   // v2.9 AXIS B — per-session MESSAGE flow (ask | auto_inbound | auto_outbound | auto_both).
   // What crosses between machines. It can never approve a work tool, and even auto_outbound
   // only covers a post into this session's OWN channel: opening a DM stays a click.
   setMessageMode(mode) {
-    ipcRenderer.invoke('session:set-message-mode', { mode: asMessageMode(mode) });
+    return ipcRenderer.invoke('session:set-message-mode', { mode: asMessageMode(mode) });
+  },
+  // 2026-08-02 — THE MODEL this session runs on. NOT a permission: it can approve nothing and
+  // deny nothing, and the two axes above are unaffected by it. Live mid-session (main calls
+  // Query.setModel, which applies to the next response) and durable across a park/resume. The
+  // invoke PROMISE is returned like the two axes, so the select reverts when main refuses.
+  setModel(model) {
+    return ipcRenderer.invoke('session:set-model', { model: asModel(model) });
   },
   // Q6 — the Claude Code sign-in banner. THREE narrow members, no arguments in either
   // direction: main re-derives the session from the window (event.sender) exactly like every
@@ -175,6 +215,19 @@ contextBridge.exposeInMainWorld('doplSession', {
     // Reload / late-registration read of the CURRENT hold (null when there is none).
     get() {
       return ipcRenderer.invoke('session:auth-state', {});
+    },
+  },
+  // 2026-08-02 — the REQUEST LIFECYCLE STRIP. ONE member, and it only RECEIVES: the strip has
+  // no control on it, so there is nothing to invoke and nothing to forge. The payload carries a
+  // status word from a closed table and no id, name or body.
+  request: {
+    onStatus(cb) {
+      requestHandler = typeof cb === 'function' ? cb : null;
+      if (requestHandler && requestBuffer.length) {
+        const pending = requestBuffer;
+        requestBuffer = [];
+        for (const payload of pending) deliverRequest(payload);
+      }
     },
   },
   // Folder display + change (item 7). LABEL only ever crosses back — the main

@@ -321,6 +321,55 @@ function requesterTaskOpen(m, myId) {
   return !!target && target !== myId;
 }
 
+// ── Requester SHELL detector (2026-08-02) ────────────────────────────────────
+// TRUE iff this message is MY OWN, HUMAN-TYPED, first-class thread opener addressed to a
+// peer — the request the operator types in the app's own web view. The desktop opens a
+// PINNED SHELL for it: a window plus the thread's transcript, with the agent NOT started.
+//
+// WHY IT IS A SECOND PREDICATE AND NOT A LOOSENED requesterTaskOpen. That helper answers a
+// different question ("should a requester SESSION be launched and driven"), and its WAKE-V1
+// runtime conjunct is load bearing: a thread my EXTERNAL Claude Code session opened must
+// open nothing here, because that session awaits the reply itself and a window would steal
+// it. The app's web view posts from the BROWSER context — cookies, no X-Dopl-Runtime header
+// — so the server stamps no `runtime` key and the operator's own typed request was refused
+// by exactly the conjunct written for external agents. Both are unstamped; the only thing on
+// the wire that separates them is the AUTHOR KIND, and only a shell — which starts nothing,
+// consumes nothing and can be evicted — is safe to open on that evidence.
+//
+//   - firstClassTaskId(m) present   → a real first-class (UUID) thread, not legacy.
+//   - m.authorUserId === myId       → MY message.
+//   - taskCreatedBy === myId        → I opened the thread (server-stamped, §Q4).
+//   - taskTarget present && !== me  → addressed to a PEER.
+//   - authorKind === 'user'         → a PERSON typed it. An 'agent' author is an agent
+//                                     session's create and still opens NOTHING.
+//   - no author_agent_id            → not an as_agent-attributed post. The server stamps that
+//                                     key only from a validated authorAgentId, so an
+//                                     operator's cookie session posting on an agent's behalf
+//                                     is an agent's create no matter what kind it declares.
+//   - runtime !== 'desktop-session' → a thread a DESKTOP-spawned session opened belongs to
+//                                     requesterTaskOpen, which launches a full requester
+//                                     session; this must never open a second window over it.
+//
+// THE AUTHOR KIND IS CALLER-ASSERTED, AND THAT IS ACCEPTABLE HERE. `authorKind` is an
+// optional field on the post; the server derives it from the credential only when the caller
+// omits it. So it is a ROUTING HINT, not an attestation — the same class of signal `runtime`
+// is. It is safe to read because of what it decides: whether the OPERATOR'S OWN post opens a
+// dormant window on the OPERATOR'S OWN machine. This is UX routing, NOT a security gate. The
+// gate is the identity pair (authored by me AND created by me), which no peer can forge, and
+// the worst a mis-declared kind can buy is a window the operator did not want — it starts no
+// agent, grants no tool, posts nothing and reaches no peer.
+function requesterShellOpen(m, myId) {
+  if (!m || m.kind !== 'message' || !myId) return false;
+  if (!firstClassTaskId(m)) return false;
+  if (m.authorUserId !== myId) return false;
+  if (m.authorKind !== 'user') return false;
+  if (metaStr(m, 'author_agent_id')) return false;
+  if (metaStr(m, 'taskCreatedBy') !== myId) return false;
+  if (metaStr(m, 'runtime') === 'desktop-session') return false;
+  const target = metaStr(m, 'taskTarget');
+  return !!target && target !== myId;
+}
+
 module.exports = {
   setHandlers: win.setHandlers,
   truncate,
@@ -335,6 +384,7 @@ module.exports = {
   knownLegacyReply,
   useLegacyThreadStore, // Q11: index.js injects electron-store at boot
   requesterTaskOpen,
+  requesterShellOpen, // 2026-08-02: the operator's OWN typed request opens a pinned shell
   openChannelForEntry: win.openChannelForEntry,
   resolveToolProfile: win.resolveToolProfile,
 };

@@ -90,10 +90,15 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     costUsd: 0.42,
   });
   assert.deepEqual(Object.keys(rec).sort(), [
+    // "model" (2026-08-02) is the operator's per-session model pick. It is on this list rather
+    // than left off it because a P2 recreate that silently reverted to the CLI default while the
+    // picker still claimed the pick is exactly the defect class this whitelist exists to kill.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
-    "counterpartyName", "direct", "key", "mode", "phase", "profile", "sdkSessionId",
+    "counterpartyName", "direct", "key", "mode", "model", "phase", "profile", "sdkSessionId",
     "sessionId", "side", "startedAt", "taskId", "taskTitle", "turns", "workspaceId",
   ]);
+  // ...and it defaults to the CLI's own pick, because the input above never named a model.
+  assert.equal(rec.model, "default");
   assert.equal(rec.counterpartyId, "u2");
   assert.equal(rec.direct, true);
   // H2 fail-quiet: a hand-edited store can only ever turn this OFF, which understates the

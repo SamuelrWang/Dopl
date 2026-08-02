@@ -17,8 +17,15 @@ const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');
 const gate = require('./session-gate'); // v2.5 D1: the inbound gate owns the decision
 const attended = require('./attended-handoff'); // F-118: "Open in Claude Code" on the consent card
+// FIX 1: the pre-consent registry is where a posture picked BEFORE Accept is stored. Required
+// directly, like `attended` above and for the same reason — the ENTRY comes from the engine's
+// injected getConsentBySender, so the frozen §B.3 resolution contract is untouched; only the
+// write lands here. session-consent requires nothing back, so there is no cycle.
+const sessionConsent = require('./session-consent');
 // v2.9: the canonical mode tables live with the gate that resolves them (session-profiles).
 const { normalizeToolMode, normalizeMessageMode } = require('./session-profiles');
+// 2026-08-02: the canonical MODEL enum lives with the option assembly that spends it.
+const { normalizeModel, modelArg } = require('./session-model');
 const peerPost = require('./session-peer-post'); // v2.8: the operator's own peer-addressed post
 const { diag } = require('./diag');
 
@@ -115,18 +122,28 @@ function register(internals) {
   //
   // AXIS A — tool permissions. It touches NOTHING about message flow: no drainInbound, no
   // outbound resolution. That separation is the invariant, enforced again in grantDecision.
-  ipcMain.handle('session:set-tool-mode', (e, p) => withSession(e, (s) => {
-    engine.dispatch(s, { type: 'set_tool_mode', mode: normalizeToolMode(p && p.mode) });
+  ipcMain.handle('session:set-tool-mode', (e, p) => modeChange(e, 'tools', normalizeToolMode(p && p.mode), (s, mode) => {
+    engine.dispatch(s, { type: 'set_tool_mode', mode });
   }));
 
   // AXIS B — message flow. This is where v2.5 D4's drain moved: switching INCOMING to
   // automatic must not strand a message already held at the gate behind a control that says
   // it flows (drainInbound self-guards — it no-ops unless an inbound opt-in is armed, and
   // when nothing is held). Nothing here can approve a work tool.
-  ipcMain.handle('session:set-message-mode', (e, p) => withSession(e, (s) => {
-    engine.dispatch(s, { type: 'set_message_mode', mode: normalizeMessageMode(p && p.mode) });
-    gate.drainInbound(s);
-  }));
+  //
+  // FIX L1 (2026-08-02): the drain is handed in SEPARATELY from the dispatch, because the two
+  // have different failure meanings. See modeChange — a dispatch that throws changed nothing, a
+  // drain that throws happens AFTER main already switched the axis.
+  ipcMain.handle('session:set-message-mode', (e, p) => modeChange(e, 'messages', normalizeMessageMode(p && p.mode), (s, mode) => {
+    engine.dispatch(s, { type: 'set_message_mode', mode });
+  }, (s) => gate.drainInbound(s)));
+
+  // ── THE MODEL, per session (2026-08-02). A third control in the status strip, beside the two
+  // axes and deliberately NOT a third axis: a model is not a permission, so this touches no
+  // grant, no gate, no drain, and nothing in session-profiles. It is bound from event.sender
+  // like every handler here and coerced FAIL-CLOSED twice (preload, then here) against the same
+  // frozen enum, because the value ends up as `--model <argv>` on a child process.
+  ipcMain.handle('session:set-model', (e, p) => modelChange(e, normalizeModel(p && p.model)));
 
   // ── Item 8: the pre-consent Accept / Deny — resolved from the window, not the id.
   ipcMain.handle('session:consent-decision', (e, p) => {
@@ -181,6 +198,110 @@ function register(internals) {
 // window when it needs to free a slot in the shared window budget. Memory only.
 function touch(s) {
   if (s) s.operatorTouched = true;
+}
+
+// FIX 1 (2026-08-02) — ONE resolution order for BOTH axes, and the reason the pre-consent
+// selects were dead. They ran `withSession`, which resolves ONLY the live-session registry;
+// a pre-consent window lives in session-consent's registry instead, so main answered
+// {ok:false} for every change made before Accept — and the preload discarded that promise, so
+// the select moved, nothing behind it did, and the spawn then emitted manual/ask and visibly
+// dragged it back. The order now is:
+//
+//   LIVE SESSION   dispatch through the reducer, exactly as before. {ok:true} carries main's
+//                  own post-dispatch pair, so the renderer stamps what was ENFORCED.
+//   CONSENT CARD   getConsentBySender (the same resolver the attended handoff uses) and store
+//                  the pick on that card's entry, which startSession consumes on adopt.
+//   NEITHER        {ok:false}. That is a real answer now: the renderer reverts the select to
+//                  main's last confirmed value and says so (FIX 2), instead of leaving a
+//                  control claiming a posture nothing is enforcing.
+//
+// FIX L1 (2026-08-02) — AND {ok:false} MUST MEAN "MAIN DID NOT TAKE IT". `apply` used to be one
+// callback carrying BOTH the reducer dispatch and AXIS B's drain, so a drainInbound that threw
+// returned {ok:false} for a change main had already made: the renderer then reverted the select
+// over a posture the gate was enforcing, which is the exact lie FIX 2 exists to remove, pointing
+// the other way. The two steps are separate arguments now. Only `apply` can fail the call; a
+// throw from `after` is diagnosed and the answer still reports main's own post-dispatch pair.
+function modeChange(e, axis, mode, apply, after) {
+  const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
+  // THE POSTURE DIAG LINE (2026-08-02), the twin of session-io's gate verdict line. Between the
+  // two, "the operator never moved the control", "the control moved and main refused it" and
+  // "main took it and the gate still asked" are three different shapes in listener.log instead
+  // of one silence. Deliberately THIN and logged BEFORE the branch, so an unknown sender (no
+  // session prefix) is visible too: the AXIS, the already-coerced VALUE, and an 8-char session
+  // prefix to join on. NEVER prompt text, a drafted body, or a full id — listener.log is plaintext.
+  diag('session posture:', axis + '=' + mode, 'session=' + String((s && s.sessionId) || '').slice(0, 8));
+  if (s) {
+    touch(s);
+    try {
+      apply(s, mode);
+    } catch (err) {
+      diag('session-ipc: mode handler error', err && err.message); // nothing was applied
+      return { ok: false };
+    }
+    // The mode is ALREADY on the session from here down, so nothing below may answer {ok:false}.
+    if (after) {
+      try { after(s); } catch (err) { diag('session-ipc: mode drain error', err && err.message); }
+    }
+    return { ok: true, tool: s.state && s.state.toolMode, message: s.state && s.state.messageMode };
+  }
+  const c = engine.getConsentBySender && engine.getConsentBySender(e && e.sender);
+  if (!c) return { ok: false };
+  const armed = sessionConsent.armModes(c, axis, mode);
+  if (!armed) return { ok: false }; // a decided / adopted card cannot be re-armed
+  return { ok: true, tool: armed.tools, message: armed.messages };
+}
+
+// THE MODEL CHANGE. Same three-sender resolution order as modeChange above (live session ->
+// consent card -> {ok:false}, which the renderer reverts on), and a SEPARATE function rather
+// than a third axis of that one, because the two differ where it matters:
+//
+//   NOT REDUCER STATE. `s.model` is a session-OBJECT field like `s.profile`. buildSdkOptions is
+//   its single reader, so there is no decision for the state machine to make and no effect to
+//   execute; routing it through the reducer would have added a state field nothing consults.
+//   LIVE, WHERE THE SDK ALLOWS IT. Query.setModel switches the running child for its NEXT
+//   response. A parked, held or pre-consent session has no query at all — the value still lands,
+//   and the resume/spawn assembles with it, because every shape re-enters buildSdkOptions. A
+//   RUNNING query whose SDK has no setModel is the third case, and it is DEFERRED (FIX L2).
+//
+// The {ok:true} carries main's OWN post-change value, so the select stamps what was recorded.
+function modelChange(e, model) {
+  const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
+  diag('session posture:', 'model=' + model, 'session=' + String((s && s.sessionId) || '').slice(0, 8));
+  if (s) {
+    touch(s);
+    s.model = model;
+    // Fire-and-forget, and NEVER fatal: a switch the CLI refuses leaves the session running on
+    // the model it already had, which is exactly what `s.model` will re-request on the next
+    // resume. undefined is the SDK's own "go back to the default".
+    //
+    // FIX L2 (2026-08-02) — DEFERRED IS NOT LIVE, and the wire has to say which one it was. A
+    // RUNNING query on an SDK build with no `setModel` used to answer a bare {ok:true} and echo
+    // the same event a real switch echoes, so nothing downstream could tell "the child is on it
+    // now" from "the child keeps the old model until the next resume". It answers {deferred:true}
+    // now and the echo is the PENDING shape: `choice` still moves the picker, which is the
+    // operator's ASK and the only thing that select has ever shown, while `pending` marks that no
+    // running child was switched. What is REALLY running stays the header's liveModel, fed by the
+    // per-turn `context` event and by `init` — this path does not touch it and never did. A
+    // session with NO query at all is not deferred: nothing is running to disagree with it.
+    let deferred = false;
+    try {
+      const live = s.query && s.query.setModel;
+      if (live) Promise.resolve(s.query.setModel(modelArg(model) || undefined)).catch((err) => diag('session-ipc: setModel rejected', err && err.message));
+      else if (s.query) deferred = true;
+    } catch (err) {
+      diag('session-ipc: setModel threw', err && err.message);
+    }
+    if (deferred) diag('session-ipc: setModel unavailable, model deferred to the next assembly');
+    if (engine.emitToSession) {
+      engine.emitToSession(s, deferred ? { type: 'model', choice: model, pending: true } : { type: 'model', choice: model });
+    }
+    return deferred ? { ok: true, deferred: true, model: model } : { ok: true, model: model };
+  }
+  const c = engine.getConsentBySender && engine.getConsentBySender(e && e.sender);
+  if (!c) return { ok: false };
+  const armed = sessionConsent.armModel(c, model);
+  if (!armed) return { ok: false }; // a decided / adopted card cannot be re-armed
+  return { ok: true, model: armed.model };
 }
 
 function withSession(e, fn) {

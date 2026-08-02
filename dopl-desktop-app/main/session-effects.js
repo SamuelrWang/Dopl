@@ -51,6 +51,21 @@ function modesEmit(state) {
   return { type: 'emit', payload: { type: 'modes', tool: state.toolMode, message: state.messageMode } };
 }
 
+// FIX 3 (2026-08-02) — A PARK THAT TAKES THE POSTURE AWAY MUST SAY SO.
+// The park resets both axes and modesEmit drags the selects back to Manual / Ask, but nothing
+// ever STATED that the posture the operator chose had been revoked: the controls just moved.
+// So the reported experience was "I set Bypass and it keeps turning itself off" with no event
+// anywhere in the window to attach that to. The line is emitted ONLY when there was really
+// something to reset, so it can never claim a change that did not happen — a session already
+// sitting at manual/ask parks exactly as quietly as it does today.
+// Copy lives here rather than in the renderer because main is what knows whether the reset
+// happened; it goes out as an ordinary `notice`, which the view-model already renders via
+// textContent. No em dash, and it names the two controls it is talking about.
+const POSTURE_RESET_NOTE = 'Paused. Tools and Messages reset to Manual / Ask.';
+function postureWasReset(state) {
+  return !!state && (state.toolMode !== 'manual' || state.messageMode !== 'ask');
+}
+
 // P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise fail-closed, tear down
 // the live query, clear (never re-arm) the idle timer, persist phase 'parked', tell the renderer. NOT settled: no
 // `settle`, no `win.destroy`, no registry removal, and sdkSessionId is retained, so a lazy wake can resume it.
@@ -69,6 +84,9 @@ function parkEffects(state) {
     // "wait for a reply" is wrong when the reply is already here, waiting.
     { type: 'emit', payload: state && state.hasPendingInbound === true ? { type: 'paused', gated: true } : { type: 'paused' } },
   ];
+  if (postureWasReset(state)) {
+    effects.push({ type: 'emit', payload: { type: 'notice', level: 'info', text: POSTURE_RESET_NOTE } });
+  }
   // FIX #6 (v2.3): clear the renderer's permission dock for anything awaiting a button. Main
   // denies each fail-closed (denyPending) before the abort, so a parked, query-less session must
   // not keep showing a live-looking prompt. Renderer drops each on resolve.
@@ -87,4 +105,6 @@ module.exports = {
   endEffects,
   modesEmit,
   parkEffects,
+  postureWasReset, // FIX 3: did this park actually take a posture away?
+  POSTURE_RESET_NOTE,
 };

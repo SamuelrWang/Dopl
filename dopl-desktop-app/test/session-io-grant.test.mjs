@@ -109,9 +109,12 @@ test("D2/L3: an own-channel post DISPATCHES a permission_request, rendered as it
   // with, so the dock stays free for the next NON-post request. RE-PINNED for FIX F4: it also
   // carries the AUTHORIZED BYTES (the body this canUseTool call is holding) plus the peer name,
   // so the card's surface comes from the input under decision, not the streamed copy.
+  // 2026-08-02: RE-PINNED again for the gate REASON. An own-channel post held by AXIS B is the
+  // most common gate in the product and it never said why it was asking, so the card gets a
+  // machine-readable code (the words live in the renderer). Codes only, never prose or bodies.
   assert.deepEqual(rec.events[0].payload, {
     type: "outbound_gate", requestId: "r10", toolUseId: "t10", ownChannel: true,
-    text: POST.body, to: null,
+    text: POST.body, to: null, gateReason: "message-approval-required",
   });
   assert.ok(!("channel" in rec.events[0].payload), "still a boolean destination, never a channel id");
   s.pendingPermissions.get("r10")({ behavior: "deny", message: "Denied by operator" });

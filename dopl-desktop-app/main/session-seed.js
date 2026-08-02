@@ -201,9 +201,34 @@ function withSeed(s, text, threadId) {
   return `${frameHistorySeed(s.nonce, transcript)}\n\n${text}`;
 }
 
+// FIX (v2.x): the INITIATING request as a DISPLAY-ONLY stream item for the TOP of the transcript.
+// main fed the raw body to the agent as its fenced first turn but never emitted it for the
+// operator to SEE, so the window showed a reply with no visible question. Returns the payload the
+// engine emits once at session start, or null when nothing is fresh to show (a resumed or parked
+// shell has no firstMessage and its D3 history already carries the ask). DISPLAY ONLY — never
+// pushed to the SDK iterator, so the agent input is byte-identical. `from` is the BOUND
+// counterparty for a responder (never a third party); a requester shows its own goal, so it needs
+// no peer name. The text is the RAW UNFENCED body — never the nonce fences or OUR framing lines.
+//
+// It LIVES HERE (moved from session-io.js, 2026-08-02) because it is the display twin of the
+// first turn this file assembles: same input, same one-shot lifetime, opposite destination. The
+// move is what bought session-io.js the lines for the model + meter fields; session-io re-exports
+// it verbatim, so session-engine's `io.initialRequestPayload(...)` is unchanged.
+function initialRequestPayload(side, firstMessage, counterpartyName) {
+  if (typeof firstMessage !== 'string' || !firstMessage.trim()) return null;
+  const responder = side === 'responder';
+  return {
+    type: 'request',
+    side: responder ? 'responder' : 'requester',
+    from: responder ? (counterpartyName || null) : null,
+    text: firstMessage,
+  };
+}
+
 module.exports = {
   frameContinuation,
   frameHistorySeed, // v2.5 D3
+  initialRequestPayload, // the initiating ask, once, as display (moved from session-io.js)
   historyTranscript, // v2.5 D3
   noteGatedBody, // FIX F1
   isGatedEntry, // FIX F4

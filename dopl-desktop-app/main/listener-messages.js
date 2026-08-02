@@ -41,6 +41,13 @@ async function dispatchMessage(entry, m, myUserId) {
   // (see noteMyLegacyThread), and re-seeing one only refreshes its eviction age, so calling it
   // here as well as from classify cannot double-record or change a verdict.
   targeting.noteMyLegacyThread(m, entry, myUserId);
+  // THE REQUEST LIFECYCLE STRIP is OBSERVED here, ahead of every route, for the same reason the
+  // skew read is: the events that say what happened to a request the operator sent are events
+  // some route below is about to claim (a peer's reply) or that no route reads at all (the
+  // milestones — every route gates on kind === 'message'). It claims nothing, short-circuits
+  // nothing and changes no verdict; it advances one status line on the shell route (4) opened,
+  // and answers false for every session that never sent a request.
+  sessionDispatch.noteRequestLifecycle(entry, m, myUserId);
   // D2 — ADDRESSING WINS, so it is checked FIRST. A message naming one of THIS operator's
   // agents (`metadata.to_agent_id`) belongs to that agent's own session and to nothing
   // else. Ahead of feedLiveSession deliberately: an addressed message that also carries a
@@ -66,6 +73,13 @@ async function dispatchMessage(entry, m, myUserId) {
   if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
   if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
   if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;
+  //   4. open a PINNED SHELL for MY OWN, HUMAN-TYPED request to a peer. Route 2 claims a thread
+  //      a DESKTOP-spawned session opened; this claims the one the operator typed in the app's
+  //      web view, which carries no runtime stamp and so looked exactly like an EXTERNAL agent's
+  //      create to route 2. LAST of the four on purpose: it only ever sees my own message, which
+  //      none of the three above can claim, and a stamped create is refused by the predicate as
+  //      well as by this ordering.
+  if (await sessionDispatch.maybeOpenRequesterShell(entry, m, myUserId)) return;
   // FIX B1: say so when the "address to act" law is being evaluated against a roster this
   // run has never successfully read. The count classify uses is then the durable last-known
   // one (or 0 for a channel never known to hold agents), which fails CLOSED toward the law —

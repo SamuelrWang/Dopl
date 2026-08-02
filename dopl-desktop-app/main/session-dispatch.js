@@ -26,6 +26,11 @@
 //       predicate (taskCreatedBy === me && author === the task's target) WITHOUT
 //       perturbing classify's 1536-case table. `false` (no record at all) falls through
 //       to classify, where the 'task-reply' verdict still fires the passive notice.
+//   (4) maybeOpenRequesterShell — MY OWN, HUMAN-TYPED create addressed to a peer (the request
+//       the operator types in the app's web view, which carries no desktop runtime stamp)
+//       opens a PINNED SHELL: window + transcript, agent NOT started. See the route.
+//   (5) noteRequestLifecycle — NOT a route. An observation the listener makes ahead of all of
+//       the above, advancing that shell's status line from lifecycle events already on the wire.
 
 const settings = require('./settings');
 const targeting = require('./targeting');
@@ -151,6 +156,99 @@ async function maybeSurfaceRequesterReply(entry, m, myUserId) {
   if (ok) diag('requester reply gated', 'task', taskId.slice(0, 8));
   return ok;
 }
+// (4) THE OPERATOR'S OWN TYPED REQUEST -> A PINNED SHELL (2026-08-02).
+//
+// THE GAP: a request the operator types in the app's own web view opened NOTHING on their
+// machine. The view posts from the browser (cookies, no X-Dopl-Runtime header), so the server
+// stamps no `runtime` key, and route (2)'s WAKE-V1 conjunct — written so a thread my EXTERNAL
+// Claude Code session opened would not get a competing window — refused it for exactly the same
+// reason it refuses an external agent's create. Clicking the thread later opened history with no
+// session, and the peer's accept or decline was invisible until a reply arrived.
+//
+// Runs AFTER route (2), so a DESKTOP-spawned session's create is claimed there and never gets
+// here; targeting.requesterShellOpen ALSO refuses a stamped message, so the two are exclusive in
+// both directions rather than by ordering alone. An EXTERNAL agent's create is refused by the
+// author-kind conjunct and still opens nothing at all.
+//
+// A SHELL, NOT A SESSION. openRequesterShell opens the window and starts no query, which is what
+// makes it safe to open on a caller-asserted author kind: it spends nothing, posts nothing and
+// wakes only on the operator's own turn or an accepted reply. It counts against the same
+// MAX_WINDOWS budget as every other shell and is evictable while the operator has not touched it.
+async function maybeOpenRequesterShell(entry, m, myUserId) {
+  if (!settings.getWindowMode()) return false;
+  if (!targeting.requesterShellOpen(m, myUserId)) return false;
+  const taskId = targeting.firstClassTaskId(m);
+  if (sessionEngine.hasLiveSession({ channelId: entry.channel.id, taskId })) return true;
+  const target = targeting.metaStr(m, 'taskTarget');
+  const res = await sessionEngine.openRequesterShell({
+    channelId: entry.channel.id,
+    taskId,
+    workspaceId: entry.workspaceId,
+    counterpartyId: target, // FIX L1 binding: only this member's replies may ever feed the shell
+    direct: entry.channel.isDirect === true, // H2: in a DM the server addresses this session's posts
+    context: {
+      channelName: entry.channel.name,
+      taskTitle: targeting.metaStr(m, 'taskTitle'),
+      authorName: io.displayNameFor(target), // startSession reads counterpartyName off this
+      channelId: entry.channel.id,
+      workspaceId: entry.workspaceId,
+      taskId,
+    },
+  });
+  // ONE DIAG LINE PER AUTO-OPEN, and one per refusal with its reason. Ids only, as 8-char
+  // prefixes: no request body, no thread title, no member id.
+  if (res && res.ok) {
+    diag('requester shell opened', entry.channel.id.slice(0, 8), 'thread', taskId.slice(0, 8));
+    return true;
+  }
+  diag('requester shell not opened', entry.channel.id.slice(0, 8), 'thread', taskId.slice(0, 8),
+    'reason', (res && res.reason) || 'unknown');
+  return false;
+}
+
+// (5) THE REQUEST LIFECYCLE STRIP — AN OBSERVATION, NOT A ROUTE.
+//
+// It claims no message and short-circuits nothing: the listener calls it ahead of the routes,
+// the same way it observes the peer's stamped build, because the events it reads are already
+// spoken for or reach nobody. A peer's reply belongs to route (1); the milestones reach no route
+// at all (every one of them gates on kind === 'message'). All this does is advance the small
+// status line on the shell the operator's own request opened. A session with no strip — every
+// responder, every team shell, every plain reopen — is untouched, because only openRequesterShell
+// arms one.
+//
+// The three transitions are exactly the facts on the wire:
+//   task_started by the peer -> Accepted. They took the request.
+//   task_failed + declined   -> Declined. `declined` is a server-reserved calm flag, re-stamped
+//                               only for a poster entitled to the thread tag, so a third member
+//                               cannot fabricate somebody else's outcome onto my thread.
+//   a kind='message' reply   -> Replied.
+// BOUND TO THE PAIR: the thread has to be one I created and the author has to be the member I
+// addressed, so a third member posting in my thread moves nothing.
+//
+// A task_failed with NO declined flag is a real error on the peer's side, not a decline, and v1
+// has no word for it — the strip holds where it is rather than say the wrong thing.
+const REQUEST_MILESTONES = { task_started: 'accepted', task_failed: 'declined' };
+
+function noteRequestLifecycle(entry, m, myUserId) {
+  if (!settings.getWindowMode()) return false;
+  if (!m || !myUserId || !m.authorUserId || m.authorUserId === myUserId) return false;
+  const taskId = targeting.firstClassTaskId(m);
+  if (!taskId) return false;
+  if (targeting.metaStr(m, 'taskCreatedBy') !== myUserId) return false;
+  if (targeting.metaStr(m, 'taskTarget') !== m.authorUserId) return false;
+  const status = m.kind === 'message' ? 'replied' : REQUEST_MILESTONES[m.kind];
+  if (typeof status !== 'string') return false; // an inherited key is not a milestone
+  if (status === 'declined' && !(m.metadata && m.metadata.declined === true)) return false;
+  if (!sessionEngine.noteRequestStatus({ channelId: entry.channel.id, taskId }, status)) return false;
+  diag('request strip', entry.channel.id.slice(0, 8), 'thread', taskId.slice(0, 8), status);
+  return true;
+}
 // ─── END SESSION-DISPATCH-PURE ─────────────────────────────────────────────────
 
-module.exports = { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };
+module.exports = {
+  feedLiveSession,
+  maybeOpenRequesterSession,
+  maybeSurfaceRequesterReply,
+  maybeOpenRequesterShell, // (4) the operator's own typed request
+  noteRequestLifecycle, // (5) the strip observer — claims nothing
+};

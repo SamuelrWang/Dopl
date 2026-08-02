@@ -333,3 +333,69 @@ test("makeRequest (requester): RIGHT lane, operator recipe, 'You' + self avatar"
   assert.equal(head.children.find((c) => c.classList.contains("who")).textContent, "You");
   assert.equal(imgIn(head.children[0]).getAttribute("src"), DATA_SELF, "the SELF photo");
 });
+
+// ── 2026-08-02: WHY the card is asking ────────────────────────────────────────
+// main stamps a machine-readable `gateReason` code on every gate/deny payload and this module is
+// the ONLY place it becomes words. The defect it closes: an operator who had turned `bypass` on
+// saw a card with no explanation and concluded the toggle was broken.
+
+test("gateReasonText: one short line per code, in house voice, and NOTHING for a code we don't know", () => {
+  const codes = ["hard-denied", "not-covered-by-bypass", "unclassified-tool", "cross-channel-post",
+    "malformed-post-fields", "message-approval-required", "channel-op-approval-required", "awaiting-approval"];
+  for (const code of codes) {
+    const line = render.gateReasonText(code);
+    assert.ok(line.length > 0 && line.length < 120, `${code}: one SHORT line, got ${line.length}`);
+    assert.ok(!line.includes("—"), `${code}: no em dashes (house copy rule)`);
+    assert.match(line, /[.]$/, `${code}: a sentence, not a fragment`);
+  }
+  assert.equal(render.gateReasonText("hard-denied"), "Blocked for this session.", "the pre-existing deny copy is kept");
+  assert.match(render.gateReasonText("cross-channel-post"), /by id, not by slug/i,
+    "the bypass/slug miss names the FIX, because there is one");
+  // A code that only ever explains an ALLOW never reaches a card, and neither does junk.
+  // M1: the last two are the PROTOTYPE keys. A bare index on an object literal answers a
+  // FUNCTION for them, which `|| ""` does not catch, so `gateReason: "constructor"` used to put
+  // the source of Object into a textContent line. The lookup is own-property now.
+  for (const junk of ["tool-mode", "granted-for-session", "auto-outbound", "profile-preapproved",
+    "", null, undefined, 7, "HARD-DENIED", "not-covered",
+    "constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
+    assert.equal(render.gateReasonText(junk), "", String(junk));
+    assert.equal(typeof render.gateReasonText(junk), "string", `${junk}: a STRING, never a Function`);
+  }
+});
+
+const whyOf = (el) => el.children.find((c) => c.classList.contains("outbound-pending__why"));
+
+test("makeOutbound: a PENDING card renders the reason line, hidden until there is one", () => {
+  const rec = render.makeOutbound(
+    { kind: "outbound", toolUseId: "t1", requestId: "r1", status: "pending", ownChannel: true,
+      text: "shipping tonight", gateReason: "message-approval-required" }, ctxBoth);
+  const why = whyOf(rec.el);
+  assert.ok(why, "the line has its own node, under the destination");
+  assert.equal(why.textContent, "Asking because message approval is set to ask before each message.");
+  assert.ok(!why.classList.contains("hidden"), "and it is visible while the card waits");
+  // A pending card with NO code shows no line at all rather than an empty band.
+  const bare = render.makeOutbound(
+    { kind: "outbound", toolUseId: "t2", requestId: "r2", status: "pending", ownChannel: true, text: "hi" }, ctxBoth);
+  assert.equal(whyOf(bare.el).textContent, "");
+  assert.ok(whyOf(bare.el).classList.contains("hidden"));
+});
+
+test("makeOutbound: the reason belongs to the WAIT — it clears when the card resolves in place", () => {
+  const item = { kind: "outbound", toolUseId: "t1", requestId: "r1", status: "pending", ownChannel: true,
+    text: "shipping tonight", gateReason: "cross-channel-post" };
+  const rec = render.makeOutbound(item, ctxBoth);
+  assert.match(whyOf(rec.el).textContent, /^Asking because this post names another channel/);
+  rec.update({ ...item, status: "sent", requestId: null });
+  assert.equal(whyOf(rec.el).textContent, "", "a delivered record does not still explain a gate");
+  assert.ok(whyOf(rec.el).classList.contains("hidden"));
+  rec.update({ ...item, status: "not_sent", requestId: null });
+  assert.equal(whyOf(rec.el).textContent, "", "and neither does a denied one");
+});
+
+test("makeOutbound: the reason reaches the DOM via textContent only (no markup path)", () => {
+  const rec = render.makeOutbound(
+    { kind: "outbound", toolUseId: "t1", requestId: "r1", status: "pending", ownChannel: true,
+      text: "hi", gateReason: "<img src=x onerror=alert(1)>" }, ctxBoth);
+  assert.equal(whyOf(rec.el).textContent, "", "an unknown code renders nothing, so nothing untrusted is even reached");
+  assert.equal(whyOf(rec.el).children.length, 0, "and the node never grows children");
+});

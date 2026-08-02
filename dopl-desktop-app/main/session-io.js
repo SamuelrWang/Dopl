@@ -1,18 +1,15 @@
 // Session engine I/O helpers (v1.9 Session Window, Track T1).
 //
-// The push-based prompt iterator, the SDKUserMessage constructor, the SDK-message
-// -> reducer-event mapping, the canUseTool permission bridge, the durable-record
-// projection, and the tool-input/result summarizers (the untrusted-inbound
-// continuation fence + the seed live in session-seed.js, re-exported at the bottom
-// unchanged). Split out of session-engine.js so each stays under the 500-line §2
-// cap (the pre-authorized "move the canUseTool bridge + event mapping into
-// session-io.js" split, contract §E). Every helper here is PARAMETERIZED — it
-// takes the session object plus `dispatch` / `store` as arguments and holds NO
-// module-level mutable state and NO electron / SDK handle, so the engine (the
-// imperative shell) remains the only stateful, electron-bound module.
+// The push-based prompt iterator, the SDKUserMessage constructor, the SDK-message -> reducer-event
+// mapping, the canUseTool permission bridge, the durable-record projection, and the
+// tool-input/result summarizers (the untrusted-inbound continuation fence + the seed live in
+// session-seed.js, re-exported at the bottom unchanged). Split out of session-engine.js so each
+// stays under the 500-line §2 cap (contract §E). Every helper here is PARAMETERIZED — it takes the
+// session object plus `dispatch` / `store` as arguments and holds NO module-level mutable state
+// and NO electron / SDK handle, so the engine remains the only stateful, electron-bound module.
 
 const crypto = require('crypto');
-const { grantDecision, grantKeyFor, isOwnChannelPost } = require('./session-profiles');
+const { grantDecisionDetail, grantKeyFor, isOwnChannelPost } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
 // The own-channel-post classifier (`isOutboundPost`) and the FORCED thread tag live in
 // session-outbound-tag.js (§2 cap). isOutboundPost is re-exported below, so no caller changed.
@@ -23,11 +20,10 @@ const { isOutboundPost } = outboundTag;
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
 const seed = require('./session-seed');
 
-// I-LOW(a): a bounded FIFO queue of pending inbound counterparty replies lives on
-// the session object (`s.pendingInbound`, an array). In INTERACTIVE mode the
-// operator releases them one at a time, so a second reply that lands before the
-// first is released must NOT overwrite it (the old single-slot field dropped it);
-// only the HEAD is surfaced to the operator, the rest wait. In AUTONOMOUS mode the
+// I-LOW(a): a bounded FIFO queue of pending inbound counterparty replies lives on the session
+// object (`s.pendingInbound`, an array). In INTERACTIVE mode the operator releases them one at a
+// time, so a second reply landing before the first is released must NOT overwrite it (the old
+// single-slot field dropped it); only the HEAD is surfaced, the rest wait. In AUTONOMOUS mode the
 // reducer pushes each reply straight to the SDK, so nothing is ever held here.
 const MAX_PENDING_INBOUND = 16;
 function queueInbound(s, item, interactive) {
@@ -128,10 +124,9 @@ function summarizeResult(content) {
   }
 }
 
-// v2.9 — the per-call grant arguments read off the live session. ONE place builds them, so
-// postWillGate's prediction and makeCanUseTool's decision can never drift apart. Both axes
-// are read LIVE (like allowForTask): a mode the operator changes mid-turn applies to the
-// very next call. Absent state => grantDecision's own fail-closed defaults (manual / ask).
+// v2.9 — the per-call grant arguments read off the live session. ONE place builds them, so the
+// prediction and the decision can never drift apart. Both axes are read LIVE (like allowForTask):
+// a mode changed mid-turn applies to the next call. Absent state => the fail-closed defaults.
 function grantArgs(s, toolName, input) {
   const st = (s && s.state) || {};
   return {
@@ -145,36 +140,51 @@ function grantArgs(s, toolName, input) {
   };
 }
 
-// v2.7 L3 — WILL this own-channel post stop on an operator decision? It asks the SAME
-// grantDecision makeCanUseTool asks, with the SAME arguments, so the stream-time artifact and
-// the gate agree about the SAME post: one that gates is painted as the inline decision card
-// (`pending`), one that is auto-approved (a scoped task grant, or Axis B set to auto_outbound /
-// auto_both) is painted as the delivered record. This does NOT decide anything — makeCanUseTool
-// remains the only decision point; it only chooses which artifact the stream shows. FIX F3: the
-// real tool NAME is threaded through (defaulting to the canonical one) because grant keys are
-// per tool name — asking about `dopl_channel` for a call the SDK made as `dopl_channel_v2` would
-// predict against a key the decision never consults, and claim "sent" over a held post.
+// v2.7 L3 — WILL this own-channel post stop on an operator decision? It asks the SAME decision
+// makeCanUseTool asks, with the SAME arguments, so the stream-time artifact and the gate agree
+// about the SAME post: one that gates paints as the inline decision card (`pending`), one that is
+// auto-approved paints as the delivered record. It DECIDES nothing — makeCanUseTool stays the only
+// decision point. FIX F3: the real tool NAME is threaded through (grant keys are per tool name, so
+// asking about `dopl_channel` for a `dopl_channel_v2` call would claim "sent" over a held post).
 function postWillGate(s, input, toolName) {
-  return grantDecision(grantArgs(s, toolName || DOPL_CHANNEL_TOOL, input)) === 'gate';
+  return grantDecisionDetail(grantArgs(s, toolName || DOPL_CHANNEL_TOOL, input)).decision === 'gate';
+}
+
+// ── THE GATE DIAG LINE (2026-08-02) ───────────────────────────────────────────────
+// "Bypass still asks" had to be diagnosed from SOURCE, because a session logged nothing about
+// why it stopped: "the mode never landed" and "the mode landed but does not cover this tool"
+// looked identical in the field. One line per verdict fixes that, and it is deliberately THIN:
+// the tool NAME (server prefix stripped, capped), the verdict, the reason code, both postures,
+// and an 8-char session prefix to join on — the same discipline as attended-handoff's diag.
+// NEVER the tool input, the drafted body, prompt text, or a full id: listener.log is plaintext.
+const DIAG_NAME_CAP = 40;
+function shortToolLabel(name) {
+  const n = String(name == null ? '' : name).replace(/^mcp__[a-z0-9-]+?__/i, '');
+  return n.slice(0, DIAG_NAME_CAP) || 'unnamed';
+}
+function logGateVerdict(log, s, toolName, verdict) {
+  if (typeof log !== 'function') return;
+  const st = (s && s.state) || {};
+  log('session gate:', shortToolLabel(toolName), verdict.decision, verdict.reason || 'no-reason',
+    'tool=' + (st.toolMode || 'manual'), 'msg=' + (st.messageMode || 'ask'),
+    'session=' + String(s && s.sessionId ? s.sessionId : '').slice(0, 8));
 }
 
 // ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
-// MEDIUM-2 — WHO this post is really addressed to, and WHAT kind it claims to be. The card
-// used to print the session's bound counterparty for every post, so a post addressed to a
-// DIFFERENT channel member (`to:`) or forged as a lifecycle event (`kind:task_finished`)
-// looked exactly like a plain reply to the peer. Both now ride the payload and are painted
-// (session-labels.postDestinationText), and both are folded into the grant key
-// (session-profiles.postScope), so approving one reply cannot authorize either.
+// MEDIUM-2 — WHO this post is really addressed to, and WHAT kind it claims to be. The card used
+// to print the session's bound counterparty for every post, so a post addressed to a DIFFERENT
+// channel member (`to:`) or forged as a lifecycle event (`kind:task_finished`) looked exactly like
+// a plain reply. Both now ride the payload and are painted (session-labels.postDestinationText),
+// and both are folded into the grant key, so approving one reply cannot authorize either.
 const TO_CAP = 60;
 const KIND_CAP = 40;
 // FIX F9 (v2.9 review) — THE KEY AND THE CARD MUST NAME THE SAME THING. postScope keys ANY
-// non-'message' kind, but this named only the four-value enum, so `kind:'Task_Finished'` (or any
-// other invented kind the peer's UI might act on) earned its OWN grant key while the card showed
-// NOTHING and the operator approved what read as a plain reply. Every non-empty kind is rendered
-// now. And a NON-STRING `to`/`kind` is never rendered as a value it is not: String({a:1}) is
-// '[object Object]' and String(['alice']) is 'alice', so a malformed field says so in plain
-// words — and grantDecision refuses to auto-allow those calls at all (postFieldsOk), so this
-// label is always shown before anything is sent.
+// non-'message' kind, but this named only the four-value enum, so `kind:'Task_Finished'` earned
+// its OWN grant key while the card showed NOTHING and the operator approved what read as a plain
+// reply. Every non-empty kind is rendered now. And a NON-STRING `to`/`kind` is never rendered as a
+// value it is not (String({a:1}) is '[object Object]', String(['alice']) is 'alice'), so a
+// malformed field says so in plain words — and grantDecision refuses to auto-allow those calls at
+// all (postFieldsOk), so this label is always shown before anything is sent.
 function oneLineField(value, cap) {
   const raw = String(value).replace(/\s+/g, ' ').trim();
   return raw.length > cap ? raw.slice(0, cap - 1).trimEnd() + '…' : raw;
@@ -201,14 +211,12 @@ function withPostSurface(payload, input, fallbackTo) {
 }
 // ─── END SESSION-IO-POST-SURFACE ──────────────────────────────────────────────
 
-// Map ONE SDK message to the reducer events the renderer needs. Only assistant
-// (text turns + tool_use cards + op=post outbound messages) and user (tool_result
-// fills) produce render events; system/init and result are handled directly by the
-// engine (they mutate session state — sdkSessionId capture, cost delta). Unknown
-// types -> []. `sessionChannelId` + `peerName` (item 2 / §B.4) classify an
-// own-channel post as an `outbound_post` addressed to the peer. `willGatePost` (v2.7 L3,
-// optional — an absent predicate reads as "never gates", i.e. the pre-v2.7 shape) marks
-// that post PENDING so the renderer paints the decision card instead of a delivery.
+// Map ONE SDK message to the reducer events the renderer needs. Only assistant (text turns +
+// tool_use cards + op=post outbound messages) and user (tool_result fills) produce render events;
+// system/init and result are handled directly by the engine (they mutate session state). Unknown
+// types -> []. `sessionChannelId` + `peerName` (item 2 / §B.4) classify an own-channel post as an
+// `outbound_post` addressed to the peer. `willGatePost` (v2.7 L3, optional — an absent predicate
+// reads as "never gates") marks that post PENDING so the renderer paints the decision card.
 function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
   const out = [];
   const blocks = (msg && msg.message && msg.message.content) || [];
@@ -219,13 +227,10 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
       } else if (b && b.type === 'tool_use') {
         if (isOutboundPost(b.name, b.input, sessionChannelId)) {
           // The agent wants to SEND a message to the peer. Emit ONE `outbound_post` and
-          // SUPPRESS the generic tool card for this same tool_use, so a sent message
-          // never double-renders as a tool call. This event flows THROUGH the reducer
-          // (case 'outbound_post') so it can set postedThisTurn — v2.7 keeps that
-          // accounting exactly where it was: the id is recorded optimistically here, and it
-          // is un-counted on the two paths that can retract the post — a failing
-          // tool_result (FIX F3) and a park, which clears the per-turn counters with the
-          // card it deny-closes (FIX F6, reducer idle_timeout).
+          // SUPPRESS the generic tool card for this same tool_use, so a sent message never
+          // double-renders as a tool call. It flows THROUGH the reducer (case 'outbound_post')
+          // so it can set postedThisTurn: recorded optimistically here, un-counted on the two
+          // paths that retract a post — a failing tool_result (FIX F3) and a park (FIX F6).
           // MEDIUM-2: `to` is the call's REAL addressee when it set one, the bound
           // counterparty otherwise; `postKind` rides along for a lifecycle-kinded post.
           const payload = withPostSurface({
@@ -274,27 +279,6 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
   return out;
 }
 
-// FIX (v2.x): the INITIATING request as a DISPLAY-ONLY stream item for the TOP of the
-// transcript. main feeds the raw request body to the agent as its fenced first turn
-// (framing.buildFencedTurn), but never emitted it for the operator to SEE — so the window
-// showed a reply and tool activity with no visible question. Returns the render payload the
-// engine emits once at session start, or null when there is nothing fresh to show: a resumed
-// or parked shell has no firstMessage and its D3 channel history already carries the ask.
-// DISPLAY ONLY — the caller emits it, never pushes it to the SDK iterator, so the agent input
-// is byte-identical. `from` is the BOUND counterparty name for a responder (never a third
-// party); a requester shows its own goal, so it needs no peer name (the renderer shows "You").
-// The text is the RAW UNFENCED body — never the nonce fences or OUR framing lines.
-function initialRequestPayload(side, firstMessage, counterpartyName) {
-  if (typeof firstMessage !== 'string' || !firstMessage.trim()) return null;
-  const responder = side === 'responder';
-  return {
-    type: 'request',
-    side: responder ? 'responder' : 'requester',
-    from: responder ? (counterpartyName || null) : null,
-    text: firstMessage,
-  };
-}
-
 // The whitelisted durable projection of a live session (mirrors the store shape).
 // Live handles (query / window / iterator) are NEVER copied — only the fields the
 // interrupted-echo + resume path need. `phase` is read from the reducer state.
@@ -312,10 +296,9 @@ function baseRecord(s) {
     phase: s.state.phase,
     startedAt: s.startedAt,
     counterpartyId: s.counterpartyId || null, direct: s.direct === true, bind: s.bind === 'room' ? 'room' : 'pair', agentId: s.agentId || null, // FIX L1: the other party; (H2) whether the server addresses posts for us; (D2) the binding mode + the agent this session runs as
-    // v1.7.5 D1: the HEADER IDENTITY, sourced from s.context/spec at startSession.
-    // A parked record is the only thing a P2 recreate (or a post-restart resume) has
-    // to rebuild the window from, so without these the reopened header lost the peer
-    // name, the channel, and the task title and fell back to a bare "Session".
+    // v1.7.5 D1: the HEADER IDENTITY, sourced from s.context/spec at startSession. A parked
+    // record is the only thing a P2 recreate (or a post-restart resume) has to rebuild the window
+    // from, so without these the reopened header fell back to a bare "Session".
     counterpartyName: s.counterpartyName || null,
     channelName: (s.context && s.context.channelName) || null,
     taskTitle: (s.context && s.context.taskTitle) || null,
@@ -323,30 +306,35 @@ function baseRecord(s) {
     // turn/cost-capped (or parked) session instead of resetting it to a fresh one.
     turns: s.state.turns,
     costUsd: s.state.costUsd,
+    // 2026-08-02: the operator's MODEL pick, whitelisted so a P2 recreate or a crash resume
+    // comes back on the model they chose. Without it a recreate silently reverts to the CLI
+    // default while the third select still claims the pick — the exact defect class the
+    // durable-whitelist discipline exists to kill. Coerced against the frozen enum on the way
+    // OUT (session-store.durableSessionRecord) and again on the way back IN (startSession),
+    // so this projection stays a plain copy with no dependency of its own.
+    model: s.model || null,
   };
 }
 
-// The canUseTool bridge. Profile pre-approved reads are shadowed by allowedTools and
-// never reach here; the tools that DO reach here are the live-gated work tools plus
-// `dopl_channel` (FIX H1 removed it from allowedTools so it is no longer blanket
-// shadowed). It consults the OP-SCOPED grantDecision FIRST, passing the tool INPUT
-// and the session's OWN channelId:
-//   'preapproved' — a profile-shadowed read -> auto-allow, NO button. v2.5 D2: an
-//                   own-channel post no longer lands here; it GATES like every write.
-//   'allow'       — granted for the whole task (engine Set) -> auto-allow, NO button.
-//   'deny'        — hard-denied by the profile (§H2 SESSION_HARD_DENY / a restricted
-//                   profile) -> refuse WITHOUT a button (belt: disallowedTools should
-//                   already have blocked it before the SDK ever calls us).
-//   'gate'        — PAUSE on an awaited operator button.
-// Only the gate branch stashes a resolver on the session for resolvePermission.
-// `log` is injected (session-engine passes diag) so this module stays electron-free.
+// The canUseTool bridge. Profile pre-approved reads are shadowed by allowedTools and never reach
+// here; what DOES reach here is the live-gated work tools plus `dopl_channel` (FIX H1 removed it
+// from allowedTools). It consults the OP-SCOPED decision FIRST, with the tool INPUT and the
+// session's OWN channelId. 'preapproved' / 'allow' auto-allow with NO button (v2.5 D2: an
+// own-channel post no longer lands in the first of those; it GATES like every write); 'deny'
+// refuses without one (belt — disallowedTools should have blocked it before the SDK called us);
+// 'gate' PAUSES on an awaited operator button, and only that branch stashes a resolver on the
+// session for resolvePermission. `log` is injected (session-engine passes diag) so this module
+// stays electron-free.
 function makeCanUseTool(s, dispatch, log) {
   return function canUseTool(name, input, opts) {
-    // v2.9: BOTH axes resolve inside grantDecision — there is no post-decision override
-    // here any more. The old item-10 `gate && autoApprove -> allow` line is gone: it was a
-    // second decision point that knew nothing about which axis a call belonged to, which
-    // is exactly how one switch came to authorize both Bash and outbound messages.
-    const decision = grantDecision(grantArgs(s, name, input));
+    // v2.9: BOTH axes resolve inside grantDecision — there is no post-decision override here any
+    // more. The old item-10 `gate && autoApprove -> allow` line is gone: a second decision point
+    // that knew nothing about which axis a call belonged to is exactly how one switch came to
+    // authorize both Bash and outbound messages. 2026-08-02: the verdict comes back WITH the
+    // reason code that explains it, for the card and for the diag line.
+    const verdict = grantDecisionDetail(grantArgs(s, name, input));
+    const decision = verdict.decision;
+    logGateVerdict(log, s, name, verdict);
     // THE FORCED THREAD TAG (session-outbound-tag.js — the prompt alone demonstrably does
     // not hold it). Computed here but read only on an ALLOW: it rides a verdict, it never
     // makes one, and both axes resolved above without ever seeing it.
@@ -367,21 +355,18 @@ function makeCanUseTool(s, dispatch, log) {
       s.pendingPermissions.set(requestId, outboundTag.wrapAllow(resolve, tag));
       s.pendingNames.set(requestId, grantName);
       // v2.7 L3 — an OWN-CHANNEL POST decides on its own inline stream card instead of in
-      // the bottom dock. The POLICY path is untouched: the same `permission_request`
-      // reducer event, the same pendingPermissions tracking (so a park still deny-closes
-      // it fail-closed and the auto-approve drain still resolves it), the same scoped
-      // grantName (POST_GRANT), the same fail-closed permission_decision mapping. ONLY the
-      // renderer PAYLOAD differs — `outbound_gate` hands the already-painted pending card
-      // its requestId, so the card answers for ITSELF and the dock is left free to surface
-      // the next NON-post request instead of sitting blank behind a post.
-      // Every other tool (Bash / Write / WebFetch / a CROSS-channel post, which is the
-      // exfil shape FIX #9 marks) keeps the dock payload below, unchanged.
-      // FIX F4: the gate also carries the AUTHORIZED BYTES — the body this canUseTool call is
-      // holding, plus the destination name — so the card's surface is sourced from the tool
-      // input the decision actually covers instead of the separately streamed copy the
-      // reducer painted. It doubles as the RE-CREATE path (FIX F5): a gate whose stream-time
-      // artifact never landed still paints a card, so a post can never gate invisibly. `to`
-      // is a display NAME and ownChannel a boolean — never another channel's id (§H-9).
+      // the bottom dock. The POLICY path is untouched: the same `permission_request` reducer
+      // event, the same pendingPermissions tracking (a park still deny-closes it fail-closed and
+      // the auto-approve drain still resolves it), the same scoped grantName, the same fail-closed
+      // permission_decision mapping. ONLY the renderer PAYLOAD differs — `outbound_gate` hands the
+      // already-painted pending card its requestId, so the card answers for ITSELF and the dock is
+      // free for the next NON-post request. Every other tool (Bash / Write / WebFetch / a
+      // CROSS-channel post, the exfil shape FIX #9 marks) keeps the dock payload below.
+      // FIX F4: the gate also carries the AUTHORIZED BYTES — the body this call is holding, plus
+      // the destination name — so the card's surface comes from the input the decision covers, not
+      // the separately streamed copy. It doubles as the RE-CREATE path (FIX F5): a gate whose
+      // stream-time artifact never landed still paints a card, so a post can never gate invisibly.
+      // `to` is a display NAME and ownChannel a boolean — never another channel's id (§H-9).
       const payload = isOutboundPost(name, input, s.channelId)
         ? withPostSurface({
           type: 'outbound_gate',
@@ -409,17 +394,21 @@ function makeCanUseTool(s, dispatch, log) {
           postKind: postKindOf(input),
         };
       if (payload.postKind == null) delete payload.postKind; // absent stays absent
+      // 2026-08-02 — WHY THIS CARD IS ON SCREEN, on BOTH gate surfaces. Without it every
+      // uncovered tool reads as a broken bypass toggle and every slug-addressed post reads as
+      // a random refusal. A CODE, never words: the renderer owns the copy, and a code it does
+      // not know renders no line rather than a guess. Absent stays absent, like postKind.
+      if (verdict.reason) payload.gateReason = verdict.reason;
       dispatch(s, { type: 'permission_request', requestId, name: grantName, payload });
     });
   };
 }
 
-// Map ONE raw SDK message onto reducer events (the "event mapping" half of the
-// pre-authorized split). system/init captures the sdkSessionId + persists the
-// record then dispatches `launched`; assistant/user become render events; result
-// hands the reducer a per-turn cost DELTA (total_cost_usd is cumulative). Unknown
-// message types are ignored. `dispatch` + `store` are injected so this stays
-// electron/SDK-handle-free.
+// Map ONE raw SDK message onto reducer events (the "event mapping" half of the pre-authorized
+// split). system/init captures the sdkSessionId + persists the record then dispatches `launched`;
+// assistant/user become render events; result hands the reducer a per-turn cost DELTA
+// (total_cost_usd is cumulative). Unknown message types are ignored. `dispatch` + `store` are
+// injected so this stays electron/SDK-handle-free.
 function handleSdkMessage(s, msg, dispatch, store) {
   if (!msg || !msg.type) return;
   if (msg.type === 'system' && msg.subtype === 'init') {
@@ -478,6 +467,7 @@ module.exports = {
   // ── re-exported VERBATIM from session-seed.js (the §2 split) ────────────────
   frameContinuation: seed.frameContinuation,
   frameHistorySeed: seed.frameHistorySeed, // v2.5 D3
+  // (initialRequestPayload is re-exported below, beside the other display-only helpers)
   historyTranscript: seed.historyTranscript, // v2.5 D3 (the lazy seed — FIX F1)
   noteGatedBody: seed.noteGatedBody, // FIX F1: a gated message never rides the seed as well
   isGatedEntry: seed.isGatedEntry, // FIX F4: session-history drops those rows from the ENTRIES too
@@ -490,7 +480,7 @@ module.exports = {
   summarizeInput,
   safeInput,
   summarizeResult,
-  initialRequestPayload, // FIX (v2.x): the initiating request as a display-only stream item
+  initialRequestPayload: seed.initialRequestPayload, // the initiating ask, display-only (§2 split)
   isOutboundPost,
   sdkRenderEvents,
   baseRecord,

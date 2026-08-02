@@ -53,25 +53,32 @@ assert.notEqual(to, -1, "END SESSION-PROFILE TABLE sentinel missing");
 assert.ok(to > from, "session-profile sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
-// v2.9: the block also digests a grant key, so `shaKey` is injected exactly like
-// normalizeProfile — the REAL implementation, sliced from the module head. FIX F4: the FULL
-// SHA-256, not a 12-hex (48-bit) prefix. The counterparty supplies the exact command / body
-// text, so a 48-bit birthday collision is seconds of work on this machine: a benign/malicious
-// pair sharing argv0 + digest gets the benign one approved and the twin auto-allowed.
+// v2.9: the block digests a grant key. FIX F4: the FULL SHA-256, not a 12-hex (48-bit) prefix.
+// The counterparty supplies the exact command / body text, so a 48-bit birthday collision is
+// seconds of work on this machine: a benign/malicious pair sharing argv0 + digest gets the benign
+// one approved and the twin auto-allowed. §2 SPLIT (2026-08-02): the key machinery itself now
+// lives in main/session-grant-keys.js, so the block references `makeGrantKeyFor` / `POST_GRANT` /
+// `postFieldsOk` from the module head — injected here exactly like normalizeProfile, and the REAL
+// implementations, so the block is still pinned to what ships.
 const shaKey = (value) =>
   createHash("sha256").update(String(value == null ? "" : value)).digest("hex");
+const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey);
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
+  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk);
 
 const CHANNEL_SHORT = "dopl_channel";
 // The work tools kept live-gated under `full` (everything else in DENIED_BUILTINS is
 // hard-denied, plus the dopl admins). Mirrors SESSION_GATED_WORK_TOOLS in the block.
-const GATED_WORK = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"];
+// FIX 2 (2026-08-02): BashOutput / KillShell joined this set. They are the READ HALF of an
+// already-gated Bash, and hard-denying them made background Bash unusable under `full`.
+const GATED_WORK = ["Bash", "BashOutput", "KillShell", "Write", "Edit", "MultiEdit", "NotebookEdit"];
 const HARD_DENY = DENIED_BUILTINS.filter((t) => !GATED_WORK.includes(t)).concat(DOPL_ADMIN_TOOLS);
 const post = (channel) => ({ op: "post", channel });
 

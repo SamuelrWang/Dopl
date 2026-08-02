@@ -53,6 +53,20 @@
       : (typeof globalThis !== "undefined" && globalThis.DoplSessionHistoryVM) || {};
   if (typeof history.historyItems !== "function") throw new Error("session-history-vm.js did not load: historyItems");
 
+  // 2026-08-02 §2 SPLIT: the outbound decision card's two transitions live in
+  // session-outbound-vm.js, reached exactly the way the three modules above are and RE-EXPORTED
+  // below, so vm.markOutboundGated / vm.markOutboundDecided are unchanged. Same NIT posture: a
+  // MISSING module THROWS at load rather than silently leaving a gated post unanswerable.
+  const outbound =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-outbound-vm.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionOutboundVM) || {};
+  for (const fn of ["markOutboundGated", "markOutboundDecided"]) {
+    if (typeof outbound[fn] !== "function") throw new Error("session-outbound-vm.js did not load: " + fn);
+  }
+  const markOutboundGated = outbound.markOutboundGated;
+  const markOutboundDecided = outbound.markOutboundDecided;
+
   // C8/MEDIUM-6: the bound every COUNTERPARTY-CONTROLLED display name gets before it reaches a
   // decision surface (the peer bubble already had it). v2.9 THE TWO AXES: the renderer's own copy of
   // the canonical tables (a sandboxed page cannot require main), used ONLY to fail-closed a `modes`
@@ -60,6 +74,10 @@
   const NAME_CAP = 60;
   const TOOL_MODES = ["manual", "accept_edits", "auto", "bypass"];
   const MESSAGE_MODES = ["ask", "auto_inbound", "auto_outbound", "auto_both"];
+  // 2026-08-02: the renderer's copy of main/session-model.MODEL_CHOICES, used ONLY to fail-closed
+  // main's `model` echo (the picker's own options are static markup in session.html). Same
+  // discipline as the two tables above; test/session-model.test.mjs pins all four copies.
+  const MODEL_CHOICES = ["default", "opus", "sonnet", "haiku", "fable"];
 
   // ── state ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +97,14 @@
       // RESTRICTIVE value, and a park resets them, which main echoes back as `modes`.
       toolMode: "manual", // AXIS A: manual | accept_edits | auto | bypass
       messageMode: "ask", // AXIS B: ask | auto_inbound | auto_outbound | auto_both
+      // 2026-08-02 THE MODEL. Two different facts, deliberately kept apart:
+      //   modelChoice  what the operator ASKED for, and the only thing the select may show. It
+      //                moves only on main's `model` echo. 'default' means "the CLI's own".
+      //   liveModel    what is REALLY running, as the SDK reports it (init, then every turn
+      //                end): the header's truth display, and the meter's denominator.
+      modelChoice: "default",
+      liveModel: null,
+      context: null, // {tokens, window} — the context meter; null until a turn has ended
       folder: null, // {label}  (item 7 — LABEL only; the abs path never crosses the bridge)
       consent: null, // {requestId, from, summary, bodyText, taskTitle, channelName, toolProfileLabel, cwdLabel}  (item 8)
       consentResolved: null, // {decision:'accepted'|'denied'|'expired'}  (item 8)
@@ -260,6 +286,10 @@
           // FIX #9: main's own-channel verdict for an op=post (never the target id). Absent (an
           // older main) reads as cross-channel — fail suspicious.
           ownChannel: event.ownChannel === true,
+          // 2026-08-02: WHY main is asking — a stable CODE, never words (session-render owns the
+          // copy and renders nothing for a code it does not know). This whitelist dropped it,
+          // which is why the dock had no reason line while the inline post card did.
+          gateReason: event.gateReason,
         };
         return { ...state, permissions: state.permissions.concat([perm]) };
       }
@@ -348,6 +378,23 @@
           messageMode: MESSAGE_MODES.indexOf(event.message) === -1 ? "ask" : event.message,
         };
 
+      // 2026-08-02 — main's echo of the MODEL PICK for this session (session start, and every
+      // change it takes). Display only, and fail-closed on junk for the same reason the two
+      // axes are: the select must never show a value main is not going to spend.
+      case "model":
+        return { ...state, modelChoice: MODEL_CHOICES.indexOf(event.choice) === -1 ? "default" : event.choice };
+
+      // 2026-08-02 — THE CONTEXT METER, measured by main at the end of every turn. `window` is
+      // null whenever main does not know the running model's size, and session-labels then
+      // renders tokens with NO percentage. `model` is what really served the turn, so a
+      // mid-session switch corrects the header without waiting for an `init` that never comes.
+      case "context":
+        return {
+          ...state,
+          context: { tokens: Number(event.tokens) || 0, window: Number(event.window) > 0 ? Number(event.window) : null },
+          liveModel: typeof event.model === "string" && event.model ? event.model : state.liveModel,
+        };
+
       // Pre-consent state (item 8): the window opened BEFORE any SDK/agent work.
       case "consent_request":
         return {
@@ -416,55 +463,6 @@
   // The accept-once alias (the pre-gate name), kept for a mid-wave caller.
   function markInboundReleased(state, pendingId) {
     return markInboundDecided(state, pendingId, "accepted");
-  }
-
-  // v2.7 L3 — hand a post's artifact the requestId main minted in canUseTool, matched on the
-  // tool_use id both carry. It stamps an UNDECIDED artifact: one already pending, and also one
-  // painted as a DELIVERY because AXIS B was permissive when the tool_use streamed and the operator
-  // tightened it before canUseTool ran (main really is awaiting a decision in that race, so the
-  // record must ask for one, not claim the peer has it). A RESOLVED artifact is never reopened.
-  // FIX F4: the gate carries the AUTHORIZED BYTES (`ev.text`, the body canUseTool holds) and they
-  // WIN over the streamed copy — the operator approves the surface the decision covers. FIX F5:
-  // with NO artifact for this tool_use (a replay that dropped it) those bytes CREATE the card, so
-  // a post can never gate invisibly with three buttons nowhere to be found.
-  function markOutboundGated(state, ev) {
-    const toolUseId = ev && ev.toolUseId;
-    const requestId = ev && ev.requestId;
-    if (!toolUseId || !requestId) return state;
-    const mine = (it) => it.kind === "outbound" && it.toolUseId === toolUseId;
-    const open = (it) => mine(it) && (it.status === "pending" || it.status == null);
-    const ownChannel = ev.ownChannel === true; // fail-suspicious: only an explicit true
-    if (!state.items.some(mine)) {
-      if (ev.text == null) return state; // nothing to show; a bodiless gate creates nothing
-      const to = ev.to == null ? null : String(ev.to);
-      const created = { kind: "outbound", toolUseId, to, text: String(ev.text), avatarKey: "self", status: "pending", requestId, ownChannel };
-      // MEDIUM-2 again, and conditionally: a plain reply's created card is unchanged.
-      if (ev.addressed === true) created.addressed = true;
-      if (ev.postKind) created.postKind = String(ev.postKind);
-      return { ...state, items: state.items.concat([created]) };
-    }
-    if (!state.items.some(open)) return state;
-    const gate = (it) => {
-      const next = { ...it, status: "pending", requestId, ownChannel: it.ownChannel === true || ownChannel };
-      if (ev.text != null) next.text = String(ev.text); // the bytes under decision, not the stream copy
-      // MEDIUM-2: the ADDRESSEE under decision wins over the streamed guess for the same reason
-      // the bytes do — the card must describe the call canUseTool is holding.
-      if (ev.addressed === true) { next.to = ev.to == null ? next.to : String(ev.to); next.addressed = true; }
-      else if (ev.to != null && !next.to) next.to = String(ev.to);
-      if (ev.postKind) next.postKind = String(ev.postKind);
-      return next;
-    };
-    return { ...state, items: state.items.map((it) => (open(it) ? gate(it) : it)) };
-  }
-
-  // v2.7 L3 — the decision for a pending post: the two explicit allows DELIVER it, EVERYTHING else
-  // (deny, a park's deny echo, a forged string) marks it not sent. Matched by requestId only.
-  const OUTBOUND_SENT = { "allow-once": true, "allow-task": true };
-  function markOutboundDecided(state, requestId, decision) {
-    const hit = (it) => it.kind === "outbound" && it.status === "pending" && it.requestId === requestId;
-    if (!requestId || !state.items.some(hit)) return state;
-    const status = OUTBOUND_SENT[decision] === true ? "sent" : "not_sent";
-    return { ...state, items: state.items.map((it) => (hit(it) ? { ...it, status } : it)) };
   }
 
   // v2.5 D2 / FIX #9: permissionPostBody + postDestinationText live in session-labels.js and are
