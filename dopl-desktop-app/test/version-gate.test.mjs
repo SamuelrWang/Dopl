@@ -108,6 +108,9 @@ function harness(opts = {}) {
   let gate;
   try {
     gate = require(MAIN("version-gate.js"));
+    // `beforeInit` reproduces the real boot ORDER: index.js arms updater.init()
+    // first, and that fires a state event before wireVersionGate() ever runs.
+    if (opts.beforeInit) opts.beforeInit(gate);
     gate.init({
       onBlock: (v) => seen.blocks.push(v),
       onRelease: (v) => seen.releases.push(v),
@@ -331,6 +334,41 @@ test("DOPL_VERSION_GATE=force blocks immediately, before any answer arrives", as
   assert.equal(h.seen.blocks[0].floor, "1.9.0", "a synthetic floor one minor up");
   await flush();
   assert.equal(h.gate.isBlocked(), true, "and the real 'no floor' answer does not lift it");
+});
+
+test("…and DOGFOODS THE REAL SCREEN, not the dead end a dev updater would draw", async () => {
+  // `force` blocks through the real branch (the whole point), so the screen has
+  // to be rewritten with the SAME synthetic updater the verdict used. Before the
+  // fix the verdict saw a live updater and the screen saw the unpackaged one, so
+  // the developer checking the gate was shown "this build cannot update itself"
+  // with no button at all — a screen a real blocked user never gets.
+  const h = harness({ mode: "force", version: "1.8.2", updater: { supported: false } });
+  await flush();
+  const s = h.gate.screen();
+  assert.match(s.status, /Looking for an update/);
+  assert.equal(s.action.id, "check", "the button a real blocked user has");
+  assert.ok(!/cannot update itself/.test(s.status));
+});
+
+// ── Boot order ───────────────────────────────────────────────────────────────
+
+test("a verdict reached BEFORE init cannot eat the block the handlers exist for", async () => {
+  // index.js arms updater.init() first, and that fires a state event
+  // synchronously ('checking' packaged, 'unsupported' in dev) — which reaches
+  // onUpdaterState and decides a verdict while `handlers` is still empty. Left
+  // alone, that pre-wiring verdict marked the gate blocked, so the FIRST real
+  // decision looked like "no change" and onBlock never fired: the app would show
+  // its normal window while isBlocked() said otherwise.
+  const h = harness({
+    mode: "force",
+    version: "1.8.2",
+    updater: { supported: false },
+    beforeInit: (gate) => gate.onUpdaterState(),
+  });
+  assert.equal(h.gate.isBlocked(), true);
+  assert.equal(h.seen.blocks.length, 1, "the swap was actually asked for");
+  await flush();
+  assert.equal(h.seen.blocks.length, 1, "and only once");
 });
 
 // ── The screen's surface ─────────────────────────────────────────────────────

@@ -93,7 +93,12 @@ function createUpdateRequiredWindow() {
   }
   registerIpc();
 
-  win = new BrowserWindow({
+  // Held in a local as well as the module slot: `closed` arrives a tick after
+  // destroy(), by which time a release-then-reblock may already have put a NEW
+  // window in the slot. A handler that nulled it blindly would orphan the live
+  // window — every IPC call from it would then fail isGateSender and the screen
+  // would go blank and buttonless. See the guard on `closed` below.
+  const created = new BrowserWindow({
     width: 520,
     height: 460,
     resizable: false,
@@ -110,29 +115,31 @@ function createUpdateRequiredWindow() {
     },
   });
 
-  win.loadFile(PAGE);
-  win.once('ready-to-show', () => { win.show(); win.focus(); });
+  win = created;
+  created.loadFile(PAGE);
+  created.once('ready-to-show', () => { created.show(); created.focus(); });
 
   // Live narration: the download's progress and the moment it is installable
   // arrive here, so the screen never looks like a dead end while ~200MB comes
   // down. That is the same failure update-policy.js exists for.
   unsubscribe = versionGate.subscribe((state) => {
-    if (!win || win.isDestroyed()) return;
-    try { win.webContents.send(STATE_CHANNEL, state); } catch (_) { /* window going away */ }
+    if (created.isDestroyed()) return;
+    try { created.webContents.send(STATE_CHANNEL, state); } catch (_) { /* window going away */ }
   });
 
   // This window is never a browser.
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const police = (event) => event.preventDefault();
-  win.webContents.on('will-navigate', police);
-  win.webContents.on('will-redirect', police);
+  created.webContents.on('will-navigate', police);
+  created.webContents.on('will-redirect', police);
 
-  win.on('closed', () => {
+  created.on('closed', () => {
+    if (win !== created) return; // a newer window already owns the slot
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     win = null;
   });
 
-  return win;
+  return created;
 }
 
 // Called when the gate releases. The window goes away entirely rather than

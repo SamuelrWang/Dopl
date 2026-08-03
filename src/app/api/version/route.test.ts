@@ -85,6 +85,46 @@ describe("GET /api/version", () => {
     expect((await get()).cache).toBe("no-store");
   });
 
+  it("SAYS SO IN THE LOG when it refuses a floor, because the wire cannot", async () => {
+    // A refused floor is served as the same plain "no floor" a correct unset
+    // config produces — which is what makes it safe, and also what makes it
+    // silent. The only person who can fix it is the operator who set the env
+    // var, so the refusal is reported where they will look.
+    // The dedupe is module state, so this test states its own starting point
+    // rather than inheriting whatever ran before it.
+    vi.stubEnv(MIN_VERSION_ENV, "1.8.0");
+    vi.stubEnv(LATEST_VERSION_ENV, "");
+    await get();
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      vi.stubEnv(MIN_VERSION_ENV, "1.9.9");
+      vi.stubEnv(LATEST_VERSION_ENV, "1.8.2");
+      await get();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain(MIN_VERSION_ENV);
+      expect(warn.mock.calls[0][0]).toContain(LATEST_VERSION_ENV);
+
+      // Deduped: every desktop asks at boot and every 4h, and a line per request
+      // would bury the one that matters.
+      await get();
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      // A DIFFERENT mistake is a different line.
+      vi.stubEnv(MIN_VERSION_ENV, "v1.8.2");
+      await get();
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn.mock.calls[1][0]).toContain("not a version");
+
+      // And a fixed config says nothing at all.
+      vi.stubEnv(MIN_VERSION_ENV, "1.8.0");
+      await get();
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("carries no auth requirement: a signed-out old build still gets an answer", async () => {
     // GET takes no request at all, which is the strongest possible statement
     // that nothing about the caller changes the answer.

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveDesktopFloor } from "@/shared/version/desktop-floor";
+import {
+  resolveDesktopFloor,
+  MIN_VERSION_ENV,
+  LATEST_VERSION_ENV,
+  type DesktopVersionFloor,
+} from "@/shared/version/desktop-floor";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +33,34 @@ export const dynamic = "force-dynamic";
  * buys nothing and would put a stale floor in front of the change the operator
  * just made to force an upgrade.
  */
+/**
+ * A REFUSED floor is invisible on the wire — it is served as the same plain "no
+ * floor" a correct unset config produces, which is what makes it safe and also
+ * what makes it silent. The one person who can fix it is the operator who set
+ * the env var, so it is said in the server log, where they will look.
+ *
+ * Deduped on (reason, value): every desktop asks at boot and every 4h, and a
+ * line per request would bury the one that matters. Module state is per lambda
+ * instance, so the worst case is one line per cold start, and a CORRECTED value
+ * is a new key and says so once more.
+ */
+let lastRejection: string | null = null;
+
+function reportRejection(floor: DesktopVersionFloor): void {
+  const key = floor.rejected ? `${floor.rejected}:${process.env[MIN_VERSION_ENV] ?? ""}` : null;
+  if (key === lastRejection) return;
+  lastRejection = key;
+  if (!floor.rejected) return;
+  const detail =
+    floor.rejected === "malformed"
+      ? `is not a version ("${process.env[MIN_VERSION_ENV] ?? ""}")`
+      : `is above ${LATEST_VERSION_ENV} (${floor.latest ?? "?"}), so it would block every desktop with nothing to install`;
+  console.warn(`[api/version] ${MIN_VERSION_ENV} ${detail} — serving NO floor.`);
+}
+
 export function GET() {
   const floor = resolveDesktopFloor();
+  reportRejection(floor);
   return NextResponse.json(
     { minSupported: floor.minSupported, latest: floor.latest },
     { headers: { "Cache-Control": "no-store" } }

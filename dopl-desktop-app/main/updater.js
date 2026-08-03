@@ -56,8 +56,18 @@ let supported = false; // packaged, and electron-updater actually loaded
 let checked = false; // a check has completed this run (available or not)
 let available = false; // something newer was found and is coming down
 let checking = false; // a check is in flight right now
+let failed = false; // the LAST attempt errored and nothing has succeeded since
 let lastPercent = null; // newest download-progress percent, or null (unknown)
 
+// WHY `failed` IS ITS OWN FIELD and does not just clear `available`. An error
+// can arrive mid-DOWNLOAD, and the two readers want opposite things from it:
+//   • the VERDICT wants `available` left alone — an update genuinely exists, we
+//     just failed to fetch it, and clearing it would hand the anti-brick guard
+//     a false "nothing is published" and relax a real block;
+//   • the SCREEN wants to stop rendering a progress spinner for a download that
+//     is no longer running, because a spinner with no button under it is the
+//     dead end this whole surface exists to avoid.
+// So the failure is reported as a fact of its own and each side reads it.
 function updateState() {
   return {
     supported,
@@ -65,6 +75,7 @@ function updateState() {
     available,
     ready: !!readyVersion,
     checking,
+    failed,
     version: readyVersion || null,
     percent: lastPercent,
   };
@@ -135,6 +146,7 @@ function init(opts) {
 
   autoUpdater.on('checking-for-update', () => {
     checking = true;
+    failed = false; // a new attempt is running: the last failure is history
     note('checking');
   });
   autoUpdater.on('update-available', (info) => {
@@ -142,6 +154,7 @@ function init(opts) {
     checking = false;
     checked = true;
     available = true;
+    failed = false;
     manualPending = false; // the outcome is now the download, not a check result
     note('downloading', { version: info && info.version });
   });
@@ -150,6 +163,7 @@ function init(opts) {
     checking = false;
     checked = true; // THE evidence the min-version gate's anti-brick guard needs
     available = false;
+    failed = false;
     manualPending = false;
     note('up-to-date', { version: appVersion.appVersion() });
   });
@@ -174,6 +188,11 @@ function init(opts) {
     checking = false;
     // `checked` is deliberately NOT set: a failed check is not evidence that
     // there is nothing to install, and the gate would relax a real block on it.
+    // `available` is deliberately NOT cleared either — a download that died
+    // mid-flight does not mean the release stopped existing. `failed` is what
+    // carries the news, and it is set BEFORE note() because note() is what fans
+    // the state out to the gate's blocking screen.
+    failed = true;
     diag('updater: error', err && err.message);
     if (manualPending) {
       manualPending = false;
@@ -188,6 +207,7 @@ function init(opts) {
     checking = false;
     checked = true;
     available = false; // no longer coming down: it is HERE, one restart away
+    failed = false;
     lastPercent = null;
     manualPending = false;
     diag('updater: downloaded', readyVersion);

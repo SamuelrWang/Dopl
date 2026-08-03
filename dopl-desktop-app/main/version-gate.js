@@ -186,9 +186,17 @@ function surfaceWarning(v) {
 }
 
 // ── The surface the blocking window talks to ─────────────────────────────────
+// The SAME updater view the verdict was reached through, or `force` would block
+// through the real branch and then render the screen of a build that cannot
+// update itself — which is not what a blocked user sees, and dogfooding a screen
+// nobody gets is worthless.
 function screen() {
   const v = verdict || {};
-  return minVersion.gateScreen({ current: v.current, floor: v.floor, updater: updaterState() });
+  return minVersion.gateScreen({
+    current: v.current,
+    floor: v.floor,
+    updater: minVersion.effectiveUpdater(VERSION_GATE.MODE, updaterState()),
+  });
 }
 
 function subscribe(fn) {
@@ -245,6 +253,15 @@ function init(opts) {
     return;
   }
   if (VERSION_GATE.MODE === 'force') diag('version gate: FORCED (DOPL_VERSION_GATE=force)');
+  // START FROM NOTHING. index.js arms updater.init() BEFORE this call, and that
+  // init fires a state event synchronously (`checking` on a packaged build,
+  // `unsupported` in dev) — which reaches onUpdaterState and decides a verdict
+  // while `handlers` is still empty. Left alone, that pre-wiring verdict would
+  // have consumed the block/release transition the handlers were installed to
+  // receive, and the window swap would silently never happen. Clearing both
+  // makes the first decision AFTER wiring the one that fires.
+  verdict = null;
+  blocked = false;
   // Decide once before the first answer lands so `force` blocks immediately and
   // so isBlocked() is never undefined for a window created in the same tick.
   decide();

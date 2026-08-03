@@ -42,6 +42,7 @@ const {
   readFloorResponse,
   resolveGateMode,
   forcedFloor,
+  effectiveUpdater,
   gateVerdict,
   gateScreen,
   floorNotice,
@@ -254,6 +255,31 @@ test("`force` keeps a REAL floor when one is already above this build", () => {
   assert.equal(at("1.8.2", "1.0.0", UPDATER.absent, "force").floor, "1.9.0");
 });
 
+test("`force` rewrites the updater for the SCREEN too, not only the verdict", () => {
+  // The dogfooding bug this pins: `force` blocks through the real branch, so if
+  // only the verdict saw a synthetic updater, a developer on an unpackaged build
+  // would block and then be shown "this build cannot update itself" — a screen
+  // no real blocked user ever gets, which is the one thing `force` exists to
+  // show. Both sides read effectiveUpdater(), so both agree.
+  const dev = effectiveUpdater("force", UPDATER.absent);
+  assert.equal(dev.supported, true, "GUARD 1 is what would otherwise degrade dev to a warning");
+  assert.equal(dev.checked, false, "GUARD 2 is what would otherwise degrade it once a check lands");
+  const s = gateScreen({ current: "1.8.2", floor: "1.9.0", updater: dev });
+  assert.match(s.status, /Looking/, "the real first screen, not the dead end");
+  assert.equal(s.action.id, "check");
+
+  // It rewrites those two fields and NOTHING else, so a packaged dogfood build
+  // still narrates its own real download.
+  const live = effectiveUpdater("force", { ...UPDATER.live, percent: 61 });
+  assert.equal(live.available, true);
+  assert.equal(live.percent, 61);
+  assert.match(gateScreen({ updater: live }).status, /61%/);
+
+  // Outside `force` the state is passed through untouched, by identity.
+  assert.equal(effectiveUpdater("auto", UPDATER.absent), UPDATER.absent);
+  assert.equal(effectiveUpdater("off", UPDATER.live), UPDATER.live);
+});
+
 test("forcedFloor is always strictly above, including for an unnameable build", () => {
   assert.equal(forcedFloor("1.8.2"), "1.9.0");
   assert.equal(forcedFloor("2.0.0"), "2.1.0");
@@ -284,6 +310,42 @@ test("a download in flight narrates itself and offers no button", () => {
   assert.ok(!/0%/.test(gateScreen({ updater: { ...UPDATER.live, percent: null } }).status));
 });
 
+test("A FAILED ATTEMPT PUTS THE BUTTON BACK: no buttonless spinner, ever", () => {
+  // THE DEAD END. updater.js leaves `available` true when a download errors (the
+  // verdict needs that: the release did not stop existing). Before this branch
+  // the screen kept rendering a progress spinner for a download that was no
+  // longer running, and `busy` hid the only button on it — so nothing on screen
+  // could end the block, and the next automatic attempt was up to 4h away.
+  const died = gateScreen({
+    current: "1.8.2", floor: "1.9.0",
+    updater: { ...UPDATER.live, percent: 37, failed: true },
+  });
+  assert.equal(died.busy, false, "not busy: nothing is running");
+  assert.equal(died.action.id, "check", "the way out is back on screen");
+  assert.match(died.status, /did not finish/i);
+  assert.ok(!/37%/.test(died.status), "a frozen percent reads as progress that is still happening");
+
+  // A check that never got an answer at all says the truer thing than "Looking…".
+  const unreachable = gateScreen({ updater: { ...UPDATER.booting, failed: true } });
+  assert.match(unreachable.status, /could not reach/i);
+  assert.equal(unreachable.action.id, "check");
+
+  // A staged update outranks it: the restart still ends the screen.
+  assert.equal(gateScreen({ updater: { ...UPDATER.ready, failed: true } }).action.id, "restart");
+  // And with no updater at all there is nothing to retry, so that copy wins.
+  assert.equal(gateScreen({ updater: { ...UPDATER.absent, failed: true } }).action, null);
+});
+
+test("a failed attempt changes the SCREEN and never the VERDICT", () => {
+  // A failed download is the loudest possible evidence that an update exists, so
+  // it must not relax anything. Pinned in both directions.
+  assert.equal(at("1.8.2", "1.9.0", { ...UPDATER.live, failed: true }).state, "block");
+  assert.equal(at("1.8.2", "1.9.0", { ...UPDATER.booting, failed: true }).state, "block");
+  // GUARD 2 still needs a COMPLETED check; `failed` is not one.
+  assert.equal(at("1.8.2", "1.9.0", { ...UPDATER.nothing, failed: true }).state, "warn");
+  assert.equal(at("1.9.0", "1.9.0", { ...UPDATER.live, failed: true }).state, "allow");
+});
+
 test("before an answer the screen offers the manual check, and says it is looking", () => {
   const booting = gateScreen({ current: "1.8.2", floor: "1.9.0", updater: UPDATER.booting });
   assert.equal(booting.action.id, "check");
@@ -300,6 +362,8 @@ test("no user-facing string in this module uses an em dash (repo copy rule)", ()
     gateScreen({ current: "1.8.2", floor: "1.9.0", updater: UPDATER.live }),
     gateScreen({ current: "1.8.2", floor: "1.9.0", updater: UPDATER.absent }),
     gateScreen({ current: "1.8.2", floor: "1.9.0", updater: UPDATER.nothing }),
+    gateScreen({ current: "1.8.2", floor: "1.9.0", updater: { ...UPDATER.live, failed: true } }),
+    gateScreen({ current: "1.8.2", floor: "1.9.0", updater: { ...UPDATER.booting, failed: true } }),
     floorNotice({ current: "1.8.2", floor: "1.9.0", reason: "no-update-published" }),
     floorNotice({ current: "1.8.2", floor: "1.9.0", reason: "no-updater" }),
   ].flatMap((o) => Object.values(o).filter((v) => typeof v === "string"));

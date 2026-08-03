@@ -110,15 +110,34 @@ function forcedFloor(current) {
   return v ? `${v[0]}.${v[1] + 1}.0` : '9999.0.0';
 }
 
+// ── The updater, as the gate sees it ─────────────────────────────────────────
+// `force` is the only thing that rewrites the updater's state, and it rewrites
+// exactly two fields: `supported` defeats GUARD 1 and `checked` defeats GUARD 2,
+// which between them are the only reasons a dev machine would not block. Every
+// other field is passed through untouched so a packaged dogfood build still
+// narrates its REAL download.
+//
+// BOTH the verdict and the screen read this. They have to: `force` blocks
+// through the real branch, so if only the verdict were rewritten, a developer on
+// an unpackaged build would block and then be shown "this build cannot update
+// itself" — a screen no blocked user would ever see, which defeats the point of
+// having a dogfooding mode at all.
+function effectiveUpdater(mode, updater) {
+  const u = updater || {};
+  return mode === 'force' ? { ...u, supported: true, checked: false } : u;
+}
+
 // ── The verdict ──────────────────────────────────────────────────────────────
 // `updater` is the live state of main/updater.js:
 //   supported  false in dev, unpackaged, or when electron-updater failed to load
 //   checked    a check has COMPLETED at least once this run (any outcome)
 //   available  an update was found and is downloading
 //   ready      an update is downloaded and one restart away
-// gateScreen additionally reads `checking`, `version` and `percent`. Those are
-// narration for the screen and are deliberately NOT verdict inputs: what the
-// download is doing right now must never change whether the app is blocked.
+// gateScreen additionally reads `checking`, `failed`, `version` and `percent`.
+// Those are narration for the screen and are deliberately NOT verdict inputs:
+// what the download is doing right now, including FAILING, must never change
+// whether the app is blocked. (A failed download is the loudest possible
+// evidence that an update exists.)
 //
 // The order of the branches is the whole design, so it is spelled out:
 //   1-2  the escape hatches, before anything can block
@@ -138,7 +157,7 @@ function gateVerdict(input) {
   // short-circuiting: what a developer sees is what a user would see.
   const forced = mode === 'force';
   const floor = forced ? (aboveFloor(current, i.floor) ? i.floor : forcedFloor(current)) : (i.floor || '');
-  const updater = forced ? { supported: true, checked: false, available: false, ready: !!u.ready } : u;
+  const updater = effectiveUpdater(mode, u);
 
   // A build that cannot name itself is never blocked: we would be comparing a
   // floor against nothing. (app-version.js only fails this way outside Electron.)
@@ -197,6 +216,21 @@ function gateScreen(input) {
     const v = u.version ? `Dopl v${u.version}` : 'The update';
     return screen(`${v} is downloaded and ready to install.`, false,
       { id: 'restart', label: 'Restart and install' });
+  }
+  // THE DEAD END THIS BRANCH EXISTS TO PREVENT. `available` stays true when a
+  // download errors (updater.js explains why the verdict needs that), so without
+  // this the screen would sit on a progress spinner, with the button hidden by
+  // `busy`, for a download that stopped running. Nothing on screen could end it
+  // and the next automatic attempt is up to 4h away. A failed attempt therefore
+  // beats the spinner: it says what happened and puts the retry back.
+  if (u.failed && u.supported) {
+    return screen(
+      u.available
+        ? 'The download did not finish. Check your connection and try again.'
+        : 'Dopl could not reach the update server. Check your connection and try again.',
+      false,
+      { id: 'check', label: 'Try again' }
+    );
   }
   // A ~200MB download over a slow link is what makes this screen look hung, and
   // a hung screen is what makes someone force-quit and lose the partial copy.
@@ -263,6 +297,7 @@ module.exports = {
   readFloorResponse,
   resolveGateMode,
   forcedFloor,
+  effectiveUpdater,
   gateVerdict,
   gateScreen,
   floorNotice,

@@ -88,7 +88,7 @@ test("the window is the repo's local-page shape, and never a browser", () => {
   assert.match(WINDOW, /contextIsolation: true/);
   assert.match(WINDOW, /nodeIntegration: false/);
   assert.match(WINDOW, /sandbox: true/);
-  assert.match(WINDOW, /win\.loadFile\(PAGE\)/);
+  assert.match(WINDOW, /\.loadFile\(PAGE\)/);
   assert.ok(!/loadURL/.test(WINDOW), "a blocked build must never load a remote page");
   assert.match(WINDOW, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
   assert.match(WINDOW, /on\('will-navigate', police\)/);
@@ -125,6 +125,18 @@ test("the live narration is unsubscribed when the window goes away", () => {
   assert.match(WINDOW, /unsubscribe = versionGate\.subscribe\(/);
   assert.match(WINDOW, /on\('closed', \(\) => \{[\s\S]*?unsubscribe\(\)/);
   assert.match(fnOf(WINDOW, "closeUpdateRequiredWindow"), /unsubscribe\(\)/);
+});
+
+test("a stale 'closed' cannot orphan the window that replaced it", () => {
+  // `closed` arrives a tick after destroy(), so a release-then-reblock can have
+  // a NEW window in the slot by then. Nulling it blindly would leave the module
+  // pointing at nothing while a live window is on screen — every IPC call from
+  // that window then fails isGateSender, and the screen goes blank with no
+  // button on it. The handler is bound to the window it was created for.
+  assert.match(WINDOW, /const created = new BrowserWindow\(/);
+  assert.match(WINDOW, /on\('closed', \(\) => \{\s*if \(win !== created\) return;/);
+  // The push listener is bound to the same window, not to whatever `win` is now.
+  assert.match(WINDOW, /subscribe\(\(state\) => \{\s*if \(created\.isDestroyed\(\)\) return;/);
 });
 
 // ── The preload ──────────────────────────────────────────────────────────────

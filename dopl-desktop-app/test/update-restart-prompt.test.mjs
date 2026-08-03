@@ -141,8 +141,7 @@ function harness(opts = {}) {
 // consumer of it decides whether the app may open at all (main/min-version.js).
 // `checked` is the load-bearing one: it is the ONLY evidence that a floor sits
 // above the newest build that exists, and acting on a wrong answer is a fleet
-// outage in either direction. So each transition is pinned here rather than
-// inferred from the prose the tray shows.
+// outage in either direction. Each transition is pinned here.
 
 test("an unpackaged run reports NO updater, which is what stops a hard block", () => {
   const h = harness({ packaged: false });
@@ -154,7 +153,7 @@ test("a packaged run reports a live updater before it has learned anything", () 
   const h = harness();
   assert.deepEqual(h.state(), {
     supported: true, checked: false, available: false, ready: false,
-    checking: false, version: null, percent: null,
+    checking: false, failed: false, version: null, percent: null,
   });
 });
 
@@ -170,14 +169,38 @@ test("'nothing newer' is the ONE outcome that sets `checked` without an update",
 });
 
 test("a FAILED check never sets `checked` — it learned nothing", () => {
-  // The whole anti-brick guard turns on this. An offline machine that treated
-  // "the check errored" as "there is nothing newer" would let itself past a
-  // floor it really is below, on every network blip.
+  // The whole anti-brick guard turns on this. A machine that read "the check
+  // errored" as "there is nothing newer" would let itself past a floor it really
+  // is below, on every network blip.
   const h = harness();
   h.autoUpdater.emit("checking-for-update");
   h.autoUpdater.emit("error", new Error("net::ERR_INTERNET_DISCONNECTED"));
   assert.equal(h.state().checked, false);
   assert.equal(h.state().checking, false, "…but it is no longer in flight");
+  assert.equal(h.state().failed, true, "and the failure is a fact of its own");
+});
+
+test("a DOWNLOAD that dies keeps `available` and reports `failed` beside it", () => {
+  // One error, two readers wanting opposite things. Clearing `available` would
+  // hand the gate's anti-brick guard a false "nothing is published" and relax a
+  // real block; keeping it alone left the blocking screen spinning on a dead
+  // download, its only button hidden by `busy`. So both facts are reported.
+  const h = harness();
+  h.autoUpdater.emit("update-available", { version: "1.9.0" });
+  h.autoUpdater.emit("error", new Error("net::ERR_CONNECTION_RESET"));
+  assert.equal(h.state().available, true, "the release did not stop existing");
+  assert.equal(h.state().failed, true);
+});
+
+test("every attempt that gets somewhere clears `failed`, so it never sticks", () => {
+  for (const [event, arg] of [["checking-for-update"], ["update-not-available"],
+    ["update-available", { version: "1.9.0" }], ["update-downloaded", { version: "1.9.0" }]]) {
+    const h = harness();
+    h.autoUpdater.emit("error", new Error("boom"));
+    assert.equal(h.state().failed, true, `${event}: primed`);
+    h.autoUpdater.emit(event, arg);
+    assert.equal(h.state().failed, false, `${event} left a stale failure behind`);
+  }
 });
 
 test("found -> downloading -> ready walks available then ready, and carries the percent", () => {
