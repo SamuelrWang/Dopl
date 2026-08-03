@@ -58,6 +58,18 @@ export interface WorkspaceWithRole extends Workspace {
   role: Role;
 }
 
+/**
+ * Head-counts behind the overview page's stat cards. Read by the
+ * `/overview` server component and by
+ * `GET /api/workspaces/[workspaceSlug]/overview-counts` (the SPA's twin).
+ */
+export interface WorkspaceOverviewCounts {
+  workflows: number;
+  knowledgeBases: number;
+  skills: number;
+  members: number;
+}
+
 export interface WorkspaceMembership {
   workspaceId: string;
   userId: string;

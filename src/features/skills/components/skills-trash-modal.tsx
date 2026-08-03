@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { FileCode, RotateCcw, X } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, NOT the `settings-modal` barrel: the barrel re-exports
+// `SettingsModal`, which drags the whole settings tree (and its
+// `next/navigation` call sites) into any bundle that touches this modal —
+// fatal for the desktop SPA, which has no Next.
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { toast } from "@/shared/ui/toast";
 import {

@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { CopyButton } from "@/shared/ui/copy-button";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 
 const DOCS = {
   claudeCode: "https://code.claude.com/docs/en/mcp",
@@ -27,7 +28,7 @@ export function ConnectClients() {
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrigin(window.location.origin);
+    setOrigin(getAppOrigin());
   }, []);
   const url = `${origin}/api/mcp`;
 

@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel: the barrel also re-exports
+// SettingsModal, whose section tree reaches `next/navigation`. This dialog is a
+// leaf primitive reused by pages the desktop SPA bundles, where a `next/*`
+// module anywhere in the graph fails the build.
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 
 interface Props {

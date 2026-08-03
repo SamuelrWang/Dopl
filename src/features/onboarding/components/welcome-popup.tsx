@@ -6,6 +6,7 @@ import { Check, Copy, X } from "lucide-react";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildBootstrapPrompt } from "../bootstrap-prompt";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 
 const WELCOME_KEY = "dopl:welcome";
 
@@ -23,7 +24,7 @@ export function WelcomePopup() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrigin(window.location.origin);
+    setOrigin(getAppOrigin());
     let raf = 0;
     try {
       if (window.localStorage.getItem(WELCOME_KEY) === "1") {

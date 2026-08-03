@@ -21,6 +21,10 @@ const { createLoadGuard } = require('./load-guard');
 const { diag } = require('./diag');
 // v1.9 Session Window: engine seam + window factory / lifecycle echoes + window-mode.
 const sessionEngine = require('./session-engine');
+const spaWindow = require('./spa-window');
+const uiBridge = require('./ui-bridge');
+const authTokens = require('./auth-tokens');
+const uiSync = require('./ui-sync');
 const settings = require('./settings');
 const sessionWindow = require('./session-window');
 
@@ -205,6 +209,9 @@ function openDeepLink(url) {
     console.warn('[deeplink] auth fragment rejected (no pending sign-in / expired) — ignoring');
     return;
   }
+  // Deterministic re-arm of the token authority on fresh credentials (C15) —
+  // replaces timing guesses; no-op when start() hasn't run.
+  try { authTokens.onSignIn(); } catch (err) { diag('token re-arm error', err && err.message); }
 
   const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -363,7 +370,43 @@ if (!gotLock) {
     // the tray keeps the latest as a quiet, disabled line.
     versionSkew.setHandlers({ onSkew: (skew) => tray.setPeerSkew(skew) });
 
-    createMainWindow();
+    // ── Desktop migration Phase 2 (docs/DESKTOP-MIGRATION-PLAN.md) ──
+    // The bundled SPA ships behind DOPL_UI=spa while the remote window
+    // remains the default and the rollback. The token authority starts
+    // unconditionally — it is additive beside the cookie path and is what
+    // keeps main's credential fresh once the remote page (whose Supabase
+    // client refreshed the cookie jar) is no longer loaded.
+    try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
+    if (process.env.DOPL_UI === 'spa') {
+      // Bridge handlers bind to the SPA window's top frame ONLY — and are
+      // registered ONLY in SPA mode, so the remote window never has a
+      // registered privileged surface it doesn't use.
+      uiBridge.register({ getMainWindow: () => mainWindow });
+      const startUiSync = () =>
+        uiSync.start({ getWindow: () => mainWindow, getAccessToken: authTokens.getAccessToken });
+      authTokens.subscribe((state) => {
+        try { uiBridge.broadcastAuthState(mainWindow, state); } catch (_err) { /* window gone */ }
+        // The subscriber payload is the OBJECT broadcastAuthState reads
+        // ({ status, signedIn, userId }) — compare the field, not the value.
+        const status = state && state.status;
+        // A dead session must not keep a live realtime feed; a fresh one
+        // must get the feed back without an app restart.
+        if (status === 'signed-out') { try { uiSync.stop(); } catch (_err) { /* not started */ } }
+        if (status === 'signed-in') {
+          try { startUiSync(); } catch (err) { diag('ui-sync restart error', err && err.message); }
+          // A rotation lands on the live channel NOW, not at the 5-min
+          // recheck backstop — every successful refresh emits 'signed-in'.
+          try { uiSync.refreshAuth(); } catch (err) { diag('ui-sync auth-refresh error', err && err.message); }
+        }
+      });
+      // Phase 3: main watches the viewed workspace's content tables and
+      // pushes coalesced change events to the SPA (dopl:sync-event).
+      startUiSync();
+      mainWindow = spaWindow.createSpaWindow();
+      mainWindow.on('closed', () => { mainWindow = null; });
+    } else {
+      createMainWindow();
+    }
     flushPendingDeepLink();
 
     // Session seam: factory + lifecycle handlers, then init() (registers session IPC + reloads records) BEFORE listener.start.
@@ -415,6 +458,8 @@ if (!gotLock) {
       // what fix the multi-minute hang after a network transition.
       try { listener.wake(); } catch (err) { diag('wake error', err && err.message); }
       try { api.resetPool(); } catch (err) { diag('wake pool-reset error', err && err.message); } // (2b) main-process undici pool
+      try { authTokens.onWake(); } catch (err) { diag('wake token error', err && err.message); } // (2d) refresh a stale access token now, not at the late alarm
+      try { uiSync.onWake(); } catch (err) { diag('wake ui-sync error', err && err.message); } // (2e) rejoin the SPA's sync feed on fresh sockets
       try { if (loadGuard) loadGuard.onWake(); } catch (err) { diag('wake guard error', err && err.message); } // (2a) renderer pool + (2c) retry a hung load
     };
     try {

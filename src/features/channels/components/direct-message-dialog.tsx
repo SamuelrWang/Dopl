@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel: the barrel also re-exports
+// SettingsModal, whose section tree reaches `next/navigation`. This dialog is
+// bundled by the desktop SPA, where a `next/*` module anywhere in the graph
+// fails the build (apps/desktop-ui/CONVENTIONS.md § Sharing code).
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { SearchField } from "@/shared/ui/search-field";
 import { Avatar } from "@/shared/ui/avatar";
 import { useApiQuery } from "@/shared/hooks/use-api-query";

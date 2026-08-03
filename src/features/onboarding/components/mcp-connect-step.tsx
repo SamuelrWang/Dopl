@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildConnectPrompt } from "../bootstrap-prompt";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 
 interface McpConnectStepProps {
   connected: boolean;
@@ -27,7 +28,7 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrigin(window.location.origin);
+    setOrigin(getAppOrigin());
   }, []);
   const url = origin ? `${origin}/api/mcp` : DEFAULT_MCP_URL;
 

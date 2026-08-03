@@ -44,14 +44,26 @@ export interface DoplDesktopBridge {
   sessions?: DoplSessionsBridge;
 }
 
-declare global {
-  interface Window {
-    dopl?: DoplDesktopBridge;
-  }
+/**
+ * The bridge as THIS module sees it, read through a cast rather than a
+ * `declare global` on `Window`.
+ *
+ * Two augmentations of the same `window.dopl` property with different types is
+ * a hard TS error in any program that sees both — and the desktop SPA sees
+ * both: it declares its own `window.dopl` (the renderer-side mirror of
+ * `app-preload.js`, apps/desktop-ui/src/lib/dopl-bridge.ts) AND bundles this
+ * module, which the channels tree reaches through `useChannelFolder`. Neither
+ * side owns the name; each describes only the slice of the preload surface it
+ * uses, and every read here is already feature-detected, so a narrowed local
+ * view costs nothing.
+ */
+function doplBridge(): DoplDesktopBridge | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { dopl?: DoplDesktopBridge }).dopl;
 }
 
 export function isDesktopApp(): boolean {
-  return typeof window !== "undefined" && !!window.dopl?.isDesktop;
+  return !!doplBridge()?.isDesktop;
 }
 
 /**
@@ -61,8 +73,7 @@ export function isDesktopApp(): boolean {
  * cleanly yield null — the caller renders nothing.
  */
 export function getDesktopChannelFolders(): DoplChannelsBridge | null {
-  if (typeof window === "undefined") return null;
-  const channels = window.dopl?.channels;
+  const channels = doplBridge()?.channels;
   return channels && typeof channels.chooseFolder === "function" ? channels : null;
 }
 
@@ -73,7 +84,6 @@ export function getDesktopChannelFolders(): DoplChannelsBridge | null {
  * both cleanly yield null — the caller renders nothing.
  */
 export function getDesktopSessions(): DoplSessionsBridge | null {
-  if (typeof window === "undefined") return null;
-  const sessions = window.dopl?.sessions;
+  const sessions = doplBridge()?.sessions;
   return sessions && typeof sessions.reopen === "function" ? sessions : null;
 }

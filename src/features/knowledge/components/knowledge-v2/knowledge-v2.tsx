@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { Role } from "@/features/workspaces/types";
@@ -11,6 +10,7 @@ import { ListPanel } from "./list/list-panel";
 import { DetailPanel } from "./detail/detail-panel";
 import { useKnowledgeV2Controller } from "./use-knowledge-v2-controller";
 import type { BaseTree, KbTeamRef, Selection } from "./types";
+import type { KnowledgeRouting, KnowledgeUrlSync } from "./routing";
 import type { KnowledgeBase } from "../../types";
 import styles from "./knowledge-v2.module.css";
 
@@ -29,6 +29,10 @@ interface Props {
   /** SSR-resolved trees to seed (the deep-linked base), keyed by baseId. */
   initialTrees?: Record<string, BaseTree>;
   onCreate: () => void;
+  /** Router bindings for the moves that leave this tree (./routing.ts). */
+  routing: KnowledgeRouting;
+  /** Selection ↔ address-bar adapter; defaults to the History API. */
+  urlSync?: KnowledgeUrlSync;
 }
 
 /**
@@ -48,6 +52,8 @@ export function KnowledgeV2({
   initialSelection,
   initialTrees,
   onCreate,
+  routing,
+  urlSync,
 }: Props) {
   const c = useKnowledgeV2Controller({
     workspaceId,
@@ -55,10 +61,10 @@ export function KnowledgeV2({
     initialBases: bases,
     initialSelection,
     initialTrees,
+    urlSync,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsBase = c.selection?.base ?? null;
-  const router = useRouter();
 
   return (
     <div className={cn("page-float", styles.shell)}>
@@ -95,14 +101,16 @@ export function KnowledgeV2({
         onBaseSaved={() => {
           // The bases list is a live query now — refetch it so the local
           // user's own base rename/description edit reflects immediately;
-          // router.refresh() still repulls the SSR-only owner/team pills.
+          // refreshServerData() still repulls the owner/team pills, which
+          // this tree renders but does not fetch.
           c.refetchBases();
-          router.refresh();
+          routing.refreshServerData();
         }}
         onSelectSearchEntry={c.selectEntryById}
         onCrumbSelect={c.selectCrumb}
         onExportBase={c.exportBase}
         onOpenSettings={() => setSettingsOpen(true)}
+        routing={routing}
       />
 
       <ConfirmDialog
@@ -148,6 +156,7 @@ export function KnowledgeV2({
           role={role}
           folders={c.trees[settingsBase.id]?.folders ?? []}
           onFoldersChanged={() => c.refreshTree(settingsBase.id)}
+          routing={routing}
         />
       ) : null}
     </div>

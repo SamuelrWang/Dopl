@@ -2,13 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { Check, Folder, FolderOpen } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel: the barrel also re-exports
+// SettingsModal, whose section tree reaches `next/navigation`. This dialog is
+// bundled by the desktop SPA, where a `next/*` module anywhere in the graph
+// fails the build (apps/desktop-ui/CONVENTIONS.md § Sharing code).
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SearchField } from "@/shared/ui/search-field";
 import { Avatar } from "@/shared/ui/avatar";
 import { toast } from "@/shared/ui/toast";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { useAuthUser } from "@/shared/auth/use-auth-user";
+// The Next-free half of `use-auth-user`: this dialog only needs "who is
+// logged in", not the sign-out navigation that pulls in `next/navigation`.
+import { useAuthUserState } from "@/shared/auth/use-auth-user-core";
 import {
   getDesktopChannelFolders,
   type DoplChannelsBridge,
@@ -48,7 +54,7 @@ export function CreateChannelDialog({
   onOpenChange,
   onCreated,
 }: Props) {
-  const { user } = useAuthUser();
+  const user = useAuthUserState();
   const selfId = user?.id ?? null;
 
   const [name, setName] = useState("");

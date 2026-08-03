@@ -15,12 +15,13 @@ import { CopyButton } from "@/shared/ui/copy-button";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
 import { buildClaudeCliHttp } from "../snippets";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 
 export function RemoteConnect() {
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrigin(window.location.origin);
+    setOrigin(getAppOrigin());
   }, []);
 
   const url = `${origin}/api/mcp`;

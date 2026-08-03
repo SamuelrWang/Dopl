@@ -452,7 +452,17 @@ test("refresh() is single-flight, so N loops cannot rotate the token N ways", ()
   assert.match(fn, /if \(refreshing\) return refreshing;/, "concurrent callers share one promise");
   assert.match(fn, /refreshInner\(\)\.finally\(/, "…and it is released when it settles");
   assert.match(fnOf(AUTH, "ensureFresh"), /refresh\(\)/, "the path that had NO bound goes through it");
-  assert.match(fnOf(AUTH, "refreshInner"), /res\.status === 400/, "the drop-the-blob branch it protects");
+  // Phase 2: the drop-the-blob branch this protects is now BOUNDED. It used to be
+  // `if (res.status === 400) clearSession()` — one rotation-race loser was a real
+  // sign-out — and the decision moved to auth-tokens.noteRefreshOutcome, which
+  // requires N consecutive DEFINITIVE rejections and ignores transient failures
+  // entirely. The truth table lives in test/auth-tokens.test.mjs; what is pinned
+  // here is that a drop still exists and is still reached only through refresh().
+  assert.match(
+    fnOf(AUTH, "refreshInner"),
+    /verdict\.dropSession[\s\S]*clearSession\(\)/,
+    "the drop-the-blob branch it protects, now gated on the bounded verdict"
+  );
 });
 
 test("writeSessionCookies SETS before it prunes, so the jar is never empty mid-write", () => {

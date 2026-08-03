@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiRequest } from "@/shared/api/api-client";
 
 const POLL_INTERVAL_MS = 3500;
 
@@ -9,6 +10,12 @@ const POLL_INTERVAL_MS = 3500;
  * shows up for the signed-in user. Stops itself once connected (or on
  * unmount). `enabled` lets the connect step pause polling after the
  * user skips.
+ *
+ * Goes through `apiRequest` rather than `fetch` so the desktop SPA's
+ * onboarding port rides the IPC transport (the packaged renderer ships
+ * `connect-src 'none'`). The route is `force-dynamic` and sends no
+ * cache-control, so dropping the old `cache: "no-store"` changes nothing
+ * on the web.
  */
 export function useMcpConnectionPoll(enabled: boolean): boolean {
   const [connected, setConnected] = useState(false);
@@ -20,11 +27,9 @@ export function useMcpConnectionPoll(enabled: boolean): boolean {
 
     async function check() {
       try {
-        const res = await fetch("/api/onboarding/mcp-status", {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const body = (await res.json()) as { connected?: boolean };
+        const body = await apiRequest<{ connected?: boolean }>(
+          "/api/onboarding/mcp-status"
+        );
         if (body.connected && !cancelled) {
           connectedRef.current = true;
           setConnected(true);

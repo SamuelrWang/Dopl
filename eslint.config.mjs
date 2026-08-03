@@ -32,9 +32,35 @@ const eslintConfig = defineConfig([
   // production-hardening round with nothing to say so. Same severity and same
   // options as the desktop config, on purpose: one cap, one meaning.
   {
-    files: ["src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+    files: [
+      "src/**/*.{ts,tsx}",
+      "packages/*/src/**/*.{ts,tsx}",
+      "apps/*/src/**/*.{ts,tsx}",
+    ],
     rules: {
       "max-lines": ["error", { max: 500, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  // The SPA's fence around web-tree reuse: `@/` maps to the repo-root web
+  // tree (so reused feature modules' own imports resolve verbatim), which
+  // makes it POSSIBLE to import things that must never enter the renderer
+  // bundle. Next-coupled modules already fail the vite build (unresolvable
+  // `next/*`), but the app router tree and the server layers would bundle
+  // silently — fence them here. See apps/desktop-ui/CONVENTIONS.md.
+  {
+    files: ["apps/*/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["@/app/*"], message: "Next app-router tree — never bundled into the SPA. Reuse lives under @/features/* and @/shared/*." },
+            { group: ["@/features/*/server/*", "@/shared/supabase/admin", "@/shared/auth/*"], message: "Server-only module — the renderer talks to the API, never to services or Supabase." },
+            { group: ["next", "next/*"], message: "No Next in the SPA." },
+          ],
+        },
+      ],
     },
   },
 
@@ -57,7 +83,10 @@ const eslintConfig = defineConfig([
       "src/features/billing/server/webhook-handler.test.ts",
       "src/features/ontology/server/repository.ts",
       "src/features/workspaces/server/invitations.ts",
-      "src/features/channels/components/channels-view.tsx",
+      // Renamed, not added: this is the old `channels-view.tsx` body, moved so
+      // the desktop SPA can bundle it Next-free (the file that keeps that name
+      // is now the 23-line `next/link` binding, and is capped).
+      "src/features/channels/components/channels-view-core.tsx",
       "src/features/teams/server/repository.ts",
       "src/features/billing/components/upgrade-modal.tsx",
       // NOT exempted, deliberately: `src/shared/auth/mcp-oauth.ts` sits at

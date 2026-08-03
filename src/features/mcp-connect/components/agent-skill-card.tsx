@@ -15,6 +15,7 @@ import { ArrowUpRight, Check, ChevronRight, Copy, GraduationCap } from "lucide-r
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { buildDoplSkillMd } from "../skill-template";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 
 const SKILLS_DOCS = "https://code.claude.com/docs/en/skills";
 const INSTALL_PATH = "~/.claude/skills/dopl/SKILL.md";
@@ -23,7 +24,7 @@ export function AgentSkillCard() {
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrigin(window.location.origin);
+    setOrigin(getAppOrigin());
   }, []);
   const skillMd = buildDoplSkillMd(`${origin}/api/mcp`);
 

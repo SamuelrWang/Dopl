@@ -12,8 +12,8 @@
  * `KnowledgeApiError`, `data` kept while a same-key refetch is in
  * flight (no flicker), cleared on key change (no cross-workspace leak).
  */
-import { useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -21,9 +21,10 @@ import type {
 } from "@/features/knowledge/types";
 import {
   KnowledgeApiError,
-  fetchBases,
+  fetchBaseList,
   fetchEntry,
   fetchTree,
+  type KnowledgeBaseList,
 } from "./api";
 
 export type FetchStatus = "idle" | "loading" | "success" | "error";
@@ -100,10 +101,19 @@ function useKnowledgeQuery<T>(
 
 // ─── Hooks ──────────────────────────────────────────────────────────
 
-export function useKnowledgeBases(
+/**
+ * The base list AND the owner-name map, in one cache entry.
+ *
+ * `GET /api/knowledge/bases` answers both halves in a single response, so
+ * they share one key: a page that needs `ownerNames` (the desktop SPA's
+ * knowledge page, which has no RSC to compute them) and the two-pane
+ * controller's `useKnowledgeBases` ride the same request instead of hitting
+ * the route twice.
+ */
+export function useKnowledgeBaseList(
   workspaceId?: string,
-  options?: { initialData?: KnowledgeBase[] }
-): Result<KnowledgeBase[]> {
+  options?: { initialData?: KnowledgeBaseList }
+): Result<KnowledgeBaseList> {
   // Use the workspace id as the cache key so switching workspaces
   // re-fetches. Fall back to a sentinel so the hook still fires when
   // no id is provided (a sole-workspace caller auto-targets; a
@@ -111,12 +121,64 @@ export function useKnowledgeBases(
   // SSR seed avoids a skeleton flash when the page already loaded the
   // list on the server (mirrors useKnowledgeEntry's initialData).
   const key = `bases:${workspaceId ?? "default"}`;
-  return useKnowledgeQuery<KnowledgeBase[]>(
+  return useKnowledgeQuery<KnowledgeBaseList>(
     key,
-    () => fetchBases(workspaceId),
+    () => fetchBaseList(workspaceId),
     options?.initialData !== undefined
       ? { initialData: options.initialData, initialKey: key }
       : undefined
+  );
+}
+
+/** The cache key `useKnowledgeBaseList`/`useKnowledgeBases` share. */
+export function knowledgeBasesQueryKey(workspaceId?: string) {
+  return ["knowledge", `bases:${workspaceId ?? "default"}`] as const;
+}
+
+/**
+ * Upsert one base into the cached list, synchronously.
+ *
+ * Call this BEFORE navigating to a base the caller just created or renamed.
+ * The URL is the only channel that carries a selection between the dialogs
+ * and the two-pane controller, and the controller resolves a URL segment
+ * against this list — so navigating first and refetching after leaves a
+ * window where the segment matches nothing and the move is silently dropped.
+ */
+export function seedKnowledgeBase(
+  queryClient: QueryClient,
+  workspaceId: string | undefined,
+  base: KnowledgeBase
+): void {
+  queryClient.setQueryData<KnowledgeBaseList>(
+    knowledgeBasesQueryKey(workspaceId),
+    (prev) => {
+      if (!prev) return prev;
+      const known = prev.bases.some((b) => b.id === base.id);
+      return {
+        ...prev,
+        bases: known
+          ? prev.bases.map((b) => (b.id === base.id ? base : b))
+          : [base, ...prev.bases],
+      };
+    }
+  );
+}
+
+export function useKnowledgeBases(
+  workspaceId?: string,
+  options?: { initialData?: KnowledgeBase[] }
+): Result<KnowledgeBase[]> {
+  const seed = options?.initialData;
+  const list = useKnowledgeBaseList(
+    workspaceId,
+    // An SSR seed carries the bases only; `ownerNames` reaches the web page
+    // as its own RSC prop, so an empty map here is the honest value and no
+    // consumer reads it off this seeded entry.
+    seed !== undefined ? { initialData: { bases: seed, ownerNames: {} } } : undefined
+  );
+  return useMemo(
+    () => ({ ...list, data: list.data ? list.data.bases : null }),
+    [list]
   );
 }
 

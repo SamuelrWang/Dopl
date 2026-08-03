@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel — the barrel drags
+// SettingsModal (and its `next/navigation` tree) into the desktop SPA's
+// members-page bundle, where any `next/*` module fails the vite build.
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { cn } from "@/shared/lib/utils";
 import type { AccessMatrixResource } from "@/features/teams/types";
 import type { AccessLevel } from "@/features/teams/access-levels";

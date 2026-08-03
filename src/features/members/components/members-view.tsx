@@ -18,7 +18,7 @@ import { ResourceDetail } from "./resource-detail";
 import { CreateTeamDialog } from "./create-team-dialog";
 import { InviteDialog } from "./invite-dialog";
 import { ConflictDialog, type ConflictState } from "./conflict-dialog";
-import { ApiError } from "@/shared/api/api-client";
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 
 export type MembersTabKey = "members" | "teams" | "access";
@@ -139,11 +139,10 @@ export function MembersView({
 
   const handleRevokeInvitation = async (id: string) => {
     try {
-      const res = await fetch(
+      await apiRequest<void>(
         `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(id)}`,
-        { method: "DELETE", credentials: "same-origin" }
+        { method: "DELETE" }
       );
-      if (!res.ok && res.status !== 204) throw new Error("Couldn't revoke invitation");
       refreshInvitations();
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "Couldn't revoke invitation" });

@@ -26,6 +26,12 @@ TanStack Query is now the server-state layer (§7) and every feature's client da
 
 ```
 setup-intelligence-engine/
+├── apps/                          # npm workspace — shipped clients that are NOT the Next app
+│   └── desktop-ui/                # Vite + React SPA bundled into the Electron app (Phase 2 of
+│                                  # docs/DESKTOP-MIGRATION-PLAN.md). Builds to
+│                                  # dopl-desktop-app/renderer/app/. Its OWN rules live in
+│                                  # apps/desktop-ui/CONVENTIONS.md (one way to fetch, one way to
+│                                  # add a route, no fetch/next-*/hardcoded colors).
 ├── docs/                          # This file, ADRs, runbooks
 ├── packages/                      # Internal workspace libs (not published to npm)
 │   ├── chrome-extension/          # Browser extension (webpack build)
@@ -333,6 +339,9 @@ A swarm audit of the whole MCP surface drove a batch of fixes (tracked as F-042)
 
 ### Realtime & new-workspace seeding (2026-07-17)
 
+- **Shared channel registry (2026-08-02, desktop migration Phase 0):** `useWorkspaceTablesRealtime` no longer opens a channel per component instance. All mounts sharing a `(topicPrefix, workspaceId, tables)` key ride ONE ref-counted channel via `src/shared/realtime/shared-channel-registry.ts`. The registry owns reconnect backoff, a StrictMode-proof teardown grace window, and — load-bearing — GENERATION-UNIQUE topic names: realtime-js dedupes `channel(topic)` by name and forgets removed channels only after the leave push settles, so topic reuse resurrects corpse channels. Never construct a raw `supabase.channel()` for postgres_changes in feature code; go through the hook. The per-instance design existed to dodge the v2 "no `.on()` after `.subscribe()`" crash — the registry keeps that safety (all bindings attach before subscribe; late subscribers share via the listener set).
+- **Query cache persists to IndexedDB (2026-08-02, Phase 1):** `QueryProvider` wraps `PersistQueryClientProvider` + `src/shared/api/idb-persister.ts` (24h maxAge, success-only dehydration, gcTime === maxAge). Cold starts render last-known data; don't add per-query `gcTime` below 24h without knowing it kills that query's persistence.
+- **Bearer Supabase JWTs are SESSION callers (2026-08-02, Phase 2 prereq):** `withUserAuth` routes bearers by exact prefix — `dopl_at_*` → OAuth/agent branch; anything else is verified locally as a Supabase access JWT and gets cookie-identical session semantics. The bundled desktop SPA authenticates this way. Never key agent-vs-user behavior off "has Authorization header" — key off `agentTokenId`.
 - **Realtime:** every content surface streams agent/MCP writes live. Publication covers knowledge_*, skills, skill_versions, workflow_*, ontology_*, chats/chat_messages/chat_folders, channels/channel_members/channel_messages. Per-feature subscribers live in `features/<name>/client/realtime.ts` on the shared `useWorkspaceTablesRealtime` refetch-signal pattern (events trigger a filtered service refetch — never payload merging, so RLS + service filters like the chats retention window stay authoritative). `src/shared/realtime/refetch-coordinator.ts` defers refetches while local debounced edits are pending — any new live surface MUST use it or it will clobber in-flight typing.
 - **Loading skeletons:** shared primitives in `src/shared/ui/skeleton.tsx` (`Skeleton`/`SkeletonBar`/`SkeletonLine`/`SkeletonText`/`SkeletonRow`/`TwoPaneListSkeleton`). Every page's loading state renders inside its real `.page-float` shell mirroring the loaded layout — server-fetched routes via `loading.tsx`, client-fetched views in their loading branch. Never ship a bare "Loading…" string or a flat panel.
 - **Interactive graph substrate (2026-07-17):** `src/shared/graph/` is the shared layer for both graph pages — `routeEdges` (router v2: geometry-picked sides w/ hysteresis, per-corridor lane fan-out, ≥24px stubs, `SceneEdge.points[]` multi-elbow override, labels anchored off corners), `useNodeDrag` (4px threshold, grid snap, pointer capture, edge auto-scroll), `useGraphPositions` (hybrid layout: stored `layout` jsonb wins per node, auto-layout fills the rest; debounced persist via the lifted `src/shared/lib/merge-scheduler.ts`; `resetLayout()` → `{}`). Positions persist to `ontology_clusters.layout` / `workflows.layout` (web-only concern — never exposed through MCP tool schemas). Drag-to-connect ports + edge condition popover are workflow-feature code (`use-connect-drag.ts`, `graph/ports.ts`) — Canvas deliberately has NO connect affordances (ontology edges derive from data). New graph-y visuals go through the `.graph-*` kit classes in globals.css, never inline.
@@ -736,6 +745,40 @@ They handle: Bearer OAuth access tokens (`dopl_at_`, validated via `mcp-oauth.ts
 
 Error envelope is the **flat billing-style** `{ error, message, workspaces? }` (via `WorkspaceResolutionError`, mirroring `entitlementDeniedBody`), so `@dopl/client` / the web `apiRequest` surface it verbatim; `WORKSPACE_REQUIRED` lists `{name, slug, role}` per membership (empty ⇒ the message points at `POST /api/workspaces`). Any UI that reads a workspace-scoped route must send the header (`apiRequest({ workspaceId })`) or the fetch fails closed for multi-workspace users — don't rely on a default.
 
+### SPA boot + segment routes (desktop migration, 2026-08-02)
+
+The bundled desktop SPA has no RSC, so the routing decisions the server used to
+make during render now cross the wire. Four routes exist purely to carry them —
+they are the HTTP twins of server helpers, and the twin must never grow its own
+logic:
+
+- `GET /api/user/onboarding-state` → `{ isOnboarded }`. Twin of `isOnboarded`.
+  NOT the same question as `GET /api/onboarding/mcp-status`.
+- `POST /api/workspaces/ensure-default` → `{ workspace, segment }`. Twin of
+  `ensureDefaultWorkspace` — the only PROVISIONING route in the boot path
+  (`GET /api/workspaces` lists but never creates). Idempotent by contract: the
+  SPA calls it on every cold boot, so it answers **200, never 201**.
+- `GET /api/workspaces/resolve?segment=` → `{ workspace, canonical, needsRedirect }`.
+  Twin of `resolveWorkspaceSegmentForUser`. `needsRedirect` must pass through
+  verbatim — the web path 301s on it, the SPA replaces history. A miss is a
+  plain 404: the resolver is membership-scoped, so "not a member" and "does not
+  exist" arrive identically and must not be split back apart.
+- `GET /api/workspaces/[workspaceSlug]/overview-counts` → the four stat-card
+  counts + `isMcpConnected`. Membership via `resolveApiWorkspace` (the sibling
+  `[workspaceSlug]` pattern), which must resolve BEFORE any count runs — the
+  counts read through the service-role client, so membership is the only gate.
+
+Counts live in `workspaces/server/service.ts#getWorkspaceOverviewCounts` over
+`repository.ts#countWorkspaceResources`; the `/overview` page imports the
+service. It previously inlined the `supabaseAdmin()` queries — pages don't talk
+to Supabase (§8), and the RSC page and the SPA route must read the same code so
+they can't drift.
+
+Owner names were folded into `GET /api/knowledge/bases` (`{ bases, ownerNames }`)
+rather than given an endpoint: the lookup takes the base list as its input, so a
+separate route could only ever be a forced second round trip. Prefer folding
+over a new surface whenever the second read is strictly downstream of the first.
+
 ### Shared API helpers
 
 Available in `src/shared/`:
@@ -963,6 +1006,21 @@ nothing imports it).
 - `entitlements.mac.plist` — hardened-runtime entitlements (JIT, etc.).
 - `scripts/notarize.js` — electron-builder `afterSign` hook (notarizes during build).
 - `scripts/finish-notarize.sh` — standalone notarize+staple of an existing DMG.
+
+**Phase 2 (bundled SPA) — built, NOT wired.** See `dopl-desktop-app/WIRING.md`
+for the two-line `main/index.js` integration and what moves when it flips.
+- `main/spa-window.js` — the LOCAL UI window (`loadFile renderer/app/index.html`,
+  or `DOPL_UI_DEV_URL` for Vite HMR). Same security shape as `session-window.js`:
+  sandbox + contextIsolation, `window.open` denied, navigation locked to the page.
+- `renderer/app-preload.js` — `window.dopl` for that window: `apiRequest`,
+  `getAuthState`, `onAuthState`, `openExternal`. **No tokens cross it, and the
+  renderer cannot set headers.**
+- `main/ui-bridge.js` — the `ipcMain.handle` half. Sender-bound to the SPA
+  window's top frame (the `mainOnly` convention from `channel-dir-ipc.js`);
+  path-gated to `/api/**`; `getBearerToken()` is the auth seam and still returns
+  `null`.
+- `renderer/app/` — build output of `apps/desktop-ui` (`npm run build:ui` at the
+  repo root). Gitignored; must exist before `npm run dist`/`release`.
 
 ### Commands
 ```bash

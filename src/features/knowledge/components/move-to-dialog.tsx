@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, X } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel — the barrel re-exports
+// SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
 import type { KnowledgeFolder } from "../types";

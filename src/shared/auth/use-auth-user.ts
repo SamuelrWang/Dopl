@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
+import { useAuthUserState } from "./use-auth-user-core";
 import type { User } from "@supabase/supabase-js";
+
+export { userInitials } from "./use-auth-user-core";
 
 export interface AuthUser {
   user: User | null;
@@ -15,50 +17,20 @@ export interface AuthUser {
  * sign-out action. Single source of truth for "who is logged in" in the
  * shell — the workspace switcher and any other client surface reuse this
  * rather than re-implementing the getUser + onAuthStateChange dance.
+ *
+ * The subscription itself lives in `./use-auth-user-core` so consumers that
+ * only need the user (and must stay Next-free for the desktop SPA) can import
+ * it without pulling `next/navigation` in.
  */
 export function useAuthUser(): AuthUser {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const supabase = getSupabaseBrowser();
-
-  useEffect(() => {
-    supabase.auth
-      .getUser()
-      .then(({ data }: { data: { user: User | null } }) => setUser(data.user));
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      (_event: string, session: { user: User } | null) => {
-        setUser(session?.user ?? null);
-      },
-    );
-
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+  const user = useAuthUserState();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await getSupabaseBrowser().auth.signOut();
     router.push("/login");
     router.refresh();
   }
 
   return { user, signOut };
-}
-
-/**
- * Two-letter initials for an avatar fallback. Prefers full name, then
- * the email local-part, then "?".
- */
-export function userInitials(user: User): string {
-  const name =
-    (user.user_metadata?.full_name as string | undefined) ||
-    (user.user_metadata?.name as string | undefined) ||
-    user.email ||
-    "";
-  const parts = name.split(/[\s@]+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return (name[0] || "?").toUpperCase();
 }

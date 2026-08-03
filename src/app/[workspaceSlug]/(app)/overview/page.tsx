@@ -9,7 +9,7 @@
 
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { supabaseAdmin } from "@/shared/supabase/admin";
+import { getWorkspaceOverviewCounts } from "@/features/workspaces/server/service";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { isMcpConnected } from "@/features/onboarding/server/service";
@@ -25,34 +25,6 @@ interface PageProps {
   params: Promise<{ workspaceSlug: string }>;
 }
 
-/** Parallel head-counts for the stat cards. Failures degrade to 0. */
-async function loadCounts(workspaceId: string) {
-  const db = supabaseAdmin();
-  const count = (table: string, soft: boolean) => {
-    let q = db
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId);
-    if (soft) q = q.is("deleted_at", null);
-    return q;
-  };
-  const [wf, kb, sk, mem] = await Promise.all([
-    count("workflows", false),
-    count("knowledge_bases", true),
-    count("skills", true),
-    db
-      .from("workspace_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId),
-  ]);
-  return {
-    workflows: wf.count ?? 0,
-    knowledgeBases: kb.count ?? 0,
-    skills: sk.count ?? 0,
-    members: mem.count ?? 0,
-  };
-}
-
 export default async function OverviewPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
@@ -61,7 +33,7 @@ export default async function OverviewPage({ params }: PageProps) {
   const segment = workspaceSegment(workspace);
 
   const [counts, connected] = await Promise.all([
-    loadCounts(workspace.id),
+    getWorkspaceOverviewCounts(workspace.id),
     isMcpConnected(user.id).catch(() => false),
   ]);
 

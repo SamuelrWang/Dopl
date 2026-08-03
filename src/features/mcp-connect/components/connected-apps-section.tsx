@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/shared/api/api-client";
 import { toast } from "@/shared/ui/toast";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
@@ -34,8 +35,9 @@ export function ConnectedAppsSection() {
   async function revoke(id: string) {
     setRevoking(id);
     try {
-      const res = await fetch(`/api/oauth/grants/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      // `apiRequest`, not `fetch`: the desktop renderer reuses this section and
+      // its only transport is the Electron IPC bridge behind this seam.
+      await apiRequest<void>(`/api/oauth/grants/${id}`, { method: "DELETE" });
       queryClient.setQueryData(
         [GRANTS_PATH, undefined, undefined],
         (prev: { grants?: Grant[] } | undefined) =>

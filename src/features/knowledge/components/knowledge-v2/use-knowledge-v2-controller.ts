@@ -6,8 +6,13 @@ import { useKnowledgeBases, useKnowledgeEntry } from "../../client/hooks";
 import { useKnowledgeRealtime } from "../../client/realtime";
 import { kbScope } from "../../scope";
 import type { KnowledgeBase, KnowledgeEntry } from "../../types";
-import { knowledgeBaseSegment } from "../../url";
+import { findBaseBySegment } from "../../url";
 import type { BaseTree, ListFilter, Selection } from "./types";
+import {
+  createHistoryUrlSync,
+  locationForSelection,
+  type KnowledgeUrlSync,
+} from "./routing";
 import { reportError } from "./utils";
 import { readLastBaseId, writeLastBaseId } from "./last-base";
 import { useKnowledgeV2Trees } from "./use-knowledge-v2-trees";
@@ -24,20 +29,12 @@ interface ControllerArgs {
   initialSelection?: Selection | null;
   /** SSR-resolved trees to seed (e.g. the deep-linked base), keyed by baseId. */
   initialTrees?: Record<string, BaseTree>;
-}
-
-/** Path + search the URL should hold for a given selection. */
-function targetUrl(
-  workspaceSegment: string,
-  selection: Selection | null
-): string {
-  const base = `/${workspaceSegment}/knowledge`;
-  if (!selection) return base;
-  const seg = knowledgeBaseSegment(selection.base);
-  if (selection.kind === "entry") {
-    return `${base}/${seg}?entryId=${selection.entry.id}`;
-  }
-  return `${base}/${seg}`;
+  /**
+   * How selection ↔ address bar sync happens. Defaults to the web app's
+   * History-API implementation; the desktop SPA passes a hash-router adapter
+   * so the same two effects below drive both (see ./routing.ts).
+   */
+  urlSync?: KnowledgeUrlSync;
 }
 
 /**
@@ -53,7 +50,12 @@ export function useKnowledgeV2Controller({
   initialBases,
   initialSelection = null,
   initialTrees,
+  urlSync,
 }: ControllerArgs) {
+  const sync = useMemo(
+    () => urlSync ?? createHistoryUrlSync(workspaceSegment),
+    [urlSync, workspaceSegment]
+  );
   // Bases are a live client query seeded from SSR (no skeleton flash) so
   // agent/remote base name/description edits appear without a reload —
   // the realtime subscriber below refetches it. Everything downstream reads
@@ -297,47 +299,57 @@ export function useKnowledgeV2Controller({
   const prevBaseIdRef = useRef<string | null>(
     initialResolvedSelection?.base.id ?? null
   );
+  // The URL this controller last put there. The SPA's router notifies on
+  // EVERY location change, its own writes included; without this the
+  // notification below would re-derive a selection from a URL we just wrote
+  // and downgrade an entry selection whose tree hasn't loaded yet.
+  const lastWrittenUrlRef = useRef<string | null>(null);
+  // RECONCILED, not raw: the URL is built from the base's slug, and a rename
+  // reaches this tree as a fresh `bases` row rather than a new selection. On
+  // the raw state the address bar would keep — and later re-assert — the slug
+  // the base had when it was selected.
   useEffect(() => {
-    const target = targetUrl(workspaceSegment, selection);
-    const current = window.location.pathname + window.location.search;
-    const nextBaseId = selection?.base.id ?? null;
-    if (target !== current) {
-      if (nextBaseId && nextBaseId !== prevBaseIdRef.current) {
-        window.history.pushState(null, "", target);
-      } else {
-        window.history.replaceState(null, "", target);
-      }
+    const target = sync.urlFor(locationForSelection(reconciledSelection));
+    const nextBaseId = reconciledSelection?.base.id ?? null;
+    if (target !== sync.current()) {
+      sync.write(
+        target,
+        nextBaseId && nextBaseId !== prevBaseIdRef.current ? "push" : "replace"
+      );
     }
+    lastWrittenUrlRef.current = target;
     prevBaseIdRef.current = nextBaseId;
-  }, [selection, workspaceSegment]);
+  }, [reconciledSelection, sync]);
 
-  // Back/forward: re-derive the selection from the URL so the view actually
-  // changes (not just the address bar). Matches the base by canonical segment,
-  // restores the entry if its tree is already loaded.
+  // Back/forward (and, in the SPA, a programmatic navigation from the create
+  // dialog or a delete): re-derive the selection from the URL so the view
+  // actually changes, not just the address bar. Matches the base by canonical
+  // segment, restores the entry if its tree is already loaded.
   useEffect(() => {
-    function onPopState() {
-      const parts = window.location.pathname.split("/").filter(Boolean);
-      // /{ws}/knowledge/{seg?}
-      const seg = parts[1] === "knowledge" ? parts[2] : undefined;
-      if (!seg) {
+    return sync.subscribe(() => {
+      const { baseSegment, entryId } = sync.read();
+      if (sync.urlFor({ baseSegment, entryId }) === lastWrittenUrlRef.current) {
+        return;
+      }
+      if (!baseSegment) {
         setSelection(null);
         return;
       }
-      const base = bases.find((b) => knowledgeBaseSegment(b) === seg);
+      // One grammar, one resolver: `findBaseBySegment` is the same matcher the
+      // page uses for a deep link, so a legacy slug-only URL arriving over
+      // Back/Forward resolves here exactly as it does on a cold load.
+      const base = findBaseBySegment(bases, baseSegment);
       if (!base) return;
       setExpanded((prev) => new Set(prev).add(base.id));
       if (!trees[base.id]) void loadTree(base.id);
-      const entryId = new URLSearchParams(window.location.search).get("entryId");
       const tree = trees[base.id];
       const entry =
         entryId && tree?.status === "ready"
           ? tree.entries.find((e) => e.id === entryId)
           : undefined;
       setSelection(entry ? { kind: "entry", base, entry } : { kind: "base", base });
-    }
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [bases, trees, loadTree]);
+    });
+  }, [sync, bases, trees, loadTree]);
 
   // ── Auto-select resolution (Feature A) ─────────────────────────────
   // Runs once the base list is available. A deep link is already applied

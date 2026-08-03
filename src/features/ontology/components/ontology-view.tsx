@@ -22,7 +22,23 @@ interface Props {
   /** Member+ — viewers can read the ontology but can't create, so their
    *  create affordances (New cluster / Column / Add new) are hidden. */
   canEdit?: boolean;
+  /**
+   * How the address bar follows the active cluster's slug. Defaults to
+   * `history.replaceState` with the path URL — what the Next app has always
+   * done, and why the RSC pages pass nothing (a server component cannot hand a
+   * function to a client component anyway).
+   *
+   * The desktop SPA injects its hash-router equivalent: the packaged renderer
+   * is a `file://` document where replacing the path is a Chromium security
+   * error, so the same intent has to travel through the router there. Same
+   * seam, same reason, as `WorkflowsView`.
+   */
+  replaceUrl?: (path: string) => void;
 }
+
+/** Module-level so the default is referentially stable across renders. */
+const replaceHistoryUrl = (path: string): void =>
+  window.history.replaceState(null, "", path);
 
 /**
  * Ontology page root. One cluster per page; its columns are container
@@ -37,6 +53,7 @@ export function OntologyView({
   initialClusterSlug,
   canManageBilling = false,
   canEdit = true,
+  replaceUrl = replaceHistoryUrl,
 }: Props) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const { graph, status, dispatch, createCluster, createObject } = useOntology(
@@ -59,7 +76,7 @@ export function OntologyView({
     setSelectedId(null);
     const slug = graph.clusters.find((c) => c.id === id)?.slug;
     if (slug) {
-      window.history.replaceState(null, "", `/${workspaceSegment}/ontology/${slug}`);
+      replaceUrl(`/${workspaceSegment}/ontology/${slug}`);
     }
   };
 

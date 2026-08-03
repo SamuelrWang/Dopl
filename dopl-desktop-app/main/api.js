@@ -7,10 +7,12 @@
 // a bearer). withUserAuth endpoints ({ sessionOnly: true } included) honor them.
 
 const auth = require('./auth');
+const authTokens = require('./auth-tokens');
 const appVersion = require('./app-version');
 const { API_BASE } = require('./config');
+const { diag } = require('./diag');
 
-async function apiFetch(pathname, opts = {}) {
+async function sendOnce(pathname, opts) {
   const { method = 'GET', workspaceId, body, headers: extra, timeoutMs, noStore } = opts;
   const cookie = await auth.getAuthCookie();
   // Q10: this build's version rides on the TRANSPORT, not on each post site, so a
@@ -35,6 +37,44 @@ async function apiFetch(pathname, opts = {}) {
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+// 401 REPAIR (Phase 2 — desktop-main.md B3/R1). `api.js` had NO repair at all:
+// only the listener retried on 401 (channel-listener.js:102-115), so presence
+// skipped a cycle and consent, mcp-config, session-history, session-peer-post and
+// session-close-task simply failed. Today the remote page hides that by keeping
+// the cookie jar fresh; the bundled SPA removes the page and with it the
+// refresher, and `getAuthCookie()` only repairs an EMPTY jar, never a STALE one.
+//
+// So: on a 401, force ONE rotation through the token authority (which shares
+// auth.js's single-flight refresh — never a second refresher against a rotating
+// refresh token), write the fresh session back into the jar so the retry actually
+// carries a different credential, and retry EXACTLY ONCE. A 401 that survives a
+// fresh token is a real authorization answer (a revoked session, a sessionOnly
+// route, the wrong workspace) and must surface, not spin.
+async function apiFetch(pathname, opts = {}) {
+  const res = await sendOnce(pathname, opts);
+  if (!authTokens.shouldRepairAuth(res.status, false)) return res;
+
+  const fresh = await authTokens.forceRefresh();
+  if (!fresh || !fresh.access_token) {
+    diag('api: 401 and the refresh did not produce a session —', pathname);
+    return res;
+  }
+  // Keep the COOKIE transport working: this file still authenticates with the
+  // jar (auth-flows.md §4 — the token authority is additive until Phase 4), so a
+  // refreshed blob is worthless to the retry until the jar carries it.
+  try {
+    await auth.writeSessionCookies(fresh);
+  } catch (err) {
+    diag('api: jar repair after 401 failed —', (err && err.message) || String(err));
+  }
+  const retried = await sendOnce(pathname, opts);
+  if (retried.status === 401) {
+    diag('api: 401 survived a forced refresh —', pathname);
+    authTokens.emitAuthState('signed-out');
+  }
+  return retried;
 }
 
 // The main process uses the global `fetch` — which in Electron main is Node's

@@ -1,69 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import type { Role } from "@/features/workspaces/types";
-import type { KnowledgeBase } from "../../types";
-import { CreateBaseDialog } from "../create-base-dialog";
-import { KnowledgeV2 } from "./knowledge-v2";
-import type { BaseTree, KbTeamRef, Selection } from "./types";
+import { useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { knowledgeBaseSegment } from "../../url";
+import {
+  KnowledgeV2PreviewCore,
+  type KnowledgeV2PreviewCoreProps,
+} from "./landing-preview-core";
+import type { KnowledgeRouting } from "./routing";
 
-interface Props {
-  workspaceSegment: string;
-  workspaceId: string;
-  bases: KnowledgeBase[];
-  /** Display names for foreign base owners, keyed by user id. */
-  ownerNames?: Record<string, string>;
-  currentUserId: string;
-  role: Role;
-  /** Admin-only: kbId → teams granted, for the base overview. */
-  kbTeams?: Record<string, KbTeamRef[]>;
-  /** SSR-resolved deep-link target (base/entry), if the route carried one. */
-  initialSelection?: Selection | null;
-  /** SSR-resolved trees to seed (the deep-linked base), keyed by baseId. */
-  initialTrees?: Record<string, BaseTree>;
-}
+type Props = Omit<KnowledgeV2PreviewCoreProps, "routing" | "urlSync">;
 
 /**
- * Knowledge V2 entry point. Mounts the two-pane redesign plus the shared
- * create-base dialog (opened from the list pane's "+"). The surrounding app
- * shell is mounted by the (app) layout.
+ * The web app's knowledge entry point — `./landing-preview-core` plus the one
+ * thing that cannot cross into the desktop SPA: `next/navigation`.
+ *
+ * `ownerNames` and `kbTeams` are RSC props here
+ * (`src/app/[workspaceSlug]/(app)/knowledge/**`), so "that data is stale"
+ * means "re-run the server component" — hence `router.refresh()`. The SPA
+ * fetches both itself and invalidates those queries instead
+ * (apps/desktop-ui/src/pages/knowledge/index.tsx).
  */
-export function KnowledgeV2Preview({
-  workspaceSegment,
-  workspaceId,
-  bases,
-  ownerNames,
-  currentUserId,
-  role,
-  kbTeams,
-  initialSelection,
-  initialTrees,
-}: Props) {
-  const [createOpen, setCreateOpen] = useState(false);
+export function KnowledgeV2Preview(props: Props) {
+  const router = useRouter();
+  const { workspaceSegment } = props;
 
-  return (
-    <>
-      <KnowledgeV2
-        workspaceId={workspaceId}
-        workspaceSegment={workspaceSegment}
-        bases={bases}
-        ownerNames={ownerNames}
-        currentUserId={currentUserId}
-        role={role}
-        kbTeams={kbTeams}
-        initialSelection={initialSelection}
-        initialTrees={initialTrees}
-        onCreate={() => setCreateOpen(true)}
-      />
-
-      <CreateBaseDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        workspaceId={workspaceId}
-        workspaceSlug={workspaceSegment}
-        currentUserId={currentUserId}
-        role={role}
-      />
-    </>
+  const routing = useMemo<KnowledgeRouting>(
+    () => ({
+      refreshServerData: () => router.refresh(),
+      goToBase: (base, mode) => {
+        const to = base
+          ? `/${workspaceSegment}/knowledge/${knowledgeBaseSegment(base)}`
+          : `/${workspaceSegment}/knowledge`;
+        if (mode === "push") router.push(to);
+        else router.replace(to);
+      },
+    }),
+    [router, workspaceSegment]
   );
+
+  return <KnowledgeV2PreviewCore {...props} routing={routing} />;
 }

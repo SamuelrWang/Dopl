@@ -2,50 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  BookOpen,
-  Hash,
-  Home,
-  LayoutGrid,
-  MessagesSquare,
-  Network,
-  Settings,
-  SlidersHorizontal,
-  Sparkles,
-  Users,
-  Workflow,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
 import type { SettingsSection } from "@/shared/layout/settings-modal";
 import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
 import { WorkspaceSwitcher } from "./workspace-switcher";
-import styles from "./app-shell.module.css";
+import { AppSidebarCore, activeSectionFromPath } from "./app-sidebar-core";
 
-export type NavSection =
-  | "overview"
-  | "canvas"
-  | "workflows"
-  | "knowledge"
-  | "skills"
-  | "chats"
-  | "channels"
-  | "ontology"
-  | "configuration"
-  | "members";
-
-const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
-  { label: "Overview", icon: Home, section: "overview" },
-  { label: "Ontology", icon: Network, section: "ontology" },
-  { label: "Canvas", icon: LayoutGrid, section: "canvas" },
-  { label: "Workflows", icon: Workflow, section: "workflows" },
-  { label: "Knowledge", icon: BookOpen, section: "knowledge" },
-  { label: "Skills", icon: Sparkles, section: "skills" },
-  { label: "Chats", icon: MessagesSquare, section: "chats" },
-  { label: "Channels", icon: Hash, section: "channels" },
-  { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
-  { label: "Members", icon: Users, section: "members" },
-];
+export type { NavSection } from "./app-sidebar-core";
+export { sectionPath } from "./app-sidebar-core";
 
 interface Props {
   workspaceSegment: string;
@@ -56,14 +19,14 @@ interface Props {
   onCreateWorkspace: () => void;
 }
 
-export function sectionPath(segment: string, section: NavSection): string {
-  return `/${segment}/${section}`;
-}
-
 /**
  * App sidebar in the new design language. Brand slot shows the open
  * workspace's name; nav highlights the section the current path is in;
  * footer carries Settings / Help, wired to the settings modal.
+ *
+ * The markup lives in `./app-sidebar-core`; this file binds it to Next
+ * (`next/link`, `usePathname`) and to the consent inbox, so the desktop
+ * renderer can mount the same sidebar on the SPA router.
  */
 export function AppSidebar({
   workspaceSegment,
@@ -78,84 +41,23 @@ export function AppSidebar({
   // page, not just the channels thread. RLS scopes the stream to the caller's
   // own requests; the badge just surfaces "you have something to decide".
   const { requests: consentRequests } = useConsentInbox(workspaceId);
-  const consentCount = consentRequests.length;
-  // Path shape: /{wsSegment}/{section}/... — the bare workspace root
-  // (which redirects to /canvas) highlights Canvas.
-  const segments = pathname.split("/").filter(Boolean);
-  const activeSection: NavSection = (
-    NAV.some((n) => n.section === segments[1]) ? segments[1] : "canvas"
-  ) as NavSection;
 
   return (
-    <aside className={styles.sidebar}>
-      <WorkspaceSwitcher
-        workspaceSegment={workspaceSegment}
-        workspacePublicId={workspacePublicId}
-        workspaceName={workspaceName}
-        onOpenSettings={onOpenSettings}
-        onCreateWorkspace={onCreateWorkspace}
-      />
-
-      <nav className={styles.nav}>
-        <span
-          className={styles.navThumb}
-          style={{
-            transform: `translateY(${
-              Math.max(
-                0,
-                NAV.findIndex((n) => n.section === activeSection)
-              ) * 35
-            }px)`,
-          }}
+    <AppSidebarCore
+      workspaceSegment={workspaceSegment}
+      activeSection={activeSectionFromPath(pathname)}
+      consentCount={consentRequests.length}
+      onOpenSettings={onOpenSettings}
+      Link={Link}
+      brand={
+        <WorkspaceSwitcher
+          workspaceSegment={workspaceSegment}
+          workspacePublicId={workspacePublicId}
+          workspaceName={workspaceName}
+          onOpenSettings={onOpenSettings}
+          onCreateWorkspace={onCreateWorkspace}
         />
-        {NAV.map(({ label, icon: Icon, section }) => (
-          <Link
-            key={section}
-            href={sectionPath(workspaceSegment, section)}
-            className={cn(styles.navItem, section === activeSection && styles.navActive)}
-          >
-            <Icon size={20} strokeWidth={1.8} />
-            {label}
-            {section === "channels" && consentCount > 0 && (
-              <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-warning/30 bg-warning/10 px-1 text-micro font-semibold text-warning">
-                <span aria-hidden>{consentCount}</span>
-                <span className="sr-only">
-                  {consentCount === 1
-                    ? "1 pending approval"
-                    : `${consentCount} pending approvals`}
-                </span>
-              </span>
-            )}
-          </Link>
-        ))}
-      </nav>
-
-      <div className={styles.wordsCard}>
-        <div className={styles.wcTitle}>
-          <b>Pro</b> unlocks more
-        </div>
-        <div className={styles.wcDesc}>
-          Unlimited knowledge bases, skills, and agent access across your team.
-        </div>
-        <button
-          type="button"
-          className={styles.upgradeBtn}
-          onClick={() => onOpenSettings("billing")}
-        >
-          Upgrade to Pro
-        </button>
-      </div>
-
-      <div className={styles.foot}>
-        <button
-          type="button"
-          className={styles.footItem}
-          onClick={() => onOpenSettings("account")}
-        >
-          <Settings size={20} strokeWidth={1.8} />
-          Settings
-        </button>
-      </div>
-    </aside>
+      }
+    />
   );
 }

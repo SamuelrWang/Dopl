@@ -2,3 +2,9 @@ node_modules/
 dist/
 .DS_Store
 *.dmg
+
+# Vite build output for the bundled SPA (apps/desktop-ui → `npm run build:ui`).
+# Build artifact, never edited by hand; electron-builder picks it up from the
+# working tree via `files: ["renderer/**/*"]`, so it must EXIST before a
+# packaging run. See WIRING.md.
+renderer/app/
