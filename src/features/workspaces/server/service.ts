@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import type {
   Workspace,
   WorkspaceMembership,
+  WorkspaceOverviewCounts,
   WorkspaceWithRole,
   Role,
 } from "../types";
@@ -12,6 +13,7 @@ import { touchLastSeen } from "./last-seen";
 import { seedNewWorkspace } from "./seed-workspace";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
+  countWorkspaceResources,
   deleteWorkspace,
   findWorkspaceById,
   findWorkspaceByPublicId,
@@ -242,6 +244,22 @@ export async function listMyWorkspacesWithRole(
   userId: string
 ): Promise<WorkspaceWithRole[]> {
   return listWorkspacesWithRoleForUser(userId);
+}
+
+/**
+ * Head-counts for the overview page's stat cards. The `/overview` server
+ * component and `GET /api/workspaces/[workspaceSlug]/overview-counts` both
+ * read through here so the RSC page and the SPA can never drift — the page
+ * used to inline these `supabaseAdmin()` queries itself (ENGINEERING §8:
+ * pages don't talk to Supabase).
+ *
+ * Membership is NOT checked here; both callers resolve the workspace
+ * membership-scoped first (`resolvePageWorkspace` / `resolveApiWorkspace`).
+ */
+export async function getWorkspaceOverviewCounts(
+  workspaceId: string
+): Promise<WorkspaceOverviewCounts> {
+  return countWorkspaceResources(workspaceId);
 }
 
 export async function createWorkspaceForUser(

@@ -380,15 +380,21 @@ survives Phase 4.
 
 Cross-checked every `src/app/[workspaceSlug]/(app)/**/page.tsx` + `layout.tsx`.
 
-**Hard gaps (no endpoint exists):**
+**Hard gaps — CLOSED 2026-08-02.** All five now have endpoints; the table
+records what was built so a re-audit doesn't re-open them.
 
 | Data | Fetched at | Status |
 |---|---|---|
-| Overview counts (workflows / KBs / skills / members) | `overview/page.tsx:30-53` — raw `supabaseAdmin()` count queries, bypasses every service | **no API route.** Needs a new `GET /api/workspaces/[slug]/overview` (or client-side counts from existing list endpoints) |
-| `isOnboarded(userId)` | `[workspaceSlug]/(app)/page.tsx:28`, `src/app/canvas/page.tsx:30`, `auth/callback/route.ts:56` | **no API route.** `onboarding/mcp-status` is a different question (MCP connected ≠ onboarded) |
-| `listBaseOwnerNames(ctx, bases)` | `knowledge/page.tsx:51`, `knowledge/[kbSlug]/page.tsx:73` | **not exposed.** `GET /api/knowledge/bases` returns `{ bases }` only (`knowledge/bases/route.ts:16`) — owner display names are RSC-only |
-| `resolvePageWorkspace(slug, userId, section)` redirect semantics | every page, e.g. `knowledge/page.tsx:35` | `GET /api/workspaces/[slug]` covers lookup, but the *section-aware redirect/404 behaviour* has no equivalent — the SPA router must reimplement it |
-| `resolveWorkspaceSegmentForUser` | `(app)/layout.tsx:41` | same; slug-vs-public-id disambiguation lives only in RSC |
+| Overview counts (workflows / KBs / skills / members) | `overview/page.tsx` | ✅ `GET /api/workspaces/[workspaceSlug]/overview-counts` — returns the four counts **plus** `isMcpConnected`, so the page header is one round trip. The page's inline `loadCounts` moved to `getWorkspaceOverviewCounts` (`workspaces/server/service.ts`) over `countWorkspaceResources` (repository); the page now imports the service and no longer touches `supabaseAdmin` |
+| `isOnboarded(userId)` | `[workspaceSlug]/(app)/page.tsx`, `src/app/canvas/page.tsx`, `auth/callback/route.ts` | ✅ `GET /api/user/onboarding-state` → `{ isOnboarded }`. Still distinct from `onboarding/mcp-status` (MCP connected ≠ onboarded) |
+| `listBaseOwnerNames(ctx, bases)` | `knowledge/page.tsx`, `knowledge/[kbSlug]/page.tsx` | ✅ folded into `GET /api/knowledge/bases`, which now returns `{ bases, ownerNames }` — no new endpoint. The lookup takes the base list as input, so a separate route could only ever be a forced second round trip. Additive: existing readers destructure `bases` |
+| `resolvePageWorkspace(slug, userId, section)` redirect semantics | every page | ✅ via `GET /api/workspaces/resolve?segment=` (below). The route reports `needsRedirect` + `canonical`; the *section tail* stays client-side — it's the SPA's own route, not server knowledge |
+| `resolveWorkspaceSegmentForUser` | `(app)/layout.tsx` | ✅ `GET /api/workspaces/resolve?segment=` → `{ workspace, canonical, needsRedirect }`. 404 on a miss, membership-scoped, so non-member and nonexistent stay indistinguishable |
+
+Also built alongside these (a gap §3 named but this table didn't):
+`POST /api/workspaces/ensure-default` → `{ workspace, segment }` — the
+provisioning half of the boot sequence (`GET /api/workspaces` lists but never
+creates). Idempotent; answers 200, never 201.
 
 **Soft gaps (an endpoint exists but the RSC path uses the service directly, so
 shape drift is possible):**
@@ -419,4 +425,6 @@ client components that already fetch through `/api/**`.
 2. The desktop OAuth handoff produces a Supabase session, not a Bearer the API
    accepts (§2d). Resolving this is a **Phase 2 prerequisite**, not a per-page
    port detail.
-3. Five hard data gaps need new endpoints before pages can be ported (§5).
+3. ~~Five hard data gaps need new endpoints before pages can be ported~~ —
+   **closed 2026-08-02** (§5): four new routes plus one folded response. No
+   page port is blocked on a missing endpoint any more.

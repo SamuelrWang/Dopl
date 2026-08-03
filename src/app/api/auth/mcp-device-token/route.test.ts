@@ -52,6 +52,11 @@ vi.mock("@supabase/ssr", () => ({
 }));
 vi.mock("@/shared/auth/mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
+  // `withUserAuth` discriminates bearer KINDS through this predicate before
+  // it ever calls `validateAccessToken` (a Supabase JWT presented as a bearer
+  // takes the session branch instead). Mirror the real prefix check — omitting
+  // it makes every bearer-carrying case here throw inside the wrapper.
+  isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
   issueDeviceToken: vi.fn(async () => ({
     token: "dopl_at_minted",
     expiresAt: "2026-10-29T00:00:00.000Z",

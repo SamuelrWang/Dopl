@@ -739,6 +739,40 @@ They handle: Bearer OAuth access tokens (`dopl_at_`, validated via `mcp-oauth.ts
 
 Error envelope is the **flat billing-style** `{ error, message, workspaces? }` (via `WorkspaceResolutionError`, mirroring `entitlementDeniedBody`), so `@dopl/client` / the web `apiRequest` surface it verbatim; `WORKSPACE_REQUIRED` lists `{name, slug, role}` per membership (empty ⇒ the message points at `POST /api/workspaces`). Any UI that reads a workspace-scoped route must send the header (`apiRequest({ workspaceId })`) or the fetch fails closed for multi-workspace users — don't rely on a default.
 
+### SPA boot + segment routes (desktop migration, 2026-08-02)
+
+The bundled desktop SPA has no RSC, so the routing decisions the server used to
+make during render now cross the wire. Four routes exist purely to carry them —
+they are the HTTP twins of server helpers, and the twin must never grow its own
+logic:
+
+- `GET /api/user/onboarding-state` → `{ isOnboarded }`. Twin of `isOnboarded`.
+  NOT the same question as `GET /api/onboarding/mcp-status`.
+- `POST /api/workspaces/ensure-default` → `{ workspace, segment }`. Twin of
+  `ensureDefaultWorkspace` — the only PROVISIONING route in the boot path
+  (`GET /api/workspaces` lists but never creates). Idempotent by contract: the
+  SPA calls it on every cold boot, so it answers **200, never 201**.
+- `GET /api/workspaces/resolve?segment=` → `{ workspace, canonical, needsRedirect }`.
+  Twin of `resolveWorkspaceSegmentForUser`. `needsRedirect` must pass through
+  verbatim — the web path 301s on it, the SPA replaces history. A miss is a
+  plain 404: the resolver is membership-scoped, so "not a member" and "does not
+  exist" arrive identically and must not be split back apart.
+- `GET /api/workspaces/[workspaceSlug]/overview-counts` → the four stat-card
+  counts + `isMcpConnected`. Membership via `resolveApiWorkspace` (the sibling
+  `[workspaceSlug]` pattern), which must resolve BEFORE any count runs — the
+  counts read through the service-role client, so membership is the only gate.
+
+Counts live in `workspaces/server/service.ts#getWorkspaceOverviewCounts` over
+`repository.ts#countWorkspaceResources`; the `/overview` page imports the
+service. It previously inlined the `supabaseAdmin()` queries — pages don't talk
+to Supabase (§8), and the RSC page and the SPA route must read the same code so
+they can't drift.
+
+Owner names were folded into `GET /api/knowledge/bases` (`{ bases, ownerNames }`)
+rather than given an endpoint: the lookup takes the base list as its input, so a
+separate route could only ever be a forced second round trip. Prefer folding
+over a new surface whenever the second read is strictly downstream of the first.
+
 ### Shared API helpers
 
 Available in `src/shared/`:
