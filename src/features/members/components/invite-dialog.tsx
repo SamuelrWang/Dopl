@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 // Deep import, not the `settings-modal` barrel: the barrel also re-exports
 // SettingsModal, whose section tree reaches `next/navigation`, and this dialog
 // is mounted by the members page the desktop SPA reuses (a `next/*` module
@@ -68,7 +69,7 @@ function ShareLinkSection({
 
   const url =
     token && typeof window !== "undefined"
-      ? `${window.location.origin}/join/${token}`
+      ? `${getAppOrigin()}/join/${token}`
       : null;
 
   async function reset() {

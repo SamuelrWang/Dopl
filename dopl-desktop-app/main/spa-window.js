@@ -82,6 +82,10 @@ function createSpaWindow() {
     backgroundColor: '#f5f7fa',
     show: false,
     webPreferences: {
+      // The renderer's document origin is file:// — user-facing URLs (MCP
+      // endpoints, join links) must come from the REAL app origin, passed
+      // as a preload constant, never derived from the document.
+      additionalArguments: [`--dopl-app-origin=${require('./config').APP_ORIGIN}`],
       preload: PRELOAD,
       contextIsolation: true,
       nodeIntegration: false,

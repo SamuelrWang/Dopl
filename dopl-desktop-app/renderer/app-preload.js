@@ -57,7 +57,17 @@ ipcRenderer.on(AUTH_STATE_EVENT, (_event, state) => {
   }
 });
 
+// The app's public origin, injected by main (spa-window.js
+// additionalArguments). A constant, not a capability — safe to expose.
+const APP_ORIGIN_ARG = process.argv
+  .find((a) => a.startsWith('--dopl-app-origin='));
+const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
+
 contextBridge.exposeInMainWorld('dopl', {
+  // The public https origin for building user-facing URLs (join links,
+  // MCP endpoints) — the document's own origin is file:// here.
+  appOrigin: APP_ORIGIN,
+
   // → { status, statusText, hasBody, body? }. Never throws for an HTTP status;
   //   the renderer decodes the error envelope (apps/desktop-ui/src/lib/api.ts).
   //   Rejects only when the request never completed or the call was malformed.
