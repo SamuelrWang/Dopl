@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,16 +37,27 @@ const WORKSPACE = {
   updatedAt: "2026-01-01T00:00:00Z",
 };
 
+/** Free workspace by default, so every upgrade CTA is on screen. */
 const BILLING_STATUS = {
+  plan: "free",
+  status: "free",
+  memberCount: 3,
+  seatCount: null,
+  objectCap: 100,
+  objectsUsed: 40,
+  canCreateObjects: true,
+  chatsWindowDays: 90,
+  subscription_period_end: null,
+  has_stripe_customer: false,
+};
+
+const PAID_STATUS = {
+  ...BILLING_STATUS,
   plan: "team",
   status: "active",
-  memberCount: 3,
   seatCount: 3,
   objectCap: null,
-  objectsUsed: 0,
-  canCreateObjects: true,
   chatsWindowDays: null,
-  subscription_period_end: null,
   has_stripe_customer: true,
 };
 
@@ -181,23 +192,76 @@ describe("settings modal", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("renders billing read-only and hands the plan change to the browser", async () => {
+  /** Open the modal on Plans & Billing. */
+  async function openBilling() {
     renderShell();
     await screen.findByText("page body");
-
     fireEvent.click(gear());
     await screen.findByRole("dialog", { name: "Settings" });
     fireEvent.click(screen.getByRole("button", { name: "Plans & Billing" }));
+  }
 
-    expect(await screen.findByText("Team plan")).toBeInTheDocument();
+  it("renders the whole billing pane — status, plan cards, feature lists", async () => {
+    await openBilling();
+
+    // Current state summary.
+    expect(await screen.findByText("Starter plan")).toBeInTheDocument();
     expect(screen.getByText("3 members")).toBeInTheDocument();
-    // No checkout inside the app — the CSP refuses Stripe outright.
-    expect(screen.queryByText(/Upgrade —/)).not.toBeInTheDocument();
+    expect(screen.getByText("Ontology objects")).toBeInTheDocument();
+    expect(screen.getByText("40 / 100")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Manage billing in browser/ }));
+    // All three plan cards, with prices and feature lists. Scoped to the
+    // dialog: the sidebar behind it also advertises "Pro".
+    const pane = within(screen.getByRole("dialog", { name: "Settings" }));
+    for (const name of ["Starter", "Pro", "Team"]) {
+      expect(pane.getByText(name)).toBeInTheDocument();
+    }
+    expect(screen.getByText("$5.99")).toBeInTheDocument();
+    expect(screen.getByText("$7.99")).toBeInTheDocument();
+    expect(screen.getByText("Full chat history")).toBeInTheDocument();
+    expect(
+      screen.getByText("Seats sync automatically as members join or leave")
+    ).toBeInTheDocument();
+    // 3 members → Solo is not sellable, exactly as on the web.
+    expect(screen.getByText("Single-member workspaces only")).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends an upgrade click to the web billing surface, not to Stripe", async () => {
+    await openBilling();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Upgrade — $7.99/seat" }));
+
     expect(openExternal).toHaveBeenCalledWith(
       `https://www.usedopl.com/${SEGMENT}/canvas?billing=upgrade`
     );
+    // No checkout mounted inside the app — the CSP refuses Stripe outright.
+    expect(screen.queryByText("Subscribe to Team")).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("opens the Stripe-hosted portal externally for a paid workspace", async () => {
+    apiRequest.mockImplementation((path: string, opts?: BridgeRequestOpts) => {
+      if (path === "/api/billing/status") return Promise.resolve(ok(PAID_STATUS));
+      if (path === "/api/billing/portal" && opts?.method === "POST") {
+        return Promise.resolve(ok({ url: "https://billing.stripe.com/p/session_123" }));
+      }
+      return defaultBridge(path);
+    });
+    await openBilling();
+
+    expect(await screen.findByText("Team plan")).toBeInTheDocument();
+    expect(screen.getByText("Current plan")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Manage billing" }));
+
+    await waitFor(() =>
+      expect(openExternal).toHaveBeenCalledWith(
+        "https://billing.stripe.com/p/session_123"
+      )
+    );
+    // The portal URL was fetched over the bridge, never navigated to here.
+    expect(window.location.href).not.toContain("stripe.com");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("hides sign-out when main has no signOut op", async () => {

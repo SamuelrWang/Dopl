@@ -42,8 +42,8 @@ interface Props {
  * Account profile form, all of which read through `apiRequest`, i.e. the IPC
  * bridge. What the renderer cannot do arrives as slots: the multipart icon
  * upload is simply absent (the bridge carries JSON), account deletion links
- * out, and Plans & Billing degrades to a status pane (Stripe Elements needs a
- * CDN script and network origins the packaged CSP refuses).
+ * out, and Plans & Billing renders in full off `PlansBillingCore` with only
+ * its two Stripe-shaped actions rerouted to the browser (see `./billing-pane`).
  */
 export function SettingsModal({
   open,
@@ -119,7 +119,11 @@ export function SettingsModal({
         />
       }
       billingPane={
-        <BillingPane workspaceSegment={workspaceSegment} workspaceId={workspaceId} />
+        <BillingPane
+          workspaceSegment={workspaceSegment}
+          workspaceId={workspaceId}
+          role={me.data?.role ?? role}
+        />
       }
     />
   );

@@ -2,21 +2,28 @@ import { getAppOrigin } from "@/shared/lib/app-origin";
 import { getBridge } from "#/lib/dopl-bridge";
 
 /**
- * Hand a path off to the user's real browser.
- *
- * The origin comes from `getAppOrigin()` (the preload constant), never from
- * `window.location` — the packaged renderer is a `file://` document, where a
- * relative URL builds `file:///…`. Without a bridge (browser dev mode) the
- * "external" browser is this one.
+ * Hand an absolute URL off to the user's real browser. For URLs this app did
+ * not build — the Stripe-hosted billing portal, which the API mints. Without a
+ * bridge (browser dev mode) the "external" browser is this one.
  */
-export function openInBrowser(path: string): void {
-  const url = `${getAppOrigin()}${path}`;
+export function openUrlInBrowser(url: string): void {
   const bridge = getBridge();
   if (bridge) {
     void bridge.openExternal(url);
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/**
+ * Hand an app path off to the user's real browser.
+ *
+ * The origin comes from `getAppOrigin()` (the preload constant), never from
+ * `window.location` — the packaged renderer is a `file://` document, where a
+ * relative URL builds `file:///…`.
+ */
+export function openInBrowser(path: string): void {
+  openUrlInBrowser(`${getAppOrigin()}${path}`);
 }
 
 /**

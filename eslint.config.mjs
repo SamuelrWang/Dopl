@@ -78,7 +78,10 @@ const eslintConfig = defineConfig([
       "src/features/skills/components/skill-view.tsx",
       "packages/dopl-client/src/client.ts",
       "src/features/knowledge/server/seed-fixtures-data.ts",
-      "src/shared/layout/settings-modal/sections/plans-billing.tsx",
+      // REMOVED, not renamed: `settings-modal/sections/plans-billing.tsx` was
+      // split for the desktop port into a 103-line web binding, the Stripe-free
+      // `plans-billing-core.tsx`, and `plan-cards.tsx`. All three are under the
+      // cap, so the exemption is gone rather than moved.
       "src/features/channels/lib/group-thread.ts",
       "src/features/billing/server/webhook-handler.test.ts",
       "src/features/ontology/server/repository.ts",
