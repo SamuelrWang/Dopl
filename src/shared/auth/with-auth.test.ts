@@ -43,6 +43,8 @@ const state = vi.hoisted(() => ({
 vi.mock("./mcp-session", () => ({ touchMcpStatus: vi.fn() }));
 vi.mock("./mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
+  // Real predicate, not a stub — the bearer-kind router depends on it.
+  isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
 }));
 vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
@@ -127,10 +129,17 @@ function sessionReq(method: string): NextRequest {
 }
 
 /** Request carrying a Supabase JWT bearer (routes to the JWT-session branch). */
+/** A structurally valid ES256+kid JWT header (the pre-check in
+ *  bearer-jwt.ts requires alg === "ES256" and a kid BEFORE getClaims is
+ *  consulted — anything else must never reach the network). */
+const ES256_JWT =
+  Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT", kid: "kid-1" }))
+    .toString("base64url") + ".payload.sig";
+
 function jwtReq(method: string): NextRequest {
   return new NextRequest("http://localhost/api/x", {
     method,
-    headers: { authorization: "Bearer eyJhbGciOiJFUzI1NiJ9.payload.sig" },
+    headers: { authorization: `Bearer ${ES256_JWT}` },
   });
 }
 
@@ -381,7 +390,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
     expect(ctx.userId).toBe("user-jwt");
     expect(ctx.agentTokenId).toBeUndefined(); // NOT an agent
     // The JWT itself was what got verified.
-    expect(state.calls_jwtGetClaims).toEqual(["eyJhbGciOiJFUzI1NiJ9.payload.sig"]);
+    expect(state.calls_jwtGetClaims).toEqual([ES256_JWT]);
   });
 
   it("passes writes without any dopl.write scope (sessions are not scope-gated)", async () => {
@@ -408,6 +417,30 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
     expect(res.status).toBe(401); // …but a presented bearer must stand alone
     expect(handler).not.toHaveBeenCalled();
     expect(state.calls.getClaims).toBe(0); // cookie path untouched
+  });
+
+  it("non-ES256 / kid-less bearers are 401 WITHOUT consulting the verifier (no GoTrue amplifier)", async () => {
+    state.jwtUser = { id: "user-jwt" }; // verifier would accept if reached
+    const bad = [
+      // HS256 (legacy alg — auth-js would fall back to network getUser)
+      Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url") + ".p.s",
+      // ES256 but no kid (same network fallback)
+      Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT" })).toString("base64url") + ".p.s",
+      "not-a-jwt",
+      "", // empty bearer
+    ];
+    for (const token of bad) {
+      const handler = handlerSpy();
+      const res = await withUserAuth(handler)(
+        new NextRequest("http://localhost/api/x", {
+          method: "GET",
+          headers: { authorization: `Bearer ${token}` },
+        })
+      );
+      expect(res.status).toBe(401);
+      expect(handler).not.toHaveBeenCalled();
+    }
+    expect(state.calls_jwtGetClaims).toEqual([]); // verifier NEVER consulted
   });
 
   it("dopl_at_-prefixed bearers still route to the OAuth branch", async () => {

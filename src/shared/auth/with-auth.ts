@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { touchMcpStatus } from "./mcp-session";
-import { validateAccessToken } from "./mcp-oauth";
+import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
+import { getBearerJwtUser } from "./bearer-jwt";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
@@ -136,7 +136,7 @@ export function withUserAuth(
       // start with it. An invalid credential of either kind still ends in
       // the same 401 as before — there is no fallthrough from a presented
       // bearer to cookie auth.
-      if (!token.startsWith("dopl_at_")) {
+      if (!isOAuthAccessToken(token)) {
         const jwtUser = await getBearerJwtUser(token);
         if (jwtUser) {
           return runAndLog5xx(
@@ -272,9 +272,14 @@ export function withMcpAccess(
   ) => Promise<Response | NextResponse>
 ) {
   return withUserAuth(async (request, ctx) => {
-    // An Authorization header means a remote-MCP (OAuth-token) caller, whose
-    // loopback /api/* requests all carry the bearer. Session (UI) calls have none.
-    const isMcpCaller = !!request.headers.get("authorization");
+    // Only a `dopl_at_*` bearer is an MCP caller. A bare "has Authorization
+    // header" test would misclassify desktop Supabase-JWT sessions as MCP
+    // and write their request bodies into mcp_events — key off the token
+    // KIND, never the header's presence.
+    const bearerForKind = (request.headers.get("authorization") ?? "")
+      .replace(/^Bearer\s+/i, "")
+      .trim();
+    const isMcpCaller = isOAuthAccessToken(bearerForKind);
 
     // UI (session) calls are unmetered and unlogged.
     if (!isMcpCaller) {
@@ -444,34 +449,3 @@ async function getSessionUser(request: NextRequest): Promise<{ id: string } | nu
   }
 }
 
-/** Bare (cookie-less) client for verifying bearer Supabase JWTs. Lazy
- *  singleton so the JWKS cache inside auth-js is shared process-wide. */
-let _jwtClient: SupabaseClient | null = null;
-function jwtClient(): SupabaseClient {
-  if (!_jwtClient) {
-    _jwtClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
-  }
-  return _jwtClient;
-}
-
-/**
- * Verify a Supabase access JWT presented as a Bearer credential (the
- * bundled desktop SPA path). Same verification authority as
- * `getSessionUser` — `getClaims(jwt)` checks the signature locally against
- * the cached ES256 JWKS; nothing is trusted on decode alone — and the same
- * load-bearing try/catch: auth-js re-throws plain Errors for expired/
- * malformed tokens, and every road must end at null → 401, never a 500.
- */
-async function getBearerJwtUser(token: string): Promise<{ id: string } | null> {
-  try {
-    const { data } = await jwtClient().auth.getClaims(token);
-    const sub = data?.claims?.sub;
-    return typeof sub === "string" && sub.length > 0 ? { id: sub } : null;
-  } catch {
-    return null;
-  }
-}

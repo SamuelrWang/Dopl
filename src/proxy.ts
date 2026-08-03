@@ -294,11 +294,18 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Allow API routes carrying a remote-MCP OAuth access token (dopl_at_). The
-  // route's own auth wrapper validates it; the middleware just must not block
-  // the loopback /api/* calls the hosted MCP server makes on the caller's behalf.
+  // Allow API routes carrying ANY Authorization header through to the
+  // route's own auth wrapper (`withUserAuth`), which is the single
+  // authority on bearer credentials and fails closed: `dopl_at_*` tokens
+  // are validated as remote-MCP OAuth tokens; anything else must verify
+  // locally as a Supabase access JWT (ES256 + kid pre-checked, so a junk
+  // bearer costs no GoTrue round-trip) or it 401s with no cookie
+  // fallthrough. The middleware deliberately does NOT try to pre-judge
+  // bearer kinds — the previous `includes("dopl_at_")` check silently
+  // 401'd the desktop SPA's Supabase-JWT bearers before the wrapper ever
+  // ran (see docs/migration-research/auth-flows.md §3.2).
   const authHeader = request.headers.get("authorization");
-  if (pathname.startsWith("/api/") && authHeader?.includes("dopl_at_")) {
+  if (pathname.startsWith("/api/") && authHeader) {
     return supabaseResponse;
   }
 
