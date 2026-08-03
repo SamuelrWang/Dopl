@@ -24,6 +24,27 @@
  * only use is to print one line explaining a behavior gap. It fails safe in
  * both directions: an absent stamp costs a diagnostic, never a delivery, and a
  * LIED-ABOUT stamp costs a misleading log line, never a permission.
+ *
+ * THE MINIMUM-VERSION GATE DOES NOT RIDE ON THIS HEADER — recorded here so the
+ * question is not rediscovered. Phase 4 needs old desktop builds forced forward
+ * (docs/DESKTOP-MIGRATION-PLAN.md risk register), and the obvious-looking design
+ * is a `426 Upgrade Required` on `/api/**` keyed on this stamp. It was rejected:
+ *
+ *   • It would gate ACCESS on a value any device-token holder can set, which is
+ *     the one thing this contract forbids — and it would buy no coercion for the
+ *     cost, because the client that lies about its version is exactly the client
+ *     that would ignore the 426.
+ *   • The population it would reach cannot act on it. Builds <= 1.8.0 predate the
+ *     gate entirely; a 426 reaches them as unexplained API failures across every
+ *     screen — strictly worse than letting a stale build keep working.
+ *   • A cooperating client does not need to be told twice. It PULLS the floor
+ *     from `GET /api/version` and blocks ITSELF, which puts the whole upgrade
+ *     story (the screen, the download, the restart) in the one process that can
+ *     actually perform it.
+ *
+ * So the floor lives in `src/shared/version/desktop-floor.ts` and the gate lives
+ * in `dopl-desktop-app/main/min-version.js`. Nothing here changed, and nothing
+ * here may.
  */
 
 export const APP_VERSION_HEADER = "x-dopl-app-version";
