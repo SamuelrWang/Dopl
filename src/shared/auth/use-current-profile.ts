@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
+import { isSpaRenderer } from "@/shared/lib/spa-bridge";
 // The Next-free half — this hook is reached from `skill-view` and other
 // components the desktop SPA reuses, so it must not pull `next/navigation`.
 import { useAuthUserState } from "./use-auth-user-core";
@@ -35,7 +36,7 @@ export function useCurrentProfile(): CurrentProfile | null {
     // fetch (user_metadata) — no Supabase client exists here. Deferred a
     // tick (sanctioned queueMicrotask pattern) so the set isn't a
     // synchronous cascading render inside the effect body.
-    if (typeof window !== "undefined" && (window as { dopl?: unknown }).dopl) {
+    if (isSpaRenderer()) {
       const meta = (user.user_metadata ?? {}) as {
         full_name?: string;
         avatar_url?: string;

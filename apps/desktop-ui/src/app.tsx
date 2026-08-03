@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createHashRouter } from "react-router";
 import { createQueryClient } from "#/lib/query-client";
 import { routes } from "#/routes";
+import { getBridge } from "#/lib/dopl-bridge";
 // The web app's toast surface — reused feature components (ChatsView,
 // SkillsBrowser mutations) fire toast() and need a mounted host.
 import { ToastHost } from "@/shared/ui/toast";
@@ -20,6 +21,24 @@ import { ToastHost } from "@/shared/ui/toast";
 export function App() {
   const [queryClient] = useState(createQueryClient);
   const [router] = useState(() => createHashRouter(routes));
+
+  // Fleet audit 2026-08-03 (high): the query cache outlived the session —
+  // an account switch replayed the previous user's cached answers. ANY auth
+  // transition (signed-out, or a different user signing in) wipes the cache;
+  // the next screens refetch under the new credential.
+  useEffect(() => {
+    const bridge = getBridge();
+    if (!bridge || typeof bridge.onAuthState !== "function") return;
+    let lastUserId: string | null | undefined;
+    const off = bridge.onAuthState((state) => {
+      const userId = state.signedIn ? state.userId : null;
+      if (lastUserId !== undefined && userId !== lastUserId) {
+        queryClient.clear();
+      }
+      lastUserId = userId;
+    });
+    return off;
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

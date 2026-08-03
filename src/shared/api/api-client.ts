@@ -1,5 +1,7 @@
 "use client";
 
+import { getSpaBridge } from "@/shared/lib/spa-bridge";
+
 /**
  * apiRequest — the single browser-side HTTP client for this app's
  * `/api/**` routes. Owns the conventions every feature previously
@@ -68,26 +70,9 @@ export async function apiRequest<T>(
   // seam. On the web (no bridge) the plain fetch below runs unchanged. The
   // bridge answer is normalized into the same {status, json} shape so the
   // envelope/ApiError decoding beneath is shared verbatim by both paths.
-  const bridge = (
-    globalThis as {
-      dopl?: {
-        apiRequest(
-          path: string,
-          opts: {
-            method?: string;
-            body?: unknown;
-            workspaceId?: string;
-            expectedUpdatedAt?: string;
-          }
-        ): Promise<{
-          status: number;
-          statusText: string;
-          hasBody: boolean;
-          body?: unknown;
-        }>;
-      };
-    }
-  ).dopl;
+  // CAPABILITY-KEYED, never truthiness: the legacy wrapper exposes a
+  // partial window.dopl with no apiRequest — see spa-bridge.ts.
+  const bridge = getSpaBridge();
 
   let res: { status: number; ok: boolean; statusText: string; json(): Promise<unknown> };
   if (bridge) {

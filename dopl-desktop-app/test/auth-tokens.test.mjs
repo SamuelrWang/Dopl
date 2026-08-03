@@ -326,6 +326,16 @@ test("the timer re-decides from the token on every fire (a wake can make it fire
   assert.match(fn, /scheduleNext\(/, "…and a still-fresh token re-arms rather than rotating");
 });
 
+test("kick()'s healthy branch pushes signed-in (every fresh sign-in lands there)", () => {
+  // Fleet audit 2026-08-03 (critical): a fresh JWT is never near expiry, so
+  // both sign-in entry points fall through to the healthy branch — and the
+  // renderer flips OFF the login screen only on this push. Silence here
+  // stranded every sign-in on the login screen for ~48 minutes.
+  const fn = fnOf(TOKENS, "kick");
+  assert.match(fn, /emitAuthState\('signed-in'\)/, "the healthy branch must push signed-in");
+  assert.match(fn, /scheduleNext\(/);
+});
+
 test("powerMonitor wake re-decides immediately and does NOT forgive definitive failures", () => {
   const fn = fnOf(TOKENS, "onWake");
   assert.match(fn, /kick\(/);

@@ -1,5 +1,7 @@
 "use client";
 
+import { getSpaBridge } from "./spa-bridge";
+
 /**
  * The app's PUBLIC origin (https://www.usedopl.com in production) for
  * building user-facing URLs — MCP endpoints, join links, OAuth starts.
@@ -13,8 +15,8 @@
  */
 export function getAppOrigin(): string {
   if (typeof window === "undefined") return "";
-  const bridged = (
-    window as { dopl?: { appOrigin?: string } }
-  ).dopl?.appOrigin;
+  // The legacy wrapper's partial window.dopl has no appOrigin — and its
+  // document origin IS the right answer there (it loads the real site).
+  const bridged = getSpaBridge()?.appOrigin;
   return bridged || window.location.origin;
 }

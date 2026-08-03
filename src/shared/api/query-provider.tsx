@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createIdbPersister } from "./idb-persister";
@@ -36,6 +36,31 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   // time: its IndexedDB operations only run from client-side effects, so
   // the SSR pass never touches `indexedDB`.
   const [persister] = useState(() => createIdbPersister());
+
+  // Fleet audit 2026-08-03 (high): the persisted cache outlived the session,
+  // restoring the PREVIOUS account's data for the next sign-in. Any signed-
+  // out transition wipes both the live cache and the disk snapshot.
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    void (async () => {
+      try {
+        const { getSupabaseBrowser } = await import("@/shared/supabase/browser");
+        const { data } = getSupabaseBrowser().auth.onAuthStateChange((event: string) => {
+          if (event === "SIGNED_OUT") {
+            client.clear();
+            void persister.removeClient();
+          }
+        });
+        unsub = () => data.subscription.unsubscribe();
+      } catch {
+        // No browser Supabase config (SPA renderer) — the SPA clears via
+        // its own bridge auth push instead.
+      }
+    })();
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [client, persister]);
 
   return (
     <PersistQueryClientProvider

@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import type { CurrentProfile } from "@/shared/auth/use-current-profile";
+import { isSpaRenderer } from "@/shared/lib/spa-bridge";
 
 export interface PresencePeer {
   userId: string;
@@ -57,7 +58,7 @@ export function usePresence(
     // by design) — presence degrades to "just me", same policy as the
     // shared-channel-registry no-op. Phase 3 can proxy presence over the
     // bridge if the product wants live peers in the desktop app.
-    if (typeof window !== "undefined" && (window as { dopl?: unknown }).dopl) return;
+    if (isSpaRenderer()) return;
     const selfSnapshot = self;
     const supabase = getSupabaseBrowser();
     // Supabase presence/channel API is loosely typed at runtime.

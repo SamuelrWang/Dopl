@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { getSpaBridge } from "@/shared/lib/spa-bridge";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import type { User } from "@supabase/supabase-js";
 
@@ -70,16 +71,7 @@ export function useAuthUserState(): User | null {
   // rides the IPC transport inside apiRequest) for the presentable fields.
   // The object is shaped like the Supabase `User` surface the consumers
   // actually read: `id`, `email`, `user_metadata.full_name`.
-  const bridge =
-    typeof window !== "undefined"
-      ? (
-          window as {
-            dopl?: {
-              getAuthState(): Promise<{ signedIn: boolean; userId: string | null }>;
-            };
-          }
-        ).dopl
-      : undefined;
+  const bridge = getSpaBridge();
 
   useEffect(() => {
     if (bridge) {

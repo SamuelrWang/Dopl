@@ -318,6 +318,12 @@ function kick(reason) {
     refreshNow(reason).catch(() => {});
     return;
   }
+  // HEALTHY PATH MUST EMIT TOO (fleet audit 2026-08-03, critical): every
+  // successful sign-in lands here — a fresh JWT is never near expiry — and
+  // both sign-in entry points (password IPC, dopl:// capture) rely on this
+  // push to flip the renderer off the login screen. emitAuthState's
+  // lastEmitKey dedupe makes repeat kicks (wake, watch) free.
+  emitAuthState('signed-in');
   scheduleNext(
     refreshDelayMs({ expSec: exp, lifetimeSec: sessionLifetimeSec(s), nowSec: nowSec() })
   );

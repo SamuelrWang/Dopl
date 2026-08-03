@@ -364,6 +364,12 @@ describe("subscribeSharedWorkspaceTables", () => {
     const watches: Array<string | null> = [];
     const offSpy = vi.fn();
     (window as unknown as { dopl?: unknown }).dopl = {
+      // Full capability surface — getSpaBridge() keys on apiRequest/
+      // getAuthState/openExternal, so a partial object (like the legacy
+      // wrapper's) is treated as the WEB, not the SPA.
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "OK", hasBody: false }),
+      getAuthState: () => Promise.resolve({ signedIn: true, userId: "u1" }),
+      openExternal: () => Promise.resolve({ ok: true }),
       syncWatch: (ws: string | null) => {
         watches.push(ws);
         return Promise.resolve();
@@ -402,13 +408,35 @@ describe("subscribeSharedWorkspaceTables", () => {
   });
 
   it("SPA bridge: an older main without the sync surface degrades to no-op", () => {
-    (window as unknown as { dopl?: unknown }).dopl = { apiRequest: () => {} };
+    (window as unknown as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "OK", hasBody: false }),
+      getAuthState: () => Promise.resolve({ signedIn: true, userId: "u1" }),
+      openExternal: () => Promise.resolve({ ok: true }),
+      // no syncWatch/onSyncEvent — the older-main case
+    };
     try {
       const a = vi.fn();
       const off = subscribeSharedWorkspaceTables("ws1", TABLES, "k", a);
       expect(channels).toHaveLength(0);
       expect(a).not.toHaveBeenCalled();
       off();
+    } finally {
+      delete (window as unknown as { dopl?: unknown }).dopl;
+    }
+  });
+
+  it("LEGACY WRAPPER: a partial window.dopl takes the WEB path (regression)", () => {
+    // The pre-1.8 wrapper exposes {isDesktop, platform, versions, channels,
+    // sessions} — no apiRequest. It must get a real supabase channel, not
+    // the bridge branch (fleet audit 2026-08-03, critical).
+    (window as unknown as { dopl?: unknown }).dopl = {
+      isDesktop: true,
+      platform: "darwin",
+      channels: {},
+    };
+    try {
+      subscribeSharedWorkspaceTables("ws1", TABLES, "k", vi.fn());
+      expect(channels).toHaveLength(1); // web path: real channel created
     } finally {
       delete (window as unknown as { dopl?: unknown }).dopl;
     }

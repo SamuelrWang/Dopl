@@ -40,6 +40,7 @@
  */
 
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
+import { getSpaBridge } from "@/shared/lib/spa-bridge";
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
 
@@ -270,10 +271,10 @@ export function subscribeSharedWorkspaceTables(
   // bridge (Phase 3). Those events feed the SAME listener semantics the web
   // channels provide, so every feature realtime hook works unchanged. An
   // older main without the sync surface degrades to the previous no-op.
-  const spaBridge =
-    typeof window !== "undefined"
-      ? (window as { dopl?: SpaSyncBridge }).dopl
-      : undefined;
+  // Capability-keyed (spa-bridge.ts): the legacy wrapper's partial
+  // window.dopl must keep the WEB realtime path — a truthiness check here
+  // silently killed realtime for every wrapper user.
+  const spaBridge = getSpaBridge();
   if (spaBridge) {
     if (
       typeof spaBridge.onSyncEvent !== "function" ||
@@ -281,7 +282,7 @@ export function subscribeSharedWorkspaceTables(
     ) {
       return () => {};
     }
-    return subscribeViaBridge(spaBridge, workspaceId, tables, listener);
+    return subscribeViaBridge(spaBridge as SpaSyncBridge, workspaceId, tables, listener);
   }
   const key = entryKey(topicPrefix, workspaceId, tables);
   let entry = entries.get(key);

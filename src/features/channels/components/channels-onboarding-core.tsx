@@ -6,6 +6,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { useMembers } from "@/features/members/hooks/use-members";
 import { DOWNLOAD_URL } from "@/features/marketing/constants";
+import { getSpaBridge } from "@/shared/lib/spa-bridge";
 
 interface Props {
   workspaceSlug: string;
@@ -147,12 +148,10 @@ function StepCard({
             onClick={(e) => {
               // Packaged SPA: window.open is denied by the shell — route
               // external links through the bridge or the click is dead.
-              const dopl = (
-                window as { dopl?: { openExternal?: (u: string) => void } }
-              ).dopl;
-              if (dopl?.openExternal) {
+              const bridge = getSpaBridge();
+              if (bridge) {
                 e.preventDefault();
-                dopl.openExternal(href);
+                void bridge.openExternal(href);
               }
             }}
           >
