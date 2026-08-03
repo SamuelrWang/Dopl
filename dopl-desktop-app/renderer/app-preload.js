@@ -63,6 +63,11 @@ const APP_ORIGIN_ARG = process.argv
   .find((a) => a.startsWith('--dopl-app-origin='));
 const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
 
+// Channel-scoped input coercion, mirrored from renderer/preload.js — the
+// bridge never forwards raw renderer values.
+const asId = (channelId) => String(channelId == null ? '' : channelId);
+const asMode = (mode) => String(mode == null ? '' : mode);
+
 contextBridge.exposeInMainWorld('dopl', {
   // The public https origin for building user-facing URLs (join links,
   // MCP endpoints) — the document's own origin is file:// here.
@@ -85,5 +90,29 @@ contextBridge.exposeInMainWorld('dopl', {
   },
 
   // Open an http(s) URL in the SYSTEM browser (main re-validates the scheme).
+  // Per-channel controls for the consent card + channel header — the SAME
+  // five label-only ops the remote-page preload exposes (renderer/preload.js),
+  // invoking the SAME sender-bound handlers (main/channel-dir-ipc.js, which
+  // resolves the live main window — the SPA window in DOPL_UI=spa mode).
+  // Absolute paths never cross this bridge; folder ops return labels only.
+  channels: {
+    getFolderLabel: (channelId) =>
+      ipcRenderer.invoke('channels:getFolderLabel', asId(channelId)),
+    chooseFolder: (channelId) =>
+      ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
+    clearFolder: (channelId) =>
+      ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
+    getPermissionPreset: (channelId) =>
+      ipcRenderer.invoke('channels:getPermissionPreset', asId(channelId)),
+    setPermissionPreset: (channelId, preset) =>
+      ipcRenderer.invoke('channels:setPermissionPreset', {
+        channelId: asId(channelId),
+        preset: {
+          tools: asMode(preset && preset.tools),
+          messages: asMode(preset && preset.messages),
+        },
+      }),
+  },
+
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),
 });

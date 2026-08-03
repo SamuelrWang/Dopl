@@ -43,6 +43,24 @@ export interface DoplBridge {
   /** Subscribe to auth changes; returns an unsubscribe function. */
   onAuthState(callback: (state: AuthState) => void): () => void;
   openExternal(url: string): Promise<{ ok: boolean }>;
+  /** The app's public https origin for user-facing URLs (document origin
+   *  is file:// here). Injected by main as a preload constant. */
+  appOrigin?: string;
+  /** Per-channel controls (consent card + channel header) — label-only
+   *  folder ops + the two permission-preset axes. Mirrors the remote-page
+   *  preload's surface; channels UI feature-detects this namespace. */
+  channels?: {
+    getFolderLabel(channelId: string): Promise<string | null>;
+    chooseFolder(channelId: string): Promise<string | null>;
+    clearFolder(channelId: string): Promise<string | null>;
+    getPermissionPreset(
+      channelId: string
+    ): Promise<{ tools: string; messages: string } | null>;
+    setPermissionPreset(
+      channelId: string,
+      preset: { tools: string; messages: string }
+    ): Promise<{ ok: boolean }>;
+  };
 }
 
 declare global {
