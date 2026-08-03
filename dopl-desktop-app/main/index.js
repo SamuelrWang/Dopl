@@ -22,6 +22,7 @@ const { diag } = require('./diag');
 // v1.9 Session Window: engine seam + window factory / lifecycle echoes + window-mode.
 const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
+const { isSpaMode, makeShellHelpers, wireSpaServices, spaSignOut } = require('./shell-mode');
 const uiBridge = require('./ui-bridge');
 const authTokens = require('./auth-tokens');
 const uiSync = require('./ui-sync');
@@ -128,7 +129,7 @@ function wasOpenedHidden() {
 
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    createMainWindow({ show: true }); // force visible even on a hidden login launch
+    createShellWindow({ show: true }); // force visible even on a hidden login launch
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -139,14 +140,18 @@ function showMainWindow() {
   mainWindow.focus();
 }
 
-// Feature B: clicking a channel notification opens the app and navigates the
-// webview to that workspace's Channels page. `segment` is the canonical
-// `{slug}-{publicId}` URL segment supplied by the listener.
-function navigateToChannels(segment) {
-  showMainWindow();
-  if (!segment || !mainWindow || mainWindow.isDestroyed() || !loadGuard) return;
-  loadGuard.load(`${APP_ORIGIN}/${segment}/channels`);
-}
+const shellHelpers = makeShellHelpers({
+  getMainWindow: () => mainWindow,
+  setMainWindow: (win) => { mainWindow = win; },
+  createMainWindow,
+  createSpaWindow: spaWindow.createSpaWindow,
+  getLoadGuard: () => loadGuard,
+  showMainWindow: (...a) => showMainWindow(...a),
+  appOrigin: APP_ORIGIN,
+  diag,
+});
+const createShellWindow = shellHelpers.createShellWindow;
+const navigateToChannels = shellHelpers.navigateToChannels;
 
 function loadApp() {
   if (loadGuard) loadGuard.load(HOME_URL);
@@ -213,13 +218,10 @@ function openDeepLink(url) {
   // replaces timing guesses; no-op when start() hasn't run.
   try { authTokens.onSignIn(); } catch (err) { diag('token re-arm error', err && err.message); }
 
-  if (process.env.DOPL_UI !== 'remote') {
-    // SPA shell: the captured tokens ARE the session (main/auth-tokens.js);
-    // there is no cookie jar to plant, and loading the remote
-    // desktop-complete page into the SPA window would strand it on
-    // "Signing you in…" (main-initiated loadURL bypasses will-navigate).
-    // The authTokens.onSignIn() above emits the signed-in push that flips
-    // the renderer.
+  if (isSpaMode()) {
+    // SPA: the captured tokens ARE the session — loading the remote
+    // desktop-complete cookie page here stranded the window on "Signing
+    // you in…"; onSignIn() above pushed the transition that flips the UI.
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
@@ -316,6 +318,10 @@ if (!gotLock) {
       // reloads the app (which resolves to /login) and re-reconciles the listener.
       onSignIn: () => authActions.beginSignIn({ showWindow: showMainWindow }),
       onSignOut: () => {
+        if (isSpaMode()) {
+          void spaSignOut({ auth, authTokens, listener, showMainWindow });
+          return;
+        }
         authActions
           .signOut({
             showWindow: showMainWindow,
@@ -384,43 +390,18 @@ if (!gotLock) {
     // the tray keeps the latest as a quiet, disabled line.
     versionSkew.setHandlers({ onSkew: (skew) => tray.setPeerSkew(skew) });
 
-    // ── Desktop migration Phase 2 (docs/DESKTOP-MIGRATION-PLAN.md) ──
-    // The bundled SPA ships behind DOPL_UI=spa while the remote window
-    // remains the default and the rollback. The token authority starts
-    // unconditionally — it is additive beside the cookie path and is what
-    // keeps main's credential fresh once the remote page (whose Supabase
-    // client refreshed the cookie jar) is no longer loaded.
+    // Desktop migration: SPA is the default shell; DOPL_UI=remote is the
+    // rollback. Token authority starts in BOTH modes — additive beside
+    // cookies, and the credential's only refresher once the remote page
+    // (whose Supabase client refreshed the jar) is gone. wireSpaServices
+    // owns the ONE uiBridge.register call (a second handle() would throw).
     try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
-    // Default is the BUNDLED SPA as of 1.8.0 (the desktop-only migration's
-    // window flip); DOPL_UI=remote is the escape hatch back to the remote
-    // shell while it remains in the tree as the rollback path.
-    if (process.env.DOPL_UI !== 'remote') {
-      // Bridge handlers bind to the SPA window's top frame ONLY — and are
-      // registered ONLY in SPA mode, so the remote window never has a
-      // registered privileged surface it doesn't use.
-      uiBridge.register({ getMainWindow: () => mainWindow });
-      const startUiSync = () =>
-        uiSync.start({ getWindow: () => mainWindow, getAccessToken: authTokens.getAccessToken });
-      authTokens.subscribe((state) => {
-        try { uiBridge.broadcastAuthState(mainWindow, state); } catch (_err) { /* window gone */ }
-        // The subscriber payload is the OBJECT broadcastAuthState reads
-        // ({ status, signedIn, userId }) — compare the field, not the value.
-        const status = state && state.status;
-        // A dead session must not keep a live realtime feed; a fresh one
-        // must get the feed back without an app restart.
-        if (status === 'signed-out') { try { uiSync.stop(); } catch (_err) { /* not started */ } }
-        if (status === 'signed-in') {
-          try { startUiSync(); } catch (err) { diag('ui-sync restart error', err && err.message); }
-          // A rotation lands on the live channel NOW, not at the 5-min
-          // recheck backstop — every successful refresh emits 'signed-in'.
-          try { uiSync.refreshAuth(); } catch (err) { diag('ui-sync auth-refresh error', err && err.message); }
-        }
+    if (isSpaMode()) {
+      wireSpaServices({
+        uiBridge, authTokens, uiSync, diag,
+        getMainWindow: () => mainWindow,
       });
-      // Phase 3: main watches the viewed workspace's content tables and
-      // pushes coalesced change events to the SPA (dopl:sync-event).
-      startUiSync();
-      mainWindow = spaWindow.createSpaWindow();
-      mainWindow.on('closed', () => { mainWindow = null; });
+      createShellWindow({ show: false });
     } else {
       createMainWindow();
     }
@@ -489,8 +470,8 @@ if (!gotLock) {
     app.on('activate', () => {
       // Clicking the dock icon is an explicit request to see the app, so force
       // the window visible even if this process was launched hidden at login.
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow({ show: true });
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        createShellWindow({ show: true });
       } else {
         showMainWindow();
       }

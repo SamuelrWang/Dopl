@@ -79,6 +79,19 @@ contextBridge.exposeInMainWorld('dopl', {
   apiRequest: (path, opts) =>
     ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
 
+  // Main-initiated navigation (notification click → the channel's page).
+  // Path-only payload; the renderer's router decides what to do with it.
+  onNavigate: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => {
+      const p = payload && typeof payload === 'object' ? payload : {};
+      const path = String(p.path || '');
+      if (path.startsWith('/')) callback({ path });
+    };
+    ipcRenderer.on('dopl:navigate', listener);
+    return () => ipcRenderer.removeListener('dopl:navigate', listener);
+  },
+
   // Sign out: main drops the credential and pushes the signed-out state.
   signOut: () => ipcRenderer.invoke('dopl:sign-out'),
 
