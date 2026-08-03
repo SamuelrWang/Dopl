@@ -277,6 +277,20 @@ describe("api routes", () => {
     expect(res.status).toBe(200);
   });
 
+  it("a cookie-less Supabase-JWT bearer passes through un-gated (desktop SPA)", async () => {
+    // Desktop migration Phase 2: the SPA's calls carry a Supabase access
+    // JWT and NO cookies. The middleware must not pre-judge bearer kinds —
+    // withUserAuth (ES256+kid pre-check, local JWKS verify) is the single
+    // fail-closed authority. The old includes("dopl_at_") gate 401'd these
+    // before the wrapper ever ran.
+    const res = await proxy(
+      req("/api/workspaces/me", {
+        headers: { authorization: "Bearer eyJhbGciOiJFUzI1NiJ9.claims.sig" },
+      })
+    );
+    expect(res.status).toBe(200);
+  });
+
   it.each([
     "/api/mcp",
     "/api/oauth/token",
