@@ -1,15 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { Popover, MenuItem } from "@/shared/ui/popover-menu";
-import { RolePill } from "@/features/members/components/member-bits";
-import { workspaceSegment } from "@/features/workspaces/url";
 import type { WorkspaceLike } from "./workspace-types";
-import styles from "./app-shell.module.css";
+import { WorkspaceSwitcherCore } from "./workspace-switcher-core";
 
 interface Props {
   /** Canonical segment of the open workspace (`{slug}-{publicId}`). */
@@ -26,15 +21,14 @@ const selectWorkspaces = (body: { workspaces?: WorkspaceLike[] }) =>
   body.workspaces ?? [];
 
 /**
- * Workspace-switcher dropdown behind the sidebar brand pill. Clicking the
- * pill opens a Popover with the current workspace header (icon, name, slug,
- * role), workspace actions (settings, invite members), the full switch list
- * (fetched lazily — `enabled: open` — sharing the rail's `/api/workspaces`
- * cache entry), and a create-workspace row. Keyboard accessible: Escape
- * closes and returns focus to the pill; every row is a real button.
+ * Workspace-switcher dropdown behind the sidebar brand pill. The markup lives
+ * in `./workspace-switcher-core`; this file binds it to Next's router and to
+ * the web `/api/workspaces` fetch (lazy — `enabled: open` — sharing the rail's
+ * cache entry), so the desktop renderer can mount the same switcher on its own
+ * router and transport.
  */
 export function WorkspaceSwitcher({
-  workspaceSegment: segment,
+  workspaceSegment,
   workspacePublicId,
   workspaceName,
   onOpenSettings,
@@ -42,171 +36,23 @@ export function WorkspaceSwitcher({
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const { data: workspaces = [], isLoading } = useApiQuery("/api/workspaces", {
     enabled: open,
     select: selectWorkspaces,
   });
 
-  const active = workspaces.find((w) => w.publicId === workspacePublicId) ?? null;
-
-  function close() {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  function go(path: string) {
-    close();
-    router.push(path);
-  }
-
   return (
-    <div className={styles.brand}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={styles.brandPill}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className={styles.brandPillName}>{workspaceName}</span>
-        <ChevronsUpDown size={15} className={styles.brandChevron} />
-      </button>
-
-      <Popover
-        open={open}
-        onClose={close}
-        className="w-[248px] overflow-hidden rounded-xl border-border-strong p-0"
-      >
-        {/* Current workspace header */}
-        <div className="flex items-start gap-2.5 px-3 py-2.5">
-          <WorkspaceGlyph
-            name={active?.name ?? workspaceName}
-            iconUrl={active?.iconUrl ?? null}
-            size="md"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="text-body font-semibold leading-snug text-text-primary">
-              {active?.name ?? workspaceName}
-            </div>
-            {active && (
-              <div className="mt-0.5 flex items-center gap-1.5">
-                <span className="truncate text-caption text-text-muted">
-                  {active.slug}
-                </span>
-              </div>
-            )}
-          </div>
-          {active && <RolePill role={active.role} />}
-        </div>
-
-        {/* Current-workspace actions */}
-        <div className="border-t border-border-subtle py-1">
-          <MenuItem
-            icon={<Settings size={13} />}
-            onSelect={() => {
-              close();
-              onOpenSettings("workspace");
-            }}
-          >
-            Workspace settings
-          </MenuItem>
-          <MenuItem
-            icon={<UserPlus size={13} />}
-            onSelect={() => go(`/${segment}/members`)}
-          >
-            Invite members
-          </MenuItem>
-        </div>
-
-        {/* Switch workspace */}
-        <div className="border-t border-border-subtle py-1">
-          <p className="px-3 pt-1 pb-1 text-label font-semibold uppercase tracking-wide text-text-muted">
-            Switch workspace
-          </p>
-          {isLoading && workspaces.length === 0 ? (
-            <p className="px-3 py-1.5 text-small text-text-muted">Loading…</p>
-          ) : (
-            workspaces.map((ws) => {
-              const isActive = ws.publicId === workspacePublicId;
-              return (
-                <button
-                  key={ws.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={isActive}
-                  onClick={() => go(`/${workspaceSegment(ws)}`)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-surface-raised-2"
-                >
-                  <WorkspaceGlyph name={ws.name} iconUrl={ws.iconUrl} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-small text-text-primary">
-                      {ws.name}
-                    </span>
-                    <span className="block text-caption capitalize text-text-muted">
-                      {ws.role}
-                    </span>
-                  </span>
-                  <Check
-                    size={13}
-                    className={cn(
-                      "shrink-0 text-text-primary",
-                      !isActive && "opacity-0"
-                    )}
-                  />
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        {/* Create workspace */}
-        <div className="border-t border-border-subtle py-1">
-          <MenuItem
-            icon={<Plus size={13} />}
-            onSelect={() => {
-              close();
-              onCreateWorkspace();
-            }}
-          >
-            Create workspace
-          </MenuItem>
-        </div>
-      </Popover>
-    </div>
-  );
-}
-
-/** Rounded workspace glyph — icon image when present, neutral initial
- *  otherwise (Avatar's fallback recipe, squared for workspace identity). */
-function WorkspaceGlyph({
-  name,
-  iconUrl,
-  size,
-}: {
-  name: string;
-  iconUrl: string | null;
-  size: "sm" | "md";
-}) {
-  const box = size === "md" ? "h-7 w-7 text-body" : "h-6 w-6 text-caption";
-  if (iconUrl) {
-    return (
-      <span className={cn("shrink-0 overflow-hidden rounded-md", box)}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={iconUrl} alt="" className="h-full w-full object-cover" />
-      </span>
-    );
-  }
-  return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-md border border-border-default bg-bg-inset font-semibold text-text-secondary",
-        box
-      )}
-    >
-      {(name.trim()[0] || "?").toUpperCase()}
-    </span>
+    <WorkspaceSwitcherCore
+      workspaceSegment={workspaceSegment}
+      workspacePublicId={workspacePublicId}
+      workspaceName={workspaceName}
+      workspaces={workspaces}
+      isLoading={isLoading}
+      onNavigate={(path) => router.push(path)}
+      onOpenSettings={onOpenSettings}
+      onCreateWorkspace={onCreateWorkspace}
+      onOpenChange={setOpen}
+    />
   );
 }

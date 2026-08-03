@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, Folder, History } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
@@ -53,6 +52,14 @@ interface Props {
   currentUserId: string;
   /** Duplicate landed — the browser selects the new skill. */
   onDuplicated?: (skill: Skill) => void;
+  /**
+   * Something that changes the PARENT's list rendering landed (rename,
+   * refolder, duplicate). Injected instead of calling a router directly so
+   * this component stays Next-free: the web app passes `router.refresh()`,
+   * the desktop SPA passes a TanStack `invalidateQueries` — neither concept
+   * exists in both apps (apps/desktop-ui/CONVENTIONS.md).
+   */
+  onListChanged?: () => void;
 }
 
 const AUTOSAVE_DELAY_MS = 1500;
@@ -75,6 +82,7 @@ export function SkillView({
   isAdmin,
   currentUserId,
   onDuplicated,
+  onListChanged,
 }: Props) {
   const { skill } = resolved;
 
@@ -116,8 +124,6 @@ export function SkillView({
   const access = useMyAccessContext();
   const accessLevel = access.resolve("skill", skill.id);
   const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
-
-  const router = useRouter();
 
   const initialFile = useMemo(() => primaryFile(resolved.files), [resolved.files]);
   const [file, setFile] = useState<SkillFile>(initialFile);
@@ -483,7 +489,7 @@ export function SkillView({
               setDisplayedName(saved.name);
               // The browser's list pane renders server-fetched names —
               // refresh so the row matches the new title.
-              router.refresh();
+              onListChanged?.();
             }}
             onError={(err) =>
               toast({ title: "Couldn't rename", description: errMessage(err) })
@@ -499,7 +505,7 @@ export function SkillView({
                 if (!saved) return; // 412 — commitMeta refreshed + toasted.
                 setDisplayedFolder(saved.folder);
                 // Left list groups by folder — refresh so the row re-homes.
-                router.refresh();
+                onListChanged?.();
               } catch (err) {
                 toast({
                   title: "Couldn't change folder",
@@ -544,6 +550,7 @@ export function SkillView({
           workspaceId={workspaceId}
           canEdit={canEdit}
           onDuplicated={onDuplicated}
+          onListChanged={onListChanged}
         />
         <button
           type="button"
@@ -708,13 +715,14 @@ function HeaderActions({
   workspaceId,
   canEdit,
   onDuplicated,
+  onListChanged,
 }: {
   slug: string;
   workspaceId: string;
   canEdit: boolean;
   onDuplicated?: (skill: Skill) => void;
+  onListChanged?: () => void;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   return (
     <>
@@ -741,7 +749,7 @@ function HeaderActions({
               const created = await duplicateSkill(slug, workspaceId);
               toast({ title: "Skill duplicated", description: created.skill.name });
               onDuplicated?.(created.skill);
-              router.refresh();
+              onListChanged?.();
               setBusy(false);
             } catch (err) {
               toast({ title: "Couldn't duplicate", description: errMessage(err) });

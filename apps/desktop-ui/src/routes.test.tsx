@@ -1,9 +1,41 @@
 import { render, screen } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import { WORKSPACE_PAGES, routes } from "#/routes";
+
+// The layout is now the real AppShellLayout, which fetches the workspace
+// list + segment resolution on mount — same transport mock as its own test.
+const { sendRequest } = vi.hoisted(() => ({ sendRequest: vi.fn() }));
+vi.mock("#/lib/api-transport", () => ({ sendRequest }));
+
+const WORKSPACE = {
+  id: "ws-1",
+  ownerId: "user-1",
+  name: "Acme",
+  slug: "acme",
+  publicId: "ab12cd",
+  description: null,
+  iconUrl: null,
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
+};
+const ok = (body: unknown) => ({ status: 200, statusText: "OK", hasBody: true, body });
+
+beforeEach(() => {
+  sendRequest.mockImplementation(({ path }: { path: string }) => {
+    if (path.startsWith("/api/workspaces/resolve")) {
+      return Promise.resolve(
+        ok({ workspace: WORKSPACE, canonical: "acme-ab12cd", needsRedirect: false })
+      );
+    }
+    if (path === "/api/workspaces") {
+      return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
+    }
+    return Promise.resolve(ok({}));
+  });
+});
 
 /**
  * The scaffold's smoke test: the REAL route table renders under the REAL
@@ -21,9 +53,9 @@ function renderAt(path: string) {
 
 describe("app routes", () => {
   it("renders a workspace page inside the app layout", async () => {
-    renderAt("/acme-ab12cd/skills");
+    renderAt("/acme-ab12cd/channels");
 
-    expect(await screen.findByRole("heading", { name: "Skills" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Channels" })).toBeInTheDocument();
     // The layout's nav is driven by the same table the routes are.
     expect(screen.getByRole("link", { name: "Knowledge" })).toHaveAttribute(
       "href",

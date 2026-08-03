@@ -1,7 +1,11 @@
 import { Navigate, type RouteObject } from "react-router";
-import { AppLayout } from "#/components/app-layout";
+import { AppShellLayout } from "#/components/app-shell";
 import { PlaceholderPage } from "#/components/placeholder-page";
 import { RouteErrorBoundary } from "#/components/page-states";
+import OverviewPage from "#/pages/overview";
+import SkillsPage from "#/pages/skills/index";
+import SkillDetailRedirect from "#/pages/skills/detail";
+import ChatsPage from "#/pages/chats";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.
@@ -29,16 +33,16 @@ export interface PageRoute {
 }
 
 export const WORKSPACE_PAGES: PageRoute[] = [
-  { path: "overview", label: "Overview" },
+  { path: "overview", label: "Overview", element: <OverviewPage /> },
   { path: "canvas", label: "Canvas" },
   { path: "ontology", label: "Ontology" },
   { path: "knowledge", label: "Knowledge" },
   { path: "knowledge/:kbSlug", label: "Knowledge base" },
-  { path: "skills", label: "Skills" },
-  { path: "skills/:skillSlug", label: "Skill" },
+  { path: "skills", label: "Skills", element: <SkillsPage /> },
+  { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
   { path: "workflows", label: "Workflows" },
   { path: "workflows/:workflowSlug", label: "Workflow" },
-  { path: "chats", label: "Chats" },
+  { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels" },
   { path: "members", label: "Members" },
   { path: "settings", label: "Settings" },
@@ -51,7 +55,7 @@ export const WORKSPACE_HOME_PATH = "canvas";
 export const routes: RouteObject[] = [
   {
     path: "/:workspaceSegment",
-    element: <AppLayout />,
+    element: <AppShellLayout />,
     errorElement: <RouteErrorBoundary />,
     children: [
       {

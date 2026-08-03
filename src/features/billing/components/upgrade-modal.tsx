@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel: the barrel also re-exports
+// SettingsModal, whose section tree reaches `next/navigation`. This modal is
+// mounted by pages the desktop SPA reuses (chats' retention strip), where a
+// `next/*` module anywhere in the graph fails the build.
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { EmbeddedCheckoutForm } from "./embedded-checkout";
 import {

@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { useAuthUser } from "./use-auth-user";
+// The Next-free half — this hook is reached from `skill-view` and other
+// components the desktop SPA reuses, so it must not pull `next/navigation`.
+import { useAuthUserState } from "./use-auth-user-core";
 
 export interface CurrentProfile {
   userId: string;
@@ -18,7 +20,7 @@ export interface CurrentProfile {
  * unchanged so callers can safely use it in effect deps.
  */
 export function useCurrentProfile(): CurrentProfile | null {
-  const { user } = useAuthUser();
+  const user = useAuthUserState();
   const [profile, setProfile] = useState<{
     display_name: string | null;
     avatar_url: string | null;
@@ -29,6 +31,26 @@ export function useCurrentProfile(): CurrentProfile | null {
     // memo below returns null whenever there's no user).
     if (!user) return;
     let cancelled = false;
+    // SPA renderer: the profile came in through useAuthUserState's bridge
+    // fetch (user_metadata) — no Supabase client exists here. Deferred a
+    // tick (sanctioned queueMicrotask pattern) so the set isn't a
+    // synchronous cascading render inside the effect body.
+    if (typeof window !== "undefined" && (window as { dopl?: unknown }).dopl) {
+      const meta = (user.user_metadata ?? {}) as {
+        full_name?: string;
+        avatar_url?: string;
+      };
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setProfile({
+          display_name: meta.full_name ?? null,
+          avatar_url: meta.avatar_url ?? null,
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     const supabase = getSupabaseBrowser();
     void supabase
       .from("profiles")
