@@ -4,8 +4,43 @@
 client is a bundled, local-first Electron app (Slack/Notion architecture). The
 server shrinks to a pure API over Postgres.
 
-**Status:** Planning. Backup taken 2026-08-02 (see [Backup protocol](#backup-protocol)).
-Git snapshot: tag `pre-desktop-migration-2026-08-02`.
+**Status:** In progress on branch `desktop-migration`. Backup taken 2026-08-02
+(see [Backup protocol](#backup-protocol)). Git snapshot: tag
+`pre-desktop-migration-2026-08-02`.
+
+**Research docs (read before building anything):** `docs/migration-research/`
+— `desktop-main.md`, `web-pages.md`, `api-surface.md`, `auth-flows.md`,
+`packages-and-build.md`. Key corrections they made to this plan:
+
+- **Auth decision (Phase 2 prerequisite): Supabase-JWT-as-Bearer.** The SPA's
+  API calls carry `Authorization: Bearer <supabase access JWT>`;
+  `withUserAuth` (src/shared/auth/with-auth.ts) learns to discriminate bearer
+  KIND — `dopl_at_*` prefix → existing MCP/agent branch, otherwise verify as
+  a Supabase JWT via local `getClaims(jwt)` and treat the caller as a
+  SESSION (no `agentTokenId`). This keeps all ~21 `sessionOnly` handlers,
+  agent-write gates, and `source` tagging correct. Reusing MCP tokens for the
+  UI is disqualified: the UI would be treated as an agent (403 on sessionOnly
+  routes incl. device-token minting, `agent_write_enabled` gates, writes
+  stamped `source: "agent"`).
+- **`version-skew.js` is NOT a version gate** — it's an advisory notification
+  only. A real server-side minimum-version gate is new work, required before
+  Phase 4 (a stale bundled client means a stale UI forever).
+- **The `/auth/desktop-*` handoff surfaces are Next PAGES** and must survive
+  website retirement — Phase 4's deletion list must exclude them (or they get
+  rebuilt as minimal static pages).
+- **Desktop main-process auth rots without the web page.** Main's cookie jar
+  is refreshed by the remote page's Supabase client today; bundled SPA kills
+  that refresher. Main must switch to the token store + its own single-flight
+  refresh (`main/auth.js` already has the refresh client; it needs a
+  proactive timer and the blob↔jar direction inverted). `main/api.js` needs
+  401-repair.
+- **`packages/dopl-client` is main-process material only** (node:async_hooks,
+  agent-bearer auth model) — the SPA renderer keeps `src/shared/api/api-client.ts`
+  as its HTTP client, with fetch as the future IPC seam. ~50/123 API routes
+  covered by dopl-client; gaps listed in api-surface.md.
+- **6 API gaps to build** for page ports: onboarding gate, default-workspace
+  provisioning, overview head-counts, knowledge ownerNames, KB-slug
+  resolution (client-side), plus the bearer branch above.
 
 ---
 
@@ -238,5 +273,6 @@ explicitly exempts channel messaging from sync-stream consolidation (above).
 | Index migration locks a hot table | 0 | `CREATE INDEX CONCURRENTLY`; tiny DB (41MB) makes this near-instant |
 | Token auth breaks an API route that assumed cookies | 2 | Routes already accept Bearer (`with-auth.ts`); per-page port + verify |
 | Sync misses deletes | 3 | Soft-delete timestamps ride the same cursor; audit hard-delete paths first |
-| Users stuck on old shell after cutover | 4 | Minimum-version gate + auto-update on launch |
+| Users stuck on old shell after cutover | 4 | Build a REAL minimum-version gate (version-skew.js is advisory-only — new server-side work) + auto-update on launch |
+| Desktop main auth silently rots post-SPA (cookie refresher gone) | 2 | Token store + proactive refresh in main; 401-repair in main/api.js; see desktop-main.md R-risks |
 | Anything catastrophic | any | Dated dumps + iCloud copy + git tags; old remote path kept until Phase 4 |
