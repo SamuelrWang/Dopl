@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { Workspace } from "@/features/workspaces/types";
@@ -47,6 +49,29 @@ export function useWorkspaceRoute(): WorkspaceRoute {
   );
 
   const workspace = query.data?.workspace ?? null;
+
+  // SEED THE CANONICAL KEY from a redirect answer. The stale-segment
+  // response already carries the whole workspace, so the post-rewrite
+  // remount must not pay (or race) a second resolve — mirror of the web
+  // 301, where one response serves both URLs. This also closes the
+  // app-shell flake: the second fetch could strand at pending/idle when
+  // the key switch landed in the same commit as the navigation.
+  const queryClient = useQueryClient();
+  const data = query.data;
+  useEffect(() => {
+    if (!data?.needsRedirect || !data.workspace) return;
+    const canonicalKey = [
+      RESOLVE_PATH,
+      undefined,
+      { segment: data.canonical },
+    ] as const;
+    if (queryClient.getQueryData(canonicalKey) === undefined) {
+      queryClient.setQueryData(canonicalKey, {
+        ...data,
+        needsRedirect: false,
+      });
+    }
+  }, [data, queryClient]);
 
   return {
     routedSegment,

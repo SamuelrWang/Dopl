@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ApiRequestOpts } from "@/shared/api/api-envelope";
 
@@ -64,6 +64,22 @@ export function useApiQueryWith<T, S = T>(
     refetchInterval: opts.refetchInterval,
     placeholderData: opts.keepPreviousData ? keepPreviousData : undefined,
   });
+
+  // SELF-HEAL a stranded query (2026-08-03, root cause of the app-shell
+  // stale-segment flake): when an observer's key switches inside the same
+  // commit as a redirect navigation, TanStack v5 can leave the NEW query at
+  // status "pending" with fetchStatus "idle" — created, enabled, and never
+  // dispatched. In the app that is a navigation stuck on a loading screen
+  // forever. An enabled+pending+idle query has exactly one legal next step
+  // (fetch), so nudging it is always safe; the short delay lets the normal
+  // dispatch win every ordinary mount.
+  const stranded = enabled && query.isPending && query.fetchStatus === "idle";
+  const strandedRefetch = query.refetch;
+  useEffect(() => {
+    if (!stranded) return;
+    const timer = setTimeout(() => void strandedRefetch(), 50);
+    return () => clearTimeout(timer);
+  }, [stranded, strandedRefetch]);
 
   // TanStack v5 refetch() IGNORES `enabled` — on a null-path/disabled
   // query it would fire a real request at a garbage URL. Restore the

@@ -147,14 +147,10 @@ describe("app shell", () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/acme-ab12cd/overview")
     );
-    try {
-      expect(await screen.findByText("page body")).toBeInTheDocument();
-    } catch (e) {
-      // FLAKE INSTRUMENTATION
-      console.error("CALLS:", JSON.stringify(sendRequest.mock.calls.map((c: unknown[]) => (c[0] as {path?: string})?.path)));
-      console.error("DOM:", document.body.innerText.slice(0, 400));
-      throw e;
-    }
+    // The redirect key-switch once stranded the canonical resolve at
+    // pending+idle (fixed by the use-api-query-core self-heal) — this
+    // findBy is the regression tripwire.
+    expect(await screen.findByText("page body")).toBeInTheDocument();
   });
 
   it("keeps the deeper path when rewriting the segment", () => {
