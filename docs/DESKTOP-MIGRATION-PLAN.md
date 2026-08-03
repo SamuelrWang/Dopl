@@ -200,9 +200,21 @@ load-guard path alive until Phase 4.
 
 - [ ] Web app routes → download page (or straight redirect to a landing
       page + download link). Login/signup happens in-app via the OAuth flow.
-- [ ] Delete RSC pages, layouts, skeletons, landing chrome; server keeps:
-      `/api/**`, auth callback + desktop handoff, Stripe webhooks, remote MCP,
-      crons, OAuth well-known metadata.
+- [ ] **KEEP every OAuth/auth surface (Samuel, 2026-08-02): the website
+      remains the auth broker.** The MCP/Claude-connector OAuth pages
+      (`/oauth/authorize` + its page UI, `/.well-known/*` metadata, token
+      endpoints), the Supabase auth callback, login page (it backs the
+      OAuth flows), and the `/auth/desktop-*` handoff pages ALL survive
+      retirement. "Retire the website" means the app CONTENT pages die —
+      not the auth broker.
+- [ ] **Onboarding moves into the desktop app**: the web `/onboarding`
+      flow (workspace naming/setup) needs an SPA equivalent — new users
+      go straight to the desktop app now. Also covers the G2 gap (deleting
+      the last workspace currently lands on a dead `/`). Port as its own
+      slice before retirement.
+- [ ] Delete remaining RSC pages, layouts, skeletons, landing chrome;
+      server keeps: `/api/**`, everything in the KEEP list above, Stripe
+      webhooks, remote MCP, crons.
 - [ ] Remove desktop `load-guard` remote-URL machinery (bundled app doesn't
       navigate to remote pages); keep offline detection for API reachability.
 - [ ] **DB backup before this phase** (first destructive-adjacent step).
