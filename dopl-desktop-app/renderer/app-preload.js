@@ -79,6 +79,10 @@ contextBridge.exposeInMainWorld('dopl', {
   apiRequest: (path, opts) =>
     ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
 
+  // Start the external OAuth sign-in. Main arms the login-CSRF nonce and
+  // opens the browser — the renderer never builds the URL.
+  beginSignIn: () => ipcRenderer.invoke('dopl:begin-sign-in'),
+
   // → { signedIn, userId }. NEVER a token.
   getAuthState: () => ipcRenderer.invoke('dopl:auth-state'),
 

@@ -40,6 +40,11 @@ export interface AuthState {
 export interface DoplBridge {
   apiRequest(path: string, opts?: BridgeRequestOpts): Promise<BridgeResponse>;
   getAuthState(): Promise<AuthState>;
+  /** Start the external OAuth sign-in — main arms the login-CSRF nonce
+   *  and opens the browser. Absent on older mains (fallback: openExternal
+   *  to /auth/desktop-start, which cannot pass the nonce gate but keeps
+   *  browser-dev behavior). */
+  beginSignIn?(): Promise<{ ok: boolean }>;
   /** Subscribe to auth changes; returns an unsubscribe function. */
   onAuthState(callback: (state: AuthState) => void): () => void;
   openExternal(url: string): Promise<{ ok: boolean }>;

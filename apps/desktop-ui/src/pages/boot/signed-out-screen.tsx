@@ -18,9 +18,19 @@ import { getBridge } from "#/lib/dopl-bridge";
  */
 export function SignedOutScreen() {
   function signIn() {
-    const url = `${getAppOrigin()}/auth/desktop-start`;
     const bridge = getBridge();
+    // Electron: sign-in MUST start in main — beginSignIn() arms the
+    // login-CSRF pending-auth nonce and opens the browser with ?state=.
+    // A renderer-built openExternal skips the nonce, and the returning
+    // dopl:// fragment is (correctly) refused by captureFromFragment.
+    if (bridge?.beginSignIn) {
+      void bridge.beginSignIn();
+      return;
+    }
+    const url = `${getAppOrigin()}/auth/desktop-start`;
     if (bridge) {
+      // Older main without the op — best effort; the nonce gate will
+      // refuse the callback, but that's an update-the-app problem.
       void bridge.openExternal(url);
       return;
     }

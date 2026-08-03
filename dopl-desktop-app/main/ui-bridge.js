@@ -24,6 +24,7 @@ const appVersion = require('./app-version');
 const authTokens = require('./auth-tokens');
 const { API_BASE } = require('./config');
 const uiSync = require('./ui-sync');
+const authActions = require('./auth-actions');
 const { diag } = require('./diag');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
@@ -226,6 +227,18 @@ function register(opts = {}) {
   ipcMain.handle(
     'dopl:auth-state',
     bound('auth-state', () => getAuthState())
+  );
+
+  ipcMain.handle(
+    'dopl:begin-sign-in',
+    bound('begin-sign-in', () => {
+      // Sign-in MUST start in main: beginSignIn() arms the login-CSRF
+      // pending-auth nonce and appends it as ?state= before opening the
+      // browser — a renderer-side openExternal skips the nonce and
+      // captureFromFragment (correctly) refuses the returning deep link.
+      void authActions.beginSignIn({});
+      return { ok: true };
+    })
   );
 
   ipcMain.handle(
