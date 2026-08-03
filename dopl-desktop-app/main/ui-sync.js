@@ -9,13 +9,13 @@
 // which that registry turns into the same refetch signals the web fires. One
 // websocket per client instead of ~96 per-component channels eating >80% of DB time.
 //
-// NOT WATCHED — THE CHANNELS EXEMPTION (DESKTOP-MIGRATION-PLAN.md Phase 3).
-// `channel_messages` / `channel_agents` / `agent_presence` belong to realtime.js +
-// realtime-agents.js, which own them with their own breaker, coalescer and health
-// model: agent delivery is latency-critical push and was never the cost problem at
-// 1–2 subscriptions per client. Binding them here would double every wake and put
-// the listener's transport behind THIS module's join. See LISTENER_OWNED_TABLES —
-// the exclusion is a checked constant, not a comment.
+// THE CHANNELS EXEMPTION (DESKTOP-MIGRATION-PLAN.md Phase 3) is about the
+// LISTENER MODULES: realtime.js + realtime-agents.js keep their own sockets,
+// breakers and health model for AGENT delivery — nothing here touches them.
+// The UI feed watches channel_messages/channel_agents/agent_presence TOO (web
+// parity: messages appear live, roster/presence dots update) on ITS OWN
+// socket; the first dogfood proved excluding them left the app's channel
+// transcript frozen until a manual refetch.
 //
 // THE CREDENTIAL RULE, inherited verbatim from realtime.js. Realtime authorizes
 // postgres_changes with the USER JWT from setAuth. With NO JWT realtime-js joins on
@@ -79,14 +79,13 @@ const SYNC_TABLES = Object.freeze([
   'ontology_relationships',
   'chats', 'chat_messages', 'chat_folders',
   'channel_consent_requests', 'channels', 'channel_members',
-]);
-
-// The channels exemption, as data. These ARE published and could be bound here — they
-// must not be: realtime.js (messages) and realtime-agents.js (roster) own them, and
-// agent_presence is a ~30s heartbeat with no business waking a content refetch.
-const LISTENER_OWNED_TABLES = Object.freeze([
   'channel_messages', 'channel_agents', 'agent_presence',
 ]);
+
+// Historically the channels exemption excluded the three listener tables from
+// this feed; the UI needs them (see header), so the set is empty — retained
+// because the coverage contract test unions it with SYNC_TABLES.
+const LISTENER_OWNED_TABLES = Object.freeze([]);
 
 // A burst on one (workspace, table) — an agent importing 40 knowledge entries —
 // must cost ONE refetch signal, not one per row. 250ms swallows a multi-statement

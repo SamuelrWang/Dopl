@@ -114,7 +114,7 @@ test("every watched table is real: published, never dropped, workspace-scoped", 
   assert.ok(createBody("skill_versions"), "the rename follower has stopped working");
 });
 
-test("the watched set is exactly the 20 CONTENT tables, in a pinned order", () => {
+test("the watched set is exactly the 23 tables, in a pinned order", () => {
   assert.deepEqual(SYNC_TABLES, [
     "knowledge_bases", "knowledge_folders", "knowledge_entries",
     "skills", "skill_versions",
@@ -124,6 +124,7 @@ test("the watched set is exactly the 20 CONTENT tables, in a pinned order", () =
     "ontology_relationships",
     "chats", "chat_messages", "chat_folders",
     "channel_consent_requests", "channels", "channel_members",
+    "channel_messages", "channel_agents", "agent_presence",
   ]);
   assert.equal(new Set(SYNC_TABLES).size, SYNC_TABLES.length, "duplicate binding");
   assert.ok(!SYNC_TABLES.includes("skill_files"), "skill_files no longer exists as a table");
@@ -171,18 +172,17 @@ test("every table the SPA's feature hooks watch is covered by main", () => {
 
 // ── THE CHANNELS EXEMPTION ──────────────────────────────────────────────────
 
-test("the listener's own tables are exempt, published, and unbindable here", () => {
-  assert.deepEqual(LISTENER_OWNED_TABLES,
-    ["channel_messages", "channel_agents", "agent_presence"]);
-  for (const t of LISTENER_OWNED_TABLES) {
-    assert.ok(!SYNC_TABLES.includes(t), `${t} belongs to the channel listener`);
-    // They ARE published: unpublished, the exemption would look like an oversight
-    // and someone would "fix" it. They are available; we decline them.
-    assert.ok(PUB.added.has(t), `${t} is not published — the exemption comment is stale`);
+test("the channels exemption protects the listener MODULES, not the UI feed", () => {
+  // First dogfood: excluding the channel tables from THIS feed froze the
+  // app's transcript. The UI watches them on its own socket; the exemption
+  // means realtime.js / realtime-agents.js stay untouched (asserted by the
+  // desktop suite generally), so the once-excluded set is now empty.
+  assert.deepEqual(LISTENER_OWNED_TABLES, []);
+  for (const t of ["channel_messages", "channel_agents", "agent_presence"]) {
+    assert.ok(SYNC_TABLES.includes(t), `${t} must feed the UI (web parity)`);
+    assert.ok(PUB.added.has(t), `${t} is not published`);
   }
-  // And the refusal is in the code, not just in this list.
   const fn = fnOf(SRC, "connect");
-  for (const t of LISTENER_OWNED_TABLES) assert.ok(!fn.includes(t), `connect() references ${t}`);
   assert.match(fn, /for \(const table of SYNC_TABLES\)/, "bindings must come from the list");
 });
 
