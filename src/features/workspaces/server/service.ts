@@ -24,6 +24,7 @@ import {
   listWorkspacesWithRoleForUser,
   listMembers,
   updateWorkspace,
+  ensureDefaultWorkspaceRow,
 } from "./repository";
 
 export interface ResolvedMembership {
@@ -177,37 +178,28 @@ export async function resolveActiveWorkspace(
  * recover gracefully.
  */
 export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
+  // Fast path — no lock taken when the workspace already exists.
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
   const name = "Untitled";
-  try {
-    const workspace = await insertWorkspaceWithOwnerMembership({
-      ownerId: userId,
-      name,
-      slug: slugifyWorkspaceName(name),
-    });
+  // Race-proofing moved INTO the database (2026-08-02): the old
+  // catch-23505 recovery here became dead code when the slug uniqueness
+  // constraints were dropped (20260502120000 / 20260504000000 — public_id
+  // is random and never collides), so two concurrent callers could both
+  // insert "Untitled". The ensure_default_workspace RPC serializes
+  // check-then-insert under a per-owner advisory lock; `created` tells us
+  // whether THIS call won and therefore owes the seed.
+  const { workspace, created } = await ensureDefaultWorkspaceRow({
+    ownerId: userId,
+    name,
+    slug: slugifyWorkspaceName(name),
+  });
+  if (created) {
     // Seed the "how to use Dopl" starter corpus. Best-effort + idempotent
     // (never throws), so a seed hiccup can't wedge workspace creation.
     await seedNewWorkspace(workspace.id, userId);
-    return workspace;
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      const after = await findDefaultWorkspaceForUser(userId);
-      if (after) return after;
-    }
-    throw err;
   }
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  // Postgres SQLSTATE 23505 = unique_violation. Supabase JS surfaces it
-  // either as `{ code }` on the error object or wrapped in a message;
-  // check both shapes defensively.
-  if (!err || typeof err !== "object") return false;
-  const code = (err as { code?: unknown }).code;
-  if (typeof code === "string" && code === "23505") return true;
-  const message = (err as { message?: unknown }).message;
-  return typeof message === "string" && message.includes("23505");
+  return workspace;
 }
 
 /**

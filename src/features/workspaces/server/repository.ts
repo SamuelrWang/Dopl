@@ -250,6 +250,32 @@ export async function insertWorkspaceWithOwnerMembership(
   return workspace;
 }
 
+/**
+ * Race-proof SELECT-or-INSERT of the caller's default workspace via the
+ * `ensure_default_workspace` RPC (migration 20260802200000): a per-owner
+ * transaction-scoped advisory lock serializes concurrent callers, so two
+ * cold-booting clients can never double-create "Untitled". Returns the
+ * workspace plus whether THIS call created it (the caller seeds only
+ * then).
+ */
+export async function ensureDefaultWorkspaceRow(
+  args: CreateWorkspaceArgs
+): Promise<{ workspace: Workspace; created: boolean }> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.rpc("ensure_default_workspace", {
+    p_owner_id: args.ownerId,
+    p_name: args.name,
+    p_slug: args.slug,
+    p_public_id: generatePublicId(),
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | (WorkspaceRow & { created: boolean })
+    | undefined;
+  if (!row) throw new Error("ensure_default_workspace returned no row");
+  return { workspace: mapWorkspaceRow(row), created: row.created };
+}
+
 export async function updateWorkspace(
   workspaceId: string,
   patch: {

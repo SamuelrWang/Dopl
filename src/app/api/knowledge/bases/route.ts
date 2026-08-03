@@ -27,7 +27,12 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildKnowledgeContext(auth);
     const bases = await listBases(ctx);
-    const ownerNames = await listBaseOwnerNames(ctx, bases);
+    // Attribution is cosmetic; the base list is not. A profiles-table
+    // hiccup must degrade to no names, never 500 the list (kb_list_bases
+    // over MCP rides this same route).
+    const ownerNames = await listBaseOwnerNames(ctx, bases).catch(
+      () => ({}) as Record<string, string>
+    );
     return NextResponse.json({ bases, ownerNames });
   } catch (err) {
     return toKnowledgeErrorResponse(err);
