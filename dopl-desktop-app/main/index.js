@@ -382,14 +382,26 @@ if (!gotLock) {
       // registered ONLY in SPA mode, so the remote window never has a
       // registered privileged surface it doesn't use.
       uiBridge.register({ getMainWindow: () => mainWindow });
+      const startUiSync = () =>
+        uiSync.start({ getWindow: () => mainWindow, getAccessToken: authTokens.getAccessToken });
       authTokens.subscribe((state) => {
         try { uiBridge.broadcastAuthState(mainWindow, state); } catch (_err) { /* window gone */ }
-        // A dead session must not keep a live realtime feed.
-        if (state === 'signed-out') { try { uiSync.stop(); } catch (_err) { /* not started */ } }
+        // The subscriber payload is the OBJECT broadcastAuthState reads
+        // ({ status, signedIn, userId }) — compare the field, not the value.
+        const status = state && state.status;
+        // A dead session must not keep a live realtime feed; a fresh one
+        // must get the feed back without an app restart.
+        if (status === 'signed-out') { try { uiSync.stop(); } catch (_err) { /* not started */ } }
+        if (status === 'signed-in') {
+          try { startUiSync(); } catch (err) { diag('ui-sync restart error', err && err.message); }
+          // A rotation lands on the live channel NOW, not at the 5-min
+          // recheck backstop — every successful refresh emits 'signed-in'.
+          try { uiSync.refreshAuth(); } catch (err) { diag('ui-sync auth-refresh error', err && err.message); }
+        }
       });
       // Phase 3: main watches the viewed workspace's content tables and
       // pushes coalesced change events to the SPA (dopl:sync-event).
-      uiSync.start({ getWindow: () => mainWindow, getAccessToken: authTokens.getAccessToken });
+      startUiSync();
       mainWindow = spaWindow.createSpaWindow();
       mainWindow.on('closed', () => { mainWindow = null; });
     } else {

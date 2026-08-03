@@ -364,15 +364,62 @@ interface BridgeSub {
 const bridgeSubs = new Set<BridgeSub>();
 let bridgeOff: (() => void) | null = null;
 let watchedWorkspace: string | null = null;
+/** The value of the most recent syncWatch we ISSUED (set synchronously);
+ *  `watchedWorkspace` only advances when the IPC resolves. Dedupe reads
+ *  the issued value; retry semantics read the committed one. */
+let issuedWorkspace: string | null | undefined = undefined;
+let watchNullTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** The workspace most recently subscribed wins the watch — the SPA views
- *  one workspace at a time, and every page's hooks subscribe for the same
- *  one, so "last wins" and "recount on unsubscribe" agree in practice. */
+/** Which workspace should main watch? The one MOST hooks subscribe for,
+ *  most-recent winning ties — so a workspace switch (many new-workspace
+ *  mounts) wins immediately, while a single straggler re-subscribing with
+ *  a stale id cannot steal the watch from a mounted page. */
+function wantedWorkspace(): string | null {
+  const counts = new Map<string, number>();
+  let best: string | null = null;
+  for (const sub of bridgeSubs) {
+    const n = (counts.get(sub.workspaceId) ?? 0) + 1;
+    counts.set(sub.workspaceId, n);
+    // >= : later insertion wins ties (Set preserves insertion order).
+    if (best === null || n >= (counts.get(best) ?? 0)) best = sub.workspaceId;
+  }
+  return best;
+}
+
+function issueWatch(bridge: SpaSyncBridge, want: string | null): void {
+  issuedWorkspace = want;
+  // Commit only on resolve: a refused IPC (window teardown/recreate) must
+  // not leave the renderer believing it is watching — clearing the issued
+  // marker on reject makes the next updateWatch retry.
+  void Promise.resolve(bridge.syncWatch?.(want))
+    .then(() => {
+      watchedWorkspace = want;
+    })
+    .catch(() => {
+      if (issuedWorkspace === want) issuedWorkspace = watchedWorkspace;
+    });
+}
+
 function updateWatch(bridge: SpaSyncBridge): void {
-  const want = [...bridgeSubs].at(-1)?.workspaceId ?? null;
-  if (want === watchedWorkspace) return;
-  watchedWorkspace = want;
-  void bridge.syncWatch?.(want);
+  const want = wantedWorkspace();
+  if (watchNullTimer) {
+    clearTimeout(watchNullTimer);
+    watchNullTimer = null;
+  }
+  const current = issuedWorkspace === undefined ? watchedWorkspace : issuedWorkspace;
+  if (want === current) return;
+  if (want === null) {
+    // React flushes all cleanups before all creates within a commit, so
+    // every navigation momentarily empties the sub set. Deferring the
+    // unwatch behind the same grace the web path uses keeps a route change
+    // from costing a leave + rejoin + catch-up burst.
+    watchNullTimer = setTimeout(() => {
+      watchNullTimer = null;
+      if (wantedWorkspace() === null) issueWatch(bridge, null);
+    }, TEARDOWN_GRACE_MS);
+    return;
+  }
+  issueWatch(bridge, want);
 }
 
 function subscribeViaBridge(
@@ -429,7 +476,12 @@ export function __resetSharedChannelsForTests(): void {
     bridgeOff();
     bridgeOff = null;
   }
+  if (watchNullTimer) {
+    clearTimeout(watchNullTimer);
+    watchNullTimer = null;
+  }
   watchedWorkspace = null;
+  issuedWorkspace = undefined;
 }
 
 /** Test-only: current entry count (live channels, including grace-window). */

@@ -390,6 +390,10 @@ describe("subscribeSharedWorkspaceTables", () => {
       expect(a).toHaveBeenCalledTimes(3); // catch-up broadcast
 
       off();
+      // Unwatch is deferred behind the grace window (navigation churn must
+      // not cost a leave/rejoin) — nothing sent yet…
+      expect(watches.at(-1)).toBe("ws1");
+      vi.advanceTimersByTime(1_001);
       expect(watches.at(-1)).toBeNull();
       expect(offSpy).toHaveBeenCalledTimes(1);
     } finally {
