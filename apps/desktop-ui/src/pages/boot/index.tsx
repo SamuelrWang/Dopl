@@ -55,7 +55,12 @@ export default function BootPage() {
         signal,
       }),
     enabled: signedIn && onboarded,
-    staleTime: Infinity,
+    // NEVER replay a cached answer: after a last-workspace delete (or a
+    // different account signing in) the cached segment is a corpse — every
+    // visit to "/" must re-provision. The POST is idempotent server-side
+    // (advisory-lock RPC), so "always" costs one cheap round trip.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   if (auth.phase === "pending") return <PageLoading label="Starting Dopl" />;

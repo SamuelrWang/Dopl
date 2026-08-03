@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { getBridge } from "#/lib/dopl-bridge";
 
 /**
@@ -32,11 +32,16 @@ export function useAuthPhase(): { phase: AuthPhase; refresh: () => void } {
     getBridge() ? "pending" : "signed-in"
   );
 
+  // Monotonic sequence: a pushed transition must never be overwritten by a
+  // slower in-flight read that started before it (the push is NEWER truth).
+  const seqRef = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
+    const mySeq = ++seqRef.current;
     const load = async () => {
       const next = await readAuthPhase();
-      if (next && !cancelled) setPhase(next);
+      if (next && !cancelled && mySeq === seqRef.current) setPhase(next);
     };
     void load();
 
@@ -49,17 +54,20 @@ export function useAuthPhase(): { phase: AuthPhase; refresh: () => void } {
     // Main pushes transitions (sign-out from the tray, a 401 that survived a
     // forced refresh), so the screen never strands on a dead session.
     const off = bridge.onAuthState((state) => {
+      seqRef.current += 1; // outrank every in-flight read
       setPhase(state.signedIn ? "signed-in" : "signed-out");
     });
     return () => {
       cancelled = true;
       off();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = useCallback(() => {
+    const mySeq = ++seqRef.current;
     void readAuthPhase().then((next) => {
-      if (next) setPhase(next);
+      if (next && mySeq === seqRef.current) setPhase(next);
     });
   }, []);
 

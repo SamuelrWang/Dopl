@@ -144,6 +144,17 @@ function StepCard({
             target="_blank"
             rel="noreferrer"
             className={linkClass}
+            onClick={(e) => {
+              // Packaged SPA: window.open is denied by the shell — route
+              // external links through the bridge or the click is dead.
+              const dopl = (
+                window as { dopl?: { openExternal?: (u: string) => void } }
+              ).dopl;
+              if (dopl?.openExternal) {
+                e.preventDefault();
+                dopl.openExternal(href);
+              }
+            }}
           >
             {action}
           </a>

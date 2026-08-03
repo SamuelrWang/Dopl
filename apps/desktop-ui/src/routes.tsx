@@ -99,6 +99,7 @@ export const routes: RouteObject[] = [
     path: "/",
     // Boot: signed-out screen / onboarding / ensure-default → workspace.
     element: <BootPage />,
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: "*",

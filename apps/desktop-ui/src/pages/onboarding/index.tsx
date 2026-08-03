@@ -27,14 +27,15 @@ import { ONBOARDING_STATE_PATH } from "#/pages/boot/use-boot-state";
  *      redirectTo is passed and the server's own `redirectPath` always wins.
  *
  * `initialStep` is always "survey": `/api/user/onboarding-state` answers
- * `isOnboarded` only, while the RSC also had `surveyCompleted` from
- * `getOnboardingStatus`. Re-submitting is harmless (`submitSurvey` is
- * first-write-wins per user), so a half-finished user re-answers rather than
- * resuming. See the report's gap note.
+ * both `isOnboarded` and `surveyCompleted` (same pair the RSC read via
+ * `getOnboardingStatus`), so a half-finished user RESUMES at the connect
+ * step instead of re-answering the survey.
  */
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const state = useApiQuery<{ isOnboarded: boolean }>(ONBOARDING_STATE_PATH);
+  const state = useApiQuery<{ isOnboarded: boolean; surveyCompleted?: boolean }>(
+    ONBOARDING_STATE_PATH
+  );
 
   if (state.isPending) return <PageLoading label="Loading" />;
   if (state.error) {
@@ -46,7 +47,7 @@ export default function OnboardingPage() {
 
   return (
     <OnboardingFlowCore
-      initialStep="survey"
+      initialStep={state.data?.surveyCompleted ? "connect" : "survey"}
       // The server answers `/{segment}/overview` — already a valid SPA path.
       onDone={(to) => navigate(to, { replace: true })}
     />

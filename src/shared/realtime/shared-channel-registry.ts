@@ -83,6 +83,9 @@ const entries = new Map<string, Entry>();
  *  whose `subscribe()` silently no-ops, leaving the key dead until reload. */
 let nextGeneration = 1;
 
+/** One-shot guard for the missing-config warning below. */
+let warnedNoConfig = false;
+
 function entryKey(
   topicPrefix: string,
   workspaceId: string,
@@ -165,11 +168,15 @@ function connect(entry: Entry): void {
   let supabase: ReturnType<typeof getSupabaseBrowser>;
   try {
     supabase = getSupabaseBrowser();
-  } catch {
+  } catch (err) {
     // No browser Supabase config in this runtime (SPA renderers return
     // earlier via the window.dopl no-op; this guards test/exotic
-    // runtimes) — realtime silently degrades instead of unmounting the
-    // tree through an error boundary.
+    // runtimes) — realtime degrades instead of unmounting the tree. A real
+    // web-build misconfig must not die SILENTLY though: warn once.
+    if (!warnedNoConfig) {
+      warnedNoConfig = true;
+      console.warn("[realtime] disabled — browser client unavailable:", err);
+    }
     entry.broken = true;
     return;
   }

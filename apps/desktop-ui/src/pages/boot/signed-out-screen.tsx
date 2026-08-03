@@ -32,7 +32,7 @@ export function SignedOutScreen() {
     <div className="flex h-screen w-screen flex-col items-center justify-center gap-4">
       <h1 className="text-title font-semibold tracking-tight text-text-primary">Dopl</h1>
       <p className="max-w-[320px] text-center text-caption text-text-secondary">
-        Sign in to continue. Your browser opens to finish signing in, then Dopl
+        Continue with Google to sign in. Your browser opens to finish, then Dopl
         picks up where it left off.
       </p>
       <button
@@ -40,7 +40,7 @@ export function SignedOutScreen() {
         onClick={signIn}
         className="btn-light rounded-md px-3 py-1.5 text-small font-medium text-text-primary"
       >
-        Sign in
+        Continue with Google
       </button>
     </div>
   );

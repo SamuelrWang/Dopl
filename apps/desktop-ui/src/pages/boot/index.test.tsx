@@ -87,7 +87,7 @@ describe("boot page", () => {
 
     renderBoot();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Sign in" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
 
     expect(openExternal).toHaveBeenCalledWith(
       "https://www.usedopl.com/auth/desktop-start"
@@ -130,6 +130,6 @@ describe("boot page", () => {
 
     renderBoot();
 
-    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
   });
 });

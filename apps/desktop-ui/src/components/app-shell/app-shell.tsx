@@ -10,6 +10,7 @@ import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
+import { CONSENT_INBOX_POLL_MS } from "@/features/channels/constants";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { useApiQuery } from "#/hooks/use-api-query";
@@ -50,8 +51,15 @@ export function AppShellLayout() {
     useWorkspaceRoute();
 
   // Consent badge: shares the channels page's exact cache key — zero extra
-  // requests when both are mounted. Self-disables on a falsy id.
-  const { requests: consentRequests } = useConsentInbox(workspace?.id);
+  // requests when both are mounted. Self-disables on a falsy id. Polled:
+  // realtime is a no-op in the SPA (Phase 3), and a badge whose job is
+  // pulling you TO the channels page can't wait for the channels page's
+  // own observers to refresh it.
+  const { requests: consentRequests } = useConsentInbox(
+    workspace?.id,
+    undefined,
+    CONSENT_INBOX_POLL_MS
+  );
   const [createWsOpen, setCreateWsOpen] = useState(false);
 
   // The web app 301s a stale segment to its canonical form. There is no server
@@ -100,8 +108,6 @@ export function AppShellLayout() {
             workspaceSegment={segment}
             activeSection={activeSectionFromPath(location.pathname)}
             // The badge counts pending consent requests, which arrive over the
-            // channels realtime stream — Supabase realtime is not ported yet
-            // (web-pages.md §1.2), and channels is the last wave. 0 until then.
             consentCount={consentRequests.length}
             onOpenSettings={openSettings}
             Link={RouterLink}

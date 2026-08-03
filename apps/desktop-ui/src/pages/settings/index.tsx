@@ -10,6 +10,7 @@ import { WorkspaceTrashSection } from "@/features/trash/components/workspace-tra
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
 import { RESOLVE_PATH, useWorkspaceRoute } from "#/components/app-shell";
+import { ENSURE_DEFAULT_PATH } from "#/pages/boot/use-boot-state";
 
 /**
  * /:workspaceSegment/settings — per-workspace settings. Port of
@@ -61,6 +62,9 @@ export default function SettingsPage() {
     if (path) void queryClient.invalidateQueries({ queryKey: [path] });
     void queryClient.invalidateQueries({ queryKey: [RESOLVE_PATH] });
     void queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+    // The boot route's provisioning answer must not replay a segment that
+    // may have just been deleted.
+    void queryClient.removeQueries({ queryKey: [ENSURE_DEFAULT_PATH] });
   }
 
   return (
