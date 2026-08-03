@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, powerMonitor } = require('electron');
+const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -28,6 +28,10 @@ const authTokens = require('./auth-tokens');
 const uiSync = require('./ui-sync');
 const settings = require('./settings');
 const sessionWindow = require('./session-window');
+// Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
+// min-version.js, shell in version-gate.js, screen in update-required-window.js.
+const versionGate = require('./version-gate');
+const wake = require('./wake');
 
 const store = new Store();
 let mainWindow = null;
@@ -145,6 +149,8 @@ const shellHelpers = makeShellHelpers({
   setMainWindow: (win) => { mainWindow = win; },
   createMainWindow,
   createSpaWindow: spaWindow.createSpaWindow,
+  // The min-version gate rides this ONE factory (see shell-mode.js).
+  versionGate,
   getLoadGuard: () => loadGuard,
   showMainWindow: (...a) => showMainWindow(...a),
   appOrigin: APP_ORIGIN,
@@ -380,8 +386,20 @@ if (!gotLock) {
     updater.init({
       onReady: (version) => tray.setUpdateReady(version),
       onNote: (text, opts) => tray.setUpdateNote(text, opts),
+      // Feeds the min-version gate. Two things ride this: the blocking screen's
+      // live download narration, and the anti-brick guard — a check that
+      // COMPLETED and found nothing is the only honest evidence that a floor is
+      // above the newest build that exists, and it degrades the block.
+      onState: () => versionGate.onUpdaterState(),
       getLiveSessions: () => sessionEngine.listLiveSessions(),
     });
+
+    // The Phase-4 minimum-version gate. `GET /api/version` carries the floor; a
+    // build below it swaps the app window for the blocking update screen and back
+    // again through the one shell factory. Every failure to get an answer
+    // (offline, timeout, 5xx, a malformed floor) leaves the app OPEN — see
+    // min-version.js for the full fail-open table.
+    shellHelpers.wireVersionGate({ onWarn: (notice) => tray.setVersionFloor(notice) });
 
     // Q10b: a peer running an OLDER build is the standing explanation for "the
     // fix works here and not there". version-skew.js reads the server-stamped
@@ -442,31 +460,13 @@ if (!gotLock) {
     // no-ops when signed out or the CLI/endpoint isn't available).
     mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config startup error', err && err.message));
 
-    // Wake-from-sleep fast catch-up. On resume (and screen unlock) kick the
-    // listener: abort in-flight long-polls so they re-await from their cursors
-    // immediately, beat presence, and reconcile. reconcile is single-flight and
-    // wake() is debounced here, so a resume+unlock pair (they fire together) does
-    // one pass — not two. powerMonitor is only valid after the app is ready.
-    let lastWakeAt = 0;
-    const onWake = (reason) => {
-      const now = Date.now();
-      if (now - lastWakeAt < 3000) return; // coalesce resume+unlock / rapid unlocks
-      lastWakeAt = now;
-      diag('powerMonitor:', reason, '— waking listener + resetting pools');
-      // Listener long-polls self-recover on their own; the shared pool resets are
-      // what fix the multi-minute hang after a network transition.
-      try { listener.wake(); } catch (err) { diag('wake error', err && err.message); }
-      try { api.resetPool(); } catch (err) { diag('wake pool-reset error', err && err.message); } // (2b) main-process undici pool
-      try { authTokens.onWake(); } catch (err) { diag('wake token error', err && err.message); } // (2d) refresh a stale access token now, not at the late alarm
-      try { uiSync.onWake(); } catch (err) { diag('wake ui-sync error', err && err.message); } // (2e) rejoin the SPA's sync feed on fresh sockets
-      try { if (loadGuard) loadGuard.onWake(); } catch (err) { diag('wake guard error', err && err.message); } // (2a) renderer pool + (2c) retry a hung load
-    };
-    try {
-      powerMonitor.on('resume', () => onWake('resume'));
-      powerMonitor.on('unlock-screen', () => onWake('unlock-screen'));
-    } catch (err) {
-      console.warn('[powerMonitor] wiring failed:', err && err.message);
-    }
+    // Wake-from-sleep fast catch-up. The fan-out (and the reason each participant
+    // is in it) lives in wake.js, extracted at the 500-line cap when the gate
+    // joined it; resume + unlock-screen fire together and are coalesced there.
+    wake.arm({
+      listener, api, authTokens, uiSync, versionGate,
+      getLoadGuard: () => loadGuard,
+    });
 
     app.on('activate', () => {
       // Clicking the dock icon is an explicit request to see the app, so force

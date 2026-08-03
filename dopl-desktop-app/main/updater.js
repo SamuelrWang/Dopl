@@ -37,6 +37,7 @@ let autoUpdater = null;
 let readyVersion = null; // set once an update is downloaded
 let onReadyCb = null;
 let onNoteCb = null; // tray.setUpdateNote — the "what is the updater doing" line
+let onStateCb = null; // min-version gate — see updateState() below
 let getLiveSessions = null; // injected: sessionEngine.listLiveSessions
 let notified = false;
 let downloading = false;
@@ -44,11 +45,43 @@ let manualPending = false; // a manual check is in flight -> failures ARE surfac
 let promptOpen = false; // single-flight: never two restart dialogs
 let promptedThisRun = false; // the auto prompt fires at most once per run
 
+// ── The state, as a fact other modules can act on (min-version gate) ─────────
+// The note above is PROSE for a human; the minimum-version gate needs the same
+// story as booleans, because one of them decides whether the app is allowed to
+// open at all. `checked` in particular is load-bearing: a floor above the newest
+// published build would block everyone with nothing to install, and the only
+// honest evidence that "there is nothing newer" is a check that COMPLETED.
+// An errored check therefore does NOT set it — it learned nothing.
+let supported = false; // packaged, and electron-updater actually loaded
+let checked = false; // a check has completed this run (available or not)
+let available = false; // something newer was found and is coming down
+let checking = false; // a check is in flight right now
+let lastPercent = null; // newest download-progress percent, or null (unknown)
+
+function updateState() {
+  return {
+    supported,
+    checked,
+    available,
+    ready: !!readyVersion,
+    checking,
+    version: readyVersion || null,
+    percent: lastPercent,
+  };
+}
+
+function emitState() {
+  if (!onStateCb) return;
+  try { onStateCb(updateState()); } catch (_) { /* listener may be gone */ }
+}
+
 // The tray note. Also mirrored into diag, so the field log tells the same story
-// the menu bar does.
+// the menu bar does. Every transition passes through here, which makes it the
+// one place the state fan-out has to hang off.
 function note(outcome, ctx) {
   const n = policy.checkNote(outcome, ctx);
   diag('updater:', outcome, n.text ? `(${n.text})` : '');
+  emitState();
   if (!onNoteCb) return;
   try { onNoteCb(n.text, { busy: n.busy }); } catch (_) { /* tray may be gone */ }
 }
@@ -69,11 +102,16 @@ function liveSessions() {
 function init(opts) {
   onReadyCb = (opts && opts.onReady) || null;
   onNoteCb = (opts && opts.onNote) || null;
+  onStateCb = (opts && opts.onState) || null;
   getLiveSessions = (opts && opts.getLiveSessions) || null;
 
   // Dev runs aren't signed against the feed and would just error. The note is set
   // anyway so the tray's "Check for updates now" says WHY it does nothing here
   // instead of reading as a dead button.
+  //
+  // `supported` stays FALSE on both of these paths, and that is what stops the
+  // min-version gate from hard-blocking a machine whose updater could never
+  // clear the block (min-version.js GUARD 1).
   if (!app.isPackaged) {
     note('unsupported');
     diag('updater: skip (not packaged)');
@@ -87,6 +125,7 @@ function init(opts) {
     diag('updater: module load failed', err && err.message);
     return;
   }
+  supported = true;
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -95,15 +134,22 @@ function init(opts) {
   autoUpdater.logger = null;
 
   autoUpdater.on('checking-for-update', () => {
+    checking = true;
     note('checking');
   });
   autoUpdater.on('update-available', (info) => {
     downloading = true;
+    checking = false;
+    checked = true;
+    available = true;
     manualPending = false; // the outcome is now the download, not a check result
     note('downloading', { version: info && info.version });
   });
   autoUpdater.on('update-not-available', () => {
     downloading = false;
+    checking = false;
+    checked = true; // THE evidence the min-version gate's anti-brick guard needs
+    available = false;
     manualPending = false;
     note('up-to-date', { version: appVersion.appVersion() });
   });
@@ -111,8 +157,12 @@ function init(opts) {
   // "it is working, wait" a thing the operator can see (item 2).
   autoUpdater.on('download-progress', (info) => {
     downloading = true;
+    lastPercent = policy.progressPercent(info);
+    // The gate's blocking screen narrates this download, so the fan-out happens
+    // before the early return that only guards the TRAY note.
+    emitState();
     if (!onNoteCb) return;
-    const n = policy.checkNote('downloading', { percent: policy.progressPercent(info) });
+    const n = policy.checkNote('downloading', { percent: lastPercent });
     try { onNoteCb(n.text, { busy: n.busy }); } catch (_) { /* tray may be gone */ }
   });
   autoUpdater.on('error', (err) => {
@@ -121,6 +171,9 @@ function init(opts) {
     // would read as a broken button, so that failure is reported once and the
     // global swallow is left exactly as strict as it was.
     downloading = false;
+    checking = false;
+    // `checked` is deliberately NOT set: a failed check is not evidence that
+    // there is nothing to install, and the gate would relax a real block on it.
     diag('updater: error', err && err.message);
     if (manualPending) {
       manualPending = false;
@@ -132,6 +185,10 @@ function init(opts) {
   autoUpdater.on('update-downloaded', (info) => {
     readyVersion = (info && info.version) || 'new version';
     downloading = false;
+    checking = false;
+    checked = true;
+    available = false; // no longer coming down: it is HERE, one restart away
+    lastPercent = null;
     manualPending = false;
     diag('updater: downloaded', readyVersion);
     note('ready', { version: readyVersion });
@@ -308,4 +365,5 @@ module.exports = {
   quitAndInstall,
   updateReadyVersion,
   isUpdateReady,
+  updateState,
 };

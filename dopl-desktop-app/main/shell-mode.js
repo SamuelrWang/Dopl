@@ -10,6 +10,7 @@
 //   getMainWindow()/setMainWindow(win)  — the one main-window slot
 //   createMainWindow(opts)              — the legacy remote factory
 //   createSpaWindow()                   — the bundled factory
+//   versionGate                         — the min-version gate module
 //   getLoadGuard()                      — remote mode's load guard (or null)
 //   showMainWindow()                    — reveal/recreate (calls back in)
 //   appOrigin, diag
@@ -20,6 +21,24 @@ function isSpaMode() {
 
 function makeShellHelpers(deps) {
   function createShellWindow(opts = {}) {
+    // THE MINIMUM-VERSION GATE'S ENTIRE ENFORCEMENT POINT. This factory is the
+    // one place every "make or show the window" path already goes through, which
+    // is what it was extracted for — so a single branch here makes the block
+    // total, with no new interception anywhere: the dock icon, the tray's "Open
+    // Dopl", a clicked notification and a dopl:// deep link all resolve to the
+    // update screen for as long as the gate says so, and go back to resolving to
+    // the app the moment it stops. Both shells are covered, because both are
+    // downstream of this line. See main/version-gate.js.
+    //
+    // The window module is required LAZILY (the tray.js idiom) so this file keeps
+    // its property of holding no module-scope dependencies at all — its truth
+    // tables slice it into a bare scope.
+    if (deps.versionGate && deps.versionGate.isBlocked()) {
+      const win = require('./update-required-window').createUpdateRequiredWindow();
+      deps.setMainWindow(win);
+      win.on('closed', () => deps.setMainWindow(null));
+      return win;
+    }
     if (isSpaMode()) {
       const win = deps.createSpaWindow();
       deps.setMainWindow(win);
@@ -56,7 +75,33 @@ function makeShellHelpers(deps) {
     if (guard) guard.load(`${deps.appOrigin}/${segment}/channels`);
   }
 
-  return { createShellWindow, navigateTo, navigateToChannels };
+  // Replace whatever is on screen with the window the CURRENT gate verdict calls
+  // for. A block and its later release are the same two lines, because both
+  // resolve through createShellWindow above. Live SESSION windows are
+  // deliberately untouched: the gate blocks the product surface, not an agent
+  // mid turn, for the same reason the updater never force-restarts.
+  function swapShell() {
+    const win = deps.getMainWindow();
+    if (win && !win.isDestroyed()) win.destroy();
+    deps.setMainWindow(null);
+    return createShellWindow({ show: true });
+  }
+
+  // The gate's handlers, kept here because both of them are window swaps and
+  // this file is where "which window is the shell" is decided. `onWarn` is the
+  // caller's (the tray line), since the DEGRADED state has no window at all.
+  function wireVersionGate(opts = {}) {
+    deps.versionGate.init({
+      onBlock: () => swapShell(),
+      onRelease: () => {
+        require('./update-required-window').closeUpdateRequiredWindow();
+        swapShell();
+      },
+      onWarn: (notice) => { if (opts.onWarn) opts.onWarn(notice); },
+    });
+  }
+
+  return { createShellWindow, navigateTo, navigateToChannels, swapShell, wireVersionGate };
 }
 
 // ─── BEGIN SHELL-MODE-PURE (unit-tested via source extraction) ──────────────

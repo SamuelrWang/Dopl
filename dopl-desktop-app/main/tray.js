@@ -12,6 +12,7 @@ let handlers = {};
 let updateReadyVersion = null; // staged-update version; see refreshUpdateReady()
 let updateNote = null; // { text, busy } — what the updater is doing right now
 let peerSkew = null; // Q10: the newest older-build peer seen this run ({ peer, mine, who })
+let versionFloor = null; // min-version gate, WARNING state only ({ tray, ... }) or null
 let windowMode = true; // v1.9: reflect the "Run sessions in a window" setting (default ON)
 let pendingCount = 0; // Round B: number of pending consent requests (inbound + review)
 
@@ -168,6 +169,16 @@ function skewMenuLabel(skew) {
   const who = skew.who ? String(skew.who) : 'A peer';
   return who + ' is on v' + skew.peer + ', you are on v' + (skew.mine || '?');
 }
+
+// The minimum-version gate's WARNING state, and only that state. A hard block
+// has its own window and never reaches the tray; this line is what a DEGRADED
+// block looks like — the server asked for a build that cannot be installed here
+// (nothing newer is published, or this build has no updater at all), so the app
+// keeps working and the tray states the fact. Disabled, like the skew line: the
+// fix is a release, not a click. '' when there is nothing to say.
+function floorMenuLabel(notice) {
+  return notice && notice.tray ? String(notice.tray) : '';
+}
 // ─── END TRAY-UPDATE ─────────────────────────────────────────────────────────
 
 // WHERE "an update is staged" IS READ FROM (2026-07-31). The tray used to keep
@@ -228,6 +239,8 @@ function buildMenu() {
   );
   const skewLabel = skewMenuLabel(peerSkew);
   if (skewLabel) template.push({ label: skewLabel, enabled: false });
+  const floorLabel = floorMenuLabel(versionFloor);
+  if (floorLabel) template.push({ label: floorLabel, enabled: false });
   // The manual check sits with the version lines it is about, and its outcome is
   // printed directly beneath so the click always visibly does something.
   const checkItem = checkMenuState(updateNote);
@@ -309,6 +322,16 @@ function setPeerSkew(skew) {
   if (tray) buildMenu();
 }
 
+// The min-version gate's standing line. A falsy notice clears it (the gate
+// releases as soon as a satisfying build exists), and a repeat of the same line
+// never redraws the menu.
+function setVersionFloor(notice) {
+  const next = notice && notice.tray ? notice : null;
+  if ((versionFloor && versionFloor.tray) === (next && next.tray)) return;
+  versionFloor = next;
+  if (tray) buildMenu();
+}
+
 function setWindowMode(on) {
   windowMode = !!on;
   if (tray) buildMenu();
@@ -334,6 +357,6 @@ function destroy() {
 }
 
 module.exports = {
-  create, update, setUpdateReady, setUpdateNote, setPeerSkew, setWindowMode, setPendingCount,
-  refresh, destroy,
+  create, update, setUpdateReady, setUpdateNote, setPeerSkew, setVersionFloor,
+  setWindowMode, setPendingCount, refresh, destroy,
 };

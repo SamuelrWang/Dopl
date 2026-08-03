@@ -53,6 +53,30 @@ const UPDATER = {
   CHECK_INTERVAL_MS: updatePolicy.resolveCheckIntervalMs(process.env.DOPL_UPDATE_CHECK_MS),
 };
 
+// ── Minimum-version gate ─────────────────────────────────────────────────────
+// The server-authoritative floor (GET /api/version) that a bundled build blocks
+// itself on, so Phase 4 can retire the website without stranding anyone on a
+// frozen UI. Policy lives in main/min-version.js; the shell is version-gate.js.
+//
+// DOPL_VERSION_GATE is the one knob, the DOPL_UI shape: `off` disables the gate
+// for local dev, `force` synthesizes a floor so the blocking screen can be
+// dogfooded without deploying one, and anything else (including a typo) is the
+// shipping behavior — a misspelled opt-out must not silently turn the gate off.
+//
+// The steady-state cadence is UPDATER.CHECK_INTERVAL_MS on purpose: the floor
+// and the release feed answer the same question and there is nothing to gain
+// from a second interval to tune. RETRY_MS is the one exception, for the machine
+// that boots offline and would otherwise not learn there is a floor for 4h.
+const minVersion = require('./min-version');
+
+const VERSION_GATE = {
+  MODE: minVersion.resolveGateMode(process.env.DOPL_VERSION_GATE),
+  PATH: '/api/version',
+  FETCH_TIMEOUT_MS: minVersion.FLOOR_FETCH_TIMEOUT_MS,
+  CHECK_INTERVAL_MS: UPDATER.CHECK_INTERVAL_MS,
+  RETRY_MS: minVersion.FLOOR_RETRY_MS,
+};
+
 // ── Listener tuning (judgment calls, documented in the build report) ──────────
 const LISTENER = {
   // Re-list channels this often so newly-joined channels start being watched.
@@ -123,4 +147,5 @@ module.exports = {
   LISTENER,
   REALTIME,
   UPDATER,
+  VERSION_GATE,
 };

@@ -248,8 +248,9 @@ function floorNotice(v) {
 //
 // The retry is the exception. An app that boots offline learns nothing, and 4h
 // is far too long to sit not knowing; a short retry converges within minutes of
-// the network coming back. It applies ONLY after a failed or floor-less fetch,
-// so a machine that got an answer is back on the 4h cadence.
+// the network coming back. It applies ONLY when the fetch got no answer at all
+// (a throw, a timeout, a 5xx, unparseable JSON). A server that answered "no
+// floor" HAS answered, and goes back on the 4h cadence.
 const FLOOR_FETCH_TIMEOUT_MS = 8000;
 const FLOOR_RETRY_MS = 10 * 60 * 1000;
 

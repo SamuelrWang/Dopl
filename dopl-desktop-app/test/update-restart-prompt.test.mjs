@@ -50,6 +50,7 @@ function harness(opts = {}) {
   const { packaged = true, interval, responses = [], sessions = [] } = opts;
   const seen = {
     notes: [], // [text, {busy}] pairs pushed at tray.setUpdateNote
+    states: [], // onState fan-out — what the min-version gate decides on
     ready: [], // onReady echoes
     notifications: [],
     dialogs: [],
@@ -115,6 +116,7 @@ function harness(opts = {}) {
     updater.init({
       onReady: (v) => seen.ready.push(v),
       onNote: (text, o) => seen.notes.push([text, o]),
+      onState: (s) => seen.states.push(s),
       getLiveSessions: () => sessions,
     });
   } finally {
@@ -130,8 +132,77 @@ function harness(opts = {}) {
     electron,
     lastNote: () => seen.notes[seen.notes.length - 1] || [null, null],
     noteTexts: () => seen.notes.map(([t]) => t),
+    state: () => updater.updateState(),
   };
 }
+
+// ── The state the minimum-version gate decides on ───────────────────────────
+// updateState() is the same story the tray note tells, as booleans, because one
+// consumer of it decides whether the app may open at all (main/min-version.js).
+// `checked` is the load-bearing one: it is the ONLY evidence that a floor sits
+// above the newest build that exists, and acting on a wrong answer is a fleet
+// outage in either direction. So each transition is pinned here rather than
+// inferred from the prose the tray shows.
+
+test("an unpackaged run reports NO updater, which is what stops a hard block", () => {
+  const h = harness({ packaged: false });
+  assert.equal(h.state().supported, false);
+  assert.equal(h.state().checked, false);
+});
+
+test("a packaged run reports a live updater before it has learned anything", () => {
+  const h = harness();
+  assert.deepEqual(h.state(), {
+    supported: true, checked: false, available: false, ready: false,
+    checking: false, version: null, percent: null,
+  });
+});
+
+test("'nothing newer' is the ONE outcome that sets `checked` without an update", () => {
+  const h = harness();
+  h.autoUpdater.emit("checking-for-update");
+  assert.equal(h.state().checking, true);
+  assert.equal(h.state().checked, false, "in flight is not an answer");
+  h.autoUpdater.emit("update-not-available");
+  assert.equal(h.state().checked, true);
+  assert.equal(h.state().available, false);
+  assert.equal(h.state().checking, false);
+});
+
+test("a FAILED check never sets `checked` — it learned nothing", () => {
+  // The whole anti-brick guard turns on this. An offline machine that treated
+  // "the check errored" as "there is nothing newer" would let itself past a
+  // floor it really is below, on every network blip.
+  const h = harness();
+  h.autoUpdater.emit("checking-for-update");
+  h.autoUpdater.emit("error", new Error("net::ERR_INTERNET_DISCONNECTED"));
+  assert.equal(h.state().checked, false);
+  assert.equal(h.state().checking, false, "…but it is no longer in flight");
+});
+
+test("found -> downloading -> ready walks available then ready, and carries the percent", () => {
+  const h = harness();
+  h.autoUpdater.emit("update-available", { version: "1.7.19" });
+  assert.equal(h.state().checked, true);
+  assert.equal(h.state().available, true);
+  h.autoUpdater.emit("download-progress", { percent: 43.8 });
+  assert.equal(h.state().percent, 43);
+  h.autoUpdater.emit("update-downloaded", { version: "1.7.19" });
+  assert.equal(h.state().ready, true);
+  assert.equal(h.state().available, false, "it is no longer coming down: it is here");
+  assert.equal(h.state().version, "1.7.19");
+  assert.equal(h.state().percent, null);
+});
+
+test("every transition fans out, including download progress", () => {
+  // The blocking screen narrates the download off this fan-out, so a progress
+  // event that only reached the tray would leave it looking hung.
+  const h = harness();
+  const before = h.seen.states.length;
+  h.autoUpdater.emit("download-progress", { percent: 10 });
+  assert.ok(h.seen.states.length > before);
+  assert.equal(h.seen.states[h.seen.states.length - 1].percent, 10);
+});
 
 // ── The interval (item 4) ───────────────────────────────────────────────────
 

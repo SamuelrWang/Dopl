@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- This page has no network needs at all: everything it draws arrives over
+       the preload bridge. `default-src 'none'` states that, so a future edit
+       that reaches for a font or an analytics beacon fails loudly. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  <title>Dopl — Update required</title>
+  <style>
+    :root { color-scheme: light; }
+    html, body {
+      margin: 0; height: 100%;
+      background: #ffffff; color: #0d0d0d;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-user-select: none; user-select: none;
+    }
+    .wrap {
+      height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      gap: 14px; padding: 28px;
+    }
+    .mark {
+      width: 44px; height: 44px; border-radius: 11px;
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,.18));
+    }
+    h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 6px 0 0; }
+    p { margin: 0; color: #8c8c8c; font-size: 14px; max-width: 380px; line-height: 1.5; }
+    .status {
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      min-height: 20px; margin-top: 2px;
+      color: #4a4a4a; font-size: 13px;
+    }
+    .spinner {
+      width: 13px; height: 13px; border-radius: 50%; flex: none;
+      border: 2px solid rgba(0,0,0,.12);
+      border-top-color: rgba(0,0,0,.55);
+      animation: spin 0.8s linear infinite;
+    }
+    .spinner[hidden] { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+    .row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+    button {
+      padding: 10px 22px; font-size: 14px; font-weight: 500;
+      border: 0; border-radius: 9px; cursor: pointer;
+      transition: filter .15s ease;
+    }
+    button.primary {
+      color: #fff;
+      background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
+      box-shadow: 0 1px 2px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.12);
+    }
+    button.ghost {
+      color: #4a4a4a; background: #f2f2f2;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    button:hover { filter: brightness(1.06); }
+    button.primary:hover { filter: brightness(1.12); }
+    button[hidden] { display: none; }
+    button[disabled] { opacity: .5; cursor: default; filter: none; }
+    .foot { margin-top: 4px; color: #b0b0b0; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <img class="mark" src="assets/icon.png" alt="Dopl" onerror="this.style.display='none'" />
+    <h1 id="title">Update required</h1>
+    <p id="message"></p>
+    <div class="status">
+      <span class="spinner" id="spinner" hidden></span>
+      <span id="status"></span>
+    </div>
+    <div class="row">
+      <button class="primary" id="action" hidden></button>
+      <button class="ghost" id="quit">Quit Dopl</button>
+    </div>
+    <div class="foot">You can quit at any time. Dopl reopens on the new build.</div>
+  </div>
+  <script>
+    const el = (id) => document.getElementById(id);
+    const action = el('action');
+
+    // Everything on screen is main's answer. The page holds no state of its own
+    // and has no way to decide it is allowed through.
+    function render(s) {
+      if (!s) return;
+      el('title').textContent = s.title || 'Update required';
+      el('message').textContent = s.message || '';
+      el('status').textContent = s.status || '';
+      el('spinner').hidden = !s.busy;
+      if (s.action && s.action.id) {
+        action.hidden = false;
+        action.textContent = s.action.label || '';
+        action.dataset.id = s.action.id;
+      } else {
+        action.hidden = true;
+        action.dataset.id = '';
+      }
+      action.disabled = !!s.busy;
+    }
+
+    action.addEventListener('click', () => {
+      const id = action.dataset.id;
+      if (!id) return;
+      // Optimistic only in the narrow sense of "do not let a second click start
+      // a second check"; the next push from main is what actually redraws.
+      action.disabled = true;
+      window.doplUpdate.act(id);
+    });
+    el('quit').addEventListener('click', () => window.doplUpdate.quit());
+
+    window.doplUpdate.onState(render);
+    window.doplUpdate.state().then(render);
+  </script>
+</body>
+</html>
