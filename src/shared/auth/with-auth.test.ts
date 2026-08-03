@@ -29,6 +29,10 @@ import { NextRequest, NextResponse } from "next/server";
 const state = vi.hoisted(() => ({
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
   sessionUser: null as { id: string } | null,
+  /** Phase 2 bearer-JWT branch: user resolved from a Supabase JWT presented
+   *  as `Authorization: Bearer <jwt>` (no dopl_at_ prefix). */
+  jwtUser: null as { id: string } | null,
+  calls_jwtGetClaims: [] as string[],
   /** Q11: `getClaims()` re-throws plain (non-Auth) Errors at the caller. */
   claimsThrows: null as Error | null,
   /** Q11: a bad signature comes back as `{ data: null, error }`. */
@@ -75,6 +79,22 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
+vi.mock("@supabase/supabase-js", () => ({
+  // The bare cookie-less client the bearer-JWT branch verifies against.
+  createClient: () => ({
+    auth: {
+      getClaims: async (jwt?: string) => {
+        state.calls_jwtGetClaims.push(jwt ?? "");
+        if (!state.jwtUser) throw new Error("JWT has expired");
+        return {
+          data: { claims: { sub: state.jwtUser.id } },
+          error: null,
+        };
+      },
+    },
+  }),
+}));
+
 import { withUserAuth } from "./with-auth";
 
 const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
@@ -106,6 +126,14 @@ function sessionReq(method: string): NextRequest {
   return new NextRequest("http://localhost/api/x", { method });
 }
 
+/** Request carrying a Supabase JWT bearer (routes to the JWT-session branch). */
+function jwtReq(method: string): NextRequest {
+  return new NextRequest("http://localhost/api/x", {
+    method,
+    headers: { authorization: "Bearer eyJhbGciOiJFUzI1NiJ9.payload.sig" },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   state.token = null;
@@ -113,6 +141,8 @@ beforeEach(() => {
   state.claimsThrows = null;
   state.claimsError = null;
   state.calls = { getUser: 0, getClaims: 0 };
+  state.jwtUser = null;
+  state.calls_jwtGetClaims = [];
 });
 
 describe("write-scope gate — read-only OAuth token", () => {
@@ -330,5 +360,62 @@ describe("MCP read op is not falsely blocked", () => {
     const res = await withUserAuth(handler)(bearerReq("GET"));
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * Phase 2 (desktop migration) — a Supabase access JWT presented as a
+ * Bearer credential is a SESSION caller: the bundled SPA's main process
+ * holds the Supabase session and attaches the JWT to API calls. Pins:
+ * session semantics (no agentTokenId, no scope gate, sessionOnly admits),
+ * exact-prefix routing (dopl_at_ still goes to the OAuth branch), and
+ * fail-closed 401 with no cookie fallthrough.
+ */
+describe("bearer Supabase JWT (desktop SPA)", () => {
+  it("valid JWT reaches the handler with session semantics", async () => {
+    state.jwtUser = { id: "user-jwt" };
+    const handler = handlerSpy();
+    const res = await withUserAuth(handler)(jwtReq("GET"));
+    expect(res.status).toBe(200);
+    const ctx = handler.mock.calls[0][1];
+    expect(ctx.userId).toBe("user-jwt");
+    expect(ctx.agentTokenId).toBeUndefined(); // NOT an agent
+    // The JWT itself was what got verified.
+    expect(state.calls_jwtGetClaims).toEqual(["eyJhbGciOiJFUzI1NiJ9.payload.sig"]);
+  });
+
+  it("passes writes without any dopl.write scope (sessions are not scope-gated)", async () => {
+    state.jwtUser = { id: "user-jwt" };
+    for (const method of WRITE_METHODS) {
+      const handler = handlerSpy();
+      const res = await withUserAuth(handler)(jwtReq(method));
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("is admitted by sessionOnly routes (unlike every OAuth token)", async () => {
+    state.jwtUser = { id: "user-jwt" };
+    const handler = handlerSpy();
+    const res = await withUserAuth(handler, { sessionOnly: true })(jwtReq("POST"));
+    expect(res.status).toBe(200);
+  });
+
+  it("invalid/expired JWT is 401 and never falls through to cookies", async () => {
+    state.jwtUser = null; // getClaims throws (expired)
+    state.sessionUser = { id: "cookie-user" }; // a valid cookie session exists…
+    const handler = handlerSpy();
+    const res = await withUserAuth(handler)(jwtReq("GET"));
+    expect(res.status).toBe(401); // …but a presented bearer must stand alone
+    expect(handler).not.toHaveBeenCalled();
+    expect(state.calls.getClaims).toBe(0); // cookie path untouched
+  });
+
+  it("dopl_at_-prefixed bearers still route to the OAuth branch", async () => {
+    state.jwtUser = { id: "user-jwt" }; // would succeed if misrouted
+    state.token = null; // OAuth validation fails
+    const handler = handlerSpy();
+    const res = await withUserAuth(handler)(bearerReq("GET"));
+    expect(res.status).toBe(401);
+    expect(state.calls_jwtGetClaims).toEqual([]); // JWT verifier never consulted
   });
 });

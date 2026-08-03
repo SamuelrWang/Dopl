@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { touchMcpStatus } from "./mcp-session";
 import { validateAccessToken } from "./mcp-oauth";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
@@ -111,9 +112,49 @@ export function withUserAuth(
     const authHeader = request.headers.get("authorization");
 
     if (authHeader) {
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+      // BEARER KIND DISCRIMINATION (desktop migration Phase 2 — see
+      // docs/migration-research/auth-flows.md). Two credential families
+      // arrive as Authorization headers and they must never be confused:
+      //
+      //   - `dopl_at_*` — Dopl OAuth tokens (remote-MCP agents + device
+      //     tokens). These are AGENTS: `agentTokenId` is set, the
+      //     sessionOnly and write-scope gates apply, writes are stamped
+      //     `source: "agent"`.
+      //   - anything else — tried as a Supabase access JWT (the bundled
+      //     desktop SPA's credential; its main process holds the session
+      //     and attaches the JWT). Verified LOCALLY against the ES256 JWKS
+      //     (same authority + cost profile as the cookie path, see
+      //     getSessionUser). A valid JWT caller is a SESSION — identical
+      //     semantics to a cookie caller: no agentTokenId, sessionOnly
+      //     routes allowed, no write-scope gate, writes are user-origin.
+      //
+      // The prefix check is exact-match routing, not a heuristic: every
+      // token minted by mcp-oauth.ts carries the `dopl_at_` prefix, and a
+      // Supabase JWT (three dot-separated base64url segments) can never
+      // start with it. An invalid credential of either kind still ends in
+      // the same 401 as before — there is no fallthrough from a presented
+      // bearer to cookie auth.
+      if (!token.startsWith("dopl_at_")) {
+        const jwtUser = await getBearerJwtUser(token);
+        if (jwtUser) {
+          return runAndLog5xx(
+            () => handler(request, { userId: jwtUser.id, params: resolvedParams }),
+            {
+              endpoint: `${request.method} ${request.nextUrl.pathname}`,
+              userId: jwtUser.id,
+            }
+          );
+        }
+        return NextResponse.json(
+          { error: "Invalid or expired credentials" },
+          { status: 401 }
+        );
+      }
+
       // Remote-MCP OAuth access token. The /api/mcp route forwards the caller's
       // token to these /api/* endpoints over loopback.
-      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
       const tok = await validateAccessToken(token);
       if (tok) {
         // Every authenticated MCP call acts as a heartbeat for the settings
@@ -396,6 +437,38 @@ async function getSessionUser(request: NextRequest): Promise<{ id: string } | nu
     );
 
     const { data } = await supabase.auth.getClaims();
+    const sub = data?.claims?.sub;
+    return typeof sub === "string" && sub.length > 0 ? { id: sub } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Bare (cookie-less) client for verifying bearer Supabase JWTs. Lazy
+ *  singleton so the JWKS cache inside auth-js is shared process-wide. */
+let _jwtClient: SupabaseClient | null = null;
+function jwtClient(): SupabaseClient {
+  if (!_jwtClient) {
+    _jwtClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+  }
+  return _jwtClient;
+}
+
+/**
+ * Verify a Supabase access JWT presented as a Bearer credential (the
+ * bundled desktop SPA path). Same verification authority as
+ * `getSessionUser` — `getClaims(jwt)` checks the signature locally against
+ * the cached ES256 JWKS; nothing is trusted on decode alone — and the same
+ * load-bearing try/catch: auth-js re-throws plain Errors for expired/
+ * malformed tokens, and every road must end at null → 401, never a 500.
+ */
+async function getBearerJwtUser(token: string): Promise<{ id: string } | null> {
+  try {
+    const { data } = await jwtClient().auth.getClaims(token);
     const sub = data?.claims?.sub;
     return typeof sub === "string" && sub.length > 0 ? { id: sub } : null;
   } catch {
