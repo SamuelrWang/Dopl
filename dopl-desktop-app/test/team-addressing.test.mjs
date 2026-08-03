@@ -274,7 +274,9 @@ function dispatcher(cfg = {}) {
   // `shell` is the 2026-08-02 fourth route (the operator's own typed request opens a pinned
   // shell) and `strip` its lifecycle OBSERVATION, which runs ahead of every route and claims
   // nothing — both are recorded so the assertions below still describe the WHOLE outcome.
-  const calls = { routed: [], feed: [], open: [], surface: [], shell: [], strip: [], trigger: [], fyi: [], reply: [], escalate: [], dismissed: [], diag: [] };
+  // `reopen` is route (6), the only POST-classify one: it runs inside the 'trigger' branch, so
+  // it is reached only for a message this table already expects to raise consent.
+  const calls = { routed: [], feed: [], open: [], surface: [], shell: [], strip: [], reopen: [], trigger: [], fyi: [], reply: [], escalate: [], dismissed: [], diag: [] };
   // The REAL classify AND the REAL legacy registry it shares with the dispatcher. The
   // registry moved to the top of dispatchMessage when my own messages started routing to my
   // own agents (an engaged agent claims the message before classify ever sees it), so a fake
@@ -295,6 +297,7 @@ function dispatcher(cfg = {}) {
       maybeSurfaceRequesterReply: async (e, m) => { calls.surface.push(m.seq); return false; },
       maybeOpenRequesterShell: async (e, m) => { calls.shell.push(m.seq); return false; },
       noteRequestLifecycle: (e, m) => { calls.strip.push(m.seq); return false; },
+      maybeReopenAddressedThread: async (e, m) => { calls.reopen.push(m.seq); return cfg.reopen === true; },
     },
     {
       classify, noteMyLegacyThread,
@@ -358,7 +361,18 @@ test("an EMPTY verdict is the only one that falls through to the ordinary dispat
   const d = dispatcher({ routed: "" });
   await d.dispatch(listenerEntry({ memberCount: 2 }), msg({ metadata: { to_user_id: ME } }));
   assert.deepEqual(d.calls.feed, [5], "the routes below still run");
+  assert.deepEqual(d.calls.reopen, [5], "route (6) is asked whether this belongs to a window already");
   assert.deepEqual(d.calls.trigger, [5], "and the verdict is reached");
+});
+
+test("route (6) CLAIMING the message means no consent card is raised for it", async () => {
+  // The reopen route is the one thing between a 'trigger' verdict and handleTrigger. When it
+  // takes the message (a follow-up to an exchange this machine already answered) the fresh
+  // consent must not ALSO fire — the in-window gate is the decision surface for that message.
+  const d = dispatcher({ routed: "", reopen: true });
+  await d.dispatch(listenerEntry({ memberCount: 2 }), msg({ metadata: { to_user_id: ME } }));
+  assert.deepEqual(d.calls.reopen, [5]);
+  assert.deepEqual(d.calls.trigger, [], "no second consent window next to the one that answered");
 });
 
 // ── 5. the legacy-thread registry, now that MY OWN messages get claimed above classify ──

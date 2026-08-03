@@ -118,6 +118,7 @@ async function opWhoami(client, caller) {
     if (me.role === "owner" || me.role === "admin") {
         lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (op="get").`);
     }
+    lines.push(``, members_render_1.CONTACT_POINTER);
     lines.push(``, identity_1.LOCUS_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -146,6 +147,7 @@ async function opList(client, caller) {
     // missing was any reason to read it.
     lines.push(`\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`);
     lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
+    lines.push(`\n${members_render_1.CONTACT_POINTER}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opGet(client, ref) {
@@ -169,6 +171,10 @@ async function opGet(client, ref) {
     lines.push(`- Role: **${m.role}** — default access level: **${(0, members_render_1.defaultLevel)(m.role)}**`);
     lines.push(`- Status: ${(0, members_render_1.statusLabel)(m)}`);
     lines.push(`- Teams: ${(0, members_render_1.teamChips)(m.teams)}`);
+    // The CONTACT_POINTER below is deliberately NOT on this path. A DM
+    // (dopl_channel op="open", direct=true) and a channel invite both require an
+    // ACTIVE workspace member, so offering the route on an invited-but-not-joined
+    // or deactivated row would name a call the server refuses.
     if (m.status !== "active") {
         lines.push(``);
         lines.push(`_No effective access — this membership is ${m.status === "pending" ? "still invited (not yet accepted)" : "deactivated"}._`);
@@ -188,6 +194,7 @@ async function opGet(client, ref) {
             throw e;
         }
     }
+    lines.push(``, members_render_1.CONTACT_POINTER);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opTeams(client) {

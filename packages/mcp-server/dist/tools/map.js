@@ -68,6 +68,35 @@ const DOMAIN_COUNT = 5;
  * agents they cannot tell — which is the entire thing being fixed.
  */
 const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills, trashed items, and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
+/**
+ * THE ONE DESTINATION THIS MANIFEST CANNOT LIST, named anyway.
+ *
+ * A fresh external session, told "ask Sam's agent what he did recently", spent
+ * its first ten tool calls in this map, then in `dopl_members` three times, then
+ * in the chat archive and the knowledge bases — and found the CHANNELS feature
+ * only because a KB entry happened to mention a past exchange. Nothing in the
+ * discovery surface named the contact path. This map lists knowledge bases,
+ * skills, workflows and ontology; `dopl_channel` is DEFERRED in some clients, so
+ * its own description is invisible until ToolSearch loads it and the tool NAME
+ * is the only pre-discovery signal there is. A name does not say "this is how
+ * you reach a person".
+ *
+ * IT IS STATIC, AND DELIBERATELY NOT A COUNT. Channels are a different service
+ * (`client.listChannels`) from the five domains fanned out below, so a count
+ * would buy one more round trip on the call the instructions say to make FIRST,
+ * add a sixth domain to the partial-read denominator, and splice another
+ * member-typed name into the agent's opening picture of the workspace. The
+ * routing sentence is the whole fix; the count is not part of it.
+ *
+ * IT SITS BELOW THE SCOPE NOTE, for the same reason. That note ends "every
+ * section above was read", which is a claim about the domains this tool
+ * actually queried — so a pointer to a domain it never queries must not be able
+ * to sit underneath it and inherit that claim.
+ *
+ * It routes and nothing more: what a channel call costs, and who may make one,
+ * are stated by `dopl_channel` itself, which stays the single source on that.
+ */
+const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="list") for the channels and DMs this account can post into.`;
 function registerMapTool(register, client) {
     register("dopl_map", MAP_DESCRIPTION, {}, async () => {
         // Still fail-soft — one broken domain must not fail the manifest — but the
@@ -123,6 +152,7 @@ function registerMapTool(register, client) {
         // note it belongs to. On the healthy path `notice()` is "" and this line
         // is byte-for-byte the scope note alone.
         lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${SCOPE_NOTE}_`);
+        lines.push("", CHANNELS_ROUTING);
         return (0, respond_1.ok)(lines.join("\n"));
     });
 }

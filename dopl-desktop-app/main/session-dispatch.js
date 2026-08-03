@@ -31,11 +31,16 @@
 //       opens a PINNED SHELL: window + transcript, agent NOT started. See the route.
 //   (5) noteRequestLifecycle — NOT a route. An observation the listener makes ahead of all of
 //       the above, advancing that shell's status line from lifecycle events already on the wire.
+//   (6) maybeReopenAddressedThread — THE ONE POST-CLASSIFY ROUTE. A peer's FOLLOW-UP to an
+//       exchange this machine already answered reopens THAT window instead of raising a second
+//       consent. It runs from the listener's 'trigger' branch, not from the pre-classify list;
+//       the route states why below.
 
 const settings = require('./settings');
 const targeting = require('./targeting');
 const io = require('./listener-io');
 const roster = require('./channel-roster'); // 2026-08-01: WHO wrote the message being fed
+const store = require('./session-store'); // (6): the durable record that says this exchange ran here
 const sessionEngine = require('./session-engine');
 const { notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
@@ -243,6 +248,117 @@ function noteRequestLifecycle(entry, m, myUserId) {
   diag('request strip', entry.channel.id.slice(0, 8), 'thread', taskId.slice(0, 8), status);
   return true;
 }
+
+// (6) THE FOLLOW-UP REOPENS THE WINDOW THAT ANSWERED IT (2026-08-02).
+//
+// THE INCIDENT, from a real transcript. A peer's external session posted an UNTAGGED request;
+// this machine minted the ad-hoc thread tag `task-<channel>-<seq>`, raised consent, and a pair
+// session answered and posted task_finished. The calm close SETTLED that session and destroyed
+// its window, keeping only the durable record. The peer then posted a FOLLOW-UP correctly
+// tagged with that same thread — the MCP copy tells them to keep the tag, and the server lets
+// it stand because they opened the exchange. On this machine the tag was DOUBLY INVISIBLE:
+// firstClassTaskId is UUID-gated (correctly — a legacy id is caller-settable), so routes (1)
+// and (3) saw no thread at all; and the task-scoped reopen machinery was wired only to the
+// requester-side reply surfacing and the operator's own reopen click. So the follow-up fell
+// through to classify -> 'trigger' -> a BRAND NEW consent window, sitting next to the window
+// that holds the exchange it was answering.
+//
+// WHY IT IS POST-CLASSIFY, AND THE ONLY ONE. The four routes above exist because classify would
+// reach the WRONG VERDICT for the messages they claim. Here classify is right: this really is a
+// request addressed to me and it really does want a decision. What is wrong is WHERE the
+// decision is asked for. So the seam belongs at the verdict -> action boundary, and putting it
+// there buys the safety property by CONSTRUCTION rather than by predicate care: 'task-reply',
+// 'fyi', 'agent-escalation', the chat suppression and 'ignore' cannot be diverted by a route
+// that only ever runs after classify already said 'trigger'. The requester-side directions
+// (Q3b) are self-authored, so classify 'ignore's them and they never reach this line either.
+//
+// NO CONSENT ROW IS CREATED ON THIS PATH, and that is not a gap. The message is delivered
+// through the IN-WINDOW INBOUND GATE — the same v2.5 surface a LIVE session's inbound uses —
+// so the operator's Messages posture decides it: manual/ask holds it as an Accept card in the
+// window that has the exchange's history, auto_inbound feeds it. The recreated shell starts NO
+// agent (the parked-shell machinery), restores its profile fail-restrictively from the record,
+// and spends nothing until that Accept.
+//
+// FAILS TO TODAY'S BEHAVIOR ON EVERY MISS. No tag, a tag from another channel, no durable
+// record (expired by the 30-day TTL, pruned by the 200-record LRU, or never one), a record
+// bound to a different member, or a window budget with nothing to free: the route answers
+// false, the listener raises the fresh consent, and nothing about this path was reached.
+async function maybeReopenAddressedThread(entry, m, myUserId) {
+  if (!settings.getWindowMode()) return false;
+  if (!m || m.kind !== 'message') return false;
+  // THE RESPONDER-SIDE PREDICATE, stated rather than inherited. Two conjuncts, both about who
+  // this message is FROM and TO — the requester-side routes above turn on exactly the opposite
+  // pair, so no message can satisfy both.
+  //   PEER-AUTHORED. My own message opens threads, it does not answer them; a self-authored
+  //     line reaching here would reopen a window against my own words.
+  //   NOT SOMEBODY ELSE'S. An explicit addressee that is not me is a message I am watching,
+  //     not one I owe an answer to. Absent is allowed: in a DM the server addresses the peer
+  //     automatically, and classify's implicit 1:1 rule is what earned the 'trigger'.
+  if (!myUserId || !m.authorUserId || m.authorUserId === myUserId) return false;
+  const addressee = targeting.metaStr(m, 'to_user_id');
+  if (addressee && addressee !== myUserId) return false;
+  const channelId = entry && entry.channel ? String(entry.channel.id || '') : '';
+  const taskId = exchangeTag(m, channelId);
+  if (!taskId) return false;
+  const rec = store.getRecord(store.sessionKey(channelId, taskId));
+  if (!reopenableRecord(rec, channelId, taskId, m.authorUserId)) return false;
+  // The engine owns the rest: a LIVE session for this slot is fed directly, a settled one is
+  // recreated through the parked-shell path (window budget, evict-then-fail included) and the
+  // message is held on it. A refusal is a plain false and the listener carries on to consent.
+  const ok = await sessionEngine.feedInboundForTask({
+    channelId,
+    taskId,
+    message: m.body,
+    // The AUTHOR, not the account: a peer's agent posts from the peer's account, and the
+    // wrapper this text lands in names whoever this says wrote it.
+    authorName: roster.authorLabel(channelId, m),
+  });
+  diag('thread follow-up', channelId.slice(0, 8), 'thread', taskId.slice(0, 8),
+    ok ? 'reopened in place (gated)' : 'not reopened — falling through to consent');
+  return ok;
+}
+
+// The (channel, thread) STORAGE TAG this message carries, or '' for one this machine could
+// never have keyed a session under. Exactly two spellings are honored:
+//   FIRST-CLASS  a UUID `metadata.taskId`, read through the same UUID gate every other route
+//                uses. Nothing about the id says which channel it belongs to, so the slot key
+//                below is what confines the lookup to THIS channel.
+//   LEGACY       the ad-hoc id this machine mints for an untagged request, which is
+//                deterministic from (channel, seq). It is re-derived through the canonical
+//                minter and compared for equality — never pattern-matched loosely — so this
+//                reader can never disagree with the one that wrote the tag.
+// THE CHANNEL IS THE CROSS-CHANNEL FENCE: a legacy tag names its channel inline, so one minted
+// somewhere else answers '' here instead of being looked up against this channel's slot.
+function exchangeTag(m, channelId) {
+  const firstClass = targeting.firstClassTaskId(m);
+  if (firstClass) return firstClass;
+  if (!channelId) return '';
+  const tag = targeting.metaStr(m, 'taskId');
+  const seq = tag.slice(('task-' + channelId + '-').length);
+  if (!/^[1-9][0-9]*$/.test(seq)) return ''; // the same positive-integer seq the minter demands
+  return targeting.legacyThreadId(channelId, seq) === tag ? tag : '';
+}
+
+// May this durable record be reopened for this message? FAIL CLOSED on every count — a miss
+// costs a consent prompt, which is today's behavior, while a false positive would put a
+// stranger's words into somebody else's exchange window.
+//   THE RECORD IS THIS THREAD'S. `metadata.taskId` is caller-settable for a legacy id, so the
+//     record found under the slot key is re-checked against the (channel, thread) it claims.
+//   IT IS A PAIR RECORD. A summoned TEAM session is keyed (channel, AGENT) in the same key
+//     space, and an agent id is a UUID like a first-class thread id — so a tag naming one of my
+//     agents would otherwise resolve to that agent's slot. An agentId disqualifies the record.
+//   THE AUTHOR IS ITS COUNTERPARTY. The FIX L1 binding, read off the record instead of off a
+//     live session object: only the member this exchange ran against may continue it, so a
+//     third member stamping an old tag gets the ordinary consent card and nothing else. A
+//     record with no stored counterparty (a shell opened from a group channel) qualifies
+//     nobody.
+function reopenableRecord(rec, channelId, taskId, authorUserId) {
+  if (!rec || typeof rec !== 'object') return false;
+  if (String(rec.channelId || '') !== channelId) return false;
+  if (String(rec.taskId || '') !== taskId) return false;
+  if (rec.agentId) return false;
+  return !!rec.counterpartyId && rec.counterpartyId === authorUserId;
+}
 // ─── END SESSION-DISPATCH-PURE ─────────────────────────────────────────────────
 
 module.exports = {
@@ -251,4 +367,7 @@ module.exports = {
   maybeSurfaceRequesterReply,
   maybeOpenRequesterShell, // (4) the operator's own typed request
   noteRequestLifecycle, // (5) the strip observer — claims nothing
+  maybeReopenAddressedThread, // (6) POST-classify: a peer's follow-up reopens the window that answered
+  exchangeTag, // ...and its two helpers, exported for the truth table
+  reopenableRecord,
 };

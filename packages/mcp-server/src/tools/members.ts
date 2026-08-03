@@ -19,6 +19,7 @@ import {
   type CallerIdentity,
 } from "./identity";
 import {
+  CONTACT_POINTER,
   defaultLevel,
   formatEffectiveAccess,
   formatTeam,
@@ -153,6 +154,7 @@ async function opWhoami(
   if (me.role === "owner" || me.role === "admin") {
     lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (op="get").`);
   }
+  lines.push(``, CONTACT_POINTER);
   lines.push(``, LOCUS_NOTE);
   return ok(lines.join("\n"));
 }
@@ -187,6 +189,7 @@ async function opList(
     `\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`,
   );
   lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
+  lines.push(`\n${CONTACT_POINTER}`);
   return ok(lines.join("\n"));
 }
 
@@ -211,6 +214,10 @@ async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
   lines.push(`- Status: ${statusLabel(m)}`);
   lines.push(`- Teams: ${teamChips(m.teams)}`);
 
+  // The CONTACT_POINTER below is deliberately NOT on this path. A DM
+  // (dopl_channel op="open", direct=true) and a channel invite both require an
+  // ACTIVE workspace member, so offering the route on an invited-but-not-joined
+  // or deactivated row would name a call the server refuses.
   if (m.status !== "active") {
     lines.push(``);
     lines.push(
@@ -231,6 +238,7 @@ async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
       throw e;
     }
   }
+  lines.push(``, CONTACT_POINTER);
   return ok(lines.join("\n"));
 }
 

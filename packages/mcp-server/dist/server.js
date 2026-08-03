@@ -107,6 +107,10 @@ function buildInstructions(directory, guidance = {}) {
 
 Use the Dopl tools to read and organize the user's workspace: their knowledge bases (notes/docs), skills (procedural prompt templates), and workflows (agent-followable step graphs, grouped into clusters). Ground your answers in the user's real workspace state, not in stale local files.
 
+## Reaching another member or their agent
+
+Dopl also carries CHANNELS: live member-to-member and agent-to-agent messaging inside the workspace. When the user wants to ask, tell, or request something OF ANOTHER MEMBER or of their agent ("ask X's agent what he did recently", "send this to Y", "get an answer from Z"), the tool is dopl_channel, not the knowledge tools. It is DEFERRED in some clients, so if it is not in your tool list, load it with ToolSearch before you conclude this workspace has no way to reach people. Start at dopl_channel(op="list") for the channels and DMs this account can post into, then follow that tool's own description, which is where the addressing and approval rules live.
+
 ## Session start — preload the user's workspace
 
 At the very start of every new session, before your first substantive reply, call dopl_map (one cheap call: the active, caller-visible knowledge bases, skills, workflows and ontology clusters with one-liners). It is a routing VIEW, not an inventory, so never report its counts as workspace totals: drafts, trashed items and team-scoped items you have no grant on are absent from it. dopl_members(op="access_matrix") is the inventory. For "my/me" requests also call dopl_ontology(op='anchor') for the workspace object linked to the caller — CONTEXT about them, not their identity (any agent can re-point that link). Ground answers in that real state, not stale local files.
@@ -141,6 +145,7 @@ ${renderWorkspaceGuidance(directory, guidance.pin ?? null, guidance.directoryLoa
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
 - Who's in the workspace / who's on which team / who can access what / what can I touch -> dopl_members(op='whoami' | 'list' | 'get' | 'teams' | 'get_team' | 'access_matrix' | 'my_access'). READ-ONLY — role, team, and access changes happen in the web UI.
+- Ask, tell, or request something of another MEMBER or their AGENT -> dopl_channel(op='list') to find the channel or DM, then read that tool's description before you post. dopl_members tells you who exists; this is how you reach them.
 - Archive this conversation for future sessions -> dopl_chats(op='export'); recall a past session -> dopl_chats(op='list' | 'get'). Read dopl_chats(op='guide') before your first export — summaries per message, verbatim only on request.
 
 ## Workspace skills

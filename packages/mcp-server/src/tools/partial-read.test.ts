@@ -146,6 +146,15 @@ describe("dopl_map names the domains it could not read", () => {
         "_None._",
         "",
         '_Scope: ACTIVE items visible to you. Draft skills, trashed items, and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
+        "",
+        // The STATIC routing line (see `CHANNELS_ROUTING` in map.ts). It is not
+        // a domain and it costs no read, which is why it is below the scope
+        // note rather than a sixth section above it — the note's "every section
+        // above was read" speaks only for the domains actually fanned out. Its
+        // presence here, in the byte pin, is what stops it from quietly growing
+        // into a fetched section. See `channel-discovery.test.ts` for what it
+        // has to say.
+        '**Reaching a member or their agent: dopl_channel.** Channels are this workspace\'s live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="list") for the channels and DMs this account can post into.',
       ].join("\n"),
     );
     // Said twice on purpose: the substring check is what fails loudly if the

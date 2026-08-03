@@ -96,8 +96,23 @@ async function dispatchMessage(entry, m, myUserId) {
     'to', targeting.metaStr(m, 'to_user_id') ? String(targeting.metaStr(m, 'to_user_id')).slice(0, 8) : '-',
     'verdict', verdict
   );
-  if (verdict === 'trigger') await trigger.handleTrigger(entry, m);
-  else if (verdict === 'fyi') trigger.sendFyi(entry, m);
+  // ROUTE (6) — REOPEN IN PLACE, and it is the ONE route that runs AFTER classify.
+  //
+  // The four routes above are pre-classify because classify reaches the WRONG VERDICT for the
+  // messages they claim. This one is different: 'trigger' is the RIGHT verdict for a peer's
+  // follow-up — it is a request addressed to me and it does want a decision — and the only
+  // thing wrong is WHERE the decision gets asked for. A follow-up tagged with an exchange this
+  // machine already answered belongs in THAT window, at its in-window inbound gate, not in a
+  // second consent card next to it.
+  //
+  // Sitting here rather than above buys the "must not disturb the other verdicts" property by
+  // CONSTRUCTION: 'task-reply', 'fyi', 'agent-escalation' and 'ignore' are decided and
+  // dispatched before this line can be reached, so no predicate of mine can divert them.
+  // The route answers false for everything it does not claim, and then handleTrigger runs
+  // byte-for-byte as before.
+  if (verdict === 'trigger') {
+    if (!(await sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId))) await trigger.handleTrigger(entry, m);
+  } else if (verdict === 'fyi') trigger.sendFyi(entry, m);
   // Feature 4 (requester side): a reply in one of MY interactive tasks —
   // passive notify only. No consent row, no watcher record, no spawn.
   else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m);
