@@ -56,21 +56,26 @@ export function sectionPath(segment: string, section: NavSection): string {
 }
 
 /**
- * Which nav row a path highlights. Path shape: `/{wsSegment}/{section}/...` —
- * the bare workspace root (which redirects to /canvas) highlights Canvas.
- * Both apps derive it from their own router's path, so the rule lives here.
+ * Which nav row a path highlights (null = none). Path shape:
+ * `/{wsSegment}/{section}/...` — the bare workspace root (which redirects
+ * to /canvas) highlights Canvas; a non-nav route like /settings highlights
+ * NOTHING (falling back to Canvas made Settings look like it lived under
+ * the Canvas page). Both apps derive it from their own router's path, so
+ * the rule lives here.
  */
-export function activeSectionFromPath(pathname: string): NavSection {
+export function activeSectionFromPath(pathname: string): NavSection | null {
   const segments = pathname.split("/").filter(Boolean);
-  return (
-    NAV.some((n) => n.section === segments[1]) ? segments[1] : "canvas"
-  ) as NavSection;
+  if (segments.length < 2) return "canvas";
+  return NAV.some((n) => n.section === segments[1])
+    ? (segments[1] as NavSection)
+    : null;
 }
 
 export interface AppSidebarCoreProps {
   workspaceSegment: string;
-  /** Highlighted row — `activeSectionFromPath(currentPath)` in both apps. */
-  activeSection: NavSection;
+  /** Highlighted row — `activeSectionFromPath(currentPath)` in both apps.
+   *  Null on non-nav routes (e.g. /settings): no row highlights. */
+  activeSection: NavSection | null;
   /** Pending consent requests badged on Channels; 0 hides the badge. */
   consentCount: number;
   onOpenSettings: (section: SettingsSection) => void;
@@ -99,17 +104,21 @@ export function AppSidebarCore({
       {brand}
 
       <nav className={styles.nav}>
-        <span
-          className={styles.navThumb}
-          style={{
-            transform: `translateY(${
-              Math.max(
-                0,
-                NAV.findIndex((n) => n.section === activeSection)
-              ) * 35
-            }px)`,
-          }}
-        />
+        {/* The sliding thumb exists only when a nav row is active — on a
+            non-nav route (/settings) it would otherwise park on Overview. */}
+        {activeSection !== null && (
+          <span
+            className={styles.navThumb}
+            style={{
+              transform: `translateY(${
+                Math.max(
+                  0,
+                  NAV.findIndex((n) => n.section === activeSection)
+                ) * 35
+              }px)`,
+            }}
+          />
+        )}
         {NAV.map(({ label, icon: Icon, section }) => (
           <Link
             key={section}

@@ -25,6 +25,7 @@ const authTokens = require('./auth-tokens');
 const { API_BASE } = require('./config');
 const uiSync = require('./ui-sync');
 const authActions = require('./auth-actions');
+const auth = require('./auth');
 const { diag } = require('./diag');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
@@ -237,6 +238,19 @@ function register(opts = {}) {
       // browser — a renderer-side openExternal skips the nonce and
       // captureFromFragment (correctly) refuses the returning deep link.
       void authActions.beginSignIn({});
+      return { ok: true };
+    })
+  );
+
+  ipcMain.handle(
+    'dopl:sign-out',
+    bound('sign-out', async () => {
+      // SPA sign-out: drop the credential (blob + jar) and emit the
+      // signed-out push — the renderer flips to the signed-out screen on
+      // it. Deliberately NOT authActions.signOut(): that loads the remote
+      // home page into the window, which is the OLD shell's step.
+      await auth.signOut();
+      try { authTokens.onSignOut(); } catch (_err) { /* not started */ }
       return { ok: true };
     })
   );

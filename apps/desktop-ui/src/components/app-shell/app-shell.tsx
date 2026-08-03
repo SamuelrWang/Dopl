@@ -15,6 +15,7 @@ import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/crea
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
+import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
 
@@ -31,13 +32,13 @@ import { useWorkspaceRoute } from "./use-workspace-route";
  * affordances the shell owns: creating a workspace (the dialog's Next-free
  * core) and opening settings.
  *
- * Settings opens the ported `/settings` PAGE rather than the web app's settings
- * MODAL. The modal is not portable as a whole: its billing pane mounts Stripe
- * Elements (a CDN script plus `connect-src`, both refused by the packaged
- * renderer's CSP), its workspace pane uploads a multipart icon (the IPC bridge
- * carries JSON only), and its account pane deletes the account by signing out
- * through Supabase (main owns the session). The page covers the workspace half
- * of the modal today; members already have their own page.
+ * Settings opens the MODAL over the current page, as it does on the web — the
+ * sidebar's gear and the switcher's "Workspace settings" both land on their own
+ * section (`#/components/settings-modal`, the desktop binding of the shared
+ * core). The three capabilities the packaged renderer lacks — Stripe Elements,
+ * the multipart icon upload, Supabase-side account deletion — degrade inside
+ * that binding rather than costing the whole surface. The `/settings` ROUTE is
+ * untouched and still serves deep links.
  *
  * What the server layout did before rendering, this does client-side: resolve
  * the URL segment to a workspace and rewrite the URL when it is stale
@@ -61,6 +62,10 @@ export function AppShellLayout() {
     CONSENT_INBOX_POLL_MS
   );
   const [createWsOpen, setCreateWsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Seeded to the section the sidebar's gear opens, so the first paint of an
+  // Escape-then-reopen is never a flash of the wrong pane.
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
 
   // The web app 301s a stale segment to its canonical form. There is no server
   // hop here, so replace the history entry instead — same effect, and the
@@ -92,7 +97,16 @@ export function AppShellLayout() {
     );
   }
 
-  const openSettings = () => navigate(`/${segment}/settings`);
+  const openSettings = (section: SettingsSection) => {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  };
+
+  // The rail's copy of this workspace carries the caller's role — the seed the
+  // modal gates on until `/api/workspaces/me` answers (the web shell seeds it
+  // from the server-resolved membership instead).
+  const railRole =
+    workspaces.find((w) => w.publicId === workspace.publicId)?.role ?? "viewer";
 
   return (
     <div className={styles.root}>
@@ -140,6 +154,17 @@ export function AppShellLayout() {
           void workspacesQuery.refetch();
           navigate(`/${canonicalSegment(created)}`);
         }}
+      />
+
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        section={settingsSection}
+        onSectionChange={setSettingsSection}
+        workspaceSegment={segment}
+        workspaceId={workspace.id}
+        role={railRole}
+        onWorkspaceChanged={() => void workspacesQuery.refetch()}
       />
     </div>
   );

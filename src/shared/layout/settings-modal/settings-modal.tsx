@@ -1,41 +1,12 @@
 "use client";
 
-import { cn } from "@/shared/lib/utils";
 import type { Role } from "@/features/workspaces/types";
 import { AccountSection } from "./sections/account-section";
 import { WorkspaceSection } from "./sections/workspace-section";
-import { MembersSection } from "./sections/members-section";
 import { PlansBilling } from "./sections/plans-billing";
-import { ModalShell } from "./modal-shell";
-import styles from "./settings-modal.module.css";
+import { SettingsModalCore, type SettingsSection } from "./settings-modal-core";
 
-export type SettingsSection =
-  | "account"
-  | "workspace"
-  | "members"
-  | "billing";
-
-interface NavItem {
-  id: SettingsSection;
-  label: string;
-}
-
-const NAV: ReadonlyArray<{ label: string; items: NavItem[] }> = [
-  {
-    label: "Workspace",
-    items: [
-      { id: "workspace", label: "General" },
-      { id: "members", label: "Members" },
-    ],
-  },
-  {
-    label: "Account",
-    items: [
-      { id: "account", label: "Account" },
-      { id: "billing", label: "Plans & Billing" },
-    ],
-  },
-];
+export type { SettingsSection };
 
 interface Props {
   open: boolean;
@@ -55,10 +26,11 @@ interface Props {
 }
 
 /**
- * Settings modal in the study-notes popup language: darkened scrim, a
- * floating card, inset left nav with concave-pressed active tabs, and a
- * scrolling right pane. All section content styles with the global
- * tokens + kit classes.
+ * Settings modal — the WEB binding. Chrome, nav and the members pane live in
+ * `./settings-modal-core` (shared with the desktop renderer); this file
+ * supplies the three panes whose web capabilities the packaged renderer can't
+ * have: the multipart icon uploader, Supabase-backed account deletion, and
+ * Stripe embedded checkout.
  */
 export function SettingsModal({
   open,
@@ -73,61 +45,29 @@ export function SettingsModal({
   billingReturn = null,
 }: Props) {
   return (
-    <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
-      <nav className={styles.nav}>
-        {NAV.map((group) => (
-          <div key={group.label} className={styles.navGroup}>
-            <p className={styles.navGroupLabel}>{group.label}</p>
-            {group.items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSectionChange(item.id)}
-                className={cn(
-                  styles.navItem,
-                  section === item.id && ["concave-sel", styles.navActive]
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        ))}
-        <div className={styles.navFoot}>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="btn-light w-full rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
-          >
-            Close
-          </button>
-        </div>
-      </nav>
-
-      <div className={styles.pane}>
-        {section === "account" && <AccountSection />}
-        {section === "workspace" && (
-          <WorkspaceSection
-            workspaceSegment={workspaceSegment}
-            onWorkspaceChanged={onWorkspaceChanged}
-          />
-        )}
-        {section === "members" && (
-          <MembersSection
-            workspaceSegment={workspaceSegment}
-            workspaceId={workspaceId}
-            currentUserId={currentUserId}
-            role={role}
-          />
-        )}
-        {section === "billing" && (
-          <PlansBilling
-            billingReturn={billingReturn}
-            role={role}
-            workspaceId={workspaceId}
-          />
-        )}
-      </div>
-    </ModalShell>
+    <SettingsModalCore
+      open={open}
+      onOpenChange={onOpenChange}
+      section={section}
+      onSectionChange={onSectionChange}
+      workspaceSegment={workspaceSegment}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      role={role}
+      workspacePane={
+        <WorkspaceSection
+          workspaceSegment={workspaceSegment}
+          onWorkspaceChanged={onWorkspaceChanged}
+        />
+      }
+      accountPane={<AccountSection />}
+      billingPane={
+        <PlansBilling
+          billingReturn={billingReturn}
+          role={role}
+          workspaceId={workspaceId}
+        />
+      }
+    />
   );
 }

@@ -47,6 +47,12 @@ export interface DoplBridge {
   beginSignIn?(): Promise<{ ok: boolean }>;
   /** Subscribe to auth changes; returns an unsubscribe function. */
   onAuthState(callback: (state: AuthState) => void): () => void;
+  /** End the session — main clears the stored tokens and broadcasts the
+   *  signed-out `onAuthState`. Optional because main owns the session and
+   *  older builds have no such handler; the settings modal's sign-out
+   *  button HIDES itself when this is absent rather than faking it (the
+   *  renderer holds no token it could drop). */
+  signOut?(): Promise<{ ok: boolean }>;
   openExternal(url: string): Promise<{ ok: boolean }>;
   /** Phase 3 live updates: tell main which workspace the UI is viewing
    *  (null = none); main pushes coalesced change events back. */

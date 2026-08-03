@@ -79,6 +79,9 @@ contextBridge.exposeInMainWorld('dopl', {
   apiRequest: (path, opts) =>
     ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
 
+  // Sign out: main drops the credential and pushes the signed-out state.
+  signOut: () => ipcRenderer.invoke('dopl:sign-out'),
+
   // Start the external OAuth sign-in. Main arms the login-CSRF nonce and
   // opens the browser — the renderer never builds the URL.
   beginSignIn: () => ipcRenderer.invoke('dopl:begin-sign-in'),
