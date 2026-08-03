@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "scripts": {
@@ -11,6 +12,8 @@
     "build:packages": "npm --prefix packages/dopl-client run build && npm --prefix packages/mcp-server run build",
     "build": "npm run build:packages && next build",
     "start": "next start",
+    "dev:ui": "npm run dev -w @dopl/desktop-ui",
+    "build:ui": "npm run build -w @dopl/desktop-ui",
     "lint": "eslint",
     "typecheck": "tsc --noEmit"
   },

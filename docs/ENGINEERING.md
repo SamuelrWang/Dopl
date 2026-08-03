@@ -26,6 +26,12 @@ TanStack Query is now the server-state layer (§7) and every feature's client da
 
 ```
 setup-intelligence-engine/
+├── apps/                          # npm workspace — shipped clients that are NOT the Next app
+│   └── desktop-ui/                # Vite + React SPA bundled into the Electron app (Phase 2 of
+│                                  # docs/DESKTOP-MIGRATION-PLAN.md). Builds to
+│                                  # dopl-desktop-app/renderer/app/. Its OWN rules live in
+│                                  # apps/desktop-ui/CONVENTIONS.md (one way to fetch, one way to
+│                                  # add a route, no fetch/next-*/hardcoded colors).
 ├── docs/                          # This file, ADRs, runbooks
 ├── packages/                      # Internal workspace libs (not published to npm)
 │   ├── chrome-extension/          # Browser extension (webpack build)
@@ -1000,6 +1006,21 @@ nothing imports it).
 - `entitlements.mac.plist` — hardened-runtime entitlements (JIT, etc.).
 - `scripts/notarize.js` — electron-builder `afterSign` hook (notarizes during build).
 - `scripts/finish-notarize.sh` — standalone notarize+staple of an existing DMG.
+
+**Phase 2 (bundled SPA) — built, NOT wired.** See `dopl-desktop-app/WIRING.md`
+for the two-line `main/index.js` integration and what moves when it flips.
+- `main/spa-window.js` — the LOCAL UI window (`loadFile renderer/app/index.html`,
+  or `DOPL_UI_DEV_URL` for Vite HMR). Same security shape as `session-window.js`:
+  sandbox + contextIsolation, `window.open` denied, navigation locked to the page.
+- `renderer/app-preload.js` — `window.dopl` for that window: `apiRequest`,
+  `getAuthState`, `onAuthState`, `openExternal`. **No tokens cross it, and the
+  renderer cannot set headers.**
+- `main/ui-bridge.js` — the `ipcMain.handle` half. Sender-bound to the SPA
+  window's top frame (the `mainOnly` convention from `channel-dir-ipc.js`);
+  path-gated to `/api/**`; `getBearerToken()` is the auth seam and still returns
+  `null`.
+- `renderer/app/` — build output of `apps/desktop-ui` (`npm run build:ui` at the
+  repo root). Gitignored; must exist before `npm run dist`/`release`.
 
 ### Commands
 ```bash

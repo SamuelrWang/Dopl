@@ -1,0 +1,14 @@
+/* The renderer's ONE stylesheet entry. Imported by src/main.tsx; nothing else
+   imports CSS globally (feature-local layout goes in CSS modules).
+
+   Order matters: Tailwind first (its @theme/@layer machinery must be
+   registered before `@theme inline` and `@apply` run), then the token layers,
+   then the kit recipes that consume them. */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@import "./tokens.css";
+@import "./kit.css";
+
+@plugin "@tailwindcss/typography";

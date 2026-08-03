@@ -4,16 +4,17 @@ import { useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createIdbPersister } from "./idb-persister";
+import {
+  QUERY_CACHE_MAX_AGE_MS,
+  QUERY_DEFAULT_OPTIONS,
+} from "./query-defaults";
 
 /**
  * App-wide TanStack Query client (ENGINEERING §7 server-state layer).
  *
- * Defaults tuned for this app's access pattern — server data changes
- * mostly through the user's own actions or realtime signals, so:
- *   - staleTime 30s: navigating back to a page within 30s renders from
- *     cache with no refetch (kills the refetch-everything-on-focus cost).
- *   - refetchOnWindowFocus only when stale.
- *   - one retry; 4xx are not retried (ApiError carries the status).
+ * The defaults themselves live in `./query-defaults.ts` because the desktop
+ * SPA mounts the identical client (apps/desktop-ui) — this file owns only the
+ * web-side PERSISTENCE wiring.
  *
  * Phase 1 (docs/DESKTOP-MIGRATION-PLAN.md): the cache is PERSISTED to
  * IndexedDB. A cold start (app relaunch, hard reload) hydrates the last
@@ -23,24 +24,9 @@ import { createIdbPersister } from "./idb-persister";
  * restored entries to survive garbage collection between visits.
  */
 
-const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — beyond that, skeleton honestly
-
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            gcTime: CACHE_MAX_AGE_MS,
-            retry: (failureCount, error) => {
-              const status = (error as { status?: number }).status;
-              if (status !== undefined && status < 500) return false;
-              return failureCount < 1;
-            },
-          },
-        },
-      })
+    () => new QueryClient({ defaultOptions: QUERY_DEFAULT_OPTIONS })
   );
 
   // ALWAYS the persist provider, on server and client alike — branching
@@ -56,7 +42,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       client={client}
       persistOptions={{
         persister,
-        maxAge: CACHE_MAX_AGE_MS,
+        maxAge: QUERY_CACHE_MAX_AGE_MS,
         // Persist only settled successes — an error entry restored from
         // disk would render as a phantom failure.
         dehydrateOptions: {

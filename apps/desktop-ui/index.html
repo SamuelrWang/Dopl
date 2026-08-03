@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dopl</title>
+    <!--
+      NO Content-Security-Policy meta here on purpose: `vite.config.ts`'s
+      `doplCsp()` plugin injects the strict production policy at BUILD time
+      only. The dev server needs inline HMR scripts and a live `connect-src`
+      (websocket + the dev-in-browser fetch fallback), so a policy that is
+      correct for `file://` would make `npm run dev` unusable — and one that is
+      loose enough for dev would ship. See the plugin for the shipped policy.
+    -->
+  </head>
+  <body class="mosaic-bg">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -32,7 +32,11 @@ const eslintConfig = defineConfig([
   // production-hardening round with nothing to say so. Same severity and same
   // options as the desktop config, on purpose: one cap, one meaning.
   {
-    files: ["src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+    files: [
+      "src/**/*.{ts,tsx}",
+      "packages/*/src/**/*.{ts,tsx}",
+      "apps/*/src/**/*.{ts,tsx}",
+    ],
     rules: {
       "max-lines": ["error", { max: 500, skipBlankLines: false, skipComments: false }],
     },
