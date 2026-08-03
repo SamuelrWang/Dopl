@@ -137,6 +137,29 @@ export class EntitlementError extends Error {
  * Throws `EntitlementError` when the workspace is over its free cap;
  * returns silently otherwise. Reads / edits / exports never call this.
  */
+/**
+ * The URL every 402/403 plan-gate envelope points at.
+ *
+ * IN-APP, not `/pricing`. `/pricing` is a marketing page the desktop
+ * migration's Phase 4 deletes with the website (journey-audit GAP-11), and
+ * these envelopes are read by API-FIRST clients — MCP agents included — that
+ * follow the link literally. `/canvas?billing=…` is the app's own upgrade
+ * surface: `src/app/canvas/page.tsx` resolves the caller's default workspace
+ * and forwards the query string, and the (app) shell opens the settings
+ * modal's Plans & Billing pane whenever a `billing` param is present. It is
+ * the same destination Stripe's own checkout/portal return URLs use, so it is
+ * already on the keep list.
+ *
+ * Workspace-agnostic on purpose: these three builders are reached from
+ * contexts with no resolved workspace SEGMENT (only an id), and the redirect
+ * resolving the DEFAULT workspace is a better landing than a page slated for
+ * deletion. Plumbing the segment through is the follow-up, not a blocker.
+ */
+export function upgradeUrl(): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
+  return `${appUrl}/canvas?billing=upgrade`;
+}
+
 export async function assertCanCreateObject(
   workspaceId: string
 ): Promise<void> {
@@ -203,9 +226,7 @@ export async function assertCanAddMember(workspaceId: string): Promise<void> {
     billing?.plan === "solo" &&
     (billing.status === "active" || billing.status === "past_due");
   if (soloLive && memberCount >= SOLO_MAX_MEMBERS) {
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
-    throw new SoloMemberLimitError(`${appUrl}/pricing`);
+    throw new SoloMemberLimitError(upgradeUrl());
   }
 }
 
@@ -215,18 +236,16 @@ export async function assertCanAddMember(workspaceId: string): Promise<void> {
  * clients get a single, predictable "upgrade to continue" envelope.
  * Emphasizes that nothing is deleted — the workspace is frozen, not wiped.
  *
- * `upgrade_url` always points at `/pricing` — the real pricing page. The
+ * `upgrade_url` comes from `upgradeUrl()` — the in-app upgrade surface. The
  * per-workspace `/{slug}/settings/billing` route does not exist (404).
  */
 export function entitlementDeniedBody() {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
   return {
     error: "over_free_cap" as const,
     message:
       `This workspace has reached the free plan limit of ` +
       `${FREE_MULTI_MEMBER_OBJECT_CAP.toLocaleString()} objects. Nothing has been ` +
       `deleted — everything stays readable and editable. Upgrade to Team to add more.`,
-    upgrade_url: `${appUrl}/pricing`,
+    upgrade_url: upgradeUrl(),
   };
 }

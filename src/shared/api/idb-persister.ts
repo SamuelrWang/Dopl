@@ -27,6 +27,37 @@ const DB_NAME = "dopl-query-cache";
 const STORE = "cache";
 const KEY = "client";
 
+/**
+ * Bump when a change makes EXISTING persisted entries wrong in a way a deploy
+ * id would not catch (e.g. reshaping the query-key contract itself).
+ */
+const CACHE_SCHEMA_VERSION = "1";
+
+/**
+ * The persistence BUSTER — TanStack discards the whole restored snapshot when
+ * this string differs from the one it was written with.
+ *
+ * Without it the snapshot survives deploys for its full `maxAge` (24h), so a
+ * returning user hydrates day-old entries in the OLD response shape after any
+ * non-additive API change and every consumer renders them until its background
+ * refetch lands; `select()` functions and components indexing into new fields
+ * see `undefined` (2026-08-03 fleet audit — the whole "works after a hard
+ * reload" class of bugs). Keying it to the BUILD makes a deploy the
+ * invalidation event, which is exactly the granularity of a response reshape.
+ *
+ * Vercel exposes the deployment id and commit sha to the browser for Next.js
+ * projects; the explicit name is the escape hatch for other hosts. Local dev
+ * has no build identity and keeps today's behaviour (no cross-build
+ * invalidation) — a dev restarting the server is not a deploy.
+ */
+export const QUERY_CACHE_BUSTER = [
+  CACHE_SCHEMA_VERSION,
+  process.env.NEXT_PUBLIC_QUERY_CACHE_BUSTER ||
+    process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT_ID ||
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+    "dev",
+].join(":");
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);

@@ -365,7 +365,16 @@ async function getAccessToken() {
   // The refresh failed but the token we hold may still have real life in it (the
   // near-expiry window is a safety margin, not death). Past `exp` it is a
   // guaranteed 401 and null is the honest answer.
-  return exp != null && exp > nowSec() ? s.access_token : null;
+  //
+  // RE-READ THE STORE, never the pre-refresh snapshot (refreshNow's own `after =
+  // loadSession()` pattern): if that refresh was the third consecutive definitive
+  // rejection, auth.js has just cleared the blob and 'signed-out' has been
+  // emitted — handing `s.access_token` back would keep authenticating requests
+  // for up to NEAR_EXPIRY_SEC after the authority declared the session gone.
+  const after = store.loadSession();
+  if (!after || !after.access_token) return null;
+  const afterExp = sessionExpSec(after);
+  return afterExp != null && afterExp > nowSec() ? after.access_token : null;
 }
 
 /** `Authorization` header value, or null. The one intended use of the token. */

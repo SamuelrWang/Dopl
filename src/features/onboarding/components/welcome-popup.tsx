@@ -10,13 +10,23 @@ import { getAppOrigin } from "@/shared/lib/app-origin";
 
 const WELCOME_KEY = "dopl:welcome";
 
+export interface WelcomePopupProps {
+  /**
+   * The brand mark above the heading. Defaults to the web app's public
+   * favicon; the desktop SPA passes its own bundled mark because an absolute
+   * `/favicons/...` src resolves to the filesystem root in a `file://`
+   * document (same reason `OnboardingFlowCore` takes `brand`).
+   */
+  brand?: React.ReactNode;
+}
+
 /**
  * Founder's welcome — shown once, in the workspace, right after onboarding
  * completes. Onboarding sets the `dopl:welcome` flag before redirecting in.
  * The flag is cleared on DISMISS (not on read) so a remount / StrictMode
  * double-mount keeps the popup open instead of flashing it away.
  */
-export function WelcomePopup() {
+export function WelcomePopup({ brand }: WelcomePopupProps = {}) {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
   const [origin, setOrigin] = useState("https://www.usedopl.com");
@@ -103,12 +113,14 @@ export function WelcomePopup() {
         </button>
 
         <div className="mb-5 flex flex-col items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/favicons/android-chrome-512x512.png"
-            alt="Dopl"
-            className="auth-logo-3d h-11 w-11 rounded-[8px]"
-          />
+          {brand ?? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src="/favicons/android-chrome-512x512.png"
+              alt="Dopl"
+              className="auth-logo-3d h-11 w-11 rounded-[8px]"
+            />
+          )}
           <h1 className="text-[24px] font-semibold leading-tight text-[#1e242b]">
             Welcome to Dopl!
           </h1>

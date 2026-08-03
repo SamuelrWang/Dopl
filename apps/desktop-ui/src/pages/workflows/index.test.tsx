@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import WorkflowsPage from "#/pages/workflows";
 import WorkflowDetailPage from "#/pages/workflows/detail";
+import { SEGMENT } from "#/test-utils/bridge";
 
 /**
  * Smoke test for the ported workflows pages: the REAL `WorkflowsView` tree
@@ -45,7 +46,6 @@ if (!Element.prototype.scrollTo) {
   Element.prototype.scrollTo = () => {};
 }
 
-const SEGMENT = "acme-ab12cd";
 
 /** Fresh per test: the realtime registry keys one channel per workspace id
  *  across mounts, so a reused id hands the next test a live entry. */

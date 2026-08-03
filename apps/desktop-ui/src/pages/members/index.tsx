@@ -1,7 +1,6 @@
-import { useParams } from "react-router";
 import { MembersView } from "@/features/members/components/members-view";
 import { PageError, PageLoading } from "#/components/page-states";
-import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
+import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
  * /:workspaceSegment/members — the workspace access-control console.
@@ -25,8 +24,7 @@ import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
  * workspace costs no extra request.
  */
 export default function MembersPage() {
-  const { workspaceSegment = "" } = useParams();
-  const { access, isPending, error, refetch } = useWorkspaceAccess(workspaceSegment);
+  const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) return <PageLoading label="Loading members" />;

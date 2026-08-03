@@ -9,8 +9,7 @@ import {
 import { AccountSectionCore } from "@/shared/layout/settings-modal/sections/account-section-core";
 import { WorkspaceSectionCore } from "@/shared/layout/settings-modal/sections/workspace-section-core";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { RESOLVE_PATH } from "#/components/app-shell/use-workspace-route";
-import { ENSURE_DEFAULT_PATH } from "#/pages/boot/use-boot-state";
+import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
 import { AccountActions } from "./account-actions";
 import { BillingPane } from "./billing-pane";
 
@@ -67,21 +66,10 @@ export function SettingsModal({
     enabled: open && Boolean(workspaceId),
   });
 
-  /**
-   * `router.refresh()` has no equivalent here (CONVENTIONS.md), so a write that
-   * changes the workspace re-reads the three keys that carry its name/slug:
-   * this pane's read, the shell's resolve, and the rail's list. A rename also
-   * moves the canonical segment — invalidating the resolve is what surfaces
-   * that: it answers `needsRedirect` for the now-stale URL and the shell's
-   * existing effect rewrites it, exactly as it does for a legacy slug.
-   */
-  function invalidateWorkspaceReads() {
-    void queryClient.invalidateQueries({
-      queryKey: [`/api/workspaces/${workspaceSegment}`],
-    });
-    void queryClient.invalidateQueries({ queryKey: [RESOLVE_PATH] });
-    void queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
-  }
+  // Re-reading the keys a workspace write invalidates is `#/lib/workspace-cache`'s
+  // job — the SAME helper the /settings page calls, so the two surfaces can no
+  // longer disagree about what a rename or a delete makes stale.
+  const invalidate = () => invalidateWorkspaceReads(queryClient, workspaceSegment);
 
   return (
     <SettingsModalCore
@@ -97,14 +85,11 @@ export function SettingsModal({
         <WorkspaceSectionCore
           workspaceSegment={workspaceSegment}
           onSaved={() => {
-            invalidateWorkspaceReads();
+            invalidate();
             onWorkspaceChanged();
           }}
           onDeleted={(next) => {
-            invalidateWorkspaceReads();
-            // The boot route's provisioning answer must not replay a segment
-            // that was just deleted.
-            void queryClient.removeQueries({ queryKey: [ENSURE_DEFAULT_PATH] });
+            invalidate();
             onWorkspaceChanged();
             onOpenChange(false);
             // Falling back to BootPage, which provisions via ensure-default or

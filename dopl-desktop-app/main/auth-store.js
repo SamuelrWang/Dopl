@@ -31,12 +31,18 @@ function authFail(what, err) {
   diag('auth:', what, '—', detail);
 }
 
+// TRUE only when the session actually reached disk. The outcome is REPORTED
+// rather than swallowed: captureFromFragment used to answer "adopted" after a
+// refusal below, so on a machine with no keychain sign-in returned {ok:true},
+// the very next session load answered null, and the login screen re-rendered
+// with neither an error nor progress — an unbreakable retry loop.
 function persist(sessionObj) {
   try {
     const json = JSON.stringify(sessionObj);
     if (safeStorage.isEncryptionAvailable()) {
       store.set(STORE_KEY, safeStorage.encryptString(json).toString('base64'));
       store.delete(PLAIN_KEY);
+      return true;
     } else {
       // No OS keychain (unusual on macOS). This USED TO fall back to plaintext,
       // "still confined to this user's app-support dir" — but what it writes is a
@@ -52,9 +58,11 @@ function persist(sessionObj) {
       authFail('safeStorage unavailable — refusing to store the session unencrypted', null);
       store.delete(PLAIN_KEY);
       store.delete(STORE_KEY);
+      return false;
     }
   } catch (err) {
     authFail('persist failed', err);
+    return false;
   }
 }
 

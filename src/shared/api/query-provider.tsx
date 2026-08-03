@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createIdbPersister } from "./idb-persister";
+import { QUERY_CACHE_BUSTER, createIdbPersister } from "./idb-persister";
 import {
   QUERY_CACHE_MAX_AGE_MS,
   QUERY_DEFAULT_OPTIONS,
@@ -68,6 +68,10 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       persistOptions={{
         persister,
         maxAge: QUERY_CACHE_MAX_AGE_MS,
+        // Build-keyed: a deploy that reshapes any response must not be able to
+        // hydrate yesterday's shape. TanStack drops the whole snapshot when
+        // this differs from the one it was persisted with (`./idb-persister`).
+        buster: QUERY_CACHE_BUSTER,
         // Persist only settled successes — an error entry restored from
         // disk would render as a phantom failure.
         dehydrateOptions: {

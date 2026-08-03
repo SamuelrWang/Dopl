@@ -1,5 +1,11 @@
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import type { OntologyObject, OntologySnapshot } from "@/features/ontology/types";
+import { ok, noContent, workspaceRoutes } from "#/test-utils/bridge";
+
+// The workspace half of this table (resolve + me) and the canonical fixtures
+// live in `#/test-utils/bridge`; only the ontology-specific payloads are here.
+export { ok } from "#/test-utils/bridge";
+export { SEGMENT, WORKSPACE_ID } from "#/test-utils/bridge";
 
 /**
  * The one ontology bridge stub, shared by the canvas and ontology smoke tests.
@@ -14,8 +20,6 @@ import type { OntologyObject, OntologySnapshot } from "@/features/ontology/types
  * file importing another.
  */
 
-export const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
-export const SEGMENT = "acme-ab12cd";
 export const CLUSTER_ID = "cluster-1";
 export const COLUMN_ID = "obj-column-1";
 export const CARD_ID = "obj-card-1";
@@ -63,10 +67,6 @@ export const SNAPSHOT: OntologySnapshot = {
   },
 };
 
-export function ok(body: unknown): BridgeResponse {
-  return { status: 200, statusText: "OK", hasBody: true, body };
-}
-
 /**
  * Every path the canvas/ontology tree reads or writes. Anything else rejects
  * loudly — an unexpected request is a port defect, not a fixture gap.
@@ -75,18 +75,8 @@ export function ontologyBridge(
   path: string,
   opts: BridgeRequestOpts = {}
 ): Promise<BridgeResponse> {
-  if (path.startsWith("/api/workspaces/resolve")) {
-    return Promise.resolve(
-      ok({
-        workspace: { id: WORKSPACE_ID, slug: "acme", publicId: "ab12cd" },
-        canonical: SEGMENT,
-        needsRedirect: false,
-      })
-    );
-  }
-  if (path === "/api/workspaces/me") {
-    return Promise.resolve(ok({ role: "owner", userId: "user-1" }));
-  }
+  const shared = workspaceRoutes(path);
+  if (shared) return shared;
   if (path === "/api/ontology") return Promise.resolve(ok(SNAPSHOT));
   if (path === "/api/ontology/clusters" && opts.method === "POST") {
     return Promise.resolve(
@@ -106,7 +96,7 @@ export function ontologyBridge(
     return Promise.resolve(ok({ object: object({ id: "obj-new", name: "Untitled column" }) }));
   }
   if (path.startsWith("/api/ontology/clusters/") || path.startsWith("/api/ontology/objects/")) {
-    return Promise.resolve({ status: 204, statusText: "No Content", hasBody: false });
+    return Promise.resolve(noContent());
   }
   if (path === "/api/knowledge/bases") return Promise.resolve(ok({ bases: [] }));
   if (path === "/api/skills") return Promise.resolve(ok({ skills: [] }));

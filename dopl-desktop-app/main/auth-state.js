@@ -274,6 +274,14 @@ async function signOut() {
   }
   blob.clearSession();
   invalidateCookieIdentity();
+  // DISARM THE LOGIN-CSRF GATE TOO. A sign-in the operator started and then
+  // abandoned (e.g. "email me a link", then Sign out) left a pending record
+  // armed for the rest of its TTL, so any dopl://auth# fragment delivered in
+  // that window was adopted into a machine they believe is signed out. Lazy
+  // require: auth.js requires this module.
+  try { require('./auth').clearPendingAuth(); } catch (err) {
+    diag('auth: pending-auth disarm failed —', (err && err.message) || String(err));
+  }
   const cleared = await cookies.clearSessionCookies();
   let device = false;
   try {

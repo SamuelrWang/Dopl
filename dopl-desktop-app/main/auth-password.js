@@ -11,11 +11,11 @@
 // process or the OS). One code path owns "a session enters the store", with
 // its gate satisfied legitimately — we ARE the initiator.
 //
-// The magic link arms the SAME nonce before sending: the emailed link
-// completes in the browser and returns through /auth/desktop-handoff →
-// dopl://auth#tokens, i.e. the standard capture, which then requires the
-// pending record. TTL is 10 minutes — a link clicked later is refused and the
-// user just requests a fresh one.
+// The magic link arms the same gate — but only AFTER GoTrue accepts the send,
+// never before: the emailed link completes in the browser and returns through
+// /auth/desktop-handoff → dopl://auth#tokens, i.e. the standard capture, which
+// then requires the pending record. TTL is 10 minutes — a link clicked later is
+// refused and the user just requests a fresh one.
 //
 // SECRETS: the password goes into ONE https request body and is never logged,
 // stored, or echoed; tokens ride the same rules as every other auth path.
@@ -106,7 +106,11 @@ async function passwordAuth(payload) {
       return { ok: false, error: 'Sign-in did not return a session.' };
     }
 
-    const nonce = auth.beginPendingAuth();
+    // requireState + a one-minute TTL: this fragment is built right here and
+    // echoes the nonce, so the record can demand an EXACT match and is consumed
+    // on the next line. Nothing else — no injected dopl:// link, no stale
+    // browser handoff — can spend it, and it cannot outlive this call.
+    const nonce = auth.beginPendingAuth({ requireState: true, ttlMs: 60_000 });
     const adopted = auth.captureFromFragment(sessionFragment(session, nonce));
     if (!adopted) return { ok: false, error: 'Could not store the session.' };
     diag('auth-password: session adopted via', creds.mode);
@@ -126,15 +130,18 @@ async function sendMagicLink(payload) {
     return { ok: false, error: 'Enter a valid email address.' };
   }
   try {
-    // Arm BEFORE sending: the click returns via dopl://auth#tokens and the
-    // capture gate requires a pending record (10-minute TTL).
-    auth.beginPendingAuth();
     const redirect = encodeURIComponent(`${APP_ORIGIN}/auth/desktop-handoff`);
     const res = await gotrue(`/otp?redirect_to=${redirect}`, {
       email,
       create_user: false,
     });
     if (!res.ok) return { ok: false, error: gotrueErrorMessage(res.body, res.status) };
+    // Arm ONLY once GoTrue accepted the request — this record is what lets a
+    // dopl://auth# fragment into the app for the next 10 minutes. Arming before
+    // the call (the old order) opened that window for a rejected address, a
+    // network failure, or a link the user never clicks, on demand from the
+    // renderer. Email delivery is far slower than this line, so nothing races.
+    auth.beginPendingAuth();
     return { ok: true };
   } catch (err) {
     diag('auth-password: magic link failed —', (err && err.message) || String(err));

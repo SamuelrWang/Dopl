@@ -153,7 +153,10 @@ const shellHelpers = makeShellHelpers({
 const createShellWindow = shellHelpers.createShellWindow;
 const navigateToChannels = shellHelpers.navigateToChannels;
 
+// The menu's "Home" (and the remote shell's initial load). SPA mode has no loadGuard, so
+// this was a silent no-op on a user-visible control — route the renderer to boot instead.
 function loadApp() {
+  if (isSpaMode()) { shellHelpers.navigateTo('/'); return; }
   if (loadGuard) loadGuard.load(HOME_URL);
 }
 
@@ -190,9 +193,8 @@ function buildMenu() {
 }
 
 // ── Deep link (dopl://) ─────────────────────────────────────────────────────────
-// The system browser finishes OAuth and redirects to dopl://auth#<tokens>. macOS
-// routes that to this app; we load the in-app completion page with the same
-// fragment so the app's window adopts the session.
+// The system browser finishes OAuth (or a magic link) and redirects to
+// dopl://auth#<tokens>; macOS routes that here and main adopts the session.
 function openDeepLink(url) {
   let fragment = '';
   try {
@@ -202,57 +204,54 @@ function openDeepLink(url) {
     const i = url.indexOf('#');
     if (i >= 0) fragment = url.slice(i + 1);
   }
-  // Capture the Supabase tokens into the encrypted main-process store so the
-  // background listener has a session (and a refresh token) even when the
-  // window is hidden. The renderer's completion page also sets its own cookies.
+  // Capture the Supabase tokens into the encrypted main-process store so the background
+  // listener has a session (and a refresh token) even when the window is hidden.
   //
-  // M4: only adopt the session if THIS app initiated the sign-in recently. A
-  // rejected fragment (injected dopl:// link, or an expired flow) is dropped
-  // entirely — we neither persist it nor navigate the window to adopt it.
+  // M4: only adopt the session if THIS app initiated the sign-in recently. A rejected
+  // fragment (injected dopl:// link, an expired flow) is dropped entirely — we neither
+  // persist it nor navigate the window to adopt it. A false ALSO covers "the store
+  // refused the write" (auth.js), which is a failed sign-in, not an adopted one.
   const accepted = auth.captureFromFragment(fragment);
   if (!accepted) {
-    console.warn('[deeplink] auth fragment rejected (no pending sign-in / expired) — ignoring');
+    console.warn('[deeplink] auth fragment not adopted (no pending sign-in / expired / not stored)');
     return;
   }
-  // Deterministic re-arm of the token authority on fresh credentials (C15) —
-  // replaces timing guesses; no-op when start() hasn't run.
+  // Deterministic re-arm of the token authority on fresh credentials (C15); no-op when
+  // start() hasn't run (DOPL_UI=remote).
   try { authTokens.onSignIn(); } catch (err) { diag('token re-arm error', err && err.message); }
 
-  if (isSpaMode()) {
-    // SPA: the captured tokens ARE the session — loading the remote
-    // desktop-complete cookie page here stranded the window on "Signing
-    // you in…"; onSignIn() above pushed the transition that flips the UI.
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  } else {
+  // Surface the app — CREATING the window when the link arrived with it closed, which the
+  // SPA window makes routine (it is destroyed on close, not hidden).
+  showMainWindow();
+  if (!isSpaMode()) {
+    // Remote rollback shell only: the completion page plants the cookie jar. In SPA mode
+    // the captured tokens ARE the session — loading it stranded the window on "Signing
+    // you in…"; onSignIn() above pushed the flip.
     const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (loadGuard) loadGuard.load(target);
-      else mainWindow.loadURL(target).catch((err) => console.error('[deeplink] load failed:', err && err.message));
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    if (loadGuard) loadGuard.load(target);
+    else if (mainWindow) mainWindow.loadURL(target).catch((err) => diag('deeplink load failed —', err && err.message));
   }
 
-  // Give the completion page a moment to establish cookies, then (re)start the
-  // listener against the fresh session and ensure the CLI's Dopl MCP config.
+  // Let the remote completion page plant its cookies, then restart the listener against
+  // the fresh session and ensure the CLI's Dopl MCP config.
   setTimeout(() => {
     listener.restart();
     mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config post-signin error', err && err.message));
   }, 3000);
 }
 
+// PARK ONLY BEFORE app-ready. The old gate was "is there a window?" — almost always true
+// pre-migration (the remote window hid on close), routinely false now that the SPA window
+// is DESTROYED on close while the app stays in the tray. An OAuth return or a clicked
+// magic link then parked forever (pendingDeepLink is flushed exactly once, at startup)
+// and the pending-auth record expired. Capture needs no window; openDeepLink surfaces one.
 function handleDeepLink(url) {
   if (!url || !url.startsWith(PROTOCOL + '://')) return;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    openDeepLink(url);
-  } else {
-    pendingDeepLink = url; // arrived before the window existed — flush on ready
+  if (!app.isReady()) {
+    pendingDeepLink = url; // macOS can deliver open-url before the store exists
+    return;
   }
+  openDeepLink(url);
 }
 
 function flushPendingDeepLink() {
@@ -390,13 +389,15 @@ if (!gotLock) {
     // the tray keeps the latest as a quiet, disabled line.
     versionSkew.setHandlers({ onSkew: (skew) => tray.setPeerSkew(skew) });
 
-    // Desktop migration: SPA is the default shell; DOPL_UI=remote is the
-    // rollback. Token authority starts in BOTH modes — additive beside
-    // cookies, and the credential's only refresher once the remote page
-    // (whose Supabase client refreshed the jar) is gone. wireSpaServices
-    // owns the ONE uiBridge.register call (a second handle() would throw).
-    try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
+    // Desktop migration: SPA is the default shell; DOPL_UI=remote is the rollback. The
+    // token authority's PROACTIVE timer starts in SPA mode ONLY — in remote mode the
+    // page's own supabase-js still refreshes the jar, and both sides share ONE rotating
+    // refresh-token family, so main rotating at ~80% of token life left the page holding
+    // a stale refresh token and Supabase's reuse detection revoked the family (hourly
+    // sign-outs of the rollback shell). On-demand refresh needs no timer and is
+    // unaffected. wireSpaServices owns the ONE uiBridge.register call.
     if (isSpaMode()) {
+      try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
       wireSpaServices({
         uiBridge, authTokens, uiSync, diag,
         getMainWindow: () => mainWindow,

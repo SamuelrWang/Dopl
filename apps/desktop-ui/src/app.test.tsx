@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthState } from "#/lib/dopl-bridge";
+import { installBridge } from "#/test-utils/bridge";
 import { App } from "./app";
 
 /**
@@ -73,12 +74,7 @@ describe("App — main's auth and navigation pushes", () => {
     authListeners = [];
     navListeners = [];
     getAuthState.mockResolvedValue(SIGNED_IN);
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest, getAuthState, onAuthState, onNavigate },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest, getAuthState, onAuthState, onNavigate });
   });
 
   it("swaps ANY route to the sign-in screen when main pushes signed-out", async () => {
@@ -136,11 +132,7 @@ describe("App — main's auth and navigation pushes", () => {
   });
 
   it("tolerates an older main that exposes neither push", async () => {
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest },
-    });
+    installBridge({ apiRequest });
 
     window.location.hash = "#/acme-ab12cd/members";
     render(<App />);

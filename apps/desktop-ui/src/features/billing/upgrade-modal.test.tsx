@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeResponse } from "#/lib/dopl-bridge";
+import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
 
 /**
  * The PAYWALL's desktop degradation (journey-audit GAP-9). `UpgradeModal` is a
@@ -23,8 +24,6 @@ import type { BridgeResponse } from "#/lib/dopl-bridge";
 const apiRequest = vi.hoisted(() => vi.fn());
 const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
 
-const SEGMENT = "acme-ab12cd";
-const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
 
 /** Free, single member — the state that offers both Pro and Team checkout. */
 const FREE_STATUS = {
@@ -65,12 +64,7 @@ describe("UpgradeModal in the desktop SPA", () => {
       if (path === "/api/billing/status") return Promise.resolve(ok(FREE_STATUS));
       return Promise.reject(new Error(`unexpected request: ${path}`));
     });
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest, openExternal, appOrigin: "https://www.usedopl.com" },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest, openExternal, appOrigin: "https://www.usedopl.com" });
   });
 
   it("keeps the plan pitch and hands checkout to the browser, scoped to this workspace", async () => {

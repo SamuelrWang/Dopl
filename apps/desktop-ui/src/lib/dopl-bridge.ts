@@ -116,11 +116,22 @@ declare global {
   }
 }
 
-/** The bridge when running inside Electron, else null (browser dev mode). */
+/**
+ * The bridge when running inside Electron, else null (browser dev mode).
+ *
+ * Capability-keyed on `apiRequest`, never on `window.dopl` being truthy: the
+ * LEGACY desktop wrapper exposes a partial `window.dopl` with no `apiRequest`.
+ * The web tree's `@/shared/lib/spa-bridge` is the same detector for modules
+ * shared with the web app; this one is the renderer-local typed view.
+ *
+ * There is deliberately NO `isDesktop()` alias here. It had zero consumers and
+ * was a naming trap: `@/shared/lib/desktop`'s `isDesktopApp()` reads the legacy
+ * wrapper's `isDesktop` MARKER flag, which the SPA preload does not set — the
+ * two would have answered oppositely inside this very renderer (2026-08-03
+ * fleet audit). Ask for the capability you need instead.
+ */
 export function getBridge(): DoplBridge | null {
   if (typeof window === "undefined") return null;
   const bridge = window.dopl;
   return bridge && typeof bridge.apiRequest === "function" ? bridge : null;
 }
-
-export const isDesktop = (): boolean => getBridge() !== null;

@@ -12,7 +12,7 @@ const globals = require('globals');
 const MAX_LINES = ['error', { max: 500, skipBlankLines: false, skipComments: false }];
 
 module.exports = [
-  { ignores: ['node_modules/**', 'dist/**', 'build/**'] },
+  { ignores: ['renderer/app/**', 'node_modules/**', 'dist/**', 'build/**'] },
 
   // CommonJS main process + scripts + preload/renderer helpers.
   {

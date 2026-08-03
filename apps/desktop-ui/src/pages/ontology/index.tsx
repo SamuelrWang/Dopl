@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError, PageLoading } from "#/components/page-states";
-import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
+import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
  * `/:workspaceSegment/ontology` AND `/:workspaceSegment/ontology/:clusterSlug`
@@ -39,9 +39,9 @@ import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
  * behaviour.
  */
 export default function OntologyPage() {
-  const { workspaceSegment = "", clusterSlug } = useParams();
+  const { clusterSlug } = useParams();
   const navigate = useNavigate();
-  const { access, isPending, error, refetch } = useWorkspaceAccess(workspaceSegment);
+  const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   // `replaceState`'s stand-in: same path string, no history entry, and the
   // router's own location stays authoritative (the shell's canonical-segment

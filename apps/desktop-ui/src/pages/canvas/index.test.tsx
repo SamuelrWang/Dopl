@@ -1,9 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
+import { bridgeCalls, installBridge, renderWithProviders } from "#/test-utils/bridge";
 import CanvasPage from "./index";
 import Canvas2AliasPage from "./canvas2";
 import { SEGMENT, WORKSPACE_ID, ontologyBridge } from "#/pages/ontology/test-fixtures";
@@ -37,24 +35,15 @@ if (!Element.prototype.scrollTo) {
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-const calls = () =>
-  apiRequest.mock.calls.map((args) => ({
-    path: (args as unknown[])[0] as string,
-    opts: ((args as unknown[])[1] ?? {}) as BridgeRequestOpts,
-  }));
+const calls = () => bridgeCalls(apiRequest);
 
 function renderCanvas() {
-  const router = createMemoryRouter(
+  const { router } = renderWithProviders(
     [
       { path: "/:workspaceSegment/canvas", element: <CanvasPage /> },
       { path: "/:workspaceSegment/canvas2", element: <Canvas2AliasPage /> },
     ],
-    { initialEntries: [`/${SEGMENT}/canvas`] }
-  );
-  render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    [`/${SEGMENT}/canvas`]
   );
   return router;
 }
@@ -67,12 +56,7 @@ describe("canvas page", () => {
     apiRequest.mockImplementation((path: string, opts?: BridgeRequestOpts) =>
       ontologyBridge(path, opts)
     );
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<never>(() => {})));
+    installBridge({ apiRequest });
   });
 
   it("resolves the workspace, then renders the graph off the bridge", async () => {
@@ -136,17 +120,12 @@ describe("canvas page", () => {
   });
 
   it("aliases /canvas2 onto /canvas, forwarding the query string", async () => {
-    const router = createMemoryRouter(
+    const { router } = renderWithProviders(
       [
         { path: "/:workspaceSegment/canvas", element: <p>graph</p> },
         { path: "/:workspaceSegment/canvas2", element: <Canvas2AliasPage /> },
       ],
-      { initialEntries: [`/${SEGMENT}/canvas2?billing=success`] }
-    );
-    render(
-      <QueryClientProvider client={createQueryClient()}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      [`/${SEGMENT}/canvas2?billing=success`]
     );
 
     await waitFor(() =>

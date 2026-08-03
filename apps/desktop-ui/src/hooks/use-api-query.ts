@@ -1,26 +1,21 @@
-import { useCallback } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { apiRequest, type ApiRequestOpts } from "#/lib/api";
+import {
+  useApiQueryWith,
+  type UseApiQueryOpts,
+} from "@/shared/hooks/use-api-query-core";
+import { apiRequest } from "#/lib/api";
 
-export interface UseApiQueryOpts<T, S = T>
-  extends Pick<ApiRequestOpts, "workspaceId" | "query"> {
-  /** Map the raw response body to the hook's data shape. */
-  select?: (body: T) => S;
-  /** Pause the query (e.g. while the workspace id is unresolved). */
-  enabled?: boolean;
-  /** Override the provider default (ms). */
-  staleTime?: number;
-  /** Refetch interval in ms for polling endpoints. */
-  refetchInterval?: number;
-  /** Keep the prior key's data visible while a new key's query loads. */
-  keepPreviousData?: boolean;
-}
+export type { UseApiQueryOpts };
 
 /**
- * useApiQuery — THE way this renderer reads server data. Port of
- * `src/shared/hooks/use-api-query.ts`, rebound to the SPA's `apiRequest`
- * (which is why it is a port and not a shared import: the two apps have
- * different transports under an identical contract).
+ * useApiQuery — THE way this renderer reads server data.
+ *
+ * The implementation is shared with the web app
+ * (`@/shared/hooks/use-api-query-core`); this file only binds it to the SPA's
+ * `apiRequest`, which is the one thing that genuinely differs (the two apps
+ * have different transports under an identical contract). It used to be a
+ * byte-for-byte fork, which meant the `[path, workspaceId, query]` cache-key
+ * contract and the TanStack refetch workaround had two homes and no signal to
+ * keep them in sync.
  *
  * The query key is `[path, workspaceId, query]` — pass the same args from any
  * component and they share one cache entry + one in-flight request. Invalidate
@@ -31,31 +26,5 @@ export function useApiQuery<T, S = T>(
   path: string | null,
   opts: UseApiQueryOpts<T, S> = {}
 ) {
-  const enabled = path !== null && (opts.enabled ?? true);
-  const query = useQuery({
-    queryKey: [path, opts.workspaceId, opts.query] as const,
-    queryFn: ({ signal }) =>
-      apiRequest<T>(path as string, {
-        workspaceId: opts.workspaceId,
-        query: opts.query,
-        signal,
-      }),
-    enabled,
-    select: opts.select,
-    staleTime: opts.staleTime,
-    refetchInterval: opts.refetchInterval,
-    placeholderData: opts.keepPreviousData ? keepPreviousData : undefined,
-  });
-
-  // TanStack v5 refetch() IGNORES `enabled` — on a null-path/disabled query it
-  // would fire a real request at a garbage URL. Restore the contract: refetch
-  // on a disabled query is a no-op.
-  const rawRefetch = query.refetch;
-  const refetch = useCallback<typeof rawRefetch>(
-    (...args) =>
-      enabled ? rawRefetch(...args) : Promise.resolve(undefined as never),
-    [enabled, rawRefetch]
-  );
-
-  return { ...query, refetch };
+  return useApiQueryWith<T, S>(apiRequest, path, opts);
 }

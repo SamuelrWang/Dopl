@@ -1,9 +1,8 @@
 import { useCallback } from "react";
-import { useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
-import { useWorkspaceAccess } from "./use-workspace-access";
+import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 import { SkillsBrowserCore } from "@/features/skills/components/skills-browser-core";
 import type { Skill } from "@/features/skills/types";
 
@@ -30,14 +29,13 @@ const SKILLS_PATH = "/api/skills";
  * re-rendering a server component.
  */
 export default function SkillsPage() {
-  const { workspaceSegment = "" } = useParams();
   const queryClient = useQueryClient();
   const {
     access,
     isPending: accessPending,
     error: accessError,
     refetch: refetchAccess,
-  } = useWorkspaceAccess(workspaceSegment);
+  } = useWorkspaceAccess();
 
   const workspaceId = access?.workspaceId;
   const skills = useApiQuery<{ skills: Skill[] }, Skill[]>(SKILLS_PATH, {

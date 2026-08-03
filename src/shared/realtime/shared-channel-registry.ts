@@ -389,12 +389,18 @@ function wantedWorkspace(): string | null {
 
 function issueWatch(bridge: SpaSyncBridge, want: string | null): void {
   issuedWorkspace = want;
-  // Commit only on resolve: a refused IPC (window teardown/recreate) must
-  // not leave the renderer believing it is watching — clearing the issued
-  // marker on reject makes the next updateWatch retry.
+  // Commit only on SUCCESS: a refused IPC (reject) or a refused payload
+  // (a resolved { ok: false } from an older main) must not leave the
+  // renderer believing it is watching — clearing the issued marker makes
+  // the next updateWatch retry.
   void Promise.resolve(bridge.syncWatch?.(want))
-    .then(() => {
-      watchedWorkspace = want;
+    .then((out) => {
+      const ok = !(out && typeof out === "object" && (out as { ok?: boolean }).ok === false);
+      if (ok) {
+        watchedWorkspace = want;
+      } else if (issuedWorkspace === want) {
+        issuedWorkspace = watchedWorkspace;
+      }
     })
     .catch(() => {
       if (issuedWorkspace === want) issuedWorkspace = watchedWorkspace;

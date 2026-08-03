@@ -4,7 +4,9 @@ import { createPortal } from "react-dom";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { TOUR_FINISH, TOUR_STEPS } from "../tour-steps";
-import { useTour } from "./tour-provider";
+// From the CORE, not the `next/navigation` binding: the popover is rendered by
+// the core provider, so importing the binding would pull Next back in.
+import { useTour } from "./tour-provider-core";
 import styles from "./tour.module.css";
 
 /**

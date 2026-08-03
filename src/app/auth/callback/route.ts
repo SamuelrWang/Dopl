@@ -28,7 +28,12 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // Onboarding detour for new users; set inside the try below so a
       // failed status read falls back to redirectTo and never blocks sign-in.
-      let destination = isDesktop ? "/auth/desktop-handoff" : redirectTo;
+      // The desktop app's login-CSRF nonce rides through as ?state so the
+      // handoff can echo it in the dopl:// fragment (exact-match gate).
+      const desktopState = searchParams.get("state") || "";
+      let destination = isDesktop
+        ? `/auth/desktop-handoff${desktopState ? `?state=${encodeURIComponent(desktopState)}` : ""}`
+        : redirectTo;
       // Post-auth side effects. Wrapped in try/catch so any failure here
       // can never block the redirect. (The per-user 24h trial is retired —
       // billing is workspace-level now, so no trial is stamped on sign-in.)

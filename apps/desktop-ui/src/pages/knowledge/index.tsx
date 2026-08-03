@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
-import { useWorkspaceAccess, type WorkspaceAccess } from "#/pages/skills/use-workspace-access";
+import { useWorkspaceAccess, type WorkspaceAccess } from "#/hooks/use-workspace-access";
 import { useKnowledgeUrlSync } from "./use-knowledge-url-sync";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { KnowledgeV2PreviewCore } from "@/features/knowledge/components/knowledge-v2/landing-preview-core";
@@ -48,8 +48,7 @@ import type { TeamView } from "@/features/teams/types";
  *     `initialSelection`.
  */
 export default function KnowledgePage() {
-  const { workspaceSegment = "" } = useParams();
-  const { access, isPending, error, refetch } = useWorkspaceAccess(workspaceSegment);
+  const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) return <PageLoading label="Loading knowledge" />;

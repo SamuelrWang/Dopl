@@ -5,6 +5,22 @@ import { defineConfig, type Plugin } from "vitest/config";
 const src = fileURLToPath(new URL("./src", import.meta.url));
 
 /**
+ * Supabase storage — the ONLY remote origin any packaged page is allowed to
+ * load bytes from, and images only. Workspace icons are public-bucket objects
+ * (`src/features/workspaces/server/icon.ts` → `getPublicUrl`), so `iconUrl` on
+ * every rail tile is an absolute URL on this host. Pinned to the exact project
+ * origin on purpose: NEVER widen this to `https:` or a wildcard subdomain —
+ * `img-src` is the one hole in `default-src 'none'` and a wildcard would turn
+ * any rendered URL into an outbound beacon.
+ *
+ * Mirrors `NEXT_PUBLIC_SUPABASE_URL`. Inlined rather than read from the
+ * environment because this string is baked into the shipped HTML at build
+ * time: a missing/typo'd env var would silently ship a policy that blocks
+ * every icon again, which is exactly the bug this fixes.
+ */
+const SUPABASE_STORAGE_ORIGIN = "https://mrefkedvdehahjejreae.supabase.co";
+
+/**
  * The production Content-Security-Policy for the packaged renderer.
  *
  * Modelled on the session window's page CSP
@@ -18,16 +34,26 @@ const src = fileURLToPath(new URL("./src", import.meta.url));
  * `style-src 'unsafe-inline'` is the one relaxation: React and several deps
  * set inline `style` attributes and inject <style> tags at runtime.
  *
- * OPEN SEAM — `img-src 'self' data: blob:` blocks remote avatars and workspace
- * icons (Supabase storage URLs). When the first page that renders them is
- * ported, either proxy the bytes through main (preferred — keeps `connect-src
- * 'none'` honest) or add that exact origin here. Do not widen to `https:`.
+ * `img-src` carries the exact Supabase storage origin so workspace icons load
+ * (`AppRailCore`'s `<img src={ws.iconUrl}>` — journey-audit GAP-20).
+ *
+ * OPEN SEAM (narrowed, not closed) — member AVATARS are still blocked. They
+ * are NOT Supabase URLs: `profiles.avatar_url` is copied from the OAuth
+ * provider's `raw_user_meta_data` (see
+ * `supabase/migrations/20260731090000_profiles_display_name_bounds.sql:85`),
+ * so they resolve to `lh3.googleusercontent.com`,
+ * `avatars.githubusercontent.com`, and whatever future providers return —
+ * an open-ended set that CANNOT be pinned. The fix for those is the main-side
+ * proxy, which already exists for the session window
+ * (`dopl-desktop-app/main/avatar-cache.js`: bounded one-shot GET → `data:`
+ * URI) and just needs wiring to the SPA bridge. Until then avatars fall back
+ * to initials. Do not widen `img-src` to `https:` to paper over it.
  */
 const PRODUCTION_CSP = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob: ${SUPABASE_STORAGE_ORIGIN}`,
   "font-src 'self'",
   "connect-src 'none'",
   "base-uri 'none'",

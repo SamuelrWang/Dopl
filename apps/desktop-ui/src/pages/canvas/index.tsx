@@ -1,8 +1,7 @@
-import { useParams } from "react-router";
 import { GraphView } from "@/features/ontology/graph/graph-view";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError, PageLoading } from "#/components/page-states";
-import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
+import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
  * `/:workspaceSegment/canvas` — the port of
@@ -30,8 +29,7 @@ import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
  * snapshot to defer. Wiring it any other way would be a second pattern.
  */
 export default function CanvasPage() {
-  const { workspaceSegment = "" } = useParams();
-  const { access, isPending, error, refetch } = useWorkspaceAccess(workspaceSegment);
+  const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) return <PageLoading label="Loading canvas" />;

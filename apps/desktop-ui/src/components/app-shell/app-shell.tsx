@@ -12,11 +12,20 @@ import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
 import { CONSENT_INBOX_POLL_MS } from "@/features/channels/constants";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
+import { JoinRequestNoticesCore } from "@/features/workspaces/components/join-request-notices-core";
+import { ConnectAgentBanner } from "@/features/onboarding/components/connect-agent-banner";
+import { WelcomePopup } from "@/features/onboarding/components/welcome-popup";
+import { TourProviderCore } from "@/features/tour/components/tour-provider-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
+// Bundled as a data URI (`?inline`) for the same reason the signed-out screen
+// does it: the packaged renderer is a `file://` document under
+// `img-src 'self' data: blob:`, so the web popup's absolute `/favicons/...`
+// src resolves to the filesystem root and never loads.
+import doplMark from "#/assets/dopl-mark.png?inline";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
 
@@ -40,6 +49,13 @@ import { useWorkspaceRoute } from "./use-workspace-route";
  * the multipart icon upload, Supabase-side account deletion — degrade inside
  * that binding rather than costing the whole surface. The `/settings` ROUTE is
  * untouched and still serves deep links.
+ *
+ * The layout's guidance + notice layer is mounted too — TourProvider,
+ * JoinRequestNotices, ConnectAgentBanner, WelcomePopup (journey-audit GAP-3
+ * and GAP-7). The first two were `next/navigation`-bound and were split into
+ * cores for this; the last two were already Next-free. WelcomePopup takes the
+ * SPA's bundled brand mark because its web default is an absolute
+ * `/favicons/...` path that dead-ends under `file://`.
  *
  * What the server layout did before rendering, this does client-side: resolve
  * the URL segment to a workspace and rewrite the URL when it is stale
@@ -142,12 +158,38 @@ export function AppShellLayout() {
               />
             }
           />
-          {/* Per-resource access matrix — without it useMyAccessContext
-              no-ops and every teams-mode gate resolves to a FALSE edit
-              affordance (server still refuses; the UI shouldn't offer). */}
-          <MyAccessProvider workspaceSegment={segment}>
-            <Outlet />
-          </MyAccessProvider>
+          {/* The web layout's guidance + notice layer, in its order
+              (`src/app/[workspaceSlug]/(app)/layout.tsx`): the tour wraps the
+              routed page, and the three one-shot surfaces mount beside it.
+              Each is the Next-free core/binding form, so the router and the
+              brand mark come from here. */}
+          <TourProviderCore
+            workspaceSegment={segment}
+            onNavigate={(path) => navigate(path)}
+          >
+            {/* Per-resource access matrix — without it useMyAccessContext
+                no-ops and every teams-mode gate resolves to a FALSE edit
+                affordance (server still refuses; the UI shouldn't offer). */}
+            <MyAccessProvider workspaceSegment={segment}>
+              <Outlet />
+              {/* Terminal step of the join-approval loop: an approved
+                  requester is told they're in (journey-audit GAP-7). */}
+              <JoinRequestNoticesCore onNavigate={(path) => navigate(path)} />
+              <ConnectAgentBanner />
+              <WelcomePopup
+                brand={
+                  // next/image is forbidden here — there is no Next runtime
+                  // in this SPA.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={doplMark}
+                    alt="Dopl"
+                    className="auth-logo-3d h-11 w-11 rounded-[8px]"
+                  />
+                }
+              />
+            </MyAccessProvider>
+          </TourProviderCore>
         </div>
       </div>
 

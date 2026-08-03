@@ -6,7 +6,8 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { useMembers } from "@/features/members/hooks/use-members";
 import { DOWNLOAD_URL } from "@/features/marketing/constants";
-import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import { isSpaRenderer } from "@/shared/lib/spa-bridge";
+import { openExternalUrl } from "@/shared/lib/open-external";
 
 interface Props {
   workspaceSlug: string;
@@ -147,11 +148,12 @@ function StepCard({
             className={linkClass}
             onClick={(e) => {
               // Packaged SPA: window.open is denied by the shell — route
-              // external links through the bridge or the click is dead.
-              const bridge = getSpaBridge();
-              if (bridge) {
+              // external links through the bridge or the click is dead. The
+              // anchor's own target="_blank" already does the right thing off
+              // the bridge, so only the bridged case preempts the default.
+              if (isSpaRenderer()) {
                 e.preventDefault();
-                void bridge.openExternal(href);
+                void openExternalUrl(href);
               }
             }}
           >

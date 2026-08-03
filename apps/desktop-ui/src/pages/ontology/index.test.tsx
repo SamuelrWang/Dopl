@@ -1,9 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
+import { bridgeCalls, installBridge, renderWithProviders } from "#/test-utils/bridge";
 import OntologyPage from "./index";
 import OntologyDetailPage from "./detail";
 import { SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
@@ -24,24 +22,15 @@ import { SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-const calls = () =>
-  apiRequest.mock.calls.map((args) => ({
-    path: (args as unknown[])[0] as string,
-    opts: ((args as unknown[])[1] ?? {}) as BridgeRequestOpts,
-  }));
+const calls = () => bridgeCalls(apiRequest);
 
 function renderOntology(entry = `/${SEGMENT}/ontology`) {
-  const router = createMemoryRouter(
+  const { router } = renderWithProviders(
     [
       { path: "/:workspaceSegment/ontology", element: <OntologyPage /> },
       { path: "/:workspaceSegment/ontology/:clusterSlug", element: <OntologyDetailPage /> },
     ],
-    { initialEntries: [entry] }
-  );
-  render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    [entry]
   );
   return router;
 }
@@ -54,12 +43,7 @@ describe("ontology page", () => {
     apiRequest.mockImplementation((path: string, opts?: BridgeRequestOpts) =>
       ontologyBridge(path, opts)
     );
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<never>(() => {})));
+    installBridge({ apiRequest });
   });
 
   it("resolves the workspace, then renders the first cluster's board", async () => {

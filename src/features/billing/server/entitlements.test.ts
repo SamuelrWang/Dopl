@@ -275,7 +275,7 @@ describe("assertCanAddMember", () => {
       expect(e.status).toBe(402);
       expect(e.code).toBe("SOLO_MEMBER_LIMIT");
       expect((e.details as { upgrade_url: string }).upgrade_url).toMatch(
-        /\/pricing$/
+        /\/canvas\?billing=upgrade$/
       );
     }
   });
@@ -317,12 +317,16 @@ describe("entitlementDeniedBody", () => {
     expect(body.error).toBe("over_free_cap");
     expect(body.message.toLowerCase()).toContain("nothing");
     expect(body.message.toLowerCase()).toContain("upgrade");
-    expect(body.upgrade_url).toMatch(/\/pricing$/);
+    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
   });
 
-  it("always points at /pricing (the per-workspace billing route is a 404)", () => {
+  // GAP-11: `/pricing` is a marketing page Phase 4 deletes with the website,
+  // and API-first clients (MCP agents) follow this URL literally — so the
+  // envelope points at the IN-APP upgrade surface instead.
+  it("points at the in-app upgrade surface, never /pricing or the 404 billing route", () => {
     const body = entitlementDeniedBody();
-    expect(body.upgrade_url).toMatch(/\/pricing$/);
+    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
+    expect(body.upgrade_url).not.toContain("/pricing");
     expect(body.upgrade_url).not.toContain("/settings/billing");
   });
 });

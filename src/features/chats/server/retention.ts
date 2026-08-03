@@ -2,6 +2,7 @@ import "server-only";
 import {
   FREE_CHATS_WINDOW_DAYS,
   getWorkspaceEntitlements,
+  upgradeUrl,
 } from "@/features/billing/server/entitlements";
 import * as repo from "./repository";
 
@@ -39,17 +40,17 @@ export async function resolveChatsWindow(
  * upgrade_url }` envelope. Emphasizes that nothing is deleted — the chat
  * is safely stored, Pro restores full history.
  *
- * `upgrade_url` always points at `/pricing` — the real pricing page. The
- * per-workspace `/{slug}/settings/billing` route does not exist (404).
+ * `upgrade_url` comes from billing's shared `upgradeUrl()` — the in-app
+ * upgrade surface. The per-workspace `/{slug}/settings/billing` route does
+ * not exist (404).
  */
 export function chatRetentionDeniedBody() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
   return {
     error: "chat_outside_retention" as const,
     message:
       `This chat is older than the free plan's ${FREE_CHATS_WINDOW_DAYS}-day ` +
       `history window. Nothing has been deleted — it's safely stored. Upgrade ` +
       `to Pro to restore full chat history.`,
-    upgrade_url: `${appUrl}/pricing`,
+    upgrade_url: upgradeUrl(),
   };
 }

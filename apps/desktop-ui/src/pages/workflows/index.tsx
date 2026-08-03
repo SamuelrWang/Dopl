@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { WorkflowsView } from "@/features/workflows/components/workflows-view";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError, PageLoading } from "#/components/page-states";
-import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
+import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
  * `/:workspaceSegment/workflows` and `/:workspaceSegment/workflows/:workflowSlug`
@@ -32,9 +32,9 @@ import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
  * reload still deep-links back to the open workflow.
  */
 export default function WorkflowsPage() {
-  const { workspaceSegment = "", workflowSlug } = useParams();
+  const { workflowSlug } = useParams();
   const navigate = useNavigate();
-  const { access, isPending, error, refetch } = useWorkspaceAccess(workspaceSegment);
+  const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   // `replaceState`'s stand-in: same path string, no history entry, and the
   // router's own location stays authoritative (the shell's canonical-segment

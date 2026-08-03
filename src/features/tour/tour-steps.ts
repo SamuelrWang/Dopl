@@ -7,7 +7,9 @@
  * user-facing strings (owner explicitly banned them).
  */
 
-import type { NavSection } from "@/shared/layout/app-shell";
+// Deep import, never the `app-shell` barrel: the barrel re-exports the
+// Next-bound `AppShell`, and this module is in the desktop renderer's graph.
+import type { NavSection } from "@/shared/layout/app-shell/app-sidebar-core";
 
 export type TourStep = {
   section: NavSection;

@@ -1,6 +1,13 @@
 "use client";
 
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import {
+  ApiError,
+  decodeResponse,
+  withQuery,
+  type ApiRequestOpts,
+  type RawApiResponse,
+} from "./api-envelope";
 
 /**
  * apiRequest — the single browser-side HTTP client for this app's
@@ -15,71 +22,44 @@ import { getSpaBridge } from "@/shared/lib/spa-bridge";
  *   - `!res.ok` → throws `ApiError` carrying the `{ error: { code,
  *     message, details } }` envelope from ENGINEERING §9.
  *
+ * Everything in that list except the transport lives in `./api-envelope.ts`,
+ * shared verbatim with the desktop SPA's own client (`apps/desktop-ui/src/
+ * lib/api.ts`) — one `ApiError` class, one decoder, one option shape for the
+ * whole bundle. This file owns only WHICH WIRE the bytes leave on.
+ *
  * Feature clients that need domain-specific error subtypes (e.g. the
  * teams 409 conflict) catch/rethrow around this, they don't re-implement it.
  */
 
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-  readonly details?: unknown;
-  constructor(status: number, code: string, message: string, details?: unknown) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-    this.details = details;
-  }
-}
-
-export interface ApiRequestOpts {
-  workspaceId?: string;
-  body?: unknown;
-  /** Defaults to GET. */
-  method?: "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
-  /** Query params; `undefined` values are omitted. */
-  query?: Record<string, string | number | boolean | undefined>;
-  /** Optimistic-concurrency precondition (`x-updated-at`). */
-  expectedUpdatedAt?: string;
-  signal?: AbortSignal;
-}
+// Re-exported so the ~30 existing `@/shared/api/api-client` importers keep
+// compiling — and so `instanceof ApiError` means the same thing whichever
+// module a call site reached for.
+export { ApiError, withQuery, decodeResponse };
+export type { ApiRequestOpts, RawApiResponse };
 
 export async function apiRequest<T>(
   path: string,
   opts: ApiRequestOpts = {}
 ): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
-  if (opts.body !== undefined) headers["content-type"] = "application/json";
-  if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
-
-  let url = path;
-  if (opts.query) {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(opts.query)) {
-      if (v !== undefined) params.set(k, String(v));
-    }
-    const qs = params.toString();
-    if (qs) url += (path.includes("?") ? "&" : "?") + qs;
-  }
+  const url = withQuery(path, opts.query);
 
   // TRANSPORT SEAM (desktop migration Phase 2): inside the bundled desktop
   // SPA the renderer never touches the network — `window.dopl.apiRequest`
   // (the Electron IPC bridge; main attaches auth and fetches) is the
   // transport, and every reused feature client inherits it through this one
   // seam. On the web (no bridge) the plain fetch below runs unchanged. The
-  // bridge answer is normalized into the same {status, json} shape so the
-  // envelope/ApiError decoding beneath is shared verbatim by both paths.
+  // bridge answer is normalized into the same {status, hasBody, body} shape
+  // so the envelope/ApiError decoding is shared verbatim by both paths.
   // CAPABILITY-KEYED, never truthiness: the legacy wrapper exposes a
   // partial window.dopl with no apiRequest — see spa-bridge.ts.
   const bridge = getSpaBridge();
 
-  let res: { status: number; ok: boolean; statusText: string; json(): Promise<unknown> };
+  let raw: RawApiResponse;
   if (bridge) {
-    // NOTE: the `headers` map above is fetch-path-only — main reconstructs
-    // every header (auth, workspace, updated-at, content-type) from the
-    // structured opts. A new header added above must ALSO become a bridge
-    // opt or it will silently not exist in the desktop app.
+    // NOTE: main reconstructs every header (auth, workspace, updated-at,
+    // content-type) from the structured opts. A new header added to the
+    // fetch branch below must ALSO become a bridge opt or it will silently
+    // not exist in the desktop app.
     // The IPC call itself cannot be cancelled; racing it against the abort
     // signal keeps TanStack's unmount/supersede semantics (the promise
     // settles, the response is discarded).
@@ -100,63 +80,46 @@ export async function apiRequest<T>(
           }),
         ])
       : call);
-    res = {
+    raw = {
       status: out.status,
-      ok: out.status >= 200 && out.status < 300,
       statusText: out.statusText,
-      json: () =>
-        out.hasBody ? Promise.resolve(out.body) : Promise.reject(new Error("no body")),
+      hasBody: out.hasBody,
+      body: out.body,
     };
   } else {
-    res = await fetch(url, {
+    const headers: Record<string, string> = {};
+    if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
+    if (opts.body !== undefined) headers["content-type"] = "application/json";
+    if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
+
+    const res = await fetch(url, {
       method: opts.method ?? "GET",
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       credentials: "same-origin",
       signal: opts.signal,
     });
+    raw =
+      res.status === 204
+        ? { status: res.status, statusText: res.statusText, hasBody: false }
+        : await readJsonBody(res);
   }
 
-  if (res.status === 204) return undefined as T;
+  return decodeResponse<T>(raw);
+}
 
-  let parsed: unknown;
+/** `fetch` half of the normalization: an unparseable body is "no body", which
+ *  the decoder turns into `undefined` (2xx) or a statusText ApiError (non-2xx). */
+async function readJsonBody(res: Response): Promise<RawApiResponse> {
   try {
-    parsed = await res.json();
-  } catch {
-    if (!res.ok) {
-      // statusText is "" over HTTP/2 — never surface an empty message.
-      throw new ApiError(
-        res.status,
-        "INTERNAL_ERROR",
-        res.statusText || `Request failed (${res.status})`
-      );
-    }
-    return undefined as T;
-  }
-
-  if (!res.ok) {
-    const env = parsed as {
-      error?: { code?: string; message?: string; details?: unknown } | string;
-      message?: string;
+    const body = await res.json();
+    return {
+      status: res.status,
+      statusText: res.statusText,
+      hasBody: true,
+      body,
     };
-    const err = env.error;
-    if (typeof err === "string") {
-      // Flat plan-gate envelope (ENGINEERING §8): `{ error: <code>,
-      // message, upgrade_url }` — the string is the machine code and the
-      // human text rides in a sibling `message`. A bare `{ error: "text" }`
-      // has no sibling message, so keep the legacy INTERNAL_ERROR shape.
-      if (typeof env.message === "string") {
-        throw new ApiError(res.status, err, env.message);
-      }
-      throw new ApiError(res.status, "INTERNAL_ERROR", err);
-    }
-    throw new ApiError(
-      res.status,
-      err?.code ?? "INTERNAL_ERROR",
-      err?.message || res.statusText || `Request failed (${res.status})`,
-      err?.details
-    );
+  } catch {
+    return { status: res.status, statusText: res.statusText, hasBody: false };
   }
-
-  return parsed as T;
 }

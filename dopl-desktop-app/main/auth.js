@@ -31,8 +31,9 @@ const { store, authFail, persist, loadSession, clearSession, decodeJwt, jwtExp }
 const { diag } = require('./diag');
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./config');
 
-const PENDING_AUTH_KEY = 'pendingAuth'; // { nonce, ts } — M4 login-CSRF gate
+const PENDING_AUTH_KEY = 'pendingAuth'; // [{ nonce, ts, requireState?, ttlMs? }]
 const PENDING_AUTH_TTL_MS = 10 * 60 * 1000;
+const PENDING_AUTH_MAX = 4; // concurrent sign-in attempts worth remembering
 
 // ── Login-CSRF gate for the deep link (M4) ─────────────────────────────────
 // A dopl://auth#<tokens> link can be fired by ANY local process or a website
@@ -42,30 +43,88 @@ const PENDING_AUTH_TTL_MS = 10 * 60 * 1000;
 // nonce as ?state=), and captureFromFragment() will only persist a fragment
 // when a matching pending record exists inside the TTL.
 //
-// FOLLOW-UP DEBT: the strongest form is a full state round-trip — the web sign-in
-// flow echoing our `state` nonce back in the dopl:// fragment. Until the web side
-// echoes it, we enforce the pending-flag + 10-minute TTL gate (and, if a state IS
-// present, require it to match). Web-side echo is tracked as follow-up work.
-function beginPendingAuth() {
+// ─── BEGIN PENDING-AUTH (pure; unit-tested via source extraction) ──────────
+// The gate's DECISION, free of electron-store: given the stored records, the
+// clock, and whatever `state` a fragment echoed, WHICH record (if any)
+// authorizes adoption.
+//
+// TWO RECORD KINDS, because the two flows have different guarantees:
+//   requireState — the fragment is built IN-PROCESS (auth-password.js's
+//     password adoption), so it echoes our nonce and an EXACT match is
+//     enforceable. A fragment injected by another process carries no state and
+//     can therefore never consume one of these.
+//   presence-only — the BROWSER handoff (OAuth / magic link). The web pages
+//     still drop our ?state (see FOLLOW-UP DEBT below), so these are gated on
+//     "we started a sign-in recently" plus the TTL, exactly as before.
+//
+// A LIST, not one record: the store held a single slot, so a password sign-in
+// silently voided an in-flight browser handoff (and an emailed magic link went
+// permanently dead). Records are single-use and expired ones are pruned on
+// every read/write, so the set stays small on its own; PENDING_AUTH_MAX is the
+// belt-and-braces bound.
+//
+// FOLLOW-UP DEBT: the strongest form is a full state round-trip — the web
+// sign-in flow echoing our `state` nonce back in the dopl:// fragment.
+// /auth/desktop-start drops ?state and /auth/desktop-handoff builds the deep
+// link from the tokens alone, so the browser leg cannot be tightened from here.
+// Once it echoes, the browser records arm with requireState too and the
+// presence-only kind disappears.
+function livePendingAuth(list, now, ttlMs) {
+  return (Array.isArray(list) ? list : []).filter(
+    (p) =>
+      p && typeof p.nonce === 'string' && typeof p.ts === 'number'
+      && now - p.ts <= (typeof p.ttlMs === 'number' ? p.ttlMs : ttlMs)
+  );
+}
+
+function pickPendingAuth(live, state_) {
+  if (state_ != null && state_ !== '') {
+    return live.find((p) => p.nonce === state_) || null;
+  }
+  // No echo: only a record that does not REQUIRE one may be consumed, newest first.
+  const open = live.filter((p) => !p.requireState);
+  return open.length ? open[open.length - 1] : null;
+}
+// ─── END PENDING-AUTH ──────────────────────────────────────────────────────
+
+function readPendingAuth() {
+  return livePendingAuth(store.get(PENDING_AUTH_KEY), Date.now(), PENDING_AUTH_TTL_MS);
+}
+
+function writePendingAuth(list) {
+  if (list.length) store.set(PENDING_AUTH_KEY, list.slice(-PENDING_AUTH_MAX));
+  else store.delete(PENDING_AUTH_KEY);
+}
+
+function beginPendingAuth(opts) {
+  const o = opts && typeof opts === 'object' ? opts : {};
   const nonce = crypto.randomBytes(16).toString('hex');
-  store.set(PENDING_AUTH_KEY, { nonce, ts: Date.now() });
+  const rec = { nonce, ts: Date.now() };
+  if (o.requireState) rec.requireState = true;
+  if (typeof o.ttlMs === 'number' && o.ttlMs > 0) rec.ttlMs = o.ttlMs;
+  writePendingAuth([...readPendingAuth(), rec]);
   return nonce;
 }
 
 function hasValidPendingAuth() {
-  const p = store.get(PENDING_AUTH_KEY);
-  return !!(p && p.ts && Date.now() - p.ts <= PENDING_AUTH_TTL_MS);
+  return readPendingAuth().length > 0;
 }
 
-// Single-use: consumes (deletes) the pending record and returns whether it was
-// valid. If the flow echoed a `state`, it must match the stored nonce.
+// Single-use: consumes (deletes) the matching pending record and returns whether
+// one was found. The OTHER live records survive — a completed password sign-in
+// must not kill the OAuth flow the operator started thirty seconds earlier.
 function consumePendingAuth(state_) {
-  const p = store.get(PENDING_AUTH_KEY);
+  const live = readPendingAuth();
+  const hit = pickPendingAuth(live, state_);
+  writePendingAuth(hit ? live.filter((p) => p !== hit) : live);
+  return !!hit;
+}
+
+// Disarm every pending record. Sign-out must leave no armed gate behind: the
+// operator believes the machine is signed out, so a dopl:// fragment arriving in
+// the residual TTL must not be adopted into the freshly cleaned app.
+function clearPendingAuth() {
   store.delete(PENDING_AUTH_KEY);
-  if (!p || !p.ts) return false;
-  if (Date.now() - p.ts > PENDING_AUTH_TTL_MS) return false;
-  if (state_ != null && state_ !== '' && state_ !== p.nonce) return false;
-  return true;
 }
 
 // ── Deep-link token capture (Phase 3) ─────────────────────────────────────
@@ -88,13 +147,21 @@ function captureFromFragment(fragment) {
 
     const expiresIn = Number(params.get('expires_in') || 0);
     const expiresAt = Number(params.get('expires_at') || 0);
-    persist({
+    const stored = persist({
       access_token,
       refresh_token,
       token_type: 'bearer',
       expires_in: expiresIn || 3600,
       expires_at: expiresAt || Math.floor(Date.now() / 1000) + (expiresIn || 3600),
     });
+    // persist() REFUSES to write when safeStorage is unavailable (it will not
+    // downgrade a refresh token to cleartext). Reporting success there made
+    // sign-in a silent dead end: the caller answered {ok:true}, the next session
+    // load found nothing, and the login screen came back with no error at all.
+    if (!stored) {
+      diag('auth: deep-link session NOT stored (see the persist failure above) — reporting failure');
+      return false;
+    }
     state.invalidateCookieIdentity(); // re-read the jar the completion page sets
     console.log('[auth] captured Supabase session from deep link');
     diag('auth: captured Supabase session from deep link');
@@ -332,6 +399,7 @@ module.exports = {
   captureFromFragment,
   beginPendingAuth,
   hasValidPendingAuth,
+  clearPendingAuth,
   getUserId,
   getUserIdFromCookies,
   getAccessToken,

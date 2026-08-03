@@ -2,7 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
 import { getBridge } from "#/lib/dopl-bridge";
-import { openInBrowser } from "./open-in-browser";
+import { openInBrowser } from "#/lib/open-in-browser";
 
 /**
  * The desktop Account pane's footer — what replaces the web section's

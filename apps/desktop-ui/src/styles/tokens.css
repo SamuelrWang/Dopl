@@ -157,6 +157,23 @@
      Do NOT "fix" this back to the next/font variable. */
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-heading: var(--font-app), system-ui, sans-serif;
+  /* Wordmark serif. On the web this variable is Newsreader, loaded by
+     `next/font/google` in src/app/layout.tsx (the name `--font-playfair`
+     predates the switch). The SPA has no next/font and stays
+     system-fonts-only (CSP `font-src 'self'`, offline-safe, no webfont
+     download), so it resolves to the nearest license-free system serifs:
+     Charter / Iowan Old Style / Sitka Text are the same transitional
+     text-serif class as Newsreader, with Georgia as the universal floor.
+
+     DEFINING it is the fix, not a nicety: the reused wordmarks write
+     `font-family: var(--font-playfair), Georgia, serif`
+     (`onboarding-flow-core.tsx`, `login-form-core.tsx`,
+     `reset-password-screen.tsx`), and an UNDEFINED var with no fallback makes
+     the whole declaration invalid at computed-value time — the element then
+     INHERITS --font-app and the wordmark rendered in Helvetica, never
+     reaching the `Georgia, serif` fallback that looks like it is there. */
+  --font-playfair: Charter, "Bitstream Charter", "Iowan Old Style",
+    "Sitka Text", Georgia, "Times New Roman", serif;
 
   /* Radius scale */
   --radius-sm: calc(var(--radius) * 0.6);

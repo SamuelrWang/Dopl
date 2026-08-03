@@ -4,6 +4,7 @@ import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
+import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
 import { AppShellLayout } from "#/components/app-shell";
 
 /**
@@ -22,8 +23,6 @@ import { AppShellLayout } from "#/components/app-shell";
 const apiRequest = vi.hoisted(() => vi.fn());
 const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
 
-const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
-const SEGMENT = "acme-ab12cd";
 
 const WORKSPACE = {
   id: WORKSPACE_ID,
@@ -134,12 +133,7 @@ const gear = () => screen.getByRole("button", { name: "Settings" });
 describe("settings modal", () => {
   beforeEach(() => {
     apiRequest.mockImplementation((path: string) => defaultBridge(path));
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest, openExternal, appOrigin: "https://www.usedopl.com" },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest, openExternal, appOrigin: "https://www.usedopl.com" });
   });
 
   it("opens on Account from the sidebar gear, leaving the page mounted", async () => {
@@ -279,11 +273,7 @@ describe("settings modal", () => {
 
   it("signs out through the bridge when the op exists", async () => {
     const signOut = vi.fn(() => Promise.resolve({ ok: true }));
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest, openExternal, signOut, appOrigin: "https://www.usedopl.com" },
-    });
+    installBridge({ apiRequest, openExternal, signOut, appOrigin: "https://www.usedopl.com" });
     renderShell();
     await screen.findByText("page body");
 

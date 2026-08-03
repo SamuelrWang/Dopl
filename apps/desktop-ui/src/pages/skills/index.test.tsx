@@ -4,6 +4,7 @@ import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import type { TransportRequest } from "#/lib/api-transport";
+import { WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
 import SkillsPage from "./index";
 
 
@@ -14,8 +15,6 @@ vi.mock("#/lib/api-transport", () => ({ sendRequest }));
 /** The recorded transport calls, typed — `vi.fn()` widens its args to any[]. */
 const transportCalls = () =>
   sendRequest.mock.calls.map((args) => (args as unknown[])[0] as TransportRequest);
-
-const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
 
 function skill(over: Partial<Record<string, unknown>> = {}) {
   return {
@@ -80,25 +79,21 @@ function renderPage() {
 
 describe("skills index page", () => {
   beforeEach(() => {
-  // SPA runtime marker: the shared web tree's SPA-mode guards (presence
-  // no-op, realtime no-op, bridge identity) key off window.dopl. Without
-  // it this suite would exercise the WEB paths and hide renderer crashes
-  // — the exact failure a stubbed supabase module hid before. The bridge's
-  // apiRequest funnels into the SAME sendRequest mock as the SPA transport,
-  // so one mock serves both clients (exactly the packaged topology, where
-  // both funnel into main).
-  (window as unknown as { dopl?: unknown }).dopl = {
-    apiRequest: (path: string, opts: Record<string, unknown> = {}) =>
-      sendRequest({ path, ...opts }),
-    getAuthState: () => Promise.resolve({ signedIn: false, userId: null }),
-    onAuthState: () => () => {},
-    openExternal: () => Promise.resolve({ ok: true }),
-  };
-
+    // SPA runtime marker: the shared web tree's SPA-mode guards (presence
+    // no-op, realtime no-op, bridge identity) key off window.dopl. Without it
+    // this suite would exercise the WEB paths and hide renderer crashes — the
+    // exact failure a stubbed supabase module hid before. The bridge's
+    // apiRequest funnels into the SAME sendRequest mock as the SPA transport,
+    // so one mock serves both clients (exactly the packaged topology, where
+    // both funnel into main). `installBridge` also arms the fetch tripwire.
+    installBridge({
+      apiRequest: (path: string, opts: Record<string, unknown> = {}) =>
+        sendRequest({ path, ...opts }),
+      getAuthState: () => Promise.resolve({ signedIn: false, userId: null }),
+      onAuthState: () => () => {},
+      openExternal: () => Promise.resolve({ ok: true }),
+    });
     sendRequest.mockImplementation(defaultTransport);
-    // The reused feature client (`@/features/skills/client/api`) still goes
-    // through the WEB api-client, which calls `fetch` directly.
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   });
 
   it("resolves the workspace, then lists the workspace's skills", async () => {

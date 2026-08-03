@@ -1,8 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
+import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
+import { SEGMENT, installBridge, renderWithProviders } from "#/test-utils/bridge";
 import ConfigurationPage from "./index";
 
 /**
@@ -16,26 +14,16 @@ import ConfigurationPage from "./index";
 const apiRequest = vi.hoisted(() => vi.fn());
 
 function renderPage() {
-  const router = createMemoryRouter(
+  return renderWithProviders(
     [{ path: "/:workspaceSegment/configuration", element: <ConfigurationPage /> }],
-    { initialEntries: ["/acme-ab12cd/configuration"] }
-  );
-  return render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    [`/${SEGMENT}/configuration`]
   );
 }
 
 describe("configuration page", () => {
   beforeEach(() => {
     apiRequest.mockReset();
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest });
   });
 
   it("renders the guide builder without a single request", () => {

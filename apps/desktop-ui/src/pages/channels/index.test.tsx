@@ -4,6 +4,7 @@ import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import ChannelsPage from "#/pages/channels";
+import { SEGMENT } from "#/test-utils/bridge";
 import type {
   Channel,
   ChannelConsentRequest,
@@ -47,7 +48,6 @@ vi.mock("@/shared/supabase/browser", () => {
   };
 });
 
-const SEGMENT = "acme-ab12cd";
 const CHANNEL_ID = "ch-1";
 
 /** Fresh per test: the realtime registry shares one channel per workspace id

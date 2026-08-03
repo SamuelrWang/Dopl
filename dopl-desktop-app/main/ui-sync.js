@@ -1,49 +1,46 @@
 // ui-sync.js — THE BUNDLED SPA'S LIVE-UPDATE FEED (Phase 3).
 //
-// WHAT THIS IS. The SPA renderer has no network (CSP `connect-src 'none'`, no
-// Supabase config, no tokens — ui-bridge.js owns the HTTP seam), so
-// `src/shared/realtime/shared-channel-registry.ts` short-circuits to a no-op the
-// moment it sees `window.dopl`. This is the other half: MAIN watches
-// postgres_changes for the CONTENT tables of the workspace the renderer is viewing
-// and forwards coalesced `{ workspaceId, table }` events over `dopl:sync-event`,
-// which that registry turns into the same refetch signals the web fires. One
-// websocket per client instead of ~96 per-component channels eating >80% of DB time.
+// WHAT THIS IS. The SPA renderer has no network (CSP `connect-src 'none'`, no Supabase
+// config, no tokens — ui-bridge.js owns the HTTP seam), so
+// `src/shared/realtime/shared-channel-registry.ts` short-circuits to a no-op the moment
+// it sees the SPA bridge. This is the other half: MAIN watches postgres_changes for the
+// CONTENT tables of the workspace the renderer is viewing and forwards coalesced
+// `{ workspaceId, table }` events over `dopl:sync-event`, which that registry turns into
+// the same refetch signals the web fires — one websocket per client instead of ~96
+// per-component channels eating >80% of DB time.
 //
-// THE CHANNELS EXEMPTION (DESKTOP-MIGRATION-PLAN.md Phase 3) is about the
-// LISTENER MODULES: realtime.js + realtime-agents.js keep their own sockets,
-// breakers and health model for AGENT delivery — nothing here touches them.
-// The UI feed watches channel_messages/channel_agents/agent_presence TOO (web
-// parity: messages appear live, roster/presence dots update) on ITS OWN
-// socket; the first dogfood proved excluding them left the app's channel
-// transcript frozen until a manual refetch.
+// THE CHANNELS EXEMPTION (DESKTOP-MIGRATION-PLAN.md Phase 3) is about the LISTENER
+// MODULES: realtime.js + realtime-agents.js keep their own sockets, breakers and health
+// model for AGENT delivery — nothing here touches them. The UI feed watches
+// channel_messages/channel_agents/agent_presence TOO (web parity: messages appear live,
+// roster/presence dots update) on ITS OWN socket; the first dogfood proved excluding
+// them left the app's channel transcript frozen until a manual refetch.
 //
 // THE CREDENTIAL RULE, inherited verbatim from realtime.js. Realtime authorizes
 // postgres_changes with the USER JWT from setAuth. With NO JWT realtime-js joins on
 // the URL apikey — as `anon` — which cannot evaluate the published tables' RLS and
 // crashes the project's whole CDC pipeline, killing push for EVERY client, web
-// included. So a missing credential FAILS CLOSED (no join, retry on the ladder);
-// setAuth is AWAITED before subscribe (async in v2 — fire-and-forget is a
-// subscribe-before-auth race); and since the token rotates roughly hourly under
-// auth-tokens.js it is re-read on every join, on wake, on refreshAuth() and on a slow
-// recheck, never captured once at start(). The token reaches setAuth() and nowhere
-// else: never retained, never logged, never sent over IPC — only the join outcome and
-// its redacted reason (realtime-core.describeSubscribeError) are logged.
+// included. So a missing credential FAILS CLOSED (no join, retry on the ladder); setAuth
+// is AWAITED before subscribe (async in v2 — fire-and-forget is a subscribe-before-auth
+// race); and since the token rotates roughly hourly under auth-tokens.js it is re-read on
+// every join, on wake, on refreshAuth() and on a slow recheck, never captured once at
+// start(). The token reaches setAuth() and nowhere else: never retained, never logged,
+// never sent over IPC — only the join outcome and its redacted reason are logged.
 //
 // TRUST MODEL. An event is a DOORBELL, never content. The only field read out of a
 // payload is `workspace_id`, and only as a guard that a late frame from a channel we
-// already left is not attributed to the workspace now being viewed. The renderer
-// answers by refetching through the authed API, which re-runs the server-side
-// visibility gate — nothing may start trusting `payload.new`.
+// already left is not attributed to the workspace now being viewed. The renderer answers
+// by refetching through the authed API, which re-runs the server-side visibility gate —
+// nothing may start trusting `payload.new`.
 //
 // TOPIC DISCIPLINE. `channel(topic)` returns the EXISTING channel for a topic
 // realtime-js still knows, and `removeChannel()` forgets it only after the leave push
-// settles — so reusing a topic across a reconnect hands back the old,
-// already-subscribed channel whose `.subscribe()` silently no-ops (and whose `.on()`
-// throws, since v2 fixes the binding list at JOIN time). Topics are therefore
-// generation-unique and every binding is attached BEFORE subscribe, as
-// shared-channel-registry.ts argues.
+// settles — so reusing a topic across a reconnect hands back the old, already-subscribed
+// channel whose `.subscribe()` silently no-ops (and whose `.on()` throws, since v2 fixes
+// the binding list at JOIN time). Topics are therefore generation-unique and every
+// binding is attached BEFORE subscribe, as shared-channel-registry.ts argues.
 //
-// NOT WIRED YET — see dopl-desktop-app/WIRING.md.
+// WIRED by main/shell-mode.js's SPA service wiring (start + the auth fan-out).
 
 const { RealtimeClient } = require('@supabase/realtime-js');
 const WebSocket = require('ws');
@@ -54,22 +51,20 @@ const { describeSubscribeError, isAuthFailure } = require('./realtime-core');
 const { diag } = require('./diag');
 
 // ─── BEGIN UI-SYNC-PURE (no electron/require refs below) ─────────────────────
-// Every decision — which tables to bind, which topic to join under, when a burst
-// becomes one send, how long to wait, and whether a frame may be forwarded — is a
-// pure function of injected values, so the truth table is testable without a socket,
-// a clock or a BrowserWindow. Sliced verbatim by test/ui-sync.test.mjs.
+// Every decision — which tables to bind, which topic to join under, when a burst becomes
+// one send, how long to wait, whether a frame may be forwarded — is a pure function of
+// injected values, testable without a socket, clock or BrowserWindow. Sliced verbatim by
+// test/ui-sync.test.mjs.
 
 // THE CONTENT TABLES — the UNION of every table the SPA's feature hooks watch
-// (src/features/*/client/realtime.ts) minus the listener-owned ones below. That union
-// is the contract: a table a hook subscribes to but this list omits is a page that
-// never updates live, so test/ui-sync.test.mjs re-derives it from those files, and
-// checks each name against supabase/migrations for publication AND a `workspace_id`
-// column — following RENAMES (skill_versions was created as skill_file_versions) and
-// BARE `DROP TABLE`s, not just `ALTER PUBLICATION … DROP`. Not ceremony: `skill_files`
-// sat here until review caught that 20260716064733 dropped the table outright while
-// leaving its 20260502100200 publication ADD in the history. Realtime refuses the
-// WHOLE channel when any binding is refused, so that one dead name meant zero live
-// updates for every table, forever.
+// (src/features/*/client/realtime.ts) minus the listener-owned ones below. That union is
+// the contract: a table a hook watches but this list omits is a page that never updates
+// live, so test/ui-sync.test.mjs re-derives it from those files and checks each name
+// against supabase/migrations for publication AND a `workspace_id` column — following
+// RENAMES (skill_versions was skill_file_versions) and BARE `DROP TABLE`s, not just
+// `ALTER PUBLICATION … DROP`. Not ceremony: `skill_files` sat here until review caught
+// 20260716064733 dropping the table while its 20260502100200 publication ADD stayed —
+// and ONE dead name makes realtime refuse the whole channel, i.e. no live updates at all.
 const SYNC_TABLES = Object.freeze([
   'knowledge_bases', 'knowledge_folders', 'knowledge_entries',
   'skills', 'skill_versions',
@@ -82,35 +77,34 @@ const SYNC_TABLES = Object.freeze([
   'channel_messages', 'channel_agents', 'agent_presence',
 ]);
 
-// Historically the channels exemption excluded the three listener tables from
-// this feed; the UI needs them (see header), so the set is empty — retained
-// because the coverage contract test unions it with SYNC_TABLES.
+// Historically the channels exemption excluded the three listener tables from this feed;
+// the UI needs them (see header), so the set is empty — retained because the coverage
+// contract test unions it with SYNC_TABLES.
 const LISTENER_OWNED_TABLES = Object.freeze([]);
 
-// A burst on one (workspace, table) — an agent importing 40 knowledge entries —
-// must cost ONE refetch signal, not one per row. 250ms swallows a multi-statement
-// transaction and stays imperceptible.
+// A burst on one (workspace, table) — an agent importing 40 knowledge entries — must cost
+// ONE refetch signal, not one per row. 250ms swallows a multi-statement transaction and
+// stays imperceptible.
 const COALESCE_MS = 250;
 
-// Reconnect ladder, mirroring shared-channel-registry.ts's. Capped: a machine that
-// is offline for a week must retry forever without ever hammering (F-072).
+// Reconnect ladder, mirroring shared-channel-registry.ts's. Capped: a machine offline for
+// a week must retry forever without ever hammering (F-072).
 const RECONNECT_DELAYS_MS = Object.freeze([500, 1000, 2000, 4000, 8000, 15000]);
 
-// BACKSTOP re-read of the access token on a live connection (refreshAuth() is the
-// prompt path). Realtime keeps authorizing rejoins with whatever setAuth last
-// received, so a connection outliving its token silently stops rejoining.
+// BACKSTOP re-read of the access token on a live connection (refreshAuth() is the prompt
+// path). Realtime keeps authorizing rejoins with whatever setAuth last received, so a
+// connection outliving its token silently stops rejoining.
 const AUTH_RECHECK_MS = 5 * 60 * 1000;
 
-// A join holds a single-flight latch across an AWAITED token read, and
-// getAccessToken() can refresh in line (an HTTP call). A machine sleeping mid-flight
-// leaves that promise pending FOREVER — latch closed, no timer pending, feed dead
-// until quit. The read is raced against this deadline; a timeout is "no credential".
+// A join holds a single-flight latch across an AWAITED token read, and getAccessToken()
+// can refresh in line (an HTTP call). A machine sleeping mid-flight leaves that promise
+// pending FOREVER — latch closed, no timer, feed dead until quit. So the read is raced
+// against this deadline; a timeout is "no credential".
 const AUTH_READ_TIMEOUT_MS = 20_000;
 
-// MODULE-scoped, never reset by a teardown — see shared-channel-registry.ts's
-// generation counter. A per-connection one would restart at 1 after stop()/start()
-// and mint a byte-identical topic while realtime-js still holds the leaving channel,
-// whose subscribe() then silently no-ops.
+// MODULE-scoped, never reset by a teardown — see shared-channel-registry.ts's generation
+// counter. A per-connection one would restart at 1 after stop()/start() and mint a
+// byte-identical topic while realtime-js still holds the leaving channel (no-op subscribe).
 let topicSeq = 1;
 
 function nextTopic(workspaceId) { return `dopl-ui-sync-${workspaceId}-g${topicSeq++}`; }
@@ -137,12 +131,12 @@ function payloadWorkspaceId(payload) {
 
 // May this frame become a renderer event? Four gates, each guarding a real failure:
 // STARTED/WATCHED — a frame arriving during teardown must not send into a window the
-// caller let go of. GENERATION — the leave push settles asynchronously, so a channel
-// we just left keeps delivering for a beat, and attributing that to the workspace
-// switched TO is a wrong-workspace refetch. TABLE — only a table we deliberately
-// bound, so the channels exemption is refused on the way OUT too. WORKSPACE — a
-// payload naming a DIFFERENT workspace is refused; one naming none is forwarded (the
-// server filter already scoped the binding; dropping those breaks every DELETE).
+// caller let go of. GENERATION — the leave push settles asynchronously, so a channel we
+// just left keeps delivering for a beat, and attributing that to the workspace switched
+// TO is a wrong-workspace refetch. TABLE — only a table we deliberately bound, so the
+// channels exemption is refused on the way OUT too. WORKSPACE — a payload naming a
+// DIFFERENT workspace is refused; one naming none is forwarded (the server filter
+// already scoped the binding; dropping those breaks every DELETE).
 function shouldForward(state, event) {
   const s = state || {};
   const e = event || {};
@@ -182,15 +176,15 @@ function createSyncCoalescer(windowMs, onFlush, timers) {
   return { mark, flush, cancel, size: () => pending.size };
 }
 
-// What a (re)SUBSCRIBED owes the renderer: events during a disconnect are simply
-// gone (postgres_changes has no replay), so a fresh join means "you may have missed
-// anything". ONE event with an EMPTY table, not one per table — the registry
-// implements exactly that contract (shared-channel-registry.ts: `if (e.table &&
+// What a (re)SUBSCRIBED owes the renderer: events during a disconnect are simply gone
+// (postgres_changes has no replay), so a fresh join means "you may have missed
+// anything". ONE event with an EMPTY table, not one per table — the registry implements
+// exactly that contract (shared-channel-registry.ts: `if (e.table &&
 // !s.tables.has(e.table)) continue`, so an empty table fires EVERY subscriber). The
 // per-table batch instead made each hook refetch once per table it watches: five
-// refetches for the workflows page on every reconnect or wake, a self-inflicted
-// burst on the very DB this phase exists to unload. NOT coalesced — a reconnect
-// must reach the UI now.
+// refetches for the workflows page on every reconnect or wake, a self-inflicted burst on
+// the very DB this phase exists to unload. NOT coalesced — a reconnect must reach the UI
+// now.
 function catchUpBatch(workspaceId) {
   if (!workspaceId) return [];
   return [{ workspaceId, table: '' }];
@@ -210,6 +204,7 @@ let channel = null;
 let subscribed = false;
 let attempt = 0;
 let connecting = false;
+let connectingGen = 0; // WHICH attempt owns the `connecting` latch (see connect())
 let reconnectTimer = null;
 let authTimer = null;
 let coalescer = null;
@@ -221,9 +216,9 @@ function describeState() {
     + `attempt=${attempt} tables=${SYNC_TABLES.length}`;
 }
 
-// The ONE place an event crosses into the renderer. `getWindow` is called at SEND
-// time, never captured: the SPA window is rebuilt on reopen, and a dead window (or
-// webContents torn down mid-send) must fail closed, not throw into a realtime cb.
+// The ONE place an event crosses into the renderer. `getWindow` is called at SEND time,
+// never captured: the SPA window is rebuilt on reopen, and a dead window (or webContents
+// torn down mid-send) must fail closed, not throw into a realtime callback.
 function sendToWindow(item) {
   let win = null;
   try { win = getWindowFn ? getWindowFn() : null; } catch (_err) { return false; }
@@ -270,8 +265,8 @@ async function applyAuth(reason) {
   if (!client) return false;
   let token = null;
   try {
-    // RACED, never awaited bare: a read that hangs across a sleep would otherwise
-    // strand the single-flight latch with no timer to reopen it.
+    // RACED, never awaited bare: a read hanging across a sleep would otherwise strand
+    // the single-flight latch with no timer to reopen it.
     token = getTokenFn ? await readTokenWithDeadline() : null;
   } catch (err) {
     diag('ui-sync auth error', reason, (err && err.message) || String(err));
@@ -313,8 +308,8 @@ function onChange(myGen, table, payload) {
   const state = { started, watched, generation };
   const event = { workspaceId: payloadWorkspaceId(payload), table, generation: myGen };
   if (!shouldForward(state, event)) return;
-  // Always emitted under the WATCHED id — that is the key the renderer's registry
-  // is subscribed on. The payload's id was a guard, not the routing key.
+  // Always emitted under the WATCHED id — the key the renderer's registry is subscribed
+  // on. The payload's id was a guard, not the routing key.
   if (coalescer) coalescer.mark(watched, table);
 }
 
@@ -351,6 +346,7 @@ function connect() {
   if (!started || !watched || connecting) return;
   connecting = true;
   const myGen = ++generation;
+  connectingGen = myGen; // this attempt now owns the latch
   const wsId = watched;
   releaseChannel();
   ensureClient();
@@ -379,9 +375,18 @@ function connect() {
       scheduleReconnect();
     })
     .finally(() => {
+      // ONLY THE OWNER MAY RELEASE. onWake() force-clears the latch and starts a NEWER
+      // attempt while this one's token read is still pending (the 20s deadline
+      // guarantees it resolves after wake); an unguarded release then cleared the latch
+      // the newer attempt holds and spawned a THIRD connect whose ++generation
+      // invalidated the healthy in-flight rejoin — and under uniform read latency those
+      // chains keep invalidating each other, so SUBSCRIBED never lands. `generation`
+      // cannot stand in for ownership: watch() bumps it too, and skipping the release on
+      // that would wedge the latch closed forever.
+      if (connectingGen !== myGen) return;
       connecting = false;
-      // A watch() that landed while we awaited the token left the desired workspace
-      // with no channel — pick it up now, not on a retry nothing scheduled.
+      // A watch() that landed while we awaited the token left the desired workspace with
+      // no channel — pick it up now, not on a retry nothing scheduled.
       if (started && watched && !channel && !reconnectTimer) connect();
     });
 }
@@ -390,20 +395,18 @@ function armAuthRecheck() {
   if (authTimer || !started) return;
   authTimer = setInterval(() => {
     if (!started || !client || !watched) return;
-    // Backstop rotation: lands on the live socket without a rejoin. An
-    // unrenewable credential logs and the next CHANNEL_ERROR puts us on the ladder.
+    // Backstop rotation: lands on the live socket without a rejoin. An unrenewable
+    // credential logs and the next CHANNEL_ERROR puts us on the ladder.
     applyAuth('rotate').catch((err) => diag('ui-sync auth recheck error', err && err.message));
   }, AUTH_RECHECK_MS);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Start the feed. Idempotent. `getWindow()` returns the live SPA BrowserWindow (or
- * null), called at SEND time; `getAccessToken()` returns a valid Supabase access JWT
- * (main/auth-tokens.js), called at every JOIN — neither is captured once. Nothing
- * subscribes until `watch()` names a workspace.
- */
+/** Start the feed. Idempotent. `getWindow()` returns the live SPA BrowserWindow (or
+ *  null), called at SEND time; `getAccessToken()` returns a valid Supabase access JWT
+ *  (main/auth-tokens.js), called at every JOIN — neither is captured once. Nothing
+ *  subscribes until `watch()` names a workspace. */
 function start(opts = {}) {
   if (started) return;
   getWindowFn = typeof opts.getWindow === 'function' ? opts.getWindow : null;
@@ -415,11 +418,9 @@ function start(opts = {}) {
   if (watched) connect();
 }
 
-/**
- * Switch the watched workspace (null unwatches). The old channel's queued signals are
- * DROPPED, not delivered into the new view, and the generation bump makes every
- * in-flight frame from it inert.
- */
+/** Switch the watched workspace (null unwatches). The old channel's queued signals are
+ *  DROPPED, not delivered into the new view, and the generation bump makes every
+ *  in-flight frame from it inert. */
 function watch(workspaceId) {
   const next = workspaceId ? String(workspaceId) : null;
   if (next === watched) return;
@@ -433,11 +434,14 @@ function watch(workspaceId) {
   if (started && watched) connect();
 }
 
-/**
- * powerMonitor 'resume' / 'unlock-screen'. The machine may have slept through a whole
- * token lifetime and a socket death the OS never surfaced, so this rejoins from
- * scratch with a fresh credential instead of trusting a connection that looks live.
- */
+/** The workspace the feed is watching (null = nothing). Read by the auth fan-out so a
+ *  same-operator sign-out → sign-in can put it back: stop() clears `watched` on purpose,
+ *  and the renderer's registry dedupes on module state it never re-issues from. */
+function watchedWorkspace() { return watched; }
+
+/** powerMonitor 'resume' / 'unlock-screen'. The machine may have slept through a whole
+ *  token lifetime and a socket death the OS never surfaced, so this rejoins from scratch
+ *  with a fresh credential instead of trusting a connection that looks live. */
 function onWake() {
   if (!started || !watched) return;
   diag('ui-sync wake —', describeState());
@@ -450,10 +454,10 @@ function onWake() {
 }
 
 /**
- * Re-apply the current credential to the LIVE socket and rejoin if the channel is
- * down. main/index.js should call this from its `authTokens.subscribe(...)` handler
- * on a 'signed-in' transition (every successful refresh emits one) so a rotation
- * lands at once rather than up to AUTH_RECHECK_MS later. Safe to call any time.
+ * Re-apply the current credential to the LIVE socket and rejoin if the channel is down.
+ * The auth fan-out (main/shell-mode.js) calls this on a 'signed-in' transition (every
+ * successful refresh emits one) so a rotation lands at once rather than up to
+ * AUTH_RECHECK_MS later. Safe to call any time.
  */
 function refreshAuth() {
   if (!started || !client || !watched) return;
@@ -464,11 +468,10 @@ function refreshAuth() {
     .catch((err) => diag('ui-sync refreshAuth error', err && err.message));
 }
 
-/**
- * Tear everything down (quit / sign-out). Safe when never started. `watched` is
- * CLEARED: a later start() must not silently rejoin the previous session's workspace
- * before the renderer re-issues its watch — after a sign-out that is another user's.
- */
+/** Tear everything down (quit / sign-out). Safe when never started. `watched` is
+ *  CLEARED: a later start() must not silently rejoin the previous session's workspace
+ *  before the renderer re-issues its watch — after a sign-out that is another user's.
+ *  Only the auth fan-out's SAME-OPERATOR replay may put it back (watchedWorkspace). */
 function stop() {
   started = false;
   watched = null;
@@ -486,7 +489,7 @@ function stop() {
 }
 
 module.exports = {
-  start, stop, watch, onWake, refreshAuth,
+  start, stop, watch, onWake, refreshAuth, watchedWorkspace,
   snapshot: describeState,
   SYNC_EVENT,
   // The table list and pure core — for callers that need the rule, not the socket.

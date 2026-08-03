@@ -1,8 +1,8 @@
 import { AuthSplitLayout } from "@/shared/layout/auth-split";
-import { getAppOrigin } from "@/shared/lib/app-origin";
 import { LoginFormCore } from "@/features/auth/components/login-form-core";
 import type { LoginActions } from "@/features/auth/hooks/use-login-core";
 import { getBridge } from "#/lib/dopl-bridge";
+import { openInBrowser } from "#/lib/open-in-browser";
 // Bundled as a data URI (`?inline`): the packaged renderer is a `file://`
 // document under `img-src 'self' data: blob:`, so the web form's absolute
 // `/favicons/...` src resolves to the filesystem root and never loads.
@@ -51,7 +51,9 @@ export function SignedOutScreen() {
           <button
             type="button"
             className={className}
-            onClick={() => void openPublicPage(href)}
+            // The public site owns /terms and /privacy — one shared helper
+            // decides how a link leaves this app (bridge, else window.open).
+            onClick={() => openInBrowser(href)}
           >
             {children}
           </button>
@@ -90,12 +92,4 @@ function bridgeActions(): LoginActions {
 
 function toResult(answer: { ok: boolean; error?: string }): { error?: string } {
   return answer.ok ? {} : { error: answer.error ?? "Something went wrong" };
-}
-
-function openPublicPage(path: string): Promise<unknown> {
-  const url = `${getAppOrigin()}${path}`;
-  const bridge = getBridge();
-  if (bridge) return bridge.openExternal(url);
-  window.open(url, "_blank", "noopener,noreferrer");
-  return Promise.resolve();
 }

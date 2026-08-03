@@ -26,8 +26,20 @@ export function PageLoading({ label = "Loading" }: { label?: string }) {
   );
 }
 
-/** A 401 from any surface means ONE thing in the desktop app: the session is
- *  gone. Screens route it to the signed-out view, never to a generic error. */
+/**
+ * A 401 from any surface means ONE thing in the desktop app: the session is
+ * gone. Screens route it to the signed-out view, never to a generic error.
+ *
+ * THE definition, for boot and for the shell alike. Boot carried a private
+ * copy that also treated 403 as signed-out; the two answered differently under
+ * one name, and the last person to "share" this helper edited boot without
+ * noticing its twin (2026-08-03 fleet audit, duplication-quality). 403 is
+ * deliberately NOT signed-out: the desktop SPA authenticates with a session
+ * JWT, so the only 403s this API mints (SESSION_REQUIRED / WRITE_SCOPE_REQUIRED,
+ * both OAuth-agent-only) cannot reach it, and a genuine authorization failure
+ * is an error to show, not a reason to throw the user at the login screen —
+ * access denial on the workspace routes is already collapsed to 404.
+ */
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }

@@ -19,13 +19,22 @@ export default function DesktopStartPage() {
     (async () => {
       // Closed enum from the query string — the desktop app's OAuth buttons
       // pass ?provider=github; anything unrecognized degrades to google.
-      const requested = new URLSearchParams(window.location.search).get("provider");
+      const search = new URLSearchParams(window.location.search);
+      const requested = search.get("provider");
       const p: "google" | "github" = requested === "github" ? "github" : "google";
       setProvider(p);
+      // Echo the app's login-CSRF nonce through the whole flow: it rides
+      // the callback redirect into /auth/desktop-handoff, which puts it in
+      // the dopl:// fragment — letting the app demand an EXACT state match
+      // instead of the weaker presence+TTL gate.
+      const state = search.get("state") || "";
+      const stateQs = state ? `&state=${encodeURIComponent(state)}` : "";
       const supabase = getSupabaseBrowser();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: p,
-        options: { redirectTo: `${window.location.origin}/auth/callback?desktop=1` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?desktop=1${stateQs}`,
+        },
       });
       if (error) setError(error.message);
     })();

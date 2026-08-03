@@ -1,8 +1,8 @@
 import { Navigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest, ApiError } from "#/lib/api";
+import { apiRequest } from "#/lib/api";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "./signed-out-screen";
 import {
   ENSURE_DEFAULT_PATH,
@@ -119,8 +119,4 @@ export default function BootPage() {
   }
 
   return <Navigate to={`/${workspace.data.segment}`} replace />;
-}
-
-function isUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 401 || error.status === 403);
 }

@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+import { between, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -33,10 +34,11 @@ function slice(src, name) {
 
 // ── ui-bridge pure guards, sliced and driven directly ────────────────────────
 
-const bridgePure = slice(M("ui-bridge.js"), "UI-BRIDGE-PURE");
-const { isWindowSender, resolveApiUrl, isExternalUrl, isWorkspaceId } =
+const BRIDGE = M("ui-bridge.js");
+const bridgePure = slice(BRIDGE, "UI-BRIDGE-PURE");
+const { isWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId } =
   new Function(
-    `${bridgePure}; return { isWindowSender, resolveApiUrl, isExternalUrl, isWorkspaceId };`
+    `${bridgePure}; return { isWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId };`
   )();
 
 const API_BASE = "https://www.usedopl.com";
@@ -136,6 +138,96 @@ test("isExternalUrl: http(s) only", () => {
   for (const evil of ["file:///etc/passwd", "smb://host/share", "javascript:alert(1)", "not a url", ""]) {
     assert.equal(isExternalUrl(evil), false, `admitted: ${evil}`);
   }
+});
+
+// ── open-external is a DESTINATION policy, not just a scheme check ───────────
+// Fleet audit 2026-08-03 (medium): `shell.openExternal` is the renderer's only
+// outbound primitive and no CSP applies to the OS opener, so a scheme-only gate
+// turned this handler into an arbitrary outbound GET — the single hole in the
+// SPA's `connect-src 'none'` containment, and the exfiltration leg for anything
+// readable back over the API bridge (e.g. a minted device token).
+
+test("open-external admits the app origin, Stripe and the release host — nothing else", () => {
+  const APP = "https://www.usedopl.com";
+  for (const ok of [
+    `${APP}/ws/canvas?billing=upgrade`,
+    `${APP}/login`,
+    "https://billing.stripe.com/p/session/live_abc",
+    "https://checkout.stripe.com/c/pay/cs_test",
+    "https://github.com/SamuelrWang/Dopl/releases/latest/download/Dopl-arm64.dmg",
+  ]) {
+    assert.equal(isAllowedExternalUrl(ok, APP), true, `refused a real destination: ${ok}`);
+  }
+  for (const evil of [
+    "https://evil.example/?t=dopl_at_live_token", // the exfiltration shape
+    "https://usedopl.com.evil.example/x", // suffix-shaped lookalike
+    "https://notgithub.com/x",
+    "https://stripe.com.evil.example/x",
+    "http://billing.stripe.com/p/session/x", // third parties are https-only
+    "file:///etc/passwd",
+    "javascript:alert(1)",
+    "not a url",
+    "",
+    null,
+  ]) {
+    assert.equal(isAllowedExternalUrl(evil, APP), false, `admitted: ${evil}`);
+  }
+});
+
+test("open-external follows a dev app origin (DOPL_APP_URL) including plain http", () => {
+  const DEV = "http://localhost:3000";
+  assert.equal(isAllowedExternalUrl(`${DEV}/ws/canvas`, DEV), true);
+  assert.equal(isAllowedExternalUrl("http://localhost:3001/x", DEV), false, "a different port is a different origin");
+  // The production origin is NOT implicitly allowed just because it is ours.
+  assert.equal(isAllowedExternalUrl("http://www.usedopl.com/x", DEV), false);
+});
+
+test("the handler runs the destination policy and names only the host when it refuses", () => {
+  const fn = between(BRIDGE, "'dopl:open-external'", "broadcastAuthState");
+  assert.match(fn, /isAllowedExternalUrl\(url, APP_ORIGIN\)/, "the scheme check alone is not the gate");
+  assert.ok(!/diag\([^)]*url\b/.test(fn), "a refused URL's query string must never reach the log");
+});
+
+// ── a refused watch must not read as a committed one ─────────────────────────
+
+test("sync-watch REJECTS a non-UUID instead of resolving {ok:false}", () => {
+  // shared-channel-registry's issueWatch commits `watchedWorkspace` on ANY resolved
+  // answer, so a soft refusal left the renderer believing it was watching a workspace
+  // main never joined — a dead feed its own dedupe then refuses to re-issue.
+  const fn = between(BRIDGE, "'dopl:sync-watch'", "'dopl:open-external'");
+  assert.match(fn, /throw new Error\('dopl: invalid workspace id'\)/);
+  assert.ok(!/return \{ ok: false \}/.test(fn), "a refusal must not be decodable as an answer");
+});
+
+// ── the 401 repair may not report a sign-out it did not observe ──────────────
+
+test("'signed-out' is emitted only after a retry with a FRESH token still 401s", () => {
+  // auth-tokens classifies 5xx/429/timeouts as TRANSIENT: forceRefresh() answers null
+  // while KEEPING the session (it just emitted 'signed-in'). Emitting off the original
+  // 401 flipped the renderer to the login screen and tore the sync feed down on a
+  // network blip, then flapped back on the next successful refresh.
+  const fn = fnOf(BRIDGE, "performApiRequest");
+  const repair = fn.slice(fn.indexOf("shouldRepairAuth"));
+  const emit = repair.indexOf("emitAuthState('signed-out')");
+  const retry = repair.indexOf("sendApiRequest(href, opts, fresh.access_token)");
+  assert.ok(retry !== -1 && emit !== -1, "the repair must still retry once and be able to emit");
+  assert.ok(retry < emit, "the emit must come after the retry, inside the fresh-token branch");
+  const guard = repair.slice(repair.indexOf("if (fresh && fresh.access_token)"), emit);
+  assert.ok(guard.length > 0, "the emit must sit INSIDE the `fresh` branch");
+});
+
+// ── the SPA auth entry points kick the same services the deep link does ──────
+
+test("SPA password sign-in and sign-out restart the listener (and sign-in writes MCP config)", () => {
+  // Without it the listener long-polls on a revoked credential (with a misleading
+  // "session expired" notification) and the tray reads signed-out for up to the
+  // 5-minute reconcile after a successful sign-in.
+  const signIn = between(BRIDGE, "'dopl:password-sign-in'", "'dopl:magic-link'");
+  assert.match(signIn, /kickListener\('password-sign-in'\)/);
+  assert.match(signIn, /ensureMcpConfig\('password-sign-in'\)/);
+  const signOut = between(BRIDGE, "'dopl:sign-out'", "'dopl:sync-watch'");
+  assert.match(signOut, /kickListener\('sign-out'\)/);
+  assert.match(fnOf(BRIDGE, "kickListener"), /require\('\.\/channel-listener'\)/, "lazy require: no import cycle");
 });
 
 test("isWorkspaceId: UUID only", () => {

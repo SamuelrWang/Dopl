@@ -1,42 +1,31 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
-import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
+import type { BridgeResponse } from "#/lib/dopl-bridge";
+import {
+  SEGMENT,
+  WORKSPACE,
+  bridgeCalls,
+  installBridge,
+  ok,
+  renderWithProviders,
+  resolveBody,
+} from "#/test-utils/bridge";
 import SettingsPage from "./index";
 
 /**
  * Smoke test for the ported settings page.
  *
- * Mocked at `window.dopl.apiRequest` — the Electron bridge — because this page
- * reads over BOTH clients: the seam (`useWorkspaceRoute`, `useApiQuery`) uses
- * the SPA transport while every reused section (trash, connected apps, and the
- * two workspace cores) uses the WEB `apiRequest`. Both land on the same bridge
- * in the packaged app.
+ * Fixtures, bridge stub and render harness come from `#/test-utils/bridge` —
+ * the resolve/me wire shapes are the SPA's most load-bearing contract and are
+ * declared once for every suite.
  *
- * `fetch` is a never-resolving tripwire: nothing here may touch the network
- * directly (`connect-src 'none'` in the packaged renderer). The section that
- * used to — `connected-apps-section`'s revoke — was moved onto `apiRequest` by
- * this slice, and the last assertion is what holds that.
+ * This page reads over BOTH clients: the seam (`useWorkspaceRoute`,
+ * `useApiQuery`) uses the SPA transport while every reused section (trash,
+ * connected apps, and the shared workspace-settings body) uses the WEB
+ * `apiRequest`. Both land on the same bridge in the packaged app.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
-
-const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
-const SEGMENT = "acme-ab12cd";
-
-const WORKSPACE = {
-  id: WORKSPACE_ID,
-  ownerId: "user-1",
-  name: "Acme",
-  slug: "acme",
-  publicId: "ab12cd",
-  description: "The workspace",
-  iconUrl: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-};
 
 const GRANTS = [
   {
@@ -48,16 +37,10 @@ const GRANTS = [
   },
 ];
 
-function ok(body: unknown): BridgeResponse {
-  return { status: 200, statusText: "OK", hasBody: true, body };
-}
-
 /** Routes every path this page reads; anything else fails the test loudly. */
 function defaultBridge(path: string, role = "owner"): Promise<BridgeResponse> {
   if (path.startsWith("/api/workspaces/resolve")) {
-    return Promise.resolve(
-      ok({ workspace: WORKSPACE, canonical: SEGMENT, needsRedirect: false })
-    );
+    return Promise.resolve(ok(resolveBody()));
   }
   if (path === `/api/workspaces/${SEGMENT}`) {
     return Promise.resolve(ok({ workspace: WORKSPACE, role }));
@@ -72,33 +55,20 @@ function defaultBridge(path: string, role = "owner"): Promise<BridgeResponse> {
   return Promise.reject(new Error(`unexpected request: ${path}`));
 }
 
-const calls = () =>
-  apiRequest.mock.calls.map((args) => ({
-    path: (args as unknown[])[0] as string,
-    opts: ((args as unknown[])[1] ?? {}) as BridgeRequestOpts,
-  }));
+const calls = () => bridgeCalls(apiRequest);
 
 function renderPage() {
-  const router = createMemoryRouter(
+  return renderWithProviders(
     [{ path: "/:workspaceSegment/settings", element: <SettingsPage /> }],
-    { initialEntries: [`/${SEGMENT}/settings`] }
-  );
-  return render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    [`/${SEGMENT}/settings`]
   );
 }
 
 describe("settings page", () => {
   beforeEach(() => {
+    apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => defaultBridge(path));
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest });
   });
 
   it("renders the workspace header and every section off the bridge", async () => {

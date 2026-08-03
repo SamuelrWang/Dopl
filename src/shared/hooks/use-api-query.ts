@@ -1,31 +1,21 @@
 "use client";
 
-import { useCallback } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { apiRequest, type ApiRequestOpts } from "@/shared/api/api-client";
+import { apiRequest } from "@/shared/api/api-client";
+import {
+  useApiQueryWith,
+  type UseApiQueryOpts,
+} from "./use-api-query-core";
 
-export interface UseApiQueryOpts<T, S = T>
-  extends Pick<ApiRequestOpts, "workspaceId" | "query"> {
-  /** Map the raw response body to the hook's data shape. */
-  select?: (body: T) => S;
-  /** Pause the query (e.g. while the workspace id is unresolved). */
-  enabled?: boolean;
-  /** Override the provider default (ms). */
-  staleTime?: number;
-  /** Refetch interval in ms for polling endpoints. */
-  refetchInterval?: number;
-  /** Keep the prior key's data visible while a new key's query loads
-   *  (TanStack `placeholderData: keepPreviousData`) — avoids a blank
-   *  flash when the query key changes for the same logical view. */
-  keepPreviousData?: boolean;
-}
+export type { UseApiQueryOpts };
 
 /**
  * useApiQuery — the standard client GET hook (successor to `useApiGet`
  * and the per-feature `useFetch` copies). TanStack Query supplies
- * caching, dedupe, focus revalidation, and keep-previous-data; this
- * wrapper binds it to `apiRequest` and the app's URL/workspace-header
- * conventions.
+ * caching, dedupe, focus revalidation, and keep-previous-data; the
+ * implementation in `./use-api-query-core.ts` binds it to the app's
+ * URL/workspace-header conventions, and this file binds THAT to the web
+ * app's transport (`@/shared/api/api-client`). The desktop SPA's
+ * `#/hooks/use-api-query` is the same three lines over its own transport.
  *
  * The query key is `[path, workspaceId, query]` — pass the same args
  * from any component and they share one cache entry + one in-flight
@@ -36,30 +26,5 @@ export function useApiQuery<T, S = T>(
   path: string | null,
   opts: UseApiQueryOpts<T, S> = {}
 ) {
-  const enabled = path !== null && (opts.enabled ?? true);
-  const query = useQuery({
-    queryKey: [path, opts.workspaceId, opts.query] as const,
-    queryFn: ({ signal }) =>
-      apiRequest<T>(path as string, {
-        workspaceId: opts.workspaceId,
-        query: opts.query,
-        signal,
-      }),
-    enabled,
-    select: opts.select,
-    staleTime: opts.staleTime,
-    refetchInterval: opts.refetchInterval,
-    placeholderData: opts.keepPreviousData ? keepPreviousData : undefined,
-  });
-
-  // TanStack v5 refetch() IGNORES `enabled` — on a null-path/disabled
-  // query it would fire a real request at a garbage URL. Restore the
-  // old hooks' contract: refetch on a disabled query is a no-op.
-  const rawRefetch = query.refetch;
-  const refetch = useCallback<typeof rawRefetch>(
-    (...args) => (enabled ? rawRefetch(...args) : Promise.resolve(undefined as never)),
-    [enabled, rawRefetch]
-  );
-
-  return { ...query, refetch };
+  return useApiQueryWith<T, S>(apiRequest, path, opts);
 }

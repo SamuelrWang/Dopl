@@ -4,6 +4,7 @@ import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeResponse } from "#/lib/dopl-bridge";
+import { SEGMENT, installBridge } from "#/test-utils/bridge";
 import OnboardingPage from "./index";
 
 /**
@@ -29,7 +30,6 @@ vi.mock("@/shared/layout/auth-split", () => ({
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-const SEGMENT = "acme-ab12cd";
 
 function ok(body: unknown): BridgeResponse {
   return { status: 200, statusText: "OK", hasBody: true, body };
@@ -76,12 +76,7 @@ function renderPage() {
 describe("onboarding page", () => {
   beforeEach(() => {
     apiRequest.mockImplementation((path: string) => bridge(false)(path));
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest, appOrigin: "https://www.usedopl.com" },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest, appOrigin: "https://www.usedopl.com" });
   });
 
   it("renders the survey and submits it over the bridge", async () => {

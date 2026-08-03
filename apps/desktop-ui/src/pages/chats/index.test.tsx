@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import ChatsPage from "#/pages/chats";
 import type { Chat, ChatDetail, ChatFolder } from "@/features/chats/types";
+import { SEGMENT } from "#/test-utils/bridge";
 
 /**
  * Smoke test for the ported chats page: the REAL `ChatsView` tree (reused from
@@ -38,7 +39,6 @@ vi.mock("@/shared/supabase/browser", () => {
   };
 });
 
-const SEGMENT = "acme-ab12cd";
 
 /** Fresh per test: the realtime registry shares one channel per workspace id
  *  across mounts (module singleton with a teardown grace window), so a reused

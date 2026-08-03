@@ -2,7 +2,7 @@ import { useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import type { Role } from "@/features/workspaces/types";
 import { PlansBillingCore } from "@/shared/layout/settings-modal/sections/plans-billing-core";
-import { billingPath, openInBrowser, openUrlInBrowser } from "./open-in-browser";
+import { billingPath, openInBrowser, openUrlInBrowser } from "#/lib/open-in-browser";
 
 interface Props {
   workspaceSegment: string;

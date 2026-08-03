@@ -4,6 +4,7 @@ import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeOpResult, BridgeResponse } from "#/lib/dopl-bridge";
+import { SEGMENT, installBridge } from "#/test-utils/bridge";
 import BootPage from "./index";
 
 /**
@@ -32,7 +33,6 @@ vi.mock("@/shared/layout/auth-split", () => ({
   ),
 }));
 
-const SEGMENT = "acme-ab12cd";
 
 function ok(body: unknown): BridgeResponse {
   return { status: 200, statusText: "OK", hasBody: true, body };
@@ -81,10 +81,7 @@ describe("boot page", () => {
   beforeEach(() => {
     getAuthState.mockResolvedValue({ signedIn: true, userId: "user-1" });
     apiRequest.mockImplementation((path: string) => bridgeFor(true)(path));
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: {
+    installBridge({
         apiRequest,
         getAuthState,
         openExternal,
@@ -92,9 +89,7 @@ describe("boot page", () => {
         passwordSignIn,
         sendMagicLink,
         appOrigin: "https://www.usedopl.com",
-      },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+      });
   });
 
   it("signed out → the real login form, and reads nothing", async () => {
@@ -166,10 +161,7 @@ describe("boot page", () => {
 describe("signed-out login form", () => {
   beforeEach(() => {
     getAuthState.mockResolvedValue({ signedIn: false, userId: null });
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: {
+    installBridge({
         apiRequest,
         getAuthState,
         openExternal,
@@ -177,9 +169,7 @@ describe("signed-out login form", () => {
         passwordSignIn,
         sendMagicLink,
         appOrigin: "https://www.usedopl.com",
-      },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+      });
   });
 
   async function renderForm() {
@@ -265,11 +255,7 @@ describe("signed-out login form", () => {
   });
 
   it("an older main (op absent) disables the path and says why", async () => {
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest, getAuthState, openExternal, appOrigin: "https://www.usedopl.com" },
-    });
+    installBridge({ apiRequest, getAuthState, openExternal, appOrigin: "https://www.usedopl.com" });
 
     await renderForm();
 

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import KnowledgePage from "./index";
 import KnowledgeDetailPage from "./detail";
+import { WORKSPACE_ID } from "#/test-utils/bridge";
 
 /**
  * Smoke test for the ported knowledge slice.
@@ -17,7 +18,6 @@ import KnowledgeDetailPage from "./detail";
  * reused components in desktop mode, where realtime and presence no-op.
  */
 
-const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
 const USER_ID = "user-1";
 
 const BASE_A = {

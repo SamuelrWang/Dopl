@@ -10,11 +10,19 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
  * can adopt the session in its own window. The app loads /auth/desktop-complete
  * with the same tokens and calls setSession there.
  */
-function buildDeepLink(accessToken: string, refreshToken: string): string {
+function buildDeepLink(
+  accessToken: string,
+  refreshToken: string,
+  state: string
+): string {
   const params = new URLSearchParams({
     access_token: accessToken,
     refresh_token: refreshToken,
   });
+  // Echo the app's login-CSRF nonce (armed by main, threaded through
+  // desktop-start → callback → here) so captureFromFragment can demand an
+  // EXACT match instead of the weaker presence+TTL gate.
+  if (state) params.set("state", state);
   return `dopl://auth#${params.toString()}`;
 }
 
@@ -30,7 +38,12 @@ export default function DesktopHandoffPage() {
         setError("No active session found. Please return to the app and try signing in again.");
         return;
       }
-      const link = buildDeepLink(data.session.access_token, data.session.refresh_token);
+      const state = new URLSearchParams(window.location.search).get("state") || "";
+      const link = buildDeepLink(
+        data.session.access_token,
+        data.session.refresh_token,
+        state
+      );
       setDeepLink(link);
       // Auto-trigger the app. The browser will prompt to open "Dopl".
       window.location.href = link;

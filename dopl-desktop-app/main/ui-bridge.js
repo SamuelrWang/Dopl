@@ -22,7 +22,7 @@
 const { ipcMain, shell } = require('electron');
 const appVersion = require('./app-version');
 const authTokens = require('./auth-tokens');
-const { API_BASE } = require('./config');
+const { API_BASE, APP_ORIGIN } = require('./config');
 const uiSync = require('./ui-sync');
 const authActions = require('./auth-actions');
 const authPassword = require('./auth-password');
@@ -87,6 +87,32 @@ function isExternalUrl(url) {
   } catch (_err) {
     return false;
   }
+}
+
+// WHERE the OS opener may be pointed. The scheme check above is not a policy:
+// no CSP applies to `shell.openExternal`, so a scheme-only gate makes this
+// handler the renderer's arbitrary outbound GET — the one hole in the SPA's
+// `connect-src 'none'` containment (app-preload.js's "a renderer that never
+// holds a credential cannot leak one"), and the exfiltration leg for anything
+// the renderer can read back over the API bridge.
+//
+// So it is an ALLOWLIST of the destinations the SPA actually opens:
+//   • the app's own origin — settings, billing, account, sign-in help; whatever
+//     scheme this build points at (DOPL_APP_URL is overridden in dev)
+//   • *.stripe.com  — hosted checkout + the billing portal, URLs the API mints
+//   • *.github.com  — the notarized DMG on the releases page (channels onboarding)
+// Adding a destination is a deliberate one-line edit here, not a side effect of
+// a link landing in a ported component.
+const EXTERNAL_HOST_ALLOWLIST = Object.freeze(['stripe.com', 'github.com']);
+
+function isAllowedExternalUrl(url, appOrigin) {
+  if (!isExternalUrl(url)) return false;
+  const u = new URL(String(url));
+  if (appOrigin && u.origin === appOrigin) return true;
+  // Third parties are https-only; the app origin above may be http in dev.
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  return EXTERNAL_HOST_ALLOWLIST.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
 // x-workspace-id is UUID-only server-side (src/shared/auth/with-workspace-auth.ts
@@ -161,10 +187,18 @@ async function performApiRequest(href, opts) {
   // 401 that survives a fresh token is a real authorization answer.
   if (authTokens.shouldRepairAuth(res.status, false)) {
     const fresh = await authTokens.forceRefresh();
+    // ONLY A 401 THAT SURVIVED A FRESH TOKEN IS A SIGN-OUT. A null refresh does
+    // NOT mean the session is dead: auth-tokens classifies 5xx/429/timeouts as
+    // TRANSIENT, keeps the stored session and has just emitted 'signed-in'. The
+    // old form emitted 'signed-out' off the ORIGINAL 401 in that case — flipping
+    // the renderer to the login screen and tearing down the sync feed (its
+    // watched workspace with it) on a network blip, then flapping back on the
+    // next successful refresh, all while the credential was still good.
+    // main/api.js's cookie transport has always gated it this way.
     if (fresh && fresh.access_token) {
       res = await sendApiRequest(href, opts, fresh.access_token);
+      if (res.status === 401) authTokens.emitAuthState('signed-out');
     }
-    if (res.status === 401) authTokens.emitAuthState('signed-out');
   }
 
   const out = { status: res.status, statusText: res.statusText, hasBody: false };
@@ -177,6 +211,32 @@ async function performApiRequest(href, opts) {
     // turns a bodiless failure into ApiError(status, INTERNAL_ERROR).
   }
   return out;
+}
+
+// THE POST-AUTH KICK, which the deep-link path has always done (index.js:
+// listener.restart() + ensureMcpConfig after adoption) and the SPA's own two
+// entry points did not: without it the channel listener keeps long-polling on a
+// revoked credential after a sign-out (up to the 5-minute reconcile, with a
+// misleading "your session expired" notification in between), and after a
+// password sign-in the tray still reads "signed out" and the CLI's MCP config is
+// never written. Lazy requires: both modules pull in the auth stack this file is
+// part of, and by the time anyone can sign in every module is loaded.
+function kickListener(reason) {
+  try {
+    require('./channel-listener').restart();
+  } catch (err) {
+    diag('ui-bridge: listener restart failed —', reason, (err && err.message) || String(err));
+  }
+}
+
+function ensureMcpConfig(reason) {
+  try {
+    require('./mcp-config')
+      .ensureMcpConfig()
+      .catch((err) => diag('ui-bridge: mcp-config —', reason, err && err.message));
+  } catch (err) {
+    diag('ui-bridge: mcp-config —', reason, (err && err.message) || String(err));
+  }
 }
 
 /**
@@ -251,6 +311,8 @@ function register(opts = {}) {
       const out = await authPassword.passwordAuth(payload);
       if (out.ok && !out.pendingConfirmation) {
         try { authTokens.onSignIn(); } catch (_err) { /* not started */ }
+        kickListener('password-sign-in');
+        ensureMcpConfig('password-sign-in');
       }
       return out;
     })
@@ -270,6 +332,7 @@ function register(opts = {}) {
       // home page into the window, which is the OLD shell's step.
       await auth.signOut();
       try { authTokens.onSignOut(); } catch (_err) { /* not started */ }
+      kickListener('sign-out');
       return { ok: true };
     })
   );
@@ -283,7 +346,15 @@ function register(opts = {}) {
         uiSync.watch(null);
         return { ok: true };
       }
-      if (!isWorkspaceId(workspaceId)) return { ok: false };
+      if (!isWorkspaceId(workspaceId)) {
+        // REJECT, never a soft `{ ok: false }`: the renderer's registry commits
+        // the watch on any RESOLVED answer (shared-channel-registry issueWatch),
+        // so a refusal it can read as a resolution leaves it believing it is
+        // watching a workspace main never joined — a permanently dead feed that
+        // its own dedupe then refuses to re-issue.
+        diag('ui-bridge: refused sync-watch — workspaceId is not a UUID');
+        throw new Error('dopl: invalid workspace id');
+      }
       uiSync.watch(workspaceId);
       return { ok: true };
     })
@@ -292,7 +363,14 @@ function register(opts = {}) {
   ipcMain.handle(
     'dopl:open-external',
     bound('open-external', async (_event, url) => {
-      if (!isExternalUrl(url)) return { ok: false };
+      if (!isAllowedExternalUrl(url, APP_ORIGIN)) {
+        // Named destination, never the URL: a refused URL may carry whatever the
+        // caller was trying to smuggle out in its query string.
+        let host = '?';
+        try { host = new URL(String(url)).host || '?'; } catch (_err) { /* unparseable */ }
+        diag('ui-bridge: refused open-external — host not on the allowlist:', host);
+        return { ok: false };
+      }
       try {
         await shell.openExternal(String(url));
         return { ok: true };
@@ -323,6 +401,7 @@ module.exports = {
   broadcastAuthState,
   resolveApiUrl,
   isExternalUrl,
+  isAllowedExternalUrl,
   isWorkspaceId,
   isWindowSender,
   AUTH_STATE_EVENT,

@@ -1,8 +1,7 @@
-import { useParams } from "react-router";
 import { ChannelsViewCore } from "@/features/channels/components/channels-view-core";
 import { PageError, PageLoading } from "#/components/page-states";
 import { RouterLink } from "#/components/app-shell";
-import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
+import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
  * /:workspaceSegment/channels — the agent-to-agent collaboration surface.
@@ -48,8 +47,7 @@ import { useWorkspaceAccess } from "#/pages/skills/use-workspace-access";
  * port. They render nothing, exactly as they do in a plain browser.
  */
 export default function ChannelsPage() {
-  const { workspaceSegment = "" } = useParams();
-  const { access, isPending, error, refetch } = useWorkspaceAccess(workspaceSegment);
+  const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) return <PageLoading label="Loading channels" />;

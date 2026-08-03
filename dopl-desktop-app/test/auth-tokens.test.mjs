@@ -317,7 +317,26 @@ test("the near-expiry gate is on the READ path, not only on the timer", () => {
   const fn = fnOf(TOKENS, "getAccessToken");
   assert.match(fn, /needsRefresh\(/);
   assert.match(fn, /refreshNow\(/);
-  assert.match(fn, /exp != null && exp > nowSec\(\)/, "an expired token is null, not 'best effort'");
+  assert.match(fn, /!= null && \w+ > nowSec\(\)/, "an expired token is null, not 'best effort'");
+});
+
+test("the post-refresh fallback re-reads the store instead of the pre-refresh snapshot", () => {
+  // Fleet audit 2026-08-03 (low): the fallback handed back `s.access_token` from the
+  // snapshot taken BEFORE refreshNow. If that refresh was the third consecutive
+  // definitive rejection, auth.js has just cleared the blob and 'signed-out' has been
+  // emitted — yet the snapshot's token kept authenticating ui-bridge requests and
+  // ui-sync joins for up to NEAR_EXPIRY_SEC after the authority declared the session
+  // gone. refreshNow itself already demonstrates the fix (`after = loadSession()`).
+  const fn = fnOf(TOKENS, "getAccessToken");
+  const refresh = fn.indexOf("refreshNow(");
+  const reread = fn.indexOf("store.loadSession()", refresh);
+  assert.ok(refresh !== -1 && reread !== -1, "the session must be re-read AFTER the refresh");
+  const code = fn.slice(refresh).replace(/^\s*\/\/.*$/gm, ""); // prose may still name it
+  assert.ok(
+    !/\?\s*s\.access_token/.test(code),
+    "the fallback must not answer from the pre-refresh snapshot"
+  );
+  assert.match(code, /\?\s*after\.access_token/, "…it answers from the re-read session");
 });
 
 test("the timer re-decides from the token on every fire (a wake can make it fire late)", () => {

@@ -1,9 +1,15 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
-import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
+import type { BridgeResponse } from "#/lib/dopl-bridge";
+import {
+  SEGMENT,
+  WORKSPACE_ID,
+  bridgeCalls,
+  installBridge,
+  ok,
+  renderWithProviders,
+  workspaceRoutes,
+} from "#/test-utils/bridge";
 import MembersPage from "./index";
 
 /**
@@ -23,8 +29,6 @@ import MembersPage from "./index";
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
-const SEGMENT = "acme-ab12cd";
 const ws = (path: string) => `/api/workspaces/${SEGMENT}${path}`;
 
 const MEMBERS = [
@@ -101,24 +105,10 @@ const INVITATIONS = [
   },
 ];
 
-function ok(body: unknown): BridgeResponse {
-  return { status: 200, statusText: "OK", hasBody: true, body };
-}
-
 /** Routes every path this page reads; anything else fails the test loudly. */
 function defaultBridge(path: string): Promise<BridgeResponse> {
-  if (path.startsWith("/api/workspaces/resolve")) {
-    return Promise.resolve(
-      ok({
-        workspace: { id: WORKSPACE_ID, slug: "acme", publicId: "ab12cd" },
-        canonical: SEGMENT,
-        needsRedirect: false,
-      })
-    );
-  }
-  if (path === "/api/workspaces/me") {
-    return Promise.resolve(ok({ role: "owner", userId: "user-1" }));
-  }
+  const shared = workspaceRoutes(path);
+  if (shared) return shared;
   if (path === ws("/members")) return Promise.resolve(ok({ members: MEMBERS }));
   if (path === ws("/invitations")) {
     return Promise.resolve(ok({ invitations: INVITATIONS }));
@@ -137,34 +127,20 @@ function defaultBridge(path: string): Promise<BridgeResponse> {
   return Promise.reject(new Error(`unexpected request: ${path}`));
 }
 
-const calls = () =>
-  apiRequest.mock.calls.map((args) => ({
-    path: (args as unknown[])[0] as string,
-    opts: ((args as unknown[])[1] ?? {}) as BridgeRequestOpts,
-  }));
+const calls = () => bridgeCalls(apiRequest);
 
 function renderPage() {
-  const router = createMemoryRouter(
+  return renderWithProviders(
     [{ path: "/:workspaceSegment/members", element: <MembersPage /> }],
-    { initialEntries: [`/${SEGMENT}/members`] }
-  );
-  return render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    [`/${SEGMENT}/members`]
   );
 }
 
 describe("members page", () => {
   beforeEach(() => {
+    apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => defaultBridge(path));
-    vi.stubGlobal("window", window);
-    Object.defineProperty(window, "dopl", {
-      configurable: true,
-      writable: true,
-      value: { apiRequest },
-    });
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    installBridge({ apiRequest });
   });
 
   it("resolves the workspace, then renders the roster off the bridge", async () => {
