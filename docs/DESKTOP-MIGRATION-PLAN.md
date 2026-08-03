@@ -257,6 +257,31 @@ Supabase dashboard's automatic daily backups (paid plans) as a second layer.
 Code snapshots: tag `pre-<phase>-<date>` before each phase begins
 (`pre-desktop-migration-2026-08-02` exists).
 
+## Journey-audit consequences (2026-08-02, post-wave-3)
+
+`docs/migration-research/journey-audit.md` traced all 11 user journeys +
+all 33 web pages: **23 gaps (4 S1, 8 S2, 11 S3)**. Standing consequences:
+
+1. **The journey audit is a Phase-4 GATE**: retirement does not execute
+   until every UNRESOLVED row is ported / kept / explicitly killed.
+2. **Channels is a prerequisite for the window flip**, not the last nicety
+   — every agent-notification click targets `${APP_ORIGIN}/{seg}/channels`
+   and dead-ends in a channel-less SPA (GAP-16).
+3. **S1s needing design/product work before Phase 4:**
+   - Desktop sign-in is Google-only (`/auth/desktop-start` hardcodes the
+     provider; email/password + GitHub have no dopl:// path) — GAP-2.
+   - Billing is dead in the SPA: Stripe Elements needs js.stripe.com +
+     iframes + XHR (all CSP-blocked); `return_url` targets `/canvas` which
+     dies; ported settings has no billing pane. Likely answer: hosted
+     Stripe Checkout in the system browser + main-process poll of
+     `/api/billing/status` after openExternal — needs a decision — GAP-9/10.
+4. **KEEP-list additions to resolve:** `/auth/reset-password`, `/terms`,
+   `/privacy`, `/join/{token}` bounce page, `/pricing`, `/admin/*`; and
+   the plan vs auth-flows.md disagreement on `/auth/desktop-complete`.
+5. **Live bugs in ported pages (fix with an app-origin bridge config):**
+   settings shows `file:///api/mcp`; members copies `file:///join/<token>`
+   — every `window.location.origin` use in a `file:` renderer.
+
 ## Channels — protected functionality
 
 The channel feature has two independent halves; know which is touched when:
