@@ -45,12 +45,16 @@ vi.mock("@supabase/ssr", () => ({
 
 vi.mock("@/features/onboarding/server/service", () => ({
   isOnboarded: vi.fn(),
+  getOnboardingStatus: vi.fn(),
 }));
 
 import { GET } from "./route";
-import { isOnboarded } from "@/features/onboarding/server/service";
+import { getOnboardingStatus, isOnboarded } from "@/features/onboarding/server/service";
 
 const mockIsOnboarded = vi.mocked(isOnboarded);
+const mockStatus = vi.mocked(getOnboardingStatus);
+// Silence the unused-var rule for the legacy mock kept for API parity.
+void mockIsOnboarded;
 
 const URL_ = "http://localhost/api/user/onboarding-state";
 
@@ -65,32 +69,32 @@ beforeEach(() => {
 
 describe("GET /api/user/onboarding-state", () => {
   it("reports a finished onboarding as { isOnboarded: true }", async () => {
-    mockIsOnboarded.mockResolvedValue(true);
+    mockStatus.mockResolvedValue({ onboarded: true, surveyCompleted: true });
 
     const res = await GET(getReq());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ isOnboarded: true });
+    expect(await res.json()).toEqual({ isOnboarded: true, surveyCompleted: true });
   });
 
   it("reports an unfinished onboarding as { isOnboarded: false }", async () => {
-    mockIsOnboarded.mockResolvedValue(false);
+    mockStatus.mockResolvedValue({ onboarded: false, surveyCompleted: false });
 
     const res = await GET(getReq());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ isOnboarded: false });
+    expect(await res.json()).toEqual({ isOnboarded: false, surveyCompleted: false });
   });
 
   it("asks about the AUTHENTICATED caller, not anyone else", async () => {
     state.sessionUser = { id: "user-42" };
-    mockIsOnboarded.mockResolvedValue(true);
+    mockStatus.mockResolvedValue({ onboarded: true, surveyCompleted: true });
 
     await GET(getReq());
-    expect(mockIsOnboarded).toHaveBeenCalledWith("user-42");
+    expect(mockStatus).toHaveBeenCalledWith("user-42");
   });
 
   it("fails loud on a read error instead of degrading to 'onboarded'", async () => {
     // Degrading open here would silently skip onboarding for every new user.
-    mockIsOnboarded.mockRejectedValue(new Error("db down"));
+    mockStatus.mockRejectedValue(new Error("db down"));
 
     const res = await GET(getReq());
     expect(res.status).toBe(500);

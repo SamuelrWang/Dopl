@@ -101,9 +101,8 @@ export default function SettingsPage() {
               workspace={workspace}
               onDeleted={(next) => {
                 invalidateWorkspaceReads();
-                // No `/onboarding` route in the SPA — the workspace-less root
-                // owns that decision once the default-workspace endpoint lands
-                // (web-pages.md §16, G2).
+      // Lands on BootPage, which provisions via ensure-default or routes
+      // to /onboarding — mirrors the web's post-delete convergence.
                 navigate(next ? `/${workspaceSegment(next)}` : "/", { replace: true });
               }}
             />

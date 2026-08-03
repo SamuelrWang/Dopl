@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
-import { isOnboarded } from "@/features/onboarding/server/service";
+import { getOnboardingStatus } from "@/features/onboarding/server/service";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +19,15 @@ export const dynamic = "force-dynamic";
  */
 export const GET = withUserAuth(async (_request, { userId }) => {
   try {
-    const onboarded = await isOnboarded(userId);
-    return NextResponse.json({ isOnboarded: onboarded });
+    // `surveyCompleted` rides along so the SPA's onboarding flow can
+    // RESUME a half-finished user at the workspace step instead of
+    // re-asking the survey — the same pair the RSC boot pages read via
+    // getOnboardingStatus.
+    const status = await getOnboardingStatus(userId);
+    return NextResponse.json({
+      isOnboarded: status.onboarded,
+      surveyCompleted: status.surveyCompleted,
+    });
   } catch (err) {
     if (err instanceof HttpError) {
       return NextResponse.json(err.toResponseBody(), { status: err.status });
