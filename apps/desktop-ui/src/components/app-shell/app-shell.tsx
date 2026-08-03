@@ -8,6 +8,7 @@ import {
 import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switcher-core";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
+import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
 import { RouterLink } from "./router-link";
@@ -98,7 +99,12 @@ export function AppShellLayout() {
               />
             }
           />
-          <Outlet />
+          {/* Per-resource access matrix — without it useMyAccessContext
+              no-ops and every teams-mode gate resolves to a FALSE edit
+              affordance (server still refuses; the UI shouldn't offer). */}
+          <MyAccessProvider workspaceSegment={segment}>
+            <Outlet />
+          </MyAccessProvider>
         </div>
       </div>
     </div>

@@ -6,41 +6,7 @@ import { createQueryClient } from "#/lib/query-client";
 import type { TransportRequest } from "#/lib/api-transport";
 import SkillsPage from "./index";
 
-/**
- * Smoke test for the ported skills index. The DATA LAYER is mocked at the
- * transport (`#/lib/api-transport`) — the one seam below which nothing in the
- * renderer is supposed to reach — so everything above it is the shipped code:
- * `useApiQuery`, `apiRequest`'s envelope decoding, and the reused web
- * component tree (`SkillsBrowserCore` → `SkillRow` → `DetailPane`).
- *
- * `@/shared/supabase/browser` is stubbed because the reused editor mounts
- * realtime + presence, which construct a Supabase browser client from
- * `process.env.NEXT_PUBLIC_*` — absent under Vite. That stub is standing on a
- * real gap, not a test convenience; see the port report.
- */
 
-vi.mock("@/shared/supabase/browser", () => ({
-  getSupabaseBrowser: () => ({
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: null } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
-    },
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
-    }),
-    channel: () => ({
-      on() {
-        return this;
-      },
-      subscribe() {
-        return this;
-      },
-      track: () => Promise.resolve(),
-      unsubscribe: () => Promise.resolve(),
-    }),
-    removeChannel: () => Promise.resolve(),
-  }),
-}));
 
 const sendRequest = vi.hoisted(() => vi.fn());
 vi.mock("#/lib/api-transport", () => ({ sendRequest }));
@@ -114,6 +80,21 @@ function renderPage() {
 
 describe("skills index page", () => {
   beforeEach(() => {
+  // SPA runtime marker: the shared web tree's SPA-mode guards (presence
+  // no-op, realtime no-op, bridge identity) key off window.dopl. Without
+  // it this suite would exercise the WEB paths and hide renderer crashes
+  // — the exact failure a stubbed supabase module hid before. The bridge's
+  // apiRequest funnels into the SAME sendRequest mock as the SPA transport,
+  // so one mock serves both clients (exactly the packaged topology, where
+  // both funnel into main).
+  (window as unknown as { dopl?: unknown }).dopl = {
+    apiRequest: (path: string, opts: Record<string, unknown> = {}) =>
+      sendRequest({ path, ...opts }),
+    getAuthState: () => Promise.resolve({ signedIn: false, userId: null }),
+    onAuthState: () => () => {},
+    openExternal: () => Promise.resolve({ ok: true }),
+  };
+
     sendRequest.mockImplementation(defaultTransport);
     // The reused feature client (`@/features/skills/client/api`) still goes
     // through the WEB api-client, which calls `fetch` directly.
@@ -158,15 +139,18 @@ describe("skills index page", () => {
 
     fireEvent.click(await screen.findByText("Summarize call"));
 
+    // The detail pane reads through the WEB api-client, whose SPA seam
+    // routes over the bridge — one transport for both clients. Raw fetch
+    // must never fire in SPA mode (the packaged CSP is connect-src 'none').
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/skills/summarize-call",
+      expect(sendRequest).toHaveBeenCalledWith(
         expect.objectContaining({
-          method: "GET",
-          headers: expect.objectContaining({ "x-workspace-id": WORKSPACE_ID }),
+          path: "/api/skills/summarize-call",
+          workspaceId: WORKSPACE_ID,
         })
       );
     });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("surfaces a failed workspace resolve as the shared page error", async () => {

@@ -91,12 +91,30 @@ export async function apiRequest<T>(
 
   let res: { status: number; ok: boolean; statusText: string; json(): Promise<unknown> };
   if (bridge) {
-    const out = await bridge.apiRequest(url, {
+    // NOTE: the `headers` map above is fetch-path-only — main reconstructs
+    // every header (auth, workspace, updated-at, content-type) from the
+    // structured opts. A new header added above must ALSO become a bridge
+    // opt or it will silently not exist in the desktop app.
+    // The IPC call itself cannot be cancelled; racing it against the abort
+    // signal keeps TanStack's unmount/supersede semantics (the promise
+    // settles, the response is discarded).
+    const call = bridge.apiRequest(url, {
       method: opts.method ?? "GET",
       body: opts.body,
       workspaceId: opts.workspaceId,
       expectedUpdatedAt: opts.expectedUpdatedAt,
     });
+    const out = await (opts.signal
+      ? Promise.race([
+          call,
+          new Promise<never>((_resolve, reject) => {
+            const onAbort = () =>
+              reject(new DOMException("Aborted", "AbortError"));
+            if (opts.signal!.aborted) onAbort();
+            else opts.signal!.addEventListener("abort", onAbort, { once: true });
+          }),
+        ])
+      : call);
     res = {
       status: out.status,
       ok: out.status >= 200 && out.status < 300,

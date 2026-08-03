@@ -24,6 +24,44 @@ import type { User } from "@supabase/supabase-js";
  * truth for "who is logged in"; `useAuthUser` wraps this with a sign-out
  * action that also navigates.
  */
+/** One in-flight/settled identity per renderer, not per hook instance —
+ *  SkillsBrowser remounts SkillView per selected row, and each remount
+ *  must not cost a fresh getAuthState + profile IPC pair. Invalidated on
+ *  every pushed auth-state transition. */
+let bridgeUserCache: Promise<User | null> | null = null;
+
+function fetchBridgeUser(bridge: {
+  getAuthState(): Promise<{ signedIn: boolean; userId: string | null }>;
+}): Promise<User | null> {
+  if (!bridgeUserCache) {
+    bridgeUserCache = (async () => {
+      const state = await bridge.getAuthState();
+      if (!state.signedIn || !state.userId) return null;
+      const { apiRequest } = await import("@/shared/api/api-client");
+      const profile = await apiRequest<{
+        display_name?: string | null;
+        avatar_url?: string | null;
+        email?: string | null;
+      }>("/api/user/profile").catch(() => null);
+      return {
+        id: state.userId,
+        // profiles carries email (PROFILE_COLUMNS) — initials and the
+        // "email local-part" display fallbacks behave exactly as on web.
+        email: profile?.email ?? undefined,
+        user_metadata: {
+          full_name: profile?.display_name ?? undefined,
+          avatar_url: profile?.avatar_url ?? undefined,
+        },
+      } as unknown as User;
+    })();
+    // A failed fetch must not poison every later mount.
+    bridgeUserCache.catch(() => {
+      bridgeUserCache = null;
+    });
+  }
+  return bridgeUserCache;
+}
+
 export function useAuthUserState(): User | null {
   const [user, setUser] = useState<User | null>(null);
   // Bundled desktop SPA: no Supabase client exists in the renderer (no
@@ -46,34 +84,47 @@ export function useAuthUserState(): User | null {
   useEffect(() => {
     if (bridge) {
       let cancelled = false;
-      void (async () => {
+      const load = async () => {
         try {
-          const state = await bridge.getAuthState();
-          if (cancelled || !state.signedIn || !state.userId) return;
-          const { apiRequest } = await import("@/shared/api/api-client");
-          const profile = await apiRequest<{
-            display_name?: string | null;
-            avatar_url?: string | null;
-          }>("/api/user/profile").catch(() => null);
-          if (cancelled) return;
-          setUser({
-            id: state.userId,
-            email: undefined,
-            user_metadata: {
-              full_name: profile?.display_name ?? undefined,
-              avatar_url: profile?.avatar_url ?? undefined,
-            },
-          } as unknown as User);
+          const u = await fetchBridgeUser(bridge);
+          if (!cancelled) setUser(u);
         } catch {
           // Signed-out / bridge failure → stay null (honest signed-out UI).
+          if (!cancelled) setUser(null);
         }
-      })();
+      };
+      void load();
+      // Main pushes auth transitions (e.g. a 401 that survived a forced
+      // refresh emits 'signed-out') — mirror the web branch's
+      // onAuthStateChange subscription or the renderer keeps rendering a
+      // signed-in identity forever.
+      const maybeOn = (
+        bridge as {
+          onAuthState?: (cb: (s: { signedIn: boolean }) => void) => () => void;
+        }
+      ).onAuthState;
+      const off =
+        typeof maybeOn === "function"
+          ? maybeOn(() => {
+              bridgeUserCache = null; // state changed — never serve the stale identity
+              void load();
+            })
+          : undefined;
       return () => {
         cancelled = true;
+        if (off) off();
       };
     }
 
-    const supabase = getSupabaseBrowser();
+    let supabase: ReturnType<typeof getSupabaseBrowser>;
+    try {
+      supabase = getSupabaseBrowser();
+    } catch {
+      // No browser Supabase config in this runtime (SPA renderer reaches
+      // the bridge branch above; this guards exotic/test runtimes) —
+      // honest signed-out state instead of an unmount-the-tree throw.
+      return;
+    }
     supabase.auth
       .getUser()
       .then(({ data }: { data: { user: User | null } }) => setUser(data.user));

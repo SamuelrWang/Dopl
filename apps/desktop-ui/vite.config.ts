@@ -88,6 +88,17 @@ export default defineConfig({
     // Fixed so DOPL_UI_DEV_URL in the desktop app never has to chase a port.
     port: 5173,
     strictPort: true,
+    // Browser-dev mode (no Electron bridge): the REUSED web feature clients
+    // fetch same-origin ("/api/..."); proxy them to the API so both
+    // transports see one origin — mirroring the packaged topology where
+    // both funnel into main. VITE_API_BASE_URL keeps parity with
+    // api-transport's dev base.
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_BASE_URL || "https://www.usedopl.com",
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     environment: "jsdom",

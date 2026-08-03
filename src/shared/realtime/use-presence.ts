@@ -53,6 +53,11 @@ export function usePresence(
 
   useEffect(() => {
     if (!topic || !self) return;
+    // Bundled desktop SPA: no Supabase client in the renderer (no network
+    // by design) — presence degrades to "just me", same policy as the
+    // shared-channel-registry no-op. Phase 3 can proxy presence over the
+    // bridge if the product wants live peers in the desktop app.
+    if (typeof window !== "undefined" && (window as { dopl?: unknown }).dopl) return;
     const selfSnapshot = self;
     const supabase = getSupabaseBrowser();
     // Supabase presence/channel API is loosely typed at runtime.
