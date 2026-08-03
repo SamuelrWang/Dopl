@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 // Deep import, not the `settings-modal` barrel — the barrel re-exports
@@ -11,6 +12,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import type { KbScope } from "../scope";
 import { KnowledgeApiError, createBase } from "../client/api";
+import { seedKnowledgeBase } from "../client/hooks";
 import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import {
   ScopeSelector,
@@ -46,6 +48,7 @@ export function CreateBaseDialog({
   role,
   routing,
 }: Props) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [scope, setScope] = useState<KbScope>("private");
@@ -90,6 +93,13 @@ export function CreateBaseDialog({
         workspaceId
       );
       close();
+      // Seed BEFORE navigating: the controller resolves the URL segment it is
+      // about to see against the cached base list, and the refetch that
+      // `refreshServerData` kicks off has not landed yet.
+      // Seed BEFORE navigating: the controller resolves the URL segment it is
+      // about to see against the cached base list, and the refetch that
+      // `refreshServerData` kicks off has not landed yet.
+      seedKnowledgeBase(queryClient, workspaceId, base);
       routing.goToBase(base, "push");
       routing.refreshServerData();
     } catch (err) {

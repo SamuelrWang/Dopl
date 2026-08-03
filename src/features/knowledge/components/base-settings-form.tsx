@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
@@ -9,6 +10,7 @@ import {
   updateBase,
   updateFolder,
 } from "../client/api";
+import { seedKnowledgeBase } from "../client/hooks";
 import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
 import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
@@ -47,6 +49,7 @@ export function BaseSettingsForm({
   onFoldersChanged,
   routing,
 }: Props) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState(base.name);
   const [description, setDescription] = useState(base.description ?? "");
   const [slug, setSlug] = useState(base.slug);
@@ -79,6 +82,9 @@ export function BaseSettingsForm({
         workspaceId
       );
       toast({ title: "Saved" });
+      // The new row must be in the cache before the URL moves — the segment
+      // carries the slug, and the controller resolves it against this list.
+      seedKnowledgeBase(queryClient, workspaceId, next);
       // Slug change keeps the same publicId — the route resolver will
       // 301 the old URL anyway, but we replace eagerly so the address
       // bar reflects the new canonical immediately.

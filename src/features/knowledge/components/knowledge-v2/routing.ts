@@ -37,6 +37,13 @@ export interface KnowledgeUrlLocation {
   entryId: string | null;
 }
 
+/**
+ * IMPLEMENTATIONS MUST BE REFERENTIALLY STABLE for the life of a mounted
+ * knowledge view. The controller's write effect depends on this object, so an
+ * adapter that is rebuilt whenever the URL changes re-runs that effect with
+ * the pre-change selection and writes the stale URL back over the new one.
+ * Read the live location through a ref inside `current`/`read` instead.
+ */
 export interface KnowledgeUrlSync {
   /** The URL string a location maps to, comparable to `current()`. */
   urlFor: (location: KnowledgeUrlLocation) => string;

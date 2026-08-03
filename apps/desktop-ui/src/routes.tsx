@@ -11,6 +11,12 @@ import KnowledgeDetailPage from "#/pages/knowledge/detail";
 import WorkflowsPage from "#/pages/workflows";
 import WorkflowDetailPage from "#/pages/workflows/detail";
 import MembersPage from "#/pages/members";
+import CanvasPage from "#/pages/canvas";
+import Canvas2AliasPage from "#/pages/canvas/canvas2";
+import OntologyPage from "#/pages/ontology";
+import OntologyDetailPage from "#/pages/ontology/detail";
+import SettingsPage from "#/pages/settings";
+import ConfigurationPage from "#/pages/configuration";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.
@@ -39,8 +45,10 @@ export interface PageRoute {
 
 export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "overview", label: "Overview", element: <OverviewPage /> },
-  { path: "canvas", label: "Canvas" },
-  { path: "ontology", label: "Ontology" },
+  { path: "canvas", label: "Canvas", element: <CanvasPage /> },
+  { path: "canvas2", label: "Canvas (alias)", element: <Canvas2AliasPage /> },
+  { path: "ontology", label: "Ontology", element: <OntologyPage /> },
+  { path: "ontology/:clusterSlug", label: "Cluster", element: <OntologyDetailPage /> },
   { path: "knowledge", label: "Knowledge", element: <KnowledgePage /> },
   { path: "knowledge/:kbSlug", label: "Knowledge base", element: <KnowledgeDetailPage /> },
   { path: "skills", label: "Skills", element: <SkillsPage /> },
@@ -50,8 +58,8 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels" },
   { path: "members", label: "Members", element: <MembersPage /> },
-  { path: "settings", label: "Settings" },
-  { path: "configuration", label: "Configuration" },
+  { path: "settings", label: "Settings", element: <SettingsPage /> },
+  { path: "configuration", label: "Configuration", element: <ConfigurationPage /> },
 ];
 
 /** The web app's `/[workspaceSlug]` server redirect target. */

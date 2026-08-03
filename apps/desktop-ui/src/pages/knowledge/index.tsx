@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
@@ -64,6 +64,7 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
   const { workspaceId, workspaceSlug, currentUserId, role, isAdmin } = access;
   const { kbSlug } = useParams();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const urlSync = useKnowledgeUrlSync(workspaceSlug);
@@ -101,8 +102,12 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
   const canonicalSegment = deepLinkBase ? knowledgeBaseSegment(deepLinkBase) : null;
   useEffect(() => {
     if (!canonicalSegment || canonicalSegment === deepLink.kbSlug) return;
-    navigate(`/${workspaceSlug}/knowledge/${canonicalSegment}`, { replace: true });
-  }, [canonicalSegment, deepLink.kbSlug, navigate, workspaceSlug]);
+    // Carry the query string across — the page's 301 preserved `?entryId=`,
+    // and dropping it here would silently demote a deep link to the base.
+    navigate(`/${workspaceSlug}/knowledge/${canonicalSegment}${location.search}`, {
+      replace: true,
+    });
+  }, [canonicalSegment, deepLink.kbSlug, location.search, navigate, workspaceSlug]);
 
   const tree = useKnowledgeTree(deepLinkBase?.id, workspaceId);
   const treeEntries = tree.data?.entries;

@@ -6,7 +6,7 @@ import { useKnowledgeBases, useKnowledgeEntry } from "../../client/hooks";
 import { useKnowledgeRealtime } from "../../client/realtime";
 import { kbScope } from "../../scope";
 import type { KnowledgeBase, KnowledgeEntry } from "../../types";
-import { knowledgeBaseSegment } from "../../url";
+import { findBaseBySegment } from "../../url";
 import type { BaseTree, ListFilter, Selection } from "./types";
 import {
   createHistoryUrlSync,
@@ -304,9 +304,13 @@ export function useKnowledgeV2Controller({
   // notification below would re-derive a selection from a URL we just wrote
   // and downgrade an entry selection whose tree hasn't loaded yet.
   const lastWrittenUrlRef = useRef<string | null>(null);
+  // RECONCILED, not raw: the URL is built from the base's slug, and a rename
+  // reaches this tree as a fresh `bases` row rather than a new selection. On
+  // the raw state the address bar would keep — and later re-assert — the slug
+  // the base had when it was selected.
   useEffect(() => {
-    const target = sync.urlFor(locationForSelection(selection));
-    const nextBaseId = selection?.base.id ?? null;
+    const target = sync.urlFor(locationForSelection(reconciledSelection));
+    const nextBaseId = reconciledSelection?.base.id ?? null;
     if (target !== sync.current()) {
       sync.write(
         target,
@@ -315,7 +319,7 @@ export function useKnowledgeV2Controller({
     }
     lastWrittenUrlRef.current = target;
     prevBaseIdRef.current = nextBaseId;
-  }, [selection, sync]);
+  }, [reconciledSelection, sync]);
 
   // Back/forward (and, in the SPA, a programmatic navigation from the create
   // dialog or a delete): re-derive the selection from the URL so the view
@@ -331,7 +335,10 @@ export function useKnowledgeV2Controller({
         setSelection(null);
         return;
       }
-      const base = bases.find((b) => knowledgeBaseSegment(b) === baseSegment);
+      // One grammar, one resolver: `findBaseBySegment` is the same matcher the
+      // page uses for a deep link, so a legacy slug-only URL arriving over
+      // Back/Forward resolves here exactly as it does on a cold load.
+      const base = findBaseBySegment(bases, baseSegment);
       if (!base) return;
       setExpanded((prev) => new Set(prev).add(base.id));
       if (!trees[base.id]) void loadTree(base.id);

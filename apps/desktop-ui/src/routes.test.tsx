@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,9 +64,17 @@ describe("app routes", () => {
   });
 
   it("redirects the workspace root to the home page", async () => {
-    renderAt("/acme-ab12cd");
-
-    expect(await screen.findByRole("heading", { name: "Canvas" })).toBeInTheDocument();
+    // Canvas is a real page now — what the root route owes is the
+    // redirect; the page's rendering belongs to its own suite.
+    const router = createMemoryRouter(routes, { initialEntries: ["/acme-ab12cd"] });
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    );
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/acme-ab12cd/canvas")
+    );
   });
 
   it("resolves a detail route with its param", () => {
@@ -85,7 +93,9 @@ describe("app routes", () => {
     expect(WORKSPACE_PAGES.map((page) => page.path)).toEqual([
       "overview",
       "canvas",
+      "canvas2",
       "ontology",
+      "ontology/:clusterSlug",
       "knowledge",
       "knowledge/:kbSlug",
       "skills",

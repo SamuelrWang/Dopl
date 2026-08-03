@@ -13,7 +13,7 @@
  * flight (no flicker), cleared on key change (no cross-workspace leak).
  */
 import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -127,6 +127,40 @@ export function useKnowledgeBaseList(
     options?.initialData !== undefined
       ? { initialData: options.initialData, initialKey: key }
       : undefined
+  );
+}
+
+/** The cache key `useKnowledgeBaseList`/`useKnowledgeBases` share. */
+export function knowledgeBasesQueryKey(workspaceId?: string) {
+  return ["knowledge", `bases:${workspaceId ?? "default"}`] as const;
+}
+
+/**
+ * Upsert one base into the cached list, synchronously.
+ *
+ * Call this BEFORE navigating to a base the caller just created or renamed.
+ * The URL is the only channel that carries a selection between the dialogs
+ * and the two-pane controller, and the controller resolves a URL segment
+ * against this list — so navigating first and refetching after leaves a
+ * window where the segment matches nothing and the move is silently dropped.
+ */
+export function seedKnowledgeBase(
+  queryClient: QueryClient,
+  workspaceId: string | undefined,
+  base: KnowledgeBase
+): void {
+  queryClient.setQueryData<KnowledgeBaseList>(
+    knowledgeBasesQueryKey(workspaceId),
+    (prev) => {
+      if (!prev) return prev;
+      const known = prev.bases.some((b) => b.id === base.id);
+      return {
+        ...prev,
+        bases: known
+          ? prev.bases.map((b) => (b.id === base.id ? base : b))
+          : [base, ...prev.bases],
+      };
+    }
   );
 }
 
