@@ -41,6 +41,11 @@ function doplCsp(): Plugin {
     name: "dopl-csp",
     apply: "build",
     transformIndexHtml(html) {
+      if (!html.includes("<head>")) {
+        // The CSP is the renderer's ONLY containment under file:// — a
+        // silent no-op replace would ship an unrestricted document.
+        throw new Error("dopl-csp: <head> marker missing from index.html");
+      }
       return html.replace(
         "<head>",
         `<head>\n    <meta http-equiv="Content-Security-Policy" content="${PRODUCTION_CSP}" />`
@@ -56,14 +61,16 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
-      "@": src,
-      // The ONLY import from the Next web tree, and deliberately an exact-match
-      // alias rather than a directory alias: `@web/*` would be an open door for
-      // "use client" / next-coupled modules to leak into the renderer. See
-      // CONVENTIONS.md § Sharing code with the web app.
-      "@web/query-defaults": fileURLToPath(
-        new URL("../../src/shared/api/query-defaults.ts", import.meta.url)
-      ),
+      // `#` = SPA-local source. `@` = the REPO-ROOT web tree — the same
+      // meaning `@/` has inside that tree, so a reused web module's own
+      // `@/shared/...` / `@/features/...` imports resolve verbatim with no
+      // edits. This is what makes the port playbook's reuse-by-import
+      // instruction executable; a next-coupled module that sneaks into the
+      // graph fails the vite build LOUDLY (unresolvable `next/*`), which is
+      // the guard — plus the eslint fence on `@/app/*`. See CONVENTIONS.md
+      // § Sharing code with the web app.
+      "#": src,
+      "@": fileURLToPath(new URL("../../src", import.meta.url)),
     },
   },
   build: {

@@ -16,8 +16,8 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@web/query-defaults": ["../../src/shared/api/query-defaults.ts"]
+      "#/*": ["./src/*"],
+      "@/*": ["../../src/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

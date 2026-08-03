@@ -28,7 +28,6 @@ export interface BridgeRequestOpts {
   method?: string;
   workspaceId?: string;
   expectedUpdatedAt?: string;
-  query?: Record<string, string>;
   body?: unknown;
 }
 

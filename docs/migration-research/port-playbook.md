@@ -16,9 +16,14 @@ scaffold's `apps/desktop-ui/CONVENTIONS.md`. Deviate from none of them.
      already exist — cache coherence matters).
    - REUSE the feature's existing client components (`src/features/*/
      components`, `hooks`, `client/*`) by import wherever they are
-     Next-free (`web-pages.md` flags which are). Do NOT fork a component to
-     strip a `next/*` import — extract the Next-free core into the feature
-     dir and have both apps import it (the web app keeps working).
+     Next-free (`web-pages.md` flags which are). In the SPA, `@/…` resolves
+     to the repo-root web tree (same meaning as inside it) and `#/…` is
+     SPA-local — so a web module and its transitive imports work verbatim.
+     Do NOT fork a component to strip a `next/*` import — extract the
+     Next-free core into the feature dir and have both apps import it (the
+     web app keeps working). The vite build fails loudly if a next-coupled
+     module sneaks into the graph; the eslint fence refuses `@/app/*` and
+     server layers.
    - `next/link`/`useRouter` → the SPA router's equivalents at the page
      seam only.
    - Realtime hooks (`features/*/client/realtime.ts`) work as-is (they ride

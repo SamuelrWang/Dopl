@@ -42,6 +42,28 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // The SPA's fence around web-tree reuse: `@/` maps to the repo-root web
+  // tree (so reused feature modules' own imports resolve verbatim), which
+  // makes it POSSIBLE to import things that must never enter the renderer
+  // bundle. Next-coupled modules already fail the vite build (unresolvable
+  // `next/*`), but the app router tree and the server layers would bundle
+  // silently — fence them here. See apps/desktop-ui/CONVENTIONS.md.
+  {
+    files: ["apps/*/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["@/app/*"], message: "Next app-router tree — never bundled into the SPA. Reuse lives under @/features/* and @/shared/*." },
+            { group: ["@/features/*/server/*", "@/shared/supabase/admin", "@/shared/auth/*"], message: "Server-only module — the renderer talks to the API, never to services or Supabase." },
+            { group: ["next", "next/*"], message: "No Next in the SPA." },
+          ],
+        },
+      ],
+    },
+  },
+
   // The BACKLOG, listed rather than hidden. Every one of these was already over
   // the cap when the rule landed; turning the rule on with a blanket ignore, or
   // refactoring fourteen unrelated files inside a hardening round, were both

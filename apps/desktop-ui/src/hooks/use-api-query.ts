@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { apiRequest, type ApiRequestOpts } from "@/lib/api";
+import { apiRequest, type ApiRequestOpts } from "#/lib/api";
 
 export interface UseApiQueryOpts<T, S = T>
   extends Pick<ApiRequestOpts, "workspaceId" | "query"> {

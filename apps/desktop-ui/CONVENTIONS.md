@@ -113,17 +113,28 @@ same change**, until one file is imported at build time by all three.
 
 ## Sharing code with the web app
 
-Exactly one import crosses from `src/` (the Next app) into this renderer:
+Two aliases, two meanings (revised 2026-08-02 for the page ports):
 
-```ts
-import { QUERY_DEFAULT_OPTIONS } from "@web/query-defaults";
-```
+- `#/…` — THIS app's own source (`apps/desktop-ui/src`).
+- `@/…` — the REPO-ROOT web tree (`src/`), with the **same meaning `@/` has
+  inside that tree**. A reused web module's own `@/shared/...` /
+  `@/features/...` imports therefore resolve verbatim, transitively, with no
+  edits — which is what makes the port playbook's reuse-by-import
+  instruction executable at all (real feature components pull in dozens of
+  files; per-file exact aliases cannot scale to that).
 
-It is an **exact-match** alias onto `src/shared/api/query-defaults.ts`, not a
-directory alias, so nothing else can slip through. To share another module it
-must be (a) framework-free — no `"use client"`, no React, no Next, no DOM — and
-(b) added as its own exact alias in `vite.config.ts` *and* `tsconfig.json`. If
-it is not framework-free, port it instead.
+The fences that keep the open door safe:
+
+1. **The vite build fails loudly** on any next-coupled module in the import
+   graph (`next/*` doesn't resolve here). A `"use client"` directive alone
+   is inert.
+2. **ESLint refuses** `@/app/*` (the Next app-router tree), server layers
+   (`@/features/*/server/*`, `@/shared/supabase/admin`, `@/shared/auth/*`),
+   and `next` itself — see the fence block in the root `eslint.config.mjs`.
+3. **Reuse targets are client modules only**: `@/features/*/components`,
+   `@/features/*/hooks`, `@/features/*/client`, `@/shared/{ui,hooks,lib,api}`.
+   If a module needs surgery to lose a Next import, extract its Next-free
+   core in place (the web app keeps working) and import the core.
 
 ## Forbidden
 

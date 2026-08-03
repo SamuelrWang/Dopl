@@ -1,7 +1,7 @@
 import { Navigate, type RouteObject } from "react-router";
-import { AppLayout } from "@/components/app-layout";
-import { PlaceholderPage } from "@/components/placeholder-page";
-import { RouteErrorBoundary } from "@/components/page-states";
+import { AppLayout } from "#/components/app-layout";
+import { PlaceholderPage } from "#/components/placeholder-page";
+import { RouteErrorBoundary } from "#/components/page-states";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.

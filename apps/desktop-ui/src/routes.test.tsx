@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import { createQueryClient } from "@/lib/query-client";
-import { WORKSPACE_PAGES, routes } from "@/routes";
+import { createQueryClient } from "#/lib/query-client";
+import { WORKSPACE_PAGES, routes } from "#/routes";
 
 /**
  * The scaffold's smoke test: the REAL route table renders under the REAL

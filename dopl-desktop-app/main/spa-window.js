@@ -35,11 +35,24 @@ const PRELOAD = path.join(__dirname, '../renderer/app-preload.js');
 // refused here and, if it is a legitimate outbound link, goes through
 // `window.dopl.openExternal` into the system browser instead.
 //
-// `devUrl` is the resolved DOPL_UI_DEV_URL ('' in production). Parsing is
-// defensive: a URL we cannot parse is refused, never waved through.
-function isAllowedNavigation(url, devUrl) {
+// `devUrl` is the resolved DOPL_UI_DEV_URL ('' in production); `indexHref` is
+// the pathToFileURL href of the ONE local document this window may show. A
+// bare `file://` prefix test would admit ANY local document — which inherits
+// the window.dopl bridge and (CSP being a per-document <meta>) carries no CSP
+// — so the file: comparison is exact on the path, ignoring query/hash.
+// Parsing is defensive: a URL we cannot parse is refused, never waved through.
+function isAllowedNavigation(url, devUrl, indexHref) {
   const target = String(url || '');
-  if (target.startsWith('file://')) return true;
+  if (target.startsWith('file:')) {
+    if (!indexHref) return false;
+    try {
+      const t = new URL(target);
+      const allowed = new URL(indexHref);
+      return t.protocol === 'file:' && t.pathname === allowed.pathname;
+    } catch (_err) {
+      return false;
+    }
+  }
   if (!devUrl) return false;
   try {
     return new URL(target).origin === new URL(devUrl).origin;
@@ -86,8 +99,20 @@ function createSpaWindow() {
 
   // Defense in depth on top of the page CSP. This window is never a browser.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedNavigation(url, devUrl())) event.preventDefault();
+  // The same predicate polices EVERY top-frame steering primitive: direct
+  // navigation, server-issued redirects, and subframe navigations (frames are
+  // frame-src 'none' in the built CSP, but dev loadURL carries no CSP).
+  const indexHref = require('node:url').pathToFileURL(INDEX_HTML).href;
+  const policeNavigation = (event, url) => {
+    if (!isAllowedNavigation(url, devUrl(), indexHref)) event.preventDefault();
+  };
+  win.webContents.on('will-navigate', policeNavigation);
+  win.webContents.on('will-redirect', policeNavigation);
+  win.webContents.on('will-frame-navigate', (event) => {
+    // Only the main frame may navigate at all; any subframe navigation is
+    // refused outright.
+    if (!event.isMainFrame) { event.preventDefault(); return; }
+    policeNavigation(event, event.url);
   });
 
   return win;

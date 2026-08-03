@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useParams } from "react-router";
-import { WORKSPACE_PAGES } from "@/routes";
+import { WORKSPACE_PAGES } from "#/routes";
 
 /**
  * The workspace shell — the SPA's layout route, standing in for

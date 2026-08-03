@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { QUERY_DEFAULT_OPTIONS } from "@web/query-defaults";
+import { QUERY_DEFAULT_OPTIONS } from "@/shared/api/query-defaults";
 
 /**
  * The renderer's TanStack Query client. The defaults are IMPORTED, not copied:

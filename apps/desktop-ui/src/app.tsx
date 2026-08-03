@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createHashRouter } from "react-router";
-import { createQueryClient } from "@/lib/query-client";
-import { routes } from "@/routes";
+import { createQueryClient } from "#/lib/query-client";
+import { routes } from "#/routes";
 
 /**
  * The provider stack, mounted once by `main.tsx`.

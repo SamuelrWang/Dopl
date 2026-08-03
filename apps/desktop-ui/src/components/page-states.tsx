@@ -1,5 +1,5 @@
 import { useRouteError } from "react-router";
-import { ApiError } from "@/lib/api";
+import { ApiError } from "#/lib/api";
 
 /**
  * The two states every page renders besides its content, and the router-level
