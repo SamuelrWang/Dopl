@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 import { isDesktopApp } from "@/shared/lib/desktop";
-import { evaluatePassword, PASSWORD_REQUIREMENT_MESSAGE } from "../password-policy";
+import type { LoginActions, SocialProvider } from "./use-login-core";
 
-export type SocialProvider = "google" | "github";
+export type { SocialProvider };
 
 /** Origin Supabase sends auth emails / OAuth callbacks back to. Pinned to the
  *  canonical NEXT_PUBLIC_APP_URL in prod so links never embed a preview or
@@ -19,9 +18,13 @@ function authOrigin(): string {
   return window.location.origin;
 }
 
-type Pending = null | "password" | "signup" | "magic" | "reset" | SocialProvider;
-
-export function useLogin() {
+/**
+ * The WEB binding of `LoginActions` — supabase-browser plus the Next router's
+ * query string. Everything else about the login form (field state, the
+ * in-flight slot, the banner, the password policy gate) lives in
+ * `./use-login-core`, which the desktop SPA reuses with bridge-backed actions.
+ */
+export function useLoginActions(): LoginActions {
   const searchParams = useSearchParams();
   // Workspace + canvas are auto-provisioned in /auth/callback before redirect,
   // so first-time users land in their workspace. Deep links override via an
@@ -37,127 +40,63 @@ export function useLogin() {
     return `${authOrigin()}/auth/callback?${params.toString()}`;
   }
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [pending, setPending] = useState<Pending>(null);
-  // True after a failed password sign-in — used to surface the otherwise-hidden
-  // "Forgot password?" link only when it's actually relevant.
-  const [signInFailed, setSignInFailed] = useState(false);
-
   const supabase = getSupabaseBrowser();
 
-  async function run(kind: Pending, fn: () => Promise<void>) {
-    setError(null);
-    setMessage(null);
-    setPending(kind);
-    try {
-      await fn();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function signInWithPassword(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setSignInFailed(false);
-    setPending("password");
-    try {
+  return {
+    async signInWithPassword(email, password) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (error) return { error: error.message };
       // Session persisted by the browser client; land on the resolved destination.
       window.location.assign(redirectTo);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setSignInFailed(true);
-    } finally {
-      setPending(null);
-    }
-  }
+      return {};
+    },
 
-  async function signUpWithPassword() {
-    await run("signup", async () => {
-      if (!evaluatePassword(password).valid) throw new Error(PASSWORD_REQUIREMENT_MESSAGE);
+    async signUpWithPassword(email, password) {
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: { emailRedirectTo: buildCallbackUrl() },
       });
-      if (error) throw error;
-      setMessage("Check your email to confirm your account.");
-    });
-  }
+      return error ? { error: error.message } : {};
+    },
 
-  async function sendMagicLink() {
-    await run("magic", async () => {
-      if (!email) throw new Error("Enter your email first.");
+    async sendMagicLink(email) {
       // Works for new and existing users — Supabase creates the auth row on
       // first link. Keeps pre-password (magic-link era) users able to sign in.
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: buildCallbackUrl() },
       });
-      if (error) throw error;
-      setMessage("Check your email for a sign-in link.");
-    });
-  }
+      return error ? { error: error.message } : {};
+    },
 
-  async function resetPassword() {
-    await run("reset", async () => {
-      if (!email) throw new Error("Enter your email first, then click Forgot Password.");
+    async resetPassword(email) {
       // Route the recovery link through /auth/callback (which exchanges the code
       // into a live session) and forward to the set-new-password page.
       const params = new URLSearchParams({ redirectTo: "/auth/reset-password" });
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${authOrigin()}/auth/callback?${params.toString()}`,
       });
-      if (error) throw error;
-      setMessage("Check your email to reset your password.");
-    });
-  }
+      return error ? { error: error.message } : {};
+    },
 
-  async function signInWithProvider(provider: SocialProvider) {
-    await run(provider, async () => {
+    async oauth(provider) {
       // Desktop app: OAuth can't run in the wrapper window (Supabase PKCE needs
       // the code-verifier in the same context that exchanges the code). Open the
       // system browser; it hands the session back via a dopl:// deep link. Only
       // Google has the desktop handoff today.
       if (isDesktopApp() && provider === "google") {
         window.open(`${window.location.origin}/auth/desktop-start`, "_blank");
-        setMessage(
-          "Continue signing in with Google in your browser. You'll be returned to the Dopl app automatically.",
-        );
-        return;
+        return {
+          message:
+            "Continue signing in with Google in your browser. You'll be returned to the Dopl app automatically.",
+        };
       }
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo: buildCallbackUrl() },
       });
-      if (error) throw error;
-    });
-  }
-
-  return {
-    email,
-    setEmail,
-    password,
-    setPassword,
-    remember,
-    setRemember,
-    error,
-    message,
-    pending,
-    signInFailed,
-    signInWithPassword,
-    signUpWithPassword,
-    sendMagicLink,
-    resetPassword,
-    signInWithProvider,
+      return error ? { error: error.message } : {};
+    },
   };
 }

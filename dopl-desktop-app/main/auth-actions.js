@@ -62,10 +62,14 @@ function maybeBeginAuth(urlStr) {
 
 // Tray "Listener signed out — Sign in…". Shows the window (so the operator sees
 // where they are) and kicks the same external OAuth flow the web login page does.
-function beginSignIn({ showWindow } = {}) {
+function beginSignIn({ showWindow, provider } = {}) {
   try { if (typeof showWindow === 'function') showWindow(); } catch (_) { /* best-effort */ }
-  const url = maybeBeginAuth(SIGN_IN_URL);
-  diag('auth: tray sign-in — opening external sign-in flow');
+  // Closed enum, google default — /auth/desktop-start reads ?provider= and
+  // anything unrecognized there also degrades to google.
+  const p = provider === 'github' ? 'github' : 'google';
+  const target = p === 'google' ? SIGN_IN_URL : `${SIGN_IN_URL}?provider=${p}`;
+  const url = maybeBeginAuth(target);
+  diag('auth: sign-in — opening external flow via', p);
   return shell.openExternal(url).catch((err) => diag('auth: sign-in open failed —', err && err.message));
 }
 

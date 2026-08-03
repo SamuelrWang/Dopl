@@ -37,14 +37,38 @@ export interface AuthState {
   userId: string | null;
 }
 
+/** Answer shape of the sign-in ops: `ok` plus, when it failed, a message fit
+ *  to show the user (the login form drops it straight into its error banner).
+ *  Main owns the wording — the renderer has no supabase error to translate. */
+export interface BridgeOpResult {
+  ok: boolean;
+  error?: string;
+}
+
+/** The social providers the login form offers. */
+export type SignInProvider = "google" | "github";
+
 export interface DoplBridge {
   apiRequest(path: string, opts?: BridgeRequestOpts): Promise<BridgeResponse>;
   getAuthState(): Promise<AuthState>;
-  /** Start the external OAuth sign-in — main arms the login-CSRF nonce
-   *  and opens the browser. Absent on older mains (fallback: openExternal
-   *  to /auth/desktop-start, which cannot pass the nonce gate but keeps
-   *  browser-dev behavior). */
-  beginSignIn?(): Promise<{ ok: boolean }>;
+  /** Start the external OAuth sign-in for `provider` (default "google") —
+   *  main arms the login-CSRF nonce and opens the browser, and the session
+   *  comes back over the `dopl://auth` deep link. Absent on older mains,
+   *  where the signed-out screen disables the social buttons rather than
+   *  opening a URL whose callback the nonce gate would (correctly) refuse. */
+  beginSignIn?(provider?: SignInProvider): Promise<BridgeOpResult>;
+  /** Email + password sign-in / sign-up, run in MAIN (the renderer has no
+   *  supabase client and never sees a token). Success needs no navigation:
+   *  main stores the session and pushes the `onAuthState` transition that
+   *  swaps the signed-out screen out. Absent on older mains. */
+  passwordSignIn?(input: {
+    mode: "sign-in" | "sign-up";
+    email: string;
+    password: string;
+  }): Promise<BridgeOpResult>;
+  /** Email the user a sign-in link (the magic-link fallback). Absent on
+   *  older mains. */
+  sendMagicLink?(input: { email: string }): Promise<BridgeOpResult>;
   /** Subscribe to auth changes; returns an unsubscribe function. */
   onAuthState(callback: (state: AuthState) => void): () => void;
   /** End the session — main clears the stored tokens and broadcasts the

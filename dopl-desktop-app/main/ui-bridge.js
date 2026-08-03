@@ -25,6 +25,7 @@ const authTokens = require('./auth-tokens');
 const { API_BASE } = require('./config');
 const uiSync = require('./ui-sync');
 const authActions = require('./auth-actions');
+const authPassword = require('./auth-password');
 const auth = require('./auth');
 const { diag } = require('./diag');
 
@@ -232,14 +233,32 @@ function register(opts = {}) {
 
   ipcMain.handle(
     'dopl:begin-sign-in',
-    bound('begin-sign-in', () => {
+    bound('begin-sign-in', (_event, provider) => {
       // Sign-in MUST start in main: beginSignIn() arms the login-CSRF
       // pending-auth nonce and appends it as ?state= before opening the
       // browser — a renderer-side openExternal skips the nonce and
       // captureFromFragment (correctly) refuses the returning deep link.
-      void authActions.beginSignIn({});
+      // Provider is a closed enum; anything else falls back to google.
+      const p = provider === 'github' ? 'github' : 'google';
+      void authActions.beginSignIn({ provider: p });
       return { ok: true };
     })
+  );
+
+  ipcMain.handle(
+    'dopl:password-sign-in',
+    bound('password-sign-in', async (_event, payload) => {
+      const out = await authPassword.passwordAuth(payload);
+      if (out.ok && !out.pendingConfirmation) {
+        try { authTokens.onSignIn(); } catch (_err) { /* not started */ }
+      }
+      return out;
+    })
+  );
+
+  ipcMain.handle(
+    'dopl:magic-link',
+    bound('magic-link', (_event, payload) => authPassword.sendMagicLink(payload))
   );
 
   ipcMain.handle(

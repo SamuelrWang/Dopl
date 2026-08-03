@@ -115,7 +115,12 @@ test("index.js supplies both handlers", () => {
 
 test("the tray sign-in still arms the M4 login-CSRF nonce", () => {
   const fn = fnOf(ACTIONS, "beginSignIn");
-  assert.match(fn, /maybeBeginAuth\(SIGN_IN_URL\)/, "the tray entry point must not bypass the gate");
+  // The URL is now provider-parameterized, but it is still DERIVED from
+  // SIGN_IN_URL (exact app origin, /auth path) and still passes through the
+  // gate — which is the invariant this test protects.
+  assert.match(fn, /const target = p === 'google' \? SIGN_IN_URL : `\$\{SIGN_IN_URL\}\?provider=\$\{p\}`;/,
+    "the sign-in URL must be derived from SIGN_IN_URL");
+  assert.match(fn, /maybeBeginAuth\(target\)/, "the tray entry point must not bypass the gate");
   const gate = fnOf(ACTIONS, "maybeBeginAuth");
   assert.match(gate, /auth\.beginPendingAuth\(\)/);
   assert.match(gate, /searchParams\.set\('state', nonce\)/);

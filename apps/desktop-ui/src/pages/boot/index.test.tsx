@@ -3,7 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
-import type { BridgeResponse } from "#/lib/dopl-bridge";
+import type { BridgeOpResult, BridgeResponse } from "#/lib/dopl-bridge";
 import BootPage from "./index";
 
 /**
@@ -19,6 +19,10 @@ import BootPage from "./index";
 const apiRequest = vi.hoisted(() => vi.fn());
 const getAuthState = vi.hoisted(() => vi.fn());
 const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
+// Typed as the bridge's own result so a test can answer `{ ok: false, error }`.
+const beginSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
+const passwordSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
+const sendMagicLink = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
 
 // The crystal panel needs ResizeObserver + a canvas 2D context — neither
 // exists in jsdom. Same passthrough the onboarding suite uses.
@@ -84,22 +88,34 @@ describe("boot page", () => {
         apiRequest,
         getAuthState,
         openExternal,
+        beginSignIn,
+        passwordSignIn,
+        sendMagicLink,
         appOrigin: "https://www.usedopl.com",
       },
     });
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   });
 
-  it("signed out → the signed-out screen, which opens sign-in externally", async () => {
+  it("signed out → the real login form, and reads nothing", async () => {
     getAuthState.mockResolvedValue({ signedIn: false, userId: null });
 
     renderBoot();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+    // The web /login form, not a stand-in card (Samuel's #1 complaint).
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email Address")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Remember me" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Email me a sign-in link instead" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeInTheDocument();
+    expect(screen.getByAltText("Dopl")).toBeInTheDocument();
 
-    expect(openExternal).toHaveBeenCalledWith(
-      "https://www.usedopl.com/auth/desktop-start"
-    );
     // Boot must not read anything for a signed-out caller.
     expect(apiRequest).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
@@ -139,5 +155,131 @@ describe("boot page", () => {
     renderBoot();
 
     expect(await screen.findByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The signed-out screen's credential ops. Every one of them runs in MAIN over
+ * the bridge — the renderer has no supabase client and never sees a token — so
+ * the assertions are on the bridge calls, and `fetch` stays untouched.
+ */
+describe("signed-out login form", () => {
+  beforeEach(() => {
+    getAuthState.mockResolvedValue({ signedIn: false, userId: null });
+    Object.defineProperty(window, "dopl", {
+      configurable: true,
+      writable: true,
+      value: {
+        apiRequest,
+        getAuthState,
+        openExternal,
+        beginSignIn,
+        passwordSignIn,
+        sendMagicLink,
+        appOrigin: "https://www.usedopl.com",
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+  });
+
+  async function renderForm() {
+    renderBoot();
+    await screen.findByRole("heading", { name: "Sign in" });
+  }
+
+  function type(label: string, value: string) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+
+  it("submits email + password through passwordSignIn", async () => {
+    await renderForm();
+
+    type("Email Address", "sam@usedopl.com");
+    type("Password", "hunter2-Hunter!");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() =>
+      expect(passwordSignIn).toHaveBeenCalledWith({
+        mode: "sign-in",
+        email: "sam@usedopl.com",
+        password: "hunter2-Hunter!",
+      })
+    );
+    // Success needs no navigation — main pushes the auth transition.
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sign up reuses passwordSignIn with mode: sign-up", async () => {
+    await renderForm();
+
+    type("Email Address", "new@usedopl.com");
+    type("Password", "hunter2-Hunter!");
+    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+
+    await waitFor(() =>
+      expect(passwordSignIn).toHaveBeenCalledWith({
+        mode: "sign-up",
+        email: "new@usedopl.com",
+        password: "hunter2-Hunter!",
+      })
+    );
+  });
+
+  it("surfaces a failed sign-in in the banner", async () => {
+    passwordSignIn.mockResolvedValueOnce({ ok: false, error: "Invalid login credentials" });
+
+    await renderForm();
+
+    type("Email Address", "sam@usedopl.com");
+    type("Password", "wrong-Password1!");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Invalid login credentials");
+  });
+
+  it("the magic-link fallback calls sendMagicLink", async () => {
+    await renderForm();
+
+    type("Email Address", "sam@usedopl.com");
+    fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link instead" }));
+
+    await waitFor(() =>
+      expect(sendMagicLink).toHaveBeenCalledWith({ email: "sam@usedopl.com" })
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Check your email for a sign-in link."
+    );
+  });
+
+  it("the social buttons start OAuth in main, per provider", async () => {
+    await renderForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    await waitFor(() => expect(beginSignIn).toHaveBeenCalledWith("google"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue with GitHub" }));
+    await waitFor(() => expect(beginSignIn).toHaveBeenCalledWith("github"));
+
+    // A renderer-built OAuth URL would skip main's login-CSRF nonce.
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("an older main (op absent) disables the path and says why", async () => {
+    Object.defineProperty(window, "dopl", {
+      configurable: true,
+      writable: true,
+      value: { apiRequest, getAuthState, openExternal, appOrigin: "https://www.usedopl.com" },
+    });
+
+    await renderForm();
+
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeDisabled();
+    expect(
+      screen.getByText("Update the Dopl app to sign in with a password here.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Update the Dopl app to continue with Google or GitHub.")
+    ).toBeInTheDocument();
   });
 });

@@ -13,12 +13,18 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
  */
 export default function DesktopStartPage() {
   const [error, setError] = useState<string | null>(null);
+  const [provider, setProvider] = useState<"google" | "github">("google");
 
   useEffect(() => {
     (async () => {
+      // Closed enum from the query string — the desktop app's OAuth buttons
+      // pass ?provider=github; anything unrecognized degrades to google.
+      const requested = new URLSearchParams(window.location.search).get("provider");
+      const p: "google" | "github" = requested === "github" ? "github" : "google";
+      setProvider(p);
       const supabase = getSupabaseBrowser();
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider: p,
         options: { redirectTo: `${window.location.origin}/auth/callback?desktop=1` },
       });
       if (error) setError(error.message);
@@ -35,7 +41,9 @@ export default function DesktopStartPage() {
       ) : (
         <>
           <Spinner />
-          <p style={{ color: "#646d78", fontSize: 14 }}>Redirecting to Google…</p>
+          <p style={{ color: "#646d78", fontSize: 14 }}>
+            Redirecting to {provider === "github" ? "GitHub" : "Google"}…
+          </p>
         </>
       )}
     </Shell>
