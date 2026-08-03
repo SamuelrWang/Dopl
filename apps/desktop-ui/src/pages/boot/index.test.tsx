@@ -20,6 +20,14 @@ const apiRequest = vi.hoisted(() => vi.fn());
 const getAuthState = vi.hoisted(() => vi.fn());
 const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
 
+// The crystal panel needs ResizeObserver + a canvas 2D context — neither
+// exists in jsdom. Same passthrough the onboarding suite uses.
+vi.mock("@/shared/layout/auth-split", () => ({
+  AuthSplitLayout: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="auth-split">{children}</div>
+  ),
+}));
+
 const SEGMENT = "acme-ab12cd";
 
 function ok(body: unknown): BridgeResponse {

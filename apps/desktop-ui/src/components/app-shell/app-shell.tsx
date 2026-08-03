@@ -14,7 +14,8 @@ import { CONSENT_INBOX_POLL_MS } from "@/features/channels/constants";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
+import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
@@ -89,6 +90,9 @@ export function AppShellLayout() {
     );
   }
 
+  // A 401 anywhere in the shell means the session died — the answer is the
+  // sign-in screen, never a dead-end error card on the landing backdrop.
+  if (isUnauthorized(error)) return <SignedOutScreen />;
   if (error || !workspace) {
     return (
       <div className="flex h-screen w-screen flex-col">

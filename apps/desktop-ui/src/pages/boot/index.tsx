@@ -63,7 +63,15 @@ export default function BootPage() {
     refetchOnMount: "always",
   });
 
-  if (auth.phase === "pending") return <PageLoading label="Starting Dopl" />;
+  // Boot states render OUTSIDE any page chrome — on the raw body, which
+  // carries the dark landing backdrop. Pin them to a light cover so text
+  // and buttons are legible (the web equivalent was AuthSplitLayout).
+  if (auth.phase === "pending")
+    return (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        <PageLoading label="Starting Dopl" />
+      </div>
+    );
   if (auth.phase === "signed-out") return <SignedOutScreen />;
 
   // The bridge is not consulted in browser dev mode, so a 401 from either call
@@ -75,6 +83,7 @@ export default function BootPage() {
 
   if (onboarding.error) {
     return (
+      <div className="fixed inset-0 z-50 flex bg-white">
       <PageError
         error={onboarding.error}
         onRetry={() => {
@@ -82,17 +91,31 @@ export default function BootPage() {
           void onboarding.refetch();
         }}
       />
+    </div>
     );
   }
-  if (onboarding.isPending) return <PageLoading label="Starting Dopl" />;
+  if (onboarding.isPending)
+    return (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        <PageLoading label="Starting Dopl" />
+      </div>
+    );
 
   if (!onboarded) return <Navigate to="/onboarding" replace />;
 
   if (workspace.error) {
-    return <PageError error={workspace.error} onRetry={() => void workspace.refetch()} />;
+    return (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        <PageError error={workspace.error} onRetry={() => void workspace.refetch()} />
+      </div>
+    );
   }
   if (workspace.isPending || !workspace.data) {
-    return <PageLoading label="Opening workspace" />;
+    return (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        <PageLoading label="Opening workspace" />
+      </div>
+    );
   }
 
   return <Navigate to={`/${workspace.data.segment}`} replace />;

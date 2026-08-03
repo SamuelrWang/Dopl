@@ -1,3 +1,4 @@
+import { AuthSplitLayout } from "@/shared/layout/auth-split";
 import { getAppOrigin } from "@/shared/lib/app-origin";
 import { getBridge } from "#/lib/dopl-bridge";
 
@@ -39,19 +40,23 @@ export function SignedOutScreen() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center gap-4">
-      <h1 className="text-title font-semibold tracking-tight text-text-primary">Dopl</h1>
-      <p className="max-w-[320px] text-center text-caption text-text-secondary">
-        Continue with Google to sign in. Your browser opens to finish, then Dopl
-        picks up where it left off.
-      </p>
-      <button
-        type="button"
-        onClick={signIn}
-        className="btn-light rounded-md px-3 py-1.5 text-small font-medium text-text-primary"
-      >
-        Continue with Google
-      </button>
-    </div>
+    <AuthSplitLayout>
+      <div className="flex w-full max-w-[360px] flex-col items-center gap-5 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+          Welcome to Dopl
+        </h1>
+        <p className="text-sm leading-relaxed text-neutral-500">
+          Continue with Google to sign in. Your browser opens to finish, then
+          Dopl picks up where it left off.
+        </p>
+        <button
+          type="button"
+          onClick={signIn}
+          className="w-full rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-neutral-700"
+        >
+          Continue with Google
+        </button>
+      </div>
+    </AuthSplitLayout>
   );
 }

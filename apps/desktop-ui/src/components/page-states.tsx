@@ -26,6 +26,12 @@ export function PageLoading({ label = "Loading" }: { label?: string }) {
   );
 }
 
+/** A 401 from any surface means ONE thing in the desktop app: the session is
+ *  gone. Screens route it to the signed-out view, never to a generic error. */
+export function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 /** Human copy for anything thrown by `apiRequest` (ApiError) or the transport. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
