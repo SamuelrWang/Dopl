@@ -1,7 +1,8 @@
 import { Navigate, useNavigate } from "react-router";
 import { OnboardingFlowCore } from "@/features/onboarding/components/onboarding-flow-core";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
+import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { ONBOARDING_STATE_PATH } from "#/pages/boot/use-boot-state";
 
 /**
@@ -15,9 +16,9 @@ import { ONBOARDING_STATE_PATH } from "#/pages/boot/use-boot-state";
  * app; the web `/onboarding` RSC dies with the website (Phase 4).
  *
  * The RSC did three things this file replaces:
- *   1. `getUser()` + redirect to `/login` — the SPA has no login route; an
- *      unauthenticated caller is caught one level up, by the boot page, which
- *      owns the signed-out screen.
+ *   1. `getUser()` + redirect to `/login` — the SPA has no login route, so a
+ *      401 renders the SAME signed-out screen boot and the shell render
+ *      (a generic error card here was a dead end whose Retry only 401s again).
  *   2. `getOnboardingStatus` + redirect to `/canvas` when already onboarded —
  *      `GET /api/user/onboarding-state` is the HTTP twin. The boot page reads
  *      the SAME key, so a normal boot→onboarding hop pays for it once; this
@@ -37,9 +38,23 @@ export default function OnboardingPage() {
     ONBOARDING_STATE_PATH
   );
 
-  if (state.isPending) return <PageLoading label="Loading" />;
+  // This route lives OUTSIDE the workspace shell, so these states render on
+  // the raw body — the dark landing backdrop, where the token text color is
+  // near-black on near-black. Pin them to the same light cover boot uses.
+  if (state.isPending) {
+    return (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        <PageLoading label="Loading" />
+      </div>
+    );
+  }
+  if (isUnauthorized(state.error)) return <SignedOutScreen />;
   if (state.error) {
-    return <PageError error={state.error} onRetry={() => void state.refetch()} />;
+    return (
+      <div className="fixed inset-0 z-50 flex bg-white">
+        <PageError error={state.error} onRetry={() => void state.refetch()} />
+      </div>
+    );
   }
   // Already onboarded — the boot route resolves the default workspace, the same
   // hop the RSC made to `/canvas`.

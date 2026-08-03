@@ -8,6 +8,8 @@ import { Check } from "lucide-react";
 // `next/*` module anywhere in the graph fails the build.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
+import { getSpaBridge, isSpaRenderer } from "@/shared/lib/spa-bridge";
+import { getAppOrigin } from "@/shared/lib/app-origin";
 import { EmbeddedCheckoutForm } from "./embedded-checkout";
 import {
   formatMoney,
@@ -176,9 +178,62 @@ function CheckoutView({
               seats * TEAM_SEAT_PRICE
             )} / month`}
       </p>
-      <EmbeddedCheckoutForm workspaceId={workspaceId} plan={plan} />
+      {isSpaRenderer() ? (
+        <BrowserCheckoutHandoff />
+      ) : (
+        <EmbeddedCheckoutForm workspaceId={workspaceId} plan={plan} />
+      )}
     </div>
   );
+}
+
+/**
+ * The DESKTOP leg of checkout — the same handoff the settings modal's billing
+ * pane makes (`apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`).
+ *
+ * The packaged renderer cannot mount Stripe at all: `script-src 'self'` refuses
+ * js.stripe.com, `connect-src 'none'` refuses its XHR, `frame-src 'none'`
+ * refuses its iframes, and the checkout session fetch would resolve against a
+ * `file://` document. So the paywall stops at the pitch and sends the purchase
+ * to the browser, which lands on this identical checkout signed in
+ * (journey-audit GAP-9; before this the button dead-ended on an error card).
+ */
+function BrowserCheckoutHandoff() {
+  const [opened, setOpened] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          void getSpaBridge()?.openExternal(browserBillingUrl());
+          setOpened(true);
+        }}
+        className="auth-btn-3d flex h-9 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white"
+      >
+        Continue in your browser
+      </button>
+      <p className="mt-3 text-caption text-text-secondary">
+        {opened
+          ? "Finish the payment in your browser — your plan updates here as soon as it lands."
+          : "Payment steps finish in your browser — the desktop app never handles card details."}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The web billing surface for the workspace the desktop app is CURRENTLY
+ * showing. `?billing=upgrade` is the param the web app shell opens Plans &
+ * Billing on (the same one Stripe's return URLs carry), and the segment comes
+ * off the desktop hash router's own location — `#/{segment}/…` — because a
+ * bare `/canvas?billing=upgrade` resolves the user's DEFAULT workspace, which
+ * is not necessarily the one being upgraded. The origin comes from the preload
+ * constant, never `window.location` (a `file://` document here).
+ */
+function browserBillingUrl(): string {
+  const segment = window.location.hash.replace(/^#\/?/, "").split(/[/?#]/)[0];
+  const path = segment ? `/${segment}/canvas` : "/canvas";
+  return `${getAppOrigin()}${path}?billing=upgrade`;
 }
 
 function GenericUpsell({

@@ -71,6 +71,12 @@ export interface DoplBridge {
   sendMagicLink?(input: { email: string }): Promise<BridgeOpResult>;
   /** Subscribe to auth changes; returns an unsubscribe function. */
   onAuthState(callback: (state: AuthState) => void): () => void;
+  /** Main-initiated navigation — a clicked channel notification or the tray's
+   *  "Pending" item (journey-audit GAP-16). The payload is a ROUTER path
+   *  (`/{segment}/channels`), never a URL: main does not know this router is
+   *  a hash router and must never load an origin into the SPA window.
+   *  Absent on older mains, where the click only fronts the window. */
+  onNavigate?(callback: (payload: { path: string }) => void): () => void;
   /** End the session — main clears the stored tokens and broadcasts the
    *  signed-out `onAuthState`. Optional because main owns the session and
    *  older builds have no such handler; the settings modal's sign-out

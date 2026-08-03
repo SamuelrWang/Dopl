@@ -151,4 +151,50 @@ describe("onboarding page", () => {
 
     expect(await screen.findByText("BOOT ROUTE")).toBeInTheDocument();
   });
+
+  /**
+   * This route lives OUTSIDE the workspace shell, so its states render on the
+   * raw body — `mosaic-bg`, the dark landing backdrop, where token text is
+   * near-black on near-black. And a 401 here used to be a generic error card
+   * whose "Try again" only 401s again (fleet audit 2026-08-03).
+   */
+  it("routes a 401 to the sign-in screen, not a dead-end error card", async () => {
+    apiRequest.mockResolvedValue({
+      status: 401,
+      statusText: "Unauthorized",
+      hasBody: true,
+      body: { error: { code: "UNAUTHORIZED", message: "Not signed in" } },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("pins the loading and error states to a light cover, not the dark body", async () => {
+    apiRequest.mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderPage();
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(container.querySelector(".fixed.inset-0.bg-white")).not.toBeNull();
+  });
+
+  it("a non-401 error still offers a retry, on that same cover", async () => {
+    // 404, not 500: the shared retry predicate retries 5xx, so a server error
+    // would still be in flight here.
+    apiRequest.mockResolvedValue({
+      status: 404,
+      statusText: "Not Found",
+      hasBody: true,
+      body: { error: { code: "NOT_FOUND", message: "Boom" } },
+    });
+
+    const { container } = renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Boom");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(container.querySelector(".fixed.inset-0.bg-white")).not.toBeNull();
+  });
 });
