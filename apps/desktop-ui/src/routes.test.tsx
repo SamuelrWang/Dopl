@@ -53,11 +53,12 @@ function renderAt(path: string) {
 
 describe("app routes", () => {
   it("renders a workspace page inside the app layout", async () => {
+    // Every row is a real page now — the table's own job is mounting pages
+    // inside the shell, so the shell's nav is the anchor.
     renderAt("/acme-ab12cd/channels");
 
-    expect(await screen.findByRole("heading", { name: "Channels" })).toBeInTheDocument();
     // The layout's nav is driven by the same table the routes are.
-    expect(screen.getByRole("link", { name: "Knowledge" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Knowledge" })).toHaveAttribute(
       "href",
       "/acme-ab12cd/knowledge"
     );

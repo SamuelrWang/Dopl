@@ -5,8 +5,10 @@
    Copied ranges: lines 6–388 (@theme inline + the :root palette + the html /
    @layer base rules), 415–449 (.mosaic-bg app frame + AppShell geometry vars),
    892–917 (the global discreet-scrollbar rules). Deliberately NOT copied:
-   the landing/login-only rules (.design-grid, login orbs + keyframes,
-   logo-scroll, .dopl-slider) — they die with the website in Phase 4.
+   the landing/login-only rules (.design-grid, login orbs, logo-scroll) —
+   they die with the website in Phase 4. `loginFadeIn` and `.dopl-slider`
+   were in that list until /onboarding was ported INTO the app; they now
+   live at the foot of the sibling kit.css.
 
    ⚠ DRIFT WARNING (REFACTOR-FINDINGS F-074). This is the SECOND hand-copy of
    the same palette: `dopl-desktop-app/renderer/session/tokens.css` is the

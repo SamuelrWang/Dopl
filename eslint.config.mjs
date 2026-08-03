@@ -83,7 +83,10 @@ const eslintConfig = defineConfig([
       "src/features/billing/server/webhook-handler.test.ts",
       "src/features/ontology/server/repository.ts",
       "src/features/workspaces/server/invitations.ts",
-      "src/features/channels/components/channels-view.tsx",
+      // Renamed, not added: this is the old `channels-view.tsx` body, moved so
+      // the desktop SPA can bundle it Next-free (the file that keeps that name
+      // is now the 23-line `next/link` binding, and is capped).
+      "src/features/channels/components/channels-view-core.tsx",
       "src/features/teams/server/repository.ts",
       "src/features/billing/components/upgrade-modal.tsx",
       // NOT exempted, deliberately: `src/shared/auth/mcp-oauth.ts` sits at

@@ -9,6 +9,7 @@ import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switc
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
+import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { useApiQuery } from "#/hooks/use-api-query";
@@ -47,6 +48,10 @@ export function AppShellLayout() {
   const location = useLocation();
   const { workspace, segment, isPending, error, refetch, needsRedirect } =
     useWorkspaceRoute();
+
+  // Consent badge: shares the channels page's exact cache key — zero extra
+  // requests when both are mounted. Self-disables on a falsy id.
+  const { requests: consentRequests } = useConsentInbox(workspace?.id);
   const [createWsOpen, setCreateWsOpen] = useState(false);
 
   // The web app 301s a stale segment to its canonical form. There is no server
@@ -97,7 +102,7 @@ export function AppShellLayout() {
             // The badge counts pending consent requests, which arrive over the
             // channels realtime stream — Supabase realtime is not ported yet
             // (web-pages.md §1.2), and channels is the last wave. 0 until then.
-            consentCount={0}
+            consentCount={consentRequests.length}
             onOpenSettings={openSettings}
             Link={RouterLink}
             brand={

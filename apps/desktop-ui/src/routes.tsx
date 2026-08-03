@@ -17,6 +17,9 @@ import OntologyPage from "#/pages/ontology";
 import OntologyDetailPage from "#/pages/ontology/detail";
 import SettingsPage from "#/pages/settings";
 import ConfigurationPage from "#/pages/configuration";
+import ChannelsPage from "#/pages/channels";
+import BootPage from "#/pages/boot";
+import OnboardingPage from "#/pages/onboarding";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.
@@ -56,7 +59,7 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "workflows", label: "Workflows", element: <WorkflowsPage /> },
   { path: "workflows/:workflowSlug", label: "Workflow", element: <WorkflowDetailPage /> },
   { path: "chats", label: "Chats", element: <ChatsPage /> },
-  { path: "channels", label: "Channels" },
+  { path: "channels", label: "Channels", element: <ChannelsPage /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
   { path: "configuration", label: "Configuration", element: <ConfigurationPage /> },
@@ -66,6 +69,13 @@ export const WORKSPACE_PAGES: PageRoute[] = [
 export const WORKSPACE_HOME_PATH = "canvas";
 
 export const routes: RouteObject[] = [
+  {
+    // Runs BEFORE a workspace exists — deliberately outside
+    // /:workspaceSegment. Static segment outranks the param route.
+    path: "/onboarding",
+    element: <OnboardingPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
   {
     path: "/:workspaceSegment",
     element: <AppShellLayout />,
@@ -87,12 +97,8 @@ export const routes: RouteObject[] = [
     // default-workspace endpoint from the gap register
     // (docs/migration-research/web-pages.md §16) before this can redirect.
     path: "/",
-    element: (
-      <PlaceholderPage
-        title="Dopl"
-        note="Workspace resolution is not ported yet — open a /:workspaceSegment route."
-      />
-    ),
+    // Boot: signed-out screen / onboarding / ensure-default → workspace.
+    element: <BootPage />,
   },
   {
     path: "*",

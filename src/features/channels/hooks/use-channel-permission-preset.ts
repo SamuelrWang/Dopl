@@ -83,9 +83,10 @@ export function normalizePermissionPreset(raw: unknown): PermissionPreset | null
  */
 export function getDesktopPermissionPresets(): DoplPermissionPresetBridge | null {
   if (typeof window === "undefined") return null;
-  const channels = window.dopl?.channels as unknown as
-    | Partial<DoplPermissionPresetBridge>
-    | undefined;
+  // Read through a local cast, not a `Window` augmentation — `@/shared/lib/desktop`
+  // explains why the bridge has no single global type.
+  const channels = (window as unknown as { dopl?: { channels?: unknown } }).dopl
+    ?.channels as Partial<DoplPermissionPresetBridge> | undefined;
   if (!channels) return null;
   return typeof channels.getPermissionPreset === "function" &&
     typeof channels.setPermissionPreset === "function"

@@ -162,7 +162,17 @@ function connect(entry: Entry): void {
   releaseChannel(entry);
   entry.broken = false;
 
-  const supabase = getSupabaseBrowser();
+  let supabase: ReturnType<typeof getSupabaseBrowser>;
+  try {
+    supabase = getSupabaseBrowser();
+  } catch {
+    // No browser Supabase config in this runtime (SPA renderers return
+    // earlier via the window.dopl no-op; this guards test/exotic
+    // runtimes) — realtime silently degrades instead of unmounting the
+    // tree through an error boundary.
+    entry.broken = true;
+    return;
+  }
   // Topic is generation-unique — see the header comment: reusing a topic
   // string while realtime-js still remembers it returns the OLD channel
   // object, which must never happen. The trailing table-count keeps two
