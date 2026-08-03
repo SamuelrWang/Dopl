@@ -6,6 +6,11 @@ import OverviewPage from "#/pages/overview";
 import SkillsPage from "#/pages/skills/index";
 import SkillDetailRedirect from "#/pages/skills/detail";
 import ChatsPage from "#/pages/chats";
+import KnowledgePage from "#/pages/knowledge";
+import KnowledgeDetailPage from "#/pages/knowledge/detail";
+import WorkflowsPage from "#/pages/workflows";
+import WorkflowDetailPage from "#/pages/workflows/detail";
+import MembersPage from "#/pages/members";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.
@@ -36,15 +41,15 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "overview", label: "Overview", element: <OverviewPage /> },
   { path: "canvas", label: "Canvas" },
   { path: "ontology", label: "Ontology" },
-  { path: "knowledge", label: "Knowledge" },
-  { path: "knowledge/:kbSlug", label: "Knowledge base" },
+  { path: "knowledge", label: "Knowledge", element: <KnowledgePage /> },
+  { path: "knowledge/:kbSlug", label: "Knowledge base", element: <KnowledgeDetailPage /> },
   { path: "skills", label: "Skills", element: <SkillsPage /> },
   { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
-  { path: "workflows", label: "Workflows" },
-  { path: "workflows/:workflowSlug", label: "Workflow" },
+  { path: "workflows", label: "Workflows", element: <WorkflowsPage /> },
+  { path: "workflows/:workflowSlug", label: "Workflow", element: <WorkflowDetailPage /> },
   { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels" },
-  { path: "members", label: "Members" },
+  { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings" },
   { path: "configuration", label: "Configuration" },
 ];

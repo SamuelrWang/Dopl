@@ -3,10 +3,14 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel: the barrel also re-exports
+// SettingsModal, whose section tree reaches `next/navigation`, and this dialog
+// is mounted by the members page the desktop SPA reuses (a `next/*` module
+// anywhere in that graph fails the vite build).
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { SearchField } from "@/shared/ui/search-field";
 import { cn } from "@/shared/lib/utils";
-import { apiRequest } from "@/shared/api/api-client";
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
@@ -136,20 +140,15 @@ function parseEmails(raw: string): string[] {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * True when a failed invite response is the Solo plan's member-limit
- * gate. Parses both error envelopes defensively: nested
- * `{ error: { code, message, details } }` (HttpError.toResponseBody)
- * and flat `{ error: "SOLO_MEMBER_LIMIT", message }`.
+ * True when a failed invite is the Solo plan's member-limit gate.
+ * `apiRequest` decodes both envelopes into `ApiError`: the nested
+ * `{ error: { code, message } }` lands on `code`, while the flat
+ * `{ error: "SOLO_MEMBER_LIMIT" }` (no sibling message) lands on
+ * `message` — check both.
  */
-function isSoloMemberLimit(status: number, body: unknown): boolean {
-  if (status !== 402) return false;
-  if (typeof body !== "object" || body === null) return false;
-  const err = (body as { error?: unknown }).error;
-  if (typeof err === "string") return err === "SOLO_MEMBER_LIMIT";
-  if (typeof err === "object" && err !== null) {
-    return (err as { code?: unknown }).code === "SOLO_MEMBER_LIMIT";
-  }
-  return false;
+function isSoloMemberLimit(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 402) return false;
+  return err.code === "SOLO_MEMBER_LIMIT" || err.message === "SOLO_MEMBER_LIMIT";
 }
 
 /**
@@ -211,25 +210,22 @@ export function InviteDialog({
     try {
       const results = await Promise.all(
         emails.map(async (email) => {
-          const res = await fetch(
-            `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email,
-                role,
-                ...(teamIds.size > 0 ? { teamIds: [...teamIds] } : {}),
-              }),
-            },
-          );
-          if (res.ok) return { email, ok: true, soloBlocked: false };
-          const body: unknown = await res.json().catch(() => null);
-          return {
-            email,
-            ok: false,
-            soloBlocked: isSoloMemberLimit(res.status, body),
-          };
+          try {
+            await apiRequest<unknown>(
+              `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`,
+              {
+                method: "POST",
+                body: {
+                  email,
+                  role,
+                  ...(teamIds.size > 0 ? { teamIds: [...teamIds] } : {}),
+                },
+              }
+            );
+            return { email, ok: true, soloBlocked: false };
+          } catch (err) {
+            return { email, ok: false, soloBlocked: isSoloMemberLimit(err) };
+          }
         }),
       );
       const failed = results.filter((r) => !r.ok).map((r) => r.email);

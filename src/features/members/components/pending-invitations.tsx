@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Mail } from "lucide-react";
 import type { TeamView } from "@/features/teams/types";
 import type { WorkspaceInvitationView } from "../types";
+import { apiRequest } from "@/shared/api/api-client";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { TeamChip } from "./team-bits";
 
@@ -33,16 +34,12 @@ export function PendingInvitations({
     setBusyId(invitation.id);
     setError(null);
     try {
-      const res = await fetch(
+      await apiRequest<void>(
         `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(
           invitation.id
         )}`,
         { method: "DELETE" }
       );
-      if (!res.ok && res.status !== 204) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || body?.error || "Failed to revoke");
-      }
       onRevoked?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

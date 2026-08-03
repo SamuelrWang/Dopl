@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "@/shared/ui/toast";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
@@ -13,7 +12,7 @@ import {
 import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
 import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
-import { knowledgeBaseSegment } from "../url";
+import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import { AgentWriteToggle } from "./agent-write-toggle";
 import { KbSharingSection } from "./kb-sharing-section";
 
@@ -25,6 +24,9 @@ interface Props {
   currentUserId: string;
   role: Role;
   onFoldersChanged?: () => void;
+  /** Slug edits and the danger-zone delete both change which URL is
+   *  canonical — see ./knowledge-v2/routing.ts. */
+  routing: KnowledgeRouting;
 }
 
 /**
@@ -43,8 +45,8 @@ export function BaseSettingsForm({
   currentUserId,
   role,
   onFoldersChanged,
+  routing,
 }: Props) {
-  const router = useRouter();
   const [name, setName] = useState(base.name);
   const [description, setDescription] = useState(base.description ?? "");
   const [slug, setSlug] = useState(base.slug);
@@ -81,11 +83,9 @@ export function BaseSettingsForm({
       // 301 the old URL anyway, but we replace eagerly so the address
       // bar reflects the new canonical immediately.
       if (next.slug !== base.slug) {
-        router.replace(
-          `/${workspaceSlug}/knowledge/${knowledgeBaseSegment(next)}`
-        );
+        routing.goToBase(next, "replace");
       } else {
-        router.refresh();
+        routing.refreshServerData();
       }
     } catch (err) {
       const msg =
@@ -106,8 +106,8 @@ export function BaseSettingsForm({
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
       // Return to the knowledge list; the user can pick another base there.
-      router.replace(`/${workspaceSlug}/knowledge`);
-      router.refresh();
+      routing.goToBase(null, "replace");
+      routing.refreshServerData();
     } catch (err) {
       const msg =
         err instanceof KnowledgeApiError
@@ -168,6 +168,7 @@ export function BaseSettingsForm({
           base={base}
           currentUserId={currentUserId}
           role={role}
+          routing={routing}
         />
       </Section>
 

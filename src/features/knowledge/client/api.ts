@@ -77,11 +77,28 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 // ─── Bases ──────────────────────────────────────────────────────────
 
+/** `GET /api/knowledge/bases` in full: the list plus the owner-name map the
+ *  route folds in (display names for bases created by *other* members). */
+export interface KnowledgeBaseList {
+  bases: KnowledgeBase[];
+  /** Display names for foreign base owners, keyed by user id. `{}` when
+   *  every visible base is the caller's own. */
+  ownerNames: Record<string, string>;
+}
+
+export async function fetchBaseList(
+  workspaceId?: string
+): Promise<KnowledgeBaseList> {
+  const data = await request<{
+    bases: KnowledgeBase[];
+    ownerNames?: Record<string, string>;
+  }>("/api/knowledge/bases", { workspaceId });
+  return { bases: data.bases, ownerNames: data.ownerNames ?? {} };
+}
+
 export async function fetchBases(workspaceId?: string): Promise<KnowledgeBase[]> {
-  const data = await request<{ bases: KnowledgeBase[] }>("/api/knowledge/bases", {
-    workspaceId,
-  });
-  return data.bases;
+  const { bases } = await fetchBaseList(workspaceId);
+  return bases;
 }
 
 export async function fetchTree(

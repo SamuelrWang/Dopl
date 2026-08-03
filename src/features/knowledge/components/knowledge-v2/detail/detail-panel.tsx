@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronRight,
   Database,
@@ -18,6 +17,7 @@ import { KnowledgeSearch } from "../../knowledge-search";
 import { KnowledgeApiError, deleteBase } from "../../../client/api";
 import type { KnowledgeBase, KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import type { BaseTree, KbTeamRef, Selection } from "../types";
+import type { KnowledgeRouting } from "../routing";
 import { BaseOverview } from "./base-overview";
 import { EntryView } from "./entry-view";
 import { viewModel } from "./view-model";
@@ -53,6 +53,9 @@ interface Props {
   onExportBase: (baseId: string) => void;
   /** Open the base settings modal for the selected base. */
   onOpenSettings: () => void;
+  /** Router bindings — the toolbar delete leaves this base's URL behind
+   *  (see ../routing.ts). */
+  routing: KnowledgeRouting;
 }
 
 /** Root → leaf folder chain for an entry, from the flat folder list. */
@@ -96,9 +99,8 @@ export function DetailPanel({
   onCrumbSelect,
   onExportBase,
   onOpenSettings,
+  routing,
 }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Live editor instance for the currently open entry, published by
@@ -108,7 +110,7 @@ export function DetailPanel({
 
   // Mirrors the settings form's danger-zone delete (base-settings-form.tsx):
   // same `deleteBase` call, then navigate to the base-less knowledge root so
-  // the view remounts with an empty selection and refresh re-pulls the list.
+  // the view drops to an empty selection and the list is re-pulled.
   async function handleDeleteBase() {
     if (!selection) return;
     const base = selection.base;
@@ -116,9 +118,8 @@ export function DetailPanel({
     try {
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
-      const workspaceSegment = pathname.split("/").filter(Boolean)[0] ?? "";
-      router.replace(`/${workspaceSegment}/knowledge`);
-      router.refresh();
+      routing.goToBase(null, "replace");
+      routing.refreshServerData();
     } catch (err) {
       const msg =
         err instanceof KnowledgeApiError

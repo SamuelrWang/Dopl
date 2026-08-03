@@ -1,10 +1,14 @@
 "use client";
 
 import { X } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel: the barrel also re-exports
+// SettingsModal, whose delete-account section pulls in `next/navigation` and
+// would drag Next into the desktop SPA's import graph.
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
+import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import { BaseSettingsForm } from "./base-settings-form";
 
 interface Props {
@@ -21,6 +25,8 @@ interface Props {
   /** Called after a folder description saves so the parent can refresh
    *  its tree snapshot. */
   onFoldersChanged?: () => void;
+  /** Router bindings for the form's slug-change / delete moves. */
+  routing: KnowledgeRouting;
 }
 
 /**
@@ -38,6 +44,7 @@ export function BaseSettingsModal({
   role,
   folders,
   onFoldersChanged,
+  routing,
 }: Props) {
   return (
     <ModalShell
@@ -67,6 +74,7 @@ export function BaseSettingsModal({
           currentUserId={currentUserId}
           role={role}
           onFoldersChanged={onFoldersChanged}
+          routing={routing}
         />
       </div>
     </ModalShell>

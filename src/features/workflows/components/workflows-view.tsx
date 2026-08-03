@@ -20,9 +20,25 @@ interface Props {
   initialWorkflowSlug?: string;
   /** Member+ — viewers read the workflow but see no create/edit affordances. */
   canEdit?: boolean;
+  /**
+   * How the address bar follows the server-canonical workflow slug. Defaults
+   * to `history.replaceState` with the path URL — what the Next app has always
+   * done, and why the RSC pages pass nothing (a server component cannot hand a
+   * function to a client component anyway).
+   *
+   * The desktop SPA injects its hash-router equivalent: the packaged renderer
+   * is a `file://` document where replacing the path is a Chromium security
+   * error, so the same intent has to travel through the router there.
+   */
+  replaceUrl?: (path: string) => void;
 }
 
 const EMPTY_GRAPH: WorkflowGraph = { nodes: [], edges: [] };
+
+/** Module-level so the default is referentially stable across renders — the
+ *  slug-sync effect depends on it. */
+const replaceHistoryUrl = (path: string): void =>
+  window.history.replaceState(null, "", path);
 
 /**
  * Workflows page root. A tab strip of workflows over the graph substrate:
@@ -36,6 +52,7 @@ export function WorkflowsView({
   workspaceSegment,
   initialWorkflowSlug,
   canEdit = true,
+  replaceUrl = replaceHistoryUrl,
 }: Props) {
   const [tabId, setTabId] = useState<string | null>(null);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -76,8 +93,8 @@ export function WorkflowsView({
   const activeSlug = active?.slug;
   useEffect(() => {
     if (!activeSlug) return;
-    window.history.replaceState(null, "", `/${workspaceSegment}/workflows/${activeSlug}`);
-  }, [activeSlug, workspaceSegment]);
+    replaceUrl(`/${workspaceSegment}/workflows/${activeSlug}`);
+  }, [activeSlug, workspaceSegment, replaceUrl]);
 
   const graph = detail?.graph ?? EMPTY_GRAPH;
   const activeStep = selectedStepId
@@ -90,7 +107,7 @@ export function WorkflowsView({
     setConfirmDelete(false);
     const slug = workflows.find((w) => w.id === id)?.slug;
     if (slug) {
-      window.history.replaceState(null, "", `/${workspaceSegment}/workflows/${slug}`);
+      replaceUrl(`/${workspaceSegment}/workflows/${slug}`);
     }
   };
 

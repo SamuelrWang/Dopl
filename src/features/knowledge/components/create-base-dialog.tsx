@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
-import { ModalShell } from "@/shared/layout/settings-modal";
+// Deep import, not the `settings-modal` barrel — the barrel re-exports
+// SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
+import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import type { KbScope } from "../scope";
 import { KnowledgeApiError, createBase } from "../client/api";
-import { knowledgeBaseSegment } from "../url";
+import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import {
   ScopeSelector,
   TeamGrantEditor,
@@ -24,6 +25,9 @@ interface Props {
   workspaceSlug: string;
   currentUserId: string;
   role: Role;
+  /** Where a freshly created base sends the user — see
+   *  ./knowledge-v2/routing.ts. */
+  routing: KnowledgeRouting;
 }
 
 /**
@@ -40,8 +44,8 @@ export function CreateBaseDialog({
   workspaceSlug,
   currentUserId,
   role,
+  routing,
 }: Props) {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [scope, setScope] = useState<KbScope>("private");
@@ -86,8 +90,8 @@ export function CreateBaseDialog({
         workspaceId
       );
       close();
-      router.push(`/${workspaceSlug}/knowledge/${knowledgeBaseSegment(base)}`);
-      router.refresh();
+      routing.goToBase(base, "push");
+      routing.refreshServerData();
     } catch (err) {
       const msg =
         err instanceof KnowledgeApiError

@@ -69,12 +69,16 @@ describe("app routes", () => {
     expect(await screen.findByRole("heading", { name: "Canvas" })).toBeInTheDocument();
   });
 
-  it("resolves a detail route with its param", async () => {
-    renderAt("/acme-ab12cd/knowledge/some-base-9f2a");
-
-    expect(
-      await screen.findByRole("heading", { name: "Knowledge base" })
-    ).toBeInTheDocument();
+  it("resolves a detail route with its param", () => {
+    // Every detail route is a real page now — its rendering is covered by
+    // the page's own suite. What THIS table owes is the match: the param
+    // row wins over the index row and delivers its param.
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/acme-ab12cd/knowledge/some-base-9f2a"],
+    });
+    const match = router.state.matches.at(-1);
+    expect(match?.route.path).toBe("knowledge/:kbSlug");
+    expect(match?.params.kbSlug).toBe("some-base-9f2a");
   });
 
   it("mirrors the web app's page list", () => {

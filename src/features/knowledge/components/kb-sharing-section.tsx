@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/members/hooks/use-teams";
@@ -13,6 +12,7 @@ import type { TeamConflictDetails } from "@/features/members/teams-client";
 import { KnowledgeApiError, updateBase } from "../client/api";
 import { kbScope, type KbScope } from "../scope";
 import type { KnowledgeBase } from "../types";
+import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import {
   ScopeSelector,
   TeamGrantEditor,
@@ -25,6 +25,9 @@ interface Props {
   base: KnowledgeBase;
   currentUserId: string;
   role: Role;
+  /** Scope changes move a KB in and out of other members' lists, which the
+   *  page's owner/team data is derived from — see ./knowledge-v2/routing.ts. */
+  routing: KnowledgeRouting;
 }
 
 /**
@@ -40,8 +43,8 @@ export function KbSharingSection({
   base,
   currentUserId,
   role,
+  routing,
 }: Props) {
-  const router = useRouter();
   const isAdmin = meetsMinRole(role, "admin");
   const canManage = base.createdBy === currentUserId || isAdmin;
   const { teams, loading: teamsLoading, error: teamsError } =
@@ -114,7 +117,7 @@ export function KbSharingSection({
         workspaceId
       );
       toast({ title: "Sharing updated" });
-      router.refresh();
+      routing.refreshServerData();
     } catch (err) {
       if (
         err instanceof KnowledgeApiError &&
