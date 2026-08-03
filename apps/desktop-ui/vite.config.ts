@@ -37,17 +37,19 @@ const SUPABASE_STORAGE_ORIGIN = "https://mrefkedvdehahjejreae.supabase.co";
  * `img-src` carries the exact Supabase storage origin so workspace icons load
  * (`AppRailCore`'s `<img src={ws.iconUrl}>` — journey-audit GAP-20).
  *
- * OPEN SEAM (narrowed, not closed) — member AVATARS are still blocked. They
- * are NOT Supabase URLs: `profiles.avatar_url` is copied from the OAuth
- * provider's `raw_user_meta_data` (see
+ * CLOSED SEAM — member AVATARS do not need an origin here and must never get
+ * one. They are NOT Supabase URLs: `profiles.avatar_url` is copied from the
+ * OAuth provider's `raw_user_meta_data` (see
  * `supabase/migrations/20260731090000_profiles_display_name_bounds.sql:85`),
  * so they resolve to `lh3.googleusercontent.com`,
- * `avatars.githubusercontent.com`, and whatever future providers return —
- * an open-ended set that CANNOT be pinned. The fix for those is the main-side
- * proxy, which already exists for the session window
- * (`dopl-desktop-app/main/avatar-cache.js`: bounded one-shot GET → `data:`
- * URI) and just needs wiring to the SPA bridge. Until then avatars fall back
- * to initials. Do not widen `img-src` to `https:` to paper over it.
+ * `avatars.githubusercontent.com`, and whatever future providers return — an
+ * open-ended set that CANNOT be pinned. They now arrive as `data:` URIs
+ * instead: `@/shared/hooks/use-bridged-image-src` asks main over
+ * `window.dopl.avatarDataUri`, main gates the destination
+ * (`dopl-desktop-app/main/avatar-policy.js`) and fetches it bounded + cached
+ * (`main/avatar-cache.js`), and the renderer only ever receives inline bytes.
+ * A new avatar provider is a one-line allowlist edit in main, never a change
+ * here. Do not widen `img-src` to `https:`.
  */
 const PRODUCTION_CSP = [
   "default-src 'none'",

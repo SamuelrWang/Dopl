@@ -171,4 +171,14 @@ contextBridge.exposeInMainWorld('dopl', {
   },
 
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),
+
+  // → a `data:image/...;base64,...` URI, or null. The packaged page's
+  // `img-src` cannot list the OAuth CDNs (`lh3.googleusercontent.com`,
+  // `avatars.githubusercontent.com` — an open-ended set), so main fetches the
+  // avatar on the renderer's behalf and returns the bytes inline. Main owns
+  // the destination allowlist (main/avatar-policy.js) AND re-checks the mime
+  // and size of what it hands back; a refused URL answers null and the
+  // component keeps its initials. Never a URL, never a header, never a token —
+  // this does NOT widen the two invariants above.
+  avatarDataUri: (url) => ipcRenderer.invoke('dopl:avatar', asStr(url)),
 });

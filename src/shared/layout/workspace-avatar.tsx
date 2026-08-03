@@ -1,3 +1,6 @@
+"use client";
+
+import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 
 type AvatarSize = "sm" | "md" | "lg";
@@ -23,6 +26,10 @@ interface Props {
  */
 export function WorkspaceAvatar({ name, iconUrl, size = "md", className }: Props) {
   const letter = (name.trim()[0] || "?").toUpperCase();
+  // Workspace icons are Supabase-storage objects, which the packaged CSP
+  // already names — so this is a passthrough today. It rides the same resolver
+  // as member avatars so a future icon host does not silently render blank.
+  const src = useBridgedImageSrc(iconUrl);
   return (
     <span
       className={cn(
@@ -31,9 +38,9 @@ export function WorkspaceAvatar({ name, iconUrl, size = "md", className }: Props
         className,
       )}
     >
-      {iconUrl ? (
+      {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={iconUrl} alt="" className="w-full h-full object-cover" />
+        <img src={src} alt="" className="w-full h-full object-cover" />
       ) : (
         letter
       )}

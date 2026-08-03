@@ -1,5 +1,6 @@
 "use client";
 
+import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 
 export interface AvatarStackUser {
@@ -19,6 +20,9 @@ function initials(name: string): string {
 }
 
 function Avatar({ user }: { user: AvatarStackUser }) {
+  // Same proxy as `@/shared/ui/avatar`: a provider-CDN avatar is unrenderable
+  // in the packaged SPA until main hands it back as a `data:` URI.
+  const src = useBridgedImageSrc(user.avatarUrl);
   const title = user.editing
     ? `${user.displayName} (editing)`
     : user.displayName;
@@ -33,10 +37,10 @@ function Avatar({ user }: { user: AvatarStackUser }) {
           "bg-surface-raised-4 text-micro font-semibold uppercase tracking-wide text-text-secondary"
         )}
       >
-        {user.avatarUrl ? (
+        {src ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={user.avatarUrl}
+            src={src}
             alt={user.displayName}
             className="h-full w-full object-cover"
           />

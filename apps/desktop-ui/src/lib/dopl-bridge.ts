@@ -84,6 +84,13 @@ export interface DoplBridge {
    *  renderer holds no token it could drop). */
   signOut?(): Promise<{ ok: boolean }>;
   openExternal(url: string): Promise<{ ok: boolean }>;
+  /** Proxy a remote image through main and get it back as a `data:` URI (or
+   *  null when the host is not on main's avatar allowlist, or the fetch
+   *  failed). The packaged page's `img-src` cannot enumerate the OAuth
+   *  avatar CDNs, so `profiles.avatar_url` is unrenderable here without this.
+   *  Optional: absent on older mains, where `useBridgedImageSrc` leaves the
+   *  initials fallback in place rather than emitting a blocked request. */
+  avatarDataUri?(url: string): Promise<string | null>;
   /** Phase 3 live updates: tell main which workspace the UI is viewing
    *  (null = none); main pushes coalesced change events back. */
   syncWatch?(workspaceId: string | null): Promise<unknown>;

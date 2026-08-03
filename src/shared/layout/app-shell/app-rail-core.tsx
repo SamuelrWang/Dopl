@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
+import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 import type { LinkLike } from "@/shared/ui/link-like";
 import type { WorkspaceLike } from "./workspace-types";
@@ -38,12 +39,7 @@ export function AppRailCore({
             title={ws.name}
             className={cn(styles.wsTile, active && styles.wsActive)}
           >
-            {ws.iconUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={ws.iconUrl} alt="" />
-            ) : (
-              <span className={styles.wsLetter}>{letter}</span>
-            )}
+            <RailTileGlyph iconUrl={ws.iconUrl} letter={letter} />
           </Link>
         );
       })}
@@ -59,4 +55,22 @@ export function AppRailCore({
       </button>
     </nav>
   );
+}
+
+/**
+ * One tile's glyph. Extracted from the map above ONLY so the image src can go
+ * through `useBridgedImageSrc` — a hook cannot be called per iteration.
+ * Falls back to the letter mark while the src is absent, exactly as before.
+ */
+function RailTileGlyph({
+  iconUrl,
+  letter,
+}: {
+  iconUrl: string | null | undefined;
+  letter: string;
+}) {
+  const src = useBridgedImageSrc(iconUrl);
+  if (!src) return <span className={styles.wsLetter}>{letter}</span>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" />;
 }

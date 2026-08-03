@@ -27,6 +27,7 @@ const uiSync = require('./ui-sync');
 const authActions = require('./auth-actions');
 const authPassword = require('./auth-password');
 const auth = require('./auth');
+const avatarPolicy = require('./avatar-policy');
 const { diag } = require('./diag');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
@@ -357,6 +358,19 @@ function register(opts = {}) {
       }
       uiSync.watch(workspaceId);
       return { ok: true };
+    })
+  );
+
+  ipcMain.handle(
+    'dopl:avatar',
+    bound('avatar', async (_event, url) => {
+      // NULL, never a throw: an avatar that cannot be proxied is not an error
+      // the page must handle — every caller already renders initials for a
+      // missing image, and a rejection here would surface as an unhandled
+      // promise in a component that has nothing useful to do with it. The
+      // allowlist + the bounded fetch live in main/avatar-policy.js; the
+      // renderer never learns which of them said no.
+      return avatarPolicy.resolveAvatarDataUri(String(url == null ? '' : url));
     })
   );
 

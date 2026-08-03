@@ -1013,12 +1013,22 @@ for the two-line `main/index.js` integration and what moves when it flips.
   or `DOPL_UI_DEV_URL` for Vite HMR). Same security shape as `session-window.js`:
   sandbox + contextIsolation, `window.open` denied, navigation locked to the page.
 - `renderer/app-preload.js` — `window.dopl` for that window: `apiRequest`,
-  `getAuthState`, `onAuthState`, `openExternal`. **No tokens cross it, and the
-  renderer cannot set headers.**
+  `getAuthState`, `onAuthState`, `openExternal`, `avatarDataUri`. **No tokens
+  cross it, and the renderer cannot set headers.**
 - `main/ui-bridge.js` — the `ipcMain.handle` half. Sender-bound to the SPA
   window's top frame (the `mainOnly` convention from `channel-dir-ipc.js`);
   path-gated to `/api/**`; `getBearerToken()` is the auth seam and still returns
   `null`.
+- `main/avatar-policy.js` — the destination allowlist behind `dopl:avatar`. The
+  packaged page's `img-src` cannot enumerate the OAuth avatar CDNs, so main
+  proxies those images and answers a `data:` URI (fetched bounded + memoized by
+  `main/avatar-cache.js`, the session window's existing proxy). **A remote image
+  the renderer cannot load is fixed HERE — by adding a host to that allowlist —
+  never by widening the CSP in `apps/desktop-ui/vite.config.ts`.** The renderer
+  half is the one shared hook `@/shared/hooks/use-bridged-image-src`, which every
+  avatar/icon `<img>` in the web tree goes through; it is a verbatim passthrough
+  on the web and for CSP-permitted URLs, so a new `<img src>` on a remote origin
+  is the only thing that ever needs to think about this.
 - `renderer/app/` — build output of `apps/desktop-ui` (`npm run build:ui` at the
   repo root). Gitignored; must exist before `npm run dist`/`release`.
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "lucide-react";
+import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 import { Popover, MenuItem } from "@/shared/ui/popover-menu";
 import { RolePill } from "@/features/members/components/member-bits";
@@ -197,11 +198,14 @@ function WorkspaceGlyph({
   size: "sm" | "md";
 }) {
   const box = size === "md" ? "h-7 w-7 text-body" : "h-6 w-6 text-caption";
-  if (iconUrl) {
+  // Passthrough for the Supabase-hosted icon URLs this actually receives; the
+  // shared resolver is used so no icon surface is special-cased.
+  const src = useBridgedImageSrc(iconUrl);
+  if (src) {
     return (
       <span className={cn("shrink-0 overflow-hidden rounded-md", box)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={iconUrl} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" />
       </span>
     );
   }

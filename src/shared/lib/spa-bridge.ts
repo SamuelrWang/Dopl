@@ -28,6 +28,12 @@ export interface SpaBridgeSurface {
   getAuthState(): Promise<{ signedIn: boolean; userId: string | null }>;
   onAuthState?(cb: (s: { signedIn: boolean; userId: string | null }) => void): () => void;
   openExternal(url: string): Promise<{ ok: boolean }>;
+  /** Remote image → `data:` URI, proxied by main (null = refused/failed).
+   *  The renderer-local mirror of this member is
+   *  `apps/desktop-ui/src/lib/dopl-bridge.ts`; the consumer is
+   *  `@/shared/hooks/use-bridged-image-src`. Optional — an older main has
+   *  no such handler, and the caller falls back to initials. */
+  avatarDataUri?(url: string): Promise<string | null>;
   appOrigin?: string;
   syncWatch?(workspaceId: string | null): Promise<unknown>;
   onSyncEvent?(cb: (e: { workspaceId: string; table: string }) => void): () => void;

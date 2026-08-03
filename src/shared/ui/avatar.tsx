@@ -6,6 +6,7 @@
  * identity color in this app belongs to teams, not people.
  */
 
+import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 
 export interface AvatarPerson {
@@ -35,7 +36,13 @@ export function Avatar({
   size?: keyof typeof SIZE;
   className?: string;
 }) {
-  if (person.avatarUrl) {
+  // OAuth avatars live on provider CDNs the packaged desktop CSP cannot name,
+  // so in that renderer the bytes arrive from main as a `data:` URI instead.
+  // Undefined (pending, or refused) falls through to the initials below —
+  // which is what this component already did for a member with no picture.
+  const src = useBridgedImageSrc(person.avatarUrl);
+
+  if (src) {
     return (
       <span
         className={cn(
@@ -46,7 +53,7 @@ export function Avatar({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={person.avatarUrl}
+          src={src}
           alt={person.displayName || person.email || "Member"}
           className="h-full w-full object-cover"
         />

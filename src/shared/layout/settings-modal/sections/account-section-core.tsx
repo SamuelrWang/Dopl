@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { SectionShell } from "./section-shell";
 
 interface ProfileData {
@@ -32,6 +33,9 @@ export function AccountSectionCore({ dangerZone }: { dangerZone?: React.ReactNod
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // `profile.avatar_url` is the raw OAuth-provider URL — proxied through main
+  // in the packaged SPA, passed through verbatim on the web.
+  const avatarSrc = useBridgedImageSrc(profile?.avatar_url);
 
   // Seed the input once when the profile first arrives; after that the
   // field is user-owned (a background refetch must not overwrite typing).
@@ -65,10 +69,10 @@ export function AccountSectionCore({ dangerZone }: { dangerZone?: React.ReactNod
   return (
     <SectionShell title="Account" subtitle="Manage your personal account">
       <div className="flex items-center gap-4">
-        {profile?.avatar_url ? (
+        {avatarSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={profile.avatar_url}
+            src={avatarSrc}
             alt=""
             className="h-14 w-14 rounded-full border border-border-default object-cover"
           />
