@@ -48,13 +48,28 @@ on reopen. If it returns null, every handler fails closed.
   keep the renderer alive so its Supabase cookies stay live for the background
   listener. Once main owns the credential, re-check whether it is still needed —
   do not let it become load-bearing for something else by accident.
-- **Auth is a separate track.** `ui-bridge.js`'s `getBearerToken()` and
-  `getAuthState()` are stubs returning `null` / signed-out, so every request
-  currently goes out unauthenticated and the API answers 401. See
-  `docs/migration-research/desktop-main.md` §3.3 (breaks B1–B8) and the
-  Supabase-JWT-as-Bearer decision in the master plan. When the token store lands,
-  those two functions are the only edits in this file, and `broadcastAuthState(win, state)`
-  is the push channel for `window.dopl.onAuthState`.
+- **Auth has landed, but is not wired either.** `main/auth-tokens.js` is the
+  main-process access-token authority (proactive refresh at ~80% of token
+  lifetime, near-expiry gate on every read, bounded-drop on refresh failure), and
+  `ui-bridge.js`'s `getBearerToken()` / `getAuthState()` are implemented against
+  it — `getBearerToken()` is now **async**. `broadcastAuthState(win, state)` is
+  still the push channel for `window.dopl.onAuthState`. Three calls in
+  `main/index.js` are required to make it live:
+
+  ```js
+  const authTokens = require('./auth-tokens');
+
+  authTokens.start();                                   // in app.whenReady()
+  authTokens.subscribe((s) => uiBridge.broadcastAuthState(mainWindow, s));
+  // inside the existing powerMonitor onWake() fan-out, next to api.resetPool():
+  try { authTokens.onWake(); } catch (err) { diag('wake token error', err && err.message); }
+  ```
+
+  Optional but recommended: `authTokens.onSignIn()` right after
+  `auth.captureFromFragment()` in `openDeepLink`, and `authTokens.onSignOut()`
+  after `auth.signOut()` — both replace a timing guess with a deterministic
+  re-arm (C15). Until `start()` is called the timer never runs; the cookie path
+  is unaffected either way.
 - **`scripts/smoke-test.js` still loads the remote site.** After the flip it
   should `loadFile` the built SPA and assert first paint + the bridge — which
   makes it a real release gate for the first time.

@@ -262,18 +262,28 @@ async function refreshInner() {
     );
     if (!res.ok) {
       authFail('refresh failed', `HTTP ${res.status}`);
-      // A 400 here usually means the refresh token was rotated/revoked — the
-      // stored session is dead. Drop it so we stop retrying a bad token. The
-      // cookie jar may still be perfectly alive, which is exactly why the
-      // signed-in state no longer depends on this blob (auth-state.js).
-      if (res.status === 400) {
+      // BOUNDED DROP (Phase 2). This used to be `if (res.status === 400)
+      // clearSession()` — a real sign-out from ONE bad response. It was only ever
+      // survivable because the cookie jar was a second source; the bearer path
+      // (auth-tokens.js) has none, and FIX S6's own rotation race produces exactly
+      // one 400. So the decision moved to auth-tokens.noteRefreshOutcome: N
+      // CONSECUTIVE definitive rejections drop the blob, and a transient network
+      // failure never counts toward it. A throw here (module unloadable) falls to
+      // the outer catch and drops NOTHING, which is the safe direction.
+      const verdict = require('./auth-tokens').noteRefreshOutcome({ ok: false, status: res.status });
+      if (verdict && verdict.dropSession) {
         clearSession();
-        diag('auth: refresh 400 — stored blob dropped; cookie session may still be live');
+        diag('auth: refresh rejected repeatedly — stored blob dropped; cookie session may still be live');
       }
       return null;
     }
     const data = await res.json();
-    if (!data.access_token || !data.refresh_token) return null;
+    if (!data.access_token || !data.refresh_token) {
+      // A 200 with no tokens is not a rejection of the refresh token — treat it
+      // as transient so it can never accumulate toward a sign-out.
+      require('./auth-tokens').noteRefreshOutcome({ ok: false, status: res.status });
+      return null;
+    }
     const next = {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
@@ -285,10 +295,15 @@ async function refreshInner() {
       user: data.user || null,
     };
     persist(next);
+    require('./auth-tokens').noteRefreshOutcome({ ok: true });
     console.log('[auth] refreshed Supabase session');
     return next;
   } catch (err) {
     authFail('refresh error', err);
+    // A throw is a TRANSIENT failure (DNS, captive portal, sleep mid-flight, a
+    // torn socket). It must never move the machine toward a sign-out — but it
+    // must still advance the backoff so a dead network is not hammered.
+    try { require('./auth-tokens').noteRefreshOutcome({ ok: false, status: null }); } catch (_) {}
     return null;
   }
 }

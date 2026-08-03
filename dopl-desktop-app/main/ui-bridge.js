@@ -21,6 +21,7 @@
 
 const { ipcMain, shell } = require('electron');
 const appVersion = require('./app-version');
+const authTokens = require('./auth-tokens');
 const { API_BASE } = require('./config');
 const { diag } = require('./diag');
 
@@ -47,20 +48,30 @@ function isWindowSender(event, win) {
   } catch (_err) {
     return false;
   }
-  if (frame && sender.mainFrame && frame !== sender.mainFrame) return false;
+  // FAIL CLOSED: a frame we cannot read — or a webContents whose mainFrame
+  // is gone — is refused, never waved through.
+  if (!frame || !sender.mainFrame || frame !== sender.mainFrame) return false;
   return true;
 }
 
-// The renderer may reach the API and NOTHING else. A path that is not an
-// app-relative `/api/...` is refused before a URL is built, so the bridge can
-// never be steered at another origin (`//evil.example/x` is a protocol-relative
-// URL), at the auth pages, or out of the prefix via `..` normalization.
-function isApiPath(path) {
-  const p = String(path == null ? '' : path);
-  if (!p.startsWith('/api/')) return false;
-  if (p.startsWith('//')) return false;
-  if (p.includes('\\') || p.includes('..')) return false;
-  return true;
+// The renderer may reach the API and NOTHING else. PARSE FIRST, GATE THE
+// RESULT: a character blacklist runs before WHATWG normalization, which
+// decodes dot-segments AFTER the check (`/api/%2e%2e/auth/x` resolves to
+// `/auth/x`), so the gate must judge the URL the fetch will actually use.
+// Returns the resolved absolute href, or null when refused — the caller
+// fetches the RETURNED href, never the raw input. Origin equality kills
+// protocol-relative (`//evil.example/api/x`) and credentialed forms; the
+// normalized-pathname prefix check kills every traversal encoding.
+function resolveApiUrl(path, apiBase) {
+  let u;
+  try {
+    u = new URL(String(path == null ? '' : path), apiBase);
+  } catch (_err) {
+    return null;
+  }
+  if (u.origin !== new URL(apiBase).origin) return null;
+  if (!(u.pathname === '/api' || u.pathname.startsWith('/api/'))) return null;
+  return u.href;
 }
 
 // Only http(s) may be opened externally: a `file:`/`smb:` URL handed to the OS
@@ -83,40 +94,40 @@ function isWorkspaceId(id) {
 // ─── END UI-BRIDGE-PURE ──────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE AUTH SEAM — deliberately unimplemented in this file.
+// THE AUTH SEAM — now implemented against main/auth-tokens.js.
 //
 // Phase 2's decision (docs/DESKTOP-MIGRATION-PLAN.md, corrections §1) is
 // Supabase-JWT-as-Bearer: main attaches `Authorization: Bearer <supabase access
-// token>` and `withUserAuth` grows a bearer-KIND branch. Today main's HTTP is
-// COOKIE-based (main/api.js:6-7) and the jar is refreshed by the remote web
-// page — the refresher that the bundled SPA removes
-// (docs/migration-research/desktop-main.md §3.3 B1–B8).
+// token>` and `withUserAuth` has grown a bearer-KIND branch, so this bearer is a
+// SESSION caller (not an agent) and `sessionOnly` routes answer it.
 //
-// So the token half is being built separately. These two functions are the
-// entire seam; when the auth work lands, they become the only edits here.
-// Until then every request goes out UNAUTHENTICATED and the API answers 401 —
-// which is the honest failure, not a silent one.
+// These two functions are still the entire seam — the names are load-bearing for
+// WIRING.md and for anything that greps for them. `getBearerToken` is now async
+// because the authority refreshes in line when the token is near expiry; nothing
+// else about the shape changed.
+//
+// INVARIANT (auth-flows.md §5 I8): the token value may become an outbound
+// Authorization header and NOTHING else. `getAuthState()` is what crosses IPC,
+// and it is token-free by construction.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TODO(auth): return the current Supabase access token from the main-process
-// token store, refreshing it proactively when it is near expiry. Never return
-// it to the renderer — it exists only to build this header.
+// The current Supabase access token from the main-process token authority,
+// proactively refreshed when it is near expiry. NEVER returned to the renderer —
+// it exists only to build the header below.
 function getBearerToken() {
-  return null;
+  return authTokens.getAccessToken();
 }
 
-// TODO(auth): derive from the token store's JWT (main/auth.js `getUserId()`
-// reads the id with no network call). MUST stay token-free: `{ signedIn,
-// userId }` is the entire contract the renderer is allowed to see.
+// `{ signedIn, userId }` — derived from the stored session's JWT with no network
+// call. Token-free by contract: this is the entire shape the renderer may see.
 function getAuthState() {
-  return { signedIn: false, userId: null };
+  return authTokens.getAuthState();
 }
 
-async function performApiRequest(path, opts) {
+async function sendApiRequest(href, opts, token) {
   const method = opts.method || 'GET';
   const headers = { Accept: 'application/json', ...appVersion.versionHeaders() };
 
-  const token = getBearerToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.workspaceId) headers['X-Workspace-Id'] = opts.workspaceId;
   if (opts.expectedUpdatedAt) headers['x-updated-at'] = opts.expectedUpdatedAt;
@@ -124,11 +135,10 @@ async function performApiRequest(path, opts) {
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  let res;
   try {
     // Node's global fetch — the same undici pool main/api.js documents (and
     // resets after a network transition), NOT Chromium's stack.
-    res = await fetch(`${API_BASE}${path}`, {
+    return await fetch(href, {
       method,
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
@@ -136,6 +146,21 @@ async function performApiRequest(path, opts) {
     });
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function performApiRequest(href, opts) {
+  let res = await sendApiRequest(href, opts, await getBearerToken());
+
+  // 401 REPAIR — ONE forced rotation and ONE retry, never a loop. The token can
+  // be revoked or rotated out from under a request that was already in flight; a
+  // 401 that survives a fresh token is a real authorization answer.
+  if (authTokens.shouldRepairAuth(res.status, false)) {
+    const fresh = await authTokens.forceRefresh();
+    if (fresh && fresh.access_token) {
+      res = await sendApiRequest(href, opts, fresh.access_token);
+    }
+    if (res.status === 401) authTokens.emitAuthState('signed-out');
   }
 
   const out = { status: res.status, statusText: res.statusText, hasBody: false };
@@ -173,12 +198,27 @@ function register(opts = {}) {
   ipcMain.handle(
     'dopl:api-request',
     bound('api-request', async (_event, path, rawOpts) => {
-      if (!isApiPath(path)) throw new Error('dopl: invalid api path');
+      const href = resolveApiUrl(path, API_BASE);
+      if (!href) throw new Error('dopl: invalid api path');
       const o = rawOpts && typeof rawOpts === 'object' ? rawOpts : {};
       if (o.workspaceId !== undefined && !isWorkspaceId(o.workspaceId)) {
-        throw new Error('dopl: invalid workspace id');
+        // SERVER-SHAPED 400, not a bridge rejection: the renderer's decoder
+        // must see `status: 400` so TanStack's retry policy treats it as
+        // permanent (a status-less Error is retried as if transient) and
+        // the page surfaces the same envelope the server would answer.
+        return {
+          status: 400,
+          statusText: 'Bad Request',
+          hasBody: true,
+          body: {
+            error: {
+              code: 'WORKSPACE_INVALID',
+              message: 'x-workspace-id must be a UUID',
+            },
+          },
+        };
       }
-      return performApiRequest(path, o);
+      return performApiRequest(href, o);
     })
   );
 
@@ -219,7 +259,7 @@ function broadcastAuthState(win, state) {
 module.exports = {
   register,
   broadcastAuthState,
-  isApiPath,
+  resolveApiUrl,
   isExternalUrl,
   isWorkspaceId,
   isWindowSender,
