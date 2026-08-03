@@ -265,12 +265,23 @@ export function subscribeSharedWorkspaceTables(
   listener: Listener
 ): () => void {
   // Bundled desktop SPA (window.dopl present): the renderer has no network
-  // (CSP connect-src 'none') and no Supabase config — realtime signals are
-  // a deliberate no-op here until Phase 3 pushes change events over the
-  // bridge from the main process (which already holds the realtime
-  // machinery). Pages degrade to staleTime-driven refetching, not errors.
-  if (typeof window !== "undefined" && (window as { dopl?: unknown }).dopl) {
-    return () => {};
+  // (CSP connect-src 'none') — main watches postgres_changes for the viewed
+  // workspace and pushes coalesced {workspaceId, table} events over the
+  // bridge (Phase 3). Those events feed the SAME listener semantics the web
+  // channels provide, so every feature realtime hook works unchanged. An
+  // older main without the sync surface degrades to the previous no-op.
+  const spaBridge =
+    typeof window !== "undefined"
+      ? (window as { dopl?: SpaSyncBridge }).dopl
+      : undefined;
+  if (spaBridge) {
+    if (
+      typeof spaBridge.onSyncEvent !== "function" ||
+      typeof spaBridge.syncWatch !== "function"
+    ) {
+      return () => {};
+    }
+    return subscribeViaBridge(spaBridge, workspaceId, tables, listener);
   }
   const key = entryKey(topicPrefix, workspaceId, tables);
   let entry = entries.get(key);
@@ -335,9 +346,90 @@ export function subscribeSharedWorkspaceTables(
   };
 }
 
+// ─── SPA bridge feed (Phase 3) ───────────────────────────────────────────
+
+interface SpaSyncBridge {
+  syncWatch?: (workspaceId: string | null) => Promise<unknown>;
+  onSyncEvent?: (
+    cb: (e: { workspaceId: string; table: string }) => void
+  ) => () => void;
+}
+
+interface BridgeSub {
+  workspaceId: string;
+  tables: ReadonlySet<string>;
+  listener: Listener;
+}
+
+const bridgeSubs = new Set<BridgeSub>();
+let bridgeOff: (() => void) | null = null;
+let watchedWorkspace: string | null = null;
+
+/** The workspace most recently subscribed wins the watch — the SPA views
+ *  one workspace at a time, and every page's hooks subscribe for the same
+ *  one, so "last wins" and "recount on unsubscribe" agree in practice. */
+function updateWatch(bridge: SpaSyncBridge): void {
+  const want = [...bridgeSubs].at(-1)?.workspaceId ?? null;
+  if (want === watchedWorkspace) return;
+  watchedWorkspace = want;
+  void bridge.syncWatch?.(want);
+}
+
+function subscribeViaBridge(
+  bridge: SpaSyncBridge,
+  workspaceId: string,
+  tables: readonly string[],
+  listener: Listener
+): () => void {
+  const sub: BridgeSub = {
+    workspaceId,
+    tables: new Set(tables),
+    listener,
+  };
+  bridgeSubs.add(sub);
+  if (!bridgeOff) {
+    bridgeOff =
+      bridge.onSyncEvent?.((e) => {
+        for (const s of [...bridgeSubs]) {
+          if (s.workspaceId !== e.workspaceId) continue;
+          // Empty table = main's catch-up signal after (re)subscribe —
+          // fire everyone, mirroring the web SUBSCRIBED catch-up.
+          if (e.table && !s.tables.has(e.table)) continue;
+          try {
+            s.listener();
+          } catch {
+            // One listener throwing must not starve the others.
+          }
+        }
+      }) ?? null;
+  }
+  updateWatch(bridge);
+  // Catch-up: the web path fires on SUBSCRIBED; the bridge path fires once
+  // on subscribe so a page mounting after events flowed refetches.
+  try {
+    listener();
+  } catch {
+    /* listener errors are the caller's problem */
+  }
+  return () => {
+    bridgeSubs.delete(sub);
+    updateWatch(bridge);
+    if (bridgeSubs.size === 0 && bridgeOff) {
+      bridgeOff();
+      bridgeOff = null;
+    }
+  };
+}
+
 /** Test-only: reset all shared state (tears down every live channel). */
 export function __resetSharedChannelsForTests(): void {
   for (const entry of [...entries.values()]) teardown(entry);
+  bridgeSubs.clear();
+  if (bridgeOff) {
+    bridgeOff();
+    bridgeOff = null;
+  }
+  watchedWorkspace = null;
 }
 
 /** Test-only: current entry count (live channels, including grace-window). */

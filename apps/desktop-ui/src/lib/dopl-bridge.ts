@@ -43,6 +43,12 @@ export interface DoplBridge {
   /** Subscribe to auth changes; returns an unsubscribe function. */
   onAuthState(callback: (state: AuthState) => void): () => void;
   openExternal(url: string): Promise<{ ok: boolean }>;
+  /** Phase 3 live updates: tell main which workspace the UI is viewing
+   *  (null = none); main pushes coalesced change events back. */
+  syncWatch?(workspaceId: string | null): Promise<unknown>;
+  onSyncEvent?(
+    callback: (event: { workspaceId: string; table: string }) => void
+  ): () => void;
   /** The app's public https origin for user-facing URLs (document origin
    *  is file:// here). Injected by main as a preload constant. */
   appOrigin?: string;

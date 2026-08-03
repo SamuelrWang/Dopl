@@ -24,6 +24,7 @@ const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
 const uiBridge = require('./ui-bridge');
 const authTokens = require('./auth-tokens');
+const uiSync = require('./ui-sync');
 const settings = require('./settings');
 const sessionWindow = require('./session-window');
 
@@ -383,7 +384,12 @@ if (!gotLock) {
       uiBridge.register({ getMainWindow: () => mainWindow });
       authTokens.subscribe((state) => {
         try { uiBridge.broadcastAuthState(mainWindow, state); } catch (_err) { /* window gone */ }
+        // A dead session must not keep a live realtime feed.
+        if (state === 'signed-out') { try { uiSync.stop(); } catch (_err) { /* not started */ } }
       });
+      // Phase 3: main watches the viewed workspace's content tables and
+      // pushes coalesced change events to the SPA (dopl:sync-event).
+      uiSync.start({ getWindow: () => mainWindow, getAccessToken: authTokens.getAccessToken });
       mainWindow = spaWindow.createSpaWindow();
       mainWindow.on('closed', () => { mainWindow = null; });
     } else {
@@ -441,6 +447,7 @@ if (!gotLock) {
       try { listener.wake(); } catch (err) { diag('wake error', err && err.message); }
       try { api.resetPool(); } catch (err) { diag('wake pool-reset error', err && err.message); } // (2b) main-process undici pool
       try { authTokens.onWake(); } catch (err) { diag('wake token error', err && err.message); } // (2d) refresh a stale access token now, not at the late alarm
+      try { uiSync.onWake(); } catch (err) { diag('wake ui-sync error', err && err.message); } // (2e) rejoin the SPA's sync feed on fresh sockets
       try { if (loadGuard) loadGuard.onWake(); } catch (err) { diag('wake guard error', err && err.message); } // (2a) renderer pool + (2c) retry a hung load
     };
     try {

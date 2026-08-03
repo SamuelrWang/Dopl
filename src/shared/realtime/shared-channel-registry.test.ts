@@ -359,6 +359,57 @@ describe("subscribeSharedWorkspaceTables", () => {
     expect(channels).toHaveLength(1);
   });
 
+  it("SPA bridge: events feed listeners; watch follows subscriptions", () => {
+    const events: Array<(e: { workspaceId: string; table: string }) => void> = [];
+    const watches: Array<string | null> = [];
+    const offSpy = vi.fn();
+    (window as unknown as { dopl?: unknown }).dopl = {
+      syncWatch: (ws: string | null) => {
+        watches.push(ws);
+        return Promise.resolve();
+      },
+      onSyncEvent: (cb: (e: { workspaceId: string; table: string }) => void) => {
+        events.push(cb);
+        return offSpy;
+      },
+    };
+    try {
+      const a = vi.fn();
+      const off = subscribeSharedWorkspaceTables("ws1", TABLES, "k", a);
+      expect(a).toHaveBeenCalledTimes(1); // mount catch-up
+      expect(watches).toEqual(["ws1"]);
+      expect(channels).toHaveLength(0); // NO supabase channel in SPA mode
+
+      events[0]({ workspaceId: "ws1", table: "knowledge_bases" });
+      expect(a).toHaveBeenCalledTimes(2);
+      events[0]({ workspaceId: "ws1", table: "unrelated_table" });
+      expect(a).toHaveBeenCalledTimes(2); // filtered
+      events[0]({ workspaceId: "ws2", table: "knowledge_bases" });
+      expect(a).toHaveBeenCalledTimes(2); // other workspace
+      events[0]({ workspaceId: "ws1", table: "" });
+      expect(a).toHaveBeenCalledTimes(3); // catch-up broadcast
+
+      off();
+      expect(watches.at(-1)).toBeNull();
+      expect(offSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (window as unknown as { dopl?: unknown }).dopl;
+    }
+  });
+
+  it("SPA bridge: an older main without the sync surface degrades to no-op", () => {
+    (window as unknown as { dopl?: unknown }).dopl = { apiRequest: () => {} };
+    try {
+      const a = vi.fn();
+      const off = subscribeSharedWorkspaceTables("ws1", TABLES, "k", a);
+      expect(channels).toHaveLength(0);
+      expect(a).not.toHaveBeenCalled();
+      off();
+    } finally {
+      delete (window as unknown as { dopl?: unknown }).dopl;
+    }
+  });
+
   it("no listener fires after teardown, even from buffered events", () => {
     const listener = vi.fn();
     const off = subscribeSharedWorkspaceTables("ws1", TABLES, "k", listener);

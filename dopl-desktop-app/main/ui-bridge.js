@@ -23,6 +23,7 @@ const { ipcMain, shell } = require('electron');
 const appVersion = require('./app-version');
 const authTokens = require('./auth-tokens');
 const { API_BASE } = require('./config');
+const uiSync = require('./ui-sync');
 const { diag } = require('./diag');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
@@ -225,6 +226,21 @@ function register(opts = {}) {
   ipcMain.handle(
     'dopl:auth-state',
     bound('auth-state', () => getAuthState())
+  );
+
+  ipcMain.handle(
+    'dopl:sync-watch',
+    bound('sync-watch', (_event, workspaceId) => {
+      // null = unwatch; anything else must be a workspace UUID — the same
+      // gate the api-request header enforces.
+      if (workspaceId === null) {
+        uiSync.watch(null);
+        return { ok: true };
+      }
+      if (!isWorkspaceId(workspaceId)) return { ok: false };
+      uiSync.watch(workspaceId);
+      return { ok: true };
+    })
   );
 
   ipcMain.handle(

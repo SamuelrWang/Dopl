@@ -114,5 +114,22 @@ contextBridge.exposeInMainWorld('dopl', {
       }),
   },
 
+  // Phase 3 live updates: main watches postgres_changes for the viewed
+  // workspace's content tables and forwards coalesced change events; the
+  // renderer's shared-channel-registry turns them into refetch signals.
+  // syncWatch tells main WHICH workspace the UI is looking at (null =
+  // none). Subscription returns an unsubscribe fn.
+  syncWatch: (workspaceId) =>
+    ipcRenderer.invoke('dopl:sync-watch', workspaceId == null ? null : String(workspaceId)),
+  onSyncEvent: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => {
+      const p = payload && typeof payload === 'object' ? payload : {};
+      callback({ workspaceId: String(p.workspaceId || ''), table: String(p.table || '') });
+    };
+    ipcRenderer.on('dopl:sync-event', listener);
+    return () => ipcRenderer.removeListener('dopl:sync-event', listener);
+  },
+
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),
 });
