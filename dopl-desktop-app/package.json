@@ -1,7 +1,7 @@
 {
   "name": "dopl-desktop",
-  "version": "1.7.24",
-  "description": "Dopl — desktop app",
+  "version": "1.8.0",
+  "description": "Dopl \u2014 desktop app",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",

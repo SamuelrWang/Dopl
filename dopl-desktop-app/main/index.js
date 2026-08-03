@@ -213,13 +213,27 @@ function openDeepLink(url) {
   // replaces timing guesses; no-op when start() hasn't run.
   try { authTokens.onSignIn(); } catch (err) { diag('token re-arm error', err && err.message); }
 
-  const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (loadGuard) loadGuard.load(target);
-    else mainWindow.loadURL(target).catch((err) => console.error('[deeplink] load failed:', err && err.message));
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+  if (process.env.DOPL_UI !== 'remote') {
+    // SPA shell: the captured tokens ARE the session (main/auth-tokens.js);
+    // there is no cookie jar to plant, and loading the remote
+    // desktop-complete page into the SPA window would strand it on
+    // "Signing you in…" (main-initiated loadURL bypasses will-navigate).
+    // The authTokens.onSignIn() above emits the signed-in push that flips
+    // the renderer.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  } else {
+    const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (loadGuard) loadGuard.load(target);
+      else mainWindow.loadURL(target).catch((err) => console.error('[deeplink] load failed:', err && err.message));
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   }
 
   // Give the completion page a moment to establish cookies, then (re)start the
@@ -377,7 +391,10 @@ if (!gotLock) {
     // keeps main's credential fresh once the remote page (whose Supabase
     // client refreshed the cookie jar) is no longer loaded.
     try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
-    if (process.env.DOPL_UI === 'spa') {
+    // Default is the BUNDLED SPA as of 1.8.0 (the desktop-only migration's
+    // window flip); DOPL_UI=remote is the escape hatch back to the remote
+    // shell while it remains in the tree as the rollback path.
+    if (process.env.DOPL_UI !== 'remote') {
       // Bridge handlers bind to the SPA window's top frame ONLY — and are
       // registered ONLY in SPA mode, so the remote window never has a
       // registered privileged surface it doesn't use.
