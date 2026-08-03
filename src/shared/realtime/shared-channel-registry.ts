@@ -247,6 +247,14 @@ export function subscribeSharedWorkspaceTables(
   topicPrefix: string,
   listener: Listener
 ): () => void {
+  // Bundled desktop SPA (window.dopl present): the renderer has no network
+  // (CSP connect-src 'none') and no Supabase config — realtime signals are
+  // a deliberate no-op here until Phase 3 pushes change events over the
+  // bridge from the main process (which already holds the realtime
+  // machinery). Pages degrade to staleTime-driven refetching, not errors.
+  if (typeof window !== "undefined" && (window as { dopl?: unknown }).dopl) {
+    return () => {};
+  }
   const key = entryKey(topicPrefix, workspaceId, tables);
   let entry = entries.get(key);
 

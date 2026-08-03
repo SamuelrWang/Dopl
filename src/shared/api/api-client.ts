@@ -61,13 +61,58 @@ export async function apiRequest<T>(
     if (qs) url += (path.includes("?") ? "&" : "?") + qs;
   }
 
-  const res = await fetch(url, {
-    method: opts.method ?? "GET",
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    credentials: "same-origin",
-    signal: opts.signal,
-  });
+  // TRANSPORT SEAM (desktop migration Phase 2): inside the bundled desktop
+  // SPA the renderer never touches the network — `window.dopl.apiRequest`
+  // (the Electron IPC bridge; main attaches auth and fetches) is the
+  // transport, and every reused feature client inherits it through this one
+  // seam. On the web (no bridge) the plain fetch below runs unchanged. The
+  // bridge answer is normalized into the same {status, json} shape so the
+  // envelope/ApiError decoding beneath is shared verbatim by both paths.
+  const bridge = (
+    globalThis as {
+      dopl?: {
+        apiRequest(
+          path: string,
+          opts: {
+            method?: string;
+            body?: unknown;
+            workspaceId?: string;
+            expectedUpdatedAt?: string;
+          }
+        ): Promise<{
+          status: number;
+          statusText: string;
+          hasBody: boolean;
+          body?: unknown;
+        }>;
+      };
+    }
+  ).dopl;
+
+  let res: { status: number; ok: boolean; statusText: string; json(): Promise<unknown> };
+  if (bridge) {
+    const out = await bridge.apiRequest(url, {
+      method: opts.method ?? "GET",
+      body: opts.body,
+      workspaceId: opts.workspaceId,
+      expectedUpdatedAt: opts.expectedUpdatedAt,
+    });
+    res = {
+      status: out.status,
+      ok: out.status >= 200 && out.status < 300,
+      statusText: out.statusText,
+      json: () =>
+        out.hasBody ? Promise.resolve(out.body) : Promise.reject(new Error("no body")),
+    };
+  } else {
+    res = await fetch(url, {
+      method: opts.method ?? "GET",
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      credentials: "same-origin",
+      signal: opts.signal,
+    });
+  }
 
   if (res.status === 204) return undefined as T;
 
