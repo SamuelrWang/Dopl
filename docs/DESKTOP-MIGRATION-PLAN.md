@@ -4,7 +4,15 @@
 client is a bundled, local-first Electron app (Slack/Notion architecture). The
 server shrinks to a pure API over Postgres.
 
-**Status:** In progress on branch `desktop-migration`. Backup taken 2026-08-02
+**Status:** Phases 0–3 BUILT on branch `desktop-migration` (2026-08-03).
+All 14 app routes + boot + onboarding are real pages in the SPA; live
+updates flow over the bridge; `DOPL_UI=spa npm start` boots the bundled
+app end-to-end (verified in real Electron via CDP). NOT yet done: the
+default-window flip, the min-version gate, Phase 4 retirement (gated on
+the journey-audit + Samuel), and the Samuel-gated S1 decisions (sign-in
+providers, billing flow). Phase 3 shipped as EVENT-DRIVEN INVALIDATION
+over the bridge instead of a delta-cursor endpoint — same outcome, no new
+protocol; the delta design below is retained as reference only. Backup taken 2026-08-02
 (see [Backup protocol](#backup-protocol)). Git snapshot: tag
 `pre-desktop-migration-2026-08-02`.
 
