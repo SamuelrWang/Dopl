@@ -193,6 +193,27 @@ function webPathToRoute(target) {
 }
 
 /**
+ * The path of a `dopl://…` URL AS WRITTEN, cut out of the string rather than
+ * read off `URL`.
+ *
+ * `parsed.pathname` is already NORMALIZED: `dopl://open/{seg}/../../etc` comes
+ * back as `/etc`, with every dot segment resolved and gone. `pathSegments`
+ * refuses dot segments precisely so a link that says one thing cannot resolve
+ * to another — and handing it a pre-normalized path silently disarms that,
+ * because by then there is nothing left to refuse. (Found by running the
+ * dispatcher, not by reading it: the unit case passed, because it was handed
+ * the raw string this function now produces.)
+ *
+ * Query and fragment come off FIRST, so a `?target=/a/b` cannot be mistaken for
+ * the start of the path.
+ */
+function rawPathOf(url) {
+  const afterScheme = url.slice(PROTOCOL_PREFIX.length).split('#')[0].split('?')[0];
+  const slash = afterScheme.indexOf('/');
+  return slash >= 0 ? afterScheme.slice(slash) : '';
+}
+
+/**
  * A dopl:// URL → `{ verb, fragment, target }`, or `null` when it is not one.
  *
  * ANYTHING THAT IS NOT `open` IS THE AUTH HANDOFF. That is not laziness: builds
@@ -219,7 +240,7 @@ function parseDeepLink(url) {
     // `?target=` wins when present and non-blank; otherwise the path IS the
     // target (`dopl://open/seg/page`), and `dopl://open` carries neither.
     const query = parsed.searchParams.get('target');
-    const target = query !== null && query.trim() !== '' ? query : parsed.pathname;
+    const target = query !== null && query.trim() !== '' ? query : rawPathOf(url);
     return { verb: VERB_OPEN, fragment: '', target: target || null };
   }
   return {

@@ -136,6 +136,40 @@ test("a blank ?target= falls back to the path rather than to nothing", () => {
   assert.equal(parseDeepLink(`dopl://open/${SEG}?target=%20`).target, `/${SEG}`);
 });
 
+test("the path arrives AS WRITTEN, not as `URL` normalized it", () => {
+  // `parsed.pathname` resolves dot segments away — `dopl://open/{seg}/../../etc`
+  // reads back as `/etc` — which silently disarms the refusal in the map below,
+  // because by then there is nothing left to refuse. Caught by running the
+  // dispatcher: every unit case passed, because each was handed a raw string.
+  assert.equal(parseDeepLink(`dopl://open/${SEG}/../../etc`).target, `/${SEG}/../../etc`);
+  assert.equal(parseDeepLink(`dopl://open/${SEG}/../../etc`).verb, VERB_OPEN);
+});
+
+// The two halves are only ever used together, and the bug above lived exactly
+// in the seam between them — so the seam gets its own table.
+const END_TO_END = [
+  ["dopl://open", HOME_ROUTE],
+  [`dopl://open/${SEG}`, `/${SEG}/${WORKSPACE_HOME_PAGE}`],
+  [`dopl://open/${SEG}/channels`, `/${SEG}/channels`],
+  [`dopl://open/${SEG}/knowledge/runbooks`, `/${SEG}/knowledge/runbooks`],
+  [`dopl://open?target=${encodeURIComponent(`/${SEG}/settings`)}`, `/${SEG}/settings`],
+  [`dopl://open?target=${encodeURIComponent("https://evil.example")}`, null],
+  [`dopl://open/${SEG}/../../etc`, null],
+  ["dopl://open/../secrets", null],
+  ["dopl://open//evil.example", null],
+  ["dopl://open/%2e%2e/secrets", null],
+  ["dopl://open/canvas", HOME_ROUTE],
+  ["dopl://open/onboarding", "/onboarding"],
+];
+
+for (const [url, expected] of END_TO_END) {
+  test(`${url} opens ${expected === null ? "home (refused)" : expected}`, () => {
+    const parsed = parseDeepLink(url);
+    assert.equal(parsed.verb, VERB_OPEN);
+    assert.equal(webPathToRoute(parsed.target), expected);
+  });
+}
+
 // ── The map: what a link resolves to ─────────────────────────────────────────
 
 const MAPPINGS = [
