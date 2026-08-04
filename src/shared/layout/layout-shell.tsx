@@ -13,6 +13,10 @@ const NON_WORKSPACE_ROOTS = new Set([
   "auth",
   "canvas",
   "design",
+  // The post-auth download page. It draws its own full-viewport surface (like
+  // login), but it must be listed here or `isAppShellRoute` reads it as a
+  // workspace slug and paints the app's dark rail colour behind it.
+  "get-started",
   "invite",
   "join",
   "login",

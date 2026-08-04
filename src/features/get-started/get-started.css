@@ -1,0 +1,784 @@
+/* ─────────────────────────────────────────────────────────────────────
+   /get-started — the post-auth download page.
+
+   SCOPED UNDER `.lp` ON PURPOSE. This file never declares a typeface, an
+   ink colour, a muted colour, a hairline or a page gutter: the root
+   element carries BOTH `lp` and `gs`, so `--grotesk`, `--ink`, `--muted`,
+   `--line` and `--gutter` all come from marketing.css, and the buttons are
+   the landing page's own `.lp-btn--3d` / `.lp-btn--3d-light` recipes. A
+   visitor arrives here one click after the landing page and one screen
+   after login; it has to be the same surface, not a lookalike.
+
+   The `--gs-*` block below is the ONE place this file adds values, and it
+   adds them for a reason marketing.css has no opinion about: the animation
+   is a drawing of macOS chrome — a browser toolbar, a mounted disk image,
+   a folder tile. Those greys are the illustration's palette. They are
+   declared once, here, and referenced by name everywhere below.
+   ───────────────────────────────────────────────────────────────────── */
+
+.gs {
+  --gs-chrome: #f6f6f7; /* window/toolbar fill */
+  --gs-chrome-line: #dcdcdf; /* window hairline */
+  --gs-chrome-btn: #e7e7ea; /* toolbar control face */
+  --gs-page: #fdfdfd; /* the "web page" inside the mock browser */
+  --gs-tile: #f1f1f3; /* icon tile at rest */
+  --gs-tile-hot: #e2e8f4; /* icon tile as a live drop target */
+  --gs-accent: #6b7cff; /* the one colour: drop target + progress */
+  --gs-ghost: #c9c9cf; /* skeleton bars, arrow */
+  --gs-radius: 12px;
+
+  /* One clock for the whole illustration. Every keyframe below is a
+     percentage of THIS, which is what keeps nine independent animations
+     in step without a single animation-delay to drift. */
+  --gs-dur: 11s;
+
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Chrome ──────────────────────────────────────────────────────────── */
+
+.gs-topbar {
+  display: flex;
+  align-items: center;
+  padding: 22px var(--gutter) 0;
+}
+
+.gs-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  /* Takes whatever the brand bar leaves and centres the row inside it, so the
+     page reads as one composed screen rather than as content that ran out. It
+     still grows past the viewport (and scrolls) on a short window. */
+  flex: 1;
+  align-content: center;
+  gap: clamp(24px, 4vw, 64px);
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(24px, 4vh, 48px) var(--gutter) 48px;
+}
+
+/* ── Copy column ─────────────────────────────────────────────────────── */
+
+.gs-eyebrow {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gs-title {
+  margin: 0;
+  font-size: clamp(30px, 3vw, 48px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #0a0a0a;
+}
+
+.gs-sub {
+  margin: 18px 0 0;
+  max-width: 460px;
+  font-size: clamp(14px, 1vw, 16px);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* The live status line. Its dot is the only thing on the page that says
+   "something is happening right now", so it keeps pulsing even under
+   reduced motion — see the bottom of this file for what does not. */
+.gs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 26px;
+  padding: 9px 16px 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.gs-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gs-accent);
+  animation: gs-pulse 1.6s ease-in-out infinite;
+}
+
+.gs-status-file {
+  font-weight: 500;
+}
+
+/* The frame that starts the download. Zero-sized rather than display:none —
+   a display:none frame is not guaranteed to load, and a load is the point. */
+.gs-sink {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-retry {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.gs-retry a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.gs-steps {
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: gs-step;
+  display: grid;
+  gap: 14px;
+  max-width: 460px;
+}
+
+/* The numeral is positioned OUT of flow, not laid out as a grid/flex sibling:
+   a step's text is inline content (`Double-click <code>…</code>.`) and any
+   layout mode that treats children as items would break that sentence into one
+   item per node — which it did, one character wide. */
+.gs-steps li {
+  counter-increment: gs-step;
+  position: relative;
+  padding-left: 34px;
+  min-height: 22px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.gs-steps li::before {
+  content: counter(gs-step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.gs-steps code {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--gs-tile);
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.gs-foot {
+  margin: 28px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ── Visual column ───────────────────────────────────────────────────── */
+
+.gs-visual {
+  display: flex;
+  justify-content: center;
+}
+
+/* The illustration is drawn in a FIXED 400×320 coordinate space and scaled
+   as a whole. Every cursor target below is a literal px pair in that space,
+   which is the only way nine keyframe tracks can be made to agree on where
+   "the Applications folder" is; a percentage-based layout would put the
+   cursor next to the folder at one width and inside it at another. */
+.gs-stage-frame {
+  --gs-k: 1;
+  position: relative;
+  width: calc(400px * var(--gs-k));
+  height: calc(320px * var(--gs-k));
+}
+
+.gs-stage {
+  position: absolute;
+  inset: 0;
+  width: 400px;
+  height: 320px;
+  transform: scale(var(--gs-k));
+  transform-origin: top left;
+}
+
+/* ── Mock browser ────────────────────────────────────────────────────── */
+
+.gs-browser {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 400px;
+  height: 208px;
+  border: 1px solid var(--gs-chrome-line);
+  border-radius: var(--gs-radius);
+  background: var(--gs-page);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
+  animation: gs-browser var(--gs-dur) linear infinite;
+}
+
+.gs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--gs-chrome);
+  border-bottom: 1px solid var(--gs-chrome-line);
+}
+
+.gs-lights {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.gs-light {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--gs-ghost);
+}
+
+.gs-urlbar {
+  flex: 1;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--gs-chrome-line);
+}
+
+/* The toolbar's downloads button — the thing the cursor clicks. */
+.gs-tray {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--gs-chrome-btn);
+  color: #55555c;
+  animation: gs-tray var(--gs-dur) linear infinite;
+}
+
+.gs-page-body {
+  padding: 20px 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.gs-skel {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--gs-ghost);
+  opacity: 0.5;
+}
+
+/* ── The download chip that drops out of the toolbar ─────────────────── */
+
+.gs-chip {
+  position: absolute;
+  left: 186px;
+  top: 46px;
+  width: 202px;
+  padding: 10px 12px;
+  border: 1px solid var(--gs-chrome-line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+  animation: gs-chip var(--gs-dur) linear infinite;
+}
+
+.gs-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.gs-chip-name {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.gs-chip-track {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gs-tile);
+  overflow: hidden;
+}
+
+.gs-chip-bar {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--gs-accent);
+  animation: gs-chip-bar var(--gs-dur) linear infinite;
+}
+
+/* ── Mock mounted disk image ─────────────────────────────────────────── */
+
+.gs-dmg {
+  position: absolute;
+  left: 30px;
+  top: 90px;
+  width: 340px;
+  height: 216px;
+  border: 1px solid var(--gs-chrome-line);
+  border-radius: var(--gs-radius);
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  animation: gs-dmg var(--gs-dur) linear infinite;
+}
+
+.gs-dmg-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  padding: 0 10px;
+  background: var(--gs-chrome);
+  border-bottom: 1px solid var(--gs-chrome-line);
+}
+
+.gs-dmg-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6a6a72;
+}
+
+.gs-dmg-body {
+  position: relative;
+  height: calc(100% - 28px);
+}
+
+/* Both tiles sit in the same coordinate space as the cursor track. */
+.gs-tile {
+  position: absolute;
+  top: 44px;
+  width: 78px;
+  height: 78px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gs-tile--app {
+  left: 52px;
+  animation: gs-drag var(--gs-dur) linear infinite;
+}
+
+.gs-tile--folder {
+  left: 210px;
+  border: 1px dashed var(--gs-chrome-line);
+  background: var(--gs-tile);
+  animation: gs-folder var(--gs-dur) linear infinite;
+}
+
+.gs-app-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 15px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+}
+
+.gs-tile-label {
+  position: absolute;
+  top: 128px;
+  width: 78px;
+  text-align: center;
+  font-size: 10.5px;
+  color: #6a6a72;
+}
+
+/* The label leaves with the icon it names — it just doesn't travel, because a
+   sliding word reads as a bug rather than as a drag. Opacity only, on the
+   icon's own track. */
+.gs-tile-label--app {
+  left: 52px;
+  animation: gs-drag-label var(--gs-dur) linear infinite;
+}
+
+.gs-tile-label--folder {
+  left: 210px;
+}
+
+.gs-arrow {
+  position: absolute;
+  left: 140px;
+  top: 76px;
+  width: 62px;
+  color: var(--gs-ghost);
+}
+
+.gs-check {
+  position: absolute;
+  left: 258px;
+  top: 40px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--gs-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  animation: gs-check var(--gs-dur) linear infinite;
+}
+
+/* ── The cursor ──────────────────────────────────────────────────────── */
+
+.gs-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  margin: -2px 0 0 -2px;
+  color: #16161a;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  animation: gs-cursor var(--gs-dur) linear infinite;
+}
+
+/* ── Keyframes — one 11s timeline, read top to bottom ─────────────────── */
+
+/* 0–2.2s approach · 2.6s click · 4.4s the browser recedes · 5.2s the disk
+   image mounts · 6.6–8.2s the drag · 8.8s dropped · 10.2s rest. */
+@keyframes gs-cursor {
+  0% {
+    opacity: 0;
+    transform: translate(40px, 300px) scale(1);
+  }
+  4% {
+    opacity: 1;
+    transform: translate(40px, 300px) scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(375px, 20px) scale(1);
+  }
+  23% {
+    transform: translate(375px, 20px) scale(0.8);
+  }
+  27% {
+    transform: translate(375px, 20px) scale(1);
+  }
+  47% {
+    opacity: 1;
+    transform: translate(375px, 20px) scale(1);
+  }
+  57% {
+    transform: translate(121px, 201px) scale(1);
+  }
+  61% {
+    transform: translate(121px, 201px) scale(0.8);
+  }
+  75% {
+    transform: translate(279px, 201px) scale(0.8);
+  }
+  80% {
+    transform: translate(279px, 201px) scale(1);
+  }
+  90% {
+    opacity: 1;
+    transform: translate(279px, 201px) scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translate(279px, 201px) scale(1);
+  }
+}
+
+@keyframes gs-tray {
+  0%,
+  22% {
+    transform: scale(1);
+    background: var(--gs-chrome-btn);
+  }
+  25% {
+    transform: scale(0.9);
+    background: var(--gs-tile-hot);
+  }
+  32%,
+  100% {
+    transform: scale(1);
+    background: var(--gs-chrome-btn);
+  }
+}
+
+@keyframes gs-chip {
+  0%,
+  23% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  28%,
+  40% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  46%,
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes gs-chip-bar {
+  0%,
+  27% {
+    width: 0;
+  }
+  39%,
+  100% {
+    width: 100%;
+  }
+}
+
+@keyframes gs-browser {
+  0%,
+  40% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  47%,
+  92% {
+    opacity: 0.26;
+    transform: translateY(-10px) scale(0.965);
+  }
+  98%,
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes gs-dmg {
+  0%,
+  40% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+  47%,
+  92% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+}
+
+/* The drag itself: lift, travel 158px (tile centre to tile centre), drop. */
+@keyframes gs-drag {
+  0%,
+  61% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  64% {
+    transform: translate(0, -5px) scale(1.06);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(158px, -5px) scale(1.06);
+  }
+  81% {
+    opacity: 0;
+    transform: translate(158px, 0) scale(0.45);
+  }
+  95% {
+    opacity: 0;
+    transform: translate(158px, 0) scale(0.45);
+  }
+  96%,
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes gs-drag-label {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  81%,
+  95% {
+    opacity: 0;
+  }
+  96%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes gs-folder {
+  0%,
+  63% {
+    background: var(--gs-tile);
+    border-color: var(--gs-chrome-line);
+  }
+  70%,
+  80% {
+    background: var(--gs-tile-hot);
+    border-color: var(--gs-accent);
+  }
+  88%,
+  100% {
+    background: var(--gs-tile);
+    border-color: var(--gs-chrome-line);
+  }
+}
+
+@keyframes gs-check {
+  0%,
+  79% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  84%,
+  92% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes gs-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
+@media (min-width: 1240px) {
+  .gs-stage-frame {
+    --gs-k: 1.16;
+  }
+}
+
+@media (max-width: 1100px) {
+  .gs-stage-frame {
+    --gs-k: 0.88;
+  }
+}
+
+@media (max-width: 900px) {
+  .gs-main {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    padding-top: 28px;
+  }
+  /* The illustration follows the copy on a phone: the instructions are the
+     job, the drawing is the reassurance. */
+  .gs-visual {
+    order: 2;
+  }
+  .gs-copy {
+    order: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .gs-stage-frame {
+    --gs-k: 0.78;
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+
+/* Not "no animation" — the LAST FRAME, which is the one that carries the
+   instruction: the disk image is open and the app is in the folder. The
+   status dot stops pulsing too; the sentence beside it already says it. */
+@media (prefers-reduced-motion: reduce) {
+  .gs-cursor,
+  .gs-chip,
+  .gs-status-dot {
+    animation: none;
+  }
+  .gs-cursor,
+  .gs-chip {
+    opacity: 0;
+  }
+  .gs-tray,
+  .gs-chip-bar,
+  .gs-browser,
+  .gs-dmg,
+  .gs-tile--app,
+  .gs-tile-label--app,
+  .gs-tile--folder,
+  .gs-check {
+    animation: none;
+  }
+  .gs-tile-label--app {
+    opacity: 0;
+  }
+  .gs-chip-bar {
+    width: 100%;
+  }
+  .gs-browser {
+    opacity: 0.26;
+    transform: translateY(-10px) scale(0.965);
+  }
+  .gs-dmg {
+    opacity: 1;
+    transform: none;
+  }
+  .gs-tile--app {
+    opacity: 0;
+  }
+  .gs-tile--folder {
+    background: var(--gs-tile-hot);
+    border-color: var(--gs-accent);
+  }
+  .gs-check {
+    opacity: 1;
+    transform: none;
+  }
+}

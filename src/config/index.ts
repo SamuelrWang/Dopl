@@ -28,7 +28,12 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "connect",
   "design",
   "docs",
+  // `/download` (the dmg redirect) and `/get-started` (the post-auth download
+  // page) are both top-level routes; a workspace slugged either name would be
+  // silently shadowed by them.
+  "download",
   "e",
+  "get-started",
   // Static API route segments at /api/workspaces/<name> — a legacy
   // slug-only workspace URL with one of these names would be shadowed
   // by the static route (desktop migration review, 2026-08-02).
