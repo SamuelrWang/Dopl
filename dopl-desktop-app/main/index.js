@@ -23,6 +23,7 @@ const { diag } = require('./diag');
 const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
 const { isSpaMode, makeShellHelpers, wireSpaServices, spaSignOut } = require('./shell-mode');
+const deepLinkModule = require('./deep-link');
 const uiBridge = require('./ui-bridge');
 const authTokens = require('./auth-tokens');
 const uiSync = require('./ui-sync');
@@ -36,7 +37,6 @@ const wake = require('./wake');
 const store = new Store();
 let mainWindow = null;
 let loadGuard = null; // owns the main window's load lifecycle (load-guard.js)
-let pendingDeepLink = null; // deep link received before the window is ready
 let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
 
 // isAppOrigin / maybeBeginAuth (the M4 sign-in CSRF nonce) live in auth-actions.js
@@ -199,82 +199,24 @@ function buildMenu() {
 }
 
 // ── Deep link (dopl://) ─────────────────────────────────────────────────────────
-// The system browser finishes OAuth (or a magic link) and redirects to
-// dopl://auth#<tokens>; macOS routes that here and main adopts the session.
-function openDeepLink(url) {
-  let fragment = '';
-  try {
-    const u = new URL(url);
-    fragment = u.hash ? u.hash.slice(1) : u.search.slice(1);
-  } catch (_) {
-    const i = url.indexOf('#');
-    if (i >= 0) fragment = url.slice(i + 1);
-  }
-  // Capture the Supabase tokens into the encrypted main-process store so the background
-  // listener has a session (and a refresh token) even when the window is hidden.
-  //
-  // M4: only adopt the session if THIS app initiated the sign-in recently. A rejected
-  // fragment (injected dopl:// link, an expired flow) is dropped entirely — we neither
-  // persist it nor navigate the window to adopt it. A false ALSO covers "the store
-  // refused the write" (auth.js), which is a failed sign-in, not an adopted one.
-  const accepted = auth.captureFromFragment(fragment);
-  if (!accepted) {
-    console.warn('[deeplink] auth fragment not adopted (no pending sign-in / expired / not stored)');
-    return;
-  }
-  // Deterministic re-arm of the token authority on fresh credentials (C15); no-op when
-  // start() hasn't run (DOPL_UI=remote).
-  try { authTokens.onSignIn(); } catch (err) { diag('token re-arm error', err && err.message); }
-
-  // Surface the app — CREATING the window when the link arrived with it closed, which the
-  // SPA window makes routine (it is destroyed on close, not hidden).
-  showMainWindow();
-  if (!isSpaMode()) {
-    // Remote rollback shell only: the completion page plants the cookie jar. In SPA mode
-    // the captured tokens ARE the session — loading it stranded the window on "Signing
-    // you in…"; onSignIn() above pushed the flip.
-    const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
-    if (loadGuard) loadGuard.load(target);
-    else if (mainWindow) mainWindow.loadURL(target).catch((err) => diag('deeplink load failed —', err && err.message));
-  }
-
-  // Let the remote completion page plant its cookies, then restart the listener against
-  // the fresh session and ensure the CLI's Dopl MCP config.
-  setTimeout(() => {
-    listener.restart();
-    mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config post-signin error', err && err.message));
-  }, 3000);
-}
-
-// PARK ONLY BEFORE app-ready. The old gate was "is there a window?" — almost always true
-// pre-migration (the remote window hid on close), routinely false now that the SPA window
-// is DESTROYED on close while the app stays in the tray. An OAuth return or a clicked
-// magic link then parked forever (pendingDeepLink is flushed exactly once, at startup)
-// and the pending-auth record expired. Capture needs no window; openDeepLink surfaces one.
-function handleDeepLink(url) {
-  if (!url || !url.startsWith(PROTOCOL + '://')) return;
-  if (!app.isReady()) {
-    pendingDeepLink = url; // macOS can deliver open-url before the store exists
-    return;
-  }
-  openDeepLink(url);
-}
-
-function flushPendingDeepLink() {
-  if (pendingDeepLink) {
-    const url = pendingDeepLink;
-    pendingDeepLink = null;
-    openDeepLink(url);
-  }
-}
-
-// Register as the handler for dopl:// (also declared in Info.plist via build config).
-app.setAsDefaultProtocolClient(PROTOCOL);
-
-// macOS delivers deep links via 'open-url' (can fire before the app is ready).
-app.on('open-url', (event, url) => {
-  event.preventDefault();
-  handleDeepLink(url);
+// Two verbs, both owned by deep-link.js (extracted at the 500-line cap): the
+// OAuth/magic-link session handoff `dopl://auth#<tokens>`, and `dopl://open`,
+// which shows the app and — when the link names one — the linked page. The
+// grammar and the web-path → SPA-route map are the pure deep-link-target.js.
+// `arm` registers the protocol and the macOS 'open-url' delivery, and hands back
+// the two entry points the rest of this file needs.
+const deepLink = deepLinkModule.arm({
+  auth,
+  authTokens,
+  listener,
+  mcpConfig,
+  showMainWindow: (...a) => showMainWindow(...a),
+  navigateTo: (path) => shellHelpers.navigateTo(path),
+  getMainWindow: () => mainWindow,
+  getLoadGuard: () => loadGuard,
+  isSpaMode,
+  appOrigin: APP_ORIGIN,
+  diag,
 });
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -285,7 +227,7 @@ if (!gotLock) {
   app.on('second-instance', (_event, argv) => {
     // Windows/Linux deliver deep links as a launch arg; macOS uses 'open-url'.
     const link = argv.find((a) => a.startsWith(PROTOCOL + '://'));
-    if (link) handleDeepLink(link);
+    if (link) deepLink.handle(link);
     showMainWindow();
   });
 
@@ -424,7 +366,7 @@ if (!gotLock) {
     } else {
       createMainWindow();
     }
-    flushPendingDeepLink();
+    deepLink.flushPending();
 
     // Session seam: factory + lifecycle handlers, then init() (registers session IPC + reloads records) BEFORE listener.start.
     sessionEngine.setWindowFactory(sessionWindow.createSessionWindow);

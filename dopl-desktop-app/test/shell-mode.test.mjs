@@ -26,6 +26,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const SHELL = M("shell-mode.js");
 const INDEX = M("index.js");
+// The deep-link half moved out of index.js when the `dopl://open` verb joined
+// the auth handoff and the file hit the 500-line cap. The properties pinned
+// below are unchanged; only the file holding them is.
+const DEEP_LINK = M("deep-link.js");
 
 const { resumeWatchTarget } = new Function(
   `${between(SHELL, "// ─── BEGIN SHELL-MODE-PURE", "// ─── END SHELL-MODE-PURE", "shell-mode pure block")}
@@ -101,17 +105,39 @@ test("the menu's Home routes the SPA to boot instead of no-oping on a null loadG
 // ── deep links no longer depend on a window existing ────────────────────────
 
 test("a deep link is parked only before app-ready, never on a missing window", () => {
-  const fn = fnOf(INDEX, "handleDeepLink");
+  const fn = fnOf(DEEP_LINK, "handle");
   assert.match(fn, /if \(!app\.isReady\(\)\)/, "the store/safeStorage are the real precondition");
   assert.ok(
-    !/mainWindow/.test(fn),
+    !/MainWindow|mainWindow/.test(fn),
     "the window guard is what parked an OAuth return / magic link forever once the SPA window could be closed"
   );
-  assert.match(fn, /openDeepLink\(url\)/);
+  assert.match(fn, /openDeepLink\(url, deps\)/);
   // The capture happens first and unconditionally; the window is then surfaced (and
   // recreated when it was closed) rather than being a precondition for adopting.
-  const open = fnOf(INDEX, "openDeepLink");
-  assert.ok(orderOf(open, "auth.captureFromFragment(fragment)", "showMainWindow()", "openDeepLink"));
+  const open = fnOf(DEEP_LINK, "adoptSession");
+  assert.ok(
+    orderOf(open, "deps.auth.captureFromFragment(fragment)", "deps.showMainWindow()"),
+    "the capture must precede the window"
+  );
+  // …and index.js still arms it, flushes the park at startup, and forwards the
+  // Windows/Linux launch-arg delivery.
+  assert.match(INDEX, /deepLinkModule\.arm\(\{/);
+  assert.match(INDEX, /deepLink\.flushPending\(\)/);
+  assert.match(INDEX, /if \(link\) deepLink\.handle\(link\)/);
+});
+
+test("the open verb never navigates a signed-out app, and never in remote mode", () => {
+  // A workspace route pushed at a signed-out SPA replaces the sign-in screen
+  // with a page waiting on a session; the rollback shell has no bridge routing
+  // at all. Both fall back to "the window is up", which is the verb's floor.
+  const fn = fnOf(DEEP_LINK, "openApp");
+  assert.ok(orderOf(fn, "deps.showMainWindow()", "webPathToRoute"), "the window comes first");
+  assert.match(fn, /if \(!deps\.isSpaMode\(\)\) return;/);
+  assert.match(fn, /if \(!signedIn\)/);
+  assert.ok(
+    orderOf(fn, "if (!deps.isSpaMode()) return;", "signedIn", "pushRoute"),
+    "every refusal must sit above the one push"
+  );
 });
 
 // ── one refresher per rotating refresh-token family ─────────────────────────
