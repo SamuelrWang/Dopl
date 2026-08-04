@@ -28,6 +28,19 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const R = (p) => readFileSync(join(HERE, "..", "renderer", p), "utf8");
 
+const KIT = readFileSync(join(HERE, "..", "..", "apps", "desktop-ui", "src", "styles", "kit.css"), "utf8");
+
+// Every `prop: value` in one rule body, whitespace-normalized, as a Set. Enough
+// to compare two hand-transcribed copies of the same recipe; not a CSS parser.
+function rule(css, selector) {
+  const at = css.indexOf(selector + " {");
+  assert.notEqual(at, -1, `no rule for ${selector}`);
+  const body = css.slice(at + selector.length + 2, css.indexOf("}", at));
+  return new Set(
+    body.split(";").map((d) => d.replace(/\s+/g, " ").trim()).filter(Boolean)
+  );
+}
+
 const INDEX = M("index.js");
 const SHELL = M("shell-mode.js");
 const WINDOW = M("update-required-window.js");
@@ -180,6 +193,36 @@ test("it renders main's answer and holds no state of its own", () => {
   // textContent, never innerHTML: the copy comes from main, but it is still
   // strings being written into a document.
   assert.ok(!/innerHTML/.test(HTML));
+});
+
+test("THE BUTTONS ARE THE DESIGN SYSTEM'S, not a look-alike", () => {
+  // This page cannot import the kit: it is a local file in its own window and
+  // must render with no network at all. So it carries the kit's recipes as
+  // literal CSS — the same bargain kit.css itself made with globals.css (its own
+  // DRIFT WARNING header, F-074). A copy with nothing watching it is how the
+  // screen ended up with pill-shaped buttons in a squared-off app, so this
+  // diffs the copy against the source instead of trusting a comment.
+  for (const [kitSelector, pageSelector] of [
+    [".auth-btn-3d", "button.primary"],
+    [".auth-btn-3d:hover:not(:disabled)", "button.primary:hover:not(:disabled)"],
+    [".auth-btn-3d:active:not(:disabled)", "button.primary:active:not(:disabled)"],
+    [".auth-btn-3d-light", "button.secondary"],
+    [".auth-btn-3d-light:hover:not(:disabled)", "button.secondary:hover:not(:disabled)"],
+    [".auth-btn-3d-light:active:not(:disabled)", "button.secondary:active:not(:disabled)"],
+  ]) {
+    const mine = rule(HTML, pageSelector);
+    for (const decl of rule(KIT, kitSelector)) {
+      assert.ok(mine.has(decl), `${pageSelector} drifted from ${kitSelector}: missing "${decl}"`);
+    }
+  }
+  // The geometry and type every auth surface uses (login-form-core.tsx: h-[46px]
+  // rounded-[10px] text-[15px] font-semibold; auth-split is a white page).
+  const base = rule(HTML, "button");
+  for (const decl of ["height: 46px", "border-radius: 10px", "font-size: 15px", "font-weight: 600"]) {
+    assert.ok(base.has(decl), `the shared button geometry lost "${decl}"`);
+  }
+  assert.match(HTML, /font-family: "Helvetica Neue", Helvetica, Arial/, "--font-app, not the OS default");
+  assert.match(HTML, /color: #181818/, "the auth surfaces' ink");
 });
 
 test("no user-facing string on the page uses an em dash (repo copy rule)", () => {
