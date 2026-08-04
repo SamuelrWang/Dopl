@@ -19,6 +19,12 @@ const PUBLIC_ROUTES = [
   "/terms",
   "/privacy",
   "/pricing",
+  // The landing page's Download button. It resolves the newest notarized mac
+  // build out of the release feed and 307s to GitHub — a visitor who has never
+  // had an account is the entire audience, so a session gate here would bounce
+  // the download to /login, which is the CTA the landing page just stopped
+  // advertising. See src/app/download/route.ts.
+  "/download",
   // Canvas invite acceptance — invitee may not be signed in yet. The
   // landing page shows what they're being invited to; the underlying
   // accept POST is still auth-gated by withUserAuth, so non-members

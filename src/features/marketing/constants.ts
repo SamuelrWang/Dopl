@@ -4,7 +4,20 @@ export const BRAND = "Dopl";
 
 export const NAV_LINKS = ["Product", "Services", "Career", "Pricing", "About"] as const;
 
-export const LOGIN_LABEL = "Login";
+/**
+ * THE LANDING PAGE HAS ONE CALL TO ACTION, AND IT IS THE DOWNLOAD.
+ *
+ * Dopl is a desktop app. The web app is being retired
+ * (docs/migration-research/website-retirement-plan.md), so the public page must
+ * stop offering a web sign-in it will shortly not have — every visitor's next
+ * step is the same one, and a second button beside it only splits the click.
+ *
+ * `/login` ITSELF IS NOT GOING ANYWHERE. It is on the retirement plan's KEEP
+ * list: the desktop OAuth handoff (`/auth/desktop-start` → the system browser →
+ * `dopl://auth`) lands there, and a password reset lands there. What was removed
+ * is the LANDING PAGE ADVERTISING it, not the route.
+ */
+export const DOWNLOAD_LABEL = "Download";
 
 export const MENU_LABEL = "Menu";
 
@@ -13,16 +26,18 @@ export const HERO = {
   headlineLines: ["Ontologies to Bridge", "Agents and Teams"] as const,
   subhead:
     "We bring ideas to life by combining years of experiences of our very talented team.",
-  primaryCta: "Login",
-  secondaryCta: "Download",
+  primaryCta: DOWNLOAD_LABEL,
 } as const;
 
 /**
- * Stable public URL of the notarized macOS desktop DMG. Served from the latest
- * GitHub release; the version-less asset name keeps this link valid across builds.
+ * The download, as a stable same-origin path.
+ *
+ * This was a hardcoded github.com URL naming a `Dopl-arm64.dmg` asset that has
+ * never existed — electron-builder stamps the version into the file name, so the
+ * button 404'd. `src/app/download/route.ts` resolves the real asset out of the
+ * release feed and redirects; `src/shared/version/mac-download.ts` is the why.
  */
-export const DOWNLOAD_URL =
-  "https://github.com/SamuelrWang/Dopl/releases/latest/download/Dopl-arm64.dmg";
+export const DOWNLOAD_URL = "/download";
 
 export interface DeckPanel {
   id: string;
