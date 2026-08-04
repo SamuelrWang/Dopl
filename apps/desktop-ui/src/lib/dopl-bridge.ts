@@ -115,6 +115,17 @@ export interface DoplBridge {
       preset: { tools: string; messages: string }
     ): Promise<{ ok: boolean }>;
   };
+  /** Reveal (or recreate parked) this thread's session window — the
+   *  session-card's "Open thread" button. Mirrors the remote-page preload's
+   *  one session op; opens a window only, starts no query. The web tree
+   *  feature-detects this namespace (`@/shared/lib/desktop`
+   *  getDesktopSessions), so an absent one silently hides the button. */
+  sessions?: {
+    reopen(
+      channelId: string,
+      taskId: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+  };
 }
 
 declare global {

@@ -1,9 +1,10 @@
 // Preload for the BUNDLED UI window (main/spa-window.js).
 //
-// `window.dopl` here is the ENTIRE privileged API the SPA gets: four members,
-// no dynamic channels, no Node, no fs. It follows session-preload.js's model (a
-// local page may hold a real bridge) with session-preload.js's discipline
-// (every argument coerced to a primitive before it crosses, fail-closed).
+// `window.dopl` here is the ENTIRE privileged API the SPA gets: a fixed, small
+// set of members, no dynamic channels, no Node, no fs. It follows
+// session-preload.js's model (a local page may hold a real bridge) with
+// session-preload.js's discipline (every argument coerced to a primitive
+// before it crosses, fail-closed).
 //
 // TWO INVARIANTS THAT MUST SURVIVE EVERY EDIT:
 //
@@ -150,6 +151,30 @@ contextBridge.exposeInMainWorld('dopl', {
           tools: asMode(preset && preset.tools),
           messages: asMode(preset && preset.messages),
         },
+      }),
+  },
+
+  // The session-card's "Open thread" button — the SAME single op the
+  // remote-page preload exposes (renderer/preload.js), invoking the SAME
+  // sender-bound handler (main/channel-dir-ipc.js `sessions:reopen`, which
+  // resolves the live main window — the SPA window in DOPL_UI=spa mode — and
+  // requires its TOP frame). Ids are coerced to strings here; main re-validates
+  // (channelId must be a UUID) and answers `{ ok }` — ok:false when the thread
+  // is truly closed. Wire name `task` == domain name `thread`.
+  //
+  // This OPENS THE WINDOW ONLY (v3.0 A5): it starts no query, wakes no agent
+  // and runs no gated tool, so it widens neither invariant above — a parked
+  // shell stays parked until a steer or an accepted inbound resumes it.
+  //
+  // The web tree feature-detects this namespace (`@/shared/lib/desktop`
+  // getDesktopSessions → `sessions.reopen`) and renders NOTHING when it is
+  // absent, so dropping it here silently removes the button rather than
+  // failing. Pinned by test/preload-parity.test.mjs.
+  sessions: {
+    reopen: (channelId, taskId) =>
+      ipcRenderer.invoke('sessions:reopen', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
       }),
   },
 
