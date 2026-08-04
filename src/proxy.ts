@@ -37,6 +37,14 @@ const PUBLIC_ROUTES = [
   "/oauth/authorize",
   "/api/oauth",
   "/api/mcp",
+  // The desktop minimum-version floor. It MUST answer a signed-out caller: a
+  // build below the floor may be too old to complete a sign-in at all, and the
+  // whole point is to tell it to upgrade before it tries. Left out of this list
+  // it 401s here, the desktop reads the 401 as "no answer", fails open, and the
+  // gate silently never blocks anybody — which is how it shipped, and how it was
+  // caught (a live `version gate: floor fetch 401` in the field log).
+  // See src/app/api/version/route.ts.
+  "/api/version",
 ];
 
 // The subset of PUBLIC_ROUTES that is MACHINE-authenticated: no human session is
@@ -56,6 +64,14 @@ const SELF_AUTH_ROUTES = [
   "/.well-known/oauth-",
   "/api/billing/webhook",
   "/api/cron/",
+  // The one entry here that is not machine-AUTHENTICATED: /api/version has no
+  // auth of its own because there is nothing to protect — every caller gets the
+  // same public fact, and the release feed already carries it. It qualifies for
+  // the short-circuit on the property that actually matters above: nothing
+  // below the auth call can change its answer. Skipping the claims read also
+  // keeps a boot-time liveness question off the JWKS path, and every desktop
+  // asks it at launch.
+  "/api/version",
 ];
 
 // Q4 (2026-07-31) — THE LOOP BREAKER for the `/login → /canvas` bounce below.

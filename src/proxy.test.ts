@@ -301,6 +301,25 @@ describe("api routes", () => {
     const res = await proxy(req(path));
     expect(res.status).toBe(200);
   });
+
+  it("/api/version answers a SIGNED-OUT caller, or the desktop gate is inert", async () => {
+    // The minimum-version floor is pulled by builds that may be too old to
+    // complete a sign-in at all, and the client reads any non-2xx as "no
+    // answer" and fails open. A 401 here is therefore not a small bug: it is
+    // the whole forced-upgrade gate silently never blocking anybody. It shipped
+    // that way and was caught by a live `version gate: floor fetch 401`.
+    const res = await proxy(req("/api/version"));
+    expect(res.status).toBe(200);
+  });
+
+  it("…and does not spend the claims read to do it", async () => {
+    // Every desktop asks at launch. Reading claims for a route whose answer no
+    // caller can change is pure cost on the JWKS path (see SELF_AUTH_ROUTES).
+    signedIn();
+    await proxy(req("/api/version"));
+    expect(state.calls.getClaims).toBe(0);
+    expect(state.calls.network).toBe(0);
+  });
 });
 
 // ── 4. The S-8 lowercase redirect (must still precede the auth outcome) ──────

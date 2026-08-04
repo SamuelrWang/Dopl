@@ -23,6 +23,14 @@ export const dynamic = "force-dynamic";
  * it. Adding auth would mean an old build could only be told to upgrade after it
  * finished a sign-in flow it may be too old to complete.
  *
+ * WHICH TAKES TWO PLACES, NOT ONE. Having no auth wrapper here is not enough:
+ * `src/proxy.ts` 401s every unmatched `/api/**` path before a route runs, so
+ * this path is listed in its PUBLIC_ROUTES **and** SELF_AUTH_ROUTES. Without
+ * those entries the desktop gets a 401, reads it as "no answer", fails open, and
+ * the entire forced-upgrade gate silently never blocks anyone — which is exactly
+ * how it shipped, and how a live `version gate: floor fetch 401` caught it.
+ * `proxy.test.ts` pins the signed-out 200.
+ *
  * ALWAYS A 200. `minSupported: null` is the fail-open answer and the shape every
  * misconfiguration collapses to (unset env, a typo, a floor above the declared
  * latest). This route never 4xx/5xxs on a config problem, because a client that
