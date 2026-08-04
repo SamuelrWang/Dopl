@@ -2,18 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { DOWNLOAD_LABEL, DOWNLOAD_URL, MENU_LABEL, NAV_LINKS } from "../constants";
+import { GET_STARTED_LABEL, GET_STARTED_URL, MENU_LABEL, NAV_LINKS } from "../constants";
 import { ArrowUpRight, MenuIcon, SearchIcon } from "./icons";
 import { Logo } from "./logo";
 import { PricingModal } from "./pricing-modal";
 
-/** Top bar: brand left · links + Download centered · search + Menu right.
+/** Top bar: brand left · links + Get Started centered · search + Menu right.
  * "Pricing" opens the popup (href stays /pricing for middle-click/no-JS).
  *
- * The dark button here was Login; it is the same button with the same classes,
- * pointed at the download (../constants.ts). Below 900px `.lp-nav-center` is
- * display:none, so this button is desktop-only — unchanged from the Login era,
- * and the hero's CTA is the one a phone sees. */
+ * The dark button here was Login, then Download; it is the same button with the
+ * same classes, now pointed at `/login` — which lands on `/get-started` and the
+ * dmg (../constants.ts). Below 900px `.lp-nav-center` is display:none, so this
+ * button is desktop-only — unchanged from the Login era, and the hero's CTA is
+ * the one a phone sees. */
 export function SiteNav() {
   const [pricingOpen, setPricingOpen] = useState(false);
 
@@ -45,8 +46,8 @@ export function SiteNav() {
           )}
         </nav>
         <span className="lp-divider" aria-hidden />
-        <a href={DOWNLOAD_URL} download className="lp-btn lp-btn--sm lp-btn--3d">
-          {DOWNLOAD_LABEL}
+        <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
+          {GET_STARTED_LABEL}
           <ArrowUpRight size={13} />
         </a>
       </div>

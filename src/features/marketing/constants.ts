@@ -5,19 +5,38 @@ export const BRAND = "Dopl";
 export const NAV_LINKS = ["Product", "Services", "Career", "Pricing", "About"] as const;
 
 /**
- * THE LANDING PAGE HAS ONE CALL TO ACTION, AND IT IS THE DOWNLOAD.
+ * THE LANDING PAGE HAS ONE CALL TO ACTION, AND IT NOW GOES THROUGH THE ACCOUNT.
  *
- * Dopl is a desktop app. The web app is being retired
- * (docs/migration-research/website-retirement-plan.md), so the public page must
- * stop offering a web sign-in it will shortly not have — every visitor's next
- * step is the same one, and a second button beside it only splits the click.
+ * It was "Download", pointing straight at the dmg: the login buttons had already
+ * left the page, because Dopl is a desktop app and the web app is being retired
+ * (docs/migration-research/website-retirement-plan.md). This is the next move,
+ * not a reversal of that one — the button is still ONE button, it just captures
+ * the account first (the Wispr Flow pattern):
  *
- * `/login` ITSELF IS NOT GOING ANYWHERE. It is on the retirement plan's KEEP
- * list: the desktop OAuth handoff (`/auth/desktop-start` → the system browser →
- * `dopl://auth`) lands there, and a password reset lands there. What was removed
- * is the LANDING PAGE ADVERTISING it, not the route.
+ *   Get Started → /login (sign in or sign up) → /get-started (the dmg starts
+ *   downloading, with install steps) → open the app → sign in there.
+ *
+ * WHY THE EXTRA HOP IS WORTH IT. A download that begins at an anonymous click is
+ * unmeasurable and unrecoverable: nobody knows whether the installer was ever
+ * opened, and there is no address to follow up on when it wasn't. An account
+ * created BEFORE the download makes install drop-off a thing you can see and
+ * write to, and turns the funnel into three countable hops. The user signs in
+ * once more inside the app afterwards, which they were always going to do.
+ *
+ * `/download` IS STILL THE DOWNLOAD, and still public. `/get-started` uses it —
+ * it is the stable, README-able, tweetable path and nothing about it changed.
  */
-export const DOWNLOAD_LABEL = "Download";
+export const GET_STARTED_LABEL = "Get Started";
+
+/**
+ * Where "Get Started" goes. `/login` IS the signup surface: the same screen
+ * carries "Don't have an account? Sign up" (email + password, confirmed by
+ * mail), a magic link that creates the account on first use, and Google/GitHub
+ * OAuth that auto-provisions on first sign-in. There is no separate `/signup`
+ * route and no mode param to pass — the audit that removed `signup` from
+ * RESERVED_WORKSPACE_SLUGS (S-13) recorded the same fact.
+ */
+export const GET_STARTED_URL = "/login";
 
 export const MENU_LABEL = "Menu";
 
@@ -26,11 +45,12 @@ export const HERO = {
   headlineLines: ["Ontologies to Bridge", "Agents and Teams"] as const,
   subhead:
     "We bring ideas to life by combining years of experiences of our very talented team.",
-  primaryCta: DOWNLOAD_LABEL,
+  primaryCta: GET_STARTED_LABEL,
 } as const;
 
 /**
- * The download, as a stable same-origin path.
+ * The download, as a stable same-origin path. No longer a landing-page CTA —
+ * `/get-started` is what fires it now, on mount and from its retry link.
  *
  * This was a hardcoded github.com URL naming a `Dopl-arm64.dmg` asset that has
  * never existed — electron-builder stamps the version into the file name, so the
