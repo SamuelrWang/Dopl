@@ -1,0 +1,401 @@
+/* ─────────────────────────────────────────────────────────────────────
+   The install, drawn — the illustration that fills `/get-started`'s right
+   field. Split out of `get-started.css` when the page was rebuilt to the
+   reference layout: that file is the page's two fields and its copy, this
+   one is the drawing's COMPOSITION, and `install-animation-motion.css` is
+   its timeline. Three purposes, three files, all imported by the page.
+
+   THE COMPOSITION HAS TWO ANCHORS, NOT ONE CENTRED BOX.
+     · A browser-window FRAGMENT pinned to the top of the field, cropped by
+       the field's top edge and bleeding past its left edge. Only the
+       toolbar row and a sliver of page are ever on screen; the download
+       chip hangs out of it, under the downloads button.
+     · A macOS window mock in the lower right, holding the app icon and the
+       Applications folder.
+   The cursor travels between them. That is the whole picture: the browser
+   the file came from, and the window it has to be dragged in.
+
+   ONE FIXED COORDINATE SPACE, SCALED AS A WHOLE — 640×660, scaled by
+   `--gs-k`. Every position below is a literal px pair in that space, which
+   is the only way ten keyframe tracks can agree on where "the Applications
+   folder" is; a percentage layout would put the cursor beside the folder at
+   one width and inside it at another. `--gs-k` is derived from the FIELD
+   (container units, hence `container-type: size` next door), not from the
+   viewport, so the same one factor is correct in the stacked layout too.
+
+   Everything is drawn from `--gs-*` below plus `--gs-accent`, which is
+   declared on `.gs` in `get-started.css` because the status dot in the copy
+   column is the same colour by design. The greys here are this drawing's
+   own palette — macOS chrome, a mounted volume, a folder tile — and they
+   are the only values either file invents.
+
+   WHY DIVS AND KEYFRAMES AND NOT A VIDEO, A GIF OR LOTTIE: as markup it is
+   a few kilobytes that ship with the HTML, stay crisp at any density,
+   inherit the page's own hairlines, and have a reduced-motion state that is
+   one media query rather than a second asset. There is no JS driving it, so
+   it costs nothing on the main thread while the download is starting.
+   ───────────────────────────────────────────────────────────────────── */
+
+.gs-field {
+  --gs-chrome: #f6f6f7; /* window/toolbar fill */
+  --gs-chrome-line: #dcdcdf; /* window hairline */
+  --gs-page: #ffffff; /* the "web page" and the volume's body */
+  --gs-tile: #f1f1f3; /* icon tile at rest */
+  --gs-tile-hot: color-mix(in srgb, var(--gs-accent) 12%, #ffffff);
+  --gs-ghost: #c9c9cf; /* traffic lights, arrow */
+  --gs-label: #6a6a72; /* icon labels, toolbar glyphs, window title */
+  --gs-radius: 12px;
+
+  /* One clock for the whole illustration. Every keyframe below is a
+     percentage of THIS, which is what keeps ten independent animations in
+     step without a single animation-delay to drift. */
+  --gs-dur: 11s;
+}
+
+/* `--gs-k` reads the FIELD and takes the smaller of the two fits: width, so
+   the composition always spans the field and the browser fragment always
+   bleeds past its left edge; height, so the window mock's bottom (stage y
+   618) can never fall past the fold on a short, wide field. Length ÷ length
+   is a plain number, which is what `scale()` wants. */
+.gs-stage-frame {
+  --gs-k: min(calc(100cqw / 640px), calc(100cqh / 636px));
+  position: absolute;
+  inset: 0;
+}
+
+.gs-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 640px;
+  height: 660px;
+  transform: scale(var(--gs-k));
+  transform-origin: top left;
+}
+
+/* ── The browser fragment ────────────────────────────────────────────── */
+
+/* Negative left AND top: the field's own `overflow: hidden` does the
+   cropping, so the fragment reads as a window that continues past the
+   corner of the screen rather than as a small picture of one. Only the
+   right-hand corners can ever be seen, so only they are rounded. */
+.gs-browser {
+  position: absolute;
+  left: -72px;
+  top: -40px;
+  width: 620px;
+  height: 150px;
+  border: 1px solid var(--gs-chrome-line);
+  border-radius: 0 var(--gs-radius) var(--gs-radius) 0;
+  background: var(--gs-chrome);
+  overflow: hidden;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.3);
+  animation: gs-browser var(--gs-dur) linear infinite;
+}
+
+/* The bottom of one tab, most of it above the crop — the cheapest way to
+   say "browser" when the tab strip is off-screen. */
+.gs-tab {
+  position: absolute;
+  left: 96px;
+  top: 22px;
+  width: 190px;
+  height: 40px;
+  border-radius: 8px 8px 0 0;
+  background: var(--gs-page);
+}
+
+.gs-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 62px;
+  height: 44px;
+  background: var(--gs-chrome);
+  border-bottom: 1px solid var(--gs-chrome-line);
+}
+
+/* Toolbar contents are absolutely placed rather than flexed: the cursor's
+   click target is a literal coordinate in the stage, so the downloads
+   button may not be allowed to move when a sibling's width changes. */
+.gs-tool {
+  position: absolute;
+  top: 14px;
+  width: 16px;
+  height: 16px;
+  color: var(--gs-label);
+}
+
+.gs-tool--reload {
+  left: 26px;
+}
+
+.gs-tool--share {
+  left: 508px;
+}
+
+.gs-tool--newtab {
+  left: 542px;
+}
+
+.gs-tool--tabs {
+  left: 576px;
+}
+
+/* Starts off the left edge of the field, so it is a PARTIAL URL bar. */
+.gs-urlbar {
+  position: absolute;
+  left: 54px;
+  top: 9px;
+  width: 300px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--gs-page);
+  border: 1px solid var(--gs-chrome-line);
+}
+
+/* The downloads button — highlighted at REST, the way the reference draws
+   it (the file has just arrived), and pressed on the click beat. */
+.gs-tray {
+  position: absolute;
+  left: 468px;
+  top: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--gs-accent) 40%, #ffffff);
+  background: var(--gs-tile-hot);
+  color: var(--gs-accent);
+  animation: gs-tray var(--gs-dur) linear infinite;
+}
+
+.gs-page-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 106px;
+  bottom: 0;
+  background: var(--gs-page);
+}
+
+/* ── The download chip that drops out of the toolbar ─────────────────── */
+
+/* A stage-level sibling, not a child of the fragment: it hangs BELOW the
+   fragment's bottom edge, and it must not inherit the fragment's own
+   recede. Its left is chosen so the tray button's centre (stage x 409)
+   falls inside it, the way a real download bubble hangs off its button. */
+.gs-chip {
+  position: absolute;
+  left: 236px;
+  top: 92px;
+  width: 210px;
+  padding: 11px 13px;
+  border: 1px solid var(--gs-chrome-line);
+  border-radius: 10px;
+  background: var(--gs-page);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
+  animation: gs-chip var(--gs-dur) linear infinite;
+}
+
+.gs-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.gs-chip-icon {
+  border-radius: 5px;
+}
+
+.gs-chip-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.gs-chip-track {
+  margin-top: 9px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gs-tile);
+  overflow: hidden;
+}
+
+.gs-chip-bar {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--gs-accent);
+  animation: gs-chip-bar var(--gs-dur) linear infinite;
+}
+
+/* ── The mounted volume, lower right ─────────────────────────────────── */
+
+.gs-dmg {
+  position: absolute;
+  left: 176px;
+  top: 322px;
+  width: 440px;
+  height: 296px;
+  border: 1px solid var(--gs-chrome-line);
+  border-radius: 14px;
+  background: var(--gs-page);
+  overflow: hidden;
+  box-shadow: 0 34px 74px rgba(0, 0, 0, 0.36);
+  animation: gs-dmg var(--gs-dur) linear infinite;
+}
+
+.gs-dmg-bar {
+  position: relative;
+  height: 40px;
+  background: var(--gs-chrome);
+  border-bottom: 1px solid var(--gs-chrome-line);
+}
+
+.gs-lights {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  gap: 8px;
+}
+
+.gs-light {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--gs-ghost);
+}
+
+.gs-dmg-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gs-label);
+}
+
+.gs-dmg-glyph {
+  border-radius: 4px;
+}
+
+.gs-dmg-body {
+  position: relative;
+  height: calc(100% - 40px);
+}
+
+/* Both tiles sit in the same coordinate space as the cursor track. */
+.gs-tile {
+  position: absolute;
+  top: 58px;
+  width: 112px;
+  height: 112px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gs-tile--app {
+  left: 62px;
+  animation: gs-drag var(--gs-dur) linear infinite;
+}
+
+.gs-tile--folder {
+  left: 246px;
+  border: 1px dashed var(--gs-chrome-line);
+  background: var(--gs-tile);
+  animation: gs-folder var(--gs-dur) linear infinite;
+}
+
+/* The real app icon, the same mark the login screen and the dock show — a
+   drawing of an install that shows a placeholder is a drawing of somebody
+   else's install. */
+.gs-app-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.gs-folder-icon {
+  width: 74px;
+  height: 74px;
+  color: var(--gs-accent);
+}
+
+.gs-tile-label {
+  position: absolute;
+  top: 178px;
+  width: 112px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--gs-label);
+}
+
+/* The label leaves with the icon it names — it just doesn't travel, because
+   a sliding word reads as a bug rather than as a drag. Opacity only, on the
+   icon's own track. */
+.gs-tile-label--app {
+  left: 62px;
+  animation: gs-drag-label var(--gs-dur) linear infinite;
+}
+
+.gs-tile-label--folder {
+  left: 246px;
+}
+
+.gs-arrow {
+  position: absolute;
+  left: 182px;
+  top: 107px;
+  width: 56px;
+  color: var(--gs-ghost);
+}
+
+.gs-check {
+  position: absolute;
+  left: 336px;
+  top: 46px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--gs-accent);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  animation: gs-check var(--gs-dur) linear infinite;
+}
+
+/* ── The cursor ──────────────────────────────────────────────────────── */
+
+/* The negative margin puts the arrow's TIP on the translate coordinate, so
+   every keyframe in the motion file can be read as "where it is pointing". */
+.gs-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  margin: -6px 0 0 -6px;
+  color: var(--ink);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.38));
+  animation: gs-cursor var(--gs-dur) linear infinite;
+}
+
+.gs-cursor-edge {
+  stroke: #ffffff;
+}
+

@@ -33,6 +33,8 @@ import { GetStartedScreen } from "@/features/get-started";
 
 import "@/features/marketing/marketing.css";
 import "@/features/get-started/get-started.css";
+import "@/features/get-started/install-animation.css";
+import "@/features/get-started/install-animation-motion.css";
 
 export const metadata = {
   title: "Get Dopl for Mac",

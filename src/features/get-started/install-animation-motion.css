@@ -1,0 +1,277 @@
+/* ─────────────────────────────────────────────────────────────────────
+   The install animation's TIMELINE — the sibling half of
+   `install-animation.css`, which owns the composition. That file says
+   where everything is; this one says when it moves, and nothing else.
+
+   ONE 11s CLOCK (`--gs-dur`, declared on `.gs-field` next door). Ten
+   independent tracks are written as percentages of that single duration
+   rather than as durations of their own with `animation-delay` offsets:
+   delays drift the moment any one of them is retimed, percentages of a
+   shared clock cannot. Read the whole thing top to bottom as one storyboard
+   and the phases line up — the click at 23% is the same instant as the
+   chip's drop at 23–28% because both numbers mean the same 2.6s.
+
+   THE COORDINATES ARE THE COMPOSITION'S, in its fixed 640×660 space: the
+   downloads button's centre is (409, 44), the app tile's is (294, 476), the
+   Applications tile's is (478, 476). Move one of those in the sibling file
+   and the cursor track here has to move with it — that is the price of a
+   cursor that lands on things, and it is cheaper than the alternative,
+   which is a cursor that lands beside them at half the window widths.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* ── Keyframes — one 11s timeline, read top to bottom ─────────────────── */
+
+/* 0–2.2s approach · 2.6s click · 4.4s the browser recedes · 5.2s the volume
+   mounts · 6.6–8.2s the drag · 8.8s dropped · 10.2s rest. Percentages are
+   unchanged from the version this replaced — only the coordinates moved,
+   because only the composition did. */
+@keyframes gs-cursor {
+  0% {
+    opacity: 0;
+    transform: translate(330px, 640px) scale(1);
+  }
+  4% {
+    opacity: 1;
+    transform: translate(330px, 640px) scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(409px, 44px) scale(1);
+  }
+  23% {
+    transform: translate(409px, 44px) scale(0.8);
+  }
+  27% {
+    transform: translate(409px, 44px) scale(1);
+  }
+  47% {
+    opacity: 1;
+    transform: translate(409px, 44px) scale(1);
+  }
+  57% {
+    transform: translate(294px, 476px) scale(1);
+  }
+  61% {
+    transform: translate(294px, 476px) scale(0.8);
+  }
+  75% {
+    transform: translate(478px, 476px) scale(0.8);
+  }
+  80% {
+    transform: translate(478px, 476px) scale(1);
+  }
+  90% {
+    opacity: 1;
+    transform: translate(478px, 476px) scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translate(478px, 476px) scale(1);
+  }
+}
+
+@keyframes gs-tray {
+  0%,
+  22% {
+    transform: scale(1);
+    background: var(--gs-tile-hot);
+  }
+  25% {
+    transform: scale(0.88);
+    background: color-mix(in srgb, var(--gs-accent) 26%, #ffffff);
+  }
+  32%,
+  100% {
+    transform: scale(1);
+    background: var(--gs-tile-hot);
+  }
+}
+
+@keyframes gs-chip {
+  0%,
+  23% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  28%,
+  40% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  46%,
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes gs-chip-bar {
+  0%,
+  27% {
+    width: 0;
+  }
+  39%,
+  100% {
+    width: 100%;
+  }
+}
+
+/* OPACITY ONLY. The fragment is cropped by two edges of the field, so the
+   scale-down this beat used to carry would have walked its hidden corners
+   back into view — the recede has to happen without the geometry moving. */
+@keyframes gs-browser {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  47%,
+  92% {
+    opacity: 0.34;
+  }
+  98%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes gs-dmg {
+  0%,
+  40% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+  47%,
+  92% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+}
+
+/* The drag itself: lift, travel 184px (tile centre to tile centre), drop. */
+@keyframes gs-drag {
+  0%,
+  61% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  64% {
+    transform: translate(0, -5px) scale(1.06);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(184px, -5px) scale(1.06);
+  }
+  81% {
+    opacity: 0;
+    transform: translate(184px, 0) scale(0.45);
+  }
+  95% {
+    opacity: 0;
+    transform: translate(184px, 0) scale(0.45);
+  }
+  96%,
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes gs-drag-label {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  81%,
+  95% {
+    opacity: 0;
+  }
+  96%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes gs-folder {
+  0%,
+  63% {
+    background: var(--gs-tile);
+    border-color: var(--gs-chrome-line);
+  }
+  70%,
+  80% {
+    background: var(--gs-tile-hot);
+    border-color: var(--gs-accent);
+  }
+  88%,
+  100% {
+    background: var(--gs-tile);
+    border-color: var(--gs-chrome-line);
+  }
+}
+
+@keyframes gs-check {
+  0%,
+  79% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  84%,
+  92% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+
+/* Not "no animation" — the LAST FRAME, which is the one that carries the
+   instruction: the volume is open and the app is in the folder. */
+@media (prefers-reduced-motion: reduce) {
+  .gs-cursor,
+  .gs-chip,
+  .gs-tray,
+  .gs-chip-bar,
+  .gs-browser,
+  .gs-dmg,
+  .gs-tile--app,
+  .gs-tile-label--app,
+  .gs-tile--folder,
+  .gs-check {
+    animation: none;
+  }
+  .gs-cursor,
+  .gs-chip,
+  .gs-tile--app,
+  .gs-tile-label--app {
+    opacity: 0;
+  }
+  .gs-chip-bar {
+    width: 100%;
+  }
+  .gs-browser {
+    opacity: 0.34;
+  }
+  .gs-dmg {
+    opacity: 1;
+    transform: none;
+  }
+  .gs-tile--folder {
+    background: var(--gs-tile-hot);
+    border-color: var(--gs-accent);
+  }
+  .gs-check {
+    opacity: 1;
+    transform: none;
+  }
+}

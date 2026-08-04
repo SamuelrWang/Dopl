@@ -19,41 +19,47 @@ export interface GetStartedScreenProps {
 const AUTOSTART_DELAY_MS = 500;
 
 /**
- * "Dopl lives on your desktop" — the page a web sign-in lands on.
+ * "Open Dopl in 3 steps" — the page a web sign-in lands on.
  *
  * TWO AUDIENCES, ONE PAGE. A brand-new account arrives here from the landing
  * page's "Get Started"; after the website retirement's Stage B flip, a returning
  * signed-in user bounced off a retired app route arrives here too
  * (docs/migration-research/website-retirement-plan.md §2.2 — this page is that
  * plan's `/retired`). Both are being told the same thing and both need the same
- * button, so the copy states where Dopl lives rather than congratulating anybody
- * on signing up.
+ * file, so the copy is an instruction rather than a congratulation.
+ *
+ * THE SHAPE IS THE REFERENCE'S, THE STEPS ARE OURS. Two full-height fields:
+ * instructions on the dark left, the install drawn on the deep right. The
+ * heading promises three steps, so there are three — the fourth ("open Dopl and
+ * sign in") folds into the drag, because it is the same motion at the same
+ * moment and a list that outruns its own heading is worse than a long line.
  */
 export function GetStartedScreen({ asset }: GetStartedScreenProps) {
   const sink = useAutoDownload();
 
   return (
     <div className="lp gs">
-      <header className="gs-topbar">
-        <Logo />
-      </header>
+      <section className="gs-panel">
+        <header className="gs-brand">
+          <Logo />
+        </header>
 
-      <main className="gs-main">
-        <section className="gs-copy">
-          <p className="gs-eyebrow">You&apos;re signed in</p>
-          <h1 className="gs-title">Dopl lives on your desktop</h1>
-          <p className="gs-sub">
-            Your download is starting. Install the app, open it, and sign in with the account you
-            just used — everything else happens in there.
-          </p>
+        <div className="gs-copy">
+          <h1 className="gs-title">Open Dopl in 3 steps:</h1>
 
-          <div className="gs-status" role="status">
-            <span className="gs-status-dot" aria-hidden="true" />
-            <span>
-              Downloading{" "}
-              <span className="gs-status-file">{asset ?? "the Dopl installer"}</span>
-            </span>
-          </div>
+          <ol className="gs-steps">
+            <li>Open your Downloads folder.</li>
+            <li>
+              {asset ? (
+                <>
+                  Double-click <code>{asset}</code>.
+                </>
+              ) : (
+                <>Double-click the Dopl installer you just downloaded.</>
+              )}
+            </li>
+            <li>Drag Dopl into Applications, open it, and sign in.</li>
+          </ol>
 
           <p className="gs-retry">
             Not working?{" "}
@@ -62,31 +68,27 @@ export function GetStartedScreen({ asset }: GetStartedScreenProps) {
                 recovery has to be a click the person makes themselves — and a
                 click is also the one navigation that is ALLOWED to leave this
                 page, because they chose it. */}
-            <a href={DOWNLOAD_URL}>Download again</a>
+            <a href={DOWNLOAD_URL}>Try again</a>.
           </p>
+        </div>
 
-          <ol className="gs-steps">
-            <li>Open your Downloads folder.</li>
-            <li>
-              {asset ? (
-                <>
-                  Double-click <code>{asset}</code>
-                </>
-              ) : (
-                <>Double-click the Dopl installer you just downloaded.</>
-              )}
-            </li>
-            <li>Drag Dopl into your Applications folder.</li>
-            <li>Open Dopl and sign in. Your workspace is already waiting.</li>
-          </ol>
-
+        {/* The reference's bottom-left ornament slot, carrying signal instead:
+            the download starts by itself and without a sound, so the live
+            region that says so is what anchors this corner. */}
+        <footer className="gs-footer">
+          <p className="gs-status" role="status">
+            <span className="gs-status-dot" aria-hidden="true" />
+            <span>
+              Downloading <span className="gs-status-file">{asset ?? "the Dopl installer"}</span>
+            </span>
+          </p>
           <p className="gs-foot">macOS on Apple silicon.</p>
-        </section>
+        </footer>
+      </section>
 
-        <section className="gs-visual">
-          <InstallAnimation />
-        </section>
-      </main>
+      <section className="gs-field">
+        <InstallAnimation />
+      </section>
 
       {sink}
     </div>
@@ -108,8 +110,8 @@ export function GetStartedScreen({ asset }: GetStartedScreenProps) {
  * GitHub 404 PAGE, not a file. A top-level navigation to that page commits: the
  * visitor is thrown onto a GitHub 404 and the install instructions are gone. In
  * an iframe the same response is `X-Frame-Options: deny`, the frame fails
- * silently, and the page — including "Not working? Download again" — is still
- * on screen. The same holds for the resolver's designed fallback to the releases
+ * silently, and the page — including "Not working? Try again" — is still on
+ * screen. The same holds for the resolver's designed fallback to the releases
  * page, which is HTML too.
  *
  * `<a download>` was the third option and the worst: the attribute is dropped
