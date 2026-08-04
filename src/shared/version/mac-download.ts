@@ -4,6 +4,7 @@ import {
   RELEASE_CHANNEL_FILE,
   RELEASE_OWNER,
   RELEASE_REPO,
+  parseChannelVersion,
 } from "./latest-release";
 
 /**
@@ -48,9 +49,13 @@ export const RELEASES_PAGE_URL = `https://github.com/${RELEASE_OWNER}/${RELEASE_
 const MAX_FEED_CHARS = 8 * 1024;
 
 /**
- * How long a resolved asset name is reused. A release is a manual, laptop-run
- * ritual, so ten minutes of staleness costs at most ten minutes of the previous
- * build being served — and the previous build auto-updates itself on first run.
+ * How long a resolved release (asset name + tag, one read) is reused. A release
+ * is a manual, laptop-run ritual, so ten minutes of staleness costs at most ten
+ * minutes of the previous build being served — and the previous build
+ * auto-updates itself on first run. That claim is only true because the URL is
+ * pinned to the TAG read alongside the name (F-131): pairing a cached name with
+ * GitHub's live `latest` resolution 404'd for ten minutes after every release,
+ * which is a dead button, not an old build.
  */
 export const MAC_DOWNLOAD_TTL_S = 600;
 
@@ -79,14 +84,28 @@ export function parseChannelDmgAsset(body: string | null | undefined): string | 
 }
 
 /**
- * The evergreen GitHub URL for an asset of the newest non-prerelease release.
- * `/releases/latest/download/:asset` is the pattern the old constant used and
- * the one it should have used — it is correct the moment the name is real.
+ * The GitHub URL for an asset of the release the channel file described.
+ *
+ * TAG-PINNED, NOT `latest` (F-131). `/releases/latest/download/:asset` lets
+ * GitHub resolve "latest" at CLICK time while the asset name was read up to a
+ * TTL earlier — publish a release and the two disagree for ten minutes, and a
+ * name paired with the wrong release is a 404, not a stale build. The channel
+ * file that named the asset also names its version, releases are tagged
+ * `v${version}` (electron-builder's default, true of every release in the
+ * feed), so the URL is built against that tag: name and release now come from
+ * ONE read and cannot drift apart. A missing version falls back to the
+ * `latest` form — same 404 window as before, never worse, and only reachable
+ * if the channel file names a dmg but no parseable version.
+ *
+ * `version` arrives through `parseChannelVersion`, whose character class and
+ * `narrowVersion` bound it to `[0-9A-Za-z.-]` — safe in a URL path segment for
+ * the same reasons `CHANNEL_DMG_RE` documents for the asset name.
  */
-export function macDownloadUrlFor(asset: string): string {
+export function macDownloadUrlFor(asset: string, version: string | null = null): string {
+  const release = version ? `download/v${version}` : `latest/download`;
   return (
     `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}` +
-    `/releases/latest/download/${asset}`
+    `/releases/${release}/${asset}`
   );
 }
 
@@ -108,6 +127,18 @@ export function macDownloadUrlFor(asset: string): string {
  * the same failures.
  */
 export async function resolveMacDownloadAsset(): Promise<string | null> {
+  return (await readChannel()).asset;
+}
+
+/**
+ * ONE read of the channel file, yielding the asset name AND the version that
+ * published it. Reading them together is the F-131 fix's load-bearing half:
+ * a name and a tag from the same bytes cannot describe different releases.
+ * (The fetch is deduplicated by Next's data cache — same URL, same
+ * `revalidate` — so the two public resolvers still cost one request per TTL.)
+ */
+async function readChannel(): Promise<{ asset: string | null; version: string | null }> {
+  const none = { asset: null, version: null };
   try {
     const res = await fetch(LATEST_RELEASE_URL, {
       // github.com 302s to the release-asset CDN — following it IS the request.
@@ -117,15 +148,25 @@ export async function resolveMacDownloadAsset(): Promise<string | null> {
       next: { revalidate: MAC_DOWNLOAD_TTL_S },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) return note(`${LATEST_RELEASE_URL} answered ${res.status}`);
+    if (!res.ok) {
+      note(`${LATEST_RELEASE_URL} answered ${res.status}`);
+      return none;
+    }
     const declared = Number(res.headers.get("content-length"));
     if (Number.isFinite(declared) && declared > MAX_FEED_CHARS) {
-      return note(`${RELEASE_CHANNEL_FILE} answered ${declared} bytes, which is not a channel file`);
+      note(`${RELEASE_CHANNEL_FILE} answered ${declared} bytes, which is not a channel file`);
+      return none;
     }
-    const asset = parseChannelDmgAsset(await res.text());
-    return asset ?? note(`${RELEASE_CHANNEL_FILE} named no .dmg asset`);
+    const body = await res.text();
+    const asset = parseChannelDmgAsset(body);
+    if (!asset) {
+      note(`${RELEASE_CHANNEL_FILE} named no .dmg asset`);
+      return none;
+    }
+    return { asset, version: parseChannelVersion(body) };
   } catch (err) {
-    return note(`${RELEASE_CHANNEL_FILE} fetch failed: ${(err as Error)?.message ?? String(err)}`);
+    note(`${RELEASE_CHANNEL_FILE} fetch failed: ${(err as Error)?.message ?? String(err)}`);
+    return none;
   }
 }
 
@@ -141,8 +182,8 @@ export async function resolveMacDownloadAsset(): Promise<string | null> {
  * nowhere to go is the bug this module was written to end).
  */
 export async function resolveMacDownloadUrl(): Promise<string> {
-  const asset = await resolveMacDownloadAsset();
-  return asset ? macDownloadUrlFor(asset) : RELEASES_PAGE_URL;
+  const { asset, version } = await readChannel();
+  return asset ? macDownloadUrlFor(asset, version) : RELEASES_PAGE_URL;
 }
 
 /** Says it once, then shuts up — the `latest-release.ts` idiom. */

@@ -131,16 +131,29 @@ describe("parseChannelDmgAsset", () => {
 // ── The URL ──────────────────────────────────────────────────────────────────
 
 describe("macDownloadUrlFor", () => {
-  it("is the evergreen /releases/latest/download/:asset pattern", () => {
-    // Evergreen in the RELEASE, not in the asset name — GitHub resolves "latest"
-    // and then demands the exact file, which is the half the old constant got
-    // wrong. Nothing here may reach for api.github.com (rate-limited per IP on a
-    // shared lambda egress; see latest-release.ts).
+  it("pins the URL to the tag the channel file named (F-131)", () => {
+    // `latest` is resolved by GitHub at CLICK time while the name was read up
+    // to a TTL earlier — after every release the pair disagreed for ten
+    // minutes, and the disagreement is a 404, not an old build. Tag-pinning
+    // makes name and release one fact. Nothing here may reach for
+    // api.github.com (rate-limited per IP on a shared lambda egress; see
+    // latest-release.ts).
+    expect(macDownloadUrlFor("Dopl-1.7.24-arm64.dmg", "1.7.24")).toBe(
+      `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}` +
+        "/releases/download/v1.7.24/Dopl-1.7.24-arm64.dmg"
+    );
+    expect(macDownloadUrlFor("x.dmg", "1.0.0")).not.toContain("api.github.com");
+    expect(macDownloadUrlFor("x.dmg", "1.0.0")).not.toContain("/latest/");
+  });
+
+  it("falls back to the /releases/latest/download form when no version parsed", () => {
+    // Same ten-minute window the constant had — never worse — and reachable
+    // only when the channel file names a dmg but no parseable version.
     expect(macDownloadUrlFor("Dopl-1.7.24-arm64.dmg")).toBe(
       `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}` +
         "/releases/latest/download/Dopl-1.7.24-arm64.dmg"
     );
-    expect(macDownloadUrlFor("x.dmg")).not.toContain("api.github.com");
+    expect(macDownloadUrlFor("x.dmg", null)).toContain("/releases/latest/download/");
   });
 
   it("names the repo the desktop app actually publishes to", () => {
@@ -151,10 +164,20 @@ describe("macDownloadUrlFor", () => {
 // ── The resolve ──────────────────────────────────────────────────────────────
 
 describe("resolveMacDownloadUrl", () => {
-  it("resolves a real feed to the dmg of the newest release", async () => {
+  it("resolves a real feed to the dmg of the release that published it, tag-pinned", async () => {
     serve(REAL_CHANNEL_FILE);
+    const url = await resolveMacDownloadUrl();
+    expect(url).toBe(macDownloadUrlFor("Dopl-1.7.24-arm64.dmg", "1.7.24"));
+    // The F-131 regression pin: a resolved URL must never route through
+    // GitHub's live `latest` pointer, which is what let a cached name pair
+    // with a newer release and 404 for the length of the TTL.
+    expect(url).not.toContain("/latest/");
+  });
+
+  it("degrades to the latest-download form when the feed names a dmg but no version", async () => {
+    serve("files:\n  - url: Dopl-1.7.24-arm64.dmg\n");
     await expect(resolveMacDownloadUrl()).resolves.toBe(
-      macDownloadUrlFor("Dopl-1.7.24-arm64.dmg")
+      macDownloadUrlFor("Dopl-1.7.24-arm64.dmg", null)
     );
   });
 
@@ -224,7 +247,8 @@ describe("resolveMacDownloadAsset", () => {
     __resetMacDownloadForTests();
     serve(REAL_CHANNEL_FILE);
     const url = await resolveMacDownloadUrl();
-    expect(url).toBe(macDownloadUrlFor(asset!));
+    expect(url).toBe(macDownloadUrlFor(asset!, "1.7.24"));
+    expect(url.endsWith(`/${asset}`)).toBe(true);
   });
 
   it.each([
