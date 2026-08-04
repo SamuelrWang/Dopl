@@ -20,6 +20,7 @@ import {
   __resetMacDownloadForTests,
   macDownloadUrlFor,
   parseChannelDmgAsset,
+  resolveMacDownloadAsset,
   resolveMacDownloadUrl,
 } from "./mac-download";
 
@@ -204,5 +205,49 @@ describe("resolveMacDownloadUrl", () => {
     await resolveMacDownloadUrl();
     await resolveMacDownloadUrl();
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── The name in the install instructions ─────────────────────────────────────
+
+describe("resolveMacDownloadAsset", () => {
+  it("is the file name a user will actually find in Downloads", async () => {
+    // `/get-started` prints this in step 2. It is the same read as the URL, so
+    // the page cannot name one build while the button serves another.
+    serve(REAL_CHANNEL_FILE);
+    await expect(resolveMacDownloadAsset()).resolves.toBe("Dopl-1.7.24-arm64.dmg");
+  });
+
+  it("is the name INSIDE the url the button uses — one fact, not two", async () => {
+    serve(REAL_CHANNEL_FILE);
+    const asset = await resolveMacDownloadAsset();
+    __resetMacDownloadForTests();
+    serve(REAL_CHANNEL_FILE);
+    const url = await resolveMacDownloadUrl();
+    expect(url).toBe(macDownloadUrlFor(asset!));
+  });
+
+  it.each([
+    ["a network failure", null, 200],
+    ["a 404", "Not Found", 404],
+    ["an HTML captive portal", "<!DOCTYPE html><title>Sign in</title>", 200],
+    ["a feed with no dmg in it", "version: 1.7.24\npath: Dopl-1.7.24-arm64-mac.zip\n", 200],
+  ])("is null on %s — the copy stops naming a file rather than guessing one", async (
+    _label,
+    body,
+    status
+  ) => {
+    // Null, NOT the releases page: this value goes into a sentence, and a
+    // sentence telling somebody to double-click a URL is nonsense. The button
+    // beside it still degrades to the releases page on the same failure.
+    serve(body, status);
+    await expect(resolveMacDownloadAsset()).resolves.toBeNull();
+  });
+
+  it("refuses a hostile name for the same reason the URL does", async () => {
+    // The name is rendered into the page. It gets the parser's full guarantee,
+    // not a softer one — nothing here may become a link or a path.
+    serve("files:\n  - url: https://evil.example/x.dmg\n");
+    await expect(resolveMacDownloadAsset()).resolves.toBeNull();
   });
 });

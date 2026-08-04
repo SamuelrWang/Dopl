@@ -91,12 +91,23 @@ export function macDownloadUrlFor(asset: string): string {
 }
 
 /**
- * The URL to send a clicking visitor to. NEVER throws and never returns
- * something that is not a github.com release URL: every failure — a timeout, a
- * 5xx, an HTML captive-portal page, a channel file with no dmg in it — degrades
- * to the releases page, which is a worse click but never a dead one.
+ * The NAME of the dmg the newest release publishes (`Dopl-1.8.4-arm64.dmg`), or
+ * null when the feed could not be read.
+ *
+ * WHY THE NAME IS EXPORTED SEPARATELY FROM THE URL. `/get-started` tells a new
+ * user to "double-click Dopl-1.8.4-arm64.dmg in your Downloads folder", and an
+ * install instruction naming a file that is not the one on disk is worse than an
+ * instruction that names no file at all. The name is therefore READ from the same
+ * `latest-mac.yml` the URL is read from, in the same request, under the same TTL
+ * — never typed into copy, never assembled from `package.json` (which says what
+ * SHOULD ship, not what DID; see latest-release.ts).
+ *
+ * `null` is a first-class answer, not an error: the page drops to version-less
+ * copy ("the Dopl installer") rather than guessing, because the button beside it
+ * still works — `resolveMacDownloadUrl` degrades to the releases page on exactly
+ * the same failures.
  */
-export async function resolveMacDownloadUrl(): Promise<string> {
+export async function resolveMacDownloadAsset(): Promise<string | null> {
   try {
     const res = await fetch(LATEST_RELEASE_URL, {
       // github.com 302s to the release-asset CDN — following it IS the request.
@@ -112,23 +123,37 @@ export async function resolveMacDownloadUrl(): Promise<string> {
       return note(`${RELEASE_CHANNEL_FILE} answered ${declared} bytes, which is not a channel file`);
     }
     const asset = parseChannelDmgAsset(await res.text());
-    return asset
-      ? macDownloadUrlFor(asset)
-      : note(`${RELEASE_CHANNEL_FILE} named no .dmg asset`);
+    return asset ?? note(`${RELEASE_CHANNEL_FILE} named no .dmg asset`);
   } catch (err) {
     return note(`${RELEASE_CHANNEL_FILE} fetch failed: ${(err as Error)?.message ?? String(err)}`);
   }
 }
 
+/**
+ * The URL to send a clicking visitor to. NEVER throws and never returns
+ * something that is not a github.com release URL: every failure — a timeout, a
+ * 5xx, an HTML captive-portal page, a channel file with no dmg in it — degrades
+ * to the releases page, which is a worse click but never a dead one.
+ *
+ * The two branches here are the whole contract, and they are the reason the
+ * resolver above may return null while this one may not: a NAME can be absent
+ * (the copy simply stops naming a file), a LINK cannot (a Download button with
+ * nowhere to go is the bug this module was written to end).
+ */
+export async function resolveMacDownloadUrl(): Promise<string> {
+  const asset = await resolveMacDownloadAsset();
+  return asset ? macDownloadUrlFor(asset) : RELEASES_PAGE_URL;
+}
+
 /** Says it once, then shuts up — the `latest-release.ts` idiom. */
 let lastNote: string | null = null;
 
-function note(detail: string): string {
+function note(detail: string): null {
   if (detail !== lastNote) {
     lastNote = detail;
     console.warn(`[mac-download] ${detail} — the button falls back to the releases page.`);
   }
-  return RELEASES_PAGE_URL;
+  return null;
 }
 
 /** Tests only: the dedupe above is module state. */
