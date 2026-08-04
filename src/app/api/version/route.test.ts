@@ -11,14 +11,22 @@
  *      module load would look identical in every test that only calls GET once.
  *   3. **Nothing is cached.** A CDN entry in front of this route delays the one
  *      change it exists to deliver.
+ *   4. **GitHub is never on the request path.** The clamp's `latest` is derived
+ *      from the release feed, and the derivation is read from a cache and
+ *      refreshed afterwards. A hung GitHub must not cost this route anything.
  *
- * The resolver is NOT mocked: this route's whole body is that call, and mocking
- * it would leave the malformed/above-latest paths untested at the wire.
+ * Neither the resolver nor the derivation is mocked: this route's whole body is
+ * those two calls, and mocking them would leave the malformed/above-latest paths
+ * untested at the wire. Only `fetch` is stubbed, at the network edge.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GET } from "./route";
 import { MIN_VERSION_ENV, LATEST_VERSION_ENV } from "@/shared/version/desktop-floor";
+import {
+  __resetLatestReleaseForTests,
+  refreshLatestRelease,
+} from "@/shared/version/latest-release";
 
 type Body = { minSupported: string | null; latest: string | null };
 
@@ -31,8 +39,34 @@ async function get(): Promise<{ status: number; body: Body; cache: string | null
   };
 }
 
+/** The release feed answering with a published version. */
+function serveFeed(version: string): ReturnType<typeof vi.fn> {
+  const spy = vi.fn(
+    async () => new Response(`version: ${version}\nfiles:\n  - url: Dopl.zip\n`)
+  );
+  vi.stubGlobal("fetch", spy);
+  return spy;
+}
+
+/** GitHub at its worst: hung. Answers nothing, logs nothing, caches nothing. */
+function hangFeed(): ReturnType<typeof vi.fn> {
+  const spy = vi.fn(() => new Promise<Response>(() => {}));
+  vi.stubGlobal("fetch", spy);
+  return spy;
+}
+
+beforeEach(() => {
+  // The derived latest is module state that outlives a test, and every case
+  // here states its own starting point rather than inheriting one. The default
+  // is a feed that never answers, so a test that does not care about GitHub
+  // exercises exactly the env-var behavior this route had before F-125's fix.
+  __resetLatestReleaseForTests();
+  hangFeed();
+});
+
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("GET /api/version", () => {
@@ -131,3 +165,113 @@ describe("GET /api/version", () => {
     expect(GET.length).toBe(0);
   });
 });
+
+/**
+ * The anti-brick clamp, end to end, against a DERIVED latest (F-125 residual).
+ *
+ * The failure being fixed: `DOPL_DESKTOP_LATEST_VERSION` was bumped by hand, so
+ * it decayed, and a decayed clamp refuses legitimate floors — the gate fails
+ * safe and useless at the same time. The clamp now reads the release feed the
+ * updater already reads, so it tracks reality without anyone remembering to
+ * type a number.
+ */
+describe("GET /api/version — the derived anti-brick clamp", () => {
+  it("still REFUSES a floor above the newest published release", async () => {
+    await serveAndDerive("1.7.24");
+    vi.stubEnv(MIN_VERSION_ENV, "1.9.0");
+    // No env var declares anything: the refusal is entirely the feed's doing.
+    vi.stubEnv(LATEST_VERSION_ENV, "");
+    expect((await get()).body).toEqual({ minSupported: null, latest: "1.7.24" });
+  });
+
+  it("lets the floor RISE the moment a newer release exists", async () => {
+    // The operator's real loop, in three steps. Nothing about it involves
+    // editing a "latest" anywhere.
+    await serveAndDerive("1.7.24");
+    vi.stubEnv(MIN_VERSION_ENV, "1.8.0");
+    vi.stubEnv(LATEST_VERSION_ENV, "");
+    expect((await get()).body.minSupported).toBeNull(); // 1.8.0 is not out yet
+
+    __resetLatestReleaseForTests();
+    await serveAndDerive("1.8.0"); // Samuel runs `npm run release`
+    expect((await get()).body).toEqual({ minSupported: "1.8.0", latest: "1.8.0" });
+  });
+
+  it("OVERRULES a stale env var, in the direction each staleness needs", async () => {
+    // Stale-LOW: the hand-bumped var was refusing a floor that is genuinely
+    // published. The feed unsticks it.
+    await serveAndDerive("1.8.0");
+    vi.stubEnv(MIN_VERSION_ENV, "1.8.0");
+    vi.stubEnv(LATEST_VERSION_ENV, "1.7.24");
+    expect((await get()).body).toEqual({ minSupported: "1.8.0", latest: "1.8.0" });
+
+    // Stale-HIGH: someone copied `dopl-desktop-app/package.json`'s version, as
+    // the old docs told them to, and that file runs AHEAD of what is published.
+    // The feed refuses the floor that would have bricked every Mac.
+    __resetLatestReleaseForTests();
+    await serveAndDerive("1.7.24");
+    vi.stubEnv(MIN_VERSION_ENV, "1.8.2");
+    vi.stubEnv(LATEST_VERSION_ENV, "1.8.2");
+    expect((await get()).body).toEqual({ minSupported: null, latest: "1.7.24" });
+  });
+
+  it("falls back to the env var while the feed is unreachable", async () => {
+    // A cold lambda that has not reached GitHub yet. The env var survives for
+    // exactly this, and for the day the feed goes away.
+    vi.stubEnv(MIN_VERSION_ENV, "1.9.0");
+    vi.stubEnv(LATEST_VERSION_ENV, "1.8.2");
+    expect((await get()).body).toEqual({ minSupported: null, latest: "1.8.2" });
+  });
+
+  it("a HUNG GitHub costs this route nothing at all", async () => {
+    // The constraint the whole design turns on. `GET` is a synchronous function
+    // — it cannot await a socket even by accident — and the round trip it kicks
+    // off is still in flight when the response is already built.
+    const feed = hangFeed();
+    vi.stubEnv(MIN_VERSION_ENV, "1.8.2");
+    const res = GET();
+    expect(res).not.toBeInstanceOf(Promise);
+    expect(await res.json()).toEqual({ minSupported: "1.8.2", latest: null });
+    expect(feed).toHaveBeenCalledTimes(1);
+  });
+
+  it("schedules ONE refresh across a burst, then leaves the cache alone", async () => {
+    const feed = serveFeed("1.7.24");
+    await get();
+    await get();
+    await get();
+    await vi.waitFor(() => expect(feed).toHaveBeenCalled());
+    // Single-flight during, TTL after: three boots do not become three trips.
+    expect(feed).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the SOURCE it refused against, because the two need opposite fixes", async () => {
+    // A derived latest means "publish the build"; a declared one means "your env
+    // var is stale". F-125's lesson was that a refusal invisible on the wire has
+    // to be legible in the log, and a log that names the wrong knob is worse
+    // than one that names none.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await serveAndDerive("1.7.24");
+      vi.stubEnv(MIN_VERSION_ENV, "1.9.0");
+      vi.stubEnv(LATEST_VERSION_ENV, "");
+      await get();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("newest published release");
+      expect(warn.mock.calls[0][0]).toContain("1.7.24");
+      expect(warn.mock.calls[0][0]).not.toContain(LATEST_VERSION_ENV);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+/**
+ * Fill the derived cache the way a warm lambda would have, but synchronously
+ * enough to assert on. The route only ever READS this cache, so a test that
+ * wants a derived value asks for it up front rather than racing the scheduler.
+ */
+async function serveAndDerive(version: string): Promise<void> {
+  serveFeed(version);
+  await refreshLatestRelease();
+}

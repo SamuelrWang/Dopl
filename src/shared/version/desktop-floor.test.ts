@@ -15,7 +15,9 @@
  * The one intentional asymmetry is (2)'s dependence on `latest` being kept
  * current: a stale-LOW latest refuses a legitimate floor (annoying, safe), and
  * a missing latest disables the clamp entirely (the client's updater-grounded
- * guard is the backstop there).
+ * guard is the backstop there). That is why `latest` is now DERIVED from the
+ * release feed and the env var is only the fallback — see `latest-release.ts`,
+ * and the `derivedLatest` cases at the bottom of this file.
  */
 
 import { describe, it, expect } from "vitest";
@@ -100,6 +102,7 @@ describe("resolveDesktopFloor", () => {
     expect(resolveDesktopFloor(env("1.8.2"))).toEqual({
       minSupported: "1.8.2",
       latest: null,
+      latestSource: null,
       rejected: null,
     });
   });
@@ -108,11 +111,13 @@ describe("resolveDesktopFloor", () => {
     expect(resolveDesktopFloor(env())).toEqual({
       minSupported: null,
       latest: null,
+      latestSource: null,
       rejected: null,
     });
     expect(resolveDesktopFloor({})).toEqual({
       minSupported: null,
       latest: null,
+      latestSource: null,
       rejected: null,
     });
   });
@@ -132,6 +137,7 @@ describe("resolveDesktopFloor", () => {
       expect(resolveDesktopFloor(env(blank))).toEqual({
         minSupported: null,
         latest: null,
+        latestSource: null,
         rejected: null,
       });
     }
@@ -144,6 +150,7 @@ describe("resolveDesktopFloor", () => {
     expect(out.minSupported).toBeNull();
     expect(out.rejected).toBe("above-latest");
     expect(out.latest).toBe("1.8.2");
+    expect(out.latestSource).toBe("env");
   });
 
   it("a floor EQUAL to latest is legitimate and is served", () => {
@@ -158,6 +165,62 @@ describe("resolveDesktopFloor", () => {
     const out = resolveDesktopFloor(env("1.8.2", "v1.9.0"));
     expect(out.minSupported).toBe("1.8.2");
     expect(out.latest).toBeNull();
+  });
+
+  it("prefers the DERIVED latest over the declared one, in both directions", () => {
+    // The whole point of F-125's fix. The env var is a claim about what should
+    // be published; the release feed is the record of what is. When they
+    // disagree the fact wins, whichever way the disagreement runs.
+
+    // Stale-LOW env (the silent-decay case): the derivation UNSTICKS a
+    // legitimate floor the hand-bumped var was refusing.
+    const unstuck = resolveDesktopFloor(env("1.9.0", "1.8.2"), "1.9.0");
+    expect(unstuck.minSupported).toBe("1.9.0");
+    expect(unstuck.latest).toBe("1.9.0");
+    expect(unstuck.latestSource).toBe("release-feed");
+
+    // Stale-HIGH env (the brick case, and the reason release-time automation
+    // that copies package.json's version was rejected): the derivation REFUSES
+    // a floor the declared value would have waved through.
+    const refused = resolveDesktopFloor(env("1.8.2", "1.8.2"), "1.7.24");
+    expect(refused.minSupported).toBeNull();
+    expect(refused.rejected).toBe("above-latest");
+    expect(refused.latest).toBe("1.7.24");
+    expect(refused.latestSource).toBe("release-feed");
+  });
+
+  it("falls back to the env var when nothing has been derived yet", () => {
+    // A cold lambda that has not reached GitHub, or a feed that has gone away.
+    const out = resolveDesktopFloor(env("1.9.0", "1.8.2"), null);
+    expect(out.latest).toBe("1.8.2");
+    expect(out.latestSource).toBe("env");
+    expect(out.rejected).toBe("above-latest");
+  });
+
+  it("a MALFORMED derived value falls through to the env rather than voiding it", () => {
+    // The parser should never hand one over, but the resolver is the last stop
+    // and a garbage value must not be able to blank a working clamp.
+    for (const bad of ["v1.8.2", "1.8", "latest", ""]) {
+      const out = resolveDesktopFloor(env("1.9.0", "1.8.2"), bad);
+      expect(out.latest).toBe("1.8.2");
+      expect(out.latestSource).toBe("env");
+    }
+  });
+
+  it("no latest from EITHER source disables the clamp, which is today's behavior", () => {
+    // Stated so it is a decision, not a gap: with no idea what is published,
+    // the clamp cannot judge, and the client's GUARD 2 is the backstop. The
+    // route never lets this state persist — it schedules a refresh on the way
+    // out and the next request has an answer.
+    const out = resolveDesktopFloor(env("1.9.0"), null);
+    expect(out.minSupported).toBe("1.9.0");
+    expect(out.latest).toBeNull();
+    expect(out.latestSource).toBeNull();
+  });
+
+  it("defaults derivedLatest to null, so an old caller keeps its old behavior", () => {
+    expect(resolveDesktopFloor(env("1.9.0", "1.8.2")).latest).toBe("1.8.2");
+    expect(resolveDesktopFloor.length).toBe(0); // both parameters are optional
   });
 
   it("reads process.env when nothing is injected", () => {

@@ -5,6 +5,10 @@ import {
   LATEST_VERSION_ENV,
   type DesktopVersionFloor,
 } from "@/shared/version/desktop-floor";
+import {
+  cachedLatestRelease,
+  scheduleLatestReleaseRefresh,
+} from "@/shared/version/latest-release";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +44,15 @@ export const dynamic = "force-dynamic";
  * NOT CACHED. The client asks at most a few times a day per Mac, so a CDN entry
  * buys nothing and would put a stale floor in front of the change the operator
  * just made to force an upgrade.
+ *
+ * IT TALKS TO GITHUB, AND NEVER WAITS FOR IT. The anti-brick clamp's `latest` is
+ * derived from the release feed (`latest-release.ts`) rather than hand-declared.
+ * The derivation is READ from a cache here and REFRESHED after the response, so
+ * GitHub being slow, rate-limited or gone cannot add a millisecond to this
+ * route: the worst it can do is leave `latest` at its previous value, or at the
+ * env var, or at `null` — and every one of those refuses MORE floors than the
+ * truth would, never fewer. That `GET` is a synchronous function is the
+ * guarantee, not a coincidence; a test pins it.
  */
 /**
  * A REFUSED floor is invisible on the wire — it is served as the same plain "no
@@ -55,19 +68,32 @@ export const dynamic = "force-dynamic";
 let lastRejection: string | null = null;
 
 function reportRejection(floor: DesktopVersionFloor): void {
-  const key = floor.rejected ? `${floor.rejected}:${process.env[MIN_VERSION_ENV] ?? ""}` : null;
+  const key = floor.rejected
+    ? `${floor.rejected}:${process.env[MIN_VERSION_ENV] ?? ""}:${floor.latest ?? ""}:${floor.latestSource ?? ""}`
+    : null;
   if (key === lastRejection) return;
   lastRejection = key;
   if (!floor.rejected) return;
+  // The clamp's number now has two possible origins and they need OPPOSITE
+  // reactions — a derived one means "publish the build", a declared one means
+  // "your env var is stale". Naming the wrong one sends the operator to fix a
+  // variable that is not the problem, so the line says which it read.
+  const source =
+    floor.latestSource === "release-feed"
+      ? "the newest published release"
+      : LATEST_VERSION_ENV;
   const detail =
     floor.rejected === "malformed"
       ? `is not a version ("${process.env[MIN_VERSION_ENV] ?? ""}")`
-      : `is above ${LATEST_VERSION_ENV} (${floor.latest ?? "?"}), so it would block every desktop with nothing to install`;
+      : `is above ${source} (${floor.latest ?? "?"}), so it would block every desktop with nothing to install`;
   console.warn(`[api/version] ${MIN_VERSION_ENV} ${detail} — serving NO floor.`);
 }
 
 export function GET() {
-  const floor = resolveDesktopFloor();
+  // Read, then schedule: the answer is built from what this instance already
+  // knows, and the round trip is a side effect for the NEXT caller.
+  const floor = resolveDesktopFloor(process.env, cachedLatestRelease());
+  scheduleLatestReleaseRefresh();
   reportRejection(floor);
   return NextResponse.json(
     { minSupported: floor.minSupported, latest: floor.latest },
