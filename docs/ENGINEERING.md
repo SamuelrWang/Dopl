@@ -1013,8 +1013,36 @@ for the two-line `main/index.js` integration and what moves when it flips.
   or `DOPL_UI_DEV_URL` for Vite HMR). Same security shape as `session-window.js`:
   sandbox + contextIsolation, `window.open` denied, navigation locked to the page.
 - `renderer/app-preload.js` — `window.dopl` for that window: `apiRequest`,
-  `getAuthState`, `onAuthState`, `openExternal`, `avatarDataUri`. **No tokens
-  cross it, and the renderer cannot set headers.**
+  `getAuthState`, `onAuthState`, `openExternal`, `avatarDataUri`, plus the
+  `channels` and `sessions` namespaces the shared web tree feature-detects.
+  **No tokens cross it, and the renderer cannot set headers.**
+
+**PRELOAD PARITY — every op `renderer/preload.js` exposes must also exist in
+`renderer/app-preload.js`, on the same wire.** The two preloads are not
+symmetric and must not be: the SPA has a large surface the remote shell must
+never get (`apiRequest`, the auth ops, `syncWatch`, `appOrigin`), because the
+SPA loads our bundle and the remote shell loads a remote page. The asymmetry
+runs one way only — **both shells serve the SAME `src/` tree**, and that tree
+feature-detects each capability (`@/shared/lib/desktop`,
+`@/shared/lib/spa-bridge`, `use-channel-permission-preset`) and renders
+**nothing** when it is absent. That self-hiding is correct for a plain browser
+and for an older build, and it is exactly why a gap here does not fail: it
+deletes a feature silently. Three shipped this way — avatars (F-124), the
+consent card's folder row, and 1.8.x's "Open thread" button (F-129) — each
+found by a human noticing something missing. `dopl-desktop-app/test/preload-parity.test.mjs`
+now EXECUTES both preloads against a fake `electron` and pins: every callable
+op of the remote preload exists in the SPA preload; each shared op invokes the
+same channel with the same payload; every capability the web tree detects is
+provided; and every member `SpaBridgeSurface` declares exists. Restricting
+parity to CALLABLE members is deliberate — it is the set that can be
+feature-detected, and it excludes the legacy markers (`isDesktop`, `platform`,
+`versions`) the SPA preload intentionally does not set. **Do not add
+`isDesktop` to the SPA preload:** `isDesktopApp()` gates the web login page
+into the browser-OAuth + `dopl://` handoff, which the SPA must not take (it
+signs in through main). That divergence is pinned by the same test.
+**Adding an op is a FOUR-file change:** the preload(s), the `ipcMain` handler,
+the renderer-side typed mirror `apps/desktop-ui/src/lib/dopl-bridge.ts`, and
+the web tree's feature detector.
 - `main/ui-bridge.js` — the `ipcMain.handle` half. Sender-bound to the SPA
   window's top frame (the `mainOnly` convention from `channel-dir-ipc.js`);
   path-gated to `/api/**`; `getBearerToken()` is the auth seam and still returns
