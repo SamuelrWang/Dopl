@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { safeRedirect } from "@/shared/lib/url/safe-redirect";
+import { webPostAuthDestination } from "@/shared/lib/url/post-auth-landing";
 
 /**
  * Google One Tap — the auto-appearing "Sign in with Google" prompt (top-right
@@ -98,7 +98,13 @@ export function GoogleOneTap() {
               token: response.credential,
               nonce: raw,
             });
-            if (!error) window.location.assign(safeRedirect(searchParams.get("redirectTo")));
+            // One Tap completes the session in place, so it lands the visitor
+            // itself rather than routing through /auth/callback — same rule as
+            // the password form: the deep link if there is one, else the
+            // post-auth download page.
+            if (!error) {
+              window.location.assign(webPostAuthDestination(searchParams.get("redirectTo")));
+            }
           })();
         },
       });

@@ -2,7 +2,10 @@
 
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { safeRedirect } from "@/shared/lib/url/safe-redirect";
+import {
+  WEB_POST_AUTH_LANDING,
+  explicitPostAuthTarget,
+} from "@/shared/lib/url/post-auth-landing";
 import { isDesktopApp } from "@/shared/lib/desktop";
 import type { LoginActions, SocialProvider } from "./use-login-core";
 
@@ -26,18 +29,28 @@ function authOrigin(): string {
  */
 export function useLoginActions(): LoginActions {
   const searchParams = useSearchParams();
-  // Workspace + canvas are auto-provisioned in /auth/callback before redirect,
-  // so first-time users land in their workspace. Deep links override via an
-  // explicit ?redirectTo= but only if same-origin (open-redirect guard).
-  const redirectTo = safeRedirect(searchParams.get("redirectTo"));
+  // A deep link overrides the destination via `?redirectTo=`, same-origin only
+  // (open-redirect guard). Absent one, a web sign-in lands on the post-auth
+  // download page — see `shared/lib/url/post-auth-landing.ts` for why, and for
+  // what it deliberately leaves alone.
+  const explicitTarget = explicitPostAuthTarget(searchParams.get("redirectTo"));
+  const redirectTo = explicitTarget ?? WEB_POST_AUTH_LANDING;
   // Optional "install this cluster after sign-in" intent, threaded through to
   // /auth/callback so OAuth + email flows can run the fork server-side.
   const installCluster = searchParams.get("installCluster");
 
   function buildCallbackUrl(): string {
-    const params = new URLSearchParams({ redirectTo });
+    const params = new URLSearchParams();
+    // ONLY when the URL actually named a target. The callback reads the presence
+    // of this param as "this sign-in came from somewhere and owes it a return
+    // trip", and routes a first-run user through `/onboarding` on the strength of
+    // it. Threading the DEFAULT through here would make every plain signup look
+    // like a deep link and put the web onboarding flow back in front of the
+    // download — which is the detour this whole change removes.
+    if (explicitTarget) params.set("redirectTo", explicitTarget);
     if (installCluster) params.set("installCluster", installCluster);
-    return `${authOrigin()}/auth/callback?${params.toString()}`;
+    const qs = params.toString();
+    return `${authOrigin()}/auth/callback${qs ? `?${qs}` : ""}`;
   }
 
   const supabase = getSupabaseBrowser();

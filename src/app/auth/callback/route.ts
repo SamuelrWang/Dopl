@@ -4,16 +4,21 @@ import { cookies } from "next/headers";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { isOnboarded } from "@/features/onboarding/server/service";
-import { safeRedirect } from "@/shared/lib/url/safe-redirect";
+import {
+  WEB_POST_AUTH_LANDING,
+  explicitPostAuthTarget,
+} from "@/shared/lib/url/post-auth-landing";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  // A default workspace is provisioned below before redirect, so a
-  // first-time user lands directly in their workspace. Deep links
-  // override via ?redirectTo= but only if same-origin path (open
-  // redirect guard — see safeRedirect doc).
-  const redirectTo = safeRedirect(searchParams.get("redirectTo"));
+  // A default workspace is provisioned below before redirect. A deep link
+  // overrides the destination via ?redirectTo=, same-origin only (open-redirect
+  // guard); `explicitTarget` is null when the URL named nothing usable, and
+  // BOTH the destination and the onboarding detour below hang off that
+  // distinction. See shared/lib/url/post-auth-landing.ts.
+  const explicitTarget = explicitPostAuthTarget(searchParams.get("redirectTo"));
+  const redirectTo = explicitTarget ?? WEB_POST_AUTH_LANDING;
   // Desktop app flow: this callback runs in the user's system browser. After
   // the exchange we hand the session back to the app via /auth/desktop-handoff
   // (which redirects to a dopl:// deep link). Skip the onboarding detour — the
@@ -55,13 +60,20 @@ export async function GET(request: NextRequest) {
           // they'll use as soon as they hit /canvas.
           await ensureDefaultWorkspace(user.id);
 
-          // First-run users detour to /onboarding (survey + MCP connect).
-          // Only an EXPLICIT deep link is threaded — the /canvas default
-          // isn't, since onboarding computes the workspace landing itself.
-          if (!isDesktop && !(await isOnboarded(user.id))) {
-            destination = searchParams.get("redirectTo")
-              ? `/onboarding?${new URLSearchParams({ redirectTo })}`
-              : "/onboarding";
+          // First-run users detour to /onboarding (survey + MCP connect) ONLY
+          // when this sign-in owes somewhere a return trip — an invite, a join
+          // link, an OAuth consent screen. That deep link is threaded through so
+          // onboarding can finish the journey it interrupted.
+          //
+          // A PLAIN signup no longer detours. It goes to the download page and
+          // onboards INSIDE the desktop app, which is where onboarding already
+          // happens for everybody who signs in through the app (the `!isDesktop`
+          // guard on this branch has always said so) and where the SPA's own
+          // /onboarding route now lives. Sending a brand-new account through a
+          // web survey it will never see again, on the way to installing the app
+          // that asks the same questions, is the detour this change removes.
+          if (!isDesktop && explicitTarget && !(await isOnboarded(user.id))) {
+            destination = `/onboarding?${new URLSearchParams({ redirectTo })}`;
           }
         }
       } catch (err) {
