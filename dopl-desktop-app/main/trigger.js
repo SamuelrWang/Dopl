@@ -39,7 +39,7 @@ const settings = require('./settings');
 const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 const claudeAuth = require('./claude-auth');
-const { postTaskEvent, postResult, notifyLocal } = require('./channel-post');
+const { postTaskEvent, postResult, postCourtesy, notifyLocal } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
 // §2 SPLIT (2026-08-04): the HEADLESS FALLBACK lane — spawn, then open an outbound
 // review — plus the two peer-facing replies both lanes send. Its own module because
@@ -329,7 +329,7 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     // H1: a held session owns this slot and is running nothing. Headless would fail on the
     // same missing credential, so answer honestly and settle rather than falling through.
     diag('responder session: skipped=auth-hold — the slot is held on the sign-in action');
-    await postResult(entry, m, AUTH_HELD_REPLY);
+    await postCourtesy(entry, m, AUTH_HELD_REPLY); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'auth-hold');
     return true; // handled — do NOT also run headless
   }
@@ -338,7 +338,7 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     // RESEND is an untagged bubble by design, so the requester watching THIS thread sees
     // nothing there. One milestone inside the thread says queued rather than ignored.
     await queued.announce(entry, m, rec.taskId || taskId, 'session');
-    await postResult(entry, m, RESEND);
+    await postCourtesy(entry, m, RESEND); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'busy');
     return true; // handled — do NOT also run headless
   }

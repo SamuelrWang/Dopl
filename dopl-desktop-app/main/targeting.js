@@ -218,12 +218,28 @@ function classify(m, entry, myId) {
     return isMember ? 'fyi' : 'ignore';
   }
   // LOOP BRAKE: an UNADDRESSED agent can never trigger — FYI (member) / ignore.
-  // The responder posts its reply UNADDRESSED (author_kind=agent, no to_user_id
-  // via postResult), so it lands here as FYI and cannot re-trigger the asker.
-  // Loop-safe because every trigger is still consent-gated (a human clicks Allow
-  // per hop) AND replies are unaddressed; only a deliberately-addressed follow-up
-  // re-triggers, which is itself a consented turn. So a two-agent exchange can
-  // never self-sustain without a human in the loop.
+  //
+  // P1-5 (2026-08-04) — THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM,
+  // which is the only shape the DM product has. It said "the responder posts its
+  // reply UNADDRESSED (author_kind=agent, no to_user_id via postResult), so it
+  // lands here as FYI" — and `postResult` really does send no `to`. But in a
+  // DIRECT channel the SERVER addresses it: `resolvePostMetadata` falls back to
+  // `peerUserId` when nobody was named, so `to_user_id` IS stamped, the addressed
+  // rule above claims the message, and this branch is never reached at all. A
+  // courtesy no-op ("please resend") therefore arrived as a trigger, raised
+  // consent, and could spawn a session under a synthetic `task-<channel>-<seq>`
+  // id against a message that asked for nothing. Two agents can ping-pong that
+  // way; only the consent gate stopped it, and standing trust removes the gate.
+  //
+  // WHAT ACTUALLY BRAKES A DM, therefore, is `intent:"chat"` — suppressed
+  // unconditionally a few lines above, ahead of every branch that can return
+  // 'trigger', and skipped by the auto-address server-side so there is nothing to
+  // trigger on in the first place. `channel-post.postCourtesy` is what stamps it,
+  // and the incidental posts are the ones that reach for it.
+  //
+  // THIS BRANCH still does its job everywhere the server addresses nothing for
+  // you — a group channel, and a DM post that carried an explicit `intent` — and
+  // the consent gate remains the belt in front of both.
   if (m.authorKind === 'agent') return isMember ? 'fyi' : 'ignore';
   // Implicit 1:1 trigger (USER authors only) — but an explicit per-channel mute
   // ('none') wins over an IMPLICIT target: the sender never addressed us, and

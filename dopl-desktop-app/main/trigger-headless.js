@@ -22,7 +22,7 @@ const targeting = require('./targeting');
 const spawner = require('./session-spawner');
 const claudeAuth = require('./claude-auth');
 const queued = require('./queued-notice');
-const { postTaskEvent, postResult, notifyLocal } = require('./channel-post');
+const { postTaskEvent, postResult, postCourtesy, notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
 
 const RESEND =
@@ -57,7 +57,7 @@ async function runHeadlessApproved(entry, m, rec, { taskId, startedAt, requester
   if (result.skipped === 'busy') {
     // Same notice; D1 changed what defers it (this SESSION runs, or the pool is at its cap).
     await queued.announce(entry, m, taskId, 'headless');
-    await postResult(entry, m, RESEND);
+    await postCourtesy(entry, m, RESEND); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'busy');
     return;
   }

@@ -214,7 +214,10 @@ test("both busy defers announce, ahead of the RESEND bubble", () => {
   for (const src of both) {
     for (const site of src.match(/queued\.announce\([^)]*\)/g) || []) {
       const at = src.indexOf(site);
-      const resend = src.indexOf("postResult(entry, m, RESEND)", at);
+      // P1-5: the bubble goes out through `postCourtesy` now (intent "chat", so a
+      // no-op cannot trigger the peer). Same post, same position, named for what
+      // it is.
+      const resend = src.indexOf("postCourtesy(entry, m, RESEND)", at);
       assert.ok(resend > at && resend - at < 200, `${site} must precede its RESEND post`);
     }
   }

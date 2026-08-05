@@ -77,17 +77,54 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
 //
 // `metadata` (optional) rides through to `channel_messages.metadata` (jsonb).
 // The agent's ACTUAL reply carries `{ taskId }` so the web thread can group it
-// into the same session card as its task_started/finished events; incidental
-// posts (e.g. the busy "please resend" notice) pass no metadata and render as
-// plain agent bubbles, outside any session. Reserved keys (to_user_id/summary)
-// are stripped server-side, so taskId is the only key we set here.
-async function postResult(entry, m, text, metadata) {
+// into the same session card as its task_started/finished events. Reserved keys
+// (to_user_id/summary) are stripped server-side, so taskId is the only key we set
+// here.
+//
+// P1-5 (2026-08-04) — THIS COMMENT USED TO CARRY A FALSE INVARIANT, and the false
+// part was the bug. It said incidental posts "pass no metadata and render as
+// plain agent bubbles, OUTSIDE ANY SESSION", which is true of the metadata and
+// false of the delivery: in a DIRECT channel the server ADDRESSES an unaddressed
+// post to the peer for you (`service-writes-metadata.resolvePostMetadata`:
+// `agents.toAgentOwnerUserId ?? input.toUserId ?? peerUserId`). So a courtesy
+// no-op — "I'm still finishing a previous request, please resend" — arrived on
+// the peer's machine as an ADDRESSED, agent-authored message, which
+// `targeting.classify` returns 'trigger' for, which raises consent and can spawn
+// a session against a message that asked for nothing. Two agents can ping-pong
+// that way in a DM, which is where the whole product lives; only the consent gate
+// stopped it, and standing trust removes the gate.
+//
+// `opts.intent` is the fix, and it is the cheapest correct one: `chat` is a
+// server-validated marker that SKIPS the direct-channel auto-address entirely
+// (so there is no `to_user_id` to trigger on) and that `classify` suppresses
+// unconditionally, ahead of every branch that can return 'trigger'. It is
+// stamped, not merely acted on, so the receiving side can tell a deliberate
+// no-op from a message that forgot to address — see `postCourtesy` below, which
+// is what call sites should reach for.
+async function postResult(entry, m, text, metadata, opts) {
   return postWithRetry(entry, {
     body: consent.clampBody(text),
     authorKind: 'agent',
     clientMsgId: `agent-${entry.channel.id}-${m.seq}`,
     ...(metadata ? { metadata } : {}),
+    ...(opts && opts.intent ? { intent: opts.intent } : {}),
   });
+}
+
+// P1-5 — AN INCIDENTAL POST THAT ASKS FOR NOTHING, said as such on the wire.
+//
+// The three of them are courtesy no-ops this machine sends about ITSELF: "I'm
+// still finishing a previous request" (the busy defer, both lanes) and "my
+// sign-in needs attention" (the auth hold). None is a request, none wants an
+// answer, and each is exactly the shape that spawned a phantom session on the
+// peer under a synthetic thread id.
+//
+// A NAMED HELPER rather than an `intent` argument at each call site, because the
+// property is about what the MESSAGE IS, not about a flag somebody remembered to
+// pass. A fourth courtesy line added next year gets it by reaching for the
+// obvious function.
+async function postCourtesy(entry, m, text) {
+  return postResult(entry, m, text, null, { intent: 'chat' });
 }
 
 // D2 — THE AGENT'S OWN VOICE. A message this machine posts on behalf of one of the
@@ -153,4 +190,4 @@ function notifyLocal(title, body) {
   } catch (_) { /* best-effort */ }
 }
 
-module.exports = { postTaskEvent, postResult, postAgentMessage, notifyLocal };
+module.exports = { postTaskEvent, postResult, postCourtesy, postAgentMessage, notifyLocal };
