@@ -340,8 +340,12 @@ test("makeRequest (requester): RIGHT lane, operator recipe, 'You' + self avatar"
 // saw a card with no explanation and concluded the toggle was broken.
 
 test("gateReasonText: one short line per code, in house voice, and NOTHING for a code we don't know", () => {
+  // M3 (2026-08-05) adds the two `*-read` codes. The copy moved to session-labels.js (this file
+  // was at the §2 cap) and session-render RE-EXPORTS it, so every caller and this test are
+  // unchanged — which is also the assertion that the re-export really works.
   const codes = ["hard-denied", "not-covered-by-bypass", "unclassified-tool", "cross-channel-post",
-    "malformed-post-fields", "message-approval-required", "channel-op-approval-required", "awaiting-approval"];
+    "cross-channel-read", "malformed-post-fields", "message-approval-required",
+    "read-approval-required", "channel-op-approval-required", "awaiting-approval"];
   for (const code of codes) {
     const line = render.gateReasonText(code);
     assert.ok(line.length > 0 && line.length < 120, `${code}: one SHORT line, got ${line.length}`);
@@ -355,7 +359,7 @@ test("gateReasonText: one short line per code, in house voice, and NOTHING for a
   // M1: the last two are the PROTOTYPE keys. A bare index on an object literal answers a
   // FUNCTION for them, which `|| ""` does not catch, so `gateReason: "constructor"` used to put
   // the source of Object into a textContent line. The lookup is own-property now.
-  for (const junk of ["tool-mode", "granted-for-session", "auto-outbound", "profile-preapproved",
+  for (const junk of ["tool-mode", "granted-for-session", "auto-outbound", "auto-inbound-read", "profile-preapproved",
     "", null, undefined, 7, "HARD-DENIED", "not-covered",
     "constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
     assert.equal(render.gateReasonText(junk), "", String(junk));

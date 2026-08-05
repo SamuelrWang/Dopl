@@ -166,26 +166,17 @@
     return typeof fn === "function" && fn(item) === true;
   }
 
-  // 2026-08-02 — WHY A CARD IS ASKING. main stamps a machine-readable `gateReason` code on every
-  // gate/deny payload (session-profiles GATE_REASONS); this is the ONLY place it becomes words.
-  // Without it an uncovered tool under `bypass` reads as a broken toggle and a slug-addressed post
-  // as a random refusal. Unknown or absent renders NO line; where there is a fix, the line names it.
-  const GATE_REASON = {
-    "hard-denied": "Blocked for this session.",
-    "not-covered-by-bypass": "Asking because the current tool setting does not cover this tool.",
-    "unclassified-tool": "Asking because Dopl does not recognise this tool, so every setting asks.",
-    "cross-channel-post": "Asking because this post names another channel. Address your own channel by id, not by slug.",
-    "malformed-post-fields": "Asking because this post has a recipient or a kind that is not text.",
-    "message-approval-required": "Asking because message approval is set to ask before each message.",
-    "channel-op-approval-required": "Asking because message approval covers replies, not this channel operation.",
-    "awaiting-approval": "Asking because tool approval is set to ask before each tool.",
-  };
-  // M1: OWN PROPERTY ONLY. A bare index on an object literal answers a FUNCTION for 'constructor'
-  // and 'toString', which `|| ""` does not catch, so those two words used to put source code into
-  // textContent. Same idiom as session-park.requestRank and session-request-ui's TEXT table.
+  // M3 (2026-08-05) §2 SPLIT: the gate-reason COPY moved to session-labels.js, which is what that
+  // module is for (plain words, no DOM, no deps) and which had the room this file does not — M3
+  // adds two codes and this file was AT the cap. Reached exactly like `chrome` above (session.html
+  // loads session-labels.js first); RE-EXPORTED below, so session.js and every test that calls
+  // render.gateReasonText are unchanged. It is still the ONE place a code becomes words.
+  const labels =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-labels.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionLabels) || null;
   function gateReasonText(reason) {
-    const k = String(reason == null ? "" : reason);
-    return Object.prototype.hasOwnProperty.call(GATE_REASON, k) ? GATE_REASON[k] : "";
+    return labels ? labels.gateReasonText(reason) : "";
   }
 
   // v2.7 L3 — the OUTBOUND DECISION CARD *is* the delivered record: ONE node, ONE stream item per

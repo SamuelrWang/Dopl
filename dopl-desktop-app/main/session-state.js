@@ -19,11 +19,45 @@
 
 // ─── BEGIN SESSION-STATE (pure; unit-tested via source extraction) ───────────
 
-// Loop-safety defaults (contract §A.2). turn cap bounds a two-agent exchange; idle TTL ends a
+// Loop-safety defaults (contract §A.2). turn cap bounds a two-agent exchange; idle TTL parks a
 // stalled session (task stays open, resumable); cost cap is opt-in (0 => disabled).
 const DEFAULT_TURN_CAP = 24;
 const DEFAULT_IDLE_MS = 15 * 60 * 1000; // 15 minutes
 const DEFAULT_COST_CAP_USD = 0; // 0 => disabled
+
+// M1 (2026-08-05) — A SESSION WAITING ON THE PEER IS NOT AN IDLE SESSION.
+// THE DEFECT: every turn end armed the 15-minute TTL, INCLUDING the turn that had just posted
+// into the channel — the one turn the reducer itself labels `awaiting_peer` two lines earlier.
+// A counterparty's agent routinely takes longer than fifteen minutes doing real work, so the
+// exchange parked mid-flight, the park reset the posture, the peer's reply then woke it, and the
+// next tool call asked. That is the whole of "I set bypass and it still asks me": the timer could
+// not tell "the operator walked away" from "the other agent is thinking", and it guessed wrong on
+// the one state where the difference matters.
+//
+// WHY A LONGER BOUND AND NOT SUPPRESSION. Suppressing the timer entirely while awaiting a peer
+// leaves a live SDK query, its push iterator and its awaited canUseTool promises alive FOREVER
+// when the reply never comes (the peer is offline, their agent crashed, they abandoned the
+// thread) — an unbounded resource commitment with nobody watching, which is the exact class of
+// thing the idle timer exists to bound. A bound far above the exchange-latency range keeps the
+// guarantee ("nothing runs unattended forever") while making the timer stop lying about what
+// idle means. Four hours is ~16x the 15-minute TTL and one to two orders of magnitude above a
+// real agent turn (seconds to tens of minutes), so it cannot fire inside a live exchange.
+const AWAITING_PEER_IDLE_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// M2 (2026-08-05) — and what a GENUINELY abandoned session does, measured from the park.
+// The park used to reset both axes and every standing grant, because a parked session stays
+// WAKEABLE by the counterparty and "a counterparty-driven lazy resume must not run
+// pre-authorized while the operator is away" (v2.9 FIX #3 / C9 / F1). Samuel's contract is that
+// operator intent survives the session, so the reset is gone — see session-reducer's
+// idle_timeout branch for where that reasoning was re-sited. This is the replacement, and it is
+// a STRICTER guard than the reset was: a session nobody has come back to does not sit dormant at
+// bypass waiting to be woken by a peer, it ENDS. `phase: 'ended'` is terminal in the reducer, so
+// nothing can wake it at all; a later peer reply recreates a dormant shell from the durable
+// record, which starts at manual/ask like every other wake nobody approved (FIX 1b).
+// TWELVE HOURS is 48x the park TTL and 3x the awaiting-peer bound, so it can never be confused
+// with either: a session parked at the end of a working day ends overnight, and one parked over
+// a lunch break is still there, still armed, when the operator comes back.
+const ABANDONED_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // v2.9 THE MODE TABLES, duplicated ON PURPOSE: session-profiles.js is canonical, but this block is
 // evaluated standalone (source extraction) and is the STATE OWNER, so it defends its own field fail-
@@ -103,9 +137,30 @@ function initialSessionState(opts) {
   };
 }
 
-// Idle timer duration (§A.2). Constant today; a hook for phase-aware backoff later.
+// Idle timer duration (§A.2). M1 (2026-08-05) — this WAS the "hook for phase-aware backoff
+// later" and now uses it, because the phase distinction already existed and simply was not
+// consulted where the timer got scheduled. `awaiting_peer` is set by the reducer's `result`
+// branch for exactly the turn that posted, and dispatch stores the new state BEFORE running the
+// effects, so the scheduleIdle this very turn emits reads the activity this very turn produced.
+// Math.max, not a replacement, so a configured idleMs longer than the peer bound still wins.
 function nextIdleMs(state) {
-  return state.idleMs;
+  return state.activity === 'awaiting_peer' ? Math.max(state.idleMs, AWAITING_PEER_IDLE_MS) : state.idleMs;
+}
+// M2 — how long a PARKED session waits to be come back to before it ends (see ABANDONED_MS).
+// Same Math.max discipline: the abandonment bound can never come in under the idle TTL.
+function nextAbandonMs(state) {
+  return Math.max(state.idleMs, ABANDONED_MS);
+}
+
+// M2 — THE WHOLE TIMER DECISION, in one place, because it is a fact about the STATE and not about
+// the timer plumbing: how long to wait, and which event that wait produces. session-engine's
+// scheduleIdle is one clearTimeout + one setTimeout over exactly this, so a PARKED session can
+// only ever be armed with the abandonment bound and a live one only ever with the idle TTL —
+// there is no second timer to leak, and a wake's own scheduleIdle overwrites a park's arm.
+function idleTimeout(state) {
+  return state.parked === true
+    ? { ms: nextAbandonMs(state), type: 'abandon_timeout' }
+    : { ms: nextIdleMs(state), type: 'idle_timeout' };
 }
 function turnCapReached(state) {
   return state.turns >= state.turnCap;
@@ -120,11 +175,15 @@ module.exports = {
   DEFAULT_TURN_CAP,
   DEFAULT_IDLE_MS,
   DEFAULT_COST_CAP_USD,
+  AWAITING_PEER_IDLE_MS, // M1: the bound a turn that posted waits under
+  ABANDONED_MS, // M2: the bound a PARKED session ends under
   TOOL_MODES,
   MESSAGE_MODES,
   coerceMode,
   initialSessionState,
   nextIdleMs,
+  nextAbandonMs,
+  idleTimeout, // M2: {ms, type} — the ONE timer decision the engine arms
   turnCapReached,
   costCapReached,
 };

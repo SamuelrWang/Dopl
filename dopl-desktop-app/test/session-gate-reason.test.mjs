@@ -56,8 +56,13 @@ test("FIX 1: every gate/deny branch names WHY, with a code from the closed set",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", kind: ["x"], body: "hi" } }, "gate", "malformed-post-fields"],
     ["an own-channel post held by AXIS B at `ask`",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" }, messageMode: "ask" }, "gate", "message-approval-required"],
-    ["a NON-post channel op is never auto-sent, even at auto_both",
+    ["a NON-post, NON-read channel op is never auto-run, even at auto_both",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "open", direct: true }, messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
+    // M3 (2026-08-05): a READ has its own two facts, and they are not the post's two facts.
+    ["an own-channel read held by AXIS B at `ask` says which half of the axis is asking",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "read" }, messageMode: "ask" }, "gate", "read-approval-required"],
+    ["a slug-addressed read is classified cross-channel, and says READ, not POST",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "get_thread", channel: "my-slug" }, messageMode: "auto_both" }, "gate", "cross-channel-read"],
   ];
   for (const [label, args, decision, reason] of cases) {
     const d = detail(args);
@@ -76,6 +81,10 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
     { decision: "allow", reason: "granted-for-session" });
   assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" }, messageMode: "auto_outbound" }),
     { decision: "allow", reason: "auto-outbound" });
+  // M3: the two Axis-B allows are DIFFERENT rules, so the diag can tell "your outbound setting
+  // sent this" from "your inbound setting read this" without a source read.
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read" }, messageMode: "auto_inbound" }),
+    { decision: "allow", reason: "auto-inbound-read" });
 });
 
 test("FIX 1: the reason NEVER moves the verdict — grantDecision is byte-identical", () => {
@@ -109,7 +118,8 @@ test("FIX 1: the code set is CLOSED — nothing produces a reason the renderer h
         for (const toolName of ["Bash", "BashOutput", "Read", "Task", "Nope", DOPL_CHANNEL_TOOL,
           "mcp__dopl__dopl_kb", "NotebookRead", "WebFetch"]) {
           for (const input of [{}, { command: "ls" }, { op: "post", body: "b" },
-            { op: "post", channel: "z" }, { op: "read" }, { to: 1 }]) {
+            { op: "post", channel: "z" }, { op: "read" }, { op: "read", channel: "z" },
+            { op: "open" }, { to: 1 }]) {
             const r = profiles.grantDecisionDetail({ profile, channelId: CH, toolMode, messageMode, toolName, input }).reason;
             if (r) seen.add(r);
           }
@@ -254,6 +264,46 @@ test("FIX 3: the line carries NO body, NO prompt text, NO tool input and NO full
   // ...and a hostile tool name cannot blow the line open.
   const long = gateOnce({}, "X".repeat(4000), {});
   assert.ok(long.logged[0].length < 160, "a 4000-char tool name is capped");
+});
+
+// ── M3 (2026-08-05): the line NAMES THE CHANNEL OP ────────────────────────────────
+// The line carried the tool and the reason but not the operation, so `dopl_channel gate
+// channel-op-approval-required` read identically for a read, an invite and a DM open — which is
+// why diagnosing the read/post incoherence took code archaeology instead of ten seconds of log.
+
+test("M3: a channel verdict names the op; nothing else on the line moves", () => {
+  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
+  const read = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "read" });
+  assert.match(read.logged[0], /^session gate: dopl_channel op=read allow auto-inbound-read tool=bypass msg=auto_both session=sess-123$/);
+  const open = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" });
+  assert.match(open.logged[0], /^session gate: dopl_channel op=open gate channel-op-approval-required tool=bypass msg=auto_both session=sess-123$/);
+  // THE PRODUCTION LINE FROM THE DIAG LOG, now diagnosable: it says WHICH op stopped.
+  assert.ok(open.logged[0].includes("op=open"), "the field that turns archaeology into reading");
+});
+
+test("M3: a NON-channel tool's line is byte-unchanged (no `op=` segment at all)", () => {
+  const { logged } = gateOnce({ state: { allowForTask: [], toolMode: "auto", messageMode: "auto_both" } },
+    "Bash", { command: "ls" });
+  assert.match(logged[0], /^session gate: Bash gate not-covered-by-bypass tool=auto msg=auto_both session=sess-123$/);
+  assert.ok(!logged[0].includes("op="), "a work tool has no channel op to name");
+});
+
+test("M3: the op is a NAME, never a value — hostile input cannot open the line", () => {
+  const SECRET = "ssh-rsa AAAAB3-not-for-the-log";
+  const runs = [
+    [{ op: "post ssh-rsa AAAAB3-not-for-the-log", body: SECRET }, "op=postssh-rsaAAAAB3-not-f"],
+    [{ op: "r".repeat(4000) }, "op=" + "r".repeat(24)],
+    [{ op: { evil: SECRET } }, "op=invalid"],
+    [{ op: ["read"] }, "op=invalid"],
+    [{ body: SECRET }, "op=none"],
+  ];
+  for (const [input, expected] of runs) {
+    const { logged } = gateOnce({}, DOPL_CHANNEL_TOOL, input);
+    assert.equal(logged.length, 1);
+    assert.ok(logged[0].includes(expected), `${JSON.stringify(input)} -> ${logged[0]}`);
+    assert.ok(!logged[0].includes("ssh-rsa AAAAB3"), `the line leaked input: ${logged[0]}`);
+    assert.ok(logged[0].length < 160, "one SHORT line, whatever the model sent");
+  }
 });
 
 test("FIX 3: an ALLOW and a DENY are logged too, or the log answers only half the question", () => {

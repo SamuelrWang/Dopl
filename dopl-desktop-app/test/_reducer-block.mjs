@@ -56,6 +56,7 @@ export function loadReducer() {
               gatePhase, endedEmit, endLifecycle, endEffects, modesEmit, parkEffects,
               postureWasReset, POSTURE_RESET_NOTE,
               wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode,
+              nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS,
               DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD };`
   )();
 }

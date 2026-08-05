@@ -186,6 +186,40 @@ function isOwnChannelPost(input, sessionChannelId) {
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
 }
 
+// M3 (2026-08-05) — THE READ HALF OF THE OWN CHANNEL. Axis B used to auto-allow exactly one
+// shape, an own-channel POST, and gate every other op on this tool in every posture. So POSTING
+// into the session's own channel ran with no card while READING that same channel asked: the more
+// dangerous op was the permitted one, and the operator saw `dopl_channel gate
+// channel-op-approval-required tool=bypass msg=auto_both` with both axes wide open. Incoherent,
+// and one of the three separate mechanisms behind "I set automatic and it still asks me".
+//
+// WHICH OPS, AND WHY THESE. Read-only, and scoped to the channel this session is already bound
+// to — nothing here writes, addresses anyone, or reaches a channel the operator did not open:
+//   read / await   the channel's messages (await is the same read, long-polled: it is what an
+//                  agent blocked on the peer is doing, and gating it gates waiting itself)
+//   list_threads / get_thread   this channel's threads and one thread's contents
+//   members / agents            this channel's roster, which the session's own prompt framing
+//                  already carries; enumerating it discloses nothing the agent was not told
+// WHAT DELIBERATELY STAYS GATED IN EVERY POSTURE, because the v1.9 FIX H1 exfil reasoning is
+// sound and untouched: `open` (opens a channel or a DM with another member), `invite`,
+// `create_thread`, `propose_close` and `close_thread`, `set_thread_mode`, `join_thread` /
+// `leave_thread`, the agent-lifecycle ops (`summon_agent` / `rename_agent` / `set_agent_status` /
+// `disengage_agent`), `milestone` and every post — plus `list`, which is read-only but enumerates
+// EVERY channel and DM this account can reach and is therefore not own-channel-scoped at all.
+// "Read my own room for me" is not consent to open a DM with a stranger.
+const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members', 'agents'];
+
+// The read twin of isOwnChannelPost, with the SAME scoping rule and the same safe failure: a
+// `channel` naming anything but this session's id (a slug included) is classified as ANOTHER
+// channel and gates. Absent/empty means the session's own channel, exactly as for a post.
+function isOwnChannelRead(input, sessionChannelId) {
+  const i = input || {};
+  if (OWN_CHANNEL_READ_OPS.indexOf(i.op) === -1) return false;
+  const target = i.channel;
+  if (target == null || target === '') return true;
+  return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
+}
+
 // The accept_edits set (contract A2). Named HERE because Axis A and the grant key both read
 // it, and the key machinery is handed it by the factory below rather than keeping a copy.
 const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit'];
@@ -309,6 +343,12 @@ function grantDecision(args) {
     // auto_outbound / auto_both send the agent's own replies with no click. ONLY an
     // own-channel post: everything else on this tool is the exfil surface, so it gates.
     if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
+    // M3: and the READ half of that same channel follows the INBOUND half of the axis. A read
+    // sends nothing; what it does is bring the peer's words into this agent's context without an
+    // operator seeing them first, which is precisely what auto_inbound / auto_both consent to
+    // (the inbound gate makes the identical call about a pushed turn). `auto_outbound` alone
+    // therefore does NOT cover it: "send my replies for me" is a statement about what leaves.
+    if (autoInboundMode(a.messageMode) && isOwnChannelRead(a.input, a.channelId)) return 'allow';
     return 'gate';
   }
   if (cfg.preApproved.indexOf(a.toolName) !== -1) return 'preapproved';
@@ -327,8 +367,8 @@ function grantDecision(args) {
 // ordering and source pins are byte-unchanged: an explanation must not be able to move a gate.
 // The explainer is handed THIS table's own predicates, so there is one definition of each rule.
 const gateReason = makeGateReason({
-  isChannelTool, isOwnChannelPost, postFieldsOk, grantKeyFor,
-  BYPASS_TOOLS, normalizeToolMode,
+  isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
+  OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
 });
 // { decision, reason } — the reason is a GATE_REASONS code, or null for a verdict nothing can
 // honestly explain. Callers that only route on the verdict keep using grantDecision unchanged.
@@ -339,6 +379,7 @@ function grantDecisionDetail(args) {
 
 module.exports = {
   buildSessionToolConfig, grantDecision, shortDoplName, isOwnChannelPost,
+  isOwnChannelRead, OWN_CHANNEL_READ_OPS, // M3: the own-channel READ set Axis B's inbound half covers
   grantDecisionDetail, GATE_REASONS, // 2026-08-02: the verdict + the code that explains it
   BYPASS_READS, // the NAMED read-only tools `bypass` covers on top of the classified work set
   grantKeyFor, // v2.9 HIGH-1: the scoped allowForTask key for EVERY tool class

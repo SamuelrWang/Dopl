@@ -109,7 +109,8 @@ test("M3: a park's reset to manual/ask is itself the newest posture and replaces
   ring.ringRecord(r, INIT);
   ring.ringRecord(r, modes("bypass", "auto_both"));
   ring.ringRecord(r, { type: "turn", text: "a" });
-  ring.ringRecord(r, modes("manual", "ask")); // session-reducer parkEffects echoes both axes reset
+  ring.ringRecord(r, modes("manual", "ask")); // what an AUTH HOLD's parkEffects echoes (M2: the
+  // idle park no longer resets, so this models the hold — the ring rule under test is unchanged)
   assert.deepEqual(r.entries.map((e) => e.type), ["init", "turn", "modes"],
     "the stale posture left the log; the new one sits in its chronological place");
   assert.deepEqual(r.entries[2], modes("manual", "ask"));

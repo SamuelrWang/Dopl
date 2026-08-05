@@ -46,18 +46,40 @@ const decide = (over) => grantDecision({ profile: "full", channelId: CH, ...over
 const keyOf = (input) => grantKeyFor(DOPL_CHANNEL_TOOL, input, CH);
 const post = (over) => ({ op: "post", body: "shipping tonight", ...over });
 
-// ── F1: a standing grant must not outlive the watched window ──────────────────────
-// The behaviour is pinned in session-permission-axes.test.mjs (the park test that missed it).
-// This is the SOURCE half: the claim and the code have to agree, because a comment saying
-// "cleared on park" is what stopped anyone checking that nothing cleared it.
+// ── F1 -> M2 (2026-08-05): the SOURCE half, inverted with the requirement ──────────
+// F1's original claim was "a standing grant must not outlive the watched window", and this pin
+// existed because a COMMENT saying "cleared on park" is what stopped anyone checking that nothing
+// cleared it. The requirement changed (Samuel: a posture and its grants hold for the session), so
+// the claim to keep honest changed with it — the same defect class, pointed the other way. The
+// idle park must now touch NONE of the four, and the AUTH HOLD must still reset all four, and
+// each half has to be provable from source or the next edit silently merges them again.
 
-test("F1: the idle_timeout patch really names allowForTask (the claim was false for a release)", () => {
-  const patch = REDUCER_SRC.slice(REDUCER_SRC.indexOf("if (type === 'idle_timeout')"),
-    REDUCER_SRC.indexOf("if (type === 'cost_cap')"));
-  assert.match(patch, /allowForTask: \[\]/, "the park must clear the standing grants");
-  // ...alongside the resets that were already there, so none of them can be dropped quietly.
-  for (const field of ["toolMode: 'manual'", "messageMode: 'ask'", "inboundForTask: false"]) {
-    assert.ok(patch.includes(field), field);
+const branch = (from, to) => REDUCER_SRC.slice(REDUCER_SRC.indexOf(from), REDUCER_SRC.indexOf(to));
+const POSTURE_FIELDS = ["toolMode: 'manual'", "messageMode: 'ask'", "inboundForTask: false", "allowForTask: []"];
+
+test("M2: the idle_timeout patch resets NO posture and NO grant", () => {
+  const patch = branch("if (type === 'idle_timeout')", "if (type === 'abandon_timeout')");
+  for (const field of POSTURE_FIELDS) {
+    assert.ok(!patch.includes(field), `the idle park must not write ${field}`);
+  }
+  assert.match(patch, /resetPosture: false/, "and it says so at the parkEffects call");
+  // The two it DOES still clear are not a posture: one-shot resolvers on a query being torn
+  // down, and the per-turn post counters whose post the park just deny-closed (FIX F6).
+  assert.match(patch, /pendingPermissions: \[\]/);
+  assert.match(patch, /postedThisTurn: false, postedToolUseIds: \[\]/);
+});
+
+test("M2: the AUTH HOLD is the one park that still resets all four", () => {
+  const patch = branch("if (type === 'auth_hold')", "if (type === 'auth_release')");
+  for (const field of POSTURE_FIELDS) assert.ok(patch.includes(field), `the hold must still clear ${field}`);
+});
+
+test("M2: an abandoned session ENDS rather than being silently downgraded", () => {
+  const patch = branch("if (type === 'abandon_timeout')", "if (type === 'auth_hold')");
+  assert.match(patch, /phase: 'ended'/, "terminal, so a peer can never wake it");
+  assert.match(patch, /endEffects\(state, 'ended', 'abandoned'\)/);
+  for (const field of POSTURE_FIELDS) {
+    assert.ok(!patch.includes(field), `ending is the answer, not ${field}`);
   }
 });
 

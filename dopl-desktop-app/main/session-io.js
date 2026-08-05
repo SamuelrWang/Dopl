@@ -9,7 +9,7 @@
 // and NO electron / SDK handle, so the engine remains the only stateful, electron-bound module.
 
 const crypto = require('crypto');
-const { grantDecisionDetail, grantKeyFor, isOwnChannelPost } = require('./session-profiles');
+const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
 // The own-channel-post classifier (`isOutboundPost`) and the FORCED thread tag live in
 // session-outbound-tag.js (§2 cap). isOutboundPost is re-exported below, so no caller changed.
@@ -154,20 +154,31 @@ function postWillGate(s, input, toolName) {
 // "Bypass still asks" had to be diagnosed from SOURCE, because a session logged nothing about
 // why it stopped: "the mode never landed" and "the mode landed but does not cover this tool"
 // looked identical in the field. One line per verdict fixes that, and it is deliberately THIN:
-// the tool NAME (server prefix stripped, capped), the verdict, the reason code, both postures,
-// and an 8-char session prefix to join on — the same discipline as attended-handoff's diag.
+// the tool NAME (server prefix stripped, capped), M3's channel OP, the verdict, the reason code,
+// both postures, and an 8-char session prefix to join on — attended-handoff's diag discipline.
 // NEVER the tool input, the drafted body, prompt text, or a full id: listener.log is plaintext.
-const DIAG_NAME_CAP = 40;
+const DIAG_NAME_CAP = 40; const DIAG_OP_CAP = 24;
 function shortToolLabel(name) {
   const n = String(name == null ? '' : name).replace(/^mcp__[a-z0-9-]+?__/i, '');
   return n.slice(0, DIAG_NAME_CAP) || 'unnamed';
 }
-function logGateVerdict(log, s, toolName, verdict) {
+// M3 (2026-08-05) — THE OP, ON THE LINE. `dopl_channel gate channel-op-approval-required` read
+// identically for a read, an invite and a DM open, so the read/post incoherence took code
+// archaeology to find. THE OP NAME ONLY (a closed vocabulary from the server's enum), sanitized
+// because it arrives from model input; never a body, recipient or channel. Non-channel tools get
+// no `op=` segment, so every line this file already produced is byte-unchanged.
+function channelOpLabel(toolName, callInput) {
+  if (!isChannelTool(toolName)) return '';
+  const raw = callInput && callInput.op;
+  if (typeof raw !== 'string') return raw == null ? 'none' : 'invalid';
+  return raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, DIAG_OP_CAP) || 'invalid';
+}
+function logGateVerdict(log, s, toolName, verdict, op) {
   if (typeof log !== 'function') return;
   const st = (s && s.state) || {};
-  log('session gate:', shortToolLabel(toolName), verdict.decision, verdict.reason || 'no-reason',
-    'tool=' + (st.toolMode || 'manual'), 'msg=' + (st.messageMode || 'ask'),
-    'session=' + String(s && s.sessionId ? s.sessionId : '').slice(0, 8));
+  log.apply(null, ['session gate:', shortToolLabel(toolName)].concat(op ? ['op=' + op] : [],
+    [verdict.decision, verdict.reason || 'no-reason', 'tool=' + (st.toolMode || 'manual'),
+      'msg=' + (st.messageMode || 'ask'), 'session=' + String(s && s.sessionId ? s.sessionId : '').slice(0, 8)]));
 }
 
 // ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
@@ -334,7 +345,7 @@ function makeCanUseTool(s, dispatch, log) {
     // reason code that explains it, for the card and for the diag line.
     const verdict = grantDecisionDetail(grantArgs(s, name, input));
     const decision = verdict.decision;
-    logGateVerdict(log, s, name, verdict);
+    logGateVerdict(log, s, name, verdict, channelOpLabel(name, input));
     // THE FORCED THREAD TAG (session-outbound-tag.js — the prompt alone demonstrably does
     // not hold it). Computed here but read only on an ALLOW: it rides a verdict, it never
     // makes one, and both axes resolved above without ever seeing it.

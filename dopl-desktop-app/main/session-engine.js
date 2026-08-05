@@ -19,7 +19,7 @@ const sessionPark = require('./session-park');
 const framing = require('./prompt-framing');
 const { closeTask } = require('./session-close-task'); // §2 split: the engine holds no HTTP dep
 const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-in
-const { initialSessionState, sessionReducer, nextIdleMs } = require('./session-reducer');
+const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const { getSdk } = require('./sdk-loader');
 const sessionQuery = require('./session-query'); // §3 split: SDK options + the query lifecycle (H1)
 const { buildSdkOptions, startQuery, consume } = sessionQuery;
@@ -168,7 +168,8 @@ function emitQuiet(s, payload) {
 }
 function scheduleIdle(s) {
   if (s.idleTimer) clearTimeout(s.idleTimer);
-  s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: 'idle_timeout' }); }, nextIdleMs(s.state));
+  const t = idleTimeout(s.state); // M2: {ms,type} — a PARKED session waits on the abandonment bound
+  s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: t.type }); }, t.ms);
 }
 
 // Returns TRUE only when a live awaited resolver was actually taken (FIX F1): no resolver means the request is

@@ -223,6 +223,63 @@ test("INVARIANT: AXIS B auto_outbound sends the post with no dispatch, and NOTHI
   s.pendingPermissions.get("r15c")({ behavior: "deny" });
 });
 
+// ── M3 (2026-08-05): the own-channel READ half, at the real bridge ────────────────
+// POSTING into the session's own channel ran with no card under auto_outbound while READING that
+// same channel asked in every mode: the more dangerous op was the permitted one. An own-channel
+// read now follows the INBOUND half of the axis. Everything else on this tool is unmoved.
+
+test("M3: auto_inbound reads the OWN channel with no dispatch, and opens nothing", async () => {
+  const s = mkSession({ messageMode: "auto_inbound" });
+  const rec = recorder();
+  const canUse = io.makeCanUseTool(s, rec.dispatch);
+  for (const op of ["read", "await", "list_threads", "get_thread", "members", "agents"]) {
+    assert.deepEqual(await canUse(CHANNEL_TOOL, { op }, { requestId: "m-" + op }), { behavior: "allow" }, op);
+  }
+  assert.equal(rec.events.length, 0, "the operator opted into receiving; asking again is the bug");
+  // The exfil surface is untouched: each of these still earns its own card at auto_inbound.
+  const gated = ["open", "invite", "create_thread", "propose_close", "summon_agent", "list"];
+  gated.forEach((op, i) => canUse(CHANNEL_TOOL, { op, direct: true, member: "evil@x" }, { requestId: "g" + i }));
+  assert.equal(rec.events.length, gated.length, "every channel-changing op still asks");
+  // ...and so is a read of ANOTHER channel, and a POST (that is the outbound half's business).
+  canUse(CHANNEL_TOOL, { op: "read", channel: "other-id" }, { requestId: "x1" });
+  canUse(CHANNEL_TOOL, POST, { requestId: "x2" });
+  assert.equal(rec.events.length, gated.length + 2, "inbound consent is not outbound consent");
+  for (const id of [...s.pendingPermissions.keys()]) s.pendingPermissions.get(id)({ behavior: "deny" });
+});
+
+test("M3: at `ask` every own-channel read still gates — the posture is what moved, not the rule", async () => {
+  const s = mkSession();
+  const rec = recorder();
+  const canUse = io.makeCanUseTool(s, rec.dispatch);
+  canUse(CHANNEL_TOOL, { op: "read" }, { requestId: "a1" });
+  assert.equal(rec.events.length, 1);
+  assert.equal(rec.events[0].payload.gateReason, "read-approval-required", "and it says which half asks");
+  for (const id of [...s.pendingPermissions.keys()]) s.pendingPermissions.get(id)({ behavior: "deny" });
+});
+
+test("M3: bypass STILL cannot read the channel, and auto_both still cannot run a work tool", async () => {
+  // THE INVARIANT, extended to the new allow: Axis A must not answer a read, and the read allow
+  // must not become a second way for Axis B to reach a work tool.
+  const a = mkSession({ toolMode: "bypass" });
+  const recA = recorder();
+  io.makeCanUseTool(a, recA.dispatch)(CHANNEL_TOOL, { op: "read" }, { requestId: "b1" });
+  assert.equal(recA.events.length, 1, "a TOOL posture can never answer a channel operation");
+  a.pendingPermissions.get("b1")({ behavior: "deny" });
+  const b = mkSession({ messageMode: "auto_both" });
+  const recB = recorder();
+  io.makeCanUseTool(b, recB.dispatch)("Bash", { command: "cat /etc/passwd" }, { requestId: "b2" });
+  assert.equal(recB.events.length, 1, "a MESSAGE posture can never run a work tool");
+  b.pendingPermissions.get("b2")({ behavior: "deny" });
+  // And the hard-deny set is immovable under both, as it always was.
+  for (const tool of ["Task", "SendMessage", "CronCreate", "mcp__dopl__dopl_kb_admin"]) {
+    const c = mkSession({ toolMode: "bypass", messageMode: "auto_both" });
+    const recC = recorder();
+    assert.deepEqual(await io.makeCanUseTool(c, recC.dispatch)(tool, {}, { requestId: "d1" }),
+      { behavior: "deny", message: "Blocked for this session" }, tool);
+    assert.equal(recC.events.length, 0, `${tool} is refused without a button, not gated`);
+  }
+});
+
 test("INVARIANT: AXIS A bypass runs every work tool and STILL cannot send a message", async () => {
   const s = mkSession({ toolMode: "bypass" });
   const rec = recorder();

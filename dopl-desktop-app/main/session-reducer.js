@@ -18,7 +18,7 @@
 const { gatePhase, endedEmit, endEffects, modesEmit, parkEffects } = require('./session-effects');
 const {
   DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, TOOL_MODES, MESSAGE_MODES,
-  coerceMode, initialSessionState, nextIdleMs, turnCapReached, costCapReached,
+  coerceMode, initialSessionState, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
 } = require('./session-state');
 
 // ─── BEGIN SESSION-REDUCER (pure; unit-tested via source extraction) ─────────
@@ -384,23 +384,40 @@ function sessionReducer(state, event) {
     // terminal, the session stays resumable via a lazy wake. FIX #17: the guard reads `parked`, not
     // `phase` — a parked session HOLDING a message sits at 'awaiting_inbound' with parked===true,
     // so the old phase check let a stale timer re-run the whole park on it.
-    // WHAT RESETS, AND WHY EACH ONE: FIX #3 (v2.9) both axes, so a counterparty-driven lazy resume
-    // cannot run pre-authorized while the operator is away; MEDIUM-3 (C9) `inboundForTask`, which
-    // survived a park and let a peer restart a parked query and drive turns with nobody watching;
-    // FIX F6 the per-turn post counters, or the next turn reads "Waiting for reply" beside a post
-    // the park deny-closed; FIX F1 (v2.9 review) `allowForTask` — contract §B3 and the comment in
-    // session-profiles both DOCUMENTED it as cleared on park and nothing cleared it, so one benign
-    // reply approved for-task before the operator walked away let the woken agent post arbitrary
-    // content with NO card, under a header honestly reading "Asking before messages in and out".
-    // A standing grant is consent given to a WATCHED window; the park is the moment that window
-    // stopped being watched, so grants die with the posture that framed them.
+    //
+    // M2 (2026-08-05) — THE POSTURE AND THE GRANTS NOW SURVIVE THE PARK, per Samuel's contract:
+    // set it and it behaves as set for the rest of the session, the for-task grants included.
+    // WHAT USED TO RESET AND WHY (the reasoning is real, and is re-sited, not deleted — the full
+    // argument is at session-state.ABANDONED_MS and docs/ENGINEERING.md §12.4): FIX #3 (v2.9)
+    // both axes, so a counterparty-driven lazy resume could not run pre-authorized while the
+    // operator was away; MEDIUM-3 (C9) `inboundForTask`, so a peer could not restart a parked
+    // query and drive turns unwatched; FIX F1 `allowForTask`, where one reply approved for-task
+    // before the operator walked away let the woken agent post with NO card. Every one is an AWAY
+    // threat, and fifteen quiet minutes was a bad proxy for away. It is answered twice elsewhere
+    // now: this park ARMS THE ABANDONMENT BOUND (a session nobody comes back to ENDS, and ended
+    // beats disarmed — it cannot be woken at all), and the real boundary was always the PROFILE's
+    // hard-deny + containment, which no posture and no grant can widen.
+    // FIX F6 SURVIVES: the per-turn post counters still clear (the park deny-closed the very post
+    // they counted), and so does `pendingPermissions` — one-shot resolvers on a query being torn
+    // down are not a posture.
     if (state.parked === true) return { state: state, effects: [] };
     return {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
-        toolMode: 'manual', messageMode: 'ask', inboundForTask: false, allowForTask: [],
         pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
-      effects: parkEffects(state),
+      effects: parkEffects(state, { resetPosture: false, armAbandon: true }),
     };
+  }
+
+  if (type === 'abandon_timeout') {
+    // M2 — a PARKED session nobody came back to. The park kept the operator's posture on the bet
+    // that they are coming back; this is where that bet expires, hours later. ENDING is the honest
+    // state and the STRONGER away-guard: `phase: 'ended'` is terminal at the top of this function,
+    // so no peer reply, no stale dock click and no drained SDK tail can wake it, where the old
+    // silent downgrade left it wakeable. A later peer reply recreates a DORMANT shell from the
+    // durable record, at manual/ask like every other spawn nobody approved (FIX 1b).
+    // A LIVE session ignores it — a stale timer must never end a session being worked in.
+    if (state.parked !== true) return { state: state, effects: [] };
+    return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'abandoned') };
   }
 
   if (type === 'auth_hold') {
@@ -409,8 +426,11 @@ function sessionReducer(state, event) {
     // one bit the rest of the machine must agree on. A hold IS a park — same effects, same
     // durable phase — so it is dormant on restart, reopenable and LRU-evictable, and parkEffects
     // fail-closes every awaited canUseTool promise before the abort. It resets both axes and
-    // every standing grant for idle_timeout's reason: consent was given to a WATCHED window, and
-    // one waiting on a sign-in button is not one (so the H2 arm cannot survive a hold either).
+    // every standing grant, and it is now the ONLY park that does (M2 above): a hold is a session
+    // whose CREDENTIAL is gone, which relaunches through startQuery on sign-in rather than
+    // resuming in place, so the arm it was given belongs to the run that ended (the H2 arm cannot
+    // survive a hold either). It arms NO abandonment timer — a held session is waiting on a human
+    // clicking Sign in, and ending it would destroy the window carrying that button.
     // IDEMPOTENT: a second hold changes nothing and emits nothing, so two failures cannot stack
     // two banners, two parks or two denyPending sweeps.
     if (state.authHeld === true) return { state: state, effects: [] };
@@ -472,6 +492,7 @@ module.exports = {
   initialSessionState,
   sessionReducer,
   nextIdleMs,
+  idleTimeout, // M2: the ONE timer decision (bound + event), re-exported for session-engine
   turnCapReached,
   costCapReached,
 };

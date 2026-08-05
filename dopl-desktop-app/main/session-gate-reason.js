@@ -26,8 +26,10 @@ const GATE_REASONS = [
   'hard-denied', //              SESSION_HARD_DENY (or a restricted profile's deny list)
   'malformed-post-fields', //    FIX F9: `to` / `kind` is not a string, so nothing can describe it
   'cross-channel-post', //       AXIS B: op=post whose channel is not this session's channel ID
+  'cross-channel-read', //       M3: a READ op whose channel is not this session's channel ID
   'message-approval-required', //AXIS B: an own-channel post while messageMode is not auto-outbound
-  'channel-op-approval-required', // AXIS B: open / invite / read / create_task — never auto-sent
+  'read-approval-required', //   M3: an own-channel READ while messageMode is not auto-inbound
+  'channel-op-approval-required', // AXIS B: open / invite / create_thread — never auto-run
   'not-covered-by-bypass', //    AXIS A miss on a CLASSIFIED tool while the posture is auto/bypass
   'unclassified-tool', //        FIX F3: a name in no list at all, which gates in EVERY mode
   'awaiting-approval', //        AXIS A miss under manual / accept_edits — the posture is "ask"
@@ -36,6 +38,7 @@ const GATE_REASONS = [
   'profile-preapproved', //      shadowed via allowedTools; never actually reaches canUseTool
   'granted-for-session', //      the operator's scoped allowForTask key covers this exact shape
   'auto-outbound', //            AXIS B auto_outbound / auto_both on an own-channel post
+  'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
   'tool-mode', //                AXIS A: the current toolMode covers this tool
 ];
 
@@ -50,15 +53,20 @@ function makeGateReason(deps) {
   };
   // WHY did a CHANNEL call stop? The order MIRRORS grantDecision's own channel branch, which is
   // what keeps the explanation true: malformed first (it gates before anything else is asked),
-  // then the own-post case, then the two shapes that are never auto-sent.
+  // then the own-post case, then M3's own-read case, then the shapes that are never auto-run.
   const channelReason = function (a) {
     if (!d.postFieldsOk(a.input)) return 'malformed-post-fields';
     if (d.isOwnChannelPost(a.input, a.channelId)) return 'message-approval-required';
+    if (d.isOwnChannelRead(a.input, a.channelId)) return 'read-approval-required';
     const op = a.input && a.input.op;
     // A SLUG lands here too, and that is the single most confusing gate in the product: the
     // agent addressed its own channel by name, isOwnChannelPost compares against the ID, and the
     // safe classification is "another channel". The renderer's copy names the fix (use the id).
-    return op === 'post' ? 'cross-channel-post' : 'channel-op-approval-required';
+    if (op === 'post') return 'cross-channel-post';
+    // M3: a READ op that got here named a channel this session is not bound to (or a slug),
+    // which is a DIFFERENT fact from "reads are never auto-run" and now says so.
+    if ((d.OWN_CHANNEL_READ_OPS || []).indexOf(op) !== -1) return 'cross-channel-read';
+    return 'channel-op-approval-required';
   };
   // WHY did a WORK tool stop? "Not in any list this build knows" is a DIFFERENT fact from "known
   // but not covered by the posture you set", and conflating them is what made bypass look broken.
@@ -75,7 +83,10 @@ function makeGateReason(deps) {
     const channel = d.isChannelTool(a.toolName);
     if (decision === 'allow') {
       if (grantedFor(a)) return 'granted-for-session';
-      return channel ? 'auto-outbound' : 'tool-mode';
+      if (!channel) return 'tool-mode';
+      // M3: the two Axis-B allows are different rules and the diag must be able to tell them
+      // apart — "your outbound setting sent this" vs "your inbound setting read this".
+      return d.isOwnChannelRead(a.input, a.channelId) ? 'auto-inbound-read' : 'auto-outbound';
     }
     if (decision !== 'gate') return null; // an unknown verdict explains nothing, honestly
     return channel ? channelReason(a) : toolReason(a);

@@ -40,7 +40,8 @@ const PARK = M("session-park.js");
 const DELIVER = M("channel-deliver.js");
 
 const { normalizeToolMode, normalizeMessageMode } = require("../main/session-profiles.js");
-const { initialSessionState, sessionReducer, POSTURE_RESET_NOTE } = loadReducer();
+const { initialSessionState, sessionReducer, POSTURE_RESET_NOTE, idleTimeout,
+        AWAITING_PEER_IDLE_MS, ABANDONED_MS } = loadReducer();
 
 const WIDE = { tools: "bypass", messages: "auto_both" };
 
@@ -377,115 +378,8 @@ test("FIX 4: the PEER-DRIVEN wake carries neither field, so a room message arms 
   assert.equal(spec.operatorArmed, undefined);
 });
 
-// ── 4. FIX 3: the idle timer ─────────────────────────────────────────────────
-// A virtual-clock stand-in for session-engine's scheduleIdle: the effect sets the deadline to
-// now + state.idleMs, `clearIdle` drops it, and nothing else touches it. The engine's real
-// scheduleIdle is one clearTimeout + one setTimeout over exactly that, so this is the timer.
-
-function clock(state) {
-  const s = { state };
-  const emitted = [];
-  let now = 0;
-  let fireAt = null;
-  function dispatch(event) {
-    const r = sessionReducer(s.state, event);
-    s.state = r.state;
-    for (const eff of r.effects) {
-      if (eff.type === "scheduleIdle") fireAt = now + s.state.idleMs;
-      else if (eff.type === "clearIdle") fireAt = null;
-      else if (eff.type === "emit") emitted.push(eff.payload);
-    }
-    return r;
-  }
-  function advance(ms) {
-    now += ms;
-    if (fireAt !== null && now >= fireAt) { fireAt = null; dispatch({ type: "idle_timeout" }); }
-  }
-  return { s, emitted, dispatch, advance, armed: () => fireAt !== null };
-}
-
-const TTL = initialSessionState({}).idleMs;
-const armedRunning = (patch) => clock({ ...initialSessionState({}), phase: "running", activity: "working", ...patch });
-const card = (id) => ({ type: "permission_request", requestId: id, name: "Bash", payload: { type: "permission_request", requestId: id } });
-
-test("FIX 3: a session with an OPEN CARD is never idle — the TTL restarts when it opens", () => {
-  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both" });
-  c.dispatch({ type: "launched", payload: {} }); // the only re-arm that existed before
-  c.advance(TTL - 1);
-  c.dispatch(card("r1")); // the operator is now reading a request
-  c.advance(TTL - 1); // ...for almost another full TTL
-  assert.equal(c.s.state.parked, false, "before FIX 3 this parked, deny-closing the very card on screen");
-  assert.equal(c.s.state.toolMode, "bypass", "and took the posture with it");
-  assert.deepEqual(c.s.state.pendingPermissions, ["r1"], "the request is still answerable");
-});
-
-test("FIX 3: answering the card restarts the TTL again (the decision is activity too)", () => {
-  const c = armedRunning({});
-  c.dispatch({ type: "launched", payload: {} });
-  c.dispatch(card("r1"));
-  c.advance(TTL - 1);
-  c.dispatch({ type: "permission_decision", requestId: "r1", decision: "allow-once", name: "Bash" });
-  c.advance(TTL - 1);
-  assert.equal(c.s.state.parked, false);
-});
-
-test("FIX 3: a steer restarts it, so a session being typed at never parks mid-conversation", () => {
-  const c = armedRunning({});
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL - 1);
-  c.dispatch({ type: "steer", text: "keep going" });
-  c.advance(TTL - 1);
-  assert.equal(c.s.state.parked, false);
-});
-
-test("FIX 3: an accepted inbound turn restarts it (a turn was just pushed)", () => {
-  const c = armedRunning({ messageMode: "auto_inbound" });
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL - 1);
-  c.dispatch({ type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
-  c.advance(TTL - 1);
-  assert.equal(c.s.state.parked, false);
-});
-
-test("FIX 3: NO card and genuinely quiet past the TTL still PARKS, and states the reset", () => {
-  // The park itself is kept: it exists for cost, and a session nobody is watching should stop.
-  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", inboundForTask: true, allowForTask: ["Bash"] });
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL);
-  assert.equal(c.s.state.parked, true);
-  assert.equal(c.s.state.toolMode, "manual");
-  assert.equal(c.s.state.messageMode, "ask");
-  assert.equal(c.s.state.inboundForTask, false, "standing grants die with the posture that framed them");
-  assert.deepEqual(c.s.state.allowForTask, []);
-  // ...and the window is TOLD. The reset used to be completely silent: the selects just moved.
-  assert.ok(c.emitted.some((p) => p.type === "modes" && p.tool === "manual" && p.message === "ask"));
-  const note = c.emitted.find((p) => p.type === "notice" && p.text === POSTURE_RESET_NOTE);
-  assert.ok(note, "the park says what it took away");
-  assert.equal(note.level, "info");
-  assert.doesNotMatch(POSTURE_RESET_NOTE, /—/, "house voice: no em dashes");
-});
-
-test("FIX 3: a park from an ALREADY restrictive posture says nothing (it took nothing away)", () => {
-  const c = armedRunning({});
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL);
-  assert.equal(c.s.state.parked, true);
-  assert.ok(!c.emitted.some((p) => p.type === "notice" && p.text === POSTURE_RESET_NOTE),
-    "the line must never claim a change that did not happen");
-});
-
-test("FIX 3: the park still CLEARS the timer, so a parked shell does not re-park on a loop", () => {
-  const c = armedRunning({ toolMode: "auto" });
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL);
-  assert.equal(c.armed(), false, "parkEffects clearIdle wins over every re-arm above it");
-  assert.equal(c.s.state.parked, true);
-});
-
-test("FIX 3: a PARKED session is not re-armed by a stale dock click", () => {
-  const c = armedRunning({});
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL);
-  c.dispatch({ type: "permission_decision", requestId: "r1", decision: "deny", name: "Bash" });
-  assert.equal(c.armed(), false, "a dormant shell gets no timer; only a real wake re-arms one");
-});
+// ── 4. FIX 3 / M1 / M2: THE IDLE TIMER ────────────────────────────────────────
+// §2 SPLIT (2026-08-05): the virtual-clock section moved WHOLE to
+// test/session-idle-bounds.test.mjs when M1 (an `awaiting_peer` turn is not idle) and M2 (a park
+// keeps the posture; an abandoned session ends) took this file past the 500-line cap. FIX 3's
+// cases went with it unchanged — one subject, one file.

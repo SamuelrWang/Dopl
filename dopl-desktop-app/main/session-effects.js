@@ -78,6 +78,9 @@ function modesEmit(state) {
 // anywhere in the window to attach that to. The line is emitted ONLY when there was really
 // something to reset, so it can never claim a change that did not happen — a session already
 // sitting at manual/ask parks exactly as quietly as it does today.
+// M2 (2026-08-05): saying it was never the whole answer, and the IDLE park no longer resets at
+// all. This copy now belongs to the ONE park that still does — the AUTH HOLD, where the reset is
+// about a session with no credential rather than about an operator who might be away.
 // Copy lives here rather than in the renderer because main is what knows whether the reset
 // happened; it goes out as an ordinary `notice`, which the view-model already renders via
 // textContent. No em dash, and it names the two controls it is talking about.
@@ -87,24 +90,45 @@ function postureWasReset(state) {
 }
 
 // P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise fail-closed, tear down
-// the live query, clear (never re-arm) the idle timer, persist phase 'parked', tell the renderer. NOT settled: no
+// the live query, clear the idle timer, persist phase 'parked', tell the renderer. NOT settled: no
 // `settle`, no `win.destroy`, no registry removal, and sdkSessionId is retained, so a lazy wake can resume it.
-function parkEffects(state) {
+//
+// M2 (2026-08-05) — TWO PARKS, TWO POSTURE ANSWERS, so the option is explicit at both call sites.
+//   `resetPosture: true`  (the default, and what AUTH_HOLD passes) — the v2.9 FIX #3 behaviour,
+//                         byte-for-byte: disarm both axes and SAY SO. A hold is a session whose
+//                         credential is gone; it relaunches through startQuery when the operator
+//                         signs in, and H1's reasoning for disarming it is untouched here.
+//   `resetPosture: false` (the IDLE park) — the operator's posture is theirs for the session.
+//                         No modes echo and no note, because nothing was taken away; the
+//                         renderer's selects move ONLY on a `modes` event, so they go on showing
+//                         what the operator set, which is now the truth.
+//   `armAbandon: true`    RE-ARMS the timer instead of clearing it. session-engine's scheduleIdle
+//                         reads `parked` off the state the reducer just stored, so what that arms
+//                         is the hours-scale ABANDONMENT bound firing `abandon_timeout`, never
+//                         another 15-minute idle TTL — one handle, one teardown path, and a wake's
+//                         own scheduleIdle overwrites it. Only the idle park asks for it: an
+//                         auth-held session is waiting on a human clicking "Sign in", and ending
+//                         it would destroy the window carrying that button.
+function parkEffects(state, opts) {
+  const o = opts || {};
+  const resetPosture = o.resetPosture !== false;
   const effects = [
     { type: 'denyPending' },
     { type: 'abortQuery' },
-    { type: 'clearIdle' },
+    o.armAbandon === true ? { type: 'scheduleIdle' } : { type: 'clearIdle' },
     { type: 'persist', phase: 'parked' },
-    // FIX #3 (v2.9): the park DISARMS both axes, so say so. The old toggle reset was silent and
-    // the checkbox went on reading "on" over a session that would ask again.
-    modesEmit({ toolMode: 'manual', messageMode: 'ask' }),
-    { type: 'emit', payload: { type: 'status', phase: gatePhase(state, 'parked') } },
-    // `paused` drops the one-line inline note (renderer owns the copy), distinct from the P2
-    // reopen shell's `notice`. FIX #17: a park that happens while a message is HELD says so —
-    // "wait for a reply" is wrong when the reply is already here, waiting.
-    { type: 'emit', payload: state && state.hasPendingInbound === true ? { type: 'paused', gated: true } : { type: 'paused' } },
   ];
-  if (postureWasReset(state)) {
+  if (resetPosture) {
+    // FIX #3 (v2.9): a park that DISARMS both axes says so. The old toggle reset was silent and
+    // the checkbox went on reading "on" over a session that would ask again.
+    effects.push(modesEmit({ toolMode: 'manual', messageMode: 'ask' }));
+  }
+  effects.push({ type: 'emit', payload: { type: 'status', phase: gatePhase(state, 'parked') } });
+  // `paused` drops the one-line inline note (renderer owns the copy), distinct from the P2
+  // reopen shell's `notice`. FIX #17: a park that happens while a message is HELD says so —
+  // "wait for a reply" is wrong when the reply is already here, waiting.
+  effects.push({ type: 'emit', payload: state && state.hasPendingInbound === true ? { type: 'paused', gated: true } : { type: 'paused' } });
+  if (resetPosture && postureWasReset(state)) {
     effects.push({ type: 'emit', payload: { type: 'notice', level: 'info', text: POSTURE_RESET_NOTE } });
   }
   // FIX #6 (v2.3): clear the renderer's permission dock for anything awaiting a button. Main

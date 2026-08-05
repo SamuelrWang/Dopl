@@ -203,9 +203,19 @@ test("the window is TOLD the starting posture, before anything can run", () => {
   assert.ok(at < ENGINE.indexOf("await startQuery(s, sdk);"), "and before anything can run");
 });
 
-test("a park still RESETS both axes — a posture never survives one", () => {
-  // The posture is that of a WATCHED window; a park is the moment that stopped being true.
+test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
+  // 2026-08-05 — INVERTED. This used to read "a park still RESETS both axes; the posture is that
+  // of a WATCHED window and a park is the moment that stopped being true". Fifteen quiet minutes
+  // turned out to be a poor proxy for "not watched" (see M1: an exchange blocked on the peer hit
+  // it routinely), and Samuel's contract is that a posture holds for the session. The reset moved
+  // to the auth hold, and the away case is answered by ending an abandoned session instead.
+  // What a PRESET seeds is untouched either way: a fresh session still starts where it is told.
   const REDUCER = read("session-reducer.js");
-  assert.match(REDUCER, /toolMode: 'manual', messageMode: 'ask', inboundForTask: false/,
-    "idle_timeout hard-resets to the restrictive pair, not back to any stored posture");
+  const idle = REDUCER.slice(REDUCER.indexOf("if (type === 'idle_timeout')"),
+    REDUCER.indexOf("if (type === 'abandon_timeout')"));
+  assert.doesNotMatch(idle, /toolMode: 'manual'/, "the idle park writes no posture at all");
+  assert.match(idle, /resetPosture: false/);
+  const hold = REDUCER.slice(REDUCER.indexOf("if (type === 'auth_hold')"), REDUCER.indexOf("if (type === 'auth_release')"));
+  assert.match(hold, /toolMode: 'manual', messageMode: 'ask', inboundForTask: false/,
+    "a session with no credential still hard-resets to the restrictive pair");
 });

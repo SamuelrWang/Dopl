@@ -158,15 +158,25 @@ test("D4/v2.9: the MESSAGE axis auto-accepts inbound; the TOOL axis never does",
   }
 });
 
-test("FIX #3 + C9: a park disarms BOTH axes AND the standing task grant", () => {
+// M2 (2026-08-05) — INVERTED. This used to prove FIX #3 + C9: a park disarmed both axes and the
+// standing inbound grant, so a peer's reply on a parked session HELD instead of feeding. Samuel's
+// contract is that a posture he set holds for the session, so an operator who turned inbound
+// auto-accept on before stepping out gets what they asked for when the reply lands. The away
+// threat that reset was buying is bought instead by the ABANDONMENT END (session-state.ABANDONED_MS):
+// a session nobody comes back to is terminal, and terminal cannot be woken by anyone.
+test("M2: a park keeps BOTH axes and the standing grant, so a woken reply feeds as set", () => {
   const armed = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true };
   const parked = sessionReducer(armed, { type: "idle_timeout" }).state;
-  assert.equal(parked.toolMode, "manual", "AXIS A never survives a park (v2.3 FIX #3)");
-  assert.equal(parked.messageMode, "ask", "and neither does AXIS B");
-  // MEDIUM-3 (C9): the standing inbound grant used to survive, which let a peer restart a
-  // parked query and drive turns with the operator away. It goes with the axes now.
-  assert.equal(parked.inboundForTask, false, "C9: the standing inbound grant is cleared too");
-  assert.equal(sessionReducer(parked, arrive).state.phase, "awaiting_inbound", "so the reply HOLDS");
+  assert.equal(parked.toolMode, "bypass", "AXIS A is the operator's for the session");
+  assert.equal(parked.messageMode, "auto_both", "and so is AXIS B");
+  assert.equal(parked.inboundForTask, true, "and the standing inbound grant");
+  const woken = sessionReducer(parked, arrive);
+  assert.equal(woken.state.phase, "running", "the reply feeds, as the operator asked");
+  assert.equal(woken.state.parked, false);
+  assert.equal(effTypes(woken.effects)[0], "resumeQuery");
+  // A session the operator never opted in on still HOLDS: M2 preserves intent, it does not add any.
+  const plain = sessionReducer(running(), { type: "idle_timeout" }).state;
+  assert.equal(sessionReducer(plain, arrive).state.phase, "awaiting_inbound", "no opt-in, no feed");
 });
 
 // ── FIX #6: nothing clobbers the gate state while a card is still pending ─────────

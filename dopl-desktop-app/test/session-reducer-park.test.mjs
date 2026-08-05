@@ -15,8 +15,9 @@ import { loadReducer, REDUCER_SRC } from "./_reducer-block.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 // §2 SPLIT (H1): the pure block now spans session-effects.js + session-reducer.js;
 // test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
-const { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
-        DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD } = loadReducer();
+const { initialSessionState, sessionReducer, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
+        DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, ABANDONED_MS,
+        AWAITING_PEER_IDLE_MS } = loadReducer();
 
 const running = (opts) =>
   sessionReducer(initialSessionState(opts), { type: "launched", payload: { type: "init" } }).state;
@@ -25,6 +26,11 @@ const findEff = (effects, type) => effects.find((e) => e.type === type);
 
 // ── idle PARKS (does not end) ─────────────────────────────────────────────────────
 
+// M2 (2026-08-05) — THE PARK'S EFFECT SET CHANGED, and both changes are the requirement change:
+// the modes echo is GONE (nothing is reset, so there is nothing to echo — the header goes on
+// showing what the operator set, which is now the truth), and `clearIdle` became `scheduleIdle`,
+// which on a state whose `parked` is already true arms the hours-scale ABANDONMENT bound
+// (session-state.idleTimeout) rather than another idle TTL.
 test("idle_timeout PARKS the session — no settle/destroy/delete, sdkSessionId retained", () => {
   const s = running();
   const r = sessionReducer(s, { type: "idle_timeout" });
@@ -33,17 +39,51 @@ test("idle_timeout PARKS the session — no settle/destroy/delete, sdkSessionId 
   assert.equal(r.state.phase, "parked");
   assert.equal(r.state.parked, true);
   assert.equal(r.state.turns, s.turns, "turn count is preserved across a park");
-  // v2.9: the park also ECHOES the reset postures, so the header cannot go on advertising a
-  // mode the woken session will not honor (the old reset was silent).
-  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit", "emit"]);
-  const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
-  assert.deepEqual(modes.payload, { type: "modes", tool: "manual", message: "ask" });
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "scheduleIdle", "persist", "emit", "emit"]);
+  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "modes"),
+    "M2: a park that takes no posture away echoes no posture change");
   assert.ok(!r.effects.some((e) => e.type === "settle"), "park NEVER settles (no destroy/delete)");
-  assert.ok(!r.effects.some((e) => e.type === "scheduleIdle"), "park NEVER re-arms the idle timer");
   assert.equal(findEff(r.effects, "persist").phase, "parked");
   const status = r.effects.find((e) => e.type === "emit" && e.payload.type === "status");
   assert.deepEqual(status.payload, { type: "status", phase: "parked" });
   assert.ok(r.effects.some((e) => e.type === "emit" && e.payload.type === "paused"), "emits the inline paused note");
+});
+
+// ── M2: the ABANDONMENT bound, and what it ends ───────────────────────────────────
+
+test("M2: the park ARMS the abandonment bound (hours), not another idle TTL (minutes)", () => {
+  const r = sessionReducer(running(), { type: "idle_timeout" });
+  assert.ok(r.effects.some((e) => e.type === "scheduleIdle"), "the park re-arms rather than clearing");
+  // session-engine's scheduleIdle asks idleTimeout(s.state) AFTER dispatch has stored the new
+  // state, so the arm a park produces can only ever be the abandonment one.
+  assert.deepEqual(idleTimeout(r.state), { ms: ABANDONED_MS, type: "abandon_timeout" });
+  assert.ok(ABANDONED_MS > DEFAULT_IDLE_MS * 40, "far above the park TTL, so the two cannot be confused");
+});
+
+test("M2: abandon_timeout ENDS a parked session — terminal, so no peer can ever wake it", () => {
+  const parked = sessionReducer({ ...running(), toolMode: "bypass", messageMode: "auto_both" },
+    { type: "idle_timeout" }).state;
+  const r = sessionReducer(parked, { type: "abandon_timeout" });
+  assert.equal(r.state.phase, "ended", "ending is the honest state for a session nobody came back to");
+  assert.ok(r.effects.some((e) => e.type === "settle" && e.outcome === "ended"));
+  assert.ok(r.effects.some((e) => e.type === "abortQuery"));
+  // It posts NO lifecycle: an unwatched machine must not write to the shared thread on a timer.
+  assert.ok(!r.effects.some((e) => e.type === "lifecycle"), "no channel write from an abandonment");
+  // ...and the end really is terminal — every later event is inert, wake triggers included.
+  for (const evt of [{ type: "steer", text: "hello" }, { type: "inbound_arrived", message: "hi", authorName: "B" }]) {
+    assert.deepEqual(sessionReducer(r.state, evt).effects, [], `${evt.type} cannot revive an ended session`);
+  }
+});
+
+test("M2: abandon_timeout is a NO-OP on a live session (a stale timer never ends real work)", () => {
+  const live = running();
+  const r = sessionReducer(live, { type: "abandon_timeout" });
+  assert.equal(r.state, live);
+  assert.deepEqual(r.effects, []);
+  // And a woken session is live again, so the arm it carries is the ordinary TTL once more.
+  const woken = sessionReducer(sessionReducer(live, { type: "idle_timeout" }).state, { type: "steer", text: "go" }).state;
+  assert.deepEqual(idleTimeout(woken), { ms: DEFAULT_IDLE_MS, type: "idle_timeout" });
+  assert.deepEqual(sessionReducer(woken, { type: "abandon_timeout" }).effects, []);
 });
 
 test("idle_timeout clears any awaited permission (denyPending) and empties pendingPermissions", () => {
@@ -81,8 +121,9 @@ test("FIX F6: parking clears postedThisTurn + postedToolUseIds (no 'Waiting for 
   // The park still deny-closes the card itself, which is what makes the counters wrong to keep.
   const echo = r.effects.find((e) => e.type === "emit" && e.payload.type === "permission_resolved");
   assert.deepEqual(echo.payload, { type: "permission_resolved", requestId: "r1", decision: "deny" });
-  // And the effect SET is unchanged by this fix (state-only change) — plus v2.9's `modes` echo.
-  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit", "emit", "emit"]);
+  // The effect SET (M2: `scheduleIdle` arms the abandonment bound where `clearIdle` used to sit,
+  // and there is no `modes` echo because the idle park no longer takes a posture away).
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "scheduleIdle", "persist", "emit", "emit", "emit"]);
 });
 
 test("FIX F6: a woken session still counts a NEW post normally", () => {
@@ -96,15 +137,51 @@ test("FIX F6: a woken session still counts a NEW post normally", () => {
   assert.deepEqual(again.postedToolUseIds, ["t2"]);
 });
 
-// ── FIX #3 + C9: no pre-authorization survives an idle park ─────────────────────────
+// ── M2 (2026-08-05): THE PARK NO LONGER DISARMS ANYTHING ────────────────────────────
+// THE REQUIREMENT CHANGE, and it INVERTS this test. It used to assert FIX #3 (both axes) +
+// MEDIUM-3/C9 (inboundForTask) + FIX F1 (allowForTask) reset on park. Samuel's contract is that a
+// posture he set holds for the session, the for-task grants included; fifteen quiet minutes is
+// not evidence he left (he may be reading, in another window, or — before M1 — waiting on the
+// peer). The AWAY threat those three fixes named is answered by the abandonment END above, which
+// is strictly stronger than the downgrade was (an ended session cannot be woken at all), and by
+// the PROFILE hard-deny, which no posture and no grant has ever been able to widen.
 
-test("FIX #3 (v2.9): parking resets BOTH axes AND inboundForTask (C9) — nothing resumes armed", () => {
-  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true };
+test("M2: parking keeps BOTH axes, inboundForTask AND every standing grant", () => {
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true,
+    allowForTask: ["Bash#ls#abc"] };
   const r = sessionReducer(s, { type: "idle_timeout" });
   assert.equal(r.state.parked, true);
-  assert.equal(r.state.toolMode, "manual", "AXIS A is disarmed while the operator is away");
-  assert.equal(r.state.messageMode, "ask", "and so is AXIS B");
-  assert.equal(r.state.inboundForTask, false, "MEDIUM-3 (C9): the standing inbound grant too");
+  assert.equal(r.state.toolMode, "bypass", "AXIS A is the operator's for the session");
+  assert.equal(r.state.messageMode, "auto_both", "and so is AXIS B");
+  assert.equal(r.state.inboundForTask, true, "and the standing inbound grant");
+  assert.deepEqual(r.state.allowForTask, ["Bash#ls#abc"], "and the scoped for-task grants");
+  // ...and the operator is told nothing was taken away, because nothing was.
+  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "notice"),
+    "no posture-reset note: the park revoked nothing");
+});
+
+test("M2: a woken session behaves as the operator set it — the whole point of the change", () => {
+  const armed = { ...running(), toolMode: "bypass", messageMode: "auto_both" };
+  const parked = sessionReducer(armed, { type: "idle_timeout" }).state;
+  const woken = sessionReducer(parked, { type: "steer", text: "carry on" }).state;
+  assert.deepEqual({ t: woken.toolMode, m: woken.messageMode }, { t: "bypass", m: "auto_both" },
+    "a park/resume cycle inside one session changes no posture");
+});
+
+test("M2: the AUTH HOLD still disarms — it is the one park that does", () => {
+  // H1's reasoning is untouched: a hold is a session with no CREDENTIAL, which relaunches through
+  // startQuery on sign-in rather than resuming in place, so its arm belongs to the run that ended.
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true,
+    allowForTask: ["Bash#ls#abc"] };
+  const r = sessionReducer(s, { type: "auth_hold" });
+  assert.deepEqual({ t: r.state.toolMode, m: r.state.messageMode }, { t: "manual", m: "ask" });
+  assert.equal(r.state.inboundForTask, false);
+  assert.deepEqual(r.state.allowForTask, []);
+  const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
+  assert.deepEqual(modes.payload, { type: "modes", tool: "manual", message: "ask" }, "and it says so");
+  // A held session arms NO abandonment bound: the window carries the Sign in button.
+  assert.ok(r.effects.some((e) => e.type === "clearIdle"), "the hold CLEARS the timer, it does not re-arm");
+  assert.ok(!r.effects.some((e) => e.type === "scheduleIdle"));
 });
 
 // ── FIX #5: a parked session is INERT to buffered SDK messages ──────────────────────
@@ -174,15 +251,15 @@ test("a parked session ignores a stale idle_timeout (idempotent, no double-park)
 
 // v2.5 D1: an inbound turn only wakes a parked session when it is AUTO-ACCEPTED (AXIS B, or
 // the standing task grant). Without that opt-in the reply is held and the session stays
-// parked — the two cases below. NOTE: as of v2.9 a park resets AXIS B *and* inboundForTask
-// (FIX #3 + C9), so this wake models an opt-in re-armed AFTER the park, which is the only way
-// a counterparty-driven resume can happen at all now.
+// parked — the two cases below. M2 (2026-08-05): a park no longer disarms either, so an opt-in
+// set BEFORE the park survives it; this case starts from a session that never had one, and
+// grants it, so it still proves the wake rather than the survival (which M2's own tests cover).
 test("LAZY RESUME (a): an AUTO-ACCEPTED inbound turn wakes a parked session (resumeQuery FIRST)", () => {
   const parked = sessionReducer(running({ mode: "autonomous" }), { type: "idle_timeout" }).state;
   assert.equal(parked.parked, true);
-  assert.equal(parked.messageMode, "ask", "FIX #3: the axis is disarmed by the park");
-  assert.equal(parked.inboundForTask, false, "C9: and so is the standing grant");
-  const granted = { ...parked, inboundForTask: true }; // re-armed by the operator after the park
+  assert.equal(parked.messageMode, "ask", "this session never opted in, so the gate holds");
+  assert.equal(parked.inboundForTask, false);
+  const granted = { ...parked, inboundForTask: true }; // the operator's standing grant
   const r = sessionReducer(granted, { type: "inbound_arrived", message: "back", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.parked, false, "the wake clears the parked flag");

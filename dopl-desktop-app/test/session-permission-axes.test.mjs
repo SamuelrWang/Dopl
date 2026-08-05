@@ -137,6 +137,9 @@ const OWN_POST = { op: "post", body: "shipping tonight" };
 const CROSS_POST = { op: "post", channel: "other", body: "the file contents" };
 const DM_OPEN = { op: "open", direct: true, member: "evil@x" };
 
+// M3 (2026-08-05) — the `read` row MOVED: an own-channel read now follows the INBOUND half of
+// this axis. The whole read half (every op, both directions, the classifier) is proved in
+// test/session-channel-read.test.mjs; this row is the pointer that keeps the table honest.
 test("AXIS B truth table: only an OWN-channel post is ever auto-sent", () => {
   const rows = [
     ["own post", OWN_POST, { ask: "gate", auto_inbound: "gate", auto_outbound: "allow", auto_both: "allow" }],
@@ -144,7 +147,8 @@ test("AXIS B truth table: only an OWN-channel post is ever auto-sent", () => {
     // me" is not consent to open a DM with another workspace member.
     ["cross-channel post", CROSS_POST, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
     ["DM open", DM_OPEN, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
-    ["read", { op: "read" }, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
+    ["read (M3: the INBOUND half, not the outbound one)", { op: "read" },
+      { ask: "gate", auto_inbound: "allow", auto_outbound: "gate", auto_both: "allow" }],
     ["create_task", { op: "create_task" }, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
   ];
   for (const [name, input, expected] of rows) {
@@ -299,12 +303,19 @@ test("B3: grants are in-memory only — nothing about a key is ever persisted", 
   assert.equal(rec.messageMode, undefined);
 });
 
-// ── D. PARK RESETS BOTH AXES AND inboundForTask (A4 / A5 / C9) ────────────────────
-
-// FIX F1 (v2.9 review): this test USED to arm only the two modes and leave allowForTask empty,
-// which is exactly why it missed that standing grants survived a park. The armed state now
-// carries REAL grants because that is what an operator who walked away leaves behind.
-test("A4/A5/C9/F1: park resets both axes, inboundForTask AND every standing grant", () => {
+// ── D. M2 (2026-08-05): THE PARK PRESERVES BOTH AXES, inboundForTask AND THE GRANTS ──
+//
+// THE REQUIREMENT CHANGE, and it inverts this test. It used to prove A4/A5 (both axes), C9
+// (inboundForTask) and FIX F1 (allowForTask) were all cleared on park. Samuel's contract is that
+// a posture he set holds for the whole session, the for-task grants included, and he named the
+// grants explicitly. F1's real defect was that the header and the state DISAGREED — a reset
+// posture beside a surviving grant — and consistency, not clearing, is what fixes that: the axes
+// and the grants now survive together, and the header goes on telling the truth about both.
+// The AWAY threat all three fixes named is answered by session-state.ABANDONED_MS (an abandoned
+// session ENDS, which is terminal and therefore stronger than a downgrade that stayed wakeable)
+// and by the PROFILE hard-deny, which no posture and no grant has ever been able to widen — the
+// last assertion below is that half, unchanged.
+test("M2: a park preserves both axes, inboundForTask AND every standing grant", () => {
   const postGrant = keyOf(OWN_POST);
   const bashGrant = grantKeyFor("Bash", { command: "ls -la" });
   const armed = {
@@ -313,21 +324,23 @@ test("A4/A5/C9/F1: park resets both axes, inboundForTask AND every standing gran
     allowForTask: [postGrant, bashGrant],
   };
   const r = reducer.sessionReducer(armed, { type: "idle_timeout" });
-  assert.equal(r.state.toolMode, "manual");
-  assert.equal(r.state.messageMode, "ask");
-  assert.equal(r.state.inboundForTask, false);
-  assert.deepEqual(r.state.allowForTask, [], "FIX F1: the grants die with the posture that framed them");
-  const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
-  assert.deepEqual(modes.payload, { type: "modes", tool: "manual", message: "ask" },
-    "the header is told, so it cannot advertise a posture the woken session will not honor");
-  // And the woken session really is back to asking — for tools AND for messages. THE EXPLOIT: the
-  // header honestly read "Asking before messages in and out" while a surviving post grant let the
-  // woken agent post arbitrary content with no card. grantDecision is asked with the WOKEN state.
+  assert.equal(r.state.parked, true, "it still parks: the query is still torn down");
+  assert.equal(r.state.toolMode, "bypass");
+  assert.equal(r.state.messageMode, "auto_both");
+  assert.equal(r.state.inboundForTask, true);
+  assert.deepEqual(r.state.allowForTask, [postGrant, bashGrant], "the grants outlive the park");
+  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "modes"),
+    "and the header is not dragged back to a posture the woken session would not honor");
+  // The WOKEN session behaves as the operator set it — asked with the woken state, as before.
   const s = { profile: "full", channelId: CH, state: r.state };
   const woken = { ...s, allowForTask: r.state.allowForTask, toolMode: r.state.toolMode, messageMode: r.state.messageMode };
-  assert.equal(grantDecision({ ...woken, toolName: "Bash", input: { command: "ls -la" } }), "gate");
-  assert.equal(grantDecision({ ...woken, toolName: DOPL_CHANNEL_TOOL, input: OWN_POST }), "gate");
-  assert.equal(io.postWillGate({ ...s, state: r.state }, OWN_POST), true);
+  assert.equal(grantDecision({ ...woken, toolName: "Bash", input: { command: "ls -la" } }), "allow");
+  assert.equal(grantDecision({ ...woken, toolName: DOPL_CHANNEL_TOOL, input: OWN_POST }), "allow");
+  assert.equal(io.postWillGate({ ...s, state: r.state }, OWN_POST), false);
+  // THE BOUNDARY THAT DID NOT MOVE: the hard-deny set is immovable across a park, in every mode.
+  for (const tool of ["Task", "Agent", "CronCreate", "SendMessage", "mcp__dopl__dopl_kb_admin"]) {
+    assert.equal(grantDecision({ ...woken, toolName: tool, input: {} }), "deny", `${tool} after a park`);
+  }
 });
 
 // ── E. THE FOUR COPIES OF THE MODE TABLES AGREE ───────────────────────────────────
