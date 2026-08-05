@@ -890,6 +890,52 @@ billing page made them cost a payment.
    do — is that midpoint. A hardcoded `/canvas` was only ever correct while
    `/canvas` was the sole destination.
 
+### 9.3 `WEBSITE_RETIRED` — the retirement redirect map (2026-08-05, Stage B)
+
+The web product UI is retired BY REDIRECT, behind one env flag, and
+`src/shared/lib/url/website-retirement.ts` is the whole map. Rules:
+
+1. **The flag defaults ON and the off switch is an explicit value**
+   (`WEBSITE_RETIRED` = `0` / `false` / `off`; unset means RETIRED). It can only
+   be changed in the Vercel dashboard, so the state reached by DELETING the
+   variable has to be the safe one — a lost env var or a fresh preview must not
+   un-retire the website. Read PER REQUEST, never captured at module load.
+2. **Nothing is deleted.** Every retired page is still in the tree, still
+   builds, and renders again the moment the flag is off. That is what makes the
+   rollback an env change rather than a revert, and it is why Stage D (deletion)
+   is a separate, later, saturation-gated PR.
+3. **The map NAMES its pages.** `[workspaceSlug]` is a ROOT-level dynamic
+   segment, so `/pricing` is `/{segment}` as far as a pattern can tell —
+   "retire any second segment" would take the KEEP list with it. `APP_PAGES` is
+   the `(app)` route table verbatim and `RESERVED_TOP_LEVEL` is the KEEP list as
+   a guard. **A new page under `src/app/[workspaceSlug]/(app)/` must be added to
+   `APP_PAGES`**; `proxy-retirement.test.ts` reads the directory and fails if it
+   is not.
+4. **`?billing=` is rewritten to `/billing/{segment}` BEFORE the generic
+   redirect, query verbatim.** Shipped desktop builds (≤1.8.5), Stripe
+   `return_url`s created before the D1 repoint and bookmarks all still produce
+   `/{segment}/canvas?billing=…`; landing those on `/get-started` loses a
+   payment. A segment that fails the charset check falls back to the
+   segment-less `/billing` (default-workspace resolution), never to a rejection.
+5. **The branch is LAST in the middleware and signed-in only.** Everything that
+   could still answer — the landing page, PUBLIC_ROUTES, OG crawlers, `/api/**`
+   under a bearer, and the signed-out login bounce — has already returned. So a
+   signed-out visitor to a retired page bounces to `/login?redirectTo=<the page
+   they asked for>` exactly as before, and the retirement applies on the way
+   back with a session. 302, never 308 or 410: these URLs come back when the
+   flag flips.
+6. **The default signed-in destination follows the flag.** With the flag on,
+   `/login` and `/` bounce to `/get-started`, not `/canvas`. This is §9.2 rule 3
+   again: leaving it at `/canvas` inserts a retirement hop between `/login` and
+   the page the browser reaches, the cookie's recorded midpoint stops matching,
+   the counter disarms every lap and the loop is unbounded. Measured, not
+   asserted — reverting only that line fails 41 tests including the walk that
+   never terminates.
+
+Matrix: `proxy-retirement.test.ts` (flag + retired set + loops),
+`-billing.test.ts` (the money URLs), `-keep.test.ts` (everything that must not
+move, desktop flows included).
+
 ---
 
 ## 10. Server vs. Client Boundaries

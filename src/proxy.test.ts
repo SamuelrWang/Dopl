@@ -164,7 +164,11 @@ describe("expired access token + valid refresh token", () => {
   });
 
   it("rotates the cookies onto the response (sessions survive past ~1h)", async () => {
-    const res = await proxy(req("/canvas"));
+    // `/get-started` rather than `/canvas`: the assertion is that a normal
+    // authed page view keeps its rotated cookies AND is not redirected, and
+    // `/canvas` is retired now (proxy-retirement.test.ts), so it always carries
+    // a Location. The rotated-cookie half of that page is covered there too.
+    const res = await proxy(req("/get-started"));
     expect(state.calls.network).toBe(1); // the ONE legitimate network call
     const set = res.cookies.getAll().map((c) => `${c.name}=${c.value}`);
     expect(set).toContain("sb-proj-auth-token.0=rotated-0");
@@ -172,10 +176,10 @@ describe("expired access token + valid refresh token", () => {
     expect(res.headers.get("location")).toBeNull(); // and the user stays authed
   });
 
-  it("still redirects / to /canvas after a refresh (claims are the fresh ones)", async () => {
+  it("still bounces / into the app after a refresh (claims are the fresh ones)", async () => {
     const res = await proxy(req("/"));
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/canvas`);
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/get-started`);
   });
 
   it("a FAILED refresh (bad refresh token) falls back to the login bounce", async () => {
@@ -212,18 +216,22 @@ describe("pages", () => {
     expect(res.headers.get("location")).toBe(`${ORIGIN}/login`);
   });
 
-  it("landing page is public when signed out, /canvas when signed in", async () => {
+  // The signed-in destination is `/get-started`, not `/canvas`, while
+  // WEBSITE_RETIRED is on — `/canvas` is retired, and pointing the default
+  // landing at a retired page costs a hop AND defeats the Q4 breaker's midpoint
+  // memory. Both states are proven in proxy-retirement.test.ts.
+  it("landing page is public when signed out, bounces in when signed in", async () => {
     expect((await proxy(req("/"))).status).toBe(200);
     signedIn();
     const res = await proxy(req("/"));
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/canvas`);
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/get-started`);
   });
 
-  it("/login is public when signed out, bounces to /canvas when signed in", async () => {
+  it("/login is public when signed out, bounces in when signed in", async () => {
     expect((await proxy(req("/login"))).status).toBe(200);
     signedIn();
     expect((await proxy(req("/login"))).headers.get("location")).toBe(
-      `${ORIGIN}/canvas`
+      `${ORIGIN}/get-started`
     );
   });
 

@@ -165,11 +165,15 @@ describe("valid claims + getUser() null terminates instead of looping", () => {
 });
 
 describe("the healthy bounce is unchanged", () => {
-  it("first /login visit still lands on /canvas", async () => {
+  // The bounce destination is `/get-started` while WEBSITE_RETIRED is on (it is
+  // `/canvas` with the flag off — both proven in proxy-retirement.test.ts). The
+  // breaker's shape is what this suite pins, and the shape is identical: the
+  // midpoint is whatever the bounce chose, and the cookie is what knows it.
+  it("first /login visit still lands on the app's front door", async () => {
     const jar = new Jar();
     const res = await proxy(jar.request("/login"));
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/canvas`);
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/get-started`);
   });
 
   it("a normal authed page view disarms the counter — the next /login bounces", async () => {
@@ -178,19 +182,21 @@ describe("the healthy bounce is unchanged", () => {
     jar.apply(await proxy(jar.request("/login")));
     expect(jar.has("dopl-login-bounce")).toBe(true);
 
-    // a real page renders fine (no server-component redirect): disarm
+    // A page that is not the midpoint disarms it — and still does when the
+    // page is RETIRED, because the retirement 302 carries the cookie writes
+    // through exactly like every other redirect in this file.
     jar.apply(await proxy(jar.request("/myws/knowledge")));
     expect(jar.has("dopl-login-bounce")).toBe(false);
 
     // …so /login still bounces rather than serving the login screen
     const res = await proxy(jar.request("/login"));
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/canvas`);
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/get-started`);
   });
 
-  it("/canvas does NOT disarm the counter (it is the cycle's midpoint)", async () => {
+  it("the destination does NOT disarm the counter (it is the cycle's midpoint)", async () => {
     const jar = new Jar();
     jar.apply(await proxy(jar.request("/login")));
-    jar.apply(await proxy(jar.request("/canvas")));
+    jar.apply(await proxy(jar.request("/get-started")));
     expect(jar.has("dopl-login-bounce")).toBe(true);
   });
 

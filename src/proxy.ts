@@ -9,6 +9,11 @@ import {
   readLoginBounce,
   setLoginBounce,
 } from "@/shared/auth/login-bounce";
+import {
+  RETIREMENT_LANDING,
+  isWebsiteRetired,
+  retirementRedirect,
+} from "@/shared/lib/url/website-retirement";
 
 const PUBLIC_ROUTES = [
   "/login",
@@ -40,6 +45,17 @@ const PUBLIC_ROUTES = [
   // still bounce to /login at the click.
   "/invite/",
   "/api/workspaces/invitations/",
+  // Shareable join links, for the same reason as /invite/ and with a stronger
+  // claim to it (retirement plan §1.1, GAP-6): the app copies
+  // `${getAppOrigin()}/join/{token}` to a member's clipboard TODAY
+  // (`invite-dialog.tsx`), so those URLs exist in the wild permanently and the
+  // person opening one has, by definition, no account yet. The page is built
+  // for exactly that — `JoinLinkCard`'s `needsAuth` branch names the workspace
+  // and the inviter, then offers `/login?redirectTo=/join/{token}` — and the
+  // session gate here made that branch DEAD IN PRODUCTION: every visitor was
+  // bounced to a bare login screen that could not say what they were joining.
+  // The join REQUEST itself is still auth-gated by its own route.
+  "/join/",
   // Remote MCP + OAuth surface. These self-authenticate: the /api/mcp handler
   // returns its own MCP-spec 401 + WWW-Authenticate (so clients can discover
   // the OAuth server and start the login dance); the OAuth endpoints are
@@ -229,6 +245,11 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // Read PER REQUEST, so the flip is an env change and never a deploy. Twice
+  // below: the retirement map at the bottom, and the default signed-in landing
+  // right here — because `/canvas` is itself on the RETIRE list.
+  const retired = isWebsiteRetired();
+
   // If authenticated, redirect landing page and login into the app.
   if (userId && (pathname === "/" || pathname === "/login")) {
     // Q4: only `/login` can loop — it is the only path a server component
@@ -274,7 +295,19 @@ export async function proxy(request: NextRequest) {
     if (target) {
       applyTarget(url, target);
     } else {
-      url.pathname = DEFAULT_SIGNED_IN_DESTINATION;
+      // THE DEFAULT LANDING FOLLOWS THE RETIREMENT, AND THIS IS NOT AN
+      // OPTIMISATION — IT IS WHAT KEEPS THE Q4 BREAKER BOUNDED.
+      //
+      // Leaving it at `/canvas` would make every lap of the cycle three hops
+      // instead of two: `/login → /canvas → (retired) /get-started`. The cookie
+      // records the midpoint the bounce CHOSE — `/canvas` — so arriving at
+      // `/get-started` reads as "a healthy authenticated page view somewhere
+      // else" and DISARMS the counter, on every lap, forever. A page whose own
+      // `getUser()` then fails sends the browser back to `/login` with the
+      // counter at zero, which is the unbounded loop the breaker exists to
+      // stop, re-created by the redirect that was supposed to be harmless.
+      // Naming the real destination puts the midpoint back under the cookie.
+      url.pathname = retired ? RETIREMENT_LANDING : DEFAULT_SIGNED_IN_DESTINATION;
       // A `redirectTo` that reached here was either consumed above or rejected
       // as hostile; either way it has no business riding to the destination,
       // where it used to sit as decoration. The landing page's query (utm and
@@ -380,6 +413,38 @@ export async function proxy(request: NextRequest) {
     // Server components cannot do this (their cookie writes are swallowed), so
     // the middleware is the only layer that can make the state self-heal.
     return redirectPreservingSession(url, supabaseResponse);
+  }
+
+  // ── WEBSITE RETIREMENT, STAGE B (docs/migration-research/website-retirement-plan.md)
+  //
+  // LAST, AND SIGNED-IN ONLY, BOTH DELIBERATELY. Everything that could still
+  // answer this request has already returned: the landing page, PUBLIC_ROUTES,
+  // the OG crawlers, `/api/**` under a bearer, and — immediately above — the
+  // signed-out login bounce. So the flag cannot reach a KEEP route even if the
+  // map below were wrong about one, and a signed-out visitor to a retired page
+  // bounces to `/login?redirectTo=<the page they asked for>` EXACTLY as today.
+  //
+  // That last part is the whole redirectTo interaction, and it composes rather
+  // than needing a second rule: the bounce carries the original URL, the login
+  // form returns the browser to it with a session, and THAT request is the one
+  // this branch retires — `/{seg}/canvas` → `/get-started`,
+  // `/{seg}/canvas?billing=upgrade` → `/billing/{seg}?billing=upgrade`. A payer
+  // signing in for the first time still lands on the checkout they asked for.
+  //
+  // 302, not 308 and not 410: these URLs are coming back the day the flag flips
+  // off, so nothing about this may be cached as permanent.
+  if (retired) {
+    const destination = retirementRedirect(pathname, request.nextUrl.search);
+    if (destination) {
+      const url = request.nextUrl.clone();
+      // Same helper the honoured `?redirectTo=` uses: it REPLACES the query
+      // rather than merging, so the generic redirects shed the retired page's
+      // params and the billing rewrites carry exactly the ones they were built
+      // with. The target is assembled from a literal root and a charset-checked
+      // segment, so it cannot leave the origin.
+      applyTarget(url, destination);
+      return redirectPreservingSession(url, supabaseResponse, 302);
+    }
   }
 
   return supabaseResponse;

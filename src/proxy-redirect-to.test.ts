@@ -163,8 +163,12 @@ describe("the signed-out bounce", () => {
 describe("a signed-in visitor to /login", () => {
   beforeEach(signedIn);
 
-  it("still lands on /canvas when the URL asked for nothing", async () => {
-    expect(await location("/login")).toBe("/canvas");
+  // The default destination is `/get-started` while WEBSITE_RETIRED is on —
+  // `/canvas` is retired, so the default landing names the surviving page
+  // directly instead of hopping through a 302. Both states, and why the hop
+  // could not be left in place, are in proxy-retirement.test.ts.
+  it("still lands on the default destination when the URL asked for nothing", async () => {
+    expect(await location("/login")).toBe("/get-started");
   });
 
   it("reaches the invite it was sent to, instead of /canvas", async () => {
@@ -201,8 +205,8 @@ describe("a signed-in visitor to /login", () => {
     // in — and `/`'s query (utm and friends) rides along exactly as it did
     // before, untouched by this change.
     const loc = await location("/?redirectTo=%2Finvite%2Ftok_x");
-    expect(new URL(loc!, ORIGIN).pathname).toBe("/canvas");
-    expect(loc).toBe("/canvas?redirectTo=%2Finvite%2Ftok_x");
+    expect(new URL(loc!, ORIGIN).pathname).toBe("/get-started");
+    expect(loc).toBe("/get-started?redirectTo=%2Finvite%2Ftok_x");
   });
 });
 
@@ -216,10 +220,10 @@ describe("a HOSTILE redirectTo is not a destination", () => {
     ["a bare word", "canvas"],
     ["a scheme", "javascript:alert(1)"],
     ["an empty value", ""],
-  ])("%s falls through to /canvas and never leaves the origin", async (_l, raw) => {
+  ])("%s falls through to the default and never leaves the origin", async (_l, raw) => {
     const res = await proxy(req(`/login?redirectTo=${encodeURIComponent(raw)}`));
     const loc = res.headers.get("location")!;
-    expect(loc).toBe(`${ORIGIN}/canvas`);
+    expect(loc).toBe(`${ORIGIN}/get-started`);
     expect(loc.startsWith(ORIGIN)).toBe(true);
     // …and the rejected value does not ride along to be re-read downstream.
     expect(loc).not.toContain("evil.example");
@@ -232,7 +236,7 @@ describe("a HOSTILE redirectTo is not a destination", () => {
     for (const raw of ["https://evil.example", "//evil.example", "/\\evil.example"]) {
       expect(explicitPostAuthTarget(raw)).toBeNull();
       expect(await location(`/login?redirectTo=${encodeURIComponent(raw)}`)).toBe(
-        "/canvas"
+        "/get-started"
       );
     }
     for (const raw of ["/invite/tok_x", `${BILLING}?billing=upgrade`]) {
@@ -295,8 +299,16 @@ describe("the desktop and OAuth flows are untouched", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("the join link still bounces a signed-out visitor back to itself", async () => {
-    expect(await location("/join/tok_x")).toBe("/login?redirectTo=%2Fjoin%2Ftok_x");
+  it("the join link now RENDERS for a signed-out visitor (GAP-6)", async () => {
+    // `/join/` joined PUBLIC_ROUTES with the retirement work. Those URLs are
+    // copied to clipboards by the live app, so the visitor has no account by
+    // definition, and the card's own `needsAuth` branch — which names the
+    // workspace and the inviter before asking anyone to sign in — was dead in
+    // production while the middleware bounced first. The bounce it offers is
+    // the same round trip, now made by the page instead of the gate.
+    const res = await proxy(req("/join/tok_x"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
   });
 });
 
