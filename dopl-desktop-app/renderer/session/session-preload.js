@@ -136,6 +136,13 @@ contextBridge.exposeInMainWorld('doplSession', {
   sendToPeer(text) {
     ipcRenderer.invoke('session:send-peer', { text: asStr(text) });
   },
+  // §3.2: the handle main gave this session, for the composer pill's resting row. Takes no
+  // argument in either direction beyond main's {name}: the session is re-derived from
+  // event.sender, so there is nothing to forge. The PROMISE is returned — the pill paints the
+  // fallback ("Message this session") until it resolves, and repaints when it does.
+  agentName() {
+    return ipcRenderer.invoke('session:agent-name', {});
+  },
   // v2.7 L3: the invoke PROMISE is RETURNED (it always resolved main's {ok} — the dock
   // simply ignored it), so the inline outbound decision card can stamp itself only once
   // main has actually taken the decision, exactly like the inbound gate. The decision

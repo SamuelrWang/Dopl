@@ -18,13 +18,15 @@
   const modesUi = globalThis.DoplSessionModesUI || null; // FIX 2: the posture selects + their revert
   const closeUi = globalThis.DoplSessionCloseUI || null; // P1-6: the human close affordance
   const folderUi = globalThis.DoplSessionFolderUI || null; // §2 cap: the working-folder pill
+  // §3.2 the composer addressee pill. BOTH modules are OPTIONAL at boot: session.html always
+  // loads them, but a harness that stubs only VM / chrome / render degrades to a steer-only
+  // composer, which is what this window did between rollback §1 and this phase.
+  const address = globalThis.DoplSessionAddress || null;
+  const addressUi = globalThis.DoplSessionAddressUI || null;
   let closeThread = null;
-  // The stream reducer used to be COMPOSED: `session-mention.js` folded in two peer_message
-  // cases (operator_post / _result) around this one, because the composer's `@` picker had a
-  // PEER half that posted the operator's own words into the channel addressed to the peer.
-  // That half is gone (channels rollback §1); phase 4 brings the capability back as a PILL
-  // inside the input, which is a control rather than a syntax nobody had to discover.
-  const reduce = vm.reduceEvent;
+  // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
+  // session-address.js (the view-model is at its 500-line cap) and run over its output.
+  const reduce = address ? (st, evt) => address.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
 
   // Bridge (contextIsolation preload). A no-op stub lets session.html open
   // standalone for manual/mock testing; window.__sessionFeed drives a mock stream.
@@ -51,6 +53,7 @@
     permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
     consentView: $("consentView"), endedBanner: $("endedBanner"), thinking: $("thinkingChip"),
     steerInput: $("steerInput"), send: $("btnSend"),
+    targetPill: $("btnTarget"), targetLabel: $("targetLabel"), targetPop: $("targetPop"),
     // P1-6: the close affordance (session-close-ui.js owns everything it does).
     closeBtn: $("btnCloseThread"), closePanel: $("closePanel"), closeNote: $("closeNote"),
     closeSummary: $("closeSummary"), closeCancel: $("btnCloseCancel"),
@@ -118,7 +121,8 @@
     attended: attendedUi ? (row, accept, note) => attendedUi.mount(row, accept, note, bridge) : null,
   };
   const FACTORY = render.makeFactories(ctx);
-  // v2.8: GRAFTED on, not added to render.makeFactories (that file is at its cap too).
+  // GRAFTED on, not added to render.makeFactories (that file is at its cap too).
+  if (addressUi) FACTORY.peer_message = (item) => addressUi.makePeerMessage(item, ctx);
 
   // ── header / status / folder ──────────────────────────────────────────────
   // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title, the subtitle, the
@@ -337,11 +341,13 @@
   // One button, two states (chromeVm.sendButtonMode): idle shows the up-arrow glyph and sends
   // the steer; a running turn shows the pause glyph and interrupts the agent. The glyphs are
   // static inline SVG in session.html — CSS swaps which one is visible, so nothing is ever
-  // built from a string here.
+  // built from a string here. §3.2: a PEER-addressed draft always shows the send glyph —
+  // it is not a steer, so there is no turn of its own to interrupt.
   function renderSend() {
-    const mode = chromeVm.sendButtonMode(state);
+    const mode = composer.target() === "peer" ? "send" : chromeVm.sendButtonMode(state);
     els.send.classList.toggle("is-running", mode === "pause");
     els.send.setAttribute("aria-label", chromeVm.sendButtonLabel(mode));
+    composer.sync(); // the pill's face follows the names, which arrive after mount
   }
 
   // The live "Thinking" affordance: shown while a turn is in flight and nothing has been
@@ -364,29 +370,39 @@
   }
 
   // ── composer / controls wiring ───────────────────────────────────────────
+  // The pill, its menu, the picked target, the session's own handle and the peer send all live
+  // in session-address-ui.js / session-address.js (this file is at the hard §2 cap). Either
+  // module absent -> the stub: everything is a steer, which is exactly what this composer was
+  // between rollback §1 and §3.2.
+  const composer = address && addressUi
+    ? addressUi.createComposer({ els, bridge,
+        getPeerName: () => (state.init && state.init.from) || "",
+        onChange: () => renderSend(), // picking NEVER sends; it only re-faces the button
+        notice: (text) => { state = reduce(state, { type: "notice", level: "error", text }); renderAll(); } })
+    : { handleKey: () => false, isOpen: () => false, sync: () => {}, target: () => "self", send: () => false };
 
   // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority (it queues as the next
-  // turn), and interrupting is the pause button's job.
-  //
-  // v2.8 MADE THIS ONE COMPOSER WITH TWO ADDRESSEES: a leading `@my-agent` (or no tag) was the
-  // steer, and a leading `@their-agent` posted the operator's OWN words into the channel
-  // addressed to the peer — never a steer (no session:send, no turn, no permission). The `@`
-  // picker is gone (channels rollback §1) and every draft is a steer again. Phase 4 brings the
-  // peer half back as a PILL inside the input, which is a control rather than a syntax nobody
-  // had to discover; `bridge.sendToPeer` is left wired for it.
+  // turn), and interrupting is the pause button's job. §3.2: ONE composer, TWO addressees. The
+  // resting pick steers this window; the other posts the operator's OWN words into the channel
+  // addressed to the peer — never a steer (no session:send, no turn, no permission). The text is
+  // delivered VERBATIM either way: the target is a control, not a prefix in the draft.
   function sendSteer() {
     const text = els.steerInput.value.trim();
     if (!text || state.ended) return;
-    bridge.send(text);
-    state = reduce(state, { type: "turn", role: "operator", text, streaming: false });
+    if (composer.target() === "peer") {
+      if (!composer.send(text)) return; // refused: the draft stays in the field, and it says why
+    } else {
+      bridge.send(text);
+      state = reduce(state, { type: "turn", role: "operator", text, streaming: false });
+    }
     els.steerInput.value = "";
     autoGrow(); // D7: back to a single line after send
     renderAll();
   }
 
-  // Click = pause mid-turn, send otherwise.
+  // Click = pause mid-turn, send otherwise; a peer-addressed draft always SENDS.
   function onSendClick() {
-    if (chromeVm.sendButtonMode(state) === "pause") {
+    if (chromeVm.sendButtonMode(state) === "pause" && composer.target() !== "peer") {
       bridge.interrupt();
       return;
     }
@@ -411,9 +427,10 @@
     els.steerInput.addEventListener("keydown", (e) => {
       // R1: an IME COMMIT fires keydown with key "Enter" and isComposing true (keyCode 229 on
       // older Chromium): sending there ships a half-composed draft, and a peer-tagged one leaves
-      // this machine and cannot be recalled. FIRST line, ahead of the popup delegation, so
-      // neither the send nor a tag-accept can run mid-composition.
+      // this machine and cannot be recalled. FIRST line, ahead of the menu delegation, so
+      // neither the send nor a dismiss can run mid-composition.
       if (e.isComposing || e.keyCode === 229) return;
+      if (composer.handleKey(e)) return; // Escape closes the open menu, and only that
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendSteer();

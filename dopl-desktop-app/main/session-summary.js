@@ -154,6 +154,19 @@ function nameFor(ledger, key, channelId) {
   return name;
 }
 
+/**
+ * The friendly handle for ONE session object, off the SAME ledger `list()` reads.
+ *
+ * Phase 4's composer pill (session window) labels its steer option "Message <name>", and the
+ * name has to match the channel's pill-bar or the two surfaces disagree about what one session
+ * is called. This is the shared read: the engine calls it while emitting `init` so the window
+ * carries the same handle `list()` will project, keyed by the same (channel, thread) session
+ * key. Idempotent — a name assigned here is the one the pill-bar shows, and vice versa.
+ */
+function nameForSession(s) {
+  return nameFor(ledger, String((s && s.key) || ""), String((s && s.channelId) || ""));
+}
+
 /** One LIVE session object -> its summary. `name` is handed in (the ledger is the
  *  caller's), so this stays a pure shape. */
 function liveSummary(s, name) {
@@ -280,6 +293,26 @@ function list() {
 }
 
 /**
+ * THE HANDLE ONE SESSION IS WEARING, for a caller that has the session in hand.
+ *
+ * §3.2 gives the session WINDOW's composer a pill whose resting row reads "Message <name>",
+ * and that name has to be the SAME one the channel pane's pill shows for the same session —
+ * a window calling itself `flint` while its pill says `onyx` is the two-readers-one-fact
+ * defect this module exists to prevent (F-142), reproduced inside one feature. So the window
+ * asks main, and main answers out of the ledger `list()` already writes.
+ *
+ * ASSIGNS ON DEMAND, like `list()` does, which is safe for exactly one reason: the caller
+ * holds a LIVE session resolved from its own window, so the key is in the registry and the
+ * next `list()` keeps it. A key that is in neither the registry nor the ended set is released
+ * on the next projection, so naming something this module cannot see would mint a handle and
+ * then lose it — never call this with anything but a live session.
+ */
+function nameForSession(s) {
+  if (!s || !s.key) return null;
+  return nameFor(ledger, s.key, String(s.channelId || ''));
+}
+
+/**
  * A session ENDED. Retain it only when its window survived — see the retention rule in
  * the header. Returns whether a pill was kept, which is what the engine's own reasoning
  * (`keepWindow` is the abandonment case alone) is worth asserting against.
@@ -367,6 +400,7 @@ module.exports = {
   bind,
   start,
   list,
+  nameForSession,
   noteEnded,
   keptWindow,
   touch,

@@ -47,7 +47,7 @@ for (const banned of ["require(", "electron", "child_process", "@anthropic", "fe
 const EXPORTED = [
   "PILL_STATES", "ACTIVITY_PILL", "pillState", "displayText", "liveSummary", "endedSummary",
   "nameFor", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS", "MAX_ENDED",
-  "bind", "start", "list", "noteEnded", "keptWindow", "touch", "sweepEnded",
+  "bind", "start", "list", "nameForSession", "noteEnded", "keptWindow", "touch", "sweepEnded",
 ];
 
 /** A fresh, isolated copy of the module (its ledger and ended set are module state, so
@@ -270,6 +270,29 @@ test("NAMES: a handle is released when its pill leaves, and goes back to the poo
   // what stops the ledger (and the suffix rounds) growing with every session ever run.
   m.bind({ sessions: new Map([["chan-1:task-9", session({ taskId: "task-9" })]]) });
   assert.equal(m.list()[0].name, "quartz");
+});
+
+/**
+ * §3.2: the session WINDOW's composer pill reads its own handle over IPC
+ * (`session:agent-name` -> `nameForSession`), and the channel pane's pill reads the same
+ * session's handle out of `list()`. Two readers again — so what is worth pinning is that there
+ * is still ONE derivation behind them, in either call order. A window calling itself `flint`
+ * while its own pill says `onyx` is F-142's defect reproduced inside one feature.
+ */
+test("NAMES: a window's own handle is the SAME one its pill shows, either way round", () => {
+  const m = load();
+  const live = session();
+  const other = session({ sessionId: "sess-2", taskId: "task-2" });
+  m.bind({ sessions: new Map([["chan-1:task-1", live], ["chan-1:task-2", other]]) });
+  const asked = m.nameForSession(live); // the window asks BEFORE any projection has run
+  assert.equal(asked, "quartz");
+  const listed = m.list();
+  assert.equal(listed[0].name, asked, "the projection agrees with the answer already given");
+  assert.equal(m.nameForSession(other), listed[1].name, "and the other way round");
+  // No key, no handle: naming something outside the registry would mint one and then lose it
+  // on the next projection, which releases every key `list()` did not see.
+  assert.equal(m.nameForSession(null), null);
+  assert.equal(m.nameForSession({}), null);
 });
 
 // ── 3. THE SUMMARY SHAPE ─────────────────────────────────────────────────────────────

@@ -27,6 +27,10 @@ const { normalizeToolMode, normalizeMessageMode } = require('./session-profiles'
 // 2026-08-02: the canonical MODEL enum lives with the option assembly that spends it.
 const { normalizeModel, modelArg } = require('./session-model');
 const peerPost = require('./session-peer-post'); // v2.8: the operator's own peer-addressed post
+// §3.2: the composer pill's resting row names this session, and the name is the ledger's
+// (F-142's one derivation), not a second one minted per window. session-summary requires
+// nothing back, so there is no cycle.
+const sessionSummary = require('./session-summary');
 const { diag } = require('./diag');
 
 let engine = null; // { getSessionBySender, getConsentBySender, dispatch, decideConsent }
@@ -59,6 +63,21 @@ function register(internals) {
     peerPost.send(s, String((p && p.text) || ''), engine.emitToSession)
       .catch((err) => diag('session-ipc: send-peer error', err && err.message));
     return { ok: true };
+  });
+
+  // §3.2: THE HANDLE THIS WINDOW IS WEARING, for the composer pill's resting row
+  // ("Message flint"). READ-ONLY in the strongest sense available here: it resolves the
+  // session from event.sender like every other handler, calls no dispatch, and deliberately
+  // does NOT touch() the LRU — a window asking its own name is not the operator using it, and
+  // letting it defer a park would make a passive read a lifecycle event.
+  //
+  // A PULL, NOT A REPLAYED EVENT. A handle is fixed for the life of the session KEY (that is
+  // what makes it survive a park, a lazy resume and a P2 recreate, F-142), so one read at mount
+  // is correct and a window reload simply re-reads. Riding `init` instead would have put it in
+  // the replay ring and made three emit sites responsible for remembering it.
+  ipcMain.handle('session:agent-name', (e) => {
+    const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
+    return { name: s ? sessionSummary.nameForSession(s) : null };
   });
 
   // FIX F1 (v2.7): report the TRUTH, not "the session exists". withSession answered
