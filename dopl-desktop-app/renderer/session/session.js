@@ -20,6 +20,9 @@
   const mentionUi = globalThis.DoplSessionMentionUI || null;
   const attendedUi = globalThis.DoplSessionAttendedUI || null; // F-118 consent-card button
   const modesUi = globalThis.DoplSessionModesUI || null; // FIX 2: the posture selects + their revert
+  const closeUi = globalThis.DoplSessionCloseUI || null; // P1-6: the human close affordance
+  const folderUi = globalThis.DoplSessionFolderUI || null; // §2 cap: the working-folder pill
+  let closeThread = null;
   // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
   // session-mention.js (the view-model is at its 500-line cap) and run over its output.
   const reduce = mention ? (st, evt) => mention.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
@@ -52,6 +55,10 @@
     permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
     consentView: $("consentView"), endedBanner: $("endedBanner"), thinking: $("thinkingChip"),
     steerInput: $("steerInput"), mentionPop: $("mentionPop"), send: $("btnSend"),
+    // P1-6: the close affordance (session-close-ui.js owns everything it does).
+    closeBtn: $("btnCloseThread"), closePanel: $("closePanel"), closeNote: $("closeNote"),
+    closeSummary: $("closeSummary"), closeCancel: $("btnCloseCancel"),
+    closeDone: $("btnCloseDone"), closeFailed: $("btnCloseFailed"),
   };
 
   let state = vm.initialState();
@@ -162,6 +169,7 @@
     // FIX 2: dead during the accept -> init adoption gap. It also owns the unconditional repaint
     // of all three selects, the bypass tint and the context meter (its own strip, and §2 cap).
     if (modesUi) modesUi.sync(els, state);
+    if (closeThread) closeThread.paint(state);
   }
 
   function renderFolder() {
@@ -416,30 +424,6 @@
     node.style.height = chromeVm.growHeight(node.scrollHeight, parseFloat(cs.lineHeight), MAX_COMPOSER_LINES, pad) + "px";
   }
 
-  // Apply a folder LABEL returned from the native picker (item 5). A change
-  // persists per-channel and takes effect on the NEXT session (O-5).
-  function applyFolder(res) {
-    if (!res || typeof res !== "object") return;
-    state = reduce(state, { type: "folder", label: res.label });
-    renderAll();
-  }
-
-  function wireFolder() {
-    // ONE click-to-change pill (item 5): clicking opens the native picker.
-    $("folderPill").addEventListener("click", () => {
-      Promise.resolve(folderBridge.choose()).then(applyFolder).catch(noop);
-    });
-    // Seed the pill from the stored dir (the engine also emits `folder` on init).
-    Promise.resolve(folderBridge.get())
-      .then((res) => {
-        if (res && typeof res === "object") {
-          state = reduce(state, { type: "folder", label: res.label });
-          renderAll();
-        }
-      })
-      .catch(noop);
-  }
-
   function wire() {
     els.send.addEventListener("click", onSendClick);
     // Enter still SENDS (the steer queues while a turn runs); Shift+Enter is a newline.
@@ -473,13 +457,20 @@
       confirmed: () => ({ tool: state.toolMode, message: state.messageMode, model: state.modelChoice }),
       notice: (text) => { state = reduce(state, { type: "notice", level: "error", text }); renderAll(); } });
 
-    // The close-thread panel is gone (v3.1). Closing settles the SHARED thread for BOTH members,
-    // so it belongs to the thread (the web thread card, or an agent via dopl_channel), not to one
-    // member's window — whose own X hides/parks it. The `session:close-task` bridge + IPC + the
-    // reducer's close_task branch are deliberately left intact: they are the seam any future
-    // surface uses, and no renderer path can reach them now.
+    // P1-6 (2026-08-04): THE CLOSE AFFORDANCE IS BACK, through the seam v3.1 left intact.
+    // v3.1 removed the panel because closing settles the SHARED thread for both members and so
+    // belongs to the thread — true, and not enough: nothing else closed either, and decision 2
+    // now makes the human the ONLY closer. session-close-ui.js owns the control; this file
+    // keeps one mount and one paint, the same arrangement session-modes-ui.js has.
+    if (closeUi) {
+      closeThread = closeUi.mount({ els, bridge,
+        notice: (text) => { state = reduce(state, { type: "notice", level: "error", text }); renderAll(); } });
+    }
 
-    wireFolder();
+    // The working-folder pill moved to session-folder-ui.js at the §2 cap (2026-08-04).
+    // A folder change persists per-channel and takes effect on the NEXT session (O-5).
+    if (folderUi) folderUi.mount({ pill: $("folderPill"), bridge: folderBridge,
+      onLabel: (label) => { state = reduce(state, { type: "folder", label }); renderAll(); } });
     wireStreamScroll();
   }
 

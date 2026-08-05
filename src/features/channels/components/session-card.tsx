@@ -9,13 +9,21 @@ import {
   type DoplSessionsBridge,
 } from "@/shared/lib/desktop";
 import { Avatar } from "@/shared/ui/avatar";
-import { splitSessionEntries, type SessionGroup } from "../lib/group-thread";
+import {
+  readCloseProposal,
+  splitSessionEntries,
+  type SessionGroup,
+} from "../lib/group-thread";
 import type { ChannelThread, ThreadOutcome } from "../types";
 import {
   CALM_TERMINAL_NOTE,
   ModeBadge,
   StatusChip,
 } from "./session-card-status";
+// DECISION 2 (2026-08-04): the close PROMPT and the close FORM are their own
+// module (§2 cap) — one seam, "how a thread gets closed", and this file is the
+// card around it.
+import { CloseProposalPrompt, ThreadCloseForm } from "./session-card-close";
 import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
 
 /**
@@ -101,6 +109,26 @@ export function SessionCard({
   const canManageThread = !!thread && isThreadParty(thread, currentUserId);
   const showClose =
     canManageThread && thread?.status === "open" && !!onCloseThread;
+  // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM, the human half.
+  //
+  // An agent may no longer close a thread; when it believes the work is done it
+  // posts a marked, non-terminal note and its OPERATOR decides. This is where
+  // that note stops being a line in the log and becomes a decision: the prompt
+  // shows who asked and why, and its Close button is the ordinary close form
+  // with the proposed outcome already chosen.
+  //
+  // GATED ON THE SAME RULE AS THE CLOSE ITSELF (`showClose`), because a prompt
+  // nobody can act on is worse than none: it would tell a third member of the
+  // channel that somebody else's thread is finished and hand them a button that
+  // 403s. A stale proposal (the thread was closed since) disappears with the
+  // control, which is correct — there is nothing left to confirm.
+  const proposal = showClose ? readCloseProposal(session) : null;
+  // Dismissal is LOCAL and deliberately not persisted. "Keep open" means "not
+  // now", and the thread staying open IS the persisted state; writing a
+  // suppression would make the next real proposal invisible.
+  const [proposalDismissed, setProposalDismissed] = useState<string | null>(null);
+  const showProposal =
+    !!proposal && !closing && proposalDismissed !== proposal.message.id;
   // Provably someone else's thread: a first-class row names both parties and we
   // know who is looking. Without the row (a legacy session) or without a viewer
   // id the parties are unknown, so the card keeps its normal footer rather than
@@ -274,8 +302,19 @@ export function SessionCard({
         )}
         <StatusChip status={session.status} />
       </footer>
+      {showProposal && proposal && (
+        <CloseProposalPrompt
+          proposal={proposal}
+          onKeepOpen={() => setProposalDismissed(proposal.message.id)}
+          onClose={() => setClosing(true)}
+        />
+      )}
       {showClose && closing && thread && onCloseThread && (
         <ThreadCloseForm
+          // The proposal's reason becomes the close summary's starting point —
+          // the agent already wrote the sentence, and retyping it is how a good
+          // outcome summary turns into an empty one.
+          initialSummary={proposal?.message.body.trim() ?? ""}
           onSubmit={async (outcome, summary) => {
             await onCloseThread(thread.id, outcome, summary);
             setClosing(false);
@@ -429,66 +468,6 @@ export function OpenWindowControls({
  * outcome and the typed summary; Cancel collapses without a write. Buttons
  * disable while a close is in flight so a double-click can't fire two writes.
  */
-function ThreadCloseForm({
-  onSubmit,
-  onCancel,
-}: {
-  onSubmit: (outcome: ThreadOutcome, summary: string) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [summary, setSummary] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function submit(outcome: ThreadOutcome) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onSubmit(outcome, summary.trim());
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-2 border-t border-border-subtle bg-card-surface-subtle px-3.5 py-2.5">
-      <input
-        type="text"
-        value={summary}
-        onChange={(event) => setSummary(event.target.value)}
-        disabled={busy}
-        maxLength={2000}
-        placeholder="Add a closing summary (optional)"
-        className="concave-field w-full rounded-[8px] px-2.5 py-1.5 text-caption text-text-primary placeholder:text-text-muted"
-      />
-      <div className="flex items-center justify-end gap-1.5">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-secondary disabled:opacity-60"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => submit("failed")}
-          disabled={busy}
-          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-danger disabled:opacity-60"
-        >
-          Mark failed
-        </button>
-        <button
-          type="button"
-          onClick={() => submit("completed")}
-          disabled={busy}
-          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
-        >
-          Mark complete
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /** A non-empty string `metadata.summary`, promoted to the entry's headline. */
 function readSummary(metadata: Record<string, unknown>): string | null {

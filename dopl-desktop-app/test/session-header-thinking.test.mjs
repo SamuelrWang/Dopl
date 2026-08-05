@@ -67,25 +67,56 @@ test("the pause click still routes to the EXISTING interrupt IPC, unchanged", ()
 
 // ── 2. THE HEADER ────────────────────────────────────────────────────────────
 
-test("the header holds End session ALONE (Stop + the thread-closing button are deleted)", () => {
+test("the header holds End session and Close thread, and Stop is still deleted", () => {
+  // v3.1 deleted BOTH extra controls. Stop stays deleted — the send button's pause morph
+  // covers every in-flight state and a second control only competed with it.
   assert.match(HTML, /id="btnEnd"[^>]*>End session</);
-  for (const gone of ["btnStop", "btnClose", "btnCloseCancel", "btnCloseConfirm", "closePanel", "closeSummary", "outcomeSeg"]) {
+  for (const gone of ["btnStop", "outcomeSeg"]) {
     assert.ok(!HTML.includes(`id="${gone}"`), `#${gone} is gone from the markup`);
     assert.ok(!JS.includes(`"${gone}"`), `#${gone} is gone from the controller`);
   }
-  assert.ok(!/Close thread/.test(HTML), "and the copy with it");
-  assert.ok(!/close-panel|close-summary|close-field/.test(CSS), "no orphaned panel recipe");
   assert.ok(!/closeOutcome|seg-btn/.test(JS), "nor any dead outcome bookkeeping");
+
+  // P1-6 (2026-08-04): CLOSE THREAD IS BACK, and the reason v3.1 removed it is the reason it
+  // had to return. "Closing belongs with the thread, not with one member's window" was true and
+  // insufficient: nothing else closed either — no layer linked a responder's "I am finished" to
+  // channel_tasks, and threads sat open for months — and decision 2 now makes the HUMAN the only
+  // closer at all. Removing it from the window where the operator watches the work, while also
+  // removing it from the agent, left the thread open unless somebody remembered another surface.
+  assert.match(HTML, /id="btnCloseThread"[^>]*>Close thread</);
+  assert.ok(HTML.includes('id="closePanel"'), "the panel is in the markup");
+  assert.ok(HTML.includes('id="closeSummary"'), "with a summary field");
+  // HIDDEN BY DEFAULT, on both the button and the panel: the control paints itself in only for a
+  // session that has a first-class thread and has not settled.
+  assert.match(HTML, /id="btnCloseThread"[^>]*hidden/);
+  assert.match(HTML, /id="closePanel"[^>]*hidden/);
 });
 
-test("NOTHING is orphaned: the close-thread SEAM survives, unreachable from this window", () => {
-  // Deliberate: the bridge + IPC + the reducer branch are the seam any future surface uses, and
-  // an agent still closes a thread over MCP. What must be true is that the RENDERER cannot.
-  assert.ok(!/closeTask\(/.test(JS), "the controller never calls it");
+test("the close SEAM is reached by exactly one module, and it is not the controller", () => {
+  // The bridge + IPC + reducer branch were always the seam; what changed is that a renderer path
+  // exists again. It lives in session-close-ui.js (session.js is at the §2 cap), so the
+  // controller still never calls closeTask itself — it mounts and paints.
+  assert.ok(!/closeTask\(/.test(JS), "the controller never calls it directly");
+  assert.match(JS, /closeUi\.mount\(/, "…it mounts the module that does");
+  const CLOSE_UI = readFileSync(R("session-close-ui.js"), "utf8");
+  assert.match(CLOSE_UI, /bridge\.closeTask\(outcome, /, "and that module reaches the bridge");
   const PRELOAD = readFileSync(R("session-preload.js"), "utf8");
   assert.match(PRELOAD, /closeTask\(outcome, summary\)/, "the bridge member is still declared");
   const REDUCER = readFileSync(fileURLToPath(new URL("../main/session-reducer.js", import.meta.url)), "utf8");
   assert.match(REDUCER, /if \(type === 'close_task'\)/, "and main still knows how to close one");
+});
+
+test("the close control refuses to appear where it would do nothing", () => {
+  // Not a permission check — the server owns that (creator or target only) and a refusal comes
+  // back as a notice. These two are about a button that would be inert:
+  //   NO THREAD    `closeTask` is a no-op without a first-class id (main/session-close-task.js).
+  //   ALREADY ENDED  this session has settled; the thread may still be open, but not from here.
+  const { canClose } = require(R("session-close-ui.js"));
+  assert.equal(canClose({ taskId: "t1" }), true);
+  assert.equal(canClose({ taskId: "t1", ended: true }), false);
+  assert.equal(canClose({ taskId: "" }), false);
+  assert.equal(canClose({}), false);
+  assert.equal(canClose(null), false);
 });
 
 // ── 3. THE THINKING CHIP ─────────────────────────────────────────────────────

@@ -251,6 +251,42 @@ export function calmSessionEndStatus(message: ChannelMessage): SessionStatus | n
  */
 export const SESSION_ENDED_KEY = "session_ended";
 
+/**
+ * DECISION 2 (2026-08-04) — the CLOSE PROPOSAL a card renders as a confirmable
+ * prompt. Reserved and server-stamped (`service-writes-metadata.CLOSE_PROPOSAL_KEYS`),
+ * so a marker on the wire is a proposal somebody was entitled to make, never a
+ * claim a peer wrote into their own metadata.
+ *
+ * The OUTCOME rides with it because the confirm prefills from it: the agent is
+ * proposing "completed" or "failed", and the human should be agreeing or
+ * disagreeing with a specific thing rather than re-deciding from scratch.
+ */
+export interface CloseProposal {
+  /** The proposing message — its body is the reason, its author is who asked. */
+  message: ChannelMessage;
+  outcome: "completed" | "failed";
+}
+
+/**
+ * The LATEST close proposal in a session, or null. Latest rather than first: a
+ * long exchange can be proposed on, continue, and be proposed on again, and the
+ * live prompt is the most recent one.
+ */
+export function readCloseProposal(session: {
+  entries: ChannelMessage[];
+}): CloseProposal | null {
+  for (let i = session.entries.length - 1; i >= 0; i -= 1) {
+    const message = session.entries[i];
+    if (message.metadata.closeProposed !== true) continue;
+    const outcome = message.metadata.closeOutcome;
+    return {
+      message,
+      outcome: outcome === "failed" ? "failed" : "completed",
+    };
+  }
+  return null;
+}
+
 /** True for the non-terminal "this member's session stopped" marker. */
 export function isSessionEndedMarker(message: ChannelMessage): boolean {
   return (

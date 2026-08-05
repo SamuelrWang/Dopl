@@ -26,17 +26,36 @@
              wire field (from `metadata.taskTitle`); only the COPY moves to "thread". -->
         <div class="task-title text-caption" id="taskTitle"></div>
       </div>
-      <!-- ONE header control (v3.1). The Stop button is gone: pausing the agent is the send
-           button's pause morph (session-chrome.sendButtonMode), which now covers every in-flight
-           state, so a second control for the same act only competed with it. The thread-closing
-           button is gone too: closing settles the SHARED thread for BOTH members, which belongs
-           with the thread itself (the web thread card, or an agent via MCP) rather than on one
-           member's window; this window's traffic-light X hides/parks it, which is what
-           dismissing a window means. -->
+      <!-- The Stop button is gone (v3.1): pausing the agent is the send button's pause morph
+           (session-chrome.sendButtonMode), which now covers every in-flight state, so a second
+           control for the same act only competed with it.
+
+           CLOSE THREAD IS BACK (P1-6, 2026-08-04). v3.1 removed it because closing settles the
+           SHARED thread for BOTH members and so "belongs with the thread". That is true and it
+           was not enough: nothing else closed either (no layer linked a responder's "I am
+           finished" to channel_tasks, and threads sat open for months), and decision 2 now makes
+           the HUMAN the only closer at all. Taking the control out of the window where the
+           operator watches the work, while also taking it away from the agent, left the thread
+           open unless somebody remembered another surface. The bridge, IPC and reducer branch
+           were left intact for exactly this; session-close-ui.js is the path back to them. -->
       <div class="header-controls">
+        <button class="ctl btn-light ctl-sm" id="btnCloseThread" type="button" hidden>Close thread</button>
         <button class="ctl btn-light ctl-sm ctl-danger" id="btnEnd" type="button">End session</button>
       </div>
     </header>
+
+    <!-- The close panel. Hidden until the operator asks for it, and hidden again the moment the
+         session has nothing to close (no first-class thread, or already settled). -->
+    <section class="close-panel" id="closePanel" hidden>
+      <p class="text-caption" id="closeNote"></p>
+      <input class="concave-field" id="closeSummary" type="text" maxlength="2000"
+             placeholder="Add a closing summary (optional)" />
+      <div class="close-actions">
+        <button class="ctl btn-light ctl-sm" id="btnCloseCancel" type="button">Cancel</button>
+        <button class="ctl btn-light ctl-sm ctl-danger" id="btnCloseFailed" type="button">Mark failed</button>
+        <button class="ctl btn-light ctl-sm" id="btnCloseDone" type="button">Mark complete</button>
+      </div>
+    </section>
 
     <!-- Status strip: status pill · the TWO permission axes (v2.9) · posture line ·
          working-directory pill (item 5).
@@ -239,6 +258,8 @@
        and the enabled/disabled rule for the accept -> init adoption gap. Loaded BEFORE the
        controller, which mounts it once and syncs it from renderStatus. -->
   <script src="session-modes-ui.js"></script>
+  <script src="session-close-ui.js"></script>
+  <script src="session-folder-ui.js"></script>
   <script src="session.js"></script>
   <!-- Q6: the sign-in banner owns its own element + its own narrow bridge sink, so it is
        independent of the transcript controller above and loads after it. -->
