@@ -89,7 +89,10 @@ test("the SPAWN turn — no thread yet — is byte for byte the turn it was", ()
   assert.ok(!before.includes('op "read"'), "no half-addressed read");
   assert.ok(!/SECOND action/.test(before), "and no orphan step");
   assert.ok(!/undefined|null/.test(before), "no placeholder leaks");
-  assert.match(before, /Your FIRST action is ToolSearch/, "the lookup order still rides alone");
+  // FIX F3b (2026-08-04): the lookup ORDER is gone (ToolSearch is hard-denied on every
+  // session profile — see prompt-profile-drift.test.mjs); the GRANT statement it was really
+  // protecting rides alone in its place.
+  assert.match(before, /mcp__dopl__dopl_channel is GRANTED to this session/, "the grant line still rides alone");
 });
 
 test("a half-known address prints no read, whatever the turn's thread is", () => {

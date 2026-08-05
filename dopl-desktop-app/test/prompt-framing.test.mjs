@@ -89,11 +89,25 @@ test("milestoneGuidance appears only when the profile can post", () => {
   assert.equal(milestoneGuidance(), "", "absent arg -> empty");
   assert.equal(milestoneGuidance({}), "", "missing flag -> empty");
   const line = milestoneGuidance({ hasPostingTool: true });
-  assert.ok(line.includes("task_progress"), "posting profile gets the milestone guidance");
-  // FIX S1: the KIND keeps the storage word, the ARGUMENT does not. dopl_channel has no
-  // `task` parameter — teaching one made every milestone land unthreaded.
-  assert.ok(line.includes('kind="task_progress"') && line.includes("thread=<id>"));
+  // P0-1: the milestone is its OWN op now, so there is no kind for the agent to pick and
+  // nothing to confuse with a reply. FIX S1 still holds for the ARGUMENT: `thread=<id>`.
+  assert.ok(line.includes('op "milestone"'), "posting profile gets the milestone guidance");
+  assert.ok(line.includes("thread=<id>"), "and the real argument name");
   assert.ok(!/\btask=/.test(line), `milestone line still teaches task=: ${line}`);
+  assert.ok(!/kind\s*=/.test(line), `milestone line still makes the agent pick a kind: ${line}`);
+});
+
+// P0-1 — THE FRAMING THAT PRODUCED THE INCIDENT. The old line ended "so the requester sees
+// progress WITHOUT WAITING FOR THE FINAL REPLY", which puts a milestone and the final reply on
+// ONE AXIS and invites the agent to reach for a different `task_*` kind at the end. It did, and
+// a `task_finished` body is structurally unrenderable (lib/group-thread.ts). Nothing on that
+// axis may come back.
+test("the milestone line no longer frames milestones against the final reply", () => {
+  const line = milestoneGuidance({ hasPostingTool: true });
+  assert.ok(!/final reply/i.test(line), `the progress-vs-final axis is back: ${line}`);
+  assert.ok(!/without waiting/i.test(line), `the progress-vs-final axis is back: ${line}`);
+  assert.ok(/optional/i.test(line), "a milestone is opt-in");
+  assert.ok(/ONE LINE/.test(line), "…and it is one line, not a payload");
 });
 
 test("sanitizeName caps length so a paragraph-length name cannot smuggle prose", () => {
@@ -136,7 +150,12 @@ test("buildFencedTurn requester: frames the GOAL as data and tells the agent to 
   assert.ok(out.includes("BEGIN-REQUEST-abc123") && out.includes("END-REQUEST-abc123"));
   assert.ok(out.includes("Ship the Q3 report"), "the goal body is included");
   assert.ok(/DRIVING a thread/i.test(out), "requester drives the thread");
-  assert.ok(/close the THREAD/.test(out), "requester closes the thread when the goal is met");
+  // DECISION 2 (2026-08-04): the requester PROPOSES a close and a human confirms it. The old
+  // copy said "close the THREAD", and a close settles the SHARED thread for both members off
+  // one machine's judgment — while the operator may still have things to say in it.
+  assert.ok(/op "propose_close"/.test(out), "requester proposes the close when the goal is met");
+  assert.ok(/never close a thread yourself/i.test(out), "…and is told it never closes one");
+  assert.ok(!/\bclose the THREAD\b/.test(out), "the old direct-close instruction is gone");
   assert.ok(out.includes("Q3 report"), "task title appears when provided");
   assert.ok(/dopl_channel/.test(out), "delivery is via the dopl_channel tool");
 });
@@ -404,15 +423,49 @@ test("no built turn teaches a `task` ARGUMENT anywhere (kinds are still allowed)
       });
       assert.ok(!/\btask\s*=/.test(out), `${side} ${taskId}: teaches task= in\n${out}`);
       assert.ok(!/\btask "/.test(out), `${side} ${taskId}: teaches task "<id>"`);
-      // …while the storage-named KINDS are untouched, because those ARE real.
-      assert.ok(/kind="task_progress"/.test(out), `${side}: the milestone kind survives`);
+      // …while the storage-named KINDS are still NAMED, because they are real — the prompt
+      // names them now to say they are NOT the agent's to post (P0-1), not to offer them.
+      assert.ok(/task_finished/.test(out), `${side}: the lifecycle names are still stated`);
     }
   }
 });
 
-test("the vocabulary names `thread=<id>` as the argument and task_* as the kinds", () => {
+test("the vocabulary names `thread=<id>` as the argument and refuses the agent the task_* kinds", () => {
   const out = buildFencedTurn({ side: "responder", message: "x", nonce: "s2", context: ids() });
   const flat = out.replace(/\s+/g, " ");
   assert.ok(flat.includes("`thread=<id>`"), "the real parameter name is stated");
-  assert.ok(/post KINDS keep the older storage word/.test(flat), "and the split is explained");
+  // P0-1 — the bullet used to LIST all four kinds and say "use each as given", which reads as
+  // an interchangeable set. It now states the split of AUTHORITY instead.
+  assert.ok(/LIFECYCLE MARKERS owned by the runtime/.test(flat), "the lifecycle kinds are the runtime's");
+  assert.ok(/not yours to post/.test(flat), "…and the agent is told so outright");
+  assert.ok(!/use each as given/i.test(flat), "the interchangeable-vocabulary reading is gone");
+});
+
+// P0-1 — THE INVARIANT, ON EVERY BRANCH. deliverySection has four returns (requester and
+// responder, each with and without a resolved delivery call) and the rule has to be in all of
+// them: an agent re-reads the delivery section when it is about to send, which is exactly the
+// moment the incident happened.
+test("every delivery branch states that prose — the final answer included — is a message", () => {
+  for (const side of ["responder", "requester"]) {
+    for (const context of [ids(), { channelName: "Ops" }]) {
+      const out = buildFencedTurn({ side, message: "x", nonce: "p1", context });
+      const flat = out.replace(/\s+/g, " ");
+      assert.ok(
+        /EVERY SUBSTANTIVE WORD YOU SEND IS AN ORDINARY MESSAGE, YOUR FINAL ANSWER INCLUDED/.test(flat),
+        `${side}: the prose invariant is missing from a delivery branch`
+      );
+      assert.ok(/NEVER put prose into a task_started, task_finished or task_failed post/.test(flat),
+        `${side}: the refusal is not stated`);
+      assert.ok(/not shown on the other member's thread card/.test(flat),
+        `${side}: the reason (an unrenderable body) is not stated`);
+    }
+  }
+});
+
+test("the team (room-bound) turn carries the prose invariant too", () => {
+  const out = buildFencedTurn({
+    bind: "room", message: "x", nonce: "p2",
+    context: { ...ids(), agentName: "quartz", ownerName: "Sam", agentId: TASK },
+  });
+  assert.ok(/YOUR FINAL ANSWER INCLUDED/.test(out.replace(/\s+/g, " ")));
 });

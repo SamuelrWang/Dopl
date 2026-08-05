@@ -127,16 +127,25 @@ function deliveryBranches() {
   return out;
 }
 
-test("FIX F3: the ToolSearch ORDER is present, once, and ABOVE the delivery section", () => {
+// FIX F3b (2026-08-04) RE-TARGETS THIS TEST, and the re-target is the finding. F3's ORDER was
+// `ToolSearch("select:mcp__dopl__dopl_channel")` — a tool `session-profiles.js` HARD-DENIES on
+// all three profiles, so the first imperative of every session was a call that comes back
+// "Blocked for this session". F3 was written for `attended-prompt.js`, which runs in the
+// operator's own unconstrained Claude Code and keeps it correctly; copying it here made the
+// prompt order something the containment table forbids. The prompt/profile join is pinned in
+// `prompt-profile-drift.test.mjs`.
+//
+// WHAT STAYS PINNED is what F3 was really protecting: the reporting rule (the #345 sentence),
+// its imperative voice, and its ORDER in the turn — all of which survive the lookup's removal.
+test("FIX F3b: FIRST ACTIONS states the GRANT, once, and ABOVE the delivery section", () => {
   for (const [label, out] of deliveryBranches()) {
-    assert.ok(out.includes('ToolSearch("select:mcp__dopl__dopl_channel")'), `${label}: the exact query to run`);
-    // IMPERATIVE, never a condition an agent that already decided can read as agreement.
-    assert.match(out, /Your FIRST action is ToolSearch/, `${label}: stated as this turn's first action`);
+    // No denied call is ordered. The generalized version of this is the drift suite.
+    assert.ok(!/ToolSearch/.test(out), `${label}: orders a tool every session profile denies`);
     assert.ok(!/If mcp__dopl__dopl_channel is not in your tool list/.test(out), `${label}: the aside is gone`);
-    assert.match(out, /It is deferred, not absent\./, `${label}: names the real state of the tool`);
-    assert.match(out, /do not report that you have no\n\s+dopl tools at all/, `${label}: forbids the #345 sentence`);
-    // ONE copy. This prompt is long and a repeated instruction costs attention everywhere else.
-    assert.equal(out.split("ToolSearch(").length - 1, 1, `${label}: stated exactly once`);
+    // IMPERATIVE, never a condition an agent that already decided can read as agreement.
+    assert.match(out, /mcp__dopl__dopl_channel is GRANTED to this session/, `${label}: states the grant`);
+    assert.match(out, /that is the list, not the grant/, `${label}: names the real state of the tool`);
+    assert.match(out, /never report that you have no dopl tools at all/, `${label}: forbids the #345 sentence`);
     // ORDER, which is the half the first fix got wrong.
     const first = out.indexOf("FIRST ACTIONS THIS TURN");
     assert.ok(first >= 0, `${label}: the block is in the turn`);
@@ -174,12 +183,12 @@ test("FIX F7: no thread (or a half-known address) prints no read, and the reques
     assert.ok(!out.includes('op "read"'), `${label}: never a half-addressed read`);
     assert.ok(!/SECOND action/.test(out), `${label}: and no orphan step`);
     assert.ok(!/undefined|null/.test(out), `${label}: no placeholder leaks`);
-    assert.match(out, /Your FIRST action is ToolSearch/, `${label}: the lookup order still rides alone`);
+    assert.match(out, /mcp__dopl__dopl_channel is GRANTED to this session/, `${label}: the grant line still rides alone`);
   }
   // The requester OPENED this thread and has been driving it; it is not the session with a hole.
   const req = framing.buildFencedTurn({ side: "requester", message: "x", nonce: "f7c", context: ctx({ taskId: TASK }) });
   assert.ok(!req.includes('op "read"'), "no seed for the side that already has the thread");
-  assert.match(req, /Your FIRST action is ToolSearch/, "but it still gets the lookup order");
+  assert.match(req, /mcp__dopl__dopl_channel is GRANTED to this session/, "but it still gets the grant line");
 });
 
 test("the granted identifier and the taught identifier are the SAME string", () => {
