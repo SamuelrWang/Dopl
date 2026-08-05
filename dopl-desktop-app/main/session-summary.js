@@ -154,19 +154,6 @@ function nameFor(ledger, key, channelId) {
   return name;
 }
 
-/**
- * The friendly handle for ONE session object, off the SAME ledger `list()` reads.
- *
- * Phase 4's composer pill (session window) labels its steer option "Message <name>", and the
- * name has to match the channel's pill-bar or the two surfaces disagree about what one session
- * is called. This is the shared read: the engine calls it while emitting `init` so the window
- * carries the same handle `list()` will project, keyed by the same (channel, thread) session
- * key. Idempotent — a name assigned here is the one the pill-bar shows, and vice versa.
- */
-function nameForSession(s) {
-  return nameFor(ledger, String((s && s.key) || ""), String((s && s.channelId) || ""));
-}
-
 /** One LIVE session object -> its summary. `name` is handed in (the ledger is the
  *  caller's), so this stays a pure shape. */
 function liveSummary(s, name) {
