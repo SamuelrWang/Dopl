@@ -1,7 +1,21 @@
 # Channels rollback — named agents out, sessions in
 
 Product direction set by Samuel, 2026-08-05, in conversation. This document is the
-agreed scope BEFORE any code moves. Nothing here is implemented yet.
+agreed SCOPE, written before any code moved, and it is left as written — it is the
+record of what was agreed, not a status board.
+
+> **Status, 2026-08-05.** Sequencing items **1-4 have landed**: F-140 (§3.4's stamp and
+> the one initiating behaviour), F-141 (§1's rip-out), F-142 (§3.3's session pills),
+> F-143 (§3.2's two composer pills). **Item 5 (§3.5's MCP ops: spawn-with-handoff,
+> message-a-session, read-session-state) is next and is unstarted**; items 6-7
+> (streaming, which unlocks §3.3's `thinking`, and `agent_presence`'s MEASURED
+> retirement) follow it. `test/live/` is still deleted and unrebuilt (F-141).
+>
+> Where this document and the shipped code disagree, **`docs/ENGINEERING.md` §18 is the
+> law and this is history** — each phase's rules live there under "PHASE N OF THE
+> ROLLBACK", with the full story in the matching `F-14x` entry in
+> `docs/REFACTOR-FINDINGS.md`. One deliberate departure of note: §3.2's chat slot ships
+> as **"Message"** in the UI, while the wire value stays `chat`.
 
 ## The one-sentence version
 
