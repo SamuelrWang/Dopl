@@ -22,6 +22,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
+// §3.3: main's session-pill push. Named here as a constant for the same reason every other
+// channel is a literal — test/preload-parity pins that no ipc channel name is computed.
+const SESSIONS_EVENT = 'dopl:sessions';
 
 const METHODS = { GET: 1, POST: 1, PATCH: 1, PUT: 1, DELETE: 1 };
 
@@ -170,12 +173,39 @@ contextBridge.exposeInMainWorld('dopl', {
   // getDesktopSessions → `sessions.reopen`) and renders NOTHING when it is
   // absent, so dropping it here silently removes the button rather than
   // failing. Pinned by test/preload-parity.test.mjs.
+  //
+  // `summaries` / `onSummaries` (rollback plan §3.3) are the SESSION PILLS' feed: the
+  // sessions running on THIS machine, each with a friendly name, a coarse state
+  // (working|idle|ended) and its channel + thread, projected in main by
+  // main/session-summary.js and served/pushed by main/ui-bridge.js. Read once on mount,
+  // then listen — a push-only surface leaves a freshly opened channel blank until the
+  // next state change, and on a quiet machine that is never.
+  //
+  // SPA-ONLY, DELIBERATELY. These two are absent from renderer/preload.js: that preload
+  // belongs to the window hosting the RETIRED website (ENGINEERING §9.3), and a retired
+  // surface does not grow new capabilities. The parity invariant runs remote ⊆ SPA, so
+  // this widens nothing — and test/preload-parity.test.mjs records the divergence
+  // explicitly rather than letting it read as an oversight.
+  //
+  // NOTHING PRIVILEGED CROSSES. The reply is derived from in-memory state: no path, no
+  // token, no window handle, no absolute anything. It starts no query and opens no
+  // window — the pill's "Open" is `reopen` above, which is unchanged.
   sessions: {
     reopen: (channelId, taskId) =>
       ipcRenderer.invoke('sessions:reopen', {
         channelId: asId(channelId),
         taskId: asId(taskId),
       }),
+    summaries: () => ipcRenderer.invoke('sessions:summaries'),
+    onSummaries: (callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        callback({ sessions: Array.isArray(p.sessions) ? p.sessions : [] });
+      };
+      ipcRenderer.on(SESSIONS_EVENT, listener);
+      return () => ipcRenderer.removeListener(SESSIONS_EVENT, listener);
+    },
   },
 
   // Phase 3 live updates: main watches postgres_changes for the viewed

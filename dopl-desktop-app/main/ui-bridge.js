@@ -24,6 +24,7 @@ const appVersion = require('./app-version');
 const authTokens = require('./auth-tokens');
 const { API_BASE, APP_ORIGIN } = require('./config');
 const uiSync = require('./ui-sync');
+const sessionSummary = require('./session-summary'); // §3.3: the session-pill projection
 const authActions = require('./auth-actions');
 const authPassword = require('./auth-password');
 const auth = require('./auth');
@@ -389,6 +390,26 @@ function register(opts = {}) {
       uiSync.watch(workspaceId);
       return { ok: true };
     })
+  );
+
+  // SESSION PILLS (rollback plan §3.3) — the CURRENT summaries, for a view that has just
+  // mounted. The feed itself is a PUSH (`dopl:sessions`, armed by session-summary.start), and
+  // a push-only surface leaves a freshly opened channel blank until the next state change,
+  // which on a quiet machine is never. So: read once on mount, then listen.
+  //
+  // IT LIVES HERE, NOT IN channel-dir-ipc.js BESIDE `sessions:reopen`, and the split is
+  // deliberate. That file is the surface exposed to the window hosting a REMOTE page, and
+  // its ops are there because the retired website needs them; this one is the bundled SPA's
+  // alone (renderer/preload.js does not expose it, so the remote page has no way to call it)
+  // and belongs on the SPA's own bound transport. `bound` REJECTS a foreign sender rather
+  // than answering a refusal shape, which is right for a read only our own bundle makes.
+  //
+  // DERIVED, NEVER STORED: the reply is a projection over the in-memory registry
+  // (main/session-summary.js). It starts no query, opens no window, writes no row and
+  // touches no network — this is a read of what is already true on this machine.
+  ipcMain.handle(
+    'sessions:summaries',
+    bound('sessions-summaries', () => ({ sessions: sessionSummary.list() }))
   );
 
   ipcMain.handle(

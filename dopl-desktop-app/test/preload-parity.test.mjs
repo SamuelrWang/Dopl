@@ -147,6 +147,45 @@ test("the SPA is allowed its own, larger surface (this is one-directional)", () 
   }
 });
 
+// ── 1b. A SHARED NAMESPACE THAT DIVERGED, ON PURPOSE ─────────────────────────
+// `sessions` is the one namespace both preloads have, and the SPA's is now bigger.
+// That is legal under the invariant above (remote ⊆ SPA), but "legal" is exactly how
+// the three silent outages this file exists for looked, so the divergence is written
+// down rather than inferred from a passing parity check.
+//
+// WHY THESE TWO ARE SPA-ONLY. `summaries` / `onSummaries` feed the SESSION PILLS bar
+// (rollback plan §3.3), which lives in the web tree the SPA bundles. The remote preload
+// belongs to the window that loads the RETIRED website (ENGINEERING §9.3) — a surface
+// nothing new is built on and nothing new is exposed to. The pills bar feature-detects
+// them and renders NOTHING without them, so the retired page simply has no pills, which
+// is the intended outcome and not a regression to chase.
+const SPA_ONLY_SESSION_OPS = ["sessions.summaries", "sessions.onSummaries"];
+
+test("the pill feed is on the SPA shell and DELIBERATELY not on the remote one", () => {
+  for (const op of SPA_ONLY_SESSION_OPS) {
+    assert.equal(
+      typeof at(SPA.api, op),
+      "function",
+      `the SPA preload must expose ${op} — the pills bar renders nothing without it`
+    );
+    assert.equal(
+      at(REMOTE.api, op),
+      undefined,
+      `${op} must stay off the retired website's preload. If it is being added there, ` +
+        "that is a decision to un-retire a surface — make it deliberately, and give it " +
+        "a wire fixture below like every other shared op."
+    );
+  }
+});
+
+test("sessions.reopen is still SHARED — the pill and the card open the same way", () => {
+  // The pill's "Open" is `reopen`, not a new op: one reopen path in main
+  // (session-reopen.reopenByTask, which grew the ended-but-kept-window branch), one IPC.
+  // A second op here would be a second machinery to keep correct.
+  assert.equal(typeof at(REMOTE.api, "sessions.reopen"), "function");
+  assert.equal(typeof at(SPA.api, "sessions.reopen"), "function");
+});
+
 // ── 2. Same op, same wire ────────────────────────────────────────────────────
 // Presence is not enough: a re-added namespace that invokes a different channel
 // name, or passes positional args where main expects an object, is the same
@@ -236,6 +275,18 @@ const WEB_DETECTS = [
     path: "sessions.reopen",
     source: ["src", "shared", "lib", "desktop.ts"],
     detection: 'typeof sessions.reopen === "function"',
+    inSpa: true,
+  },
+  {
+    path: "sessions.summaries",
+    source: ["src", "features", "channels", "components", "session-pills-bar.tsx"],
+    detection: 'typeof sessions.summaries === "function"',
+    inSpa: true,
+  },
+  {
+    path: "sessions.onSummaries",
+    source: ["src", "features", "channels", "components", "session-pills-bar.tsx"],
+    detection: 'typeof sessions.onSummaries === "function"',
     inSpa: true,
   },
   {

@@ -33,6 +33,7 @@ import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
 import { NotifyScopeButton } from "./notify-scope-button";
 import { RoomsSidebar } from "./rooms-sidebar";
+import { SessionPillsBar } from "./session-pills-bar";
 import { ThreadsButton } from "./threads-button";
 
 /** How long a thread's grouped card keeps its navigation ring after a panel click. */
@@ -355,10 +356,12 @@ export function ChannelPane({
         />
       </div>
 
-      {/* The AGENT CHIPS BAR sat here — one chip per live named agent, with
-          rename / park / disengage in a popover. It is deleted, not stubbed:
-          rollback plan §3.3 replaces it with SESSION PILLS in phase 3, and a
-          placeholder would have to be un-designed first. */}
+      {/* Where the AGENT CHIPS BAR was (one chip per summoned NAMED AGENT, its
+          state read off a server column that could not see the desktop). Rollback
+          plan §3.3's replacement: one pill per LIVE SESSION of the operator's in
+          this channel, projected by the desktop itself. Renders NOTHING outside
+          the desktop app — every fact in it is about the local machine. */}
+      {channel.isMember && <SessionPillsBar channelId={channel.id} />}
 
       {/* Body row: the conversation column, plus the optional rooms column. */}
       <div className="flex min-h-0 flex-1">

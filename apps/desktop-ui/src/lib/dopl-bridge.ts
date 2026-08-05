@@ -13,6 +13,12 @@
  * transport falls back to `fetch`. Feature-detect, never assume.
  */
 
+// The session-pill wire shape is declared ONCE, in the web tree's own view of this
+// bridge (`@/shared/lib/spa-bridge`), because the component that renders it lives
+// there and the SPA bundles that component. A third copy here would be a third thing
+// to keep in step.
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+
 /** Wire response for `dopl:api-request`. Main parses the body; the renderer
  *  owns the `{ error: { code, message } }` envelope decoding (`./api.ts`), so
  *  BOTH transports feed the identical decoder. */
@@ -116,15 +122,27 @@ export interface DoplBridge {
     ): Promise<{ ok: boolean }>;
   };
   /** Reveal (or recreate parked) this thread's session window — the
-   *  session-card's "Open thread" button. Mirrors the remote-page preload's
-   *  one session op; opens a window only, starts no query. The web tree
-   *  feature-detects this namespace (`@/shared/lib/desktop`
-   *  getDesktopSessions), so an absent one silently hides the button. */
+   *  session-card's "Open thread" button, and the session pill's "Open". Mirrors
+   *  the remote-page preload's one session op; opens a window only, starts no
+   *  query. The web tree feature-detects this namespace (`@/shared/lib/desktop`
+   *  getDesktopSessions), so an absent one silently hides the button.
+   *
+   *  `summaries` / `onSummaries` (rollback plan §3.3) are SPA-ONLY: the remote
+   *  preload has neither, because that window hosts the RETIRED website. They
+   *  carry the SESSION PILLS' feed — the sessions running on this machine, each
+   *  with a friendly name and a coarse state. Read once on mount, then listen.
+   *  Both optional: an older main has no such handler and the pills bar renders
+   *  NOTHING rather than an empty row. See `@/shared/lib/spa-bridge`, which is
+   *  the same declaration for modules shared with the web app. */
   sessions?: {
     reopen(
       channelId: string,
       taskId: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    summaries?(): Promise<{ sessions: DesktopSessionSummary[] }>;
+    onSummaries?(
+      callback: (event: { sessions: DesktopSessionSummary[] }) => void
+    ): () => void;
   };
 }
 

@@ -360,6 +360,7 @@ if (!gotLock) {
       try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
       wireSpaServices({
         uiBridge, authTokens, uiSync, diag,
+        sessionSummary: require('./session-summary'), // §3.3: the session-pill push
         getMainWindow: () => mainWindow,
       });
       createShellWindow({ show: false });

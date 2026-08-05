@@ -125,11 +125,20 @@ function resumeWatchTarget(stash, userId) {
 
 // The whenReady SPA-mode service wiring: bridge registration, auth-state
 // fan-out (stop the sync feed on sign-out, restart + rotate on sign-in),
-// and the ui-sync start. `deps` adds: uiBridge, authTokens, uiSync,
-// broadcastTo() → the live window.
+// the ui-sync start, and (§3.3) the session-pill push. `deps` adds: uiBridge,
+// authTokens, uiSync, sessionSummary, broadcastTo() → the live window.
 function wireSpaServices(deps) {
   const startUiSync = () =>
     deps.uiSync.start({ getWindow: deps.getMainWindow, getAccessToken: deps.authTokens.getAccessToken });
+  // SESSION PILLS (rollback plan §3.3). SPA-only, like the sync feed: the retired remote
+  // shell has no pills bar to feed. Unlike ui-sync it holds no socket and no credential —
+  // it projects in-memory session state — so it is armed once here and never stopped on
+  // sign-out: there is nothing running to stop, and the sessions themselves are unaffected
+  // by a sign-out (the engine owns their lifetime). `getWindow` is read at SEND time.
+  const startSessionSummary = () => {
+    if (!deps.sessionSummary) return; // mid-wave / harness
+    deps.sessionSummary.start({ getWindow: deps.getMainWindow });
+  };
   let stash = null; // { workspaceId, userId } — what the feed was watching when it stopped
   let lastUserId = null; // the operator it was watching FOR (signed-out carries no id)
   deps.uiBridge.register({ getMainWindow: deps.getMainWindow });
@@ -145,6 +154,9 @@ function wireSpaServices(deps) {
     }
     if (status === 'signed-in') {
       try { startUiSync(); } catch (err) { deps.diag('ui-sync restart error', err && err.message); }
+      // A sign-in swaps the renderer out of the signed-out screen, so the fresh one has
+      // seen no summaries frame; start() resets the digest and repaints it.
+      try { startSessionSummary(); } catch (err) { deps.diag('session-summary restart error', err && err.message); }
       const resume = resumeWatchTarget(stash, state && state.userId);
       stash = null;
       if (resume) {
@@ -155,6 +167,7 @@ function wireSpaServices(deps) {
     }
   });
   startUiSync();
+  startSessionSummary();
 }
 
 // Tray sign-out, SPA shape: drop the credential and PUSH the transition —
