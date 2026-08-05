@@ -480,12 +480,12 @@ module.exports = {
   launchRequesterSession,
   hasLiveSession,
   counterpartyFor,
-  // `summonTeamSession` / `wakeTeamSession` were exported here, delegating to session-team.js:
-  // a summoned, ROOM-BOUND session that greeted the channel on `/new-agent` and opened its
-  // dormant shell the first time its handle was addressed. Both are gone with summoning
-  // (channels rollback §1). The room-vs-pair SLOT SHAPE they used (`agentId` beside `taskId`
-  // in a session key) is left in place and inert — nothing sets `agentId` any more.
-  acceptsInboundFrom: sessionTeam.acceptsInboundFrom, // D2 — the pair fence vs the room binding
+  // The three session-team.js exports (`summonTeamSession`, `wakeTeamSession`,
+  // `acceptsInboundFrom`) went with summoning — docs/ENGINEERING.md §18 F-141 carries that
+  // story, including why the inert room-vs-pair slot shape stayed. The LAST of them left its
+  // line behind here, and `module.exports` is EVALUATED, so requiring this module threw
+  // `ReferenceError: sessionTeam is not defined` — no engine, no windows, no sessions.
+  // test/main-exports-defined.test.mjs now pins every main export against what its file binds.
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell
   armRequestStatus: sessionPark.armRequestStatus, // 2026-08-05 — the request strip on the operator's OWN typed request
