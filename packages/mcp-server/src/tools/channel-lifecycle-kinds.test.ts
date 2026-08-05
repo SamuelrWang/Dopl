@@ -125,7 +125,7 @@ describe("what the refusal must NOT catch", () => {
     expect(res.isError).toBeFalsy();
     const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
     // No kind on the wire at all — the default is what every substantive post is.
-    expect((input as Record<string, unknown>).kind).toBeUndefined();
+    expect((input as unknown as Record<string, unknown>).kind).toBeUndefined();
   });
 });
 
@@ -143,7 +143,7 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
 
     expect(res.isError).toBeFalsy();
     const [channelId, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
-    const sent = input as Record<string, unknown>;
+    const sent = input as unknown as Record<string, unknown>;
     expect(channelId).toBe("chan-1");
     expect(sent.kind).toBe("task_progress");
     expect(sent.body).toBe("schema half landed");
@@ -179,7 +179,7 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
       to_agent: "quartz",
     });
     const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
-    const sent = input as Record<string, unknown>;
+    const sent = input as unknown as Record<string, unknown>;
     expect(sent.toUserId).toBeUndefined();
     expect(sent.toAgent).toBeUndefined();
     expect(sent.toAgents).toBeUndefined();
@@ -201,7 +201,7 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
       as_agent: "quartz",
     });
     const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
-    expect((input as Record<string, unknown>).authorAgentId).toBe("agent-1");
+    expect((input as unknown as Record<string, unknown>).authorAgentId).toBe("agent-1");
   });
 });
 

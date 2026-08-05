@@ -42,10 +42,12 @@ export declare const CHANNEL_INPUT_SHAPE: {
         read: "read";
         invite: "invite";
         post: "post";
+        milestone: "milestone";
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";
         create_thread: "create_thread";
+        propose_close: "propose_close";
         close_thread: "close_thread";
         set_thread_mode: "set_thread_mode";
         agents: "agents";

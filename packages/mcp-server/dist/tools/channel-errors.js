@@ -83,6 +83,10 @@ function classifyForbidden(e) {
             return "thread_authorization";
         case "CHANNEL_AGENT_FORBIDDEN":
             return "agent_owner";
+        case "CHANNEL_LIFECYCLE_KIND_FORBIDDEN":
+            return "lifecycle_kind";
+        case "CHANNEL_CLOSE_IS_HUMAN_ONLY":
+            return "close_is_human";
         default:
             return "unknown";
     }

@@ -30,6 +30,20 @@
  * `channel-ops.test.ts` in the same change — a §2 split at the 500-line cap, on
  * the seam that this file already is: every assertion about a close result now
  * lives in one place instead of two that would have to be re-worded together.
+ *
+ * DECISION 2 (2026-08-04) RE-TARGETS THE FIRST HALF, and deliberately does not
+ * delete it. An agent may no longer CLOSE a thread — closing settles the shared
+ * exchange for both members and is its operator's judgment — so the op it
+ * reaches is `propose_close`, and every property the close result had to have is
+ * a property the PROPOSAL result has to have: the summary is forwarded and
+ * echoed, the peer-typed title is a code span under the untrusted header (a
+ * thread's TARGET may propose on it, so the title is routinely not the caller's),
+ * and the marker seq rides out rather than being guessed. What CHANGED is the
+ * claim: the close result had to stop overclaiming finality, and the proposal
+ * result has to claim none at all — the thread is untouched and still live.
+ *
+ * The post-side half (`opPost`'s closed-thread warning) is unchanged: a thread a
+ * HUMAN closed still warns a late poster exactly as before.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
@@ -61,74 +75,100 @@ function posted(threadClosed) {
         threadClosed,
     };
 }
-(0, vitest_1.describe)("opCloseThread — summary (Feature 3c)", () => {
+(0, vitest_1.describe)("opProposeClose — summary (Feature 3c, re-targeted by DECISION 2)", () => {
     (0, vitest_1.it)("forwards `summary` to the client and surfaces it in the confirmation", async () => {
-        const closeChannelThread = vitest_1.vi.fn();
-        closeChannelThread.mockResolvedValue({
-            thread: { title: "Ship it", outcome: "completed" },
-            echoSeq: null,
+        const proposeChannelThreadClose = vitest_1.vi.fn();
+        proposeChannelThreadClose.mockResolvedValue({
+            thread: { title: "Ship it" },
+            markerSeq: null,
+            outcome: "completed",
         });
-        const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
-        const [channelId, threadId, input] = closeChannelThread.mock.calls[0];
+        const client = stubClient({ proposeChannelThreadClose });
+        const res = await (0, channel_ops_threads_1.opProposeClose)(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
+        const [channelId, threadId, input] = proposeChannelThreadClose.mock.calls[0];
         (0, vitest_1.expect)(channelId).toBe("chan-1");
         (0, vitest_1.expect)(threadId).toBe("thread-uuid");
         (0, vitest_1.expect)(input).toEqual({ outcome: "completed", summary: "Shipped v2 to prod" });
         (0, vitest_1.expect)(res.content[0].text).toContain("Shipped v2 to prod");
     });
     (0, vitest_1.it)("omits the summary note when none is given", async () => {
-        const closeChannelThread = vitest_1.vi.fn();
-        closeChannelThread.mockResolvedValue({
-            thread: { title: "Ship it", outcome: "failed" },
-            echoSeq: null,
+        const proposeChannelThreadClose = vitest_1.vi.fn();
+        proposeChannelThreadClose.mockResolvedValue({
+            thread: { title: "Ship it" },
+            markerSeq: null,
+            outcome: "failed",
         });
-        const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", "thread-uuid", "failed");
-        const [, , input] = closeChannelThread.mock.calls[0];
+        const client = stubClient({ proposeChannelThreadClose });
+        const res = await (0, channel_ops_threads_1.opProposeClose)(client, "general", "thread-uuid", "failed");
+        const [, , input] = proposeChannelThreadClose.mock.calls[0];
         (0, vitest_1.expect)(input).toEqual({ outcome: "failed", summary: undefined });
-        // Q1 (write sweep): the peer-typed title is a code span and the result now
-        // opens with the thread header — a thread's TARGET may close it, so this
-        // echo routinely renders a title the caller never wrote.
-        //
-        // F6 — the sentence CONTINUES past the outcome now, and what it adds is the
-        // point: the old full stop after "as failed." asserted a finality the server
-        // does not enforce (the post path never reads thread status, so a closed
-        // thread goes on accepting posts). Pinned as a prefix + the routing claim,
-        // rather than as the whole paragraph, so re-wording the teaching does not
-        // fail a test about the confirmation.
+        // Q1 (write sweep) carries over unchanged: the peer-typed title is a code
+        // span and the result opens with the thread header — a thread's TARGET may
+        // propose on it, so this echo routinely renders a title the caller never
+        // wrote.
         const text = res.content[0].text;
-        (0, vitest_1.expect)(text.startsWith(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\nClosed thread **\`Ship it\`** in **\`General\`** as failed.`)).toBe(true);
-        (0, vitest_1.expect)(text).toContain("stops the thread's PASSIVE routing");
-        (0, vitest_1.expect)(text).toContain("does NOT seal it");
+        (0, vitest_1.expect)(text.startsWith(`${channel_render_1.UNTRUSTED_THREAD_HEADER}\n\nProposed closing thread **\`Ship it\`** in **\`General\`** as failed.`)).toBe(true);
+        (0, vitest_1.expect)(text).toContain("NOTHING IS CLOSED");
         // …and it must not carry a summary note it was given none of: with a
         // summary the outcome is followed by " — <summary>", never by the period.
         (0, vitest_1.expect)(text).not.toContain("as failed — ");
     });
 });
-(0, vitest_1.describe)("opCloseThread — the close result stops claiming finality (F6)", () => {
-    (0, vitest_1.it)("says the thread stops PASSIVE routing, and that a later post still lands", async () => {
-        const closeChannelThread = vitest_1.vi.fn(async () => ({
-            thread: { id: THREAD_ID, title: "Wire the listener", outcome: "completed" },
-            echoSeq: 355,
+(0, vitest_1.describe)("opProposeClose — the result claims NO finality at all (DECISION 2)", () => {
+    (0, vitest_1.it)("says nothing is closed, the thread is still live, and where the marker landed", async () => {
+        const proposeChannelThreadClose = vitest_1.vi.fn(async () => ({
+            thread: { id: THREAD_ID, title: "Wire the listener" },
+            markerSeq: 355,
+            outcome: "completed",
         }));
-        const client = stubClient({ closeChannelThread });
-        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", THREAD_ID, "completed");
+        const client = stubClient({ proposeChannelThreadClose });
+        const res = await (0, channel_ops_threads_1.opProposeClose)(client, "general", THREAD_ID, "completed");
         const text = res.content[0].text;
         (0, vitest_1.expect)(res.isError).toBeFalsy();
-        // The confirmation itself is unchanged…
-        (0, vitest_1.expect)(text).toContain("Closed thread **`Wire the listener`**");
+        (0, vitest_1.expect)(text).toContain("Proposed closing thread **`Wire the listener`**");
         (0, vitest_1.expect)(text).toContain("as completed");
-        // …and what follows it is the correction: passive routing, not sealing.
-        (0, vitest_1.expect)(text).toContain("stops the thread's PASSIVE routing");
-        (0, vitest_1.expect)(text).toContain("does NOT seal it");
-        (0, vitest_1.expect)(text).toContain("still accepts posts");
-        // The claim is SCOPED: it must not promise a silence nothing enforces, so
-        // direct addressing is left standing in the same breath.
-        (0, vitest_1.expect)(text).toContain("address directly still hears you");
-        // And the one action the agent cannot take here is named as a human's.
-        (0, vitest_1.expect)(text).toContain("Reopening is a human's action in the web app");
-        // The echo seq still rides out — never a guessed cursor.
-        (0, vitest_1.expect)(text).toContain("Close echo posted at seq 355");
+        // THE CORRECTION F6 MADE TO THE CLOSE COPY, taken to its limit: a close had
+        // to stop overclaiming finality, and a proposal must claim none. An agent
+        // that reads its own proposal as the end of the exchange goes quiet on a
+        // thread that is still routing.
+        (0, vitest_1.expect)(text).toContain("NOTHING IS CLOSED");
+        (0, vitest_1.expect)(text).toContain("your operator sees this as a prompt and decides");
+        (0, vitest_1.expect)(text).toContain("the thread is open and fully live");
+        (0, vitest_1.expect)(text).toContain("keep working the thread and answer it");
+        // Propose ONCE: a repeat collapses into the prompt they already have.
+        (0, vitest_1.expect)(text).toContain("Do not propose again");
+        // The marker seq still rides out — never a guessed cursor.
+        (0, vitest_1.expect)(text).toContain("Proposal note posted at seq 355");
+    });
+    (0, vitest_1.it)("a marker that did not post says so, and says the thread is untouched", async () => {
+        // `markerSeq: null` is the honest "no prompt was raised". It must not be
+        // silent: the operator has nothing to act on, and the agent would otherwise
+        // wait forever on a confirmation nobody was asked for.
+        const proposeChannelThreadClose = vitest_1.vi.fn(async () => ({
+            thread: { id: THREAD_ID, title: "Wire the listener" },
+            markerSeq: null,
+            outcome: "completed",
+        }));
+        const client = stubClient({ proposeChannelThreadClose });
+        const text = (await (0, channel_ops_threads_1.opProposeClose)(client, "general", THREAD_ID, "completed")).content[0].text;
+        (0, vitest_1.expect)(text).toContain("did NOT post");
+        (0, vitest_1.expect)(text).toContain("The thread is untouched");
+        (0, vitest_1.expect)(text).not.toContain("Proposal note posted at seq");
+    });
+});
+(0, vitest_1.describe)("close_thread is answered, not removed (DECISION 2)", () => {
+    (0, vitest_1.it)("refuses without touching the client, and names propose_close", async () => {
+        // The op stays in the enum so an agent trained on the old surface gets a
+        // sentence instead of a zod "invalid enum value" at the moment it most needs
+        // telling what to do. It is a PURE refusal — no round-trip at all.
+        const res = (0, channel_ops_threads_1.closeThreadIsHumansToMake)();
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        const text = res.content[0].text;
+        (0, vitest_1.expect)(text).toContain("Nothing was closed");
+        (0, vitest_1.expect)(text).toContain("your OPERATOR's decision, not yours");
+        (0, vitest_1.expect)(text).toContain('op="propose_close"');
+        // It must not read as a permission bug the agent can retry around.
+        (0, vitest_1.expect)(text).toContain("the thread stays open and fully live");
     });
 });
 (0, vitest_1.describe)("opPost — the closed-thread warning (F6)", () => {

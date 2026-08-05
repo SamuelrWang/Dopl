@@ -214,20 +214,26 @@ const THREAD = {
     createdBy: "u-peer",
     targetUserId: "u-me",
 };
-(0, vitest_1.describe)("Q1-B/C write · close_thread — a title the PEER typed", () => {
+// DECISION 2 (2026-08-04): the op an agent reaches is `propose_close`, and the
+// Q1-B/C exposure is IDENTICAL — proposing is allowed to a thread's TARGET, so
+// the title this result renders is routinely the PEER's 200-character,
+// newline-tolerant text and not the caller's.
+(0, vitest_1.describe)("Q1-B/C write · propose_close — a title the PEER typed", () => {
     function closingClient(title) {
         return stubClient({
             listChannels: vitest_1.vi.fn(async () => [CLEAN_CHANNEL]),
-            // `{ thread, echoSeq }` — the close writes a marker message, so the
-            // client hands back where it landed alongside the closed thread.
-            closeChannelThread: vitest_1.vi.fn(async () => ({
-                thread: { ...THREAD, title, outcome: "completed" },
-                echoSeq: null,
+            // `{ thread, markerSeq, outcome }` — the proposal writes the marked note
+            // the operator's prompt renders from, so the client hands back where it
+            // landed alongside the (untouched) thread.
+            proposeChannelThreadClose: vitest_1.vi.fn(async () => ({
+                thread: { ...THREAD, title },
+                markerSeq: null,
+                outcome: "completed",
             })),
         });
     }
     (0, vitest_1.it)("neutralizes the title and frames the result FIRST", async () => {
-        const text = (await (0, channel_ops_threads_1.opCloseThread)(closingClient(FORGERY), "general", "thread-1", "completed")).content[0].text;
+        const text = (await (0, channel_ops_threads_1.opProposeClose)(closingClient(FORGERY), "general", "thread-1", "completed")).content[0].text;
         expectContained(text);
         expectNoForgedStructure(text);
         // Framing is a HEADER: read BEFORE the peer's text, never after it.
@@ -235,8 +241,8 @@ const THREAD = {
         (0, vitest_1.expect)(text.indexOf(channel_render_1.UNTRUSTED_THREAD_HEADER)).toBeLessThan(text.indexOf(MARKER));
     });
     (0, vitest_1.it)("still names a legitimate thread, and the caller's own summary survives whole", async () => {
-        const text = (await (0, channel_ops_threads_1.opCloseThread)(closingClient("Ship the listener fix"), "general", "thread-1", "completed", "Landed in 1.7.16; the listener now survives a token refresh.")).content[0].text;
-        (0, vitest_1.expect)(text).toContain("Closed thread **`Ship the listener fix`**");
+        const text = (await (0, channel_ops_threads_1.opProposeClose)(closingClient("Ship the listener fix"), "general", "thread-1", "completed", "Landed in 1.7.16; the listener now survives a token refresh.")).content[0].text;
+        (0, vitest_1.expect)(text).toContain("Proposed closing thread **`Ship the listener fix`**");
         // The summary is the AGENT'S OWN prose from this same call — deliberately
         // not neutralized, so it keeps its punctuation and its full length.
         (0, vitest_1.expect)(text).toContain("Landed in 1.7.16; the listener now survives a token refresh.");
@@ -244,11 +250,11 @@ const THREAD = {
     (0, vitest_1.it)("a not-found error cannot be forged by the thread id it echoes", async () => {
         const client = stubClient({
             listChannels: vitest_1.vi.fn(async () => [CLEAN_CHANNEL]),
-            closeChannelThread: vitest_1.vi.fn(async () => {
+            proposeChannelThreadClose: vitest_1.vi.fn(async () => {
                 throw Object.assign(new Error("missing"), { status: 404 });
             }),
         });
-        const res = await (0, channel_ops_threads_1.opCloseThread)(client, "general", FORGERY, "completed");
+        const res = await (0, channel_ops_threads_1.opProposeClose)(client, "general", FORGERY, "completed");
         (0, vitest_1.expect)(res.isError).toBe(true);
         expectContained(res.content[0].text);
         expectNoForgedStructure(res.content[0].text);

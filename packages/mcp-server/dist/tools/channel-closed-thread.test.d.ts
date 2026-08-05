@@ -29,5 +29,19 @@
  * `channel-ops.test.ts` in the same change — a §2 split at the 500-line cap, on
  * the seam that this file already is: every assertion about a close result now
  * lives in one place instead of two that would have to be re-worded together.
+ *
+ * DECISION 2 (2026-08-04) RE-TARGETS THE FIRST HALF, and deliberately does not
+ * delete it. An agent may no longer CLOSE a thread — closing settles the shared
+ * exchange for both members and is its operator's judgment — so the op it
+ * reaches is `propose_close`, and every property the close result had to have is
+ * a property the PROPOSAL result has to have: the summary is forwarded and
+ * echoed, the peer-typed title is a code span under the untrusted header (a
+ * thread's TARGET may propose on it, so the title is routinely not the caller's),
+ * and the marker seq rides out rather than being guessed. What CHANGED is the
+ * claim: the close result had to stop overclaiming finality, and the proposal
+ * result has to claim none at all — the thread is untouched and still live.
+ *
+ * The post-side half (`opPost`'s closed-thread warning) is unchanged: a thread a
+ * HUMAN closed still warns a late poster exactly as before.
  */
 export {};

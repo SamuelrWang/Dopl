@@ -85,7 +85,7 @@ export declare function classifyBadRequest(e: unknown): BadRequestKind;
  *     caller does not own (`as_agent`, rename, park).
  *   - `unknown`              — a 403 with no code we recognize. Say so.
  */
-export type ForbiddenKind = "not_a_member" | "thread_authorization" | "agent_owner" | "unknown";
+export type ForbiddenKind = "not_a_member" | "thread_authorization" | "agent_owner" | "lifecycle_kind" | "close_is_human" | "unknown";
 export declare function classifyForbidden(e: unknown): ForbiddenKind;
 /**
  * The server's own human message for an error, as a trailing clause — or "" when

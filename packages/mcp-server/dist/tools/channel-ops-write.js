@@ -60,6 +60,33 @@ const channel_wake_guidance_1 = require("./channel-wake-guidance");
 const channel_errors_1 = require("./channel-errors");
 /** Fallback for peer text that neutralized to nothing — never an empty span. */
 const NO_NAME = "(unnamed)";
+/**
+ * P0-3 / DECISION 1 (2026-08-04) — THE THREE KINDS AN AGENT MAY NOT POST, and
+ * the fast half of a refusal the server also makes
+ * (`service-writes.assertLifecycleKindIsServerOwned`).
+ *
+ * WHY IT IS REFUSED HERE TOO, when the server already refuses it: this is the
+ * layer that can say WHAT TO DO INSTEAD in the caller's own vocabulary, before
+ * anything is sent, and "nothing was sent" is then trivially true. The server's
+ * copy is the one that holds for anything that skips this tool.
+ *
+ * `task_progress` is absent deliberately — it is the milestone lane and stays
+ * writable, though `op="milestone"` is the spelling that needs no `kind` at all.
+ */
+const LIFECYCLE_KINDS = new Set([
+    "task_started",
+    "task_finished",
+    "task_failed",
+]);
+/**
+ * The refusal itself. It leads with the CONSEQUENCE rather than the rule,
+ * because an agent that reached for `task_finished` did so believing it was
+ * delivering: the sentence that changes its behaviour is "the body is not
+ * rendered", not "that kind is reserved".
+ */
+function lifecycleKindRefusal(kind) {
+    return (0, respond_1.err)(`Nothing was sent: \`kind="${kind}"\` is a LIFECYCLE MARKER, not a way to say something, and it is not yours to post. Those three kinds ("task_started" / "task_finished" / "task_failed") are written by the runtime that starts and stops a session and by a thread close, and the other member's thread card renders a terminal marker as a STATUS CHIP — its body is not shown at all, so an answer sent this way is delivered nowhere. Re-send it as an ordinary message: drop \`kind\` entirely and post the same text. Everything substantive you send, your FINAL ANSWER included, is a plain message. To mark that a step LANDED, that is dopl_channel(op="milestone", thread="<id>", body="<one line>") — a marker, not a delivery.`);
+}
 async function opPost(client, channelRef, body, opts = {}) {
     // FIRST, and before any round-trip: a contradictory post has nothing to
     // resolve. Refusing here rather than letting the route do it means "nothing
@@ -67,6 +94,12 @@ async function opPost(client, channelRef, body, opts = {}) {
     if (opts.intent === "chat" &&
         (opts.to || opts.toAgent || (opts.toAgents?.length ?? 0) > 0)) {
         return (0, respond_1.err)(channel_post_notes_1.CHAT_ADDRESSED_REFUSAL);
+    }
+    // P0-2 — and on the same terms: a post this tool will not make needs nothing
+    // resolved. Ahead of the channel lookup so a refused post costs no round-trip
+    // and cannot be confused with a delivery failure.
+    if (opts.kind && LIFECYCLE_KINDS.has(opts.kind)) {
+        return lifecycleKindRefusal(opts.kind);
     }
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
@@ -181,6 +214,12 @@ async function opPost(client, channelRef, body, opts = {}) {
         // thread-authorization failure came back as "that agent is not yours".
         if ((0, channel_errors_1.isForbidden)(e)) {
             const kind = (0, channel_errors_1.classifyForbidden)(e);
+            // P0-2 — the SERVER refused the kind. Unreachable while the guard at the
+            // top of this op is in place, and answered anyway with the same sentence
+            // rather than falling into an arm that talks about channel membership.
+            if (kind === "lifecycle_kind") {
+                return lifecycleKindRefusal(opts.kind ?? "task_finished");
+            }
             // AN AGENT IDENTITY IS NOT ASSUMABLE. The server refuses `as_agent`
             // naming an agent the caller does not own; it never silently strips the
             // claim, so nothing was posted and the fix is to post as YOUR own agent

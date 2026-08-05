@@ -57,21 +57,34 @@ export declare function opCreateThread(client: DoplClient, channelRef: string, t
  */
 participants?: string[]): Promise<ToolResponse>;
 /**
- * Close a thread — the write op the Q1 completeness review caught still raw.
+ * DECISION 2 (Samuel, 2026-08-04) — `close_thread` IS NOT AN AGENT'S OP.
  *
- * Closing is allowed to the thread's CREATOR **or its TARGET**, so the common
- * shape is: a peer opens a thread, titles it, addresses it to me; my agent does
- * the work and closes it; and the close echo renders the PEER's 200-character,
- * newline-tolerant title as our own narration. That is Q1-B/C's exact defect
- * class on a surface the first pass never enumerated, and it is not a read an
- * agent chose — it is the confirmation of an action it just took.
+ * THE INCIDENT'S OTHER HALF. Closing settles the SHARED thread for BOTH members,
+ * and nothing linked the responder's "I am finished" to the requester's thread
+ * anyway, so threads simply never closed (two are open forever in prod). The fix
+ * is not to make the agent close harder: it is that "the work looks done" and "I
+ * am finished with this exchange" are DIFFERENT judgments, and only the second
+ * one closes anything. The human makes it.
  *
- * Two changes, both of them the ones the read ops got:
+ * ANSWERED, NOT REMOVED. The op stays in the enum so this sentence is what an
+ * agent trained on the old surface gets, instead of a zod "invalid enum value"
+ * at the moment it most needs telling what to do instead. The gate is the
+ * server's (`ThreadCloseIsHumanOnlyError`), not this.
+ */
+export declare function closeThreadIsHumansToMake(): ToolResponse;
+/**
+ * PROPOSE a close — the agent's terminal act on a thread, and the only one it
+ * has (see {@link closeThreadIsHumansToMake}).
+ *
+ * It inherits the Q1 narration discipline the close had, for the same reason:
+ * proposing is allowed to the thread's CREATOR **or its TARGET**, so the common
+ * shape is a peer's thread, a peer's 200-character newline-tolerant TITLE, and
+ * this result rendering it as our own narration. So:
  *   1. the title is one inline code span (it can be a value, never structure);
  *   2. the result carries {@link UNTRUSTED_THREAD_HEADER}, FIRST — framing that
  *      trails the content it frames is read after the injected line.
  */
-export declare function opCloseThread(client: DoplClient, channelRef: string, threadId: string, outcome: ThreadOutcome, summary?: string): Promise<ToolResponse>;
+export declare function opProposeClose(client: DoplClient, channelRef: string, threadId: string, outcome: ThreadOutcome, summary?: string): Promise<ToolResponse>;
 /**
  * Set a thread's mode. The title renders here too, and it is neutralized on the
  * same rule as everywhere else — but this op gets NO untrusted header, on

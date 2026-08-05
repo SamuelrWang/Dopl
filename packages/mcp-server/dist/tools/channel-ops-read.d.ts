@@ -22,25 +22,6 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
-/**
- * Read a channel's transcript, optionally SCOPED TO ONE THREAD.
- *
- * `thread` is a FILTER, not a lookup, and every string below is written from
- * that fact: the route keeps only the rows whose `metadata.taskId` equals it,
- * an id nothing carries returns `[]` rather than a 404, and any non-empty
- * string is legal — a thread id is a `channel_tasks` uuid today, but the
- * transcript still carries legacy `task-<channelId>-<seq>` ids and those are
- * the exchanges hardest to reconstruct by hand. Blank/whitespace is treated as
- * unset rather than sent, so a caller that passes `thread=""` gets the channel
- * read it meant instead of a 400 from the route's `min(1)`.
- *
- * WHAT THE FILTERED RESULT MAY NOT SAY: `await` has no thread parameter and
- * never will have one silently (a filtered hold would miss the messages an
- * agent must follow — see `channel-ops-await.ts`). So the seq this reports is
- * this THREAD's high-water mark, not the channel's, and the watch hint it hands
- * back is a plain channel-wide await. Suggesting a thread-scoped wait here is
- * how an agent ends up armed on a call that cannot exist.
- */
 export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
 export declare function opGetThread(client: DoplClient, ref: string, threadId: string, selfUserId?: string | null): Promise<ToolResponse>;

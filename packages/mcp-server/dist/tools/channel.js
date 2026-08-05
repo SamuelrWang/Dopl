@@ -125,6 +125,36 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     runtime,
                 });
             }
+            // P0-3 (2026-08-04) — THE MILESTONE IS ITS OWN OP, and the fixing of the
+            // kind happens HERE, at the routing seam, exactly like `open`'s
+            // `direct` branch. That is the whole point of the op: neither call makes
+            // the agent pick a `kind`, so "mark a milestone" and "send a reply"
+            // cannot be confused by choosing wrongly between enum values that sit
+            // one apart. `thread` is REQUIRED where `post` leaves it optional — an
+            // untagged milestone groups into nothing, which is the one shape of this
+            // call that is always a mistake.
+            //
+            // It delegates to `opPost` rather than growing a second delivery path:
+            // one set of error narration, one result-line vocabulary, and the lines
+            // a post produces (did it thread? who was addressed?) are exactly the
+            // ones a milestone's author needs. `to` / `to_agent` / `to_agents` are
+            // NOT routed through — a milestone marks the thread, it addresses nobody.
+            case "milestone": {
+                const miss = (0, respond_1.missingParams)("milestone", args, [
+                    "channel",
+                    "body",
+                    "thread",
+                ]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, {
+                    kind: "task_progress",
+                    thread: args.thread,
+                    summary: args.summary,
+                    asAgent: args.as_agent,
+                    runtime,
+                });
+            }
             case "read": {
                 const miss = (0, respond_1.missingParams)("read", args, ["channel"]);
                 if (miss)
@@ -174,16 +204,27 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     return (0, channel_ops_threads_1.asAgentNotOnCreateThread)();
                 return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id, runtime, args.participants);
             }
-            case "close_thread": {
-                const miss = (0, respond_1.missingParams)("close_thread", args, [
+            // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM. An agent's terminal act
+            // on a thread is a PROPOSAL its operator confirms; the close itself is a
+            // human's, because closing settles the SHARED thread for both members and
+            // the operator may still have things to say in it.
+            case "propose_close": {
+                const miss = (0, respond_1.missingParams)("propose_close", args, [
                     "channel",
                     "thread",
                     "outcome",
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_threads_1.opCloseThread)(client, args.channel, args.thread, args.outcome, args.summary);
+                return (0, channel_ops_threads_1.opProposeClose)(client, args.channel, args.thread, args.outcome, args.summary);
             }
+            // …and the op it replaces is answered rather than removed. Dropping
+            // `close_thread` from the enum would turn every call an older agent makes
+            // into a zod "invalid enum value", which is the one moment it most needs
+            // to be told what to do instead. The server refuses an agent-token close
+            // too (`ThreadCloseIsHumanOnlyError`), so this is teaching, not the gate.
+            case "close_thread":
+                return (0, channel_ops_threads_1.closeThreadIsHumansToMake)();
             case "set_thread_mode": {
                 const miss = (0, respond_1.missingParams)("set_thread_mode", args, [
                     "channel",
