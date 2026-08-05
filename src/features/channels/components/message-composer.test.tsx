@@ -2,9 +2,9 @@
  * The composer's DECISION logic (which payload a draft becomes, what it
  * refuses) lives in `lib/composer-mode.ts` and is pinned there — this repo's
  * vitest runs in the node environment with no DOM, so the mode cannot be
- * clicked here. What these cases pin is the RENDERED surface: the toggle
- * exists, chat is what first paint shows, and chat's chrome carries none of the
- * request affordances.
+ * clicked here. What these cases pin is the RENDERED surface: the pill exists
+ * INSIDE the input, message is what first paint shows, and message's chrome
+ * carries none of the request affordances.
  */
 
 import { describe, expect, it } from "vitest";
@@ -63,25 +63,38 @@ function channelMarkup(memberCount: number) {
   );
 }
 
-describe("MessageComposer — the Chat / Request toggle", () => {
-  it("renders both modes as one segmented toggle", () => {
+describe("MessageComposer — the Message / Request pill (rollback §3.2)", () => {
+  it("shows the picked mode on a closed pill, not two always-visible tabs", () => {
     const markup = dmMarkup();
-    expect(markup).toContain(">Chat<");
-    expect(markup).toContain(">Request<");
-    expect(markup).toContain('role="tablist"');
+    expect(markup).toContain(">Message<");
+    // The dropdown is closed at first paint, so the OTHER slot is not rendered
+    // at all. A two-tab row would have painted both.
+    expect(markup).not.toContain(">Request<");
+    expect(markup).not.toContain('role="tablist"');
+    expect(markup).toContain('aria-haspopup="menu"');
+    expect(markup).toContain('aria-expanded="false"');
   });
 
-  it("opens in CHAT, so the resting state starts nobody's agent", () => {
+  /**
+   * §3.2 puts the pill INSIDE the input bubble. Pinned positionally, because
+   * "inside the bubble" is the whole of what this phase changed: the control and
+   * the field it governs are one object now, and a refactor that floats it back
+   * out into its own row would look fine and be the old design again.
+   */
+  it("renders the pill INSIDE the concave input bubble, before send", () => {
     const markup = dmMarkup();
-    const chatAt = markup.indexOf(">Chat<");
-    const requestAt = markup.indexOf(">Request<");
-    // The selected slot is the one whose aria-selected="true" is nearest before it.
-    expect(markup.lastIndexOf('aria-selected="true"', chatAt)).toBeGreaterThan(
-      markup.lastIndexOf('aria-selected="false"', chatAt)
-    );
-    expect(markup.lastIndexOf('aria-selected="false"', requestAt)).toBeGreaterThan(
-      markup.lastIndexOf('aria-selected="true"', requestAt)
-    );
+    const bubbleAt = markup.indexOf("concave-field");
+    const pillAt = markup.indexOf(`${COMPOSER_MODE_LABEL}: Message`);
+    const sendAt = markup.indexOf('aria-label="Send message"');
+    expect(bubbleAt).toBeGreaterThan(-1);
+    expect(pillAt).toBeGreaterThan(bubbleAt);
+    expect(sendAt).toBeGreaterThan(pillAt);
+  });
+
+  it("opens in MESSAGE, so the resting state starts nobody's agent", () => {
+    const markup = dmMarkup();
+    expect(markup).toContain(`aria-label="${COMPOSER_MODE_LABEL}: Message"`);
+    expect(markup).not.toContain(`aria-label="${COMPOSER_MODE_LABEL}: Request"`);
   });
 
   it("states the CONSEQUENCE under the composer, not just the mode name", () => {
@@ -89,15 +102,13 @@ describe("MessageComposer — the Chat / Request toggle", () => {
   });
 
   /**
-   * `COMPOSER_MODE_LABEL` was exported and never rendered, so the toggle
-   * announced two unnamed tabs. `SegmentedControl` is a shared kit primitive
-   * that owns its own `role="tablist"` and takes no `aria-label`, so the name
-   * rides on a named group around it until the kit grows the prop.
+   * The accessible name CONTAINS the visible word rather than replacing it: a
+   * bare `aria-label="Send as"` hid the one word on the control that says what
+   * it is currently set to, which is also the word voice control needs.
    */
-  it("gives the toggle an accessible name", () => {
+  it("names the pill without hiding the label it is showing", () => {
     const markup = dmMarkup();
-    expect(markup).toContain(`aria-label="${COMPOSER_MODE_LABEL}"`);
-    expect(markup).toContain('role="group"');
+    expect(markup).toContain(`aria-label="${COMPOSER_MODE_LABEL}: Message"`);
   });
 
   it("uses no em dashes in the composer's own copy", () => {
@@ -105,7 +116,7 @@ describe("MessageComposer — the Chat / Request toggle", () => {
   });
 });
 
-describe("MessageComposer — chat mode hides the request chrome", () => {
+describe("MessageComposer — message mode hides the request chrome", () => {
   it("shows NO subject field in a DM (the operator can just talk)", () => {
     // The bare Subject field above the input was the operator's complaint: it
     // was always there, and filling it always poked the peer's machine.
@@ -144,7 +155,7 @@ describe("MessageComposer — chat mode hides the request chrome", () => {
 });
 
 /**
- * The unaddressed hint used to fire on every group-channel draft. Chat mode
+ * The unaddressed hint used to fire on every group-channel draft. Message mode
  * reaching no agent is now the POINT, so the warning there would train itself
  * away; it survives only for a REQUEST with nobody picked (whose refusal is
  * pinned as `missing-recipient` in the lib test).
@@ -152,13 +163,13 @@ describe("MessageComposer — chat mode hides the request chrome", () => {
 const UNADDRESSED_HINT = "No agent will pick this up unless you address it.";
 
 describe("MessageComposer — the unaddressed-send hint", () => {
-  it("stays silent in CHAT mode at the group threshold (that is chat's job)", () => {
+  it("stays silent in MESSAGE mode at the group threshold (that is its job)", () => {
     expect(channelMarkup(GROUP_CHANNEL_MIN_MEMBERS)).not.toContain(
       UNADDRESSED_HINT
     );
   });
 
-  it("keeps quiet above the threshold too, while chat is the mode", () => {
+  it("keeps quiet above the threshold too, while message is the mode", () => {
     expect(channelMarkup(GROUP_CHANNEL_MIN_MEMBERS + 3)).not.toContain(
       UNADDRESSED_HINT
     );

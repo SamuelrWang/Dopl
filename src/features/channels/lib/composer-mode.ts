@@ -26,8 +26,17 @@
  * against the channel's named agents and travelled as `toAgents`, so a chat
  * message could start agents by name — the primary way work was handed out.
  * Named agents are gone (rollback §1), so chat has exactly one consequence
- * again and `@` in a body is plain text. Phase 4 replaces the mode toggle with
- * a pill in the input; nothing here changes for that.
+ * again and `@` in a body is plain text.
+ *
+ * PHASE 4 MOVED THE CONTROL, NOT THE DECISION (rollback §3.2). The mode used to
+ * ride a `SegmentedControl` in a row ABOVE the input; it is now a PILL INSIDE
+ * the input bubble, on the right, next to the send button. Nothing in this file
+ * changed for that except the copy: the chat slot reads **Message**, because
+ * §3.2 names the two states "message ↔ request" and the session window's pill
+ * says "Message <name>" beside it — two pills that are the same control should
+ * not use two different words for the same half. The WIRE VALUE is still `chat`
+ * (it is `MessageIntent`, the server's own vocabulary, and renaming it would be
+ * a protocol change to make a label read better).
  *
  * Everything here is pure so both shapes can be pinned without a DOM: which
  * payload a draft becomes, and what the composer refuses to send, are the two
@@ -49,14 +58,29 @@ export type ComposerMode = MessageIntent;
  */
 export const DEFAULT_COMPOSER_MODE: ComposerMode = "chat";
 
-/** The toggle's slots, in order. */
+/**
+ * The pill's slots, in order.
+ *
+ * `hint` is the row's second line in the dropdown, and it is the CONSEQUENCE
+ * rather than a restatement of the label — the same discipline the help line
+ * below already follows, applied one step earlier, because the dropdown is now
+ * the moment the operator chooses. It is deliberately TARGET-FREE (no name):
+ * the menu is open before a target is resolved, and the help line under the
+ * composer is where the resolved addressee gets named.
+ */
 export const COMPOSER_MODE_OPTIONS: ReadonlyArray<{
   key: ComposerMode;
   label: string;
+  hint: string;
 }> = [
-  { key: "chat", label: "Chat" },
-  { key: "request", label: "Request" },
+  { key: "chat", label: "Message", hint: "Goes to the channel. No agent is started." },
+  { key: "request", label: "Request", hint: "Opens a thread and starts their agent." },
 ];
+
+/** The pill's own face: the picked slot's label. */
+export function composerModeLabel(mode: ComposerMode): string {
+  return COMPOSER_MODE_OPTIONS.find((o) => o.key === mode)?.label ?? mode;
+}
 
 /** What else the help line needs to know beyond the mode and the addressee. */
 export interface ComposerHelpState {

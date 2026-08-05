@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Info, WifiOff } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useAutoGrowTextarea } from "@/shared/ui/auto-grow-textarea";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SendButton } from "@/shared/ui/send-button";
 import { FIELD_WELL } from "@/shared/ui/wells";
 import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
@@ -12,7 +11,6 @@ import type { ChannelMember } from "../types";
 import {
   buildComposerPayload,
   composerModeHelp,
-  COMPOSER_MODE_OPTIONS,
   DEFAULT_COMPOSER_MODE,
   resolveRequestTarget,
   submitComposerDraft,
@@ -20,12 +18,16 @@ import {
   type SendOptions,
 } from "../lib/composer-mode";
 import { AddressPicker } from "./address-picker";
+import { ComposerIntentPill } from "./composer-intent-pill";
 
 /** Placeholder + accessible name for the request's title (wire field: `title`). */
 const SUBJECT_LABEL = "Subject";
 
-/** Accessible name for the mode toggle. */
-export const COMPOSER_MODE_LABEL = "Send as";
+/**
+ * Re-exported from the pill that now owns it, so the one accessible name has one
+ * definition and this module's consumers keep the import they had.
+ */
+export { COMPOSER_MODE_LABEL } from "./composer-intent-pill";
 
 export type { SendOptions } from "../lib/composer-mode";
 
@@ -59,20 +61,26 @@ interface Props {
  * adds a newline) that AUTO-GROWS to three lines and then scrolls, exactly like
  * the desktop thread window's composer, plus the shared `SendButton`.
  *
- * TWO MODES, chosen on a visible toggle, because sending used to mean exactly
- * one thing and that thing woke someone's machine:
+ * TWO MODES, chosen on a PILL INSIDE THE INPUT (rollback §3.2), because sending
+ * used to mean exactly one thing and that thing woke someone's machine:
  *
- * - CHAT (default): a plain channel message. No subject, no thread, no
- *   addressee. It reaches nobody's machine, and the line under the composer
- *   says so. Chat used to have a second consequence — an `@handle` resolved
- *   against the channel's named agents and travelled as `toAgents`, so those
- *   agents acted — and it went with them (rollback §1), taking the `@` picker,
- *   the `/new-agent` command and the moving help line with it. Phase 4 replaces
- *   this toggle with a pill inside the input.
+ * - MESSAGE (default; `intent: "chat"` on the wire): a plain channel message.
+ *   No subject, no thread, no addressee. It reaches nobody's machine, and the
+ *   line under the composer says so. It used to have a second consequence — an
+ *   `@handle` resolved against the channel's named agents and travelled as
+ *   `toAgents`, so those agents acted — and that went with them (rollback §1),
+ *   taking the `@` picker, the `/new-agent` command and the moving help line.
  * - REQUEST: the subject field comes back and an addressee is required. Sending
  *   opens a THREAD through the create-thread path (title = subject, body =
  *   message, to = the picked member), which posts the opening message and
  *   starts that member's agent.
+ *
+ * WHERE THE CHROME SITS, and why it moved. The mode control is now `ComposerIntentPill`,
+ * inside the concave input bubble beside the send button — one of §3.2's two
+ * pills, the other being the session window's. What is left in the row ABOVE the
+ * input is REQUEST-ONLY (the addressee picker and the subject), so the resting
+ * composer is now a single input with two controls in it and nothing else: the
+ * cheapest state is the quietest one on screen too.
  *
  * The mode never silently changes what a draft does: `buildComposerPayload`
  * (lib/composer-mode.ts) is the single decision, chat mode cannot produce a
@@ -203,46 +211,20 @@ export function MessageComposer({
   return (
     <div className="shrink-0 px-14 pb-5 pt-2">
       <div className="mx-auto max-w-[760px]">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          {/* THE TOGGLE'S ACCESSIBLE NAME lives on this wrapper rather than on
-              the control: `SegmentedControl` is a shared kit primitive
-              (`shared/ui`) that renders its own `role="tablist"` and takes
-              neither an `aria-label` nor a `disabled` prop, and it is outside
-              this lane's scope to change. A named group around it is the
-              honest in-scope fix; the kit should grow the prop.
-
-              LOCKED WHILE SENDING for the same reason the text is no longer
-              clobbered: the mode decides what the in-flight request WAS, so
-              flipping it mid-send left the line below describing a consequence
-              that no longer matched anything. `pointer-events-none` stops the
-              click and the `sending` guard stops the keyboard path. */}
-          <div
-            role="group"
-            aria-label={COMPOSER_MODE_LABEL}
-            aria-disabled={sending || undefined}
-            className={cn("shrink-0", sending && "pointer-events-none opacity-60")}
-          >
-            <SegmentedControl
-              options={COMPOSER_MODE_OPTIONS}
-              value={mode}
-              onChange={(next) => {
-                if (!sending) setMode(next);
-              }}
-              className="w-[168px]"
-            />
-          </div>
-          {/* The addressing row belongs to REQUEST only: a chat message has no
-              addressee, so offering one would be an affordance that does
-              nothing. A DM's peer is implicit, so it shows no picker either. */}
-          {mode === "request" && !isDirect && (
-            <AddressPicker
-              members={members}
-              currentUserId={currentUserId}
-              value={toUserId}
-              onChange={setToUserId}
-            />
-          )}
-          {mode === "request" && (
+        {/* REQUEST-ONLY CHROME. The whole row is gone in message mode now that
+            the pill left it: a chat message has no addressee and no subject, so
+            an empty row above the input was pure furniture. A DM's peer is
+            implicit, so it shows no picker either. */}
+        {mode === "request" && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {!isDirect && (
+              <AddressPicker
+                members={members}
+                currentUserId={currentUserId}
+                value={toUserId}
+                onChange={setToUserId}
+              />
+            )}
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
@@ -254,8 +236,8 @@ export function MessageComposer({
                 "min-w-0 flex-1 rounded-full px-3 py-1 text-caption text-text-primary placeholder:text-text-muted"
               )}
             />
-          )}
-        </div>
+          </div>
+        )}
 
         {offlineHint}
 
@@ -294,6 +276,12 @@ export function MessageComposer({
             spellCheck
             className="min-h-[calc(1.625em_+_8px)] max-h-[calc(4.875em_+_8px)] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-body leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
           />
+          {/* §3.2: the pill lives INSIDE the bubble, to the left of send. It is
+              LOCKED WHILE SENDING for the same reason the text is no longer
+              clobbered — the mode decides what the in-flight request WAS, so
+              flipping it mid-send left the line below describing a consequence
+              that no longer matched anything. */}
+          <ComposerIntentPill mode={mode} onChange={setMode} disabled={sending} />
           <SendButton
             onClick={() => void sendMessage()}
             disabled={!canSend}
