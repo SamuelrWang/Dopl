@@ -58,7 +58,10 @@ function harness(over = {}) {
   const recreateParkedShell = cfg.recreate
     ? (a) => { calls.recreate.push(a); return cfg.recreate(a); }
     : null;
-  api.bind({ sessions, refreshTray, recreateParkedShell });
+  // §3.3: the ENDED-but-kept window lookup (main/session-summary.keptWindow). Null unless a
+  // case arms one, which is also the mid-wave shape (an engine that has not wired it).
+  const keptWindow = cfg.kept ? () => cfg.kept : null;
+  api.bind({ sessions, refreshTray, recreateParkedShell, keptWindow });
   return { ...api, sessions, calls };
 }
 
@@ -109,6 +112,65 @@ test("a settled or destroyed session falls through to the fallback (not shown)",
   assert.deepEqual(r, { ok: true });
   assert.equal(s.calls.show, 0, "a settled session is never shown");
   assert.equal(h.calls.recreate.length, 1, "it falls back to recreate");
+});
+
+// ── §3.3: the ENDED session whose window survived ────────────────────────────────
+
+// An ABANDONED session settles out of the registry with its window LEFT OPEN (M2b: an end
+// nobody watched happen must not make a transcript vanish). Its session pill stays, as
+// `ended`, and clicking Open must land in THAT transcript.
+function keptWin() {
+  const win = {
+    destroyed: false,
+    shown: 0,
+    focused: 0,
+    isDestroyed() { return this.destroyed; },
+    show() { this.shown++; },
+    focus() { this.focused++; },
+  };
+  return win;
+}
+
+test("an ENDED session's kept window is shown, and the recreate is NOT reached", async () => {
+  const win = keptWin();
+  const h = harness({ kept: win, recreate: () => ({ ok: true }) });
+  const r = await h.reopenByTask(task);
+  assert.deepEqual(r, { ok: true });
+  assert.equal(win.shown, 1, "the painted transcript the abandonment left behind is revealed");
+  assert.equal(win.focused, 1);
+  assert.equal(
+    h.calls.recreate.length,
+    0,
+    "recreating here would open a FRESH parked shell — a different session wearing the " +
+      "dead one's name, over the top of the transcript the operator was trying to read"
+  );
+});
+
+test("a LIVE session still wins over a kept one for the same slot", () => {
+  const win = keptWin();
+  const h = harness({ kept: win, recreate: () => ({ ok: true }) });
+  const s = fakeSession();
+  h.sessions.set(KEY, s);
+  assert.deepEqual(h.reopenByTask(task), { ok: true });
+  assert.equal(s.calls.show, 1);
+  assert.equal(win.shown, 0, "the live session is the one the pill should open");
+});
+
+test("a kept window the operator CLOSED falls through to the recreate", async () => {
+  const win = keptWin();
+  win.destroyed = true;
+  const h = harness({ kept: win, recreate: () => ({ ok: true }) });
+  const r = await h.reopenByTask(task);
+  assert.deepEqual(r, { ok: true });
+  assert.equal(win.shown, 0);
+  assert.equal(h.calls.recreate.length, 1, "nothing is left to reveal — this is a plain reopen");
+});
+
+test("an unwired keptWindow changes nothing (mid-wave engine)", async () => {
+  const h = harness({ recreate: () => ({ ok: true }) });
+  const r = await h.reopenByTask(task);
+  assert.deepEqual(r, { ok: true });
+  assert.equal(h.calls.recreate.length, 1);
 });
 
 test("reopenWindow shows a hidden live window by internal sessionId", () => {

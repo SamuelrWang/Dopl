@@ -25,15 +25,19 @@ const store = require('./session-store');
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
-let deps = { sessions: null, refreshTray: function () {}, recreateParkedShell: null };
+let deps = { sessions: null, refreshTray: function () {}, recreateParkedShell: null, keptWindow: null };
 
 // The engine binds its in-memory `sessions` Map + tray-refresh + the P2 shell builder
-// here at load.
+// here at load, plus (§3.3) the ENDED-session window lookup below.
 function bind(d) {
   deps = {
     sessions: (d && d.sessions) || null,
     refreshTray: (d && d.refreshTray) || function () {},
     recreateParkedShell: (d && d.recreateParkedShell) || null,
+    // session-summary.keptWindow: the surviving window of an ABANDONED session, or null.
+    // Optional — a mid-wave engine that has not wired it simply falls through to the
+    // recreate, which is what this call did before the branch existed.
+    keptWindow: (d && d.keptWindow) || null,
   };
 }
 
@@ -98,12 +102,24 @@ function reopenWindow(sessionId) {
 //   { ok: false, reason: 'busy' }   the window budget is spent and nothing could be freed; a
 //                                   retry after closing a window will work.
 //   { ok: false }                   the window layer is not wired yet (mid-wave). Generic.
+//
+// §3.3 — THE ENDED-BUT-KEPT WINDOW, checked BETWEEN those two branches. An abandoned session
+// settles out of the registry while its window stays open (session-effects' M2b: an end nobody
+// watched happen must not make a transcript vanish), so the live lookup misses it and the
+// recreate below would answer an "Open" on its session pill by building a FRESH parked shell —
+// a different session wearing a dead one's name, over the top of the very transcript the
+// operator was trying to read. The retained window IS the answer, and showing it goes through
+// the same showLive as every other branch: ONE reopen path, one IPC, no second machinery.
 function reopenByTask(a) {
   const channelId = String((a && a.channelId) || '');
   const taskId = String((a && a.taskId) || '');
   if (!deps.sessions) return { ok: false };
   const s = deps.sessions.get(store.sessionKey(channelId, taskId));
   if (s && !s.settled && s.win && !s.win.isDestroyed()) { showLive(s); return { ok: true }; }
+  const kept = deps.keptWindow ? deps.keptWindow(channelId, taskId) : null;
+  // No `windowHidden` flag and no tray refresh to do — the entry left the registry when it
+  // settled, so this is a plain reveal of a window nothing else is tracking.
+  if (kept && !kept.isDestroyed()) { try { kept.show(); kept.focus(); } catch (_) { /* best effort */ } return { ok: true }; }
   // `fromChannel` is what separates an operator CLICK from the inbound gate's own use of the same
   // builder: only a click may open a shell for a thread this machine holds no record of.
   if (deps.recreateParkedShell) return deps.recreateParkedShell({ channelId, taskId, fromChannel: true });

@@ -66,9 +66,15 @@ const RED = loadReducer();
 
 function harness() {
   const emitted = [];
+  // §3.3: `dispatch` now also pokes the session-pill projection, which is where a pill's
+  // state can move. It is a fire-and-forget notification with no return value and no say in
+  // the decision, so the fake records the pokes and nothing else — but it has to EXIST, or
+  // the sliced dispatch throws a ReferenceError into an already-finished test.
+  const touched = { count: 0 };
   const api = new Function(
     "sessionReducer",
     "record",
+    "sessionSummary",
     `${cut("function dispatch(s, event) {", "function runEffect(s, eff) {")}
      ${cut("function resolvePerm(s, requestId, decision) {", "function runLifecycle(")}
      function runEffect(s, eff) {
@@ -83,8 +89,8 @@ function harness() {
        return undefined;
      }
      return { dispatch, resolvePerm };`
-  )(RED.sessionReducer, (eff) => emitted.push(eff));
-  return { ...api, emitted };
+  )(RED.sessionReducer, (eff) => emitted.push(eff), { touch: () => { touched.count += 1; } });
+  return { ...api, emitted, touched };
 }
 
 // A session shaped like the engine's, gated through the REAL canUseTool bridge so

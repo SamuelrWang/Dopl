@@ -46,12 +46,20 @@ function harness(over = {}) {
     saveRecord: (r) => calls.saved.push(r),
     clearSdkSessionId: (k) => calls.clearedSdk.push(k),
   };
+  // §3.3: settle also hands the ended session to the pill projection, which decides whether
+  // a pill survives it (only where the WINDOW does — the abandonment case). The fake records
+  // the call so the tests below can pin that `keepWindow` is what is passed through.
+  const sessionSummary = {
+    ended: [],
+    noteEnded(s, keepWindow) { this.ended.push({ key: s.key, keepWindow }); return keepWindow; },
+  };
   const api = new Function(
-    "store", "sessions", "refreshTray", "baseRecord",
+    "store", "sessions", "refreshTray", "baseRecord", "sessionSummary",
     `${cut("function denyPendingPermissions(s, message) {", "// A hidden window RESHOWS")}
      ${cut("function settle(s, outcome, keepWindow) {", "function getSessionBySender(")}
      return { settle, denyPendingPermissions };`
-  )(store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }));
+  )(store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }), sessionSummary);
+  calls.ended = sessionSummary.ended;
 
   const settled = [];
   const s = {

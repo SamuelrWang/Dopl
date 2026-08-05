@@ -15,6 +15,7 @@ const io = require('./session-io');
 const store = require('./session-store');
 const avatarCache = require('./avatar-cache');
 const sessionReopen = require('./session-reopen');
+const sessionSummary = require('./session-summary'); // §3.3: THE session-pill projection
 const sessionPark = require('./session-park');
 const framing = require('./prompt-framing');
 const { closeTask } = require('./session-close-task'); // §2 split: the engine holds no HTTP dep
@@ -69,14 +70,13 @@ sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: de
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 sessionHistory.bind({ emit });
-// D2 bound a TEAM lane here (session-team.js): a summon greeted the CHANNEL and opened NO
-// window, and a later wake opened the room-bound parked shell. Gone with summoning (channels
-// rollback §1).
 // §2 split: the electron window plumbing (replay wiring, hide-on-close, the crash signal, the
 // folder label). It gets `emit` rather than owning it — the RESHOW rule is session policy.
 sessionShell.bind({ dispatch, refreshTray, emit });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
-sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell });
+sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell, keptWindow: sessionSummary.keptWindow });
+// §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
+sessionSummary.bind({ sessions });
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
@@ -85,7 +85,7 @@ const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 // turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);
-  s.state = state;
+  s.state = state; sessionSummary.touch(); // §3.3: this is where a pill's state can move
   let resolvedLive = false;
   for (const eff of effects) resolvedLive = runEffect(s, eff) === true || resolvedLive;
   return resolvedLive;
@@ -211,7 +211,7 @@ function settle(s, outcome, keepWindow) {
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   store.saveRecord(baseRecord(s)); // FIX #9: full record (phase 'ended') persists cap counters for a P2 rehydrate
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
-  sessions.delete(s.key);
+  sessions.delete(s.key); sessionSummary.noteEnded(s, keepWindow === true); // §3.3: an ended pill survives only where its window does
   if (!keepWindow && s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
   refreshTray();
 }
