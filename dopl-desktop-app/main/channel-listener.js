@@ -21,6 +21,7 @@
 const { Notification } = require('electron');
 const auth = require('./auth');
 const spawner = require('./session-spawner');
+const claudeRuntime = require('./claude-runtime'); // "can a session run at all" (NOT claudeAvailable)
 const presence = require('./presence');
 const io = require('./listener-io');
 const targeting = require('./targeting');
@@ -411,20 +412,19 @@ function start(statusCb, h) {
   // polls each pending consent row off-loop and dispatches to trigger.resolvers
   // (spawn / review / echo). Idempotent; resumes durable pending records once.
   watcher.start({ resolvers: trigger.resolvers, onPendingCount: onPendingCb });
-  spawner.claudeAvailable().then((ok) => {
-    diag('claudeAvailable at start:', ok);
-    if (!ok && !cliWarned) {
+  // 2026-08-04: warn ONLY when NOTHING here can run a session. The old notice fired
+  // on the EXTERNAL-CLI probe and told most installs their channel auto-responses
+  // were off while the bundled binary answered fine. claude-runtime.js owns that
+  // distinction and the copy; this injects the surfaces and decides nothing.
+  claudeRuntime.checkRuntimeAtStart({
+    externalCli: () => spawner.claudeAvailable(),
+    log: diag,
+    notify: (n) => {
+      if (cliWarned) return;
       cliWarned = true;
-      try {
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'Dopl',
-            body: 'Claude CLI not found on PATH. Channel auto-responses stay off until it is installed.',
-          }).show();
-        }
-      } catch (_) { /* best-effort */ }
-    }
-  });
+      try { if (Notification.isSupported()) new Notification(n).show(); } catch (_) { /* best-effort */ }
+    },
+  }).catch(() => { /* a probe failure must never stop the listener */ });
   reconcile();
   refreshTimer = setInterval(reconcile, LISTENER.CHANNEL_REFRESH_MS);
   setStatus();

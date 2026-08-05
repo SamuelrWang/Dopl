@@ -41,18 +41,13 @@ const { profileLabel, profileHint } = require('./tool-profiles');
 const claudeAuth = require('./claude-auth');
 const { postTaskEvent, postResult, notifyLocal } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
+// §2 SPLIT (2026-08-04): the HEADLESS FALLBACK lane — spawn, then open an outbound
+// review — plus the two peer-facing replies both lanes send. Its own module because
+// it is its own reason to change: the session lane below is the default executor and
+// this is what answers when window mode is off or the engine skips.
+const headless = require('./trigger-headless');
+const { AUTH_HELD_REPLY, RESEND, runHeadlessApproved } = headless;
 const { diag } = require('./diag');
-
-const RESEND =
-  "I'm still finishing a previous request in this channel — please resend in a moment.";
-
-// H1 (LOW): the HONEST version of the above for the one case where "still finishing" is false.
-// A session HELD on the sign-in action occupies the registry slot while running nothing, so the
-// old copy told the peer to resend into a slot that will not free itself — the operator has to
-// sign in on that Mac first, and nothing was saying so. No local detail leaks: it names the
-// state, not the machine, the account, or the error.
-const AUTH_HELD_REPLY =
-  "I can't run this right now — my Claude Code sign-in on this machine needs attention. I'll pick it up once that's sorted.";
 
 // Rebuild the minimal `entry` / `m` the post + spawn helpers need from a persisted
 // record, so those helpers work identically on the live path and the watcher path.
@@ -103,10 +98,13 @@ function sendFyi(entry, m) {
 // Create the inbound consent row, register it, notify, and return. Everything
 // after the operator answers happens in the resolvers, driven by the watcher.
 async function handleTrigger(entry, m) {
-  // H1: gate on CLI resolution. If claude can't be found, don't prompt and don't
-  // post — the one-time "CLI not found" notice already fired at startup.
-  if (!(await spawner.claudeAvailable())) {
-    diag('trigger skipped: claude CLI unresolved');
+  // H1: gate on whether a session can be RUN AT ALL; nothing here can run one ->
+  // don't prompt, don't post (the startup notice already fired). FIX 2026-08-04,
+  // LAUNCH-CRITICAL: this gated on `spawner.claudeAvailable()` ("an EXTERNAL claude
+  // on PATH", which a fresh install has not got), so it returned HERE — before the
+  // consent row, the notification and the window. claude-runtime.js has the story.
+  if (!(await spawner.sessionSpawnAvailable())) {
+    diag('trigger skipped: no claude runtime at all (bundled or external)');
     return;
   }
 
@@ -353,108 +351,6 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     );
   }
   return false;
-}
-
-// Headless mode: spawn, then (on a clean reply) open an outbound review. D4:
-// task_started fires from onStart, which runs only once the pool slot is claimed for a
-// real spawn, so a busy/no-cli skip can never orphan a task_started.
-async function runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName }) {
-  diag('spawn mode: headless', 'profile', rec.toolProfile);
-  const result = await spawner.runForChannel({
-    channelId: entry.channel.id,
-    // D1: the FIRST-CLASS thread id only, NOT taskIdFor's legacy fallback. It picks the pool
-    // slot AND the resume id, so two threads of one channel run concurrently, while a legacy
-    // inbound (undefined here) collapses to the channel's single slot exactly as before —
-    // `task-<channel>-<seq>` is per-MESSAGE, so keying on it would never reuse or resume one.
-    taskId: rec.taskId,
-    message: m.body,
-    context: { channelName: entry.channel.name, authorName: requesterName, authorKind: m.authorKind },
-    toolProfile: rec.toolProfile,
-    onStart: () => postTaskEvent(entry, m, 'task_started', taskId),
-  });
-
-  if (result.skipped === 'busy') {
-    // Same notice; D1 changed what defers it (this SESSION runs, or the pool is at its cap).
-    await queued.announce(entry, m, taskId, 'headless');
-    await postResult(entry, m, RESEND);
-    watcher.settle(rec.key, 'busy');
-    return;
-  }
-  if (result.skipped) {
-    watcher.settle(rec.key, 'no-cli'); // e.g. 'no-cli' — stay silent (H1)
-    return;
-  }
-  diag('spawn result:', `text ${String(result.text || '').length} chars${result.isError ? ' (error)' : ''}`);
-
-  // Error suppression: an errored run (expired CLI login, timeout, crash) must NOT
-  // reply into the shared channel and opens NO outbound review — that would leak
-  // local machine state. Close the lifecycle with a generic task_failed (no
-  // declined flag → a real failure) and surface it locally only.
-  if (result.isError) {
-    await postTaskEvent(entry, m, 'task_failed', taskId, { durationMs: Date.now() - startedAt });
-    const authText = result.errorDetail || result.text || '';
-    if (claudeAuth.isAuthShapedError(authText)) {
-      diag('spawn auth-shaped error -> sign-in flow');
-      claudeAuth.startSignInFlow({
-        getClaudeBin: () => spawner.getClaudeBinPath(),
-        channelName: entry.channel.name,
-      });
-    } else {
-      diag('error reply suppressed (local notify only)');
-      notifyLocal(
-        `Dopl: channel request failed in "${entry.channel.name}"`,
-        targeting.truncate(result.text || 'The agent could not complete this request.', 160)
-      );
-    }
-    watcher.settle(rec.key, 'error');
-    return;
-  }
-
-  await openOutboundReview(entry, m, rec, { taskId, startedAt, text: result.text });
-}
-
-// Clean reply → create the outbound review row and move the request to its
-// await-outbound phase. The drafted reply is carried on the record so a restart
-// can still post it on Send. No blocking — Send/Cancel arrive via the notification
-// or the web list and the watcher drives the post.
-async function openOutboundReview(entry, m, rec, { taskId, startedAt, text }) {
-  if (!text) {
-    await postTaskEvent(entry, m, 'task_finished', taskId, { durationMs: Date.now() - startedAt });
-    watcher.settle(rec.key, 'no-reply');
-    return;
-  }
-  const reply = consent.clampBody(text); // clamp ONCE: review == posted, byte-for-byte
-  const created = await consent.createConsentRequest(rec.workspaceId, {
-    channelId: entry.channel.id,
-    kind: 'outbound',
-    messageSeq: rec.seq,
-    summary: `Reply from your agent in "${entry.channel.name}"`,
-    bodyPreview: targeting.truncate(reply, 2000),
-    proposedReply: reply,
-  });
-  if (!created) {
-    // Fail closed: no review row → do not post; tell the operator locally.
-    await postTaskEvent(entry, m, 'task_failed', taskId, { durationMs: Date.now() - startedAt });
-    notifyLocal(
-      `Dopl: couldn't queue a reply for review in "${entry.channel.name}"`,
-      'Your agent drafted a reply but the review could not be created. Open Dopl and try again.'
-    );
-    watcher.settle(rec.key, 'error');
-    return;
-  }
-  watcher.toOutbound(rec.key, { rowId: created.rowId, taskId, startedAt, proposedReply: reply });
-  if (!created.status || created.status === 'pending') {
-    consent.notifyOutbound({
-      channelName: entry.channel.name,
-      proposedReply: reply,
-      onSend: () => {
-        consent.patchDecision(rec.workspaceId, created.rowId, 'allow');
-        watcher.poke(rec.key);
-      },
-      onOpen: () => targeting.openChannelForEntry(entry),
-    });
-  }
-  watcher.poke(rec.key); // resolve a born-decided outbound row at once
 }
 
 // ── Resolver: outbound SENT → post the reply ─────────────────────────────────

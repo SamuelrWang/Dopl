@@ -40,6 +40,9 @@ const {
 const channelDirs = require('./channel-dirs');
 const { counterpartyFraming, sanitizeName } = require('./prompt-framing');
 const pool = require('./session-pool'); // D1: the concurrency pool (was a per-channel Set)
+// 2026-08-04: "can a session run at all" (bundled OR external) — a different question
+// from claude-resolve's "is there an external CLI on PATH". See claude-runtime.js.
+const { sessionSpawnAvailable } = require('./claude-runtime');
 const sessionStore = require('./session-store'); // D1: THE sessionKey definition
 
 const store = new Store();
@@ -401,6 +404,10 @@ module.exports = {
   runForChannel,
   isBusy,
   getSessionId,
+  // 2026-08-04: the gate a TRIGGER must use — "can a session RUN at all", which is
+  // NOT `claudeAvailable`'s question. Re-exported from claude-runtime.js, which
+  // owns the distinction and says why the two names stay apart.
+  sessionSpawnAvailable,
   // D1 accounting: what this machine is running headlessly, per session key.
   listActiveSpawns: pool.listActive,
   MAX_CONCURRENT_SESSIONS: pool.MAX_CONCURRENT_SESSIONS,

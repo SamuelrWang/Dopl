@@ -193,21 +193,30 @@ test("every path logs exactly one diag line, and never a token-shaped value", as
 
 // ── the call sites (static): both defers announce, and nothing else does ──────
 
-test("both busy defers in trigger.js announce, ahead of the RESEND bubble", () => {
+test("both busy defers announce, ahead of the RESEND bubble", () => {
+  // §2 SPLIT (2026-08-04): the HEADLESS FALLBACK lane moved to trigger-headless.js, so
+  // the two defer sites now live in two files — the SESSION lane's in trigger.js, the
+  // headless one next door. Read both: the invariant is about the pair of defers, not
+  // about which file they happen to sit in, and scanning only trigger.js after the
+  // split would have quietly stopped covering half of it.
   const trigger = readFileSync(join(HERE, "..", "main", "trigger.js"), "utf8");
-  const sites = trigger.match(/queued\.announce\([^)]*\)/g) || [];
+  const headless = readFileSync(join(HERE, "..", "main", "trigger-headless.js"), "utf8");
+  const both = [trigger, headless];
+  const sites = both.flatMap((src) => src.match(/queued\.announce\([^)]*\)/g) || []);
   assert.equal(sites.length, 2, "one per busy defer (engine session + headless spawner)");
 
   // The engine defer threads under the FIRST-CLASS id when the record carries one.
   assert.ok(trigger.includes("queued.announce(entry, m, rec.taskId || taskId, 'session')"));
-  assert.ok(trigger.includes("queued.announce(entry, m, taskId, 'headless')"));
+  assert.ok(headless.includes("queued.announce(entry, m, taskId, 'headless')"));
 
   // Ordered: the milestone lands in the thread BEFORE the untagged resend bubble, so a
   // requester reading top-down sees the reason before the ask.
-  for (const site of sites) {
-    const at = trigger.indexOf(site);
-    const resend = trigger.indexOf("postResult(entry, m, RESEND)", at);
-    assert.ok(resend > at && resend - at < 200, `${site} must precede its RESEND post`);
+  for (const src of both) {
+    for (const site of src.match(/queued\.announce\([^)]*\)/g) || []) {
+      const at = src.indexOf(site);
+      const resend = src.indexOf("postResult(entry, m, RESEND)", at);
+      assert.ok(resend > at && resend - at < 200, `${site} must precede its RESEND post`);
+    }
   }
 
   // NOT on the declined / auth-held / fyi paths — those are answers, not defers.
