@@ -270,6 +270,22 @@ function desktopRuntime(m) {
   return DESKTOP_RUNTIMES.indexOf(metaStr(m, 'runtime')) !== -1;
 }
 
+// ── Spawn-with-handoff (rollback §3.5) ───────────────────────────────────────
+// TRUE iff this message's create DECLARED a handoff — an EXTERNAL agent (the
+// operator's own Claude Desktop / Claude Code over MCP) asking that the session
+// driving this thread open on THIS machine rather than being kept by the
+// external session that posted the create. `handoff` is a RESERVED metadata key:
+// the server strips any caller copy and re-stamps it only from the validated
+// create_thread field (src/features/channels/server/service-writes-metadata.ts),
+// so it is a fact about the create, not a claim in it — read `=== true`, the
+// strict boolean the server writes. Like the runtime stamp it is a ROUTING HINT
+// and NOT an authorization: `requesterTaskOpen` still demands the identity pair
+// (author === me AND task creator === me) around it, and those are what no peer
+// can forge, so a handoff can never open a window on anybody else's machine.
+function declaresHandoff(m) {
+  return !!(m && m.metadata && m.metadata.handoff === true);
+}
+
 // ── Requester auto-open detector (v1.9, Q4; widened 2026-08-05) ──────────────
 // TRUE iff this message is MY OWN first-class thread opener addressed to a peer, so
 // the desktop opens a REQUESTER session window that drives the thread. Checked by the
@@ -282,7 +298,9 @@ function desktopRuntime(m) {
 //   - m.authorUserId === myId       → MY message (I, or my agent, opened the thread).
 //   - taskCreatedBy === myId        → I created the task (the requester, not a peer).
 //   - a DESKTOP runtime stamp       → this app posted it, from one of its two runtimes
-//                                     (WAKE-V1 + rollback §3.4; see below).
+//     OR a declared handoff           (WAKE-V1 + rollback §3.4); OR the create DECLARED a
+//                                     handoff (rollback §3.5), the operator asking an
+//                                     EXTERNAL session to hand the thread to a window here.
 //   - taskTarget present && !== me  → it is addressed to a PEER (a self-targeted
 //                                     task has no counterparty to drive against).
 // De-dupe (one window per taskId) + backlog suppression + the settled-set are the
@@ -300,16 +318,22 @@ function desktopRuntime(m) {
 // The predicate was NOT loosened to get there — it still demands a server-written stamp;
 // there is simply a second one now.
 //
-// WAKE-V1 RUNTIME GATE, unchanged in what it refuses. The operator's own EXTERNAL Claude
-// Code session sends no such header and therefore carries no runtime key at all. That
-// session WAITS on the reply itself (it arms a long-held MCP await that wakes it when the
-// peer answers), so auto-opening a desktop requester window for its thread would put two
-// agents on one thread and let the window consume the reply the session was armed for.
-// Unstamped — an external agent, a script, a browser — therefore still opens NOTHING; the
-// reply reaches the external agent through its await, and this machine's passive path
-// (classify 'task-reply' → task-notify's silent banner) is the fallback when nothing is
-// listening. Rollback §3.5 changes that deliberately, with an explicit handoff op, and
-// until then it is pinned by test.
+// WAKE-V1 RUNTIME GATE, and the ONE thing that now lets an unstamped create through it.
+// The operator's own EXTERNAL Claude Code session sends no runtime header and carries no
+// runtime key. By DEFAULT that session WAITS on the reply itself (it arms a long-held MCP
+// await), so auto-opening a desktop requester window for its thread would put two agents on
+// one thread and let the window consume the reply the session was armed for — so an
+// unstamped create with NO handoff still opens NOTHING, and the reply reaches the external
+// agent through its await (with this machine's passive 'task-reply' banner as the fallback).
+//
+// SPAWN-WITH-HANDOFF (rollback §3.5) is the operator explicitly asking for exactly that
+// transfer. When the create DECLARED handoff (`declaresHandoff`, a server-stamped reserved
+// flag), the external session is saying "I do NOT keep this — open the driving session on my
+// machine." So a declared handoff clears the stamp conjunct in the external session's place,
+// and the window opening here is correct because it is what was asked for. The stamp is NOT
+// loosened for anything else: an unstamped, un-declared create is still inert. And handoff
+// is only ever HONORED alongside the identity pair below — it substitutes for the runtime
+// stamp, never for "this is MY OWN thread", so it cannot open a window on a peer's machine.
 //
 // THE STAMP IS A ROUTING HINT, NOT AN AUTHORIZATION SIGNAL (src/shared/auth/
 // runtime-header.ts §"Header-only, deliberately"). A device-token holder can set the
@@ -325,7 +349,11 @@ function requesterTaskOpen(m, myId) {
   if (!firstClassTaskId(m)) return false;
   if (m.authorUserId !== myId) return false;
   if (metaStr(m, 'taskCreatedBy') !== myId) return false;
-  if (!desktopRuntime(m)) return false;
+  // The stamp conjunct, OR a declared handoff in its place (rollback §3.5): a
+  // desktop-posted create opens the window as before, and an EXTERNAL create
+  // that DECLARED handoff opens it too — that is the operator asking for the
+  // transfer. Nothing else (an unstamped, un-declared create) opens anything.
+  if (!desktopRuntime(m) && !declaresHandoff(m)) return false;
   const target = metaStr(m, 'taskTarget');
   return !!target && target !== myId;
 }
@@ -354,6 +382,7 @@ module.exports = {
   knownLegacyReply,
   useLegacyThreadStore, // Q11: index.js injects electron-store at boot
   DESKTOP_RUNTIMES, // the two stamps this app produces (asserted by the truth tables)
+  declaresHandoff, // rollback §3.5: the reserved handoff flag an external create may set
   requesterTaskOpen,
   requesterTypedByOperator, // 2026-08-05: which of the two, for the lifecycle strip only
   openChannelForEntry: win.openChannelForEntry,

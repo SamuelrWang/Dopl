@@ -88,6 +88,19 @@ test("Q3b DIRECTION 3 — the operator's TYPED create takes that same route, plu
   assert.deepEqual([h.calls.startSession, h.calls.trigger], [[], []]);
 });
 
+test("Q3b DIRECTION 4 — an EXTERNAL create that DECLARES handoff opens the session HERE", async () => {
+  // Rollback §3.5 inverts DIRECTION 1: the SAME unstamped external create, but with the
+  // server-stamped handoff flag, is the operator handing the thread to a window on this
+  // machine. Route (2) claims it and launches — and, like a spawned create, arms no strip.
+  const h = withRecord(record());
+  const m = myCreate();
+  m.metadata.handoff = true;
+  await h.dispatch(dm(), m);
+  assert.equal(h.calls.launch.length, 1, "the requester session opens on this machine");
+  assert.deepEqual([h.calls.arm, h.calls.startSession, h.calls.trigger], [[], [], []],
+    "a handoff is not the operator typing — no strip, and it is not a fresh consent either");
+});
+
 // ── 3. THE TAG READER + THE RECORD TEST, as truth tables ─────────────────────────
 
 test("exchangeTag: the two spellings, and nothing else", () => {

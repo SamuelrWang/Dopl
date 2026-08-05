@@ -142,6 +142,30 @@ test("CASE 3 — an EXTERNAL, UNSTAMPED create still opens NOTHING (rollback §3
   assert.equal(opens({ ...noKey, authorKind: "user" }), false);
 });
 
+// ── 1b. SPAWN-WITH-HANDOFF inverts CASE 3 — but only when DECLARED (rollback §3.5) ──
+// An external unstamped create carrying the server-stamped handoff flag = the operator
+// handing the thread to a window HERE.
+const handoff = (over = {}) => {
+  const m = typed(over);
+  delete m.metadata.runtime;
+  m.metadata.handoff = true;
+  return m;
+};
+
+test("a declared handoff opens the session; read strictly; identity pair still binds", () => {
+  assert.equal(opens(handoff()), true, "the CASE 3 inversion — a declared handoff opens it");
+  for (const bad of [false, "true", 1, "yes", 0, null, undefined]) { // strict: only true stamps
+    const m = handoff();
+    m.metadata.handoff = bad;
+    assert.equal(opens(m), false, `handoff ${JSON.stringify(bad)}`);
+  }
+  // it clears the STAMP conjunct only, never the identity pair (the wrong-machine guard):
+  assert.equal(opens(handoff({ authorUserId: PEER })), false, "a peer's create, flag or not");
+  assert.equal(opens(handoff({ taskCreatedBy: PEER })), false, "a thread I did not open");
+  assert.equal(opens(handoff({ taskTarget: ME })), false, "a self-addressed thread");
+  assert.equal(opens(handoff({ taskId: `task-${TASK}-7` })), false, "a legacy id is no thread");
+});
+
 test("a FORGED or near-miss runtime value opens nothing — exact match only", () => {
   for (const bad of [
     "desktop",
@@ -334,6 +358,18 @@ test("CASE 3 — an EXTERNAL, UNSTAMPED create reaches NO route and starts nothi
     assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.taskNotify.length], [0, 0, 0]);
     assert.deepEqual(h.calls.notify, [], "and no local banner for my own message");
   }
+});
+
+test("HANDOFF dispatch: an external declared-handoff create LAUNCHES, and arms no strip", async () => {
+  // §3.5: route (2) claims it, NO strip (that is for `desktop-ui` typing), no skew diag.
+  const h = harness();
+  const m = typed();
+  delete m.metadata.runtime;
+  m.metadata.handoff = true;
+  assert.equal(await h.dispatch(entry, m), "maybeOpenRequesterSession");
+  assert.equal(h.calls.launch.length, 1);
+  assert.deepEqual(h.calls.arm, []);
+  assert.equal(h.calls.diag.filter((d) => d.includes("metadata.runtime")).length, 0);
 });
 
 test("one session per thread: a live session short-circuits without opening a second window", async () => {

@@ -145,6 +145,11 @@ function diagRuntimeGateSkip(m, myUserId) {
   if (targeting.metaStr(m, 'taskCreatedBy') !== myUserId) return;
   const target = targeting.metaStr(m, 'taskTarget');
   if (!target || target === myUserId) return;
+  // Rollback §3.5 — a DECLARED handoff clears the stamp conjunct in the external
+  // session's place, so `requesterTaskOpen` returned true and this diag is not
+  // even reached; the mirror agrees explicitly so a future reorder cannot make
+  // it misreport a handoff open as a skew skip.
+  if (targeting.declaresHandoff(m)) return;
   const stamp = targeting.metaStr(m, 'runtime');
   if (targeting.DESKTOP_RUNTIMES.indexOf(stamp) !== -1) return; // not the runtime conjunct that refused
   diag(
