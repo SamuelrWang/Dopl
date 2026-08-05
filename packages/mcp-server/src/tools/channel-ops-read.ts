@@ -97,42 +97,35 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
  * back is a plain channel-wide await. Suggesting a thread-scoped wait here is
  * how an agent ends up armed on a call that cannot exist.
  *
- * P1-8 (2026-08-04) — AND THE HINT USED TO CARRY THE WRONG NUMBER, WHICH LOST
- * MESSAGES SILENTLY. The line said "Highest seq shown: N", warned in prose that N
- * is thread-local and not channel-wide, and then interpolated THAT SAME N into
- * `op="await", since=N`. `await` is channel-wide with a strict `gt("seq", since)`,
- * so an agent following the tool's own suggestion skipped EVERY message below N
- * in every other exchange — permanently, since the cursor only moves forward. The
- * warning made it worse: it told the agent the number was wrong and then used it.
+ * P1-8 (2026-08-04) SHIPPED THE FIX BACKWARDS, AND P1-8b (2026-08-05) UNDOES IT.
  *
- * So the CHANNEL-WIDE max is fetched and that is what the await suggestion
- * carries; the thread max stays as display only. It costs one extra round-trip,
- * on a cold path — a thread-scoped read, never the poll loop — and it FAILS SOFT:
- * if the channel-wide max cannot be read, the suggestion states no number at all
- * rather than falling back to the one that is known to be wrong.
+ * The original complaint was real: the line said "Highest seq shown: N", warned
+ * that N is thread-local, then interpolated that same N into `since=N`, so an
+ * agent that had only ever read this thread never saw the messages sitting below
+ * N in other exchanges. P1-8 concluded the CHANNEL-wide max M was the right
+ * number and shipped that. It is the wrong direction, and it makes the loss
+ * strictly worse.
+ *
+ * `await` is `gt("seq", since)`. A LARGER `since` returns FEWER messages. The
+ * rows in `(N, M]` are precisely the other exchanges' messages this reader has
+ * NOT seen: awaiting from N DELIVERS them, awaiting from M DROPS them — forever,
+ * because the cursor only moves forward. P1-8 therefore caused the exact message
+ * loss its own docblock was written to prevent, and its hint said so out loud
+ * ("passing the thread-local N would skip everything between the two"), which is
+ * the claim inverted. Caught in production by a counterparty's agent reading the
+ * hint against the schema, in the exchange that was testing this feature.
+ *
+ * THE HONEST ANSWER IS THAT NEITHER NUMBER IS A CURSOR. A safe `since` is the
+ * highest seq below which this reader has seen EVERYTHING, channel-wide; a
+ * thread-scoped read establishes no such bound and cannot, because it deliberately
+ * filtered rows out. So this hint no longer offers a number to await from. It
+ * states the thread's high-water mark for display, says plainly that the read did
+ * not advance any channel-wide cursor, and points at the two calls that CAN
+ * establish one. The real fix is a thread filter on `await` (or an opaque resume
+ * token) so "watch MY exchange" becomes expressible instead of approximated —
+ * tracked as the elevation this incident argues for.
  */
 
-/**
- * The channel's own highest seq, or null when it cannot be read.
- *
- * `limit=1` with no `since` is the NEWEST message (the route's documented
- * behaviour, and the same shape `create_thread`'s cursor advice names), so one
- * row answers it. Null on ANY failure — an empty channel, a transport error, a
- * shape this build does not expect — because the whole point is that a wrong
- * number here is worse than no number.
- */
-async function channelWideMaxSeq(
-  client: DoplClient,
-  ref: string,
-): Promise<number | null> {
-  try {
-    const newest = await client.readChannelMessages(ref, { limit: 1 });
-    const seq = newest[newest.length - 1]?.seq;
-    return typeof seq === "number" ? seq : null;
-  } catch {
-    return null;
-  }
-}
 export async function opRead(
   client: DoplClient,
   ref: string,
@@ -201,13 +194,11 @@ export async function opRead(
     );
     return ok(lines.join("\n"));
   }
-  // P1-8 — the await cursor is the CHANNEL's high-water mark, never this
-  // thread's. See the docblock for the message loss the old line caused.
-  const channelSeq = await channelWideMaxSeq(client, ref);
+  // P1-8b — a thread-scoped read yields NO channel-wide cursor, so it offers no
+  // number to await from. See the docblock: the thread max under-counts and the
+  // channel max over-counts, and only the second one loses messages.
   lines.push(
-    channelSeq === null
-      ? `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel; messages in other exchanges may sit above it. DO NOT pass that number to \`await\`: await is channel-wide with a strict "greater than", so a thread-local seq skips every message below it in every other exchange, permanently. This call could not read the channel's own highest seq, so get it first — dopl_channel(op="read", channel="${ref}", limit=1) — and await from THAT. Drop \`thread\` for the full transcript.`
-      : `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel; messages in other exchanges may sit above it, and the channel's own highest is ${channelSeq}. Watch for newer messages with ${watch}${channelSeq}): that is the CHANNEL-wide cursor, which is the only kind await takes — passing the thread-local ${lastSeq} would skip everything between the two, permanently. await returns whatever lands next, in any exchange. Drop \`thread\` for the full transcript.`,
+    `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel. THIS READ DID NOT ADVANCE A CHANNEL-WIDE CURSOR, so do not await from ${lastSeq}: \`await\` is channel-wide with a strict "greater than", and this page deliberately left other exchanges out, so any number taken from it skips messages you have never seen — permanently, because the cursor only moves forward. Await from the highest seq below which you have seen EVERYTHING in this channel. If you do not have one, establish it first by reading the channel unscoped (drop \`thread\`) and awaiting from that page's last seq.`,
   );
   return ok(lines.join("\n"));
 }

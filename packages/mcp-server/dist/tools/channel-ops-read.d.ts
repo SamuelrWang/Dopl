@@ -22,6 +22,53 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
+/**
+ * Read a channel's transcript, optionally SCOPED TO ONE THREAD.
+ *
+ * `thread` is a FILTER, not a lookup, and every string below is written from
+ * that fact: the route keeps only the rows whose `metadata.taskId` equals it,
+ * an id nothing carries returns `[]` rather than a 404, and any non-empty
+ * string is legal — a thread id is a `channel_tasks` uuid today, but the
+ * transcript still carries legacy `task-<channelId>-<seq>` ids and those are
+ * the exchanges hardest to reconstruct by hand. Blank/whitespace is treated as
+ * unset rather than sent, so a caller that passes `thread=""` gets the channel
+ * read it meant instead of a 400 from the route's `min(1)`.
+ *
+ * WHAT THE FILTERED RESULT MAY NOT SAY: `await` has no thread parameter and
+ * never will have one silently (a filtered hold would miss the messages an
+ * agent must follow — see `channel-ops-await.ts`). So the seq this reports is
+ * this THREAD's high-water mark, not the channel's, and the watch hint it hands
+ * back is a plain channel-wide await. Suggesting a thread-scoped wait here is
+ * how an agent ends up armed on a call that cannot exist.
+ *
+ * P1-8 (2026-08-04) SHIPPED THE FIX BACKWARDS, AND P1-8b (2026-08-05) UNDOES IT.
+ *
+ * The original complaint was real: the line said "Highest seq shown: N", warned
+ * that N is thread-local, then interpolated that same N into `since=N`, so an
+ * agent that had only ever read this thread never saw the messages sitting below
+ * N in other exchanges. P1-8 concluded the CHANNEL-wide max M was the right
+ * number and shipped that. It is the wrong direction, and it makes the loss
+ * strictly worse.
+ *
+ * `await` is `gt("seq", since)`. A LARGER `since` returns FEWER messages. The
+ * rows in `(N, M]` are precisely the other exchanges' messages this reader has
+ * NOT seen: awaiting from N DELIVERS them, awaiting from M DROPS them — forever,
+ * because the cursor only moves forward. P1-8 therefore caused the exact message
+ * loss its own docblock was written to prevent, and its hint said so out loud
+ * ("passing the thread-local N would skip everything between the two"), which is
+ * the claim inverted. Caught in production by a counterparty's agent reading the
+ * hint against the schema, in the exchange that was testing this feature.
+ *
+ * THE HONEST ANSWER IS THAT NEITHER NUMBER IS A CURSOR. A safe `since` is the
+ * highest seq below which this reader has seen EVERYTHING, channel-wide; a
+ * thread-scoped read establishes no such bound and cannot, because it deliberately
+ * filtered rows out. So this hint no longer offers a number to await from. It
+ * states the thread's high-water mark for display, says plainly that the read did
+ * not advance any channel-wide cursor, and points at the two calls that CAN
+ * establish one. The real fix is a thread filter on `await` (or an opaque resume
+ * token) so "watch MY exchange" becomes expressible instead of approximated —
+ * tracked as the elevation this incident argues for.
+ */
 export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
 export declare function opGetThread(client: DoplClient, ref: string, threadId: string, selfUserId?: string | null): Promise<ToolResponse>;

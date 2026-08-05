@@ -130,42 +130,41 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     });
   }
 
-  it("the await cursor is the CHANNEL's max, never this thread's (P1-8)", async () => {
-    // THE BUG THIS REPLACES. The line printed "Highest seq shown: 44", warned in
-    // prose that 44 is thread-local and NOT channel-wide, and then interpolated
-    // that same 44 into `op="await", since=44`. await is channel-wide with a
-    // strict greater-than, so following the tool's own suggestion skipped every
-    // message between 44 and the channel's real head — permanently, since the
-    // cursor only moves forward. The warning made it worse: it told the agent the
-    // number was wrong and then used it.
+  it("a thread-scoped read offers NO await cursor at all (P1-8b)", async () => {
+    // THE INVERSION THIS REPLACES. P1-8 read the complaint correctly — the hint
+    // used to hand back the THREAD max — and then fixed it in the wrong
+    // direction, suggesting the CHANNEL max instead. `await` is gt(seq, since),
+    // so a LARGER since returns FEWER rows: the messages in (threadMax,
+    // channelMax] are exactly the other exchanges this reader never saw, and
+    // awaiting from the channel max drops them permanently. Neither number is a
+    // cursor, because a filtered page cannot establish "I have seen everything
+    // below this". So the hint offers no number and says why.
     const text = (
       await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
     ).content[0].text;
 
-    expect(text).toContain('dopl_channel(op="await", channel="general", since=91)');
-    expect(text).not.toContain("since=44");
+    // Not the thread max, not the channel max, not any number.
+    expect(text).not.toMatch(/since=\d/);
+    expect(text).not.toContain("the channel's own highest is 91");
     // The thread max stays as DISPLAY, which is what it was always good for.
     expect(text).toContain("Highest seq shown: 44");
-    expect(text).toContain("the channel's own highest is 91");
-    // The reason rides along, because an agent that understands it will not
-    // reconstruct the mistake from a stale transcript.
-    expect(text).toContain("would skip everything between the two, permanently");
+    expect(text).toContain("THIS READ DID NOT ADVANCE A CHANNEL-WIDE CURSOR");
+    // It names the call that CAN establish one.
+    expect(text).toContain("drop `thread`");
     // ...and nothing anywhere suggests passing a thread INTO an await.
     expect(text).not.toMatch(/op="await"[^)]*thread/);
   });
 
-  it("FAILS SOFT: no channel-wide seq means NO number, not the wrong one", async () => {
-    // The failure mode being avoided is silent message loss, so an unreadable
-    // channel head must not fall back to the thread-local seq that caused it.
-    const text = (
-      await opRead(twoLaneClient([41, 44], null), "general", undefined, undefined, null, "thread-1")
-    ).content[0].text;
+  it("costs no extra round-trip — the channel head is never fetched", async () => {
+    // P1-8 fetched the channel max to build its (wrong) suggestion. With no
+    // number to offer, that cold-path read is gone: one call, one query.
+    const readChannelMessages = vi.fn<ReadSpy>();
+    readChannelMessages.mockResolvedValue([msg(41, "thread-1"), msg(44, "thread-1")]);
+    const client = stubClient({ readChannelMessages });
 
-    expect(text).not.toContain("since=44");
-    expect(text).not.toMatch(/since=\d/);
-    expect(text).toContain("DO NOT pass that number to `await`");
-    // …and it names the call that gets the right cursor.
-    expect(text).toContain('dopl_channel(op="read", channel="general", limit=1)');
+    await opRead(client, "general", undefined, undefined, null, "thread-1");
+
+    expect(readChannelMessages).toHaveBeenCalledTimes(1);
   });
 
   it("a CHANNEL-wide read pays for no second round-trip", async () => {
