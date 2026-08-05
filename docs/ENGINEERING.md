@@ -429,10 +429,14 @@ Billing is **workspace-level**, not per-user. The per-user 24h trial, `DEMO_PAYW
 - **Solo is single-member:** `assertCanAddMember` (entitlements module) throws `HttpError(402, "SOLO_MEMBER_LIMIT", …, { upgrade_url })` for a live solo workspace, and is called from **all four member-add paths** — `createInvitation`, `acceptInvitationByToken` (stale-invite hole), `requestJoin`, `resolveJoinRequest` approve. Any new member-add path MUST call it. UI catches the 402 and opens `UpgradeModal variant="add-member"`, which for a live solo sub swaps the subscription in place via `POST /api/billing/upgrade-to-team` (price swap + quantity, optimistic local upsert without stamping the event watermark) instead of a second checkout. Backstop: solo entitlements only apply while `memberCount === 1` — a solo workspace that somehow gains a member degrades to free multi-member rules (no exploit value).
 - **Checkout:** `POST /api/billing/checkout` takes `{ plan?: "solo" | "team" }` (default team); solo requires exactly one active member (409 `SOLO_REQUIRES_SINGLE_MEMBER`).
 - **The gate surface:** `features/billing/server/entitlements.ts` — `getWorkspaceEntitlements`, `assertCanCreateObject`, `assertCanAddMember`, `EntitlementError("over_free_cap")`, `entitlementDeniedBody`. Free rules: solo-member = uncapped; 2+ members = `FREE_MULTI_MEMBER_OBJECT_CAP` (100 ontology objects, creates frozen over cap — reads/edits/deletes never gated); chats visible window `FREE_CHATS_WINDOW_DAYS` (90; hide never delete, via the `chats_retention_cutoff` DB function + service-layer filter in `chats/server/service-reads.ts`). `past_due` keeps paid entitlements; `canceled` reverts to free rules. Ontology's `service.ts` importing the entitlements module is the **sanctioned** cross-feature exception to §3 (it is the designated gate).
-- **Plan-gate error envelope:** flat `{ error: <code>, message, upgrade_url }` (codes: `over_free_cap`, `chat_outside_retention`), distinct from the canonical nested envelope; `upgrade_url` always points at `/pricing` (there is no `/settings/billing` route). `@dopl/client` parses it (`upgradeUrl` on `DoplApiError`), the web `apiRequest` (`shared/api/api-client.ts`) surfaces the code when a sibling `message` is present, and the MCP server's `entitlementDenied` guard (`tools/respond.ts` + `runWithEntitlementGuard`) surfaces the message + upgrade link verbatim to agents. Rebuild `packages/dopl-client/dist` after touching its src — the MCP server consumes the built package.
+- **Plan-gate error envelope:** flat `{ error: <code>, message, upgrade_url }` (codes: `over_free_cap`, `chat_outside_retention`), distinct from the canonical nested envelope; `upgrade_url` points at **`/billing?billing=upgrade`** — never `/pricing` (a marketing page that sells nothing), never `/canvas?billing=…` (retiring), and there is no `/settings/billing` route. Build it with `billingUrl()`, never by hand. `@dopl/client` parses it (`upgradeUrl` on `DoplApiError`), the web `apiRequest` (`shared/api/api-client.ts`) surfaces the code when a sibling `message` is present, and the MCP server's `entitlementDenied` guard (`tools/respond.ts` + `runWithEntitlementGuard`) surfaces the message + upgrade link verbatim to agents. Rebuild `packages/dopl-client/dist` after touching its src — the MCP server consumes the built package.
 - **Webhook hardening:** `workspace_billing.last_stripe_event_created` is an event-ordering watermark — handlers skip any Stripe event whose `event.created` is <= the stored value (out-of-order `updated` can never resurrect a canceled sub). `invoice.payment_succeeded` only recovers a workspace whose stored subscription id matches the invoice's. `incomplete`/`incomplete_expired`/`unpaid` map to `canceled` (not entitled); `past_due` grace is only for Stripe's literal `past_due`. Checkout blocks whenever a non-canceled subscription exists (409 → portal) and passes an idempotency key. `webhook_events` claiming is atomic (update-where-unprocessed).
 - **Retention specifics:** the chats append endpoint returns `messages: []` when the chat is outside a free workspace's window (append allowed, transcript not echoed). Team-scoped chat reads are enforced in RLS too (`20260716150000_chats_team_aware_rls.sql`), mirroring `canSeeChat`. Known accepted gap: an OWNER can still read their own >90-day chats via direct PostgREST — the window is a product gate, not a security boundary (F-035).
 - **Client read:** `useWorkspaceEntitlements` (features/billing/components) is the single client-side billing read (TanStack-cached `GET /api/billing/status`); do not add parallel fetch hooks.
+- **THE BILLING SURFACE IS A PAGE, AND ITS URL HAS ONE BUILDER (2026-08-05, plan decision D1).** `/billing/{segment}` (`src/app/billing/[segment]/page.tsx`) is the standalone billing + account page, and `/billing` with no segment resolves the caller's default workspace and forwards. It is the ONE product-shaped page the website retirement keeps, because checkout is `ui_mode: "elements"` — our own React `PaymentElement` form — which the packaged renderer's CSP (`script-src 'self'`, `connect-src 'none'`) can never mount. It renders the shipped `PlansBilling` + `DeleteAccount` sections and **must not import `@/shared/layout/app-shell` or the `(app)` layout's providers**: one such import puts the rail, sidebar, tour and graph engine back in the KEEP set and Stage D stops being a deletion. Pinned by `features/billing/components/billing-page-screen.test.tsx`.
+  - **Every billing URL comes from `features/billing/url.ts`** — `billingPath` / `billingUrl` / `billingSelfPath` and the three parsers. Six sites used to hand-write `/{segment}/canvas?billing=…`: both Stripe `return_url`s, `upgradeUrl()` (402/403 envelopes, shared with chats retention), the desktop billing + account handoffs (`apps/desktop-ui/src/lib/open-in-browser.ts`), the SPA upgrade modal, and `/pricing`. The module is PURE (no `next/*`, no `server-only`, no browser globals) so the SPA, the Stripe server modules and the RSCs share one definition. Do not build one of these strings inline.
+  - **Query contract:** `?billing=success|return` is the ONLY thing that arms `plans-billing-core`'s 20×1s post-checkout poll (`billingReturn`) — a surface that drops it shows a customer who just paid their old plan. `?billing=upgrade&plan=solo|team` opens that plan's checkout at mount; a bare `?billing=upgrade` (all the 402 envelopes can say) lands on the plan list. Stripe's `{CHECKOUT_SESSION_ID}` must stay UNENCODED, which is why the builder concatenates the query instead of using `URLSearchParams`.
+  - **Stripe returns carry the segment.** `withWorkspaceAuth` already provides `workspaceSlug` + `workspacePublicId`; compose them and pass `segment` to `createWorkspaceCheckoutSession` / `createPortalSession`, or a multi-workspace admin is returned to their DEFAULT workspace's billing state after upgrading a different one.
 - **Instrumentation:** `withWorkspaceAuth` logs every MCP-authenticated op to `mcp_tool_calls` (insert-only, service role; admin SELECT). This feeds future usage analytics — keep the write fire-and-forget.
 
 ### Channels (cross-user agent collaboration — 2026-07-25)
@@ -857,6 +861,34 @@ visible.
 Same rule applies to any other per-request hot path. `src/shared/auth/with-auth.ts`
 still does a network `getUser()` per API request and is the largest remaining
 consumer (F-094).
+
+### 9.2 `?redirectTo=` — the round-trip contract (2026-08-05)
+
+Three rules, all pinned by `src/proxy-redirect-to.test.ts`. They exist because
+two of them were broken in production and neither failure was visible until the
+billing page made them cost a payment.
+
+1. **The signed-out bounce carries `pathname + search`, never `pathname` alone.**
+   A truncated `redirectTo` silently drops the intent the URL was carrying —
+   `/billing/{segment}?billing=upgrade` came back as a bare page and checkout
+   never opened, for the one population whose browser is signed out by
+   definition (first-time payers). A QUERY also promotes the default landings
+   (`/`, `/canvas`) from "no redirectTo needed" to a real destination.
+2. **A VALID `redirectTo` is honoured for an ALREADY-SIGNED-IN visitor to
+   `/login`.** Having a session is not a reason to discard the destination; it
+   is the reason the sign-in step can be skipped. Validation is always
+   `explicitPostAuthTarget` → `safeRedirect` (`shared/lib/url/post-auth-landing.ts`)
+   — the same module the login form and `/auth/callback` use. Never re-implement
+   the check: a value honoured by one layer and rejected by the next is how an
+   open redirect gets built one helper at a time. A rejected value falls through
+   to the default and does not ride along to the destination.
+3. **The Q4 loop breaker's cookie carries its own midpoint**
+   (`"<count>|<pathname>"`). The counter is disarmed by the first healthy
+   authenticated page view, and the page the bounce just chose must NOT disarm
+   it or the cycle is unbounded. Any new page that bounces to
+   `/login?redirectTo=<itself>` — `/get-started` and `/billing/{segment}` both
+   do — is that midpoint. A hardcoded `/canvas` was only ever correct while
+   `/canvas` was the sole destination.
 
 ---
 
