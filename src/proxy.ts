@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { explicitPostAuthTarget } from "@/shared/lib/url/post-auth-landing";
 
 const PUBLIC_ROUTES = [
   "/login",
@@ -107,8 +108,21 @@ const SELF_AUTH_ROUTES = [
 // unexpired token (up to ~1h), and that must keep reading as "signed out" — so
 // the disagreement, and therefore the loop, survives any such fallback. The
 // breaker is the only stop that covers both.
+//
+// THE COOKIE ALSO REMEMBERS WHERE IT BOUNCED TO, and that half is load-bearing.
+// The counter is disarmed by the first healthy authenticated page view, and the
+// one page that must NOT disarm it is the cycle's own midpoint — otherwise the
+// counter resets on every lap and the loop never terminates. That used to be a
+// hardcoded `/canvas`, which was true while `/canvas` was the only place a
+// signed-in visitor to `/login` could land. It no longer is: `/login?redirectTo=…`
+// is now honoured (an invite, a join link, the billing page), so the midpoint is
+// whatever that bounce chose, and the cookie carries it: `"<count>|<pathname>"`.
+// A legacy bare `"<count>"` still reads as `/canvas`, so cookies in flight
+// across the deploy keep the old — correct — meaning.
 const LOGIN_BOUNCE_COOKIE = "dopl-login-bounce";
 const LOGIN_BOUNCE_LIMIT = 2;
+/** Where a signed-in visitor to `/login` goes when the URL asked for nothing. */
+const DEFAULT_SIGNED_IN_DESTINATION = "/canvas";
 /**
  * Long enough that a loop whose hops are SLOW (a degraded GoTrue makes every
  * page render wait on a doomed `/auth/v1/user` call) still reaches the limit
@@ -141,13 +155,64 @@ function redirectPreservingSession(
   return response;
 }
 
-function readLoginBounces(request: NextRequest): number {
-  const raw = Number(request.cookies.get(LOGIN_BOUNCE_COOKIE)?.value);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+/** `{ count, destination }` from `"<count>|<encoded pathname>"`, or from the
+ *  legacy bare `"<count>"` (destination `/canvas`). */
+function readLoginBounce(request: NextRequest): {
+  count: number;
+  destination: string;
+} {
+  const raw = request.cookies.get(LOGIN_BOUNCE_COOKIE)?.value ?? "";
+  const separator = raw.indexOf("|");
+  const countPart = separator === -1 ? raw : raw.slice(0, separator);
+  const count = Number(countPart);
+  let destination = DEFAULT_SIGNED_IN_DESTINATION;
+  if (separator !== -1) {
+    try {
+      destination = decodeURIComponent(raw.slice(separator + 1)) || destination;
+    } catch {
+      // A mangled cookie must not be able to throw the middleware; falling back
+      // to `/canvas` only means the breaker disarms one hop early.
+    }
+  }
+  return {
+    count: Number.isFinite(count) && count > 0 ? Math.floor(count) : 0,
+    destination,
+  };
+}
+
+function setLoginBounce(
+  request: NextRequest,
+  response: NextResponse,
+  count: number,
+  destination: string
+): void {
+  response.cookies.set(
+    LOGIN_BOUNCE_COOKIE,
+    `${count}|${encodeURIComponent(destination)}`,
+    {
+      path: "/",
+      maxAge: LOGIN_BOUNCE_TTL_SECONDS,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+    }
+  );
 }
 
 function clearLoginBounces(response: NextResponse): void {
   response.cookies.set(LOGIN_BOUNCE_COOKIE, "", { path: "/", maxAge: 0 });
+}
+
+/**
+ * Point `url` at a `safeRedirect`-validated same-origin target, replacing the
+ * query rather than merging into it — the incoming `?redirectTo=` has been
+ * consumed by getting here and must not ride along to the destination.
+ */
+function applyTarget(url: URL, target: string): void {
+  const parsed = new URL(target, url.origin);
+  url.pathname = parsed.pathname;
+  url.search = parsed.search;
+  url.hash = parsed.hash;
 }
 
 export async function proxy(request: NextRequest) {
@@ -258,32 +323,61 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // If authenticated, redirect landing page and login to /canvas
+  // If authenticated, redirect landing page and login into the app.
   if (userId && (pathname === "/" || pathname === "/login")) {
     // Q4: only `/login` can loop — it is the only path a server component
     // redirects to (`if (!user) redirect("/login")`, 19 call sites), and
     // nothing redirects to `/`.
-    const bounces = pathname === "/login" ? readLoginBounces(request) : 0;
+    const bounces =
+      pathname === "/login" ? readLoginBounce(request).count : 0;
     if (bounces >= LOGIN_BOUNCE_LIMIT) {
       // Break the cycle: serve the login screen (what this request would get if
       // it were signed out) rather than bouncing into a page that will send it
       // straight back. `/login` is a PUBLIC_ROUTE, so passing through here is
-      // the same response the branch further down would return.
+      // the same response the branch further down would return. The
+      // `?redirectTo=` stays in the URL, so the form still honours it.
       clearLoginBounces(supabaseResponse);
       return supabaseResponse;
     }
 
+    // HONOUR A VALID `?redirectTo=` FOR AN ALREADY-SIGNED-IN VISITOR.
+    //
+    // This used to hardcode `/canvas` and leave the param sitting on the
+    // destination URL as decoration: a live session hitting
+    // `/login?redirectTo=%2Finvite%2Ftok_x` was 307'd to
+    // `/canvas?redirectTo=%2Finvite%2Ftok_x` and the invite was never reached.
+    // Every producer of that URL — the middleware's own bounce below,
+    // `/oauth/authorize`, `/invite`, `/join`, and now `/billing/{segment}` — is
+    // stating a destination, and having a session already is not a reason to
+    // discard it; it is the reason the sign-in step can be skipped.
+    //
+    // Same validation as everywhere else (`explicitPostAuthTarget` →
+    // `safeRedirect`): a hostile value ("https://evil.example",
+    // "//evil.example", "/\\evil.example", a bare word) is not a destination, it
+    // is an attack, and it reads as null so this falls through to the default —
+    // it can never make the middleware emit an off-origin `Location`.
+    //
+    // Only `/login` participates. A `?redirectTo=` on the marketing landing page
+    // has no producer and no meaning.
+    const target =
+      pathname === "/login"
+        ? explicitPostAuthTarget(request.nextUrl.searchParams.get("redirectTo"))
+        : null;
+
     const url = request.nextUrl.clone();
-    url.pathname = "/canvas";
+    if (target) {
+      applyTarget(url, target);
+    } else {
+      url.pathname = DEFAULT_SIGNED_IN_DESTINATION;
+      // A `redirectTo` that reached here was either consumed above or rejected
+      // as hostile; either way it has no business riding to the destination,
+      // where it used to sit as decoration. The landing page's query (utm and
+      // friends) is left alone.
+      if (pathname === "/login") url.search = "";
+    }
     const response = redirectPreservingSession(url, supabaseResponse);
     if (pathname === "/login") {
-      response.cookies.set(LOGIN_BOUNCE_COOKIE, String(bounces + 1), {
-        path: "/",
-        maxAge: LOGIN_BOUNCE_TTL_SECONDS,
-        httpOnly: true,
-        sameSite: "lax",
-        secure: request.nextUrl.protocol === "https:",
-      });
+      setLoginBounce(request, response, bounces + 1, url.pathname);
     }
     return response;
   }
@@ -292,16 +386,20 @@ export async function proxy(request: NextRequest) {
   // bounce cycle, so retire the counter — otherwise a single legitimate
   // `/login` visit would leave it armed for the rest of the TTL and a later
   // visit could land on the login screen for no reason. Written only when the
-  // cookie actually exists (no `Set-Cookie` on the hot path), and NEVER for
-  // `/canvas`, which is the cycle's own midpoint — clearing there would reset
-  // the counter on every lap and the loop would never terminate. `/api/*` is
-  // excluded for the same reason: a background poll in another tab must not
-  // disarm the breaker for the tab that is looping.
+  // cookie actually exists (no `Set-Cookie` on the hot path), and NEVER for the
+  // page the bounce just sent this browser to, which is the cycle's own
+  // midpoint — clearing there would reset the counter on every lap and the loop
+  // would never terminate. That midpoint used to be `/canvas` by definition;
+  // now the bounce records it (see LOGIN_BOUNCE_COOKIE), because an honoured
+  // `?redirectTo=` makes it any page — and a page whose own `getUser()` fails
+  // sends the browser straight back to `/login`, which is the loop verbatim.
+  // `/api/*` is excluded for a related reason: a background poll in another tab
+  // must not disarm the breaker for the tab that is looping.
   if (
     userId &&
-    pathname !== "/canvas" &&
     !pathname.startsWith("/api/") &&
-    request.cookies.has(LOGIN_BOUNCE_COOKIE)
+    request.cookies.has(LOGIN_BOUNCE_COOKIE) &&
+    pathname !== readLoginBounce(request).destination
   ) {
     clearLoginBounces(supabaseResponse);
   }
@@ -342,9 +440,33 @@ export async function proxy(request: NextRequest) {
 
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    // Only add redirectTo if it's not the default landing page
-    if (pathname !== "/" && pathname !== "/canvas") {
-      url.searchParams.set("redirectTo", pathname);
+    // THE BOUNCE CARRIES THE QUERY, NOT JUST THE PATH.
+    //
+    // This used to set `redirectTo` to `pathname` alone, so a signed-out visit
+    // to `/billing/{segment}?billing=upgrade` came back from `/login` as a bare
+    // `/billing/{segment}` and the checkout the URL asked for never opened —
+    // hitting, by definition, FIRST-TIME PAYERS, whose browser has never signed
+    // in. The same silent truncation applied to every query-bearing deep link.
+    //
+    // Still safe: the value is validated on the way out (`safeRedirect` /
+    // `explicitPostAuthTarget`, in the login form, `/auth/callback` and the
+    // signed-in branch above), and a query cannot make a same-origin path
+    // off-origin — `safeRedirect` reassembles `pathname + search + hash` from a
+    // parsed URL and rejects anything whose origin moved.
+    const target = `${pathname}${request.nextUrl.search}`;
+    // The default landings name themselves; `redirectTo=/canvas` would just be
+    // noise. A QUERY makes even those a real destination, though — a Stripe
+    // return to `/canvas?billing=success` in a signed-out tab must survive the
+    // sign-in, or the payer lands on the download page with no plan in sight.
+    const isDefaultLanding =
+      (pathname === "/" || pathname === "/canvas") &&
+      request.nextUrl.search === "";
+    if (!isDefaultLanding) {
+      // Exactly one thing rides to `/login`: where to come back to. The
+      // requested page's own query is inside `redirectTo`, so leaving a second
+      // copy of it here would be a second, ignored source of truth.
+      url.search = "";
+      url.searchParams.set("redirectTo", target);
     }
     // Preserve the cookie writes: a REFUSED refresh clears the session through
     // the storage adapter, and that clearing must reach the browser or the dead
