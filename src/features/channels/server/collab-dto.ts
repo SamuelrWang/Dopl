@@ -1,8 +1,10 @@
 import type {
   AgentTrustRule,
   ChannelConsentRequest,
+  ChannelSessionState,
   ConsentKind,
   ConsentStatus,
+  SessionPillState,
 } from "../types";
 import type { ProfileRef } from "./dto";
 
@@ -46,6 +48,42 @@ export type PresenceRow = {
   last_seen_at: string;
   status: string;
 };
+
+/**
+ * `channel_sessions` row — the desktop's per-session projection at rest (rollback
+ * §3.5, read-session-state). One row per live session the operator's machine is
+ * running; `mapSessionStateRow` turns it into the {@link ChannelSessionState}
+ * the MCP read returns.
+ */
+export type SessionStateRow = {
+  id: string;
+  channel_id: string;
+  workspace_id: string;
+  user_id: string;
+  session_key: string;
+  task_id: string | null;
+  name: string;
+  state: string;
+  channel_name: string | null;
+  thread_title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function mapSessionStateRow(row: SessionStateRow): ChannelSessionState {
+  return {
+    channelId: row.channel_id,
+    threadId: row.task_id,
+    name: row.name,
+    // The column carries a CHECK constraint on exactly these three values, so
+    // the cast is safe at the boundary (the same pattern the rest of this file
+    // uses for the untyped admin client).
+    state: row.state as SessionPillState,
+    channelName: row.channel_name,
+    threadTitle: row.thread_title,
+    updatedAt: row.updated_at,
+  };
+}
 
 export function mapConsentRow(
   row: ConsentRequestRow,

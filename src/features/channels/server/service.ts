@@ -84,3 +84,5 @@ export {
 } from "./trust-service";
 
 export { heartbeatPresence } from "./presence-service";
+
+export { listSessionStates } from "./session-state-service";

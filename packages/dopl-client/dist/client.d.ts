@@ -6,7 +6,7 @@ import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./sk
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -145,6 +145,7 @@ export declare class DoplClient {
     postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
     awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
     listChannelThreads(channelId: string): Promise<ChannelThread[]>;
+    listChannelSessions(channelId?: string): Promise<ChannelSessionState[]>;
     getChannelThread(channelId: string, threadId: string): Promise<ChannelThread>;
     createChannelThread(channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
     closeChannelThread(channelId: string, threadId: string, input: {

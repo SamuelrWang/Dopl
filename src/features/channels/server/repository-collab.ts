@@ -5,6 +5,7 @@ import type { AgentPresenceStatus } from "../types";
 import type {
   ConsentRequestRow,
   PresenceRow,
+  SessionStateRow,
   TrustRuleRow,
 } from "./collab-dto";
 
@@ -19,6 +20,10 @@ import type {
 const CONSENT_LIST_LIMIT = 200;
 const PRESENCE_ROWS_LIMIT = 5_000;
 const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
+// One member's live sessions are bounded by the desktop's window budget
+// (MAX_SESSION_WINDOWS), so this is far above any real machine and exists only
+// to make a truncation loud rather than silent.
+const SESSION_ROWS_LIMIT = 500;
 
 /**
  * Pure data access for the v1.2 collaboration tables (consent requests,
@@ -318,6 +323,38 @@ export async function presenceForWorkspace(
     });
   }
   return out;
+}
+
+// ─── Session states (rollback §3.5, read-session-state) ─────────────
+
+/**
+ * The caller's OWN live sessions, newest change first, optionally narrowed to
+ * one channel. Scoped to `userId` here (and by RLS) because a session belongs
+ * to one member's machine and read-session-state answers about the caller's own
+ * — a peer has no read on it.
+ *
+ * The write half (the desktop pushing rows on state change) is NOT wired in
+ * this phase — see the read-session-state DELIVERY GAP flag in F-144. Until it
+ * lands this returns `[]`, which the read op reports honestly as "no live
+ * sessions" rather than fabricating any.
+ */
+export async function listSessionStates(
+  userId: string,
+  workspaceId: string,
+  channelId?: string
+): Promise<SessionStateRow[]> {
+  const db = supabaseAdmin();
+  let query = db
+    .from("channel_sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId);
+  if (channelId) query = query.eq("channel_id", channelId);
+  const { data, error } = await query
+    .order("updated_at", { ascending: false })
+    .limit(SESSION_ROWS_LIMIT);
+  if (error) throw error;
+  return (data ?? []) as SessionStateRow[];
 }
 
 /** Member user-ids per channel — pairs with presence for online counts. */

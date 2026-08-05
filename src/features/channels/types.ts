@@ -152,6 +152,44 @@ export type ConsentDecisionSurface = "web" | "desktop";
 export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
 
 /**
+ * SESSION PILL STATE (rollback §3.3 / §3.5). The three states the desktop's
+ * `session-summary.js` reduces every engine phase/activity to, and the ONLY
+ * vocabulary a session's state is ever reported in — over IPC to the desktop
+ * pills, and over MCP to an external agent asking "what is flint doing?".
+ *
+ * There is deliberately NO `thinking`: it needs streaming
+ * (`includePartialMessages`), which is off (rollback §3.3 dependency note /
+ * sequencing item 6), so a state that can never be derived never appears.
+ */
+export type SessionPillState = "working" | "idle" | "ended";
+
+/**
+ * ONE LIVE (or just-ended) session of a member's, as answered over MCP by
+ * `dopl_channel(op="read_sessions")` (rollback §3.5, read-session-state). It is
+ * the server-visible projection of the desktop's `session-summary.list()` shape
+ * — the SAME derivation the pills use, lifted to the server so an external
+ * agent can read it (F-142: "phase 5 lifts the same list() to MCP and adds no
+ * second derivation").
+ *
+ * DELIVERY: the desktop pushes these rows to the server ON STATE CHANGE (not a
+ * heartbeat) into `channel_sessions`; the read is scoped to the caller's own
+ * sessions. See `session-state-service.ts`.
+ */
+export type ChannelSessionState = {
+  channelId: string;
+  /** The thread (task) this session is working, or null for one with none. */
+  threadId: string | null;
+  /** The friendly handle (flint / onyx / …) the pills show for this session. */
+  name: string;
+  state: SessionPillState;
+  /** Counterparty-influenced display text, neutralized before storage. */
+  channelName: string | null;
+  threadTitle: string | null;
+  /** When the desktop last reported a change for this session. */
+  updatedAt: string;
+};
+
+/**
  * Message kind. `message` = chat; the `task_*` values are structured
  * activity events (payload in `metadata`, human-readable render in
  * `body`); `system` = joins / topic changes.

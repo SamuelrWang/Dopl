@@ -16,7 +16,7 @@
  * deliberate, cursor-preserving one, never a blind transport retry.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -47,6 +47,13 @@ export declare function postMessage(t: DoplTransport, channelId: string, input: 
  * `echoSeq` / `threadClosed` below.
  */
 export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThread[]>;
+/**
+ * READ-SESSION-STATE (rollback §3.5) — the caller's OWN live sessions, for
+ * "what is flint doing?". `channelId` narrows to one channel; omitted, it is
+ * every one of the caller's sessions in the active workspace. Own-scoped
+ * server-side (a peer's sessions never come back). See `ChannelSessionState`.
+ */
+export declare function listChannelSessions(t: DoplTransport, channelId?: string): Promise<ChannelSessionState[]>;
 export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
 /**

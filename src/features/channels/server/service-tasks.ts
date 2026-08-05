@@ -74,16 +74,27 @@ async function postOpeningMessage(
   ctx: ChannelContext,
   channelId: string,
   task: { id: string; title: string; target_user_id: string | null },
-  body: string
+  body: string,
+  // SPAWN-WITH-HANDOFF (rollback §3.5). When the create declared it, the opener
+  // carries the reserved `metadata.handoff` stamp so the OPERATOR'S desktop
+  // opens the requester session rather than leaving it with the external
+  // session that posted the create. Server-internal only — see
+  // `PostMessageOptions.handoff`.
+  handoff?: boolean
 ): Promise<number> {
-  const message = await postMessage(ctx, channelId, {
-    body,
-    kind: "message",
-    toUserId: task.target_user_id ?? undefined,
-    summary: task.title,
-    metadata: { taskId: task.id },
-    clientMsgId: openingMessageClientId(task.id),
-  });
+  const message = await postMessage(
+    ctx,
+    channelId,
+    {
+      body,
+      kind: "message",
+      toUserId: task.target_user_id ?? undefined,
+      summary: task.title,
+      metadata: { taskId: task.id },
+      clientMsgId: openingMessageClientId(task.id),
+    },
+    { handoff }
+  );
   // The seq travels back out (WAKE-V1): it is the requester's `await` cursor,
   // and it is only known here. Every return path above is idempotent, so a
   // dedup'd re-post yields the STORED message — the same seq, never a new one.
@@ -171,7 +182,7 @@ async function convergeOnThread(
 ): Promise<TaskCreateResult> {
   const isCreator = task.created_by === ctx.userId;
   const openingSeq = isCreator
-    ? await postOpeningMessage(ctx, channelId, task, input.body)
+    ? await postOpeningMessage(ctx, channelId, task, input.body, input.handoff)
     : await storedOpeningSeq(channelId, task.id);
   return { thread: mapTaskRow(task), openingSeq };
 }
@@ -258,7 +269,13 @@ export async function createTask(
     throw err;
   }
 
-  const openingSeq = await postOpeningMessage(ctx, channel.id, task, input.body);
+  const openingSeq = await postOpeningMessage(
+    ctx,
+    channel.id,
+    task,
+    input.body,
+    input.handoff
+  );
 
   return { thread: mapTaskRow(task), openingSeq };
 }

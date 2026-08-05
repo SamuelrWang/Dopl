@@ -26,6 +26,7 @@ exports.createChannel = createChannel;
 exports.inviteToChannel = inviteToChannel;
 exports.postMessage = postMessage;
 exports.listChannelThreads = listChannelThreads;
+exports.listChannelSessions = listChannelSessions;
 exports.getChannelThread = getChannelThread;
 exports.createChannelThread = createChannelThread;
 exports.proposeChannelThreadClose = proposeChannelThreadClose;
@@ -139,6 +140,17 @@ async function postMessage(t, channelId, input) {
 async function listChannelThreads(t, channelId) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, { toolName: "channel_list_threads" });
     return data.tasks;
+}
+/**
+ * READ-SESSION-STATE (rollback §3.5) — the caller's OWN live sessions, for
+ * "what is flint doing?". `channelId` narrows to one channel; omitted, it is
+ * every one of the caller's sessions in the active workspace. Own-scoped
+ * server-side (a peer's sessions never come back). See `ChannelSessionState`.
+ */
+async function listChannelSessions(t, channelId) {
+    const query = channelId ? `?channelId=${enc(channelId)}` : "";
+    const data = await t.request(`/api/channels/sessions${query}`, { toolName: "channel_read_sessions" });
+    return data.sessions;
 }
 async function getChannelThread(t, channelId, threadId) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, { toolName: "channel_get_thread" });

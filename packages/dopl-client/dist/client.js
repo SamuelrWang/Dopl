@@ -353,6 +353,9 @@ class DoplClient {
     listChannelThreads(channelId) {
         return channel.listChannelThreads(this.transport, channelId);
     }
+    listChannelSessions(channelId) {
+        return channel.listChannelSessions(this.transport, channelId);
+    }
     getChannelThread(channelId, threadId) {
         return channel.getChannelThread(this.transport, channelId, threadId);
     }

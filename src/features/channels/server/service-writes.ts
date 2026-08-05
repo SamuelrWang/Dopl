@@ -361,7 +361,7 @@ export async function postMessage(
     ctx,
     channel,
     input,
-    { closeProposal: opts.closeProposal }
+    { closeProposal: opts.closeProposal, handoff: opts.handoff }
   );
 
   // `system` is server-reserved and rejected by the route schema, so a posted

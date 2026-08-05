@@ -168,6 +168,30 @@ export interface ChannelThread {
   outcomeSummary: string | null;
 }
 
+/**
+ * The three states a session's pill (and read-session-state) reports. NO
+ * `thinking` — it needs streaming, which is off (rollback §3.3). Mirrors
+ * `SessionPillState` in the app's channels types.
+ */
+export type SessionPillState = "working" | "idle" | "ended";
+
+/**
+ * ONE of a member's live (or just-ended) sessions, as returned by
+ * `dopl_channel(op="read_sessions")` — "what is flint doing?" (rollback §3.5).
+ * The server-visible projection of the desktop's `session-summary.list()`.
+ */
+export interface ChannelSessionState {
+  channelId: string;
+  /** The thread (task) this session is on, or null for one with none. */
+  threadId: string | null;
+  /** The friendly handle the pills show (flint / onyx / …). */
+  name: string;
+  state: SessionPillState;
+  channelName: string | null;
+  threadTitle: string | null;
+  updatedAt: string;
+}
+
 export interface ChannelThreadCreateInput {
   title: string;
   mode?: ThreadMode;
@@ -179,6 +203,15 @@ export interface ChannelThreadCreateInput {
    * the responder's window). Mirrors `ChannelMessageInput.clientMsgId`.
    */
   clientMsgId?: string;
+  /**
+   * SPAWN-WITH-HANDOFF (rollback §3.5). Set by an EXTERNAL agent (Claude Desktop
+   * / Claude Code over MCP) to declare that the session driving this thread
+   * should open ON THE OPERATOR'S MACHINE rather than staying with the external
+   * session that created it. Absent/false keeps today's behaviour: an external
+   * create opens nothing on the operator's machine. The server stamps it onto
+   * the opening message's reserved `metadata.handoff`, which the desktop reads.
+   */
+  handoff?: boolean;
 }
 
 /**

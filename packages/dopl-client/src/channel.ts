@@ -26,6 +26,7 @@ import type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelMessagePosted,
+  ChannelSessionState,
   ChannelThread,
   ChannelThreadCloseProposed,
   ChannelThreadClosed,
@@ -212,6 +213,24 @@ export async function listChannelThreads(
     { toolName: "channel_list_threads" }
   );
   return data.tasks;
+}
+
+/**
+ * READ-SESSION-STATE (rollback §3.5) — the caller's OWN live sessions, for
+ * "what is flint doing?". `channelId` narrows to one channel; omitted, it is
+ * every one of the caller's sessions in the active workspace. Own-scoped
+ * server-side (a peer's sessions never come back). See `ChannelSessionState`.
+ */
+export async function listChannelSessions(
+  t: DoplTransport,
+  channelId?: string
+): Promise<ChannelSessionState[]> {
+  const query = channelId ? `?channelId=${enc(channelId)}` : "";
+  const data = await t.request<{ sessions: ChannelSessionState[] }>(
+    `/api/channels/sessions${query}`,
+    { toolName: "channel_read_sessions" }
+  );
+  return data.sessions;
 }
 
 export async function getChannelThread(

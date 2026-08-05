@@ -49,6 +49,17 @@ export interface PostMessageOptions {
    * thread?" prompt in front of a human.
    */
   closeProposal?: "completed" | "failed";
+  /**
+   * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
+   * flag on this post's stored metadata. The one caller is
+   * `service-tasks.createTask` (via `postOpeningMessage`), which forwards the
+   * validated `TaskCreateInput.handoff` boolean. Reserved on the same terms as
+   * the runtime stamp: the desktop reads it to decide whether to OPEN A WINDOW,
+   * so a caller that could set it in raw metadata could make its own post
+   * masquerade as a declared handoff. It is stamped only onto a post that
+   * carries a thread tag the poster is entitled to (`resolvePostMetadata`).
+   */
+  handoff?: boolean;
 }
 
 /**

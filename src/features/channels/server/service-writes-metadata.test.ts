@@ -445,3 +445,42 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
     expect(capturedMetadata().runtime).toBe("desktop-session");
   });
 });
+
+describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
+  // The opener always carries a thread tag, so drive the stamp through the DM
+  // inheritance path: one open task {author, peer} is inherited and gives the
+  // post its `taskId`, onto which the handoff stamp then rides.
+  beforeEach(() => {
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+  });
+
+  it("stamps metadata.handoff=true when the create declared it", async () => {
+    await postMessage(ctx, "dm", { body: "drive this" }, { handoff: true });
+    const meta = capturedMetadata();
+    expect(meta.taskId).toBe(TASK_ID);
+    expect(meta.handoff).toBe(true);
+  });
+
+  it("stamps NOTHING without the option — the default is unchanged", async () => {
+    await postMessage(ctx, "dm", { body: "drive this" });
+    expect(has(capturedMetadata(), "handoff")).toBe(false);
+  });
+
+  it("SECURITY: a caller-supplied metadata.handoff is stripped, never honored", async () => {
+    // The desktop OPENS A WINDOW off this key, so a raw-metadata copy must not
+    // survive: only the validated `create_thread` field (opts.handoff) stamps it.
+    await postMessage(ctx, "dm", {
+      body: "drive this",
+      metadata: { handoff: true },
+    });
+    expect(has(capturedMetadata(), "handoff")).toBe(false);
+  });
+
+  it("reads the option STRICTLY — only a literal true stamps", async () => {
+    await postMessage(ctx, "dm", { body: "drive this" }, {
+      // a truthy-but-not-true value must not stamp
+      handoff: 1 as unknown as boolean,
+    });
+    expect(has(capturedMetadata(), "handoff")).toBe(false);
+  });
+});

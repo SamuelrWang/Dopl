@@ -236,6 +236,24 @@ export const TaskCreateSchema = z.object({
   body: z.string().min(1).max(16000),
   toUserId: z.string().uuid(),
   clientMsgId: z.string().min(1).max(200).optional(),
+  /**
+   * SPAWN-WITH-HANDOFF (rollback §3.5, 2026-08-05). An EXTERNAL agent (the
+   * operator's own Claude Desktop / Claude Code over MCP) declares that the
+   * session driving this thread should open ON THE OPERATOR'S MACHINE rather
+   * than being kept by the external session that created it. Default (absent /
+   * false) is unchanged: an external create opens nothing on the operator's
+   * machine and the external session keeps the reply.
+   *
+   * The flag rides the OPENING MESSAGE as a reserved `metadata.handoff` stamp
+   * (server-written, never caller-metadata — see
+   * `service-writes-metadata.resolvePostMetadata`), which the desktop listener
+   * reads to decide whether to launch a requester session (`targeting.js`
+   * `requesterTaskOpen`). It is only ever HONORED on the operator's own posts:
+   * the launch predicate also requires `authorUserId === me` AND
+   * `taskCreatedBy === me`, which no peer can forge, so a handoff a peer stamps
+   * on their own create can never open a window on someone else's machine.
+   */
+  handoff: z.boolean().optional(),
   /** REMOVED (rollback §1) — see {@link removedParam}. */
   participants: removedParam(REMOVED_PARTICIPANTS),
 });

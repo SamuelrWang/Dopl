@@ -24,7 +24,7 @@ import type { ChannelContext } from "./service-shared";
  * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`,
  * `session_id`, `taskMode`,
  * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `to_agent_ids`,
- * `author_agent_id`, `intent`,
+ * `author_agent_id`, `intent`, `handoff`,
  * and the five calm-terminal flags) are ALWAYS stripped from caller metadata
  * and re-added only from server-validated values. `taskId` stays
  * caller-settable — but EVERY thread id, first-class or legacy, now has to
@@ -195,6 +195,14 @@ export interface PostMetadataOptions {
    * is the thread's creator or its target.
    */
   closeProposal?: "completed" | "failed";
+  /**
+   * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
+   * flag `true`. The one caller is `service-tasks.createTask` (the thread
+   * opener), which forwards the validated `TaskCreateInput.handoff`. Reserved
+   * on the runtime stamp's terms: the desktop reads it to decide whether to
+   * open a requester window, so it must never be caller-settable in metadata.
+   */
+  handoff?: boolean;
 }
 
 /**
@@ -350,6 +358,13 @@ export async function resolvePostMetadata(
   // somebody else's session, which is the exact forensic question the key
   // exists to answer.
   delete metadata.session_id;
+  // SPAWN-WITH-HANDOFF (rollback §3.5) — stripped like every reserved key, and
+  // for the runtime stamp's exact reason: the desktop reads `handoff` to decide
+  // whether to OPEN A WINDOW, so a caller that could set it in metadata could
+  // make its own external post open a session on the operator's machine without
+  // declaring the intent through the validated `create_thread` field. Re-stamped
+  // only from `opts.handoff` below.
+  delete metadata.handoff;
   const calmFlags = takeCalmFlags(metadata);
 
   // Stamped only when the caller SUPPLIED it. An absent field stamps no key —
@@ -450,6 +465,17 @@ export async function resolvePostMetadata(
   if (opts.closeProposal && typeof metadata.taskId === "string") {
     metadata.closeProposed = true;
     metadata.closeOutcome = opts.closeProposal;
+  }
+
+  // SPAWN-WITH-HANDOFF (rollback §3.5) — the same discipline: stamped `true`
+  // only onto a post that carries a thread tag the poster is entitled to (the
+  // opening message always does). It is a ROUTING HINT, not an authorization —
+  // the desktop still requires the identity pair (author === me, task creator
+  // === me) before it acts on it, so a `handoff` a peer could somehow attach
+  // opens nothing on anyone else's machine. Stamped as a literal boolean, read
+  // `=== true` on the desktop, so a truthy-but-not-true value never counts.
+  if (opts.handoff === true && typeof metadata.taskId === "string") {
+    metadata.handoff = true;
   }
 
   // F6 — the notice, read off the row the folds above already resolved. An

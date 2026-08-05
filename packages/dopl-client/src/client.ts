@@ -77,6 +77,7 @@ import type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelMessagePosted,
+  ChannelSessionState,
   ChannelThread,
   ChannelThreadCloseProposed,
   ChannelThreadClosed,
@@ -638,6 +639,10 @@ export class DoplClient {
 
   listChannelThreads(channelId: string): Promise<ChannelThread[]> {
     return channel.listChannelThreads(this.transport, channelId);
+  }
+
+  listChannelSessions(channelId?: string): Promise<ChannelSessionState[]> {
+    return channel.listChannelSessions(this.transport, channelId);
   }
 
   getChannelThread(channelId: string, threadId: string): Promise<ChannelThread> {
