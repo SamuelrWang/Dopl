@@ -493,3 +493,8 @@ test("(task-g) interactive + mine + to-me but author !== taskTarget -> trigger",
     "task-reply"
   );
 });
+
+// The CHANNELS ROLLBACK's own regressions — the two D2 rules `classify` lost, pinned as
+// absences — live in `classify-rollback.test.mjs`. Split off at the §2 500-line cap rather
+// than trimmed: they are about a behaviour CHANGE where everything above is about the
+// standing truth table, which is a real reason to change and not arithmetic.

@@ -3,10 +3,6 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
-  ChannelAgentForbiddenError,
-  ChannelAgentNameConflictError,
-  ChannelAgentNotFoundError,
-  ChannelAgentNotInChannelError,
   ChannelChatAddressedError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
@@ -14,10 +10,8 @@ import {
   ChannelLifecycleKindForbiddenError,
   ChannelMemberExistsError,
   ChannelNotFoundError,
-  ChannelParticipantNotMemberError,
   ChannelSlugConflictError,
   ChannelTaskNotInChannelError,
-  ChannelTooManyAgentsError,
   ConsentAlreadyDecidedError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
@@ -60,21 +54,13 @@ export function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
   }
-  if (err instanceof ChannelAgentNotFoundError) {
-    return new HttpError(404, "CHANNEL_AGENT_NOT_FOUND", err.message);
-  }
-  if (err instanceof ChannelAgentNotInChannelError) {
-    return new HttpError(400, "CHANNEL_AGENT_NOT_IN_CHANNEL", err.message);
-  }
-  if (err instanceof ChannelAgentNameConflictError) {
-    return new HttpError(409, "CHANNEL_AGENT_NAME_CONFLICT", err.message);
-  }
-  if (err instanceof ChannelAgentForbiddenError) {
-    return new HttpError(403, "CHANNEL_AGENT_FORBIDDEN", err.message);
-  }
-  if (err instanceof ChannelTooManyAgentsError) {
-    return new HttpError(400, "CHANNEL_TOO_MANY_AGENTS", err.message);
-  }
+  // SIX ARMS ENDED HERE (channels rollback §1) and each was a named-agent or
+  // breakout-room refusal: CHANNEL_AGENT_NOT_FOUND / _NOT_IN_CHANNEL /
+  // _NAME_CONFLICT / _FORBIDDEN, CHANNEL_TOO_MANY_AGENTS and
+  // CHANNEL_PARTICIPANT_NOT_MEMBER. Nothing raises them now, and the MCP side
+  // dropped the classifier kinds that read them. A caller that still sends a
+  // removed PARAM gets VALIDATION_FAILED from the route schema, which names the
+  // field — see `schema.ts#removedParam`.
   if (err instanceof ChannelChatAddressedError) {
     return new HttpError(400, "CHANNEL_CHAT_ADDRESSED", err.message);
   }
@@ -87,9 +73,6 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ThreadCloseIsHumanOnlyError) {
     return new HttpError(403, "CHANNEL_CLOSE_IS_HUMAN_ONLY", err.message);
-  }
-  if (err instanceof ChannelParticipantNotMemberError) {
-    return new HttpError(400, "CHANNEL_PARTICIPANT_NOT_MEMBER", err.message);
   }
   if (err instanceof ConsentNotFoundError) {
     return new HttpError(404, "CONSENT_NOT_FOUND", err.message);

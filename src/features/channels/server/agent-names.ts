@@ -14,6 +14,12 @@
  *
  * This module is pure data + one function; it has no server-only import and is
  * safe to reuse anywhere the pool needs to be rendered.
+ *
+ * IT OUTLIVED WHAT IT WAS BUILT FOR. Summoning is gone (channels rollback §1) and nothing
+ * calls `pickAgentName` today; the module survives on purpose because the plan's §3.3 names
+ * it as the generator SESSION PILLS will use — each launched session gets a friendly name
+ * from this same pool, and they are still called "agents" in the UI because a session IS an
+ * agent session. Keep it importable. Its only current consumer is its own test.
  */
 
 /** 60 handles: 20 minerals, 20 stars, 18 plants + `ember` and `wren`. */

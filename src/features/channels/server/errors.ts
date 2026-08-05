@@ -143,86 +143,6 @@ export class TaskSelfTargetError extends ChannelError {
 }
 
 /**
- * An agent id that resolves to no `channel_agents` row at all. 404, collapsed
- * like every other not-found in this file so an id can't be probed. Distinct
- * from {@link ChannelAgentNotInChannelError}, which is the ADDRESSING failure.
- */
-export class ChannelAgentNotFoundError extends ChannelError {
-  constructor(public readonly ref: string) {
-    super(`Agent not found: ${ref}`);
-  }
-}
-
-/**
- * A message addressed (`toAgent`) to — or a participant naming — an agent that
- * is not an agent of THIS channel. 400, exactly like
- * {@link ChannelTaskNotInChannelError} and {@link ChannelAddresseeNotMemberError}:
- * the caller named something real-looking that this room cannot route to, and
- * the fix is the address, not the permission. Refused rather than stamped
- * silently — a `to_agent_id` nobody in the room owns would route to no machine
- * while looking delivered.
- */
-export class ChannelAgentNotInChannelError extends ChannelError {
-  constructor(public readonly ref: string) {
-    super(`Agent is not in this channel: ${ref}`);
-  }
-}
-
-/**
- * The handle is already taken in this channel (case-folded — `@Quartz` and
- * `@quartz` are one agent). 409, mirroring {@link ChannelSlugConflictError}.
- */
-export class ChannelAgentNameConflictError extends ChannelError {
-  constructor(public readonly name: string) {
-    super(`An agent named "${name}" already exists in this channel`);
-  }
-}
-
-/**
- * Caller lacks the agent-scoped permission. 403. TWO uses, one rule — an agent
- * belongs to the member who summoned it:
- *   - rename / set status: OWNER only.
- *   - `authorAgentId`: posting AS an agent is the owner's alone. A non-owner
- *     supplying another member's agent id is attempting to author under an
- *     identity that is not theirs, so it is refused rather than ignored.
- */
-export class ChannelAgentForbiddenError extends ChannelError {
-  constructor(action: string) {
-    super(`Not allowed to ${action}`);
-  }
-}
-
-/**
- * One post addressed more agents than {@link MAX_ADDRESSED_AGENTS} allows. 400.
- *
- * IT NAMES THE MERGED COUNT, because that is the number the caller has to
- * change. `toAgent` and `toAgents` are ONE address list — the singular is
- * exactly a one-element plural — so a caller sending `toAgent` plus a full
- * eight-entry `toAgents` passed the array's own `.max()` and still addressed
- * NINE. That is one over every bound the rest of the system states, and the
- * failure it produced was not a clean refusal: `MAX_DERIVED_AGENTS`
- * (`service-thread-handshake.ts`) truncated the ninth agent out of the derived
- * participant set, so it was engaged, woken, told to join the handshake thread,
- * and then 403'd out of it by `mayWriteThread` — the exact "told to join a room,
- * locked out of it" case that module exists to prevent.
- *
- * An error, not a truncation: silently dropping the ninth agent produces a room
- * where the caller believes nine machines are working and eight are, which is
- * the same reason a single unresolvable ref fails the whole post.
- */
-export class ChannelTooManyAgentsError extends ChannelError {
-  constructor(
-    public readonly count: number,
-    public readonly max: number
-  ) {
-    super(
-      `A message can address at most ${max} agents; this one addresses ${count}. ` +
-        `toAgent and toAgents are one list — the singular counts toward the same limit.`
-    );
-  }
-}
-
-/**
  * A post declared `intent:"chat"` AND addressed a PERSON (`toUserId`). 400.
  *
  * NARROWED 2026-07-31, and the narrowing is the rule: `toAgent` / `toAgents`
@@ -244,17 +164,6 @@ export class ChannelChatAddressedError extends ChannelError {
     super(
       `A chat message cannot be addressed to a person (${field}). Mention an agent with toAgents to have it act, or post with intent "request" to reach a teammate.`
     );
-  }
-}
-
-/**
- * A thread participant of `kind:"user"` who is not a member of the thread's
- * channel. 400, on the same reasoning as {@link ChannelAddresseeNotMemberError}:
- * a participant set may only admit people who can already read the room.
- */
-export class ChannelParticipantNotMemberError extends ChannelError {
-  constructor(public readonly userId: string) {
-    super(`User is not a member of this channel: ${userId}`);
   }
 }
 

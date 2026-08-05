@@ -1,6 +1,11 @@
 /**
  * Unit tests for the agent handle pool + picker. Pure module, no mocks.
  *
+ * THE MODULE HAS NO PRODUCTION CALLER RIGHT NOW, and this suite is why it can be trusted to
+ * still work when it gets one. Summoning is gone (channels rollback §1); the plan's §3.3
+ * reuses this exact pool to name SESSION PILLS, so the contract below is what phase 3 will
+ * build on rather than dead code kept out of sentiment.
+ *
  * The contract under test: `pickAgentName` is the only thing standing between a
  * summon and a 409, so it must (a) never return a handle the caller already
  * holds, (b) never return one the DB's charset CHECK would reject, and (c) keep
@@ -13,6 +18,16 @@ import { AGENT_NAME_POOL, pickAgentName } from "./agent-names";
 
 /** The `channel_agents.name` CHECK, restated here so drift fails a test. */
 const HANDLE_CHARSET = /^[a-z][a-z0-9-]{1,30}$/;
+
+describe("the generator survives the rollback", () => {
+  it("is still importable, and still yields a name", () => {
+    // The one thing §3.3 needs from it, pinned as an explicit statement rather than left
+    // implicit in the cases below: a future session-pill caller can import this module and
+    // get a handle out of it with no other machinery alive.
+    expect(typeof pickAgentName).toBe("function");
+    expect(pickAgentName(new Set())).toBe(AGENT_NAME_POOL[0]);
+  });
+});
 
 describe("AGENT_NAME_POOL", () => {
   it("has ~60 handles and no duplicates", () => {
