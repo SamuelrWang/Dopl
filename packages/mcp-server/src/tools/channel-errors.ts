@@ -146,10 +146,22 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
  *     caller does not own (`as_agent`, rename, park).
  *   - `unknown`              — a 403 with no code we recognize. Say so.
  */
+// P0-2 / DECISION 2 (2026-08-04) add two more, and both are about WHAT AN AGENT
+// MAY SAY rather than about which room it is in:
+//   - `lifecycle_kind`  — `CHANNEL_LIFECYCLE_KIND_FORBIDDEN`: a post carrying
+//     `task_started` / `task_finished` / `task_failed`. This tool refuses those
+//     before the call (`channel-ops-write.ts`), so the arm is the belt: it fires
+//     for a build whose client-side check is missing or bypassed, and it must
+//     not be reported as "you are not a member of that channel", which is what
+//     the `unknown` arm's neighbours would have said.
+//   - `close_is_human`  — `CHANNEL_CLOSE_IS_HUMAN_ONLY`: an agent-token close.
+//     Same shape, same reason.
 export type ForbiddenKind =
   | "not_a_member"
   | "thread_authorization"
   | "agent_owner"
+  | "lifecycle_kind"
+  | "close_is_human"
   | "unknown";
 
 export function classifyForbidden(e: unknown): ForbiddenKind {
@@ -160,6 +172,10 @@ export function classifyForbidden(e: unknown): ForbiddenKind {
       return "thread_authorization";
     case "CHANNEL_AGENT_FORBIDDEN":
       return "agent_owner";
+    case "CHANNEL_LIFECYCLE_KIND_FORBIDDEN":
+      return "lifecycle_kind";
+    case "CHANNEL_CLOSE_IS_HUMAN_ONLY":
+      return "close_is_human";
     default:
       return "unknown";
   }

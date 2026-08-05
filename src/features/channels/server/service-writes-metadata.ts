@@ -72,6 +72,15 @@ const CALM_FLAG_KEYS = [
   "interrupted",
   "capped",
   "ended",
+  // P1-7 (2026-08-04) — THE NON-TERMINAL SESSION END. `session_ended` rides on a
+  // `task_progress`, not a `task_failed`, and it is reserved on exactly the same
+  // terms as its five siblings: it changes how the other member's card READS
+  // ("their session stopped", not "the thread failed"), so a member who could
+  // set it on somebody else's thread could narrate that thread's state without
+  // touching the session it describes. It is NOT read by `calmTerminalStatus` —
+  // that function answers only for a `task_failed` — which is the point: a local
+  // session ending is not an outcome for the shared thread at all.
+  "session_ended",
 ] as const;
 
 /**
@@ -151,6 +160,34 @@ export interface PostMetadataResult {
   metadata: Record<string, unknown>;
   /** True when the post landed in a thread whose row is no longer open. */
   threadClosed: boolean;
+}
+
+/**
+ * The keys a CLOSE PROPOSAL stamps (DECISION 2, 2026-08-04). Reserved on the
+ * same terms as `runtime` / `session_id`: stripped from caller metadata
+ * unconditionally and re-stamped ONLY from a server-internal value, because a
+ * caller that could set them would be able to raise a "your agent thinks this
+ * can be closed — Close?" prompt on a thread it is not a party to, in front of a
+ * human whose one click then settles the exchange for both members.
+ *
+ * Two keys rather than one because the prompt has to prefill the outcome the
+ * agent is proposing: `closeProposed` is the marker the surfaces match on, and
+ * `closeOutcome` is what the confirm hands straight back to `closeTask`.
+ */
+export const CLOSE_PROPOSAL_KEYS = ["closeProposed", "closeOutcome"] as const;
+
+/**
+ * The server-internal inputs to the metadata fold — values no HTTP caller can
+ * supply, because they are not fields of `ChannelMessageCreateInput` and no
+ * route parses them.
+ */
+export interface PostMetadataOptions {
+  /**
+   * Stamp this post as a CLOSE PROPOSAL carrying that outcome. The one caller is
+   * `service-tasks.proposeTaskClose`, which has already checked that the poster
+   * is the thread's creator or its target.
+   */
+  closeProposal?: "completed" | "failed";
 }
 
 /**
@@ -303,9 +340,14 @@ export interface PostMetadataResult {
 export async function resolvePostMetadata(
   ctx: ChannelContext,
   channel: ChannelRow,
-  input: ChannelMessageCreateInput
+  input: ChannelMessageCreateInput,
+  opts: PostMetadataOptions = {}
 ): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+  // DECISION 2 — the close-proposal keys are stripped BEFORE anything decides
+  // whether a stamp is coming, exactly like `session_id` below. See
+  // {@link CLOSE_PROPOSAL_KEYS}.
+  for (const key of CLOSE_PROPOSAL_KEYS) delete metadata[key];
   delete metadata.to_user_id;
   delete metadata.summary;
   delete metadata.runtime;
@@ -425,6 +467,16 @@ export async function resolvePostMetadata(
   // strip, so a fabricated outcome has nothing to attach to.
   if (calmFlags.length > 0 && typeof metadata.taskId === "string") {
     for (const key of calmFlags) metadata[key] = true;
+  }
+
+  // DECISION 2 — the close proposal, stamped on the SAME condition the calm
+  // flags are: only onto a thread tag that survived the gate above. Belt and
+  // braces (`proposeTaskClose` already checked creator-or-target before calling
+  // us), and the belt is what makes "a prompt to close this thread" unforgeable
+  // rather than merely unforged today.
+  if (opts.closeProposal && typeof metadata.taskId === "string") {
+    metadata.closeProposed = true;
+    metadata.closeOutcome = opts.closeProposal;
   }
 
   // F6 — the notice, read off the row the folds above already resolved. An

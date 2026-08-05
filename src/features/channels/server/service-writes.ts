@@ -14,6 +14,13 @@ import {
   DirectChannelImmutableError,
   DirectSelfTargetError,
 } from "./errors";
+// P0-2 — who may post a LIFECYCLE marker, and the server-internal options that
+// answer it. Its own module (§2 cap) because it is its own reason to change: a
+// question about the caller's standing, not about the write or what it stores.
+import {
+  assertLifecycleKindIsServerOwned,
+  type PostMessageOptions,
+} from "./service-writes-lifecycle";
 import { mapMessageRow, type ChannelMessageRow } from "./dto";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
@@ -318,7 +325,8 @@ export async function deleteChannel(
 export async function postMessage(
   ctx: ChannelContext,
   ref: string,
-  rawInput: ChannelMessageCreateInput
+  rawInput: ChannelMessageCreateInput,
+  opts: PostMessageOptions = {}
 ): Promise<ChannelMessagePosted> {
   const input = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
@@ -331,6 +339,8 @@ export async function postMessage(
   // membership check because both must precede the idempotency short-circuit:
   // a contradictory post has to fail on the retry too.
   assertChatIsUnaddressed(input);
+  // P0-2 — and the same placement rule, for the same reason.
+  assertLifecycleKindIsServerOwned(ctx, input, opts);
 
   // Addressing (v1.1): a `toUserId` must name an actual channel member —
   // otherwise the message would target a listener that will never see it.
@@ -353,7 +363,8 @@ export async function postMessage(
   const { metadata, threadClosed } = await resolvePostMetadata(
     ctx,
     channel,
-    input
+    input,
+    { closeProposal: opts.closeProposal }
   );
 
   // `system` is server-reserved and rejected by the route schema, so a posted

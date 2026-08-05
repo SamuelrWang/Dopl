@@ -47,6 +47,25 @@ const ctx: ChannelContext = {
   role: "member",
 };
 
+/**
+ * P0-2 (2026-08-04) — THE CTX A LIFECYCLE POST REALLY ARRIVES ON.
+ *
+ * `postMessage` now refuses `task_started` / `task_finished` / `task_failed` from
+ * an AGENT-TOKEN caller (`source: "agent"`, i.e. every MCP `op="post"`), because
+ * those three state a fact about a RUNTIME and an agent is not in a position to
+ * state it. The fixtures below were written before that rule and used the agent
+ * ctx for everything, including the desktop's own lifecycle echoes — which is not
+ * how they arrive: `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the
+ * Electron session's SUPABASE COOKIES, so `buildChannelContext` resolves
+ * `source: "user"` and the body declares `authorKind: "agent"`.
+ *
+ * So the lifecycle cases move to this ctx. That is not a workaround for the guard;
+ * it makes the fixture match the lane it is describing, and it is what lets these
+ * suites go on pinning what they are actually about — the legacy-tag strip and the
+ * calm-flag entitlement — which are DESKTOP behaviours end to end.
+ */
+const desktopCtx: ChannelContext = { ...ctx, source: "user" };
+
 function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
   return {
     id: "chan-1",
@@ -323,7 +342,7 @@ describe("postMessage — DM task-id inheritance", () => {
   it("never inherits onto a lifecycle event (a marker must not land on someone else's task)", async () => {
     vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
 
-    await postMessage(ctx, "dm", { body: "done", kind: "task_finished" });
+    await postMessage(desktopCtx, "dm", { body: "done", kind: "task_finished" });
 
     expect(has(capturedMetadata(), "taskId")).toBe(false);
     expect(repoTasks.listTasksByChannel).not.toHaveBeenCalled();

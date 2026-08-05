@@ -115,6 +115,7 @@ export type {
   ChannelMessagePosted,
   ChannelMessageKind,
   ChannelThread,
+  ChannelThreadCloseProposed,
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,

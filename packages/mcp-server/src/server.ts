@@ -456,7 +456,15 @@ export function createServer(
       "open",
       "invite",
       "post",
+      // P0-3 / DECISION 2 (2026-08-04). `milestone` writes a message and
+      // `propose_close` writes one too (the marked prompt), so both are writes.
+      // `close_thread` STAYS in this set even though the registrar now answers it
+      // with a refusal: a read-only token must be refused for the SCOPE reason
+      // before it is refused for the human-lane reason, or the shape of the two
+      // errors tells a read-only caller which threads exist.
+      "milestone",
       "create_thread",
+      "propose_close",
       "close_thread",
       "set_thread_mode",
       // Multiplayer: roster + engagement + breakout-room membership writes.

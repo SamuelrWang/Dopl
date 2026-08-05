@@ -79,6 +79,7 @@ import type {
   ChannelMessageInput,
   ChannelMessagePosted,
   ChannelThread,
+  ChannelThreadCloseProposed,
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
@@ -648,6 +649,24 @@ export class DoplClient extends ChannelAgentsClient {
     input: { outcome: ThreadOutcome; summary?: string }
   ): Promise<ChannelThreadClosed> {
     return channel.closeChannelThread(this.transport, channelId, threadId, input);
+  }
+
+  /**
+   * DECISION 2 (2026-08-04) — the agent lane's terminal act on a thread. See
+   * `channel.proposeChannelThreadClose`; `closeChannelThread` above is the human
+   * lane and the server refuses it for an agent token.
+   */
+  proposeChannelThreadClose(
+    channelId: string,
+    threadId: string,
+    input: { outcome: ThreadOutcome; summary?: string }
+  ): Promise<ChannelThreadCloseProposed> {
+    return channel.proposeChannelThreadClose(
+      this.transport,
+      channelId,
+      threadId,
+      input
+    );
   }
 
   setChannelThreadMode(

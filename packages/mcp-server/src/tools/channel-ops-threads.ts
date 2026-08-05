@@ -256,21 +256,39 @@ export async function opCreateThread(
 }
 
 /**
- * Close a thread — the write op the Q1 completeness review caught still raw.
+ * DECISION 2 (Samuel, 2026-08-04) — `close_thread` IS NOT AN AGENT'S OP.
  *
- * Closing is allowed to the thread's CREATOR **or its TARGET**, so the common
- * shape is: a peer opens a thread, titles it, addresses it to me; my agent does
- * the work and closes it; and the close echo renders the PEER's 200-character,
- * newline-tolerant title as our own narration. That is Q1-B/C's exact defect
- * class on a surface the first pass never enumerated, and it is not a read an
- * agent chose — it is the confirmation of an action it just took.
+ * THE INCIDENT'S OTHER HALF. Closing settles the SHARED thread for BOTH members,
+ * and nothing linked the responder's "I am finished" to the requester's thread
+ * anyway, so threads simply never closed (two are open forever in prod). The fix
+ * is not to make the agent close harder: it is that "the work looks done" and "I
+ * am finished with this exchange" are DIFFERENT judgments, and only the second
+ * one closes anything. The human makes it.
  *
- * Two changes, both of them the ones the read ops got:
+ * ANSWERED, NOT REMOVED. The op stays in the enum so this sentence is what an
+ * agent trained on the old surface gets, instead of a zod "invalid enum value"
+ * at the moment it most needs telling what to do instead. The gate is the
+ * server's (`ThreadCloseIsHumanOnlyError`), not this.
+ */
+export function closeThreadIsHumansToMake(): ToolResponse {
+  return err(
+    `Nothing was closed: closing a thread is your OPERATOR's decision, not yours. A close settles the exchange for BOTH members and takes it off the open list, and only the person you work for knows whether they are finished with it — the work being done is not the same judgment. PROPOSE it instead and they confirm: dopl_channel(op="propose_close", channel="<id>", thread="<id>", outcome="completed"|"failed", summary="<one line saying what came of it>"). That posts a marked note in the thread which surfaces to your operator as a confirmable prompt; the thread stays open and fully live until they act on it. Do not propose early, and do not propose twice: repeats collapse into the one prompt they already have.`,
+  );
+}
+
+/**
+ * PROPOSE a close — the agent's terminal act on a thread, and the only one it
+ * has (see {@link closeThreadIsHumansToMake}).
+ *
+ * It inherits the Q1 narration discipline the close had, for the same reason:
+ * proposing is allowed to the thread's CREATOR **or its TARGET**, so the common
+ * shape is a peer's thread, a peer's 200-character newline-tolerant TITLE, and
+ * this result rendering it as our own narration. So:
  *   1. the title is one inline code span (it can be a value, never structure);
  *   2. the result carries {@link UNTRUSTED_THREAD_HEADER}, FIRST — framing that
  *      trails the content it frames is read after the injected line.
  */
-export async function opCloseThread(
+export async function opProposeClose(
   client: DoplClient,
   channelRef: string,
   threadId: string,
@@ -280,12 +298,16 @@ export async function opCloseThread(
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
   const chName = inlineOr(ch.name, NO_NAME);
-  // `{ thread, echoSeq }` — closing WRITES a message (the task_finished /
-  // task_failed marker), so it moves the channel's cursor. `echoSeq` is where
-  // it landed, and it is `openingSeq`'s mirror at the other end of a thread.
-  let closed;
+  // `{ thread, markerSeq }` — a proposal WRITES a message (the marked, NON-
+  // terminal `task_progress` the operator's surfaces render as a prompt), so it
+  // moves the channel's cursor. `markerSeq` is where it landed, and it is
+  // `openingSeq`'s mirror at the other end of a thread.
+  let proposed;
   try {
-    closed = await client.closeChannelThread(ch.id, threadId, { outcome, summary });
+    proposed = await client.proposeChannelThreadClose(ch.id, threadId, {
+      outcome,
+      summary,
+    });
   } catch (e) {
     // `threadId` is the caller's own argument, but it round-trips: an agent
     // copies a thread id out of a `read` legend, and a legend id is
@@ -298,7 +320,7 @@ export async function opCloseThread(
     }
     if (isForbidden(e)) {
       return err(
-        `You can't close thread ${safeId} — only its creator or the member it's addressed to may close it.`,
+        `You can't propose a close on thread ${safeId} — only its creator or the member it's addressed to may, and nothing was posted.`,
       );
     }
     throw e;
@@ -313,38 +335,29 @@ export async function opCloseThread(
   // THE CURSOR, STATED — never derived. Live incident: a requester closed a
   // thread, GUESSED the echo's seq (last known + 1), armed `await` one past it,
   // and silently skipped the peer's main deliverable, which was already in the
-  // channel below that guess. So the seq is either reported as the number the
-  // server actually returned, or not mentioned at all: `echoSeq` is null when
-  // the server sent no field (an older deployment) or the marker post failed,
-  // and in both cases a guess here would be the same bug with our name on it.
-  const echo =
-    closed.echoSeq === null
-      ? []
+  // channel below that guess. Same discipline here: the seq is either the number
+  // the server actually returned, or it is not mentioned at all.
+  const marker =
+    proposed.markerSeq === null
+      ? [
+          `The proposal note did NOT post (your operator has no prompt to act on). The thread is untouched, so this is safe to retry once.`,
+        ]
       : [
-          `Close echo posted at seq ${closed.echoSeq} — if you re-arm a wait, use since=${closed.echoSeq} (or your last READ seq), never a guessed seq.`,
+          `Proposal note posted at seq ${proposed.markerSeq} — if you re-arm a wait, use since=${proposed.markerSeq} (or your last READ seq), never a guessed seq.`,
         ];
   return ok(
     [
       UNTRUSTED_THREAD_HEADER,
       ``,
-      // F6 — WHAT A CLOSE ACTUALLY DOES, said in the words the product can back.
-      // This line read "Closed thread <title> … as <outcome>." full stop, which
-      // is finality the server does not enforce: the post path gates on thread
-      // membership and never on status, so a closed thread goes on accepting
-      // posts (five landed in one live run, silently). Rather than make the
-      // sentence true with a 403 — which would break the legitimate "one last
-      // word after the close echo" pattern, and would point at a `reopen` this
-      // tool does not have — the copy says what closing changes.
-      //
-      // AND IT IS THE PASSIVE LANE ONLY. The first cut overshot in the other
-      // direction ("no session is woken for it any more"): the desktop skips the
-      // passive thread-lane wake for a closed thread off a status cache that
-      // lags by up to ~5 minutes, an older build does not skip it at all, and an
-      // ADDRESSED post starts the addressee whatever the thread's status is. A
-      // close is a signal to the room, not a lock on it. A late post is warned,
-      // not refused (`closedThreadNote`, channel-post-linkage.ts).
-      `Closed thread **${inlineOr(closed.thread.title, NO_TITLE)}** in **${chName}** as ${closed.thread.outcome}${summaryNote}. Closing records the OUTCOME and stops the thread's PASSIVE routing: peers' sessions stop being woken by activity in it, and it is off the open list. It does NOT seal it: the thread still accepts posts (a late one lands on the card and comes back with a warning), and an agent you address directly still hears you. Say any final word now; start anything NEW in its own thread. Reopening is a human's action in the web app.`,
-      ...echo,
+      // WHAT A PROPOSAL ACTUALLY DOES, in the words the product can back — the
+      // same discipline F6 imposed on the close copy, which had claimed a
+      // finality the server does not enforce. A proposal changes NOTHING about
+      // the thread: it is open, it routes, it accepts posts, and it stays that
+      // way whether or not anybody acts on the prompt. Saying so is what stops
+      // an agent treating its own proposal as the end of the exchange and going
+      // quiet on a thread that is still live.
+      `Proposed closing thread **${inlineOr(proposed.thread.title, NO_TITLE)}** in **${chName}** as ${proposed.outcome}${summaryNote}. NOTHING IS CLOSED: your operator sees this as a prompt and decides, and until they do the thread is open and fully live — it routes, it accepts posts, and a reply may still arrive. Do not propose again; a repeat collapses into the same prompt. If more comes in, keep working the thread and answer it.`,
+      ...marker,
     ].join("\n"),
   );
 }

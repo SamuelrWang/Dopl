@@ -7,6 +7,7 @@ import {
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
+  ThreadCloseIsHumanOnlyError,
 } from "./errors";
 import type { ChannelTaskRow } from "./dto";
 import { mapTaskRow } from "./dto";
@@ -327,7 +328,9 @@ export interface TaskCloseResult {
 
 /**
  * Close a task with an outcome. Permitted for the task's creator OR its target
- * (`created_by` / `target_user_id`). Posts a lifecycle marker so the other
+ * (`created_by` / `target_user_id`) — and, since 2026-08-04, only on the HUMAN
+ * lane: an agent-token caller is refused and told to propose instead (see
+ * {@link ThreadCloseIsHumanOnlyError}). Posts a lifecycle marker so the other
  * member's thread updates live: completed -> `task_finished` (calm "done");
  * failed -> `task_failed` (a close with outcome=failed IS a genuine failure).
  */
@@ -338,6 +341,10 @@ export async function closeTask(
   outcome: ThreadOutcome,
   summary?: string
 ): Promise<TaskCloseResult> {
+  // FIRST, ahead of every lookup: a refusal about WHO is asking needs nothing
+  // else resolved, and refusing before the reads means an agent probing for
+  // thread ids learns nothing from the shape of the error either.
+  if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError();
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("close a task in this channel");
@@ -367,14 +374,27 @@ export async function closeTask(
   // (not a member, not creator/target, unknown task) is untouched above.
   let echoSeq: number | null = null;
   try {
-    const echo = await postMessage(ctx, channel.id, {
-      body:
-        (summary && summary.trim()) ||
-        (outcome === "completed" ? "Task completed" : "Task failed"),
-      kind: outcome === "completed" ? "task_finished" : "task_failed",
-      summary: task.title,
-      metadata: { taskId: task.id },
-    });
+    const echo = await postMessage(
+      ctx,
+      channel.id,
+      {
+        body:
+          (summary && summary.trim()) ||
+          (outcome === "completed" ? "Task completed" : "Task failed"),
+        kind: outcome === "completed" ? "task_finished" : "task_failed",
+        summary: task.title,
+        metadata: { taskId: task.id },
+      },
+      // P0-2 — THE ONE EXEMPTION, and it is stated at the call site rather than
+      // inferred from identity. This echo is the SERVER speaking about a close
+      // that just landed, and it is raised inside whatever request asked for the
+      // close: on the human lane that is a cookie session, but nothing stops a
+      // future internal caller arriving with an agent ctx, and the guard must
+      // not depend on which. `postMessage` accepts this option from server code
+      // only — it is not a field of `ChannelMessageCreateInput` and no route
+      // parses it — so an HTTP caller can never set it.
+      { internalLifecycle: true }
+    );
     echoSeq = echo.seq;
   } catch {
     // Marker lost. The thread is closed; the peer's panel catches up on its

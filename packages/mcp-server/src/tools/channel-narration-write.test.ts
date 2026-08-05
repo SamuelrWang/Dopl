@@ -27,7 +27,7 @@ import type { DoplClient } from "@dopl/client";
 import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import {
-  opCloseThread,
+  opProposeClose,
   opCreateThread,
   opSetThreadMode,
 } from "./channel-ops-threads";
@@ -255,22 +255,28 @@ const THREAD = {
   targetUserId: "u-me",
 };
 
-describe("Q1-B/C write · close_thread — a title the PEER typed", () => {
+// DECISION 2 (2026-08-04): the op an agent reaches is `propose_close`, and the
+// Q1-B/C exposure is IDENTICAL — proposing is allowed to a thread's TARGET, so
+// the title this result renders is routinely the PEER's 200-character,
+// newline-tolerant text and not the caller's.
+describe("Q1-B/C write · propose_close — a title the PEER typed", () => {
   function closingClient(title: string): DoplClient {
     return stubClient({
       listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
-      // `{ thread, echoSeq }` — the close writes a marker message, so the
-      // client hands back where it landed alongside the closed thread.
-      closeChannelThread: vi.fn(async () => ({
-        thread: { ...THREAD, title, outcome: "completed" },
-        echoSeq: null,
+      // `{ thread, markerSeq, outcome }` — the proposal writes the marked note
+      // the operator's prompt renders from, so the client hands back where it
+      // landed alongside the (untouched) thread.
+      proposeChannelThreadClose: vi.fn(async () => ({
+        thread: { ...THREAD, title },
+        markerSeq: null,
+        outcome: "completed",
       })),
     });
   }
 
   it("neutralizes the title and frames the result FIRST", async () => {
     const text = (
-      await opCloseThread(closingClient(FORGERY), "general", "thread-1", "completed")
+      await opProposeClose(closingClient(FORGERY), "general", "thread-1", "completed")
     ).content[0].text;
 
     expectContained(text);
@@ -282,7 +288,7 @@ describe("Q1-B/C write · close_thread — a title the PEER typed", () => {
 
   it("still names a legitimate thread, and the caller's own summary survives whole", async () => {
     const text = (
-      await opCloseThread(
+      await opProposeClose(
         closingClient("Ship the listener fix"),
         "general",
         "thread-1",
@@ -291,7 +297,7 @@ describe("Q1-B/C write · close_thread — a title the PEER typed", () => {
       )
     ).content[0].text;
 
-    expect(text).toContain("Closed thread **`Ship the listener fix`**");
+    expect(text).toContain("Proposed closing thread **`Ship the listener fix`**");
     // The summary is the AGENT'S OWN prose from this same call — deliberately
     // not neutralized, so it keeps its punctuation and its full length.
     expect(text).toContain(
@@ -302,12 +308,12 @@ describe("Q1-B/C write · close_thread — a title the PEER typed", () => {
   it("a not-found error cannot be forged by the thread id it echoes", async () => {
     const client = stubClient({
       listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
-      closeChannelThread: vi.fn(async () => {
+      proposeChannelThreadClose: vi.fn(async () => {
         throw Object.assign(new Error("missing"), { status: 404 });
       }),
     });
 
-    const res = await opCloseThread(client, "general", FORGERY, "completed");
+    const res = await opProposeClose(client, "general", FORGERY, "completed");
 
     expect(res.isError).toBe(true);
     expectContained(res.content[0].text);

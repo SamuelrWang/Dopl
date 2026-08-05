@@ -354,6 +354,14 @@ class DoplClient extends client_channel_agents_js_1.ChannelAgentsClient {
     closeChannelThread(channelId, threadId, input) {
         return channel.closeChannelThread(this.transport, channelId, threadId, input);
     }
+    /**
+     * DECISION 2 (2026-08-04) — the agent lane's terminal act on a thread. See
+     * `channel.proposeChannelThreadClose`; `closeChannelThread` above is the human
+     * lane and the server refuses it for an agent token.
+     */
+    proposeChannelThreadClose(channelId, threadId, input) {
+        return channel.proposeChannelThreadClose(this.transport, channelId, threadId, input);
+    }
     setChannelThreadMode(channelId, threadId, input) {
         return channel.setChannelThreadMode(this.transport, channelId, threadId, input);
     }

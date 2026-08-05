@@ -19,7 +19,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opRead } from "./channel-ops-read";
-import { opCloseThread } from "./channel-ops-threads";
+import { opProposeClose } from "./channel-ops-threads";
 
 const CHANNEL = {
   id: "chan-1",
@@ -173,48 +173,57 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 });
 
-// ── 2. close_thread reports the echo seq ──────────────────────────────
+// ── 2. propose_close reports the marker seq ──────────────────────────────
+//
+// DECISION 2 (2026-08-04) re-targeted this half: an agent proposes rather than
+// closes, so the seq it must never guess is the PROPOSAL MARKER's rather than
+// the close echo's. The rule is identical and is the one that matters — a
+// requester once guessed a close echo's seq, armed `await` past it, and silently
+// skipped the peer's whole deliverable.
 
-describe("opCloseThread — the close echo's seq is REPORTED, never guessed", () => {
-  function closingClient(echoSeq: number | null): DoplClient {
+describe("opProposeClose — the marker's seq is REPORTED, never guessed", () => {
+  function proposingClient(markerSeq: number | null): DoplClient {
     return stubClient({
-      closeChannelThread: vi.fn(async () => ({
-        thread: { id: "thread-1", title: "Ship it", outcome: "completed" },
-        echoSeq,
+      proposeChannelThreadClose: vi.fn(async () => ({
+        thread: { id: "thread-1", title: "Ship it" },
+        markerSeq,
+        outcome: "completed",
       })),
     });
   }
 
   it("names the seq and tells the caller to use it as `since`", async () => {
-    const text = (await opCloseThread(closingClient(57), "general", "thread-1", "completed"))
+    const text = (await opProposeClose(proposingClient(57), "general", "thread-1", "completed"))
       .content[0].text;
 
     expect(text).toContain(
-      "Close echo posted at seq 57 — if you re-arm a wait, use since=57 (or your last READ seq), never a guessed seq.",
+      "Proposal note posted at seq 57 — if you re-arm a wait, use since=57 (or your last READ seq), never a guessed seq.",
     );
     // The confirmation itself still reads off `{ thread }`, not the wrapper.
-    expect(text).toContain("Closed thread **`Ship it`** in **`General`** as completed");
+    expect(text).toContain("Proposed closing thread **`Ship it`** in **`General`** as completed");
   });
 
-  it("says NOTHING about a seq when the server reported no echo", async () => {
-    // null = an older deployment that omits the field, or a marker post that
-    // failed. Both mean the same thing to a caller: do not derive a cursor.
-    const text = (await opCloseThread(closingClient(null), "general", "thread-1", "completed"))
-      .content[0].text;
-
-    expect(text).not.toContain("Close echo");
-    expect(text).not.toContain("seq");
-    expect(text).not.toContain("never a guessed seq");
-    expect(text).toContain("Closed thread **`Ship it`**");
+  it("reports the FAILURE rather than a seq when no marker landed", () => {
+    // Where a close said nothing at all on `echoSeq: null` (the close had still
+    // happened), a proposal that did not post means NOTHING WAS PROPOSED — the
+    // operator has no prompt and the agent would otherwise wait on a
+    // confirmation nobody was asked for. So this one has to speak.
+    return opProposeClose(proposingClient(null), "general", "thread-1", "completed").then((res) => {
+      const text = res.content[0].text;
+      expect(text).toContain("did NOT post");
+      expect(text).toContain("The thread is untouched");
+      expect(text).not.toContain("Proposal note posted at seq");
+      expect(text).toContain("Proposed closing thread **`Ship it`**");
+    });
   });
 
-  it("keeps the summary note beside the echo line, not merged into it", async () => {
+  it("keeps the summary note beside the marker line, not merged into it", async () => {
     const text = (
-      await opCloseThread(closingClient(58), "general", "thread-1", "completed", "Shipped v2")
+      await opProposeClose(proposingClient(58), "general", "thread-1", "completed", "Shipped v2")
     ).content[0].text;
 
     const lines = text.split("\n");
     expect(lines[lines.length - 2]).toContain("as completed — Shipped v2.");
-    expect(lines[lines.length - 1]).toContain("Close echo posted at seq 58");
+    expect(lines[lines.length - 1]).toContain("Proposal note posted at seq 58");
   });
 });

@@ -258,6 +258,68 @@ export class ChannelParticipantNotMemberError extends ChannelError {
   }
 }
 
+/**
+ * An AGENT-token caller tried to post a LIFECYCLE kind (`task_started` /
+ * `task_finished` / `task_failed`). 403.
+ *
+ * THE INCIDENT (2026-08-04). A responder's agent did the work and posted its
+ * whole answer as `kind:"task_finished"`, and the answer appeared nowhere on the
+ * requester's side: `lib/group-thread.ts` folds a terminal marker into
+ * `draft.endEvent` and never pushes it to `draft.entries`, so its body is
+ * structurally unrenderable. The prompt invited the mistake (it framed the four
+ * kinds as an interchangeable vocabulary) and the tool's default made it easy —
+ * but the deeper problem is that the three lifecycle kinds are not statements an
+ * agent is in a position to make. They say "a session started / finished /
+ * failed", which is a fact about a RUNTIME, and the runtime that owns those
+ * facts is the desktop's session engine (`dopl-desktop-app/main/session-window.js`)
+ * or the close route's own echo (`service-tasks.closeTask`).
+ *
+ * SO THE LANE IS CLOSED BY IDENTITY, not by kind alone. `ctx.source === "agent"`
+ * means the request arrived on a bearer AGENT TOKEN, which is every MCP
+ * `op="post"` and nothing else: the desktop listener and the web both post on
+ * the operator's cookies (`source === "user"`) and keep working byte for byte,
+ * and the close echo is exempted explicitly by the one server-internal caller
+ * that raises it (see `postMessage`'s `internal` option).
+ *
+ * `task_progress` is deliberately NOT here. It is the milestone lane and stays
+ * agent-writable — it is the one `task_*` kind whose body IS rendered
+ * (`splitSessionEntries`), and it claims nothing about a session's lifecycle.
+ */
+export class ChannelLifecycleKindForbiddenError extends ChannelError {
+  constructor(public readonly kind: string) {
+    super(
+      `"${kind}" is a lifecycle marker posted by the runtime and by a thread close, not by an agent. ` +
+        `Post your message with no kind (the default) — a body written into a lifecycle event is not rendered on the thread card at all. ` +
+        `To mark a step that landed, post kind "task_progress".`
+    );
+  }
+}
+
+/**
+ * An AGENT-token caller tried to CLOSE a thread. 403.
+ *
+ * DECISION (Samuel, 2026-08-04): thread close is PROPOSE-then-CONFIRM. Closing
+ * settles the SHARED thread for BOTH members, and one machine's agent deciding
+ * the work "looks done" is not the same as the human deciding they are finished
+ * with the exchange — they may still have things to say in it. So an agent's
+ * terminal act is a PROPOSAL (`op:"propose_close"`) that surfaces to its operator
+ * as a confirmable prompt, and the close itself stays on the human lane.
+ *
+ * THE LINE IS THE CREDENTIAL, because it is the only one the wire can draw: an
+ * agent token is a machine acting on its own turn, a cookie session is a person
+ * in the app. Consequence to know: closing from an external CLI over MCP is no
+ * longer possible — the human closes in the app (web thread card, the desktop
+ * session window, or the SPA).
+ */
+export class ThreadCloseIsHumanOnlyError extends ChannelError {
+  constructor() {
+    super(
+      "An agent cannot close a thread — closing settles it for both members and is the human's decision. " +
+        'Propose it instead (op:"propose_close"), and your operator confirms.'
+    );
+  }
+}
+
 /** A direct channel would target the caller themselves — a self-DM is refused. */
 export class DirectSelfTargetError extends ChannelError {
   constructor() {

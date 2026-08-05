@@ -59,8 +59,9 @@ import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import {
   asAgentNotOnCreateThread,
-  opCloseThread,
+  closeThreadIsHumansToMake,
   opCreateThread,
+  opProposeClose,
   opSetThreadMode,
 } from "./channel-ops-threads";
 import {
@@ -148,6 +149,35 @@ export function registerChannelTool(
             runtime,
           });
         }
+        // P0-3 (2026-08-04) — THE MILESTONE IS ITS OWN OP, and the fixing of the
+        // kind happens HERE, at the routing seam, exactly like `open`'s
+        // `direct` branch. That is the whole point of the op: neither call makes
+        // the agent pick a `kind`, so "mark a milestone" and "send a reply"
+        // cannot be confused by choosing wrongly between enum values that sit
+        // one apart. `thread` is REQUIRED where `post` leaves it optional — an
+        // untagged milestone groups into nothing, which is the one shape of this
+        // call that is always a mistake.
+        //
+        // It delegates to `opPost` rather than growing a second delivery path:
+        // one set of error narration, one result-line vocabulary, and the lines
+        // a post produces (did it thread? who was addressed?) are exactly the
+        // ones a milestone's author needs. `to` / `to_agent` / `to_agents` are
+        // NOT routed through — a milestone marks the thread, it addresses nobody.
+        case "milestone": {
+          const miss = missingParams("milestone", args, [
+            "channel",
+            "body",
+            "thread",
+          ]);
+          if (miss) return miss;
+          return opPost(client, args.channel as string, args.body as string, {
+            kind: "task_progress",
+            thread: args.thread as string,
+            summary: args.summary,
+            asAgent: args.as_agent,
+            runtime,
+          });
+        }
         case "read": {
           const miss = missingParams("read", args, ["channel"]);
           if (miss) return miss;
@@ -218,14 +248,18 @@ export function registerChannelTool(
             args.participants,
           );
         }
-        case "close_thread": {
-          const miss = missingParams("close_thread", args, [
+        // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM. An agent's terminal act
+        // on a thread is a PROPOSAL its operator confirms; the close itself is a
+        // human's, because closing settles the SHARED thread for both members and
+        // the operator may still have things to say in it.
+        case "propose_close": {
+          const miss = missingParams("propose_close", args, [
             "channel",
             "thread",
             "outcome",
           ]);
           if (miss) return miss;
-          return opCloseThread(
+          return opProposeClose(
             client,
             args.channel as string,
             args.thread as string,
@@ -233,6 +267,13 @@ export function registerChannelTool(
             args.summary,
           );
         }
+        // …and the op it replaces is answered rather than removed. Dropping
+        // `close_thread` from the enum would turn every call an older agent makes
+        // into a zod "invalid enum value", which is the one moment it most needs
+        // to be told what to do instead. The server refuses an agent-token close
+        // too (`ThreadCloseIsHumanOnlyError`), so this is teaching, not the gate.
+        case "close_thread":
+          return closeThreadIsHumansToMake();
         case "set_thread_mode": {
           const miss = missingParams("set_thread_mode", args, [
             "channel",

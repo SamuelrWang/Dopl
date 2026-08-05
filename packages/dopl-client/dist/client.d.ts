@@ -7,7 +7,7 @@ import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch,
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
 import { ChannelAgentsClient } from "./client-channel-agents.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient extends ChannelAgentsClient {
@@ -143,6 +143,15 @@ export declare class DoplClient extends ChannelAgentsClient {
         outcome: ThreadOutcome;
         summary?: string;
     }): Promise<ChannelThreadClosed>;
+    /**
+     * DECISION 2 (2026-08-04) — the agent lane's terminal act on a thread. See
+     * `channel.proposeChannelThreadClose`; `closeChannelThread` above is the human
+     * lane and the server refuses it for an agent token.
+     */
+    proposeChannelThreadClose(channelId: string, threadId: string, input: {
+        outcome: ThreadOutcome;
+        summary?: string;
+    }): Promise<ChannelThreadCloseProposed>;
     setChannelThreadMode(channelId: string, threadId: string, input: {
         mode: ThreadMode;
     }): Promise<ChannelThread>;

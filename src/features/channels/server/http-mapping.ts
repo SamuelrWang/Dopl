@@ -11,6 +11,7 @@ import {
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
+  ChannelLifecycleKindForbiddenError,
   ChannelMemberExistsError,
   ChannelNotFoundError,
   ChannelParticipantNotMemberError,
@@ -24,6 +25,7 @@ import {
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
+  ThreadCloseIsHumanOnlyError,
   TrustedNotMemberError,
   TrustSelfError,
 } from "./errors";
@@ -75,6 +77,16 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelChatAddressedError) {
     return new HttpError(400, "CHANNEL_CHAT_ADDRESSED", err.message);
+  }
+  // P0-2 / DECISION 1+2 (2026-08-04). Both are 403s about WHO may make a
+  // statement rather than about whether the payload parses, and both carry a
+  // code the MCP side reads to narrate the refusal in the agent's own terms
+  // (`channel-errors.ts`) instead of guessing from the status.
+  if (err instanceof ChannelLifecycleKindForbiddenError) {
+    return new HttpError(403, "CHANNEL_LIFECYCLE_KIND_FORBIDDEN", err.message);
+  }
+  if (err instanceof ThreadCloseIsHumanOnlyError) {
+    return new HttpError(403, "CHANNEL_CLOSE_IS_HUMAN_ONLY", err.message);
   }
   if (err instanceof ChannelParticipantNotMemberError) {
     return new HttpError(400, "CHANNEL_PARTICIPANT_NOT_MEMBER", err.message);

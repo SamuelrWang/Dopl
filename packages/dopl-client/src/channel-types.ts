@@ -343,6 +343,26 @@ export interface ChannelThreadClosed {
   echoSeq: number | null;
 }
 
+/**
+ * What a close PROPOSAL returns (DECISION 2, 2026-08-04). An agent may not close
+ * a thread — closing settles the shared exchange for both members and is the
+ * human's call — so it proposes, and the human's surfaces render the proposal as
+ * a confirmable prompt.
+ *
+ * NOTHING ABOUT THE THREAD CHANGES: `thread` comes back with the status it
+ * already had (open), because a proposal writes only a marked, non-terminal
+ * message. `markerSeq` mirrors `ChannelThreadClosed.echoSeq` — the seq that
+ * message landed at, so a caller can advance its cursor past its own marker
+ * instead of guessing one (a guess once skipped a peer's whole deliverable).
+ * Null when the marker post itself failed, which is the honest "no prompt was
+ * raised" and is safe to retry because the thread is untouched.
+ */
+export interface ChannelThreadCloseProposed {
+  thread: ChannelThread;
+  markerSeq: number | null;
+  outcome: ThreadOutcome;
+}
+
 export interface ChannelMessageInput {
   body: string;
   kind?: ChannelMessageKind;

@@ -60,6 +60,25 @@ const ctx: ChannelContext = {
   role: "member",
 };
 
+/**
+ * P0-2 (2026-08-04) — THE CTX A LIFECYCLE POST REALLY ARRIVES ON.
+ *
+ * `postMessage` now refuses `task_started` / `task_finished` / `task_failed` from
+ * an AGENT-TOKEN caller (`source: "agent"`, i.e. every MCP `op="post"`), because
+ * those three state a fact about a RUNTIME and an agent is not in a position to
+ * state it. The fixtures below were written before that rule and used the agent
+ * ctx for everything, including the desktop's own lifecycle echoes — which is not
+ * how they arrive: `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the
+ * Electron session's SUPABASE COOKIES, so `buildChannelContext` resolves
+ * `source: "user"` and the body declares `authorKind: "agent"`.
+ *
+ * So the lifecycle cases move to this ctx. That is not a workaround for the guard;
+ * it makes the fixture match the lane it is describing, and it is what lets these
+ * suites go on pinning what they are actually about — the legacy-tag strip and the
+ * calm-flag entitlement — which are DESKTOP behaviours end to end.
+ */
+const desktopCtx: ChannelContext = { ...ctx, source: "user" };
+
 function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
   return {
     id: "chan-1",
@@ -209,7 +228,7 @@ describe("postMessage — legacy thread tag, kept for the exchange's own pair", 
   it("keeps it on a LIFECYCLE post — the compat case the strip exists to protect", async () => {
     // Installed desktop 1.7.16 posts legacy ids for task_started/finished/failed.
     // These must keep threading, which is why the gate strips instead of 403ing.
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Session ended",
       kind: "task_finished",
       metadata: { taskId: LEGACY_ID },
@@ -343,7 +362,7 @@ describe("postMessage — first-class (UUID) thread tag is unchanged", () => {
  */
 describe("postMessage — calm-terminal flags follow the tag decision", () => {
   it("stamps the flag for a participant of a LEGACY exchange (the decline echo)", async () => {
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Request declined",
       kind: "task_failed",
       metadata: { taskId: LEGACY_ID, declined: true },
@@ -361,7 +380,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
       opener({ author_user_id: USER, metadata: { to_user_id: THIRD } })
     );
 
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Session ended",
       kind: "task_failed",
       metadata: { taskId: LEGACY_ID, ended: true },
@@ -379,7 +398,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
       opener({ author_user_id: PEER, metadata: { to_user_id: THIRD } })
     );
 
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Request declined",
       kind: "task_failed",
       metadata: { taskId: LEGACY_ID, declined: true, dropped: true },
@@ -396,7 +415,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
   it("SECURITY: fails closed when the legacy opener cannot be resolved", async () => {
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(null);
 
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Request interrupted",
       kind: "task_failed",
       metadata: { taskId: LEGACY_ID, interrupted: true },
@@ -410,7 +429,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
   it("stamps the flag on a FIRST-CLASS thread the poster participates in", async () => {
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
 
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Turn limit reached",
       kind: "task_failed",
       metadata: { taskId: TASK_ID, capped: true },
@@ -427,7 +446,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
   it("strips a truthy-but-not-true flag even from a participant", async () => {
     // The renderers read `=== true`; normalizing here keeps the stored wire
     // clean instead of relying on every reader staying strict.
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "Crashed",
       kind: "task_failed",
       metadata: { taskId: LEGACY_ID, capped: "true", ended: 1 },
@@ -440,7 +459,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
   });
 
   it("strips flags on a post with no thread id at all", async () => {
-    await postMessage(ctx, "dm", {
+    await postMessage(desktopCtx, "dm", {
       body: "not a real outcome",
       kind: "task_failed",
       metadata: { declined: true },

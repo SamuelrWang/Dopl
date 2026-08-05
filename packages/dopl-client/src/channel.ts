@@ -27,6 +27,7 @@ import type {
   ChannelMessageInput,
   ChannelMessagePosted,
   ChannelThread,
+  ChannelThreadCloseProposed,
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
@@ -252,6 +253,46 @@ export async function createChannelThread(
   };
 }
 
+/**
+ * PROPOSE closing a thread (DECISION 2, 2026-08-04) — the agent lane's terminal
+ * act, and the one {@link closeChannelThread} is no longer reachable from.
+ *
+ * Same route, same payload shape, different op: a proposal IS the close it asks
+ * a human to confirm, so the confirm hands these two values straight back to
+ * `op:"close"`. It writes nothing to the thread row — see
+ * {@link ChannelThreadCloseProposed}.
+ */
+export async function proposeChannelThreadClose(
+  t: DoplTransport,
+  channelId: string,
+  threadId: string,
+  input: { outcome: ThreadOutcome; summary?: string }
+): Promise<ChannelThreadCloseProposed> {
+  const data = await t.request<{
+    task: ChannelThread;
+    markerSeq?: number | null;
+    proposedOutcome?: ThreadOutcome;
+  }>(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {
+    method: "PATCH",
+    body: { op: "propose_close", outcome: input.outcome, summary: input.summary },
+    toolName: "channel_propose_close",
+  });
+  return {
+    thread: data.task,
+    // Additive on the route, and read with the same discipline `echoSeq` is: an
+    // absent field is null, never a number the caller could arm a wait on.
+    markerSeq: typeof data.markerSeq === "number" ? data.markerSeq : null,
+    outcome: data.proposedOutcome ?? input.outcome,
+  };
+}
+
+/**
+ * Close a thread. HUMAN LANE ONLY since 2026-08-04 — the server refuses an
+ * agent-token caller (`ThreadCloseIsHumanOnlyError`), so no MCP op reaches this
+ * any more and the agent's path is {@link proposeChannelThreadClose}. Kept
+ * because the route op is real and this is its one binding; a human surface
+ * built on this client closes through here.
+ */
 export async function closeChannelThread(
   t: DoplTransport,
   channelId: string,

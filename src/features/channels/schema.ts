@@ -288,15 +288,27 @@ export const TaskCreateSchema = z.object({
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
 
 /**
- * Update a task: close it (`op:"close"` — creator or target), change its mode
- * (`op:"set_mode"` — creator only), OR reopen a closed one (`op:"reopen"` —
- * creator or target, web-only; no MCP counterpart). A discriminated union so
- * the ops can't bleed fields into each other. `reopen` carries no payload — it
- * clears the closed state back to open server-side.
+ * Update a task: close it (`op:"close"` — creator or target, and HUMAN LANE
+ * ONLY since 2026-08-04), PROPOSE closing it (`op:"propose_close"` — creator or
+ * target, the agent's terminal act), change its mode (`op:"set_mode"` — creator
+ * only), OR reopen a closed one (`op:"reopen"` — creator or target, web-only;
+ * no MCP counterpart). A discriminated union so the ops can't bleed fields into
+ * each other. `reopen` carries no payload — it clears the closed state back to
+ * open server-side.
+ *
+ * `propose_close` deliberately mirrors `close`'s payload (an outcome plus an
+ * optional one-line summary) rather than inventing a shape of its own: a
+ * proposal is exactly the close it is asking a human to confirm, and the surface
+ * that confirms it hands those same two values straight to `close`.
  */
 export const TaskUpdateSchema = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("close"),
+    outcome: TaskOutcomeSchema,
+    summary: z.string().trim().max(2000).optional(),
+  }),
+  z.object({
+    op: z.literal("propose_close"),
     outcome: TaskOutcomeSchema,
     summary: z.string().trim().max(2000).optional(),
   }),

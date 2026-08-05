@@ -13,6 +13,7 @@ import {
   buildChannelContext,
   closeTask,
   getChannelTask,
+  proposeTaskClose,
   reopenTask,
   setTaskMode,
 } from "@/features/channels/server/service";
@@ -61,6 +62,22 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
         // deliverable outright). Null when the close landed but the echo did
         // not — a caller must never treat that as "one past the last seq".
         return NextResponse.json({ task: thread, echoSeq });
+      }
+      // DECISION 2 (2026-08-04) — the AGENT's terminal act. It writes nothing to
+      // the task row: the thread stays open and every routing property of it is
+      // unchanged. All it posts is a marked, non-terminal `task_progress` the
+      // human's surfaces render as a confirmable prompt. `markerSeq` mirrors
+      // `echoSeq` above so a proposing agent can arm a wait past its own marker
+      // instead of guessing a seq (the guess that once skipped a deliverable).
+      case "propose_close": {
+        const { thread, markerSeq, outcome } = await proposeTaskClose(
+          ctx,
+          channelId,
+          taskId,
+          input.outcome,
+          input.summary
+        );
+        return NextResponse.json({ task: thread, markerSeq, proposedOutcome: outcome });
       }
       case "set_mode":
         return NextResponse.json({

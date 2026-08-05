@@ -28,6 +28,7 @@ exports.postMessage = postMessage;
 exports.listChannelThreads = listChannelThreads;
 exports.getChannelThread = getChannelThread;
 exports.createChannelThread = createChannelThread;
+exports.proposeChannelThreadClose = proposeChannelThreadClose;
 exports.closeChannelThread = closeChannelThread;
 exports.setChannelThreadMode = setChannelThreadMode;
 const enc = encodeURIComponent;
@@ -160,6 +161,36 @@ async function createChannelThread(t, channelId, input) {
         openingSeq: typeof data.openingSeq === "number" ? data.openingSeq : null,
     };
 }
+/**
+ * PROPOSE closing a thread (DECISION 2, 2026-08-04) — the agent lane's terminal
+ * act, and the one {@link closeChannelThread} is no longer reachable from.
+ *
+ * Same route, same payload shape, different op: a proposal IS the close it asks
+ * a human to confirm, so the confirm hands these two values straight back to
+ * `op:"close"`. It writes nothing to the thread row — see
+ * {@link ChannelThreadCloseProposed}.
+ */
+async function proposeChannelThreadClose(t, channelId, threadId, input) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {
+        method: "PATCH",
+        body: { op: "propose_close", outcome: input.outcome, summary: input.summary },
+        toolName: "channel_propose_close",
+    });
+    return {
+        thread: data.task,
+        // Additive on the route, and read with the same discipline `echoSeq` is: an
+        // absent field is null, never a number the caller could arm a wait on.
+        markerSeq: typeof data.markerSeq === "number" ? data.markerSeq : null,
+        outcome: data.proposedOutcome ?? input.outcome,
+    };
+}
+/**
+ * Close a thread. HUMAN LANE ONLY since 2026-08-04 — the server refuses an
+ * agent-token caller (`ThreadCloseIsHumanOnlyError`), so no MCP op reaches this
+ * any more and the agent's path is {@link proposeChannelThreadClose}. Kept
+ * because the route op is real and this is its one binding; a human surface
+ * built on this client closes through here.
+ */
 async function closeChannelThread(t, channelId, threadId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {
         method: "PATCH",

@@ -55,12 +55,21 @@ export const CHANNEL_INPUT_SHAPE = {
       "open",
       "invite",
       "post",
+      // P0-3 (2026-08-04) — the MILESTONE gets its own op rather than staying a
+      // `kind` an agent has to pick on `post`. See the `kind` field below for
+      // what that choice cost.
+      "milestone",
       "read",
       "await",
       "members",
       "list_threads",
       "get_thread",
       "create_thread",
+      // DECISION 2 (2026-08-04) — an agent PROPOSES a close and a human confirms
+      // it. `close_thread` is kept in the enum so the call an older agent makes
+      // gets a teaching refusal that names its replacement, rather than an
+      // opaque "unknown op".
+      "propose_close",
       "close_thread",
       "set_thread_mode",
       "agents",
@@ -190,7 +199,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(16000)
     .optional()
     .describe(
-      'op="post" / op="create_thread" (required): the message text, <=16000 characters. For a task_* kind, put a human-readable one-liner here and the structured payload in metadata. For create_thread, this is the requester\'s initial request.',
+      'op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 characters. For op="post" this is what you are actually saying, and it is a normal message whatever it contains — a half-sentence, a status line, or the finished deliverable. For op="milestone" it is ONE LINE naming the step that just landed, nothing more (content does not travel in a milestone; nobody reads one as an answer). For create_thread, it is the requester\'s initial request.',
     ),
   to: z
     .string()
@@ -209,8 +218,22 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(2000)
     .optional()
     .describe(
-      'op="post": a short one-line intent (<=200 chars — the post route enforces 200, not 2000). ALWAYS set it — it becomes the notification the receiving member sees. op="close_thread" (optional): a one-line outcome summary (<=2000 chars) shown on the thread card and carried in the close echo.',
+      'op="post": a short one-line intent (<=200 chars — the post route enforces 200, not 2000). ALWAYS set it — it becomes the notification the receiving member sees. op="propose_close" (optional): the one-line reason you think the thread is done (<=2000 chars). It is the BODY of the proposal your operator reads before deciding, and it is carried into the close summary if they confirm — so write the outcome, not "done".',
     ),
+  // P0-3 / DECISION 1 (2026-08-04) — WHAT THIS FIELD USED TO SAY, AND WHAT IT
+  // COST. It read: "message (default, chat) or a structured activity event
+  // (task_started / task_progress / task_finished / task_failed)". Five names,
+  // one list, no rule about which is which — so a responder that had finished
+  // its work posted the ANSWER as `task_finished`, and the answer appeared
+  // nowhere: `lib/group-thread.ts` folds a terminal marker into `endEvent` and
+  // never renders its body. The kinds are not a vocabulary to pick from, and the
+  // describe now says whose each one is.
+  //
+  // THE ENUM KEEPS ALL FIVE ON PURPOSE. Narrowing it would turn the mistake into
+  // an opaque -32602 from zod ("invalid enum value") at exactly the moment the
+  // agent needs to be told what to do instead; `channel-ops-write.ts` refuses
+  // the three lifecycle kinds with a sentence, and the server refuses them again
+  // for anything that skips this tool.
   kind: z
     .enum([
       "message",
@@ -221,7 +244,7 @@ export const CHANNEL_INPUT_SHAPE = {
     ])
     .optional()
     .describe(
-      'op="post": message kind — "message" (default, chat) or a structured activity event ("task_started" / "task_progress" / "task_finished" / "task_failed"; these keep the older `task_` storage names).',
+      'op="post": LEAVE THIS UNSET. The default, "message", is what every substantive thing you send is — including your FINAL ANSWER. The other four keep the older `task_` storage names and are NOT interchangeable with it: "task_started" / "task_finished" / "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session and by a thread close, and this tool REFUSES them from you (a body written into one is not rendered on the other member\'s thread card at all, so an answer sent as one is delivered nowhere). "task_progress" is the milestone lane and is yours, but you do not need this field for it either: op="milestone" posts one with no kind to pick.',
     ),
   metadata: z
     .record(z.string(), z.unknown())
@@ -263,12 +286,14 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="get_thread" / op="close_thread" / op="set_thread_mode" / op="join_thread" / op="leave_thread" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread — logs a milestone when combined with kind="task_progress". op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is always channel-wide).',
+      'op="get_thread" / op="propose_close" / op="set_thread_mode" / op="join_thread" / op="leave_thread" / op="milestone" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is always channel-wide).',
     ),
   outcome: z
     .enum(["completed", "failed"])
     .optional()
-    .describe('op="close_thread" (required): how the thread ended.'),
+    .describe(
+      'op="propose_close" (required): the outcome you are PROPOSING — "completed" or "failed". Your operator sees it prefilled on the confirm and can change it; nothing is closed until they do.',
+    ),
   // coerce: MCP clients sometimes send numbers as strings; strict
   // z.number() rejects them with an opaque -32602.
   since: z.coerce

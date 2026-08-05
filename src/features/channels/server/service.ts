@@ -63,6 +63,10 @@ export {
   reopenTask,
 } from "./service-tasks";
 
+// DECISION 2 (2026-08-04): an agent PROPOSES, a human CLOSES. Its own module
+// because the two acts have different authorities over one shared thread.
+export { proposeTaskClose } from "./service-tasks-propose";
+
 export {
   createAgent,
   disengageAgent,
