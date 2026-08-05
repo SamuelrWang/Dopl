@@ -8,9 +8,15 @@
  * Every branch below therefore asks the same question — "does a mistake here
  * fail toward NOBODY being blocked?" — and the answer has to be yes:
  *
- *   1. absent / blank / malformed floor  → `minSupported: null` (no floor)
- *   2. floor above the declared `latest` → refused, `minSupported: null`
+ *   1. blank/OFF-spelled / malformed floor → `minSupported: null` (no floor)
+ *   2. floor above the declared `latest`   → refused, `minSupported: null`
  *   3. only a well-formed, reachable floor is ever served
+ *
+ * STAGE C (2026-08-05): an UNSET env no longer means "no floor" — it means the
+ * CODE DEFAULT (`DEFAULT_MIN_VERSION`), shipped beside a matching declared
+ * latest so the clamp can never refuse its own release's floor. Fail-open now
+ * requires an explicit OFF spelling; every MISTAKE shape (typo, malformed)
+ * still fails to "no floor".
  *
  * The one intentional asymmetry is (2)'s dependence on `latest` being kept
  * current: a stale-LOW latest refuses a legitimate floor (annoying, safe), and
@@ -22,6 +28,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  DEFAULT_DECLARED_LATEST,
+  DEFAULT_MIN_VERSION,
   MIN_VERSION_ENV,
   LATEST_VERSION_ENV,
   compareReleases,
@@ -101,25 +109,31 @@ describe("resolveDesktopFloor", () => {
   it("serves a well-formed floor", () => {
     expect(resolveDesktopFloor(env("1.8.2"))).toEqual({
       minSupported: "1.8.2",
-      latest: null,
-      latestSource: null,
+      latest: DEFAULT_DECLARED_LATEST,
+      latestSource: "env",
       rejected: null,
     });
   });
 
-  it("serves NO floor when the env var is unset — the default is fail-open", () => {
-    expect(resolveDesktopFloor(env())).toEqual({
-      minSupported: null,
-      latest: null,
-      latestSource: null,
-      rejected: null,
-    });
-    expect(resolveDesktopFloor({})).toEqual({
-      minSupported: null,
-      latest: null,
-      latestSource: null,
-      rejected: null,
-    });
+  it("serves the CODE DEFAULT floor when the env var is unset (Stage C)", () => {
+    // The floor rides code now; the env var is the override. Unset = the
+    // release's own floor, clamped against the matching declared latest.
+    for (const e of [env(), {}]) {
+      expect(resolveDesktopFloor(e)).toEqual({
+        minSupported: DEFAULT_MIN_VERSION,
+        latest: DEFAULT_DECLARED_LATEST,
+        latestSource: "env",
+        rejected: null,
+      });
+    }
+  });
+
+  it("ships defaults the clamp can never refuse (the same-commit pin)", () => {
+    // Bumping DEFAULT_MIN_VERSION without DEFAULT_DECLARED_LATEST would arm
+    // the anti-brick clamp against our own floor. Fail the build instead.
+    expect(narrowVersion(DEFAULT_MIN_VERSION)).toBe(DEFAULT_MIN_VERSION);
+    expect(narrowVersion(DEFAULT_DECLARED_LATEST)).toBe(DEFAULT_DECLARED_LATEST);
+    expect(compareReleases(DEFAULT_MIN_VERSION, DEFAULT_DECLARED_LATEST)).not.toBe(1);
   });
 
   it("a MALFORMED floor blocks nobody, and says so", () => {
@@ -132,12 +146,14 @@ describe("resolveDesktopFloor", () => {
     }
   });
 
-  it("blank is 'unset', not 'malformed' — an emptied env var is a cleared floor", () => {
-    for (const blank of ["", "   "]) {
-      expect(resolveDesktopFloor(env(blank))).toEqual({
+  it("an OFF spelling is a decision — floorless, and not 'malformed'", () => {
+    // With a code default, running floorless takes an explicit act: emptying
+    // the var or naming it off. All spellings an operator would reach for.
+    for (const off of ["", "   ", "none", "0", "off", "OFF", "None"]) {
+      expect(resolveDesktopFloor(env(off))).toEqual({
         minSupported: null,
-        latest: null,
-        latestSource: null,
+        latest: DEFAULT_DECLARED_LATEST,
+        latestSource: "env",
         rejected: null,
       });
     }
@@ -212,7 +228,10 @@ describe("resolveDesktopFloor", () => {
     // the clamp cannot judge, and the client's GUARD 2 is the backstop. The
     // route never lets this state persist — it schedules a refresh on the way
     // out and the next request has an answer.
-    const out = resolveDesktopFloor(env("1.9.0"), null);
+    // Expressing "no latest" now takes an explicit blank (the code default
+    // otherwise answers), which is itself the point: the clamp-less state has
+    // become opt-in rather than the cold-start default.
+    const out = resolveDesktopFloor(env("1.9.0", ""), null);
     expect(out.minSupported).toBe("1.9.0");
     expect(out.latest).toBeNull();
     expect(out.latestSource).toBeNull();
@@ -229,8 +248,10 @@ describe("resolveDesktopFloor", () => {
     // frozen at module load.
     const before = process.env[MIN_VERSION_ENV];
     try {
-      process.env[MIN_VERSION_ENV] = "3.2.1";
-      expect(resolveDesktopFloor().minSupported).toBe("3.2.1");
+      // Below the default declared latest, so the clamp waves it through and
+      // the assertion isolates the process.env read.
+      process.env[MIN_VERSION_ENV] = "1.2.1";
+      expect(resolveDesktopFloor().minSupported).toBe("1.2.1");
     } finally {
       if (before === undefined) delete process.env[MIN_VERSION_ENV];
       else process.env[MIN_VERSION_ENV] = before;

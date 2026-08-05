@@ -22,7 +22,11 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GET } from "./route";
-import { MIN_VERSION_ENV, LATEST_VERSION_ENV } from "@/shared/version/desktop-floor";
+import {
+  DEFAULT_DECLARED_LATEST,
+  MIN_VERSION_ENV,
+  LATEST_VERSION_ENV,
+} from "@/shared/version/desktop-floor";
 import {
   __resetLatestReleaseForTests,
   refreshLatestRelease,
@@ -74,7 +78,9 @@ describe("GET /api/version", () => {
     vi.stubEnv(MIN_VERSION_ENV, "1.8.2");
     const { status, body } = await get();
     expect(status).toBe(200);
-    expect(body).toEqual({ minSupported: "1.8.2", latest: null });
+    // `latest` is the code-default declared value now (Stage C) — the clamp
+    // fallback ships beside the floor rather than arriving by env.
+    expect(body).toEqual({ minSupported: "1.8.2", latest: DEFAULT_DECLARED_LATEST });
   });
 
   it("echoes the declared latest alongside it", async () => {
@@ -106,6 +112,9 @@ describe("GET /api/version", () => {
   });
 
   it("re-reads the env on EVERY request (edit + redeploy is the whole story)", async () => {
+    // Latest held above every floor below so the clamp stays out of the frame;
+    // this test is about the read cadence, not the clamp.
+    vi.stubEnv(LATEST_VERSION_ENV, "1.9.9");
     vi.stubEnv(MIN_VERSION_ENV, "1.8.0");
     expect((await get()).body.minSupported).toBe("1.8.0");
     vi.stubEnv(MIN_VERSION_ENV, "1.9.0");
@@ -231,7 +240,9 @@ describe("GET /api/version — the derived anti-brick clamp", () => {
     vi.stubEnv(MIN_VERSION_ENV, "1.8.2");
     const res = GET();
     expect(res).not.toBeInstanceOf(Promise);
-    expect(await res.json()).toEqual({ minSupported: "1.8.2", latest: null });
+    // The declared default answers while GitHub hangs — the clamp no longer
+    // goes dark on a cold instance (Stage C's second half).
+    expect(await res.json()).toEqual({ minSupported: "1.8.2", latest: DEFAULT_DECLARED_LATEST });
     expect(feed).toHaveBeenCalledTimes(1);
   });
 

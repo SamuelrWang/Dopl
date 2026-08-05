@@ -30,8 +30,26 @@ import "server-only";
  * the client rather than enforced as a 426 on `/api/**`.
  */
 
-/** Vercel env: the oldest desktop build allowed to proceed. Unset = no floor. */
+/**
+ * Vercel env: the oldest desktop build allowed to proceed. OVERRIDE, not the
+ * only source — when unset, `DEFAULT_MIN_VERSION` below is the floor (Stage C,
+ * 2026-08-05: the floor rides code so raising it is a normal deploy and needs
+ * no dashboard access). Set the env to reposition the floor without a deploy,
+ * or to one of the OFF spellings ("", "none", "0", "off") to run floorless.
+ */
 export const MIN_VERSION_ENV = "DOPL_DESKTOP_MIN_VERSION";
+
+/**
+ * The floor when the env var is UNSET. Bump this in the release that should
+ * become mandatory — its cadence is "once per forced-upgrade event", which is
+ * release cadence, which is code cadence. A test pins it at or below
+ * `DEFAULT_DECLARED_LATEST`, so bumping one without the other fails the build
+ * instead of arming the anti-brick clamp against our own floor.
+ */
+export const DEFAULT_MIN_VERSION = "1.8.5";
+
+/** Env spellings that mean "no floor, on purpose" rather than a typo. */
+const FLOOR_OFF = new Set(["", "none", "0", "off"]);
 /**
  * Vercel env: the newest desktop build actually published. OPTIONAL, and its
  * only job is the anti-brick clamp below — it is never a floor of its own.
@@ -44,6 +62,14 @@ export const MIN_VERSION_ENV = "DOPL_DESKTOP_MIN_VERSION";
  * gone away. Leave it UNSET unless one of those is true.
  */
 export const LATEST_VERSION_ENV = "DOPL_DESKTOP_LATEST_VERSION";
+
+/**
+ * The declared latest when the env var is UNSET — the cold-start clamp
+ * fallback, set alongside `DEFAULT_MIN_VERSION` in the same release commit so
+ * the clamp can never refuse the floor shipped beside it. The release feed
+ * still wins whenever an instance has reached it (derived beats declared).
+ */
+export const DEFAULT_DECLARED_LATEST = "1.8.5";
 
 /**
  * `1.8.2`, optionally `1.9.0-beta.2`. Deliberately the same shape as
@@ -134,22 +160,23 @@ export function resolveDesktopFloor(
   env: Record<string, string | undefined> = process.env,
   derivedLatest: string | null = null
 ): DesktopVersionFloor {
-  const configured = env[MIN_VERSION_ENV];
+  const configured = env[MIN_VERSION_ENV] ?? DEFAULT_MIN_VERSION;
   const derived = narrowVersion(derivedLatest);
-  const declared = narrowVersion(env[LATEST_VERSION_ENV]);
+  // "env" as a source now covers the code default too — both are declarations
+  // (claims about what should exist), as opposed to the feed's derived fact.
+  const declared = narrowVersion(env[LATEST_VERSION_ENV] ?? DEFAULT_DECLARED_LATEST);
   const latest = derived ?? declared;
   const latestSource: LatestSource | null = derived ? "release-feed" : declared ? "env" : null;
+
+  // An explicit OFF spelling is a decision, not a typo: floorless, no rejection.
+  if (FLOOR_OFF.has(configured.trim().toLowerCase())) {
+    return { minSupported: null, latest, latestSource, rejected: null };
+  }
   const floor = narrowVersion(configured);
 
   // Configured but unreadable: serve no floor. A typo must never brick a fleet.
   if (!floor) {
-    const present = typeof configured === "string" && configured.trim() !== "";
-    return {
-      minSupported: null,
-      latest,
-      latestSource,
-      rejected: present ? "malformed" : null,
-    };
+    return { minSupported: null, latest, latestSource, rejected: "malformed" };
   }
   if (latest && compareReleases(floor, latest) === 1) {
     return { minSupported: null, latest, latestSource, rejected: "above-latest" };
