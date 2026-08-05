@@ -10,17 +10,25 @@
 // 'ignore') is the ONLY thing this helper acts on. All five conjuncts are load
 // bearing, so each is exercised failing in isolation.
 //
-// WAKE-V1 adds the fifth conjunct: metadata.runtime === 'desktop-session'. My own agent
-// can open a thread from either runtime, and only a window THIS APP spawned should get a
+// WAKE-V1 adds the fifth conjunct: the post carries a DESKTOP runtime stamp. My own
+// agent can open a thread from several runtimes, and only THIS APP's should get a
 // requester window — an EXTERNAL Claude Code session awaits the reply itself, so a
 // desktop window opened alongside it would steal that reply. The stamp is written
-// server-side off sdk-loader's `X-Dopl-Runtime` header (`runtime` is a RESERVED metadata
+// server-side off the `X-Dopl-Runtime` header (`runtime` is a RESERVED metadata
 // key, so a value in the caller's message body is stripped), but it is a ROUTING HINT,
 // NOT an authorization signal: any device-token holder can send that header, so the
 // stamp attests nothing about WHO called (src/shared/auth/runtime-header.ts). It is
 // safe to gate on only because this predicate fails CLOSED — no stamp, no window — on
 // top of the conjuncts that do carry identity (authorUserId === me AND taskCreatedBy ===
 // me). Both directions, and that independence, are pinned below.
+//
+// TWO STAMPS SINCE 2026-08-05 (docs/CHANNELS-ROLLBACK-PLAN.md §3.4): `desktop-session`
+// (a session this app SPAWNED — sdk-loader / mcp-config) and `desktop-ui` (the operator
+// TYPING in the app's own UI window — main/ui-bridge.js). Both open the full requester
+// session, which is the plan's "one initiating behaviour, not three"; the predicate was
+// widened by ADDING a recognized server-written value, never by loosening what counts as
+// evidence. The end-to-end story of that change, and of the dormant shell it deleted, is
+// test/operator-typed-request.test.mjs; this file keeps the conjunct-by-conjunct table.
 //
 // `.mjs` (ESM) to stay under the repo's shared eslint config; createRequire loads
 // the CommonJS targeting module.
@@ -110,6 +118,17 @@ test("STAMPED runtime -> true: a thread my DESKTOP-spawned session opened still 
   assert.equal(requesterTaskOpen(makeMsg({ runtime: "  desktop-session  " }), ME), true);
 });
 
+test("THE SECOND STAMP -> true: the operator typing in the app's own UI (§3.4)", () => {
+  // main/ui-bridge.js is the ONE transport the bundled SPA has, so every call the renderer
+  // originates carries `X-Dopl-Runtime: desktop-ui` and the server stamps it — refusing that
+  // value to any AGENT credential, which is why an external MCP post cannot claim it.
+  assert.equal(requesterTaskOpen(makeMsg({ runtime: "desktop-ui" }), ME), true);
+  assert.equal(requesterTaskOpen(makeMsg({ runtime: "  desktop-ui  " }), ME), true);
+  // A person typed it, so authorKind is 'user' on this lane; the predicate does not read it
+  // (a spawned session's create declares 'agent' and takes the identical route).
+  assert.equal(requesterTaskOpen(makeMsg({ runtime: "desktop-ui", authorKind: "user" }), ME), true);
+});
+
 test("UNSTAMPED runtime -> false: my EXTERNAL Claude Code session's thread opens NO window", () => {
   // The core WAKE-V1 gate. An external session sends no header, so the server writes no
   // runtime key; that session awaits the reply itself and a desktop window opened here
@@ -123,13 +142,17 @@ test("UNSTAMPED runtime -> false: my EXTERNAL Claude Code session's thread opens
 });
 
 test("a NEAR-MISS or spoof-shaped runtime value -> false (exact match only)", () => {
-  // Only the one exact server-written value opens a window. Anything else — another
+  // Only the two exact server-written values open a window. Anything else — another
   // runtime the server may stamp later, a case/substring variant, or a non-string a
   // caller tried to smuggle through (metaStr rejects those outright) — refuses.
   for (const bad of [
     "desktop",
     "Desktop-Session",
     "desktop-session-x",
+    "Desktop-UI",
+    "DESKTOP-UI",
+    "desktop-ui-x",
+    "desktop_ui",
     "external",
     "web",
     123,

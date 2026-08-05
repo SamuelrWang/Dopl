@@ -38,7 +38,7 @@ const TASK = "11111111-2222-3333-4444-555555555555";
 
 // A fresh harness per test: configurable fakes + recorded calls.
 function harness(over = {}) {
-  const calls = { feedInbound: [], launch: [], resume: [], notify: [], gate: [], storeReads: 0 };
+  const calls = { feedInbound: [], launch: [], resume: [], notify: [], gate: [], arm: [], storeReads: 0 };
   const cfg = {
     windowMode: true,
     live: false,
@@ -55,6 +55,11 @@ function harness(over = {}) {
   const targeting = {
     firstClassTaskId: (m) => m.taskId || "",
     requesterTaskOpen: () => cfg.requesterOpen,
+    // 2026-08-05: which of the two desktop runtimes posted it. Only `desktop-ui` (the
+    // operator typing in the app's own UI) arms the request strip; a spawned session's
+    // create takes the identical launch with no strip.
+    requesterTypedByOperator: (m) => (m.meta && m.meta.runtime) === "desktop-ui",
+    DESKTOP_RUNTIMES: ["desktop-session", "desktop-ui"],
     metaStr: (m, k) => (m.meta && m.meta[k]) || "",
     resolveToolProfile: () => "full",
   };
@@ -63,6 +68,7 @@ function harness(over = {}) {
     counterpartyFor: () => cfg.counterparty,
     feedInbound: (a) => { calls.feedInbound.push(a); return cfg.feedInboundReturn; },
     launchRequesterSession: async (a) => { calls.launch.push(a); return cfg.launchReturn; },
+    armRequestStatus: (a) => { calls.arm.push(a); return true; },
     resumeRequesterForReply: async (rec, sdkId, reply) => { calls.resume.push({ rec, sdkId, reply }); return true; },
     // v2.5 D1: the gate entry the route uses now (recreate the shell + hold the reply).
     feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },

@@ -33,6 +33,32 @@ const { diag } = require('./diag');
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
 const REQUEST_TIMEOUT_MS = 30_000;
 
+// THE APP'S OWN UI, STAMPED (2026-08-05, rollback plan §3.4).
+//
+// A request the operator TYPES in this app used to be indistinguishable, server-side,
+// from one an external agent posted: the old remote shell posted from a browser context
+// with no runtime header, so the server stamped nothing and the listener could only open
+// something inert on the evidence it had (a caller-asserted `authorKind`). The bundled SPA
+// removes that gap by construction — the renderer never opens a socket, so EVERY one of
+// its API calls is this function, in main, on main's own credential — and the header says
+// so. `targeting.requesterTaskOpen` reads the resulting `metadata.runtime` and launches a
+// full requester session for it, exactly as it does for `desktop-session`.
+//
+// WHY THIS FUNCTION AND NOWHERE ELSE. It is the ONE transport the SPA renderer has
+// (renderer/app-preload.js exposes no header surface at all, and every handler here is
+// bound to that window's own top frame), so the stamp cannot be attached to anything the
+// renderer did not originate, and a new call site cannot forget it. main/api.js and
+// listener-io.js are deliberately untouched: their callers are the LISTENER and SESSION
+// lanes, whose posts are not the operator typing.
+//
+// A ROUTING HINT, NOT AN AUTHORIZATION SIGNAL — the same rule sdk-loader.js states for
+// `desktop-session` (src/shared/auth/runtime-header.ts). The header alone proves nothing;
+// the server additionally refuses this value to any AGENT credential, and the desktop's
+// routing rests on the identity pair (authored by me AND created by me) that no peer can
+// forge. Unconditional: it identifies the RUNTIME, not the workspace.
+const RUNTIME_HEADER = 'X-Dopl-Runtime';
+const DESKTOP_UI_RUNTIME = 'desktop-ui';
+
 // ─── BEGIN UI-BRIDGE-PURE (guards; unit-testable via source extraction) ──────
 // No electron/require refs below.
 
@@ -157,7 +183,11 @@ function getAuthState() {
 
 async function sendApiRequest(href, opts, token) {
   const method = opts.method || 'GET';
-  const headers = { Accept: 'application/json', ...appVersion.versionHeaders() };
+  const headers = {
+    Accept: 'application/json',
+    ...appVersion.versionHeaders(),
+    [RUNTIME_HEADER]: DESKTOP_UI_RUNTIME,
+  };
 
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.workspaceId) headers['X-Workspace-Id'] = opts.workspaceId;

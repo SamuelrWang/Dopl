@@ -8,7 +8,11 @@ import type { Role } from "@/features/workspaces/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
 import { readAppVersionHeader } from "./app-version-header";
-import { readRuntimeHeader, type DoplRuntime } from "./runtime-header";
+import {
+  narrowRuntime,
+  readRuntimeHeader,
+  type DoplRuntime,
+} from "./runtime-header";
 import { readSessionIdHeader } from "./session-header";
 import { withUserAuth } from "./with-auth";
 
@@ -30,12 +34,18 @@ export interface WorkspaceAuthContext {
   workspacePublicId: string;
   role: Role;
   /**
-   * The recognized `X-Dopl-Runtime` this request carried (`desktop-session`),
-   * or undefined for every other caller. Reaches handlers the same way
-   * `X-Workspace-Id` does — read once here, never off the raw request in a
-   * feature — so the channels write path has ONE trusted source for the
+   * The recognized `X-Dopl-Runtime` this request carried (`desktop-session` or
+   * `desktop-ui`), or undefined for every other caller. Reaches handlers the
+   * same way `X-Workspace-Id` does — read once here, never off the raw request
+   * in a feature — so the channels write path has ONE trusted source for the
    * reserved `metadata.runtime` stamp. A routing hint, never an authz signal
    * (see `runtime-header.ts`).
+   *
+   * ALREADY BOUNDED BY THE CREDENTIAL. `desktop-ui` claims a person typing in
+   * the desktop app's own UI, so it is refused for an agent (`dopl_at_*`) token
+   * here — one narrowing, applied for every consumer of this context, not just
+   * channels. `desktop-session` is credential-agnostic on purpose: it IS an
+   * agent-token caller. See `narrowRuntime`.
    */
   runtime?: DoplRuntime;
   /**
@@ -200,7 +210,11 @@ export function withWorkspaceAuth(
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,
         role: membership.role,
-        runtime: readRuntimeHeader(request),
+        // The header's CLAIM, bounded by the credential that presented it: an
+        // agent token can never buy the `desktop-ui` stamp (runtime-header.ts).
+        runtime: narrowRuntime(readRuntimeHeader(request), {
+          agentCredential: !!ctx.agentTokenId,
+        }),
         appVersion: readAppVersionHeader(request),
         sessionId: readSessionIdHeader(request),
         params: ctx.params,

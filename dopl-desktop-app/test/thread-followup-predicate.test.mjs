@@ -59,25 +59,33 @@ const myCreate = (over = {}) => ({
   },
 });
 
-test("Q3b DIRECTION 1 — an EXTERNAL agent's create still opens NOTHING", async () => {
-  const h = withRecord(record());
-  await h.dispatch(dm(), myCreate());
-  assert.deepEqual([h.calls.launch, h.calls.shell, h.calls.startSession], [[], [], []]);
-  assert.deepEqual([h.calls.trigger, h.calls.fyi, h.calls.taskNotify], [[], [], []]);
+test("Q3b DIRECTION 1 — an EXTERNAL, UNSTAMPED create still opens NOTHING", async () => {
+  // Whatever author kind it declares: since 2026-08-05 (rollback §3.4) the runtime STAMP is
+  // the whole of what routes a self-authored create, and an external session has none.
+  for (const authorKind of ["agent", "user"]) {
+    const h = withRecord(record());
+    await h.dispatch(dm(), myCreate({ authorKind }));
+    assert.deepEqual([h.calls.launch, h.calls.arm, h.calls.startSession], [[], [], []], authorKind);
+    assert.deepEqual([h.calls.trigger, h.calls.fyi, h.calls.taskNotify], [[], [], []], authorKind);
+  }
 });
 
 test("Q3b DIRECTION 2 — a DESKTOP-STAMPED create still launches its requester session", async () => {
   const h = withRecord(record());
   await h.dispatch(dm(), myCreate({ runtime: "desktop-session" }));
   assert.equal(h.calls.launch.length, 1, "route (2) still claims it");
-  assert.deepEqual([h.calls.shell, h.calls.startSession, h.calls.trigger], [[], [], []]);
+  assert.deepEqual([h.calls.arm, h.calls.startSession, h.calls.trigger], [[], [], []],
+    "and a spawned session's create arms no request strip");
 });
 
-test("Q3b DIRECTION 3 — a HUMAN-TYPED unstamped create still opens the requester shell", async () => {
+test("Q3b DIRECTION 3 — the operator's TYPED create takes that same route, plus the strip", async () => {
+  // Rollback §3.4: one initiating behaviour. The dormant shell is gone; `desktop-ui` is a
+  // server-written stamp, so this is a full requester session like any other.
   const h = withRecord(record());
-  await h.dispatch(dm(), myCreate({ authorKind: "user" }));
-  assert.equal(h.calls.shell.length, 1, "route (4) still claims it");
-  assert.deepEqual([h.calls.launch, h.calls.startSession, h.calls.trigger], [[], [], []]);
+  await h.dispatch(dm(), myCreate({ authorKind: "user", runtime: "desktop-ui" }));
+  assert.equal(h.calls.launch.length, 1, "route (2) claims it too");
+  assert.equal(h.calls.arm.length, 1, "and the request strip opens at 'sent'");
+  assert.deepEqual([h.calls.startSession, h.calls.trigger], [[], []]);
 });
 
 // ── 3. THE TAG READER + THE RECORD TEST, as truth tables ─────────────────────────

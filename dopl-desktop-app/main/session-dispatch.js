@@ -11,10 +11,17 @@
 //       inbound COUNTERPARTY reply as its NEXT TURN (the loop continuation, no new
 //       consent modal). FIX L1: ONLY the task's actual other party feeds; a THIRD
 //       member posting in the same channel can never inject a turn.
-//   (2) maybeOpenRequesterSession — MY OWN first-class create_task addressed to a peer
-//       auto-opens a REQUESTER window that drives the task. One window per (channel,
+//   (2) maybeOpenRequesterSession — MY OWN first-class thread opener addressed to a peer
+//       auto-opens a REQUESTER window that drives the thread. One window per (channel,
 //       task); a cap/no-sdk/disabled skip returns false → classify 'ignore's my own
 //       message (today's behavior), with a passive local notice on a window cap.
+//       ONE BEHAVIOUR, NOT TWO (2026-08-05, rollback plan §3.4): this claims BOTH desktop
+//       runtimes now — a session this app spawned AND the operator typing in the app's own
+//       UI. There used to be a fifth route opening a dormant SHELL for the second case,
+//       because the app's UI posted with no runtime stamp and the only thing left to route
+//       on was a caller-asserted author kind. main/ui-bridge.js stamps `desktop-ui` now, so
+//       the evidence is server-side and both cases start the agent. The shell — and its
+//       predicate, its route and its park entry point — is DELETED, not disabled.
 //   (3) maybeSurfaceRequesterReply — a peer reply in a task I REQUESTED whose live
 //       window has already SETTLED. v2.5 D1 REPLACES the v2.2 bounded auto-resume:
 //       the same trigger and the same window surfacing, but the reply is HELD at the
@@ -26,12 +33,10 @@
 //       predicate (taskCreatedBy === me && author === the task's target) WITHOUT
 //       perturbing classify's 1536-case table. `false` (no record at all) falls through
 //       to classify, where the 'task-reply' verdict still fires the passive notice.
-//   (4) maybeOpenRequesterShell — MY OWN, HUMAN-TYPED create addressed to a peer (the request
-//       the operator types in the app's web view, which carries no desktop runtime stamp)
-//       opens a PINNED SHELL: window + transcript, agent NOT started. See the route.
-//   (5) noteRequestLifecycle — NOT a route. An observation the listener makes ahead of all of
-//       the above, advancing that shell's status line from lifecycle events already on the wire.
-//   (6) maybeReopenAddressedThread — THE ONE POST-CLASSIFY ROUTE. A peer's FOLLOW-UP to an
+//   (4) noteRequestLifecycle — NOT a route. An observation the listener makes ahead of all of
+//       the above, advancing the request status line on the session route (2) opened for the
+//       operator's OWN typing, from lifecycle events already on the wire.
+//   (5) maybeReopenAddressedThread — THE ONE POST-CLASSIFY ROUTE. A peer's FOLLOW-UP to an
 //       exchange this machine already answered reopens THAT window instead of raising a second
 //       consent. It runs from the listener's 'trigger' branch, not from the pre-classify list;
 //       the route states why below.
@@ -40,7 +45,7 @@ const settings = require('./settings');
 const targeting = require('./targeting');
 const io = require('./listener-io');
 const roster = require('./channel-roster'); // 2026-08-01: WHO wrote the message being fed
-const store = require('./session-store'); // (6): the durable record that says this exchange ran here
+const store = require('./session-store'); // (5): the durable record that says this exchange ran here
 const sessionEngine = require('./session-engine');
 const { notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
@@ -101,9 +106,16 @@ function feedLiveSession(entry, m, myUserId) {
 // visible effect is "no window opened", which is also exactly what an EXTERNAL
 // session's create is supposed to look like. If the server ever stops stamping
 // (a desktop shipped ahead of the server, a header renamed, a proxy dropping
-// X-Dopl-Runtime), desktop-spawned requester windows silently stop opening and
-// nothing in the logs says why. So when a message clears every conjunct EXCEPT
-// the stamp, name the stamp we actually saw.
+// X-Dopl-Runtime), desktop requester windows silently stop opening and nothing
+// in the logs says why. So when a message clears every conjunct EXCEPT the
+// stamp, name the stamp we actually saw.
+//
+// 2026-08-05: there are TWO stamps to miss now, and the second widened what this
+// line has to explain. An unstamped create is the EXPECTED shape for the
+// operator's external Claude Code session — but it is also what the app's own UI
+// looks like when main stopped attaching the header (ui-bridge.js) or the server
+// refused it (an agent credential claiming `desktop-ui`), and that failure is
+// invisible everywhere else.
 function diagRuntimeGateSkip(m, myUserId) {
   if (!m || m.kind !== 'message' || !myUserId) return;
   if (!targeting.firstClassTaskId(m)) return;
@@ -112,11 +124,12 @@ function diagRuntimeGateSkip(m, myUserId) {
   const target = targeting.metaStr(m, 'taskTarget');
   if (!target || target === myUserId) return;
   const stamp = targeting.metaStr(m, 'runtime');
-  if (stamp === 'desktop-session') return; // not the runtime conjunct that refused
+  if (targeting.DESKTOP_RUNTIMES.indexOf(stamp) !== -1) return; // not the runtime conjunct that refused
   diag(
     'requester window skipped: metadata.runtime',
     stamp ? `'${stamp}'` : '(absent)',
-    "!== 'desktop-session' — expected for my EXTERNAL session (it awaits the reply itself); if this WAS a desktop-spawned session, the server is not stamping the X-Dopl-Runtime header (version skew)"
+    'is neither', targeting.DESKTOP_RUNTIMES.join(' nor'),
+    '— expected for my EXTERNAL session (it awaits the reply itself); if this WAS this app, the X-Dopl-Runtime stamp is not reaching the message (version skew, or a credential the server refused the desktop-ui claim to)'
   );
 }
 
@@ -154,6 +167,15 @@ async function maybeOpenRequesterSession(entry, m, myUserId) {
   });
   if (res && res.sessionId) {
     diag('requester session opened', String(res.sessionId).slice(0, 8), 'task', taskId.slice(0, 8));
+    // THE REQUEST LIFECYCLE STRIP, armed for the OPERATOR'S OWN typing only (2026-08-05).
+    // It answers a question this session cannot: the peer's Accept and Decline arrive as
+    // task_started / task_failed MILESTONES, and every route here gates on
+    // kind === 'message', so the running agent never sees either. A session-posted create
+    // is left exactly as it was — that session is already narrating in its own window, and
+    // "the request I sent" is not a statement it is making.
+    if (targeting.requesterTypedByOperator(m)) {
+      sessionEngine.armRequestStatus({ channelId: entry.channel.id, taskId });
+    }
     return true;
   }
   diag('requester session not opened:', (res && res.skipped) || 'unknown');
@@ -183,65 +205,21 @@ async function maybeSurfaceRequesterReply(entry, m, myUserId) {
   if (ok) diag('requester reply gated', 'task', taskId.slice(0, 8));
   return ok;
 }
-// (4) THE OPERATOR'S OWN TYPED REQUEST -> A PINNED SHELL (2026-08-02).
-//
-// THE GAP: a request the operator types in the app's own web view opened NOTHING on their
-// machine. The view posts from the browser (cookies, no X-Dopl-Runtime header), so the server
-// stamps no `runtime` key, and route (2)'s WAKE-V1 conjunct — written so a thread my EXTERNAL
-// Claude Code session opened would not get a competing window — refused it for exactly the same
-// reason it refuses an external agent's create. Clicking the thread later opened history with no
-// session, and the peer's accept or decline was invisible until a reply arrived.
-//
-// Runs AFTER route (2), so a DESKTOP-spawned session's create is claimed there and never gets
-// here; targeting.requesterShellOpen ALSO refuses a stamped message, so the two are exclusive in
-// both directions rather than by ordering alone. An EXTERNAL agent's create is refused by the
-// author-kind conjunct and still opens nothing at all.
-//
-// A SHELL, NOT A SESSION. openRequesterShell opens the window and starts no query, which is what
-// makes it safe to open on a caller-asserted author kind: it spends nothing, posts nothing and
-// wakes only on the operator's own turn or an accepted reply. It counts against the same
-// MAX_WINDOWS budget as every other shell and is evictable while the operator has not touched it.
-async function maybeOpenRequesterShell(entry, m, myUserId) {
-  if (!settings.getWindowMode()) return false;
-  if (!targeting.requesterShellOpen(m, myUserId)) return false;
-  const taskId = targeting.firstClassTaskId(m);
-  if (sessionEngine.hasLiveSession({ channelId: entry.channel.id, taskId })) return true;
-  const target = targeting.metaStr(m, 'taskTarget');
-  const res = await sessionEngine.openRequesterShell({
-    channelId: entry.channel.id,
-    taskId,
-    workspaceId: entry.workspaceId,
-    counterpartyId: target, // FIX L1 binding: only this member's replies may ever feed the shell
-    direct: entry.channel.isDirect === true, // H2: in a DM the server addresses this session's posts
-    context: {
-      channelName: entry.channel.name,
-      taskTitle: targeting.metaStr(m, 'taskTitle'),
-      authorName: io.displayNameFor(target), // startSession reads counterpartyName off this
-      channelId: entry.channel.id,
-      workspaceId: entry.workspaceId,
-      taskId,
-    },
-  });
-  // ONE DIAG LINE PER AUTO-OPEN, and one per refusal with its reason. Ids only, as 8-char
-  // prefixes: no request body, no thread title, no member id.
-  if (res && res.ok) {
-    diag('requester shell opened', entry.channel.id.slice(0, 8), 'thread', taskId.slice(0, 8));
-    return true;
-  }
-  diag('requester shell not opened', entry.channel.id.slice(0, 8), 'thread', taskId.slice(0, 8),
-    'reason', (res && res.reason) || 'unknown');
-  return false;
-}
-
-// (5) THE REQUEST LIFECYCLE STRIP — AN OBSERVATION, NOT A ROUTE.
+// (4) THE REQUEST LIFECYCLE STRIP — AN OBSERVATION, NOT A ROUTE.
 //
 // It claims no message and short-circuits nothing: the listener calls it ahead of the routes,
 // the same way it observes the peer's stamped build, because the events it reads are already
 // spoken for or reach nobody. A peer's reply belongs to route (1); the milestones reach no route
 // at all (every one of them gates on kind === 'message'). All this does is advance the small
-// status line on the shell the operator's own request opened. A session with no strip — every
-// responder, every team shell, every plain reopen — is untouched, because only openRequesterShell
-// arms one.
+// status line on the session the operator's own typed request opened. A session with no strip —
+// every responder, every team shell, every plain reopen, and every requester session a SPAWNED
+// session's create opened — is untouched, because route (2) arms one only for `desktop-ui`.
+//
+// IT OUTLIVED THE SHELL IT WAS BUILT FOR (2026-08-05). The strip shipped on a dormant requester
+// SHELL; that shell is gone and the operator's typed request now opens a full session instead.
+// The line survives because the question it answers survives and the session cannot answer it:
+// Accept and Decline arrive as task_started / task_failed MILESTONES, and every route in this
+// file gates on kind === 'message', so the running agent never sees either one.
 //
 // The three transitions are exactly the facts on the wire:
 //   task_started by the peer -> Accepted. They took the request.
@@ -271,7 +249,7 @@ function noteRequestLifecycle(entry, m, myUserId) {
   return true;
 }
 
-// (6) THE FOLLOW-UP REOPENS THE WINDOW THAT ANSWERED IT (2026-08-02).
+// (5) THE FOLLOW-UP REOPENS THE WINDOW THAT ANSWERED IT (2026-08-02).
 //
 // THE INCIDENT, from a real transcript. A peer's external session posted an UNTAGGED request;
 // this machine minted the ad-hoc thread tag `task-<channel>-<seq>`, raised consent, and a pair
@@ -285,7 +263,7 @@ function noteRequestLifecycle(entry, m, myUserId) {
 // through to classify -> 'trigger' -> a BRAND NEW consent window, sitting next to the window
 // that holds the exchange it was answering.
 //
-// WHY IT IS POST-CLASSIFY, AND THE ONLY ONE. The four routes above exist because classify would
+// WHY IT IS POST-CLASSIFY, AND THE ONLY ONE. The three routes above exist because classify would
 // reach the WRONG VERDICT for the messages they claim. Here classify is right: this really is a
 // request addressed to me and it really does want a decision. What is wrong is WHERE the
 // decision is asked for. So the seam belongs at the verdict -> action boundary, and putting it
@@ -387,9 +365,8 @@ module.exports = {
   feedLiveSession,
   maybeOpenRequesterSession,
   maybeSurfaceRequesterReply,
-  maybeOpenRequesterShell, // (4) the operator's own typed request
-  noteRequestLifecycle, // (5) the strip observer — claims nothing
-  maybeReopenAddressedThread, // (6) POST-classify: a peer's follow-up reopens the window that answered
+  noteRequestLifecycle, // (4) the strip observer — claims nothing
+  maybeReopenAddressedThread, // (5) POST-classify: a peer's follow-up reopens the window that answered
   exchangeTag, // ...and its two helpers, exported for the truth table
   reopenableRecord,
 };

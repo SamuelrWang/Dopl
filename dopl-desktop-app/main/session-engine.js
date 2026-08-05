@@ -253,7 +253,7 @@ async function startSession(spec, sdk) {
   //
   // FIX 1b (BLOCKER, 2026-08-02) — ...AND ONLY THE SPAWN THAT ADOPTS THAT CARD MAY SPEND IT. The
   // entry is keyed sessionKey(channelId, taskId), the SAME key recreateParkedShell,
-  // openFromChannel, startResume and openRequesterShell all spawn under, and this read ran on
+  // openFromChannel and startResume all spawn under, and this read ran on
   // every one of them: a pending card armed a PEER-DRIVEN shell wake at bypass/auto_both (see
   // `operatorArmed` below), and the operator's own later Accept then started at manual/ask
   // because the arm was already spent. launch() alone sets `adoptsConsent`, off the same
@@ -488,7 +488,7 @@ module.exports = {
   acceptsInboundFrom: sessionTeam.acceptsInboundFrom, // D2 — the pair fence vs the room binding
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell
-  openRequesterShell: sessionPark.openRequesterShell, // 2026-08-02 — the operator's OWN typed request opens a PINNED shell
+  armRequestStatus: sessionPark.armRequestStatus, // 2026-08-05 — the request strip on the operator's OWN typed request
   noteRequestStatus: sessionPark.noteRequestStatus, // ...and its lifecycle strip advances from wire events only
   openConsentWindow, // consent reflow (item 8) — called by trigger.js
   decideConsent: sessionConsent.decide,

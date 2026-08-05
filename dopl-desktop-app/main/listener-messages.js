@@ -45,8 +45,8 @@ async function dispatchMessage(entry, m, myUserId) {
   // skew read is: the events that say what happened to a request the operator sent are events
   // some route below is about to claim (a peer's reply) or that no route reads at all (the
   // milestones — every route gates on kind === 'message'). It claims nothing, short-circuits
-  // nothing and changes no verdict; it advances one status line on the shell route (4) opened,
-  // and answers false for every session that never sent a request.
+  // nothing and changes no verdict; it advances one status line on the session route (2) opened
+  // for the operator's OWN typing, and answers false for every session that never sent a request.
   sessionDispatch.noteRequestLifecycle(entry, m, myUserId);
   // D2 — ADDRESSING WINS, so it is checked FIRST. A message naming one of THIS operator's
   // agents (`metadata.to_agent_id`) belongs to that agent's own session and to nothing
@@ -69,17 +69,17 @@ async function dispatchMessage(entry, m, myUserId) {
   if (routed) return; // 'fed' or 'refused': either way the message is spoken for
   // v2.2 session-window dispatch, checked BEFORE classify → consent (§A.2):
   //   1. feed a LIVE session's next turn; 2. auto-open a REQUESTER window on my
-  //   own create_task; 3. reopen a SETTLED-yet-resumable requester on a peer reply.
+  //   own thread opener; 3. reopen a SETTLED-yet-resumable requester on a peer reply.
+  //
+  // THERE WERE FOUR (2026-08-05, rollback plan §3.4). A fourth route opened a dormant SHELL
+  // for the request the operator typed in the app's own UI, because that post carried no
+  // runtime stamp and route 2 refused it for exactly the conjunct written to keep an EXTERNAL
+  // Claude Code session from getting a competing window. main/ui-bridge.js stamps `desktop-ui`
+  // now, so route 2 claims the operator's typing as well and starts the agent on it — one
+  // initiating behaviour instead of two. An UNSTAMPED create still reaches no route at all.
   if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
   if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
   if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;
-  //   4. open a PINNED SHELL for MY OWN, HUMAN-TYPED request to a peer. Route 2 claims a thread
-  //      a DESKTOP-spawned session opened; this claims the one the operator typed in the app's
-  //      web view, which carries no runtime stamp and so looked exactly like an EXTERNAL agent's
-  //      create to route 2. LAST of the four on purpose: it only ever sees my own message, which
-  //      none of the three above can claim, and a stamped create is refused by the predicate as
-  //      well as by this ordering.
-  if (await sessionDispatch.maybeOpenRequesterShell(entry, m, myUserId)) return;
   // FIX B1: say so when the "address to act" law is being evaluated against a roster this
   // run has never successfully read. The count classify uses is then the durable last-known
   // one (or 0 for a channel never known to hold agents), which fails CLOSED toward the law —
@@ -96,9 +96,9 @@ async function dispatchMessage(entry, m, myUserId) {
     'to', targeting.metaStr(m, 'to_user_id') ? String(targeting.metaStr(m, 'to_user_id')).slice(0, 8) : '-',
     'verdict', verdict
   );
-  // ROUTE (6) — REOPEN IN PLACE, and it is the ONE route that runs AFTER classify.
+  // ROUTE (5) — REOPEN IN PLACE, and it is the ONE route that runs AFTER classify.
   //
-  // The four routes above are pre-classify because classify reaches the WRONG VERDICT for the
+  // The three routes above are pre-classify because classify reaches the WRONG VERDICT for the
   // messages they claim. This one is different: 'trigger' is the RIGHT verdict for a peer's
   // follow-up — it is a request addressed to me and it does want a decision — and the only
   // thing wrong is WHERE the decision gets asked for. A follow-up tagged with an exchange this

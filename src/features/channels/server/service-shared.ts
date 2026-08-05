@@ -1,10 +1,7 @@
 import "server-only";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { narrowAppVersion } from "@/shared/auth/app-version-header";
-import {
-  DESKTOP_SESSION_RUNTIME,
-  type DoplRuntime,
-} from "@/shared/auth/runtime-header";
+import { narrowRuntime, type DoplRuntime } from "@/shared/auth/runtime-header";
 import { narrowSessionId } from "@/shared/auth/session-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { ChannelNotFoundError } from "./errors";
@@ -25,11 +22,12 @@ export interface ChannelContext {
   /** Caller's workspace role; null when the auth layer didn't resolve one. */
   role: Role | null;
   /**
-   * Which agent runtime the request speaks for — `desktop-session` for a
-   * session the desktop app spawned, undefined for everything else (the web
-   * UI, an external Claude Code session, a script). Server-resolved from the
-   * `X-Dopl-Runtime` header by the auth layer; the write path stamps it onto
-   * a message as the reserved `metadata.runtime` key.
+   * Which Dopl runtime the request speaks for — `desktop-session` for a session
+   * the desktop app spawned, `desktop-ui` for the operator typing in the app's
+   * own UI window, undefined for everything else (an external Claude Code
+   * session, a script, a browser). Server-resolved from the `X-Dopl-Runtime`
+   * header by the auth layer and bounded by the credential; the write path
+   * stamps it onto a message as the reserved `metadata.runtime` key.
    */
   runtime?: DoplRuntime;
   /**
@@ -68,12 +66,13 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     // Re-narrowed here rather than trusted as-is: the auth layer already
-    // exact-matches the header, and a second check means no other construction
-    // path can widen what counts as a desktop session.
-    runtime:
-      auth.runtime === DESKTOP_SESSION_RUNTIME
-        ? DESKTOP_SESSION_RUNTIME
-        : undefined,
+    // exact-matches the header AND applies the credential bound, and a second
+    // check through the SAME predicate means no other construction path can
+    // widen what counts as a desktop runtime — in particular, no ctx built off
+    // an agent token can arrive claiming `desktop-ui`.
+    runtime: narrowRuntime(auth.runtime, {
+      agentCredential: !!auth.agentTokenId,
+    }),
     // Same reason, same shape: re-run the header's own predicate so a version
     // that reaches an operator's screen is a version, whatever built this ctx.
     appVersion: narrowAppVersion(auth.appVersion),

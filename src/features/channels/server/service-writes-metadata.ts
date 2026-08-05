@@ -1,5 +1,4 @@
 import "server-only";
-import { DESKTOP_SESSION_RUNTIME } from "@/shared/auth/runtime-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import type { ChannelMessageCreateInput } from "../schema";
 import type { ChannelRow, ChannelTaskRow } from "./dto";
@@ -289,14 +288,19 @@ export interface PostMetadataOptions {
  *    user and the agent runs on that user's machine. The message's
  *    `author_user_id` is untouched — an agent id supplements an author, it
  *    never replaces one.
- * 5. **Runtime stamp (WAKE-V1).** `runtime` is reserved: stripped from caller
- *    metadata unconditionally, then re-stamped as `desktop-session` only when
- *    the REQUEST carried `X-Dopl-Runtime: desktop-session` (resolved by the
- *    auth layer into `ctx.runtime`). Absent header → no key at all, which is
- *    what an external agent's message looks like. This is the single stamping
- *    point precisely because the desktop reads the key to decide whether to
- *    open a requester window: a caller that could set it in `metadata` could
- *    make its own external post masquerade as a desktop session.
+ * 5. **Runtime stamp (WAKE-V1; `desktop-ui` added 2026-08-05).** `runtime` is
+ *    reserved: stripped from caller metadata unconditionally, then re-stamped
+ *    from `ctx.runtime` — which the auth layer resolved from
+ *    `X-Dopl-Runtime` AND bounded by the presented credential
+ *    (`narrowRuntime`). Two values reach here: `desktop-session` (a session the
+ *    desktop app spawned) and `desktop-ui` (the operator typing in the app's own
+ *    UI window, which only a first-party SESSION credential may claim — an
+ *    agent token is refused upstream). No recognized header → no key at all,
+ *    which is what an external agent's message looks like, and is what keeps an
+ *    external MCP post opening nothing on the sender's machine. This is the
+ *    single stamping point precisely because the desktop reads the key to decide
+ *    whether to open a requester window: a caller that could set it in
+ *    `metadata` could make its own external post masquerade as either.
  * 6. **App-version stamp (Q10).** `appVersion` is reserved on exactly the same
  *    terms as `runtime`: stripped from caller metadata unconditionally, then
  *    re-stamped only from the REQUEST's `X-Dopl-App-Version` header (resolved
@@ -368,10 +372,10 @@ export async function resolvePostMetadata(
   // `request`, the same discipline `runtime` gets one fold down.
   if (input.intent) metadata.intent = input.intent;
 
-  // Server-stamped from the request's own header, never from the payload.
-  if (ctx.runtime === DESKTOP_SESSION_RUNTIME) {
-    metadata.runtime = DESKTOP_SESSION_RUNTIME;
-  }
+  // Server-stamped from the request's own header, never from the payload — and
+  // `ctx.runtime` is already the NARROWED value (an unrecognized label, or a
+  // `desktop-ui` claim from an agent token, arrived here as undefined).
+  if (ctx.runtime) metadata.runtime = ctx.runtime;
   if (ctx.appVersion) metadata.appVersion = ctx.appVersion;
   // F2, same rule again: the header or nothing. Stamped verbatim — the value is
   // the caller's own slot key and the server has no opinion about its content

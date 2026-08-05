@@ -241,67 +241,31 @@ async function openFromChannel(a, key) {
   return { ok: true };
 }
 
-// ── THE REQUESTER SHELL (2026-08-02) ─────────────────────────────────────────────
-// The operator typed a request into the app's own web view, addressed to a peer, and their
-// OWN machine did nothing with it: no window, no session, and the peer's accept or decline
-// stayed invisible until a reply landed. This opens the same dormant shell the reopen path
-// builds — a window, the thread's transcript, and NO agent — so the request has somewhere
-// to live and somewhere to say what happened to it.
-//
-// DELIBERATELY THE RECREATE MACHINERY, NOT A NEW SHELL KIND. `parkedShell: true` is the one
-// flag that suppresses the query (startSession returns before it can start one), the shell
-// then wakes lazily on the operator's first turn or an accepted inbound exactly like every
-// other parked shell, and it is evictable while untouched, so a run of sent requests cannot
-// permanently own the window budget.
-//
-// IT KNOWS MORE THAN openFromChannel DOES, which is why it does not route through it: the
-// opening message already names the counterparty, the thread title and the workspace, so
-// nothing is re-resolved from the channel and the shell is bound to the right peer even in
-// a GROUP channel (where openFromChannel resolves no counterparty at all).
-//
-// FAIL RESTRICTIVE on the one thing it cannot know. A thread created seconds ago has no
-// durable record here, so there is no stored profile: it opens read_only, the same answer a
-// record-less shell and a corrupt record both get. `side` is 'requester' because the goal is
-// the operator's own, addressed outward.
-async function openRequesterShell(a) {
-  if (!deps || !deps.windowFactoryReady()) return { ok: false };
-  const channelId = String((a && a.channelId) || '');
-  const taskId = String((a && a.taskId) || '');
-  const key = store.sessionKey(channelId, taskId);
-  const existing = deps.sessions.get(key);
-  if (existing && !existing.settled) return { ok: true }; // one shell per thread
-  if (atCapAfterEvict()) return { ok: false, reason: 'busy' }; // the SAME shared window budget
-  const s = await deps.startSession({
-    key, channelId, taskId, workspaceId: (a && a.workspaceId) || null,
-    side: 'requester', profile: knownProfile(undefined), mode: 'interactive',
-    counterpartyId: (a && a.counterpartyId) || null, direct: !!(a && a.direct === true),
-    context: (a && a.context) || {},
-    resumeSdkId: null, turns: 0, costUsd: 0,
-    parkedShell: true, // the window opens; the agent starts on a typed turn or an accepted reply
-  }, null);
-  if (!s) return { ok: false };
-  armRequestStatus(s); // the strip opens at "sent" — the request is already on the wire
-  if (deps.loadHistory) {
-    try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
-  }
-  return { ok: true };
-}
-
 // ── THE REQUEST LIFECYCLE STRIP (2026-08-02) ─────────────────────────────────────
 // What happened to the request the operator sent, as one line in the window chrome. Every
-// state is read off events ALREADY on the wire and none of them starts anything: opening the
-// shell is 'sent', the peer's task_started is 'accepted', a task_failed carrying the calm
-// `declined` flag is 'declined', and the peer's first reply is 'replied'. The value rides the
-// session object and leaves as a display payload — no reducer event — so nothing on this path
-// can wake a parked shell, push a turn or resolve a permission.
+// state is read off events ALREADY on the wire and none of them starts anything: the request
+// is 'sent' the moment its window opens, the peer's task_started is 'accepted', a task_failed
+// carrying the calm `declined` flag is 'declined', and the peer's first reply is 'replied'.
+// The value rides the session object and leaves as a display payload — no reducer event — so
+// nothing on this path can wake a parked shell, push a turn or resolve a permission.
+//
+// IT OUTLIVED THE SHELL IT SHIPPED ON (2026-08-05, rollback plan §3.4). The strip was armed by
+// `openRequesterShell`, which opened a DORMANT window for the request the operator typed in the
+// app's own UI because that post carried no runtime stamp and could not be told from an external
+// agent's. The app stamps its own posts now, so that request opens a FULL requester session and
+// the shell entry point is deleted. The line stays because the question it answers is one the
+// session cannot: Accept and Decline reach this machine as task_started / task_failed MILESTONES,
+// and every listener route gates on kind === 'message', so the running agent never sees either.
 //
 // MONOTONIC, never a downgrade. Messages are read a page at a time and a milestone can be
 // seen after the reply that followed it, so an out-of-order task_started must not walk the
 // strip back from "Reply received". Only a strictly higher rank paints.
 //
-// ARMED, NOT AMBIENT. `requestStatus` is set ONLY by openRequesterShell above, so a
-// responder session, a summoned team shell and a plain reopened thread all read undefined
-// here and note nothing. That is what keeps the line meaning "the request I sent".
+// ARMED, NOT AMBIENT. `requestStatus` is set ONLY by {@link armRequestStatus}, whose ONE caller
+// is the requester route's `desktop-ui` arm (session-dispatch) — so a responder session, a
+// summoned team shell, a plain reopened thread and a requester session a SPAWNED session's
+// create opened all read undefined here and note nothing. That is what keeps the line meaning
+// "the request I typed".
 const REQUEST_STATUS_RANK = { sent: 0, accepted: 1, declined: 2, replied: 3 };
 
 // The rank of a status word, or undefined for anything that is not one of the four. Read through
@@ -313,9 +277,20 @@ function requestRank(status) {
   return Object.prototype.hasOwnProperty.call(REQUEST_STATUS_RANK, status) ? REQUEST_STATUS_RANK[status] : undefined;
 }
 
-function armRequestStatus(s) {
+// Open the strip at 'sent' on the session occupying this (channel, thread) slot. SLOT-KEYED
+// rather than handed a session object, because its caller is the listener route and the route
+// has the slot, not the registry entry. TRUE only when a strip was actually armed: no live
+// session, or one already armed, changes nothing and says so — re-arming would walk an
+// 'accepted' line back to 'sent' on a message read twice.
+function armRequestStatus(a) {
+  if (!deps || !deps.sessions) return false;
+  const key = store.sessionKey(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
+  const s = deps.sessions.get(key);
+  if (!s || s.settled) return false;
+  if (requestRank(s.requestStatus) !== undefined) return false;
   s.requestStatus = 'sent';
   deps.emit(s, { type: 'request_status', status: 'sent' });
+  return true;
 }
 
 // Advance the strip on a session that has one. TRUE only when it actually moved, so the
@@ -477,8 +452,8 @@ module.exports = {
   resumeParked,
   recreateParkedShell,
   openFromChannel, // Q6b: the record-less shell (exported for the test; recreateParkedShell is the caller)
-  openRequesterShell, // 2026-08-02: the pinned shell for the operator's OWN typed request
-  noteRequestStatus, // ...and the lifecycle strip that shell carries
+  armRequestStatus, // 2026-08-05: the lifecycle strip, opened at 'sent' by the requester route
+  noteRequestStatus, // ...and advanced by the listener's wire observations
   evictIdleShell, // FIX #7: LRU relief for the shared window budget
   atCapAfterEvict, // AUDIT D4: the engine's launch / openConsentWindow cap branches use it too
   emitParkedShell,

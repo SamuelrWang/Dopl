@@ -333,6 +333,9 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
       "Desktop-Session",
       "desktop",
       "desktop-session-x",
+      "Desktop-UI",
+      "desktop-ui-x",
+      "desktop_ui",
       "external",
       "",
     ]) {
@@ -341,6 +344,54 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
       );
       expect(await res.json()).toEqual({ runtime: null });
     }
+  });
+
+  /**
+   * THE CREDENTIAL BOUND on `desktop-ui` (2026-08-05, rollback plan §3.4).
+   *
+   * A header cannot attest who called — the API is public and anything holding a
+   * credential can set one. What the server CAN do is refuse to stamp a claim the
+   * presented credential does not support, and `desktop-ui` claims a PERSON typing
+   * in the desktop app's own UI window. That is a first-party session credential
+   * by construction (main/ui-bridge.js attaches the app's Supabase JWT bearer), so
+   * an AGENT token — every remote-MCP caller, every external Claude Code session,
+   * every device-token script — is refused it outright. `desktop-session` is
+   * deliberately NOT bounded that way: a desktop-spawned session authenticates
+   * with exactly that device token, and requiring a session credential would
+   * refuse the caller the value was invented for.
+   *
+   * This is what makes rollback §3.4's third case hold: an external MCP post
+   * cannot buy itself the requester window the operator's own typing gets.
+   */
+  describe("the desktop-ui credential bound", () => {
+    it("a SESSION caller may claim desktop-ui", async () => {
+      grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+      const res = await echoRuntime(
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-ui" })
+      );
+      expect(await res.json()).toEqual({ runtime: "desktop-ui" });
+    });
+
+    it("an AGENT-TOKEN caller sending the same header gets NO stamp", async () => {
+      grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+      state.token = { userId: "user-1", scopes: ["dopl.write"], tokenId: "tok-1" };
+      const res = await echoRuntime(
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-ui" })
+      );
+      expect(await res.json()).toEqual({ runtime: null });
+    });
+
+    it("...and that SAME caller still gets desktop-session, which is its own lane", async () => {
+      grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+      state.token = { userId: "user-1", scopes: ["dopl.write"], tokenId: "tok-1" };
+      const res = await echoRuntime(
+        req("/api/x", {
+          "x-workspace-id": UUID_A,
+          "x-dopl-runtime": "desktop-session",
+        })
+      );
+      expect(await res.json()).toEqual({ runtime: "desktop-session" });
+    });
   });
 });
 

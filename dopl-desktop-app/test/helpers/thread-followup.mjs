@@ -78,7 +78,7 @@ export const BODY = "one more thing — can you also check the staging config?";
 export function harness(over = {}) {
   const cfg = { windowMode: true, records: {}, sdkIds: {}, capAt: null, messageMode: "ask", ...over };
   const calls = {
-    trigger: [], fyi: [], taskNotify: [], escalate: [], launch: [], shell: [],
+    trigger: [], fyi: [], taskNotify: [], escalate: [], launch: [], arm: [],
     startSession: [], recordReads: [], history: [], notices: [], effects: [], evicted: [], diag: [],
   };
   const sessions = new Map();
@@ -162,14 +162,17 @@ export function harness(over = {}) {
     feedInbound: (a) => gate.feedInbound(a),
     feedInboundForTask: (a) => gate.feedInboundForTask(a),
     launchRequesterSession: async (a) => { calls.launch.push(a); return { sessionId: "sess-1" }; },
-    openRequesterShell: async (a) => { calls.shell.push(a); return { ok: true }; },
+    // 2026-08-05 (rollback §3.4): the requester SHELL is gone. The operator's typed request
+    // now takes the SAME launch a spawned session's create takes, and arms the display-only
+    // request strip on top of it.
+    armRequestStatus: (a) => { calls.arm.push(a); return true; },
     noteRequestStatus: () => false,
   };
   const routes = new Function(
     "settings", "targeting", "sessionEngine", "io", "roster", "store", "notifyLocal", "diag",
     `${DISPATCH_BLOCK}
      return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply,
-              maybeOpenRequesterShell, noteRequestLifecycle, maybeReopenAddressedThread,
+              noteRequestLifecycle, maybeReopenAddressedThread,
               exchangeTag, reopenableRecord };`
   )(
     { getWindowMode: () => cfg.windowMode }, targeting, sessionEngine,

@@ -299,101 +299,91 @@ const {
 } = require('./legacy-threads');
 
 
-// ── Requester auto-open detector (v1.9, Q4) ──────────────────────────────────
-// TRUE iff this message is MY OWN first-class create_task addressed to a peer, so
-// the desktop opens a REQUESTER session window that drives the task. Checked by the
+// ── The two DESKTOP runtime stamps (src/shared/auth/runtime-header.ts) ───────
+// `desktop-session` — a session THIS APP spawned (sdk-loader / mcp-config send the
+//   header on the device token).
+// `desktop-ui` — the operator typing in THIS APP'S OWN UI window. Its posts leave
+//   main, not the renderer (main/ui-bridge.js builds every header; the preload exposes
+//   no header surface), on the operator's own SESSION credential — and the server
+//   refuses that value to any agent credential, so an external MCP caller cannot claim
+//   it by sending the header.
+// Both are values the SERVER writes into the reserved `metadata.runtime` key; a
+// caller-supplied copy in the message body is always stripped.
+const DESKTOP_RUNTIMES = ['desktop-session', 'desktop-ui'];
+
+// TRUE iff this message carries one of the two stamps this app produces.
+function desktopRuntime(m) {
+  return DESKTOP_RUNTIMES.indexOf(metaStr(m, 'runtime')) !== -1;
+}
+
+// ── Requester auto-open detector (v1.9, Q4; widened 2026-08-05) ──────────────
+// TRUE iff this message is MY OWN first-class thread opener addressed to a peer, so
+// the desktop opens a REQUESTER session window that drives the thread. Checked by the
 // listener SEPARATELY from classify() — it never touches classify's body, so the
 // 1536-case truth table stays intact and a self-message still classifies 'ignore'
 // for trigger/fyi. The task* keys are stamped SERVER-SIDE (metaStr reads them off
 // metadata), so they cannot be spoofed by the caller.
 //
 //   - firstClassTaskId(m) present   → a real first-class (UUID) task, not legacy.
-//   - m.authorUserId === myId       → MY message (my agent posted the create_task).
+//   - m.authorUserId === myId       → MY message (I, or my agent, opened the thread).
 //   - taskCreatedBy === myId        → I created the task (the requester, not a peer).
-//   - runtime === 'desktop-session' → a session THIS APP spawned opened the thread
-//                                     (WAKE-V1; see below).
+//   - a DESKTOP runtime stamp       → this app posted it, from one of its two runtimes
+//                                     (WAKE-V1 + rollback §3.4; see below).
 //   - taskTarget present && !== me  → it is addressed to a PEER (a self-targeted
 //                                     task has no counterparty to drive against).
 // De-dupe (one window per taskId) + backlog suppression + the settled-set are the
 // listener's job; this helper is a pure predicate only.
 //
-// WAKE-V1 RUNTIME GATE. My own agent can open a thread from EITHER runtime: a window
-// this app spawned (sdk-loader sends `X-Dopl-Runtime: desktop-session`, and the server
-// stamps metadata.runtime off that header alone — `runtime` is RESERVED, so a value in
-// the caller's message body is stripped) or the operator's own EXTERNAL Claude Code
-// session, which sends no such header and therefore carries no runtime key at all. An
-// external session now WAITS on the reply itself (it arms a long-held MCP await that
-// wakes it when the peer answers), so auto-opening a desktop requester window for that
-// thread put two agents on one thread and let the window consume the reply the waiting
-// session was armed for. Unstamped (= external, or any non-desktop writer) therefore
-// never auto-opens; the reply reaches the external agent through its await, and this
-// machine's existing passive path (classify 'task-reply' → task-notify's silent banner)
-// is the fallback when nothing is listening.
+// ONE INITIATING BEHAVIOUR, NOT THREE (2026-08-05, docs/CHANNELS-ROLLBACK-PLAN.md §3.4).
+// This used to demand `desktop-session` exactly, which split the operator's own requests
+// into two outcomes for a reason that no longer exists. The app's own UI posted from a
+// BROWSER context — cookies, no header — so the server stamped nothing, the operator's
+// typed request looked exactly like an external agent's create, and the desktop opened a
+// dormant SHELL on the only evidence left (a caller-asserted `authorKind`). The app owns
+// that renderer now and stamps its own posts `desktop-ui`, so the evidence is server-side
+// and the shell has no remaining justification: a user who deliberately flipped the
+// composer to *request* has given clear intent, and BOTH desktop runtimes start the agent.
+// The predicate was NOT loosened to get there — it still demands a server-written stamp;
+// there is simply a second one now.
+//
+// WAKE-V1 RUNTIME GATE, unchanged in what it refuses. The operator's own EXTERNAL Claude
+// Code session sends no such header and therefore carries no runtime key at all. That
+// session WAITS on the reply itself (it arms a long-held MCP await that wakes it when the
+// peer answers), so auto-opening a desktop requester window for its thread would put two
+// agents on one thread and let the window consume the reply the session was armed for.
+// Unstamped — an external agent, a script, a browser — therefore still opens NOTHING; the
+// reply reaches the external agent through its await, and this machine's passive path
+// (classify 'task-reply' → task-notify's silent banner) is the fallback when nothing is
+// listening. Rollback §3.5 changes that deliberately, with an explicit handoff op, and
+// until then it is pinned by test.
 //
 // THE STAMP IS A ROUTING HINT, NOT AN AUTHORIZATION SIGNAL (src/shared/auth/
-// runtime-header.ts §"Header-only, deliberately"). Any holder of a device token can set
-// that header, so `runtime` cannot attest WHO called — it only labels the expected
-// origin. This gate is safe for two other reasons: it fails CLOSED (absence, a
-// near-miss, or a non-string → no window, never a window), and it is one conjunct of an
-// AND whose identity checks are the real bound — the message must be authored by ME and
-// belong to a thread I created. Read alone, the stamp decides nothing.
+// runtime-header.ts §"Header-only, deliberately"). A device-token holder can set the
+// header, so `runtime` cannot attest WHO called — it only labels the expected origin, and
+// the server's own credential bound on `desktop-ui` narrows the population that may claim
+// it rather than proving anything about one caller. This gate is safe for two other
+// reasons: it fails CLOSED (absence, a near-miss, or a non-string → no window, never a
+// window), and it is one conjunct of an AND whose identity checks are the real bound — the
+// message must be authored by ME and belong to a thread I created. Read alone, the stamp
+// decides nothing.
 function requesterTaskOpen(m, myId) {
   if (!m || m.kind !== 'message' || !myId) return false;
   if (!firstClassTaskId(m)) return false;
   if (m.authorUserId !== myId) return false;
   if (metaStr(m, 'taskCreatedBy') !== myId) return false;
-  if (metaStr(m, 'runtime') !== 'desktop-session') return false;
+  if (!desktopRuntime(m)) return false;
   const target = metaStr(m, 'taskTarget');
   return !!target && target !== myId;
 }
 
-// ── Requester SHELL detector (2026-08-02) ────────────────────────────────────
-// TRUE iff this message is MY OWN, HUMAN-TYPED, first-class thread opener addressed to a
-// peer — the request the operator types in the app's own web view. The desktop opens a
-// PINNED SHELL for it: a window plus the thread's transcript, with the agent NOT started.
-//
-// WHY IT IS A SECOND PREDICATE AND NOT A LOOSENED requesterTaskOpen. That helper answers a
-// different question ("should a requester SESSION be launched and driven"), and its WAKE-V1
-// runtime conjunct is load bearing: a thread my EXTERNAL Claude Code session opened must
-// open nothing here, because that session awaits the reply itself and a window would steal
-// it. The app's web view posts from the BROWSER context — cookies, no X-Dopl-Runtime header
-// — so the server stamps no `runtime` key and the operator's own typed request was refused
-// by exactly the conjunct written for external agents. Both are unstamped; the only thing on
-// the wire that separates them is the AUTHOR KIND, and only a shell — which starts nothing,
-// consumes nothing and can be evicted — is safe to open on that evidence.
-//
-//   - firstClassTaskId(m) present   → a real first-class (UUID) thread, not legacy.
-//   - m.authorUserId === myId       → MY message.
-//   - taskCreatedBy === myId        → I opened the thread (server-stamped, §Q4).
-//   - taskTarget present && !== me  → addressed to a PEER.
-//   - authorKind === 'user'         → a PERSON typed it. An 'agent' author is an agent
-//                                     session's create and still opens NOTHING.
-//   - no author_agent_id            → not an as_agent-attributed post. The server stamps that
-//                                     key only from a validated authorAgentId, so an
-//                                     operator's cookie session posting on an agent's behalf
-//                                     is an agent's create no matter what kind it declares.
-//   - runtime !== 'desktop-session' → a thread a DESKTOP-spawned session opened belongs to
-//                                     requesterTaskOpen, which launches a full requester
-//                                     session; this must never open a second window over it.
-//
-// THE AUTHOR KIND IS CALLER-ASSERTED, AND THAT IS ACCEPTABLE HERE. `authorKind` is an
-// optional field on the post; the server derives it from the credential only when the caller
-// omits it. So it is a ROUTING HINT, not an attestation — the same class of signal `runtime`
-// is. It is safe to read because of what it decides: whether the OPERATOR'S OWN post opens a
-// dormant window on the OPERATOR'S OWN machine. This is UX routing, NOT a security gate. The
-// gate is the identity pair (authored by me AND created by me), which no peer can forge, and
-// the worst a mis-declared kind can buy is a window the operator did not want — it starts no
-// agent, grants no tool, posts nothing and reaches no peer.
-function requesterShellOpen(m, myId) {
-  if (!m || m.kind !== 'message' || !myId) return false;
-  if (!firstClassTaskId(m)) return false;
-  if (m.authorUserId !== myId) return false;
-  if (m.authorKind !== 'user') return false;
-  if (metaStr(m, 'author_agent_id')) return false;
-  if (metaStr(m, 'taskCreatedBy') !== myId) return false;
-  if (metaStr(m, 'runtime') === 'desktop-session') return false;
-  const target = metaStr(m, 'taskTarget');
-  return !!target && target !== myId;
+// TRUE iff this message is the OPERATOR'S OWN typing in the app's UI, rather than one of
+// their spawned sessions. The listener uses it for one display-only decision — arming the
+// request lifecycle strip, which says what happened to the request the operator sent
+// (Sent / Accepted / Declined / Replied). A session-posted create needs no such line: the
+// session that posted it is already narrating in its own window. Read ONLY alongside
+// requesterTaskOpen, never as a gate of its own.
+function requesterTypedByOperator(m) {
+  return metaStr(m, 'runtime') === 'desktop-ui';
 }
 
 module.exports = {
@@ -409,8 +399,9 @@ module.exports = {
   noteMyLegacyThread,
   knownLegacyReply,
   useLegacyThreadStore, // Q11: index.js injects electron-store at boot
+  DESKTOP_RUNTIMES, // the two stamps this app produces (asserted by the truth tables)
   requesterTaskOpen,
-  requesterShellOpen, // 2026-08-02: the operator's OWN typed request opens a pinned shell
+  requesterTypedByOperator, // 2026-08-05: which of the two, for the lifecycle strip only
   openChannelForEntry: win.openChannelForEntry,
   resolveToolProfile: win.resolveToolProfile,
 };

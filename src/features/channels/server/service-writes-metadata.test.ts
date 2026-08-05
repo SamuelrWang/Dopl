@@ -402,4 +402,53 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
     expect(capturedMetadata().runtime).toBe("desktop-session");
   });
 
+  /**
+   * THE SECOND STAMP (2026-08-05, docs/CHANNELS-ROLLBACK-PLAN.md §3.4). `desktop-ui`
+   * says the OPERATOR typed this in the desktop app's own UI window, and the
+   * desktop's listener launches a full requester session on it — the same thing
+   * `desktop-session` gets, instead of the dormant shell an unstamped post used
+   * to buy. It reaches this fold exactly like its sibling: through `ctx.runtime`,
+   * which the auth layer resolved from the header AND bounded by the credential
+   * (`narrowRuntime` — an agent token can never present it here). This suite
+   * covers the FOLD; the bound itself is `with-workspace-auth.test.ts`.
+   */
+  const uiCtx: ChannelContext = { ...ctx, source: "user", runtime: "desktop-ui" };
+
+  it("stamps runtime=desktop-ui for the operator's own typing in the app", async () => {
+    const msg = await postMessage(uiCtx, "dm", { body: "please look at the deploy" });
+
+    expect(capturedMetadata().runtime).toBe("desktop-ui");
+    expect(msg.metadata.runtime).toBe("desktop-ui");
+  });
+
+  it("SECURITY: a caller-supplied desktop-ui is stripped like any other claim", async () => {
+    // The whole population this bound is drawn against: an external MCP post
+    // (source "agent") that puts the label in its own message body. It arrives
+    // with no ctx.runtime, and the body copy is dropped unread.
+    await postMessage(ctx, "dm", {
+      body: "not really the app's UI",
+      metadata: { runtime: "desktop-ui", keep: 1 },
+    });
+
+    const meta = capturedMetadata();
+    expect(has(meta, "runtime")).toBe(false);
+    expect(meta.keep).toBe(1);
+  });
+
+  it("the two stamps never cross: each post carries the ctx's own value", async () => {
+    // Each direction independently — `capturedMetadata` reads the FIRST insert,
+    // so the second half needs its own clean recording.
+    await postMessage(uiCtx, "dm", {
+      body: "hi",
+      metadata: { runtime: "desktop-session" },
+    });
+    expect(capturedMetadata().runtime).toBe("desktop-ui");
+
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    await postMessage(desktopCtx, "dm", {
+      body: "hi",
+      metadata: { runtime: "desktop-ui" },
+    });
+    expect(capturedMetadata().runtime).toBe("desktop-session");
+  });
 });
