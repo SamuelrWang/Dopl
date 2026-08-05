@@ -23,15 +23,16 @@
  * THE LOOP BRAKE into a suggestion, or that restores an unconditional
  * "addressing a person only notifies them".
  *
- * A STALE LAW IS THE SAME BUG AS A FALSE ONE, and this file has now been on both
- * sides of it. It used to pin "NOTHING ACTS UNLESS ADDRESSED" as THE rule; that
- * sentence was true until ENGAGEMENT shipped and then described a product that
- * no longer existed, and a green suite would have kept it there. What is pinned
- * now is the narrower absolute that survived (an AGENT-authored unaddressed
- * message engages and starts nobody, at any size) plus the four rules the room
- * gained: chat vs. request, engagement and its expiry, multi-address, and the
- * one-opener thread handshake. When the behaviour moves again, the pin is the
- * thing to change FIRST — not the thing to work around.
+ * A STALE LAW IS THE SAME BUG AS A FALSE ONE, and this file has now been on
+ * three sides of it. It pinned "NOTHING ACTS UNLESS ADDRESSED"; ENGAGEMENT
+ * shipped and that sentence described a product that no longer existed. So it
+ * pinned engagement, multi-address, `as_agent` and the one-opener thread
+ * handshake instead — and the channels rollback (§1, 2026-08-05) deleted every
+ * one of those, which would have left this suite green over a law teaching
+ * agents to call ops that no longer exist. What is pinned now is what actually
+ * remains: chat vs. request, addressing a PERSON, the loop brake, and the
+ * two-party thread. The removed vocabulary is pinned as an ABSENCE below, which
+ * is the half that catches a resurrection.
  *
  * Captured through the real registrar with a recording `register` and a stub
  * client (registration is all this needs — no handler ever runs).
@@ -57,26 +58,18 @@ const DESCRIPTION = description();
         (0, vitest_1.expect)(law).toBeGreaterThan(-1);
         (0, vitest_1.expect)(law).toBeLessThan(DESCRIPTION.indexOf("THE MODEL"));
     });
-    (0, vitest_1.it)("says a channel is a ROOM and a participant thread is a BREAKOUT ROOM", () => {
-        (0, vitest_1.expect)(DESCRIPTION).toContain("A CHANNEL is a ROOM");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("A THREAD with participants is a BREAKOUT ROOM");
+    (0, vitest_1.it)("says a channel is a room of PEOPLE", () => {
+        (0, vitest_1.expect)(DESCRIPTION).toContain("A CHANNEL IS A ROOM OF PEOPLE");
     });
-    (0, vitest_1.it)("says addressing an agent by handle is what starts it, singly or several at once", () => {
-        // WHAT THIS REPLACED, and why the replacement is not a softening. The law
-        // used to open "NOTHING ACTS UNLESS ADDRESSED", and that sentence stopped
-        // being the whole truth when ENGAGEMENT landed
-        // (`service-writes-agents.ts#recordAgentEngagement` +
-        // `dopl-desktop-app/main/channel-engagement.js`): an agent a HUMAN addressed
-        // by handle then acts on that human's UNTAGGED messages for a window. Left
-        // as an absolute, the law would have taught every agent in the room to
-        // ignore the untagged continuation it is now supposed to answer — the stale
-        // -law bug class this file exists to catch, in its most expensive form.
-        //
-        // The absolute that SURVIVED is narrower and is pinned separately below:
-        // an AGENT-authored unaddressed message engages and starts nobody.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("ADDRESS AN AGENT BY HANDLE TO START IT");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("to_agent=");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("to_agents=");
+    (0, vitest_1.it)("says addressing a PERSON is what asks for their machine", () => {
+        // WHAT THIS REPLACED. The law used to open "NOTHING ACTS UNLESS ADDRESSED",
+        // then — once ENGAGEMENT shipped — "ADDRESS AN AGENT BY HANDLE TO START IT".
+        // Both are gone: there is no handle to address (channels rollback §1), and
+        // the only address a post carries is a member. The receiving side decides
+        // what runs, which is what makes "you cannot start somebody else's agent
+        // directly" true again.
+        (0, vitest_1.expect)(DESCRIPTION).toContain("ADDRESSING A PERSON");
+        (0, vitest_1.expect)(DESCRIPTION).toContain("There is no way to address an agent by name");
     });
     (0, vitest_1.it)("says a message is CHAT or REQUEST, and that chat addresses nobody", () => {
         // `intent` (src/features/channels/schema.ts) — `chat` skips the DM
@@ -86,106 +79,30 @@ const DESCRIPTION = description();
         (0, vitest_1.expect)(DESCRIPTION).toContain("A MESSAGE IS CHAT OR REQUEST");
         (0, vitest_1.expect)(DESCRIPTION).toContain('intent="chat" is people talking: it addresses nobody and starts nobody');
     });
-    (0, vitest_1.it)("states ENGAGEMENT: a human's tag starts a conversation, not one turn", () => {
-        // `recordAgentEngagement` stamps `engaged_at` for a HUMAN-authored addressed
-        // post; `channel-engagement.js#isEngaged` reads it through a ~1h window and
-        // `mayEngage` restricts the widened acting to HUMAN authors. All three
-        // halves are stated, including the one an agent gets wrong by default —
-        // that its OWN to_agent post engages nobody.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("BEING ADDRESSED BY A HUMAN ENGAGES YOU");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("you also act on that person's UNADDRESSED messages in this channel");
-        (0, vitest_1.expect)(DESCRIPTION).toContain('You go IDLE again on op="disengage_agent", on park or dismiss, or after about an hour');
-        (0, vitest_1.expect)(DESCRIPTION).toContain("it addresses another agent and engages nothing");
-    });
     (0, vitest_1.it)("keeps THE LOOP BRAKE absolute — agents do not wake each other by talking", () => {
-        // `mayEngage` (channel-engagement.js) refuses every non-`user` author before
-        // it looks at anything else, at any member count. This is the property that
-        // makes engagement safe to grant at all, so it is pinned as an absolute and
-        // must never acquire a qualifier.
+        // `classify` (dopl-desktop-app/main/targeting.js) refuses every unaddressed
+        // AGENT author before it looks at anything else, at any member count. It
+        // was the property that made ENGAGEMENT safe to grant; engagement is gone
+        // and the brake is not, so it is pinned as an absolute and must never
+        // acquire a qualifier.
         (0, vitest_1.expect)(DESCRIPTION).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("an AGENT-authored unaddressed message engages nobody and starts nobody, in a room of two or of ten");
+        (0, vitest_1.expect)(DESCRIPTION).toContain("an AGENT-authored unaddressed message starts nobody, in a room of two or of ten");
         (0, vitest_1.expect)(DESCRIPTION).toContain("Agents do not wake each other by talking, and every post you make is agent-authored");
     });
-    (0, vitest_1.it)("states the thread handshake: ONE opener, chosen by agent id, with the derived key", () => {
-        // Two agents addressed in one message will both reach for `create_thread`.
-        // The tie-break has to be computable by each agent ALONE, from something
-        // both can see and neither can influence — the ids on op="agents" — and the
-        // derived `client_msg_id` is the server-side net under it: a race collapses
-        // on the idempotency key instead of opening a second room for one job.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("EXACTLY ONE OF YOU OPENS THE THREAD");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("the addressed agent whose AGENT ID sorts FIRST, lexicographically");
-        (0, vitest_1.expect)(DESCRIPTION).toContain('client_msg_id="thread-open-<channelId>-<seq>"');
-        // BLOCKER-1 — `<channelId>` IS AMBIGUOUS AND FAILED SILENTLY. The `channel`
-        // param takes a slug OR an id, and `parseHandshakeSeq`
-        // (src/features/channels/server/service-thread-handshake.ts) anchors on the
-        // UUID: a key built from the slug parses as no handshake, derives no
-        // participant set, and the create still returns 200 — the failure lands on
-        // the OTHER agent, one turn later, as a `mayWriteThread` 403 on a thread it
-        // was told to use. The law has to disambiguate the placeholder, so the
-        // disambiguation is pinned rather than left to survive the next rewrite.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("the channel's UUID, NEVER its slug");
-        // The other side of the same rule: everyone else WAITS rather than creating.
-        (0, vitest_1.expect)(DESCRIPTION).toContain('do NOT call "create_thread"');
-        (0, vitest_1.expect)(DESCRIPTION).toContain("Inside a thread everyone in it hears everything: no tagging between participants");
-    });
-    (0, vitest_1.it)("keys addressing a HUMAN on `as_agent` — the param the desktop actually reads", () => {
-        // THE PRECONDITION, PINNED. `classify` (dopl-desktop-app/main/targeting.js)
-        // returns the notify-only `agent-escalation` verdict for
-        //   authorKind === 'agent' && metadata.author_agent_id && !to_agent_id
-        // and `author_agent_id` is stamped ONLY from a validated `as_agent`, which
-        // is OPTIONAL. So a bare `post(to=<person>)` from an agent with no
-        // `as_agent` falls through to the addressed rule and returns 'trigger' — a
-        // consent card, and their agent started. The law promised the opposite
-        // unconditionally for every caller that had not read the source.
-        (0, vitest_1.expect)(DESCRIPTION).toContain('ADDRESSING A HUMAN (to="<email or user id>") DOES ONE OF TWO THINGS AND `as_agent` DECIDES WHICH.');
-        (0, vitest_1.expect)(DESCRIPTION).toContain('Post AS YOURSELF — as_agent="<your handle>" together with to= — and that person is NOTIFIED and no agent of theirs starts.');
-        (0, vitest_1.expect)(DESCRIPTION).toContain("Post WITHOUT as_agent and the same to= is a REQUEST from your operator: it triggers that member's listener, which is what starts their agent.");
-        // The escalation path is the same fact, said where an agent needs it — and
-        // it must carry the precondition too, not just the happy half.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("BLOCKED AND NEED A PERSON?");
-        (0, vitest_1.expect)(DESCRIPTION).toContain('Post with BOTH as_agent="<your handle>" and to=<them>: that notifies the person and starts no agent.');
-    });
-    (0, vitest_1.it)("states `as_agent` on a breakout post as the CONDITIONAL it is, actionably", () => {
-        // NIT-7 — THE LAW USED TO STATE THIS AS AN ABSOLUTE ("REQUIRED to post into
-        // a BREAKOUT THREAD you belong to as an agent (without it the server
-        // refuses)") and it is not one. `mayWriteThread`
-        // (src/features/channels/server/service-writes-metadata.ts) returns true on
-        // the USER branch whenever the caller's own id is in the set, so:
-        //   - a HANDSHAKE-derived room passes without `as_agent`, because
-        //     `deriveHandshakeParticipants` seeds each agent AND its owner;
-        //   - a caller-supplied `participants:["agent:x"]` room does NOT, because
-        //     `seedThreadParticipants` adds no owners.
-        // An agent inside a thread cannot tell which kind it is in, so the law may
-        // not be restated as the other absolute either ("you never need it"). What
-        // it must say is: ALWAYS pass it, and here is the case that requires it.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("ALWAYS pass it on a post into a BREAKOUT THREAD");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("it is REQUIRED whenever an AGENT ROW is what admits you there");
-        // The conditional's other half — and the reason "always" is the actionable
-        // instruction rather than a hedge.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("unless the set ALSO holds you as a person — which you cannot tell from inside the thread");
-        // …and the absolute must not come back.
-        (0, vitest_1.expect)(DESCRIPTION).not.toContain("also REQUIRED to post into a BREAKOUT THREAD you belong to as an agent");
-    });
-    (0, vitest_1.it)("names the three things to act on, and calls everything else ambient context", () => {
-        (0, vitest_1.expect)(DESCRIPTION).toContain("messages in a breakout thread you are a participant of");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("main-room messages addressed to you");
-        // THE THIRD ONE IS NEW AND IS THE WHOLE POINT OF ENGAGEMENT. It was two
-        // things for as long as an agent only ever acted on a tag; leaving it at two
-        // beside an engagement bullet would state the model twice and contradict
-        // itself once.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("while you are engaged — the unaddressed messages of the human who engaged you");
+    (0, vitest_1.it)("names the two things to act on, and calls everything else ambient context", () => {
+        // IT WAS TWO, THEN THREE, AND IT IS TWO AGAIN. Engagement added a third —
+        // the unaddressed messages of the human who engaged you — and went with the
+        // named agents (channels rollback §1). Leaving three stated beside a law
+        // that no longer has engagement would state the model twice and contradict
+        // itself once, which is the stale-law bug this file exists to catch.
+        (0, vitest_1.expect)(DESCRIPTION).toContain("messages in a THREAD you are a party to");
+        (0, vitest_1.expect)(DESCRIPTION).toContain("main-room messages addressed to YOU");
         (0, vitest_1.expect)(DESCRIPTION).toContain("EVERYTHING ELSE IS AMBIENT CONTEXT — read it, do not answer it");
     });
     (0, vitest_1.it)("says to reply where you were asked", () => {
         (0, vitest_1.expect)(DESCRIPTION).toContain("REPLY WHERE YOU WERE ASKED");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("Summoned in the main room, answer in the main room");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("Work traffic stays in your breakout thread");
-    });
-    (0, vitest_1.it)("says an agent has a NAME, posts under it, and may never wear another's", () => {
-        (0, vitest_1.expect)(DESCRIPTION).toContain("YOU HAVE A NAME");
-        (0, vitest_1.expect)(DESCRIPTION).toContain('as_agent="<your handle>"');
-        (0, vitest_1.expect)(DESCRIPTION).toContain("Never post as another agent");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("the server verifies who owns it and refuses");
+        (0, vitest_1.expect)(DESCRIPTION).toContain("Asked in the main room, answer in the main room");
+        (0, vitest_1.expect)(DESCRIPTION).toContain("Work traffic stays in its thread");
     });
     /**
      * The law block, sliced between its two anchors. Both length assertions read
@@ -202,36 +119,32 @@ const DESCRIPTION = description();
         // still worth catching, so it is kept and renamed rather than deleted, with
         // the budget it was silently failing to enforce added beside it.
         //
-        // THE CEILING MOVED ONCE, FROM 8 TO 12, AND IT IS A CEILING RATHER THAN A
-        // TARGET. The room genuinely gained rules an agent cannot infer — chat vs.
-        // request, engagement and its expiry, the loop brake, and the two-agent
-        // thread handshake — and four facts do not fit in a header plus seven lines
-        // without one of them becoming a subordinate clause somebody later deletes.
-        // What has NOT changed is why the cap exists: this text is read on every
-        // connection by every agent, so a rule that is not load-bearing does not go
-        // here — it goes in the op bullet that needs it. If a future change wants a
-        // 13th line, the question to answer first is which of these twelve stopped
-        // being a rule.
-        (0, vitest_1.expect)(LAW.split("\n").filter((l) => l.trim()).length).toBeLessThanOrEqual(12);
+        // THE CEILING MOVED TWICE: 8 to 12 when the room gained engagement,
+        // multi-address and the two-agent handshake, and back to 8 when the
+        // channels rollback (§1) took all three away. It is a CEILING rather than a
+        // target, and the reason it exists has not changed: this text is read on
+        // every connection by every agent, so a rule that is not load-bearing does
+        // not go here — it goes in the op bullet that needs it. If a future change
+        // wants a 9th line, the question to answer first is which of these eight
+        // stopped being a rule.
+        (0, vitest_1.expect)(LAW.split("\n").filter((l) => l.trim()).length).toBeLessThanOrEqual(8);
     });
     (0, vitest_1.it)("keeps the law SHORT — the budget the bullet count could not enforce", () => {
         // NIT-9's other half, and the one that actually measures "short". The law
-        // is ~3.6k characters today across twelve bullets; 4000 is roughly a 10%
-        // ceiling on that, in the same spirit as the bullet ceiling above — enough
-        // room to sharpen a rule, not enough to grow a new one inside an existing
-        // bullet, which is the drift the line count is blind to by construction.
+        // is ~1.8k characters today across seven bullets (it was ~3.6k across
+        // twelve before the rollback); 2200 is roughly a 20% ceiling on that, in
+        // the same spirit as the bullet ceiling above — enough room to sharpen a
+        // rule, not enough to grow a new one inside an existing bullet, which is
+        // the drift the line count is blind to by construction.
         //
         // A PER-BULLET CAP TOO, because the total alone is game-able the other way:
-        // one bullet could swallow another's budget and the sum would not move. The
-        // longest today is the thread-handshake rule at ~750 characters (it carries
-        // the tie-break, the derived key, and what the others do instead), so 900
-        // is its headroom and everyone else's ceiling.
+        // one bullet could swallow another's budget and the sum would not move.
         //
         // If a change needs more than either number, the honest move is the same
         // one the bullet ceiling asks for: say which rule stopped being a rule, or
         // move the detail into the op bullet that needs it — an op bullet is read
         // when the op is called, where THE LAW is read on every connection.
-        (0, vitest_1.expect)(LAW.length).toBeLessThanOrEqual(4000);
+        (0, vitest_1.expect)(LAW.length).toBeLessThanOrEqual(2200);
         const bullets = LAW.split("\n").filter((l) => l.trim().startsWith("- "));
         const overlong = bullets.filter((b) => b.length > 900);
         (0, vitest_1.expect)(overlong.map((b) => `${b.length} chars: ${b.slice(0, 80)}…`), "a law bullet grew past its budget — sharpen it, or move the detail into the op bullet that needs it").toEqual([]);
@@ -257,82 +170,70 @@ const DESCRIPTION = description();
     /** …and it says that agent RUNS (or is made to run). */
     const STARTS = /\bspawn|\bwake[sn]?\b|\bstarts?\b|\btrigger/i;
     /**
-     * …then it must name the param the outcome depends on, or be an explicit
-     * denial. `as_agent` is the whole point: WITH it a `to=` post notifies, and
-     * WITHOUT it the same post triggers. A sentence that asserts either half
-     * without naming it is the B1 defect, whichever half it asserts.
+     * …then it must say what the outcome DEPENDS ON, or be an explicit denial.
+     *
+     * The dependency used to be a param: `as_agent`. WITH it a `to=` post
+     * notified and WITHOUT it the same post triggered, so a sentence asserting
+     * either half without naming the param was the B1 defect. `as_agent` is gone
+     * (channels rollback §1) and the rule is simpler — a `to=` post is a REQUEST
+     * and it triggers — but the guard's job is unchanged: an unqualified claim
+     * about another member's agent must be one this document actually stands
+     * behind. So the qualifier is now the CONDITION under which it holds: the
+     * post being addressed, or being a request rather than chat.
      */
-    const KEYED = /as_agent|never (spawns|starts|wakes|triggers)|does not (spawn|start|wake|trigger)|starts no agent|no agent of theirs starts|reaches no one's agent|no one's agent wakes|nobody's agent (wakes|woke)|wakes nobody/i;
-    (0, vitest_1.it)("never states what addressing a PERSON does to their agent without naming `as_agent`", () => {
+    const KEYED = /\brequest\b|\baddress|\bunaddressed\b|intent|never (spawns|starts|wakes|triggers)|does not (spawn|start|wake|trigger)|starts no agent|no agent of theirs starts|reaches no one's agent|no one's agent wakes|nobody's agent (wakes|woke)|wakes nobody/i;
+    (0, vitest_1.it)("never claims something about another member's agent unconditionally", () => {
         const offenders = sentences.filter((s) => OTHER_SIDE.test(s) && STARTS.test(s) && !KEYED.test(s));
-        (0, vitest_1.expect)(offenders, `these sentences claim something about another member's agent starting (or not) without keying it on \`as_agent\` or denying it outright:\n- ${offenders.join("\n- ")}`).toEqual([]);
+        (0, vitest_1.expect)(offenders, `these sentences claim something about another member's agent starting (or not) without saying what it depends on:\n- ${offenders.join("\n- ")}`).toEqual([]);
     });
-    (0, vitest_1.it)("the guard has teeth — it catches the exact sentence that shipped", () => {
-        // Regression on the TEST, not on the text: the sentence below is the one
-        // `post` carried at :56 while the old guard passed. If a future edit makes
-        // the matcher lenient again, this fails before the description does.
-        const shipped = "Pass `to` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent: that member's listener is then the only one triggered.";
-        const caught = OTHER_SIDE.test(shipped) && STARTS.test(shipped) && !KEYED.test(shipped);
-        (0, vitest_1.expect)(caught, "the negative guard would not catch the shipped sentence").toBe(true);
+    (0, vitest_1.it)("the guard has teeth — it catches a bare claim", () => {
+        // Regression on the TEST, not on the text. If a future edit makes the
+        // matcher lenient, this fails before the description does.
+        const bare = "Post it and that member's listener is then the only one triggered.";
+        (0, vitest_1.expect)(OTHER_SIDE.test(bare) && STARTS.test(bare) && !KEYED.test(bare), "the negative guard would not catch a bare claim").toBe(true);
     });
     /**
-     * THE SECOND GUARD, AND IT IS THE GENERAL FORM OF THE FIRST: a sentence must
-     * not promise the READER an effect the reader cannot cause.
+     * THE SECOND GUARD IS NOW AN ABSENCE, and it is the stronger form of what it
+     * replaced.
      *
-     * The first guard is one instance of that rule (what a `to=` post does to
-     * another member's agent, which is keyed on `as_agent`). ENGAGEMENT is the
-     * second, and it slipped past the first guard entirely because it says nothing
-     * about "their agent" and nothing about spawning: `recordAgentEngagement`
-     * (`src/features/channels/server/service-writes-agents.ts`) now opens with
-     * `if (ctx.source === "agent") return;`, so engagement requires a HUMAN
-     * CREDENTIAL — `authorKind` is caller-assertable, `ctx.source` is derived from
-     * the token and is not — and EVERY post made through this tool is
-     * agent-credentialed. So "address it by handle again — that re-engages it"
-     * (`channel-ops-agents.ts`, shipped until 2026-07-31) was an instruction whose
-     * outcome the reader could not produce, in a result the reader reads.
+     * It used to be a truth guard: any sentence asserting that ENGAGEMENT happens
+     * had to name the HUMAN it depended on, because `recordAgentEngagement` opened
+     * with `if (ctx.source === "agent") return;` and every post through this tool
+     * is agent-credentialed — so "address it by handle again, that re-engages it"
+     * (shipped until 2026-07-31) promised the reader an outcome the reader could
+     * not cause.
      *
-     * The rule this pins: any sentence asserting that engagement HAPPENS must name
-     * the human it depends on, or deny the effect outright. It deliberately does
-     * NOT fire on ENDING an engagement ("you go IDLE again on
-     * op=\"disengage_agent\"", "parking or dismissing also ENDS any engagement") —
-     * that one the reader genuinely can cause, on its own agents and on any agent
-     * its operator engaged.
+     * Engagement is GONE (channels rollback §1), and so is every other named-agent
+     * surface. A description that still mentions any of them does not merely
+     * mislead about a mechanism; it names ops an MCP client will reject as invalid
+     * enum values. So the pin is total: the words must not appear.
      */
-    const ENGAGES = /\b(re-?engages?|re-?engaging|engages?\s|engaged\s+(you|it|them|by|an agent|that agent)|(is|are|was|were|has|have|been|stays?|keeps?|remains?)\s+engaged)\b/i;
-    /**
-     * …and the sentence names the HUMAN the effect hangs on, or denies the effect.
-     * "person" / "people" count: the law says it both ways, and which noun it uses
-     * is not the property under test — whether the sentence tells the reader the
-     * cause is somebody else is.
-     */
-    const HUMAN_KEYED = /\bhumans?\b|\bpeople\b|\bpersons?\b|engages? (nothing|nobody|no one|no agent)|cannot engage|no re-?engage|NO RE-?ENGAGE/i;
-    (0, vitest_1.it)("never promises ENGAGEMENT without naming the human credential it requires", () => {
-        const offenders = sentences.filter((s) => ENGAGES.test(s) && !HUMAN_KEYED.test(s));
-        (0, vitest_1.expect)(offenders, `these sentences say engagement happens without keying it on a HUMAN author (an MCP post is agent-credentialed and can never cause it):\n- ${offenders.join("\n- ")}`).toEqual([]);
+    const REMOVED_VOCABULARY = [
+        ["engagement", /\bengage/i],
+        ["summoning", /\bsummon/i],
+        ["to_agent / to_agents", /to_agents?\b/],
+        ["as_agent", /as_agent/],
+        ["breakout rooms", /breakout|participant set|\bparticipants\b/i],
+        ["the thread-open handshake", /thread-open-|handshake/i],
+        ["the agent lifecycle ops", /rename_agent|set_agent_status|disengage_agent|join_thread|leave_thread/],
+        ["the agents roster op", /op="agents"/],
+    ];
+    (0, vitest_1.it)("never mentions a removed named-agent surface", () => {
+        const found = REMOVED_VOCABULARY.filter(([, re]) => re.test(DESCRIPTION)).map(([label]) => label);
+        (0, vitest_1.expect)(found, `the description names surfaces that no longer exist: ${found.join(", ")}`).toEqual([]);
     });
-    (0, vitest_1.it)("the engagement guard has teeth — it catches the exact sentence that shipped", () => {
-        // Regression on the TEST. This is `opDisengageAgent`'s second result line as
-        // it shipped, offering the caller a remedy that its own credential makes
-        // impossible. If a future edit loosens either matcher, this fails before the
-        // description does.
-        const shipped = "To pick the exchange back up, address it by handle again — that re-engages it.";
-        (0, vitest_1.expect)(ENGAGES.test(shipped) && !HUMAN_KEYED.test(shipped), "the engagement guard would not catch the shipped sentence").toBe(true);
-        // …and it must NOT fire on the honest statement of the same fact.
-        const honest = "Your OWN to_agent post is not that — it addresses another agent and engages nothing, because engagement is stamped only for a HUMAN author.";
-        (0, vitest_1.expect)(ENGAGES.test(honest) && !HUMAN_KEYED.test(honest)).toBe(false);
-        // …nor on ENDING an engagement, which the reader really can do.
-        const ending = 'Parking or dismissing also ENDS any engagement: a process that is not running cannot be listening for anyone.';
-        (0, vitest_1.expect)(ENGAGES.test(ending)).toBe(false);
-    });
-    (0, vitest_1.it)("does not describe a thread as writable by exactly two members with no exception", () => {
-        // The pair rule is still the default and still stated — but a breakout
-        // room supersedes it, and a description that says only the first sends an
-        // agent away from a thread it is a participant of.
-        (0, vitest_1.expect)(DESCRIPTION).toContain("whose participant set (people and agents, see op=\"get_thread\") replaces that pair");
+    (0, vitest_1.it)("describes a thread as writable by exactly its two parties, with no exception", () => {
+        // The pair rule was briefly the DEFAULT rather than the rule: a thread with
+        // a participant set was a breakout room whose set superseded it, so a
+        // description saying only the first sent an agent away from a thread it was
+        // a participant of. Breakout rooms are gone and the pair is the rule again,
+        // so the exception must not come back.
+        (0, vitest_1.expect)(DESCRIPTION).toContain("between exactly TWO parties");
+        (0, vitest_1.expect)(DESCRIPTION).toContain("Only those two can post into it");
     });
 });
-(0, vitest_1.describe)("the multiplayer ops are documented where an agent will look", () => {
-    (0, vitest_1.it)("every new op is named in the description (the parity contract, asserted here too)", () => {
+(0, vitest_1.describe)("the removed ops are absent from the published op set", () => {
+    (0, vitest_1.it)("the description names none of them", () => {
         for (const op of [
             "agents",
             "summon_agent",
@@ -342,17 +243,23 @@ const DESCRIPTION = description();
             "join_thread",
             "leave_thread",
         ]) {
-            (0, vitest_1.expect)(DESCRIPTION, `op="${op}" is undocumented`).toContain(`"${op}"`);
+            (0, vitest_1.expect)(DESCRIPTION, `op="${op}" is still documented`).not.toContain(`"${op}"`);
         }
     });
-    (0, vitest_1.it)("post teaches that as_agent is REQUIRED for agent attribution and is server-verified", () => {
-        (0, vitest_1.expect)(DESCRIPTION).toContain("it is REQUIRED for a post to be attributed to an agent at all");
-        (0, vitest_1.expect)(DESCRIPTION).toContain("SERVER-VERIFIED");
-    });
-    (0, vitest_1.it)("create_thread teaches the participants form", () => {
-        (0, vitest_1.expect)(DESCRIPTION).toContain('"agent:<handle>" / "user:<email>"');
-    });
-    (0, vitest_1.it)("dismissal is described as a status, not a delete", () => {
-        (0, vitest_1.expect)(DESCRIPTION).toContain('"dismissed" is a status, NOT a delete');
+    (0, vitest_1.it)("still documents the ops that SURVIVED, so the rollback took nothing extra", () => {
+        for (const op of [
+            "post",
+            "milestone",
+            "read",
+            "await",
+            "members",
+            "list_threads",
+            "get_thread",
+            "create_thread",
+            "propose_close",
+            "set_thread_mode",
+        ]) {
+            (0, vitest_1.expect)(DESCRIPTION, `op="${op}" lost its documentation`).toContain(`"${op}"`);
+        }
     });
 });

@@ -26,36 +26,7 @@
  */
 import type { DoplClient, ThreadMode, ThreadOutcome } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-/**
- * S2 — `as_agent` ON `create_thread` IS REFUSED, NOT DROPPED.
- *
- * The flat input schema declares `as_agent` for the whole tool, and the
- * registrar routed it to `post` alone: passing it here did nothing, said
- * nothing, and left the caller believing its opening request was attributed to
- * its agent when the row says the bare human wrote it. Silent divergence
- * between what the surface accepts and what the code does is the exact bug
- * class this round exists to close, so it is answered rather than ignored.
- *
- * REFUSE rather than wire it through, because the attribution is not the only
- * thing that would change. `TaskCreateSchema` carries no `authorAgentId`, so
- * wiring it is server work — and the receiving desktop classifies an
- * agent-authored message addressed to a PERSON with no addressed agent as
- * `agent-escalation`, a notification that deliberately spawns nothing
- * (dopl-desktop-app/main/targeting.js). An agent-attributed opening request
- * would therefore stop starting the responder's side, which is the one thing
- * create_thread exists to do. The refusal costs one retry; wiring it would cost
- * the op its purpose.
- */
-export declare function asAgentNotOnCreateThread(): ToolResponse;
-export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null, 
-/**
- * MULTIPLAYER — the EXTRA identities admitted to the thread, in the prefix
- * form `agent:<handle>` / `user:<email>` (see `channel-agent-refs.ts`).
- * Passing any of them is what makes this a BREAKOUT ROOM: the participant
- * set then decides who may post, instead of the creator/target pair. Last
- * positional on purpose — every existing call site keeps its shape.
- */
-participants?: string[]): Promise<ToolResponse>;
+export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null): Promise<ToolResponse>;
 /**
  * DECISION 2 (Samuel, 2026-08-04) — `close_thread` IS NOT AN AGENT'S OP.
  *

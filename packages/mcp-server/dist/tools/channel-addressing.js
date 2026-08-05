@@ -41,23 +41,20 @@
  *     That is the 1.7.14 incident shape, produced by the note meant to prevent
  *     silent drops.
  *
- *  4. ENGAGEMENT IS A FOURTH WAY AN UNTAGGED MESSAGE IS ACTED ON, and it is not
- *     keyed on size either. A human who addresses an agent by handle stamps
- *     `channel_agents.engaged_at` (`service-writes-agents.ts#recordAgentEngagement`),
- *     and the desktop then treats that human's UNTAGGED messages as that agent's
- *     for ~an hour (`dopl-desktop-app/main/channel-engagement.js`). It changes
- *     nothing about the caller's OWN posts — engagement is stamped only for a
- *     HUMAN author, and fact 2 is why every post from this tool is agent's — so
- *     the notes below still hold as written. What it kills is the ABSOLUTE
- *     "two members is the only size where an untagged message can be a request",
- *     which is why `rosterAddressingRule` now says "by default".
+ *  4. ENGAGEMENT WAS A FOURTH WAY, and it is gone (channels rollback §1). A
+ *     human who addressed an agent by handle stamped `channel_agents.engaged_at`
+ *     and the desktop then treated that human's UNTAGGED messages as that
+ *     agent's for ~an hour. Nothing stamps it now, nothing reads it, and there
+ *     is no handle to address — so fact 1's "two members" is once again the
+ *     ONLY size at which an untagged message from a person is an implicit
+ *     request, with no hedge.
  *
  * Nothing here is conditional on a value this package cannot see. Where the
  * member count is unknown (`Channel.memberCount` is optional) the copy states
  * only what holds at every size.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AWAIT_UNNAMED_NOTICE = exports.MAX_ADDRESSED_AGENTS = exports.GROUP_CHANNEL_MIN_MEMBERS = void 0;
+exports.AWAIT_UNNAMED_NOTICE = exports.GROUP_CHANNEL_MIN_MEMBERS = void 0;
 exports.routesToASession = routesToASession;
 exports.unaddressedPostNote = unaddressedPostNote;
 exports.rosterAddressingRule = rosterAddressingRule;
@@ -70,23 +67,6 @@ exports.rosterAddressingRule = rosterAddressingRule;
  * the two copies to the same number.
  */
 exports.GROUP_CHANNEL_MIN_MEMBERS = 3;
-/**
- * How many AGENTS one post may address, `to_agent` and `to_agents` TOGETHER.
- *
- * DUPLICATED on the same terms as the constant above, from
- * `src/features/channels/schema.ts#MAX_ADDRESSED_AGENTS`, and pinned to it by
- * `channel-addressing-rule.test.ts`.
- *
- * IT BOUNDS THE MERGED ADDRESS, NOT ONE FIELD OF IT, and that is the whole
- * reason it is named here rather than left as a `.max(8)` literal on the array.
- * `to_agent` is exactly a one-element `to_agents`; `resolveAgentAddressing`
- * concatenates and dedupes the two and checks the cap on the RESULT. So the
- * tool published `to_agents.max(8)`, said nothing about `to_agent` counting
- * toward the same eight, and a caller that read the surface literally sent NINE
- * and got a 400 the tool could not explain. One constant, quoted in both
- * describes and in the error that fires when it is exceeded.
- */
-exports.MAX_ADDRESSED_AGENTS = 8;
 /** Mirrors the desktop's `firstClassTaskId` gate (targeting.js) exactly. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
@@ -135,14 +115,14 @@ function rosterAddressingRule(ref, memberCount) {
     // true at every size (`feedLiveSession` reads the tag, never the roster), and a
     // count-scoped absolute like "reaches no one's agent at all" is exactly the
     // over-claim this module exists to stop.
-    const how = `Address a request to ONE of them: dopl_channel(op="post", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="create_thread". Only a DIRECT (1:1) message channel addresses your post for you, and this op reads the roster, not the channel row, so it cannot tell you whether this is one. The other way to reach an agent is a THREAD tag: \`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not.`;
+    const how = `Address a request to ONE of them: dopl_channel(op="post", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="create_thread". A channel reaches PEOPLE — there is no handle for an agent. Only a DIRECT (1:1) message channel addresses your post for you, and this op reads the roster, not the channel row, so it cannot tell you whether this is one. The other way to reach an agent is a THREAD tag: \`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not.`;
     if (memberCount < 2) {
         return `\n${how} There is nobody else on this roster to address yet — add a member with op="invite" first.`;
     }
     if (memberCount >= exports.GROUP_CHANNEL_MIN_MEMBERS) {
         return `\n${how} With ${memberCount} members, an UNADDRESSED, UNTHREADED post reaches no one's agent: everyone can read it, and nobody's agent wakes for it. Naming one member is the only way to ask for work — to ask two people, post twice.`;
     }
-    return `\n${how} Two members is the ONE size where an unaddressed message is an implicit request BY DEFAULT: the other side treats a message from a PERSON as meant for the only other member. (The other route to an untagged message being acted on is ENGAGEMENT, which works at any size — an agent a person addressed by handle keeps taking that person's untagged messages for a while afterwards.) A post from an AGENT never counts for either, so leaving \`to\` off still reaches no agent when the post is yours. Name them and the distinction stops mattering.`;
+    return `\n${how} Two members is the ONE size where an unaddressed message is an implicit request: the other side treats a message from a PERSON as meant for the only other member. A post from an AGENT never counts, so leaving \`to\` off still reaches no agent when the post is yours. Name them and the distinction stops mattering.`;
 }
 /**
  * The `await` wake notice — said when nothing that arrived NAMES the caller.

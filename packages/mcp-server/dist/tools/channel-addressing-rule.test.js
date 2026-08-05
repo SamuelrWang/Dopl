@@ -35,7 +35,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const node_fs_1 = require("node:fs");
 const vitest_1 = require("vitest");
 const channel_addressing_1 = require("./channel-addressing");
-const channel_errors_1 = require("./channel-errors");
 const channel_schema_1 = require("./channel-schema");
 const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_read_1 = require("./channel-ops-read");
@@ -95,49 +94,62 @@ function rosterClient(userIds) {
         (0, vitest_1.expect)(declared, "the web constant moved or was renamed").not.toBeNull();
         (0, vitest_1.expect)(Number(declared[1])).toBe(channel_addressing_1.GROUP_CHANNEL_MIN_MEMBERS);
     });
-    (0, vitest_1.it)("matches the route schema's MAX_ADDRESSED_AGENTS", () => {
-        // Same doctrine, second constant (SHOULD-FIX-4). This one is worse to drift
-        // on than the threshold above: the tool PUBLISHES it as `to_agents.max()`,
-        // so a copy that is one higher than the server's turns the declared surface
-        // into a promise the route refuses.
-        const web = (0, node_fs_1.readFileSync)("../../src/features/channels/schema.ts", "utf8");
-        const declared = /MAX_ADDRESSED_AGENTS = (\d+)/.exec(web);
-        (0, vitest_1.expect)(declared, "the route constant moved or was renamed").not.toBeNull();
-        (0, vitest_1.expect)(Number(declared[1])).toBe(channel_addressing_1.MAX_ADDRESSED_AGENTS);
-    });
 });
-// ── the cap the tool advertised and could not explain ────────────────
-(0, vitest_1.describe)("the agent cap is MERGED, and the surface now says so", () => {
-    (0, vitest_1.it)("publishes the cap on `to_agents` and states that `to_agent` counts too", () => {
-        // THE DEFECT: `to_agents.max(8)` was published with no word about
-        // `to_agent`, while the server caps the DEDUPED MERGE of the two
-        // (`resolveAgentAddressing`). A caller that read the surface literally sent
-        // `to_agent` + eight and got a 400 for a rule nothing had stated.
-        const to_agents = channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.description ?? "";
-        const to_agent = channel_schema_1.CHANNEL_INPUT_SHAPE.to_agent.description ?? "";
-        (0, vitest_1.expect)(to_agents).toContain(`${channel_addressing_1.MAX_ADDRESSED_AGENTS} IN TOTAL`);
-        (0, vitest_1.expect)(to_agents).toContain("`to_agent` INCLUDED");
-        (0, vitest_1.expect)(to_agent).toContain(`${channel_addressing_1.MAX_ADDRESSED_AGENTS} agents in total`);
-        (0, vitest_1.expect)(to_agent).toContain("`to_agent` included");
+// ── the merged agent cap, and why nothing pins it any more ───────────
+//
+// `MAX_ADDRESSED_AGENTS` was a second cross-lane constant, pinned here on the
+// same doctrine as the threshold above: the tool PUBLISHED it as
+// `to_agents.max()`, so a copy one higher than the server's turned the declared
+// surface into a promise the route refused. Named-agent addressing is gone
+// (channels rollback §1) — no `to_agent`, no `to_agents`, no cap, and no
+// `CHANNEL_TOO_MANY_AGENTS` code to classify.
+(0, vitest_1.describe)("the removed named-agent surface is ABSENT from the published shape", () => {
+    (0, vitest_1.it)("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
+        // Not "declared and ignored": a param an MCP client can still see is a
+        // param a model will still try, and a silently-dropped address is the
+        // invisible-delivery failure the addressing contract exists to prevent.
+        for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent", "status"]) {
+            (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
+        }
     });
-    (0, vitest_1.it)("classifies CHANNEL_TOO_MANY_AGENTS instead of dropping it into `unknown`", () => {
-        // It landed in the arm that says "the server did not name a cause this tool
-        // recognizes" — for a 400 the tool's own published surface provoked.
-        (0, vitest_1.expect)((0, channel_errors_1.classifyBadRequest)({ status: 400, code: "CHANNEL_TOO_MANY_AGENTS" })).toBe("too_many_agents");
+    (0, vitest_1.it)("REFUSES every removed op at the enum, before any handler runs", () => {
+        // The seven lifecycle / membership ops. They are DROPPED rather than kept
+        // for a teaching refusal — unlike `close_thread`, whose capability MOVED
+        // (to `propose_close`) and whose refusal names where. These capabilities
+        // are gone, so "invalid enum value" is the honest answer.
+        for (const op of [
+            "agents",
+            "summon_agent",
+            "rename_agent",
+            "set_agent_status",
+            "disengage_agent",
+            "join_thread",
+            "leave_thread",
+        ]) {
+            (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.op.safeParse(op).success, `op="${op}" is still accepted`).toBe(false);
+        }
     });
-    (0, vitest_1.it)("explains the merge in the message, not just the number", () => {
-        // "At most eight" alone sends a caller back to count the same eight.
-        (0, vitest_1.expect)(channel_errors_1.AGENT_CAP_NOTE).toContain("in total");
-        (0, vitest_1.expect)(channel_errors_1.AGENT_CAP_NOTE).toContain("merged and deduped");
-        (0, vitest_1.expect)(channel_errors_1.AGENT_CAP_NOTE).toContain("`to_agent` counts as one");
-    });
-    (0, vitest_1.it)("REFUSES `to_agents: []` here, where the route has always refused it", () => {
-        // SHOULD-FIX-5. The route is `.min(1)`; this schema had no minimum, so an
-        // empty list posted a successfully UNADDRESSED message with a "NOT
-        // ADDRESSED" note under it that the caller reads as its own forgotten `to`.
-        (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.safeParse([]).success).toBe(false);
-        (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.safeParse(["quartz"]).success).toBe(true);
-        (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.to_agents.safeParse(Array.from({ length: channel_addressing_1.MAX_ADDRESSED_AGENTS + 1 }, () => "quartz")).success).toBe(false);
+    (0, vitest_1.it)("still accepts every op that SURVIVED, so the rollback took nothing extra", () => {
+        for (const op of [
+            "list",
+            "open",
+            "invite",
+            "post",
+            "milestone",
+            "read",
+            "await",
+            "members",
+            "list_threads",
+            "get_thread",
+            "create_thread",
+            "propose_close",
+            // Kept in the enum ON PURPOSE: an older agent's call gets a teaching
+            // refusal naming `propose_close`, not an opaque enum error.
+            "close_thread",
+            "set_thread_mode",
+        ]) {
+            (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.op.safeParse(op).success, `op="${op}" was lost`).toBe(true);
+        }
     });
 });
 // ── which thread tags actually route ─────────────────────────────────

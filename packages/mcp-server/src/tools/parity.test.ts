@@ -167,7 +167,6 @@ const READ_OPS: Record<string, string[]> = {
     "members",
     "list_threads",
     "get_thread",
-    "agents",
   ],
 };
 
@@ -280,24 +279,32 @@ describe("write-op completeness", () => {
     expect(computed).toEqual(expected);
   });
 
-  it("SECURITY: dopl_channel's agent-state ops are WRITES, including the non-owner one", () => {
-    // Named explicitly rather than left to the completeness scan above, because
-    // the tempting mistake with `disengage_agent` is specific and one-directional:
-    // it is the only agent op the server allows to somebody who does not own the
-    // agent (the human recorded in `engaged_by`), which reads like "not really a
-    // write" right up until a read-only token clears somebody's engagement.
+  it("SECURITY: the removed agent-state ops are gone from BOTH gate lists", () => {
+    // They were named explicitly here rather than left to the completeness scan
+    // above, because the tempting mistake with `disengage_agent` was specific:
+    // it was the only agent op the server allowed to somebody who did not own
+    // the agent, which read like "not really a write" right up until a
+    // read-only token cleared somebody's engagement. The ops are gone (channels
+    // rollback §1), so what has to hold now is that neither list still claims
+    // to gate them — a stale WRITE_OPS entry for a non-existent op is dead law
+    // that reads as coverage.
     const write = WRITE_OPS.dopl_channel ?? new Set<string>();
+    const read = READ_OPS.dopl_channel ?? [];
     for (const op of [
+      "agents",
       "summon_agent",
       "rename_agent",
       "set_agent_status",
       "disengage_agent",
+      "join_thread",
+      "leave_thread",
     ]) {
-      expect(write.has(op), `dopl_channel op="${op}" is not gated as a write`).toBe(true);
-      expect(
-        (READ_OPS.dopl_channel ?? []).includes(op),
-        `dopl_channel op="${op}" is listed as a READ op`,
-      ).toBe(false);
+      expect(write.has(op), `dopl_channel op="${op}" is still gated as a write`).toBe(
+        false,
+      );
+      expect(read.includes(op), `dopl_channel op="${op}" is still listed as a read`).toBe(
+        false,
+      );
     }
   });
 

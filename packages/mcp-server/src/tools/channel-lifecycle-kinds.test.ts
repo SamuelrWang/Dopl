@@ -185,24 +185,6 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
     expect(sent.toAgents).toBeUndefined();
   });
 
-  it("carries as_agent, so a milestone is still attributable inside a breakout room", async () => {
-    // A thread that admits the caller through one of its AGENTS refuses any post
-    // that does not CLAIM that agent (`mayWriteThread`), milestones included.
-    const client = stubClient({
-      listChannelAgents: vi.fn(async () => [
-        { id: "agent-1", name: "quartz", ownerUserId: "u-me", status: "active" },
-      ]),
-    });
-    await callTool(client)({
-      op: "milestone",
-      channel: "general",
-      thread: THREAD_ID,
-      body: "step two",
-      as_agent: "quartz",
-    });
-    const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
-    expect((input as unknown as Record<string, unknown>).authorAgentId).toBe("agent-1");
-  });
 });
 
 // ── 3. the surface still teaches the rule ──────────────────────────────────────

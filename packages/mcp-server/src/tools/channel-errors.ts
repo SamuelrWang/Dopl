@@ -23,9 +23,6 @@
  */
 
 import { neutralizeInline } from "./channel-shared";
-// The merged agent-address cap has ONE statement in this package — see
-// channel-addressing.ts for why it is not the array's `.max()`.
-import { MAX_ADDRESSED_AGENTS } from "./channel-addressing";
 
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 export function isBadRequest(e: unknown): boolean {
@@ -55,21 +52,12 @@ export function isForbidden(e: unknown): boolean {
  *   - `invalid_request`      — the route's own zod schema (or JSON parse)
  *     rejected the body BEFORE any channel logic ran. Almost always a field
  *     over its cap. Emphatically NOT a membership problem.
- *   - `participant_not_member` — a `user:` participant who is not a member of
- *     the CHANNEL. Its own kind because of WHEN it arrives (B2): `createTask`
- *     seeds the participant set AFTER inserting the thread row, so this 400 is
- *     one of the two that can land with a live thread already behind it.
- *   - `agent_not_in_channel` — an agent id/handle that names no agent OF THIS
- *     CHANNEL, as a participant seed or as a post's `to_agent` / `as_agent`.
- *     Same late-arrival property as above on the create path.
- *   - `too_many_agents`     — more addressed agents than {@link MAX_ADDRESSED_AGENTS}
- *     allows. ITS OWN KIND BECAUSE THE TOOL PROVOKES IT: the schema publishes
- *     `to_agents.max(8)` and says nothing about `to_agent` counting toward the
- *     same eight, while the server enforces the cap on the DEDUPED MERGE of the
- *     two (`resolveAgentAddressing`). So `to_agent` + a full eight is a 400 the
- *     tool's own surface invited — and it landed in the `unknown` arm ("the
- *     server did not name a cause this tool recognizes") for the one 400 this
- *     tool is best placed to explain.
+ *   (`participant_not_member` / `agent_not_in_channel` / `too_many_agents` were
+ *   three more, all of them about NAMED AGENTS and breakout-room participants,
+ *   and all three went with those surfaces — channels rollback §1. The route no
+ *   longer emits their codes; a caller that still sends one of the removed
+ *   params gets `VALIDATION_FAILED`, i.e. `invalid_request` above, with the
+ *   field named in the server's own message.)
  *   - `chat_addressed`       — a post that said `intent:"chat"` AND named an
  *     addressee. The two mean opposite things and the route refuses the pair
  *     rather than picking one (`ChannelChatAddressedError`). The tool refuses it
@@ -85,9 +73,6 @@ export type BadRequestKind =
   | "thread_not_in_channel"
   | "self_target"
   | "invalid_request"
-  | "participant_not_member"
-  | "agent_not_in_channel"
-  | "too_many_agents"
   | "chat_addressed"
   | "workspace"
   | "unknown";
@@ -111,12 +96,6 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
     case "INVALID_JSON":
     case "BAD_REQUEST":
       return "invalid_request";
-    case "CHANNEL_PARTICIPANT_NOT_MEMBER":
-      return "participant_not_member";
-    case "CHANNEL_AGENT_NOT_IN_CHANNEL":
-      return "agent_not_in_channel";
-    case "CHANNEL_TOO_MANY_AGENTS":
-      return "too_many_agents";
     case "CHANNEL_CHAT_ADDRESSED":
       return "chat_addressed";
     case "WORKSPACE_REQUIRED":
@@ -159,7 +138,6 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
 export type ForbiddenKind =
   | "not_a_member"
   | "thread_authorization"
-  | "agent_owner"
   | "lifecycle_kind"
   | "close_is_human"
   | "unknown";
@@ -170,8 +148,6 @@ export function classifyForbidden(e: unknown): ForbiddenKind {
       return "not_a_member";
     case "TASK_FORBIDDEN":
       return "thread_authorization";
-    case "CHANNEL_AGENT_FORBIDDEN":
-      return "agent_owner";
     case "CHANNEL_LIFECYCLE_KIND_FORBIDDEN":
       return "lifecycle_kind";
     case "CHANNEL_CLOSE_IS_HUMAN_ONLY":
@@ -207,13 +183,3 @@ export function serverDetail(e: unknown): string {
  */
 export const FIELD_CAPS_NOTE =
   "Field caps: title <=200 characters, body <=16000, a post's summary <=200, a close summary <=2000, client_msg_id <=200.";
-
-/**
- * The MERGED agent cap, said the way the surface should have said it all along.
- *
- * The sentence has to carry the merge, not just the number: a caller that hit
- * this read `to_agents.max(8)` on the schema, counted eight entries, and was
- * refused — because `to_agent` was the ninth. Telling them "at most eight" and
- * stopping there sends them back to count the same eight again.
- */
-export const AGENT_CAP_NOTE = `One post may address at most ${MAX_ADDRESSED_AGENTS} agents in total — \`to_agent\` and \`to_agents\` are ONE address between them, merged and deduped before the limit is applied, so \`to_agent\` counts as one of the ${MAX_ADDRESSED_AGENTS}. Naming the same agent twice (by handle and by id) collapses to one. To reach more than ${MAX_ADDRESSED_AGENTS}, post twice.`;

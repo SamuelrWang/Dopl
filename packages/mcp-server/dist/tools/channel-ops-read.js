@@ -29,15 +29,9 @@ exports.opMembers = opMembers;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
-// Whether anything in a page names an AGENT — the predicate that keeps the
-// roster read off the hot path (BLOCKER-3).
-const channel_render_agents_1 = require("./channel-render-agents");
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 const channel_addressing_1 = require("./channel-addressing");
-// Breakout-room membership: the set a thread read now carries, and the handles
-// that name the agents in it. Both fail soft.
-const channel_agent_refs_1 = require("./channel-agent-refs");
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 async function opList(client) {
@@ -147,15 +141,11 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
         // caveat placed under them is read after the injected line it warns about.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
-    // BLOCKER-3 — the handles for any agents these messages ADDRESS. Fetched
-    // ONLY when something in the page actually names one, so an ordinary
-    // transcript (and the poll loop behind it) pays nothing: this is the hot
-    // path, and the whole reason `read` skips `resolveChannelOr`. Fails soft —
-    // an unreadable roster renders the ids bare, never an error.
-    const agentNames = (0, channel_render_agents_1.anyAgentAddressed)(messages)
-        ? (await (0, channel_agent_refs_1.agentAddressIndex)(client, ref, selfUserId)).names
-        : undefined;
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, agentNames));
+    // A page that named an agent used to cost a conditional roster read here, so
+    // `· @quartz` could be rendered instead of a bare id. Named-agent addressing
+    // is gone (channels rollback §1) and so is the read: this is the hot path,
+    // and the whole reason `read` skips `resolveChannelOr`.
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
     const lastSeq = messages[messages.length - 1].seq;
     if (!scope) {
         // A channel-wide read already IS the channel-wide cursor.
@@ -224,19 +214,12 @@ async function opGetThread(client, ref, threadId, selfUserId = null) {
     // under it. The product tells a waiting agent to call this op every ~3 empty
     // holds, so it is a peer-typed title an agent re-reads on a timer.
     const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
-    // MULTIPLAYER — the PARTICIPANT SET, which is the fact this op exists to
-    // answer for an agent under the law "act on your own room": a thread with a
-    // set is a breakout room and the set is who may post into it. Rendered here
-    // rather than inside `formatThreadDetail` because naming the agents in it
-    // needs a roster the pure renderer has no way to fetch. Both lookups fail
-    // soft — an unreadable roster degrades to ids, never to an error.
-    const agentNames = await (0, channel_agent_refs_1.agentNamesById)(client, ref);
-    return (0, respond_1.ok)([
-        channel_render_1.UNTRUSTED_THREAD_HEADER,
-        ``,
-        (0, channel_render_1.formatThreadDetail)(thread, view),
-        ...(0, channel_agent_refs_1.participantLines)(thread.participants, view, agentNames),
-    ].join("\n"));
+    // A thread's PARTICIPANT SET was rendered under the detail here — a thread
+    // with a set was a breakout room and the set was who could post into it — and
+    // it needed a roster read to name the agents in it. Breakout rooms are gone
+    // (channels rollback §1): a thread is its creator and its target, both of
+    // which `formatThreadDetail` already names.
+    return (0, respond_1.ok)([channel_render_1.UNTRUSTED_THREAD_HEADER, ``, (0, channel_render_1.formatThreadDetail)(thread, view)].join("\n"));
 }
 /**
  * The channel ROSTER — who is actually in here.

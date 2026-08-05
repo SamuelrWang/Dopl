@@ -36,11 +36,6 @@ import type {
   ChannelThread,
 } from "@dopl/client";
 import { inlineOr, metaString, neutralizeInline } from "./channel-shared";
-// WHICH AGENTS a message names, and how one is rendered. Split out at the §2
-// cap — it parses an address out of jsonb rather than rendering a typed row,
-// and it is the only part of a line that needs a roster to name. One-way:
-// nothing there imports this file.
-import { agentAddressTag } from "./channel-render-agents";
 // WHICH EXCHANGE a message belongs to, and whether that exchange is a real
 // THREAD or one machine's ad-hoc grouping label (F4). Split out at the §2 cap on
 // the same seam, and one-way for the same reason.
@@ -254,12 +249,16 @@ function namesFromMessages(messages: ChannelMessage[]): Map<string, string> {
  *
  * F4 — the thread clause is now `channel-render-threads.ts`'s, because a
  * `task-<channel>-<seq>` id is NOT a thread and must stop rendering as one.
+ *
+ * There was an AGENT ADDRESS clause too — `· @quartz (id)` off
+ * `metadata.to_agent_ids`, which needed a roster read to name — and it went
+ * with named-agent addressing (channels rollback §1). An address is a PERSON
+ * again, so `· unaddressed` means what it says with no second half to clear it.
  */
 function formatMessage(
   m: ChannelMessage,
   anyThreaded: boolean,
   view: MemberView,
-  agentNames: Map<string, string>,
 ): string {
   const author = formatAuthor(m);
   const kindTag = m.kind !== "message" ? ` · ${m.kind}` : "";
@@ -279,17 +278,8 @@ function formatMessage(
     ? ` · session ${inlineOr(sessionSlotRef(session.slice(session.indexOf(":") + 1) || session), UNREADABLE_ID)}`
     : "";
   const to = addresseeOf(m);
-  const agentTag = agentAddressTag(m, agentNames);
-  // "unaddressed" is a claim about the WHOLE address, so an agent-only address
-  // must clear it: a message naming an agent by handle is emphatically not one
-  // nobody was asked to act on, and rendering it as unaddressed would teach the
-  // reader the opposite of the law it is supposed to be following.
-  const memberTag = to
-    ? ` · to ${memberRef(to, view)}`
-    : agentTag
-      ? ""
-      : " · unaddressed";
-  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${agentTag} · ${m.createdAt}`;
+  const memberTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
+  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag} · ${m.createdAt}`;
   const body = m.body ? `\n  ${m.body.replace(/\n/g, "\n  ")}` : "";
   return `- ${head}${body}`;
 }
@@ -301,23 +291,19 @@ function formatMessage(
  * from the listing's own hydrated authors, so naming the people costs the
  * read/await path nothing.
  *
- * `agentNames` is the one thing this cannot harvest from the messages — a
- * message carries agent IDS and no handles — so the caller passes it in,
- * already fetched and already fail-soft. It defaults to empty, which renders
- * every addressed agent as a bare id: the correct degradation, and what every
- * caller that has no roster in hand gets.
+ * It took an `agentNames` map too — the one thing it could not harvest from the
+ * messages, since a message carried agent IDS and no handles — and it went with
+ * the agent address tag (channels rollback §1), taking the roster round-trip
+ * the read path did for it.
  */
 export function formatMessages(
   messages: ChannelMessage[],
   ref: string,
   selfUserId: string | null = null,
-  agentNames: Map<string, string> = new Map(),
 ): string[] {
   const view: MemberView = { selfUserId, names: namesFromMessages(messages) };
   const anyThreaded = messages.some((m) => threadIdOf(m) !== undefined);
-  const lines = messages.map((m) =>
-    formatMessage(m, anyThreaded, view, agentNames),
-  );
+  const lines = messages.map((m) => formatMessage(m, anyThreaded, view));
   const legend = threadLegend(messages, ref);
   if (legend) lines.push(`\n${legend}`);
   return lines;

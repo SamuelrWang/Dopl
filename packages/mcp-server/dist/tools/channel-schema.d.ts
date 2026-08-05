@@ -18,14 +18,20 @@
  * the route trims before measuring, so the two agree on what "200 characters"
  * counts.
  *
- * F5 (2026-08-01) — THE MINIMUMS MIRROR TOO, and the agent-ref cap is published
- * at last. `body` / `client_msg_id` / `title` carried a maximum and no minimum
- * while the route required `.min(1)` on all three, and `to_agent` / `to_agents`
- * items carried NO bound against the route's 64 — so an empty body, a blank
- * idempotency key, a whitespace-only title and an over-long handle each passed
- * the tool and died at the route as an opaque 400 that the write ops then
- * mis-narrated (see `channel-errors.ts`). A client-side refusal is a -32602 that
- * names the field.
+ * F5 (2026-08-01) — THE MINIMUMS MIRROR TOO. `body` / `client_msg_id` / `title`
+ * carried a maximum and no minimum while the route required `.min(1)` on all
+ * three, so an empty body, a blank idempotency key and a whitespace-only title
+ * each passed the tool and died at the route as an opaque 400 that the write ops
+ * then mis-narrated (see `channel-errors.ts`). A client-side refusal is a -32602
+ * that names the field.
+ *
+ * THE NAMED-AGENT PARAMS ARE GONE (channels rollback §1, 2026-08-05):
+ * `to_agent` / `to_agents` / `as_agent` / `participants` / `status`, and the
+ * seven ops that read them. They are DROPPED FROM THE ENUM rather than kept for
+ * a teaching refusal, unlike `close_thread` below — a removed op whose
+ * capability is genuinely gone gets a plain "invalid enum value", which is the
+ * honest answer, where `close_thread`'s capability moved and its refusal names
+ * where it moved to.
  *
  * `summary` IS DELIBERATELY NOT SPLIT and its declared 2000 stays. One param
  * serves two routes with two caps (post 200, close_thread 2000) and this schema
@@ -36,10 +42,10 @@
 import { z } from "zod";
 export declare const CHANNEL_INPUT_SHAPE: {
     op: z.ZodEnum<{
-        open: "open";
-        members: "members";
         list: "list";
         read: "read";
+        members: "members";
+        open: "open";
         invite: "invite";
         post: "post";
         milestone: "milestone";
@@ -50,13 +56,6 @@ export declare const CHANNEL_INPUT_SHAPE: {
         propose_close: "propose_close";
         close_thread: "close_thread";
         set_thread_mode: "set_thread_mode";
-        agents: "agents";
-        summon_agent: "summon_agent";
-        rename_agent: "rename_agent";
-        set_agent_status: "set_agent_status";
-        disengage_agent: "disengage_agent";
-        join_thread: "join_thread";
-        leave_thread: "leave_thread";
     }>;
     channel: z.ZodOptional<z.ZodString>;
     direct: z.ZodOptional<z.ZodBoolean>;
@@ -67,21 +66,10 @@ export declare const CHANNEL_INPUT_SHAPE: {
         private: "private";
     }>>;
     member: z.ZodOptional<z.ZodString>;
-    agent: z.ZodOptional<z.ZodString>;
-    status: z.ZodOptional<z.ZodEnum<{
-        active: "active";
-        summoned: "summoned";
-        parked: "parked";
-        dismissed: "dismissed";
-    }>>;
-    to_agent: z.ZodOptional<z.ZodString>;
-    to_agents: z.ZodOptional<z.ZodArray<z.ZodString>>;
     intent: z.ZodOptional<z.ZodEnum<{
         chat: "chat";
         request: "request";
     }>>;
-    as_agent: z.ZodOptional<z.ZodString>;
-    participants: z.ZodOptional<z.ZodArray<z.ZodString>>;
     body: z.ZodOptional<z.ZodString>;
     to: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodString>;

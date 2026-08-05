@@ -16,7 +16,7 @@
  * deliberate, cursor-preserving one, never a blind transport retry.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadDetail, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -34,11 +34,20 @@ export declare function inviteToChannel(t: DoplTransport, channelId: string, use
  * `threadClosed` is normalized to a boolean here, and that normalization is the
  * point: an older deployment sends no key, a post into an open thread sends no
  * key, and both must read as `false` rather than as `undefined` for the caller
- * to re-decide. Same additive-field discipline as {@link withParticipants}.
+ * to re-decide. Same additive-field discipline as `openingSeq` below.
  */
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
-export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThreadDetail[]>;
-export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThreadDetail>;
+/**
+ * A thread READ used to carry its PARTICIPANT SET — the breakout room's
+ * membership — normalized through a `withParticipants` helper so an older
+ * deployment's missing field and a set-less thread's `[]` both read as "no
+ * participants". Breakout rooms are gone (channels rollback §1), and so is the
+ * field, the helper and the `ChannelThreadDetail` type; a thread read is the
+ * row. The additive-field discipline itself survives on `openingSeq` /
+ * `echoSeq` / `threadClosed` below.
+ */
+export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThread[]>;
+export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
 /**
  * PROPOSE closing a thread (DECISION 2, 2026-08-04) — the agent lane's terminal

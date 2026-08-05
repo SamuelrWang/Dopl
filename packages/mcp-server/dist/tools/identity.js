@@ -37,10 +37,6 @@ exports.callerStatusLine = callerStatusLine;
 exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
 const narration_1 = require("./narration");
-// ONE spelling of the "this handle did not survive neutralization" fallback:
-// the footer renders the SAME agent handle the channel roster does, and two
-// literals for one tell is how the two surfaces drift apart.
-const channel_agent_refs_1 = require("./channel-agent-refs");
 /**
  * The recognized `X-Dopl-Runtime` value (`src/shared/auth/runtime-header.ts`).
  * Restated rather than imported: `packages/*` cannot import from the app's
@@ -84,21 +80,18 @@ function runtimeWord(identity) {
  * where it is both a per-response token cost and one careless paste away from a
  * channel message. Both live in `whoami`.
  *
- * `agent` is the MULTIPLAYER locus: the agent identity THIS ONE CALL spoke as
- * (`dopl_channel` `as_agent`). It is a per-call fact, not a session one — a
- * session may speak for several agents — so it arrives on the result rather
- * than on the identity record (see `ToolResponse._callerAgent`). Rendered as
- * handle AND id, because a handle is its owner's claim and the id is the
- * server's record; neutralized, because the handle is member-typed.
+ * IT CARRIED A THIRD FIELD, the MULTIPLAYER locus: the named agent THIS ONE
+ * CALL spoke as (`dopl_channel` `as_agent`), which rode the RESULT rather than
+ * the identity record because a session could speak for several agents. Named
+ * agents are gone (channels rollback §1) and so is the whole `_callerAgent`
+ * channel through `respond.ts` and `server.ts`. A session's own identity — the
+ * `X-Dopl-Session-Id` stamp — is what names a running agent now.
  */
-function callerStatusLine(identity, agent = null) {
+function callerStatusLine(identity) {
     const id = identity.userId
         ? `id=\`${identity.userId}\``
         : "id=(unresolved — this connection could not confirm who you are)";
-    const as = agent
-        ? ` · as ${(0, narration_1.inlineOr)(agent.name, channel_agent_refs_1.NO_HANDLE)} (\`${agent.id}\`)`
-        : "";
-    return `  caller: ${id} · runtime=${runtimeWord(identity)}${as}`;
+    return `  caller: ${id} · runtime=${runtimeWord(identity)}`;
 }
 /**
  * The caller's own session, for the surfaces that answer "who am I" in full.

@@ -185,17 +185,10 @@ describe("Q9 · the MCP schema mirrors the routes' caps", () => {
     expect(s.safeParse({ ...base, title: "T", summary: "s".repeat(2_001) }).success).toBe(false);
   });
 
-  it("caps `to_agents` at EIGHT — the same number the route enforces", () => {
-    // MIRRORS `MAX_ADDRESSED_AGENTS` (src/features/channels/schema.ts). Declared
-    // here it is published in the tool's inputSchema (the model sees maxItems)
-    // and the ninth handle is refused before the call is made at all — the same
-    // reason every other cap in this block is duplicated rather than described.
-    const s = channelSchema();
-    const post = { op: "post", channel: "eng", body: "b" };
-    const handles = (n: number) => Array.from({ length: n }, (_, i) => `a${i}`);
-    expect(s.safeParse({ ...post, to_agents: handles(8) }).success).toBe(true);
-    expect(s.safeParse({ ...post, to_agents: handles(9) }).success).toBe(false);
-  });
+  // `to_agents` was capped at EIGHT here, mirroring the route's
+  // `MAX_ADDRESSED_AGENTS`, so the ninth handle was refused before the call was
+  // made. The param is gone (channels rollback §1) and its absence is pinned in
+  // `channel-addressing-rule.test.ts`.
 
   it("`intent` publishes exactly the two the route's union has", () => {
     const s = channelSchema();

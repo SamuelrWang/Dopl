@@ -109,7 +109,7 @@ Use the Dopl tools to read and organize the user's workspace: their knowledge ba
 
 ## Reaching another member or their agent
 
-Dopl also carries CHANNELS: live member-to-member and agent-to-agent messaging inside the workspace. When the user wants to ask, tell, or request something OF ANOTHER MEMBER or of their agent ("ask X's agent what he did recently", "send this to Y", "get an answer from Z"), the tool is dopl_channel, not the knowledge tools. It is DEFERRED in some clients, so if it is not in your tool list, load it with ToolSearch before you conclude this workspace has no way to reach people. Start at dopl_channel(op="list") for the channels and DMs this account can post into, then follow that tool's own description, which is where the addressing and approval rules live.
+Dopl also carries CHANNELS: live member-to-member and agent-to-agent messaging inside the workspace. When the user wants to ask, tell, or request something OF ANOTHER MEMBER ("ask X what he did recently", "send this to Y", "get an answer from Z"), the tool is dopl_channel, not the knowledge tools. You address a PERSON; their side decides what runs. It is DEFERRED in some clients, so if it is not in your tool list, load it with ToolSearch before you conclude this workspace has no way to reach people. Start at dopl_channel(op="list") for the channels and DMs this account can post into, then follow that tool's own description, which is where the addressing and approval rules live.
 
 ## Session start — preload the user's workspace
 
@@ -170,10 +170,11 @@ ${skill_authoring_guide_js_1.SKILL_AUTHORING_GUIDE}`;
  *     meta-tools when the caller has no session default).
  */
 async function appendDoplStatus(response, effective, caller) {
-    // The per-call agent locus (`as_agent`) rides the RESULT, not the session
-    // identity, and is stripped here on every path — it is our plumbing, and the
-    // MCP result shape does not carry it.
-    const { _callerAgent: agent = null, ...res } = response;
+    // A per-call agent locus (`as_agent`) used to ride the RESULT rather than the
+    // session identity and be stripped here before the shape went out. Named
+    // agents are gone (channels rollback §1) and the response is the MCP shape
+    // again.
+    const res = response;
     if (res.isError)
         return res;
     if (!effective)
@@ -197,7 +198,7 @@ async function appendDoplStatus(response, effective, caller) {
         "",
         "---",
         "_dopl_status:",
-        (0, identity_js_1.callerStatusLine)(caller, agent),
+        (0, identity_js_1.callerStatusLine)(caller),
         `  active_workspace: ${(0, narration_js_1.inlineOr)(effective.name, UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
         `  workspace_source: ${effective.source}`,
     ].join("\n");
@@ -348,12 +349,12 @@ function createServer(client, options = {}) {
             "propose_close",
             "close_thread",
             "set_thread_mode",
-            // Multiplayer: roster + engagement + breakout-room membership writes.
-            // `disengage_agent` PATCHes channel_agents (clearing engaged_at /
-            // engaged_by), so it is a write like the other two agent PATCHes — being
-            // allowed to a non-owner does not make it a read.
-            "summon_agent", "rename_agent", "set_agent_status", "disengage_agent",
-            "join_thread", "leave_thread",
+            // The multiplayer writes — `summon_agent` / `rename_agent` /
+            // `set_agent_status` / `disengage_agent` / `join_thread` / `leave_thread`
+            // — were listed here and are gone with the ops (channels rollback §1).
+            // Unlike `close_thread` above they are NOT kept: `close_thread` is still
+            // in the enum for a teaching refusal, so a read-only token must be
+            // refused for the SCOPE reason first; these are not ops at all.
         ]),
     };
     // Session default workspace — resolved once at boot (factory.ts), never

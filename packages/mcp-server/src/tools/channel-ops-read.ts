@@ -23,7 +23,7 @@
 import type {
   ChannelMember,
   ChannelMessage,
-  ChannelThreadDetail,
+  ChannelThread,
   DoplClient,
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
@@ -39,19 +39,9 @@ import {
   formatThreadDetail,
   formatThreadLine,
 } from "./channel-render";
-// Whether anything in a page names an AGENT — the predicate that keeps the
-// roster read off the hot path (BLOCKER-3).
-import { anyAgentAddressed } from "./channel-render-agents";
 // The addressing rule has ONE statement, in one module — see
 // channel-addressing.ts for what each half of it is verified against.
 import { rosterAddressingRule } from "./channel-addressing";
-// Breakout-room membership: the set a thread read now carries, and the handles
-// that name the agents in it. Both fail soft.
-import {
-  agentAddressIndex,
-  agentNamesById,
-  participantLines,
-} from "./channel-agent-refs";
 
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
@@ -177,15 +167,11 @@ export async function opRead(
     // caveat placed under them is read after the injected line it warns about.
     `${UNTRUSTED_BODY_HEADER}\n`,
   ];
-  // BLOCKER-3 — the handles for any agents these messages ADDRESS. Fetched
-  // ONLY when something in the page actually names one, so an ordinary
-  // transcript (and the poll loop behind it) pays nothing: this is the hot
-  // path, and the whole reason `read` skips `resolveChannelOr`. Fails soft —
-  // an unreadable roster renders the ids bare, never an error.
-  const agentNames = anyAgentAddressed(messages)
-    ? (await agentAddressIndex(client, ref, selfUserId)).names
-    : undefined;
-  lines.push(...formatMessages(messages, ref, selfUserId, agentNames));
+  // A page that named an agent used to cost a conditional roster read here, so
+  // `· @quartz` could be rendered instead of a bare id. Named-agent addressing
+  // is gone (channels rollback §1) and so is the read: this is the hot path,
+  // and the whole reason `read` skips `resolveChannelOr`.
+  lines.push(...formatMessages(messages, ref, selfUserId));
   const lastSeq = messages[messages.length - 1].seq;
   if (!scope) {
     // A channel-wide read already IS the channel-wide cursor.
@@ -211,7 +197,7 @@ export async function opListThreads(
   // Hot-path parity with read/await: hand the ref straight to the route
   // (slug-or-id + visibility enforced there) and map a 404 to a clean
   // not-found, rather than pre-resolving via listChannels.
-  let threads: ChannelThreadDetail[];
+  let threads: ChannelThread[];
   try {
     threads = await client.listChannelThreads(ref);
   } catch (e) {
@@ -246,7 +232,7 @@ export async function opGetThread(
   threadId: string,
   selfUserId: string | null = null,
 ): Promise<ToolResponse> {
-  let thread: ChannelThreadDetail;
+  let thread: ChannelThread;
   try {
     thread = await client.getChannelThread(ref, threadId);
   } catch (e) {
@@ -271,20 +257,13 @@ export async function opGetThread(
   // under it. The product tells a waiting agent to call this op every ~3 empty
   // holds, so it is a peer-typed title an agent re-reads on a timer.
   const view = { selfUserId, names: await memberNames(client, ref) };
-  // MULTIPLAYER — the PARTICIPANT SET, which is the fact this op exists to
-  // answer for an agent under the law "act on your own room": a thread with a
-  // set is a breakout room and the set is who may post into it. Rendered here
-  // rather than inside `formatThreadDetail` because naming the agents in it
-  // needs a roster the pure renderer has no way to fetch. Both lookups fail
-  // soft — an unreadable roster degrades to ids, never to an error.
-  const agentNames = await agentNamesById(client, ref);
+  // A thread's PARTICIPANT SET was rendered under the detail here — a thread
+  // with a set was a breakout room and the set was who could post into it — and
+  // it needed a roster read to name the agents in it. Breakout rooms are gone
+  // (channels rollback §1): a thread is its creator and its target, both of
+  // which `formatThreadDetail` already names.
   return ok(
-    [
-      UNTRUSTED_THREAD_HEADER,
-      ``,
-      formatThreadDetail(thread, view),
-      ...participantLines(thread.participants, view, agentNames),
-    ].join("\n"),
+    [UNTRUSTED_THREAD_HEADER, ``, formatThreadDetail(thread, view)].join("\n"),
   );
 }
 

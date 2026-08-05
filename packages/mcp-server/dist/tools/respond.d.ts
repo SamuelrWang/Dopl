@@ -6,36 +6,24 @@
  */
 import { z, type ZodRawShape } from "zod";
 /**
- * The agent identity ONE call spoke as (`dopl_channel` `as_agent`). A handle is
- * the owner's claim about a name and an id is the server's record of it, so
- * both travel together — the footer renders neither alone.
+ * A tool result: text blocks, plus the error flag.
+ *
+ * IT CARRIED A THIRD FIELD, `_callerAgent` — the named agent ONE call spoke as
+ * (`dopl_channel` `as_agent`), read by the `_dopl_status` footer in `server.ts`
+ * and stripped there before the response left, because it was our plumbing and
+ * not part of the MCP result shape. It rode the RESULT rather than the boot
+ * `CallerIdentity` because a session could speak for several agents and
+ * mutating the boot record would have made every later response claim the last
+ * agent that happened to post. Named agents are gone (channels rollback §1),
+ * and with them the field, its `withCallerAgent` setter and the footer clause.
  */
-export type CallerAgent = {
-    id: string;
-    /** The handle, RAW — neutralized where it is rendered, never before. */
-    name: string;
-};
 export type ToolResponse = {
     content: Array<{
         type: "text";
         text: string;
     }>;
     isError?: boolean;
-    /**
-     * PER-CALL agent locus, read by the `_dopl_status` footer in server.ts and
-     * STRIPPED there before the response leaves the server (it is our own
-     * plumbing, not part of the MCP result shape).
-     *
-     * Why it rides the result instead of the session's `CallerIdentity`: the boot
-     * identity is resolved once and describes the CONNECTION, while `as_agent` is
-     * chosen per call and one session may speak for several agents. Mutating the
-     * boot record would make every later response — including reads that named no
-     * agent at all — claim the last agent that happened to post.
-     */
-    _callerAgent?: CallerAgent | null;
 };
-/** Tag a response with the agent identity this call spoke as (or null). */
-export declare function withCallerAgent(response: ToolResponse, agent: CallerAgent | null): ToolResponse;
 export type RegisterTool = <S extends ZodRawShape>(name: string, description: string, schema: S, handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>) => void;
 export declare function ok(text: string): ToolResponse;
 export declare function err(message: string): ToolResponse;

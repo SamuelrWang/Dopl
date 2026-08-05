@@ -4,7 +4,7 @@
  *
  * The caps were mirrored in a previous round; the MINIMUMS were not, and one
  * cap was never published at all. So `body: ""`, `client_msg_id: ""`,
- * `title: "   "` and a >64-character agent handle all passed the tool, reached
+ * `title: "   "` and a whitespace-only title all passed the tool, reached
  * the route, and came back as an opaque 400 — which the write ops then had to
  * GUESS at, and historically guessed wrong ("invite them first" for a rejected
  * body). Declared here they are a -32602 that names the field, before anything
@@ -15,7 +15,7 @@
  *    200, close_thread's is 2000) and the schema declares the LOOSER so a
  *    legitimate close summary is never refused client-side. Pinned below so a
  *    later "consistency" pass cannot quietly tighten it.
- *  - `.trim()` on the agent refs. The route trims before measuring; this schema
+ *  - `.trim()` on the addressee ref. The route trims before measuring; this schema
  *    does not, and adding it here would change the bytes that are SENT.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -49,21 +49,10 @@ function accepts(input) {
         (0, vitest_1.expect)(accepts({ title: "t".repeat(201) })).toBe(false);
     });
 });
-(0, vitest_1.describe)("F5 — the 64-character agent-ref cap, published at last", () => {
-    (0, vitest_1.it)("bounds `to_agent`", () => {
-        (0, vitest_1.expect)(accepts({ to_agent: "quartz" })).toBe(true);
-        (0, vitest_1.expect)(accepts({ to_agent: "a".repeat(64) })).toBe(true);
-        (0, vitest_1.expect)(accepts({ to_agent: "a".repeat(65) })).toBe(false);
-    });
-    (0, vitest_1.it)("bounds each ITEM of `to_agents`, not just the list", () => {
-        (0, vitest_1.expect)(accepts({ to_agents: ["quartz", "onyx"] })).toBe(true);
-        (0, vitest_1.expect)(accepts({ to_agents: ["quartz", "a".repeat(65)] })).toBe(false);
-        // The list bounds are unchanged: 1..8, and an empty list is still refused.
-        (0, vitest_1.expect)(accepts({ to_agents: [] })).toBe(false);
-        (0, vitest_1.expect)(accepts({ to_agents: Array(8).fill("q") })).toBe(true);
-        (0, vitest_1.expect)(accepts({ to_agents: Array(9).fill("q") })).toBe(false);
-    });
-});
+// F5's agent-ref cap (`to_agent` / each `to_agents` item bounded at 64, the
+// list at 8 and `.min(1)`) was published here and is gone with the params
+// themselves (channels rollback §1). The ABSENCE is pinned in
+// `channel-addressing-rule.test.ts`.
 (0, vitest_1.describe)("F5 — what stays deliberately unmirrored", () => {
     (0, vitest_1.it)("keeps `summary` at the LOOSER 2000, so a close summary is never refused here", () => {
         // A 201-character POST summary is still the ROUTE's to reject: one param,
@@ -74,8 +63,8 @@ function accepts(input) {
         // …and the tighter number is still stated in the prose the model reads.
         (0, vitest_1.expect)(channel_schema_1.CHANNEL_INPUT_SHAPE.summary.description).toContain("<=200 chars");
     });
-    (0, vitest_1.it)("does not trim the agent refs — that would change the bytes sent", () => {
-        const parsed = shape.parse({ op: "post", to_agent: " quartz " });
-        (0, vitest_1.expect)(parsed.to_agent).toBe(" quartz ");
+    (0, vitest_1.it)("does not trim the addressee ref — that would change the bytes sent", () => {
+        const parsed = shape.parse({ op: "post", to: " ada@example.com " });
+        (0, vitest_1.expect)(parsed.to).toBe(" ada@example.com ");
     });
 });

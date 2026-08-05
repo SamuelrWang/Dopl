@@ -68,7 +68,6 @@ import type {
   WorkspaceTeam,
 } from "./member-types.js";
 import * as channel from "./channel.js";
-import { ChannelAgentsClient } from "./client-channel-agents.js";
 import type {
   AwaitMessagesOptions,
   AwaitResult,
@@ -83,7 +82,6 @@ import type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
-  ChannelThreadDetail,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
@@ -92,13 +90,23 @@ import type {
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 
-export class DoplClient extends ChannelAgentsClient {
+export class DoplClient {
+  /**
+   * PROTECTED, not private, and it stays that way: it is the hook a per-domain
+   * method-group base class reads (§2's scheduled remedy for this facade's
+   * size). There was one such link — `ChannelAgentsClient`, holding the channel
+   * agents + thread participants group — and it went with those surfaces
+   * (channels rollback §1), so this class currently extends nothing and the
+   * chain needs a new first link.
+   */
+  protected transport: DoplTransport;
+
   constructor(
     baseUrl: string,
     apiKey: string,
     opts: ConstructorParameters<typeof DoplTransport>[2] = {}
   ) {
-    super(new DoplTransport(baseUrl, apiKey, opts));
+    this.transport = new DoplTransport(baseUrl, apiKey, opts);
   }
 
   getBaseUrl(): string {
@@ -584,8 +592,8 @@ export class DoplClient extends ChannelAgentsClient {
   // Cross-user, agent-to-agent collaboration threads. Messages carry a
   // monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals
   // past a cursor so a listener can watch a channel without busy-looping.
-  // The MULTIPLAYER half — channel agents + thread participants — is a method
-  // group this class INHERITS: client-channel-agents.ts, §2's per-domain split.
+  // There was a MULTIPLAYER half — channel agents + thread participants — and
+  // it is gone with the surfaces it called (channels rollback §1).
 
   listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {
     return channel.listChannels(this.transport, opts);
@@ -628,11 +636,11 @@ export class DoplClient extends ChannelAgentsClient {
     return channel.awaitMessages(this.transport, channelId, opts);
   }
 
-  listChannelThreads(channelId: string): Promise<ChannelThreadDetail[]> {
+  listChannelThreads(channelId: string): Promise<ChannelThread[]> {
     return channel.listChannelThreads(this.transport, channelId);
   }
 
-  getChannelThread(channelId: string, threadId: string): Promise<ChannelThreadDetail> {
+  getChannelThread(channelId: string, threadId: string): Promise<ChannelThread> {
     return channel.getChannelThread(this.transport, channelId, threadId);
   }
 

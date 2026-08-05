@@ -31,7 +31,6 @@ import type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
-  ChannelThreadDetail,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
@@ -170,7 +169,7 @@ export async function inviteToChannel(
  * `threadClosed` is normalized to a boolean here, and that normalization is the
  * point: an older deployment sends no key, a post into an open thread sends no
  * key, and both must read as `false` rather than as `undefined` for the caller
- * to re-decide. Same additive-field discipline as {@link withParticipants}.
+ * to re-decide. Same additive-field discipline as `openingSeq` below.
  */
 export async function postMessage(
   t: DoplTransport,
@@ -196,39 +195,35 @@ export async function postMessage(
 // read and write path. Everything above this line speaks `thread`.
 
 /**
- * MULTIPLAYER: a thread READ now carries its PARTICIPANT SET — the breakout
- * room's membership. `withParticipants` is what makes the field safe to type
- * as non-optional: the server sends `[]` for a thread that has none, and an
- * OLDER deployment sends no field at all. Both must read as "no participants",
- * never as `undefined` for a caller to re-decide — the same additive-field
- * discipline `openingSeq` / `echoSeq` get below.
+ * A thread READ used to carry its PARTICIPANT SET — the breakout room's
+ * membership — normalized through a `withParticipants` helper so an older
+ * deployment's missing field and a set-less thread's `[]` both read as "no
+ * participants". Breakout rooms are gone (channels rollback §1), and so is the
+ * field, the helper and the `ChannelThreadDetail` type; a thread read is the
+ * row. The additive-field discipline itself survives on `openingSeq` /
+ * `echoSeq` / `threadClosed` below.
  */
-function withParticipants(task: ChannelThread): ChannelThreadDetail {
-  const raw = (task as Partial<ChannelThreadDetail>).participants;
-  return { ...task, participants: Array.isArray(raw) ? raw : [] };
-}
-
 export async function listChannelThreads(
   t: DoplTransport,
   channelId: string
-): Promise<ChannelThreadDetail[]> {
+): Promise<ChannelThread[]> {
   const data = await t.request<{ tasks: ChannelThread[] }>(
     `/api/channels/${enc(channelId)}/tasks`,
     { toolName: "channel_list_threads" }
   );
-  return data.tasks.map(withParticipants);
+  return data.tasks;
 }
 
 export async function getChannelThread(
   t: DoplTransport,
   channelId: string,
   threadId: string
-): Promise<ChannelThreadDetail> {
+): Promise<ChannelThread> {
   const data = await t.request<{ task: ChannelThread }>(
     `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
     { toolName: "channel_get_thread" }
   );
-  return withParticipants(data.task);
+  return data.task;
 }
 
 export async function createChannelThread(

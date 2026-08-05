@@ -22,15 +22,16 @@
  * THE LOOP BRAKE into a suggestion, or that restores an unconditional
  * "addressing a person only notifies them".
  *
- * A STALE LAW IS THE SAME BUG AS A FALSE ONE, and this file has now been on both
- * sides of it. It used to pin "NOTHING ACTS UNLESS ADDRESSED" as THE rule; that
- * sentence was true until ENGAGEMENT shipped and then described a product that
- * no longer existed, and a green suite would have kept it there. What is pinned
- * now is the narrower absolute that survived (an AGENT-authored unaddressed
- * message engages and starts nobody, at any size) plus the four rules the room
- * gained: chat vs. request, engagement and its expiry, multi-address, and the
- * one-opener thread handshake. When the behaviour moves again, the pin is the
- * thing to change FIRST — not the thing to work around.
+ * A STALE LAW IS THE SAME BUG AS A FALSE ONE, and this file has now been on
+ * three sides of it. It pinned "NOTHING ACTS UNLESS ADDRESSED"; ENGAGEMENT
+ * shipped and that sentence described a product that no longer existed. So it
+ * pinned engagement, multi-address, `as_agent` and the one-opener thread
+ * handshake instead — and the channels rollback (§1, 2026-08-05) deleted every
+ * one of those, which would have left this suite green over a law teaching
+ * agents to call ops that no longer exist. What is pinned now is what actually
+ * remains: chat vs. request, addressing a PERSON, the loop brake, and the
+ * two-party thread. The removed vocabulary is pinned as an ABSENCE below, which
+ * is the half that catches a resurrection.
  *
  * Captured through the real registrar with a recording `register` and a stub
  * client (registration is all this needs — no handler ever runs).

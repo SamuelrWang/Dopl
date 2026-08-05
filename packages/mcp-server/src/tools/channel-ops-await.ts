@@ -28,15 +28,6 @@ import {
   addresseeOf,
   formatMessages,
 } from "./channel-render";
-// WHICH AGENTS a message names — half of the unnamed-notice predicate below,
-// and the reason this op reads the roster at all (BLOCKER-3).
-import {
-  addressedAgentIdsOf,
-  anyAgentAddressed,
-} from "./channel-render-agents";
-// The room's agents, indexed for a read: what each addressed agent is CALLED,
-// and which of them are the caller's. Fails soft to an empty index.
-import { NO_AGENT_INDEX, agentAddressIndex } from "./channel-agent-refs";
 import {
   AWAIT_POLL_MS,
   resolveAwaitHoldCeilingMs,
@@ -264,15 +255,10 @@ export async function opAwait(
     // has to be read BEFORE them, not as a footnote underneath.
     `${UNTRUSTED_BODY_HEADER}\n`,
   ];
-  // BLOCKER-3 — one roster read, and ONLY when something that arrived names an
-  // agent. It serves both halves of the fix: the handles the lines render, and
-  // the ownership the unnamed-notice predicate needs below. Fetched here rather
-  // than inside the hold so it never lengthens a wait, and fail-soft so a
-  // roster failure cannot turn an arrived message into an error.
-  const agents = anyAgentAddressed(messages)
-    ? await agentAddressIndex(client, ref, selfUserId)
-    : NO_AGENT_INDEX;
-  lines.push(...formatMessages(messages, ref, selfUserId, agents.names));
+  // A page that named an agent used to cost a conditional roster read here,
+  // serving both the handles the lines rendered and the ownership the
+  // unnamed-notice predicate needed. Both are gone (channels rollback §1).
+  lines.push(...formatMessages(messages, ref, selfUserId));
   const lastSeq = messages[messages.length - 1].seq;
   // N-PARTY — `await` is CHANNEL-WIDE and unfiltered: every message wakes every
   // armed listener, including one addressed to a different member or to nobody.
@@ -294,20 +280,14 @@ export async function opAwait(
   // passes `excludeAuthor`, so own posts should not reach here at all — but the
   // notice must be false-free on whatever it is handed.
   //
-  // BLOCKER-3 — AND AN AGENT ADDRESS IS A NAMING. The old predicate read
-  // `to_user_id` alone, and the server stamps that from the FIRST addressed
-  // agent's owner: "@quartz @onyx work on X" therefore names onyx's owner
-  // NOWHERE in that field, so onyx's machine woke to a message naming its agent
-  // by handle and was told "NONE of the messages above NAMES you as its
-  // addressee" — the precise instruction not to act on the message it had just
-  // been assigned. A message names this side if it names the caller OR any
-  // agent the caller owns; `agents.mine` is empty when the roster read failed,
-  // which leaves the notice firing exactly as before rather than suppressing it
-  // on a guess.
+  // AN AGENT ADDRESS USED TO COUNT AS A NAMING TOO. The server stamped
+  // `to_user_id` from the FIRST addressed agent's owner, so "@quartz @onyx work
+  // on X" named onyx's owner nowhere in that field, and this predicate had to
+  // read `to_agent_ids` and the caller's own agent ids beside it. Named-agent
+  // addressing is gone (channels rollback §1), so `to_user_id` is the whole
+  // address again and the roster read that fed the second half is gone with it.
   if (selfUserId !== null) {
-    const namesMe = (m: ChannelMessage) =>
-      addresseeOf(m) === selfUserId ||
-      addressedAgentIdsOf(m).some((id) => agents.mine.has(id));
+    const namesMe = (m: ChannelMessage) => addresseeOf(m) === selfUserId;
     const foreign = messages.filter((m) => m.authorUserId !== selfUserId);
     if (foreign.length > 0 && !foreign.some(namesMe)) {
       lines.push(`\n${AWAIT_UNNAMED_NOTICE}`);

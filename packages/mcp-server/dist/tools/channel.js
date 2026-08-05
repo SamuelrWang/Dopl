@@ -23,15 +23,15 @@
  *                               result lines a post's addressing and threading
  *                               produce
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
- *   - `channel-ops-agents.ts` — agents / summon_agent / rename_agent /
- *                               set_agent_status / disengage_agent /
- *                               join_thread / leave_thread
- *                               (the MULTIPLAYER ops: who is in the room, and
- *                               which of them is currently ENGAGED)
- *   - `channel-agent-refs.ts` — agent identity: handle→row resolution, how a
- *                               handle is rendered, the participant-set render
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
  *                               headers, which the write side now shares
+ *
+ * REMOVED in the channels rollback (§1, 2026-08-05): `channel-ops-agents.ts`
+ * (agents / summon_agent / rename_agent / set_agent_status / disengage_agent /
+ * join_thread / leave_thread), `channel-agent-refs.ts` and
+ * `channel-render-agents.ts` (agent-handle resolution and rendering) and
+ * `channel-handshake-key.ts` (the two-agent thread-open key). A channel reaches
+ * PEOPLE; the only distinction a post makes is `intent` chat vs. request.
  *
  * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The ops
  * and params here say `thread`; `channel_tasks`, `metadata.taskId`, the
@@ -53,7 +53,6 @@ const channel_ops_await_1 = require("./channel-ops-await");
 const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
-const channel_ops_agents_1 = require("./channel-ops-agents");
 const identity_1 = require("./identity");
 /**
  * `caller` — the session's ONE identity record (server.ts / `identity.ts`),
@@ -118,9 +117,6 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     to: args.to,
                     summary: args.summary,
                     thread: args.thread,
-                    toAgent: args.to_agent,
-                    toAgents: args.to_agents,
-                    asAgent: args.as_agent,
                     intent: args.intent,
                     runtime,
                 });
@@ -151,7 +147,6 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     kind: "task_progress",
                     thread: args.thread,
                     summary: args.summary,
-                    asAgent: args.as_agent,
                     runtime,
                 });
             }
@@ -198,11 +193,7 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 ]);
                 if (miss)
                     return miss;
-                // S2 — a param this op cannot honour is REFUSED here, at the routing
-                // seam that would otherwise drop it. The prose lives with the op.
-                if (args.as_agent)
-                    return (0, channel_ops_threads_1.asAgentNotOnCreateThread)();
-                return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id, runtime, args.participants);
+                return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id, runtime);
             }
             // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM. An agent's terminal act
             // on a thread is a PROPOSAL its operator confirms; the close itself is a
@@ -234,69 +225,6 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 if (miss)
                     return miss;
                 return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
-            }
-            // ── Multiplayer: the room's agents, and breakout-room membership ──
-            case "agents": {
-                const miss = (0, respond_1.missingParams)("agents", args, ["channel"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_agents_1.opAgents)(client, args.channel, selfUserId);
-            }
-            case "summon_agent": {
-                const miss = (0, respond_1.missingParams)("summon_agent", args, ["channel"]);
-                if (miss)
-                    return miss;
-                // `name` stays OPTIONAL here — the pool pick is the normal path.
-                return (0, channel_ops_agents_1.opSummonAgent)(client, args.channel, args.name);
-            }
-            case "rename_agent": {
-                const miss = (0, respond_1.missingParams)("rename_agent", args, [
-                    "channel",
-                    "agent",
-                    "name",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_agents_1.opRenameAgent)(client, args.channel, args.agent, args.name);
-            }
-            case "set_agent_status": {
-                const miss = (0, respond_1.missingParams)("set_agent_status", args, [
-                    "channel",
-                    "agent",
-                    "status",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_agents_1.opSetAgentStatus)(client, args.channel, args.agent, args.status);
-            }
-            case "disengage_agent": {
-                const miss = (0, respond_1.missingParams)("disengage_agent", args, [
-                    "channel",
-                    "agent",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_agents_1.opDisengageAgent)(client, args.channel, args.agent);
-            }
-            case "join_thread": {
-                const miss = (0, respond_1.missingParams)("join_thread", args, ["channel", "thread"]);
-                if (miss)
-                    return miss;
-                // WHICH identity is checked in the handler, not here: `member` and
-                // `agent` are alternatives, and `missingParams` can only require.
-                return (0, channel_ops_agents_1.opJoinThread)(client, args.channel, args.thread, {
-                    member: args.member,
-                    agent: args.agent,
-                });
-            }
-            case "leave_thread": {
-                const miss = (0, respond_1.missingParams)("leave_thread", args, ["channel", "thread"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_agents_1.opLeaveThread)(client, args.channel, args.thread, {
-                    member: args.member,
-                    agent: args.agent,
-                });
             }
         }
     });

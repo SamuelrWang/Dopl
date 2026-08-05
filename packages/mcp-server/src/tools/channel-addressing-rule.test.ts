@@ -37,12 +37,10 @@ import type { DoplClient } from "@dopl/client";
 import {
   AWAIT_UNNAMED_NOTICE,
   GROUP_CHANNEL_MIN_MEMBERS,
-  MAX_ADDRESSED_AGENTS,
   routesToASession,
   rosterAddressingRule,
   unaddressedPostNote,
 } from "./channel-addressing";
-import { AGENT_CAP_NOTE, classifyBadRequest } from "./channel-errors";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { opAwait } from "./channel-ops-await";
 import { opMembers } from "./channel-ops-read";
@@ -113,60 +111,72 @@ describe("the group-channel threshold is not restated per lane", () => {
     expect(Number(declared![1])).toBe(GROUP_CHANNEL_MIN_MEMBERS);
   });
 
-  it("matches the route schema's MAX_ADDRESSED_AGENTS", () => {
-    // Same doctrine, second constant (SHOULD-FIX-4). This one is worse to drift
-    // on than the threshold above: the tool PUBLISHES it as `to_agents.max()`,
-    // so a copy that is one higher than the server's turns the declared surface
-    // into a promise the route refuses.
-    const web = readFileSync("../../src/features/channels/schema.ts", "utf8");
-    const declared = /MAX_ADDRESSED_AGENTS = (\d+)/.exec(web);
-    expect(declared, "the route constant moved or was renamed").not.toBeNull();
-    expect(Number(declared![1])).toBe(MAX_ADDRESSED_AGENTS);
-  });
 });
 
-// ── the cap the tool advertised and could not explain ────────────────
+// ── the merged agent cap, and why nothing pins it any more ───────────
+//
+// `MAX_ADDRESSED_AGENTS` was a second cross-lane constant, pinned here on the
+// same doctrine as the threshold above: the tool PUBLISHED it as
+// `to_agents.max()`, so a copy one higher than the server's turned the declared
+// surface into a promise the route refused. Named-agent addressing is gone
+// (channels rollback §1) — no `to_agent`, no `to_agents`, no cap, and no
+// `CHANNEL_TOO_MANY_AGENTS` code to classify.
 
-describe("the agent cap is MERGED, and the surface now says so", () => {
-  it("publishes the cap on `to_agents` and states that `to_agent` counts too", () => {
-    // THE DEFECT: `to_agents.max(8)` was published with no word about
-    // `to_agent`, while the server caps the DEDUPED MERGE of the two
-    // (`resolveAgentAddressing`). A caller that read the surface literally sent
-    // `to_agent` + eight and got a 400 for a rule nothing had stated.
-    const to_agents = CHANNEL_INPUT_SHAPE.to_agents.description ?? "";
-    const to_agent = CHANNEL_INPUT_SHAPE.to_agent.description ?? "";
-    expect(to_agents).toContain(`${MAX_ADDRESSED_AGENTS} IN TOTAL`);
-    expect(to_agents).toContain("`to_agent` INCLUDED");
-    expect(to_agent).toContain(`${MAX_ADDRESSED_AGENTS} agents in total`);
-    expect(to_agent).toContain("`to_agent` included");
+describe("the removed named-agent surface is ABSENT from the published shape", () => {
+  it("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
+    // Not "declared and ignored": a param an MCP client can still see is a
+    // param a model will still try, and a silently-dropped address is the
+    // invisible-delivery failure the addressing contract exists to prevent.
+    for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent", "status"]) {
+      expect(CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
+    }
   });
 
-  it("classifies CHANNEL_TOO_MANY_AGENTS instead of dropping it into `unknown`", () => {
-    // It landed in the arm that says "the server did not name a cause this tool
-    // recognizes" — for a 400 the tool's own published surface provoked.
-    expect(classifyBadRequest({ status: 400, code: "CHANNEL_TOO_MANY_AGENTS" })).toBe(
-      "too_many_agents",
-    );
+  it("REFUSES every removed op at the enum, before any handler runs", () => {
+    // The seven lifecycle / membership ops. They are DROPPED rather than kept
+    // for a teaching refusal — unlike `close_thread`, whose capability MOVED
+    // (to `propose_close`) and whose refusal names where. These capabilities
+    // are gone, so "invalid enum value" is the honest answer.
+    for (const op of [
+      "agents",
+      "summon_agent",
+      "rename_agent",
+      "set_agent_status",
+      "disengage_agent",
+      "join_thread",
+      "leave_thread",
+    ]) {
+      expect(
+        CHANNEL_INPUT_SHAPE.op.safeParse(op).success,
+        `op="${op}" is still accepted`,
+      ).toBe(false);
+    }
   });
 
-  it("explains the merge in the message, not just the number", () => {
-    // "At most eight" alone sends a caller back to count the same eight.
-    expect(AGENT_CAP_NOTE).toContain("in total");
-    expect(AGENT_CAP_NOTE).toContain("merged and deduped");
-    expect(AGENT_CAP_NOTE).toContain("`to_agent` counts as one");
-  });
-
-  it("REFUSES `to_agents: []` here, where the route has always refused it", () => {
-    // SHOULD-FIX-5. The route is `.min(1)`; this schema had no minimum, so an
-    // empty list posted a successfully UNADDRESSED message with a "NOT
-    // ADDRESSED" note under it that the caller reads as its own forgotten `to`.
-    expect(CHANNEL_INPUT_SHAPE.to_agents.safeParse([]).success).toBe(false);
-    expect(CHANNEL_INPUT_SHAPE.to_agents.safeParse(["quartz"]).success).toBe(true);
-    expect(
-      CHANNEL_INPUT_SHAPE.to_agents.safeParse(
-        Array.from({ length: MAX_ADDRESSED_AGENTS + 1 }, () => "quartz"),
-      ).success,
-    ).toBe(false);
+  it("still accepts every op that SURVIVED, so the rollback took nothing extra", () => {
+    for (const op of [
+      "list",
+      "open",
+      "invite",
+      "post",
+      "milestone",
+      "read",
+      "await",
+      "members",
+      "list_threads",
+      "get_thread",
+      "create_thread",
+      "propose_close",
+      // Kept in the enum ON PURPOSE: an older agent's call gets a teaching
+      // refusal naming `propose_close`, not an opaque enum error.
+      "close_thread",
+      "set_thread_mode",
+    ]) {
+      expect(
+        CHANNEL_INPUT_SHAPE.op.safeParse(op).success,
+        `op="${op}" was lost`,
+      ).toBe(true);
+    }
   });
 });
 

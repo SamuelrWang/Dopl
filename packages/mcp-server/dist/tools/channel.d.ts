@@ -22,15 +22,15 @@
  *                               result lines a post's addressing and threading
  *                               produce
  *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
- *   - `channel-ops-agents.ts` — agents / summon_agent / rename_agent /
- *                               set_agent_status / disengage_agent /
- *                               join_thread / leave_thread
- *                               (the MULTIPLAYER ops: who is in the room, and
- *                               which of them is currently ENGAGED)
- *   - `channel-agent-refs.ts` — agent identity: handle→row resolution, how a
- *                               handle is rendered, the participant-set render
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
  *                               headers, which the write side now shares
+ *
+ * REMOVED in the channels rollback (§1, 2026-08-05): `channel-ops-agents.ts`
+ * (agents / summon_agent / rename_agent / set_agent_status / disengage_agent /
+ * join_thread / leave_thread), `channel-agent-refs.ts` and
+ * `channel-render-agents.ts` (agent-handle resolution and rendering) and
+ * `channel-handshake-key.ts` (the two-agent thread-open key). A channel reaches
+ * PEOPLE; the only distinction a post makes is `intent` chat vs. request.
  *
  * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The ops
  * and params here say `thread`; `channel_tasks`, `metadata.taskId`, the

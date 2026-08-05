@@ -150,13 +150,12 @@ export declare function memberRef(userId: string, view: MemberView): string;
  * from the listing's own hydrated authors, so naming the people costs the
  * read/await path nothing.
  *
- * `agentNames` is the one thing this cannot harvest from the messages — a
- * message carries agent IDS and no handles — so the caller passes it in,
- * already fetched and already fail-soft. It defaults to empty, which renders
- * every addressed agent as a bare id: the correct degradation, and what every
- * caller that has no roster in hand gets.
+ * It took an `agentNames` map too — the one thing it could not harvest from the
+ * messages, since a message carried agent IDS and no handles — and it went with
+ * the agent address tag (channels rollback §1), taking the roster round-trip
+ * the read path did for it.
  */
-export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null, agentNames?: Map<string, string>): string[];
+export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null): string[];
 /**
  * One rendered channel line for `list`.
  *

@@ -32,9 +32,10 @@
  * untrusted-content headers they carry live in `channel-render.ts` with the
  * read side's, one definition each.
  *
- * MULTIPLAYER: `to_agent` / `as_agent` are resolved through
- * `channel-agent-refs.ts`, which also owns how an agent handle is rendered (as a
- * value, and never without the immutable agent id beside it).
+ * NAMED-AGENT ADDRESSING IS GONE (channels rollback §1). `to_agent` /
+ * `to_agents` / `as_agent` were resolved here through `channel-agent-refs.ts`
+ * before the call; a post addresses a PERSON or nobody, and `intent` decides
+ * whether even that reaches their machine.
  */
 
 import type {
@@ -42,10 +43,7 @@ import type {
   DoplClient,
   MessageIntent,
 } from "@dopl/client";
-import { ok, err, withCallerAgent, type ToolResponse } from "./respond";
-// Agent identity (handle→row resolution, and how a handle is rendered) is one
-// module for the whole tool — post, create_thread and get_thread share it.
-import { agentLabel, resolvePostAgentsOr } from "./channel-agent-refs";
+import { ok, err, type ToolResponse } from "./respond";
 // A post's result lines each live in their own module — this one answers "did
 // it thread?", which is the question a sender cannot otherwise settle.
 import { closedThreadNote, threadLinkageNote } from "./channel-post-linkage";
@@ -54,7 +52,6 @@ import { closedThreadNote, threadLinkageNote } from "./channel-post-linkage";
 // §2 cap (SHOULD-FIX-6) beside its two existing siblings.
 import {
   CHAT_ADDRESSED_REFUSAL,
-  agentAttributionNotes,
   postAddressLines,
 } from "./channel-post-notes";
 import {
@@ -71,7 +68,6 @@ import { postReplyLines } from "./channel-wake-guidance";
 // channel-errors.ts for why the old status-only branch answered every failure
 // with "invite them first".
 import {
-  AGENT_CAP_NOTE,
   FIELD_CAPS_NOTE,
   classifyBadRequest,
   classifyForbidden,
@@ -126,56 +122,12 @@ interface PostOptions {
   /** A thread id — threads this post under that thread's card (server-validated). */
   thread?: string;
   /**
-   * MULTIPLAYER — address the post to a named AGENT (handle or id). Addressing
-   * is what makes an agent act.
+   * CHAT vs REQUEST — whether this post may reach the addressee's machine at
+   * all. Absent means `request`: `to` addresses, and a DIRECT channel's
+   * auto-address still fires. `chat` is people talking — the auto-address is
+   * skipped server-side, so nothing on the far side reads the message as an ask.
    *
-   * IT DOES NOT ENGAGE IT WHEN THE CALLER IS THIS TOOL. `recordAgentEngagement`
-   * (service-writes-agents.ts) stamps `engaged_at` only for a HUMAN-authored
-   * post, and every post made through MCP is agent-authored — the write path
-   * derives `author_kind` from the caller's token (`source: auth.agentTokenId ?
-   * "agent" : "user"`, service-shared.ts) and an MCP call always carries one. So
-   * engagement is a thing that HAPPENS TO the caller's own agents (a human tags
-   * them in the web app or the desktop), never a thing this op does to a peer.
-   * Narration that said otherwise would teach an agent it had put a peer on a
-   * standing licence it does not have.
-   *
-   * Addressing a HUMAN (`to`) is NOT notify-only: see
-   * {@link PostOptions.asAgent}, which is what decides that.
-   */
-  toAgent?: string;
-  /**
-   * MULTIPLAYER — the N-agent form of {@link PostOptions.toAgent}: address up to
-   * eight named agents in ONE post, which is how two agents are told to work
-   * together. `toAgent` is exactly its one-element case and the two merge, in
-   * that order. All-or-nothing (see `resolvePostAgentsOr`), and the FIRST
-   * addressed agent's owner is the member the server stamps the post for.
-   */
-  toAgents?: string[];
-  /**
-   * MULTIPLAYER — post AS one of the caller's own agents (handle or id). It
-   * supplements the human author, it never replaces one, and the server
-   * verifies ownership: another member's agent is a 403, never a silent drop.
-   *
-   * IT ALSO DECIDES TWO THINGS THAT ARE NOT ABOUT ATTRIBUTION, and both were
-   * undocumented until B1/S1:
-   *  - with `to`=<a person>, it is what makes the post a NOTIFICATION instead
-   *    of a request that starts their agent. The receiving desktop's
-   *    notify-only `agent-escalation` verdict requires `author_agent_id`
-   *    (dopl-desktop-app/main/targeting.js), which is stamped ONLY from a
-   *    validated `as_agent`. Without it the post classifies as `trigger`.
-   *  - with `thread`, it is what admits an AGENT participant to a breakout
-   *    room: `mayWriteThread` (service-writes-metadata.ts) matches the set
-   *    against the CLAIMED agent, so the post 403s without it.
-   */
-  asAgent?: string;
-  /**
-   * CHAT vs REQUEST — whether this post may reach anybody's agent at all.
-   * Absent means `request`, which is the whole of today's behaviour: addresses
-   * work, and a DIRECT channel's auto-address still fires. `chat` is people
-   * talking — the auto-address is skipped server-side, so nothing on the far
-   * side reads the message as an ask.
-   *
-   * `chat` beside an address is a CONTRADICTION and is refused here, before the
+   * `chat` beside a `to` is a CONTRADICTION and is refused here, before the
    * call (see {@link CHAT_ADDRESSED_REFUSAL}); the route refuses it too, with
    * `CHANNEL_CHAT_ADDRESSED`.
    */
@@ -197,10 +149,7 @@ export async function opPost(
   // FIRST, and before any round-trip: a contradictory post has nothing to
   // resolve. Refusing here rather than letting the route do it means "nothing
   // was sent" is trivially true and the caller is told which two params fight.
-  if (
-    opts.intent === "chat" &&
-    (opts.to || opts.toAgent || (opts.toAgents?.length ?? 0) > 0)
-  ) {
+  if (opts.intent === "chat" && opts.to) {
     return err(CHAT_ADDRESSED_REFUSAL);
   }
   // P0-2 — and on the same terms: a post this tool will not make needs nothing
@@ -224,20 +173,6 @@ export async function opPost(
     toLabel = member.label;
   }
 
-  // MULTIPLAYER: resolve the agent identities this post names — who it is FOR
-  // (`to_agent`) and who it is FROM (`as_agent`) — against this channel's
-  // roster, in one round-trip, and none at all when neither is set. Resolving
-  // by HANDLE is the point: an agent knows the name the room addresses it by,
-  // not a uuid. Ownership is still the server's check, not ours.
-  const agentAddr = await resolvePostAgentsOr(
-    client,
-    ch.id,
-    opts.toAgent,
-    opts.asAgent,
-    opts.toAgents,
-  );
-  if (isErr(agentAddr)) return agentAddr;
-
   // Thread the post under a thread when `thread` is passed: fold the id into
   // the STORAGE key `metadata.taskId` (the explicit param wins over any
   // metadata copy). The route then server-validates it resolves to a thread
@@ -255,20 +190,6 @@ export async function opPost(
       clientMsgId: opts.clientMsgId,
       toUserId,
       summary: opts.summary,
-      // Ids, not the caller's strings: the handle was already resolved to a row
-      // of THIS channel above, and the route stamps what it is given.
-      //
-      // The SINGLE address still goes out as `toAgent` alone, byte for byte the
-      // request this tool has always sent — the server treats `toAgent` as a
-      // one-element `toAgents` and merges them, so `toAgents` is added only when
-      // there is genuinely more than one and nothing about a one-agent post
-      // changes shape.
-      toAgent: agentAddr.to?.id,
-      toAgents:
-        agentAddr.tos.length > 1
-          ? agentAddr.tos.map((a) => a.id)
-          : undefined,
-      authorAgentId: agentAddr.as?.id,
       // Absent unless the caller said so: an omitted `intent` means `request`
       // and stamps no metadata key at all (service-writes-metadata.ts).
       intent: opts.intent,
@@ -298,24 +219,6 @@ export async function opPost(
           return err(
             `The post was rejected because the call carried no usable workspace.${serverDetail(e)} This is a connection-level problem, not a channel one — report it to your operator.`,
           );
-        // `to_agent` / `as_agent` are resolved against THIS channel's roster
-        // before the call, so the route agreeing that an agent is foreign means
-        // the two reads disagree — say what the server said and re-read the
-        // roster, rather than repeating a claim it just refused.
-        case "agent_not_in_channel":
-          return err(
-            `The agent you named is not an agent of **${chName}**, so nothing was sent.${serverDetail(e)} Re-read the room's agents with dopl_channel(op="agents", channel="${ch.id}") and address one of those — a handle only ever names an agent inside ONE channel.`,
-          );
-        // SHOULD-FIX-4 — THE 400 THIS TOOL'S OWN SURFACE INVITES. The schema
-        // publishes `to_agents.max(8)` and never says `to_agent` counts toward
-        // the same eight, while the server caps the DEDUPED MERGE of the two.
-        // Without this arm the refusal fell through to `unknown` — "the server
-        // did not name a cause this tool recognizes" — for the one cause the
-        // tool is best placed to explain.
-        case "too_many_agents":
-          return err(
-            `That post addressed too many agents, so nothing was sent.${serverDetail(e)} ${AGENT_CAP_NOTE}`,
-          );
         // The local guard at the top of this op already refuses this pair, so
         // reaching here means the two disagree — answer with the RULE, not with
         // "the server named a cause this tool does not recognize".
@@ -326,21 +229,20 @@ export async function opPost(
         // classifies a self-addressed post as noise, and a post is not a
         // thread), so this arm is unreachable and exists to keep the switch
         // exhaustive rather than to invent a cause the post never has.
-        // `participant_not_member` is the same: only a thread CREATE (or a
-        // join) seeds a participant set, so a post never raises it.
+        // The REMOVED params (`to_agent` / `as_agent`, rollback §1) come back
+        // as `invalid_request` above, since the route refuses them in its zod
+        // schema. This tool cannot send one — they are not in `CHANNEL_INPUT_SHAPE`
+        // — so that arm is only ever reached by a caller bypassing the tool.
         case "self_target":
-        case "participant_not_member":
         case "unknown":
           return err(
             `The post to **${chName}** was rejected (HTTP 400) and the server did not name a cause this tool recognizes.${serverDetail(e)} Nothing was sent.`,
           );
       }
     }
-    // THE TWO 403s A POST CAN GET, TOLD APART BY THEIR CODE rather than by
-    // which params happened to be set. They can be raised by the same call —
-    // `as_agent` + `thread` is the normal breakout-room shape — and the old
-    // param-order guess reported the agent-ownership refusal for both, so a
-    // thread-authorization failure came back as "that agent is not yours".
+    // THE 403s A POST CAN GET, TOLD APART BY THEIR CODE rather than by which
+    // params happened to be set. There used to be a third — `agent_owner`, an
+    // `as_agent` naming somebody else's agent — and it went with the param.
     if (isForbidden(e)) {
       const kind = classifyForbidden(e);
       // P0-2 — the SERVER refused the kind. Unreachable while the guard at the
@@ -349,34 +251,20 @@ export async function opPost(
       if (kind === "lifecycle_kind") {
         return lifecycleKindRefusal(opts.kind ?? "task_finished");
       }
-      // AN AGENT IDENTITY IS NOT ASSUMABLE. The server refuses `as_agent`
-      // naming an agent the caller does not own; it never silently strips the
-      // claim, so nothing was posted and the fix is to post as YOUR own agent
-      // (op="agents" lists the room's, with their owners).
-      if (kind === "agent_owner" || (kind === "unknown" && agentAddr.as && !opts.thread)) {
-        return err(
-          `You can't post as ${agentAddr.as ? agentLabel(agentAddr.as) : "that agent"} — an agent may only be spoken for by the member who summoned it, and the server verified this one is not yours. Nothing was posted. Post as your own agent, or without \`as_agent\`.`,
-        );
-      }
       if (opts.thread && kind !== "not_a_member") {
-        // S1 — THE REMEDY THAT MANUFACTURED A DUPLICATE ROOM. This arm used to
-        // say "that thread belongs to two other members … open your own with
-        // op=create_thread", which is wrong for the commonest cause: the write
-        // gate (`mayWriteThread`, service-writes-metadata.ts) lets an AGENT
-        // participant of a breakout thread post only when the call CLAIMS that
-        // agent with `as_agent`. A thread the agent legitimately belongs to
-        // therefore 403s on the missing param, and the advice sent it away to
-        // open a second room for the same work. Name the missing param first.
-        // The thread id is NOT echoed into these lines. It is the caller's own
+        // A thread belongs to its CREATOR and the member it is addressed to,
+        // and that pair is the whole write gate again: the participant-set
+        // regime that briefly widened it — where the fix was to name your own
+        // agent with `as_agent` — is gone (rollback §1).
+        //
+        // The thread id is NOT echoed into this line. It is the caller's own
         // argument, but it round-trips: an agent copies an id out of a `read`
         // legend, and a legend id is `metadata.taskId`, which a peer sets
         // verbatim for any non-UUID value (Q1-E, the same reason close_thread
         // neutralizes it). "the id you just passed" needs no escaping and the
         // caller has the value in hand.
         return err(
-          agentAddr.as
-            ? `You can't post into that thread as ${agentLabel(agentAddr.as)} — nothing was posted. A thread with a participant set is a BREAKOUT ROOM and its SET decides who may write: check it with dopl_channel(op="get_thread", channel="${ch.id}", thread=<the id you just passed>). If you are not in it, ask the member who opened it (or the one it is addressed to) to admit you — do NOT open a second thread for the same work.`
-            : `You can't post into that thread — nothing was posted. FIRST TRY \`as_agent\`: if what admits you to that thread is one of YOUR AGENTS being in its participant set, the server checks the set against the agent you CLAIM, so the post is refused until you name it. Re-send the same post with as_agent="<your handle>". If you are not in the set at all — dopl_channel(op="get_thread", channel="${ch.id}", thread=<the id you just passed>) shows it — ask the member who opened the thread, or the one it is addressed to, to admit you with op="join_thread". Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`,
+          `You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with dopl_channel(op="get_thread", channel="${ch.id}", thread=<the id you just passed>). Post into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`,
         );
       }
       if (kind === "not_a_member") {
@@ -393,24 +281,17 @@ export async function opPost(
   // agent clauses are assembled next door, where the rest of the addressing
   // narration lives.
   const toNote = toLabel ? `, addressed to ${toLabel}` : "";
-  const { toAgentNote, asNote } = agentAttributionNotes(
-    agentAddr.tos,
-    agentAddr.as,
-  );
-  // THE ADDRESSING LINES — the conflict note, the multi-address note, and the
-  // addressed/chat/unaddressed line. All three live in `channel-post-notes.ts`
-  // (SHOULD-FIX-6) beside the two result-line modules this op already delegated
-  // to. `landedThread` is read back off the STORED message for the same reason
-  // the linkage note is: what actually landed, not what was asked for.
+  // THE ADDRESSING LINE — the addressed/chat/unaddressed verdict, in
+  // `channel-post-notes.ts` (SHOULD-FIX-6) beside the two result-line modules
+  // this op already delegated to. `landedThread` is read back off the STORED
+  // message for the same reason the linkage note is: what actually landed, not
+  // what was asked for.
   const addressLines = postAddressLines({
     channelId: ch.id,
     safeChannelName: chName,
     isDirect: ch.isDirect,
     intent: opts.intent,
-    toAgents: agentAddr.tos,
-    toUserId,
     toLabel,
-    seq: message.seq,
     landedThread: metaString(message, "taskId"),
   });
   // Q7: second line, right under the confirmation — a sender cannot otherwise
@@ -422,10 +303,9 @@ export async function opPost(
     message,
     opts.thread,
   );
-  return withCallerAgent(
-    ok(
+  return ok(
     [
-      `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}${toAgentNote}${asNote}). Readers watching with op="await" will pick it up.`,
+      `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
       ...addressLines,
       ...(linkage ? [linkage] : []),
       // F6 — read off the SERVER's answer, not off anything this tool guessed.
@@ -450,11 +330,6 @@ export async function opPost(
         `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first (op="read" for new activity — a working agent posts task_progress as it goes; op="get_thread" for status). Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when the thread is closed or failed, or when nothing has come from that member for ~30+ minutes.`,
       ),
     ].join("\n"),
-    ),
-    // LOCUS: this call spoke as an agent, so the `_dopl_status` footer says so.
-    // Threaded through the RESULT rather than stamped on the session identity —
-    // `as_agent` is per call, and a session may hold several agents.
-    agentAddr.as ? { id: agentAddr.as.id, name: agentAddr.as.name } : null,
   );
 }
 

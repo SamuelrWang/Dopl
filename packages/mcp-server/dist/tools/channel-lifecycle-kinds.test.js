@@ -163,24 +163,6 @@ function callTool(client) {
         (0, vitest_1.expect)(sent.toAgent).toBeUndefined();
         (0, vitest_1.expect)(sent.toAgents).toBeUndefined();
     });
-    (0, vitest_1.it)("carries as_agent, so a milestone is still attributable inside a breakout room", async () => {
-        // A thread that admits the caller through one of its AGENTS refuses any post
-        // that does not CLAIM that agent (`mayWriteThread`), milestones included.
-        const client = stubClient({
-            listChannelAgents: vitest_1.vi.fn(async () => [
-                { id: "agent-1", name: "quartz", ownerUserId: "u-me", status: "active" },
-            ]),
-        });
-        await callTool(client)({
-            op: "milestone",
-            channel: "general",
-            thread: THREAD_ID,
-            body: "step two",
-            as_agent: "quartz",
-        });
-        const [, input] = vitest_1.vi.mocked(client.postChannelMessage).mock.calls[0];
-        (0, vitest_1.expect)(input.authorAgentId).toBe("agent-1");
-    });
 });
 // ── 3. the surface still teaches the rule ──────────────────────────────────────
 (0, vitest_1.describe)("the published surface says whose each kind is", () => {
