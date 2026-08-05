@@ -175,13 +175,28 @@ test("F3: `bypass` covers exactly the CLASSIFIED work tools, and `auto` a subset
   }
 });
 
-test("F3: the channel tool is matched by SERVER PREFIX + SHORT NAME, not one literal", () => {
+// REQUIREMENT CHANGE, F-139 (2026-08-05): `mcp__other__dopl_channel` and
+// `mcp__dopl__x__dopl_channel` moved from the FALSE list to the TRUE one. F3's own comment
+// already argued the right rule ("over-matching is the SAFE direction here"); the
+// implementation only ever honoured ONE server name, and this test pinned that mistake. The
+// server segment is the CLIENT's: `mcp__dopl__` is our in-process registration, the claude.ai
+// connector says `mcp__claude_ai_Dopl__`, other clients use a UUID. Under any of the ones we
+// did not hardcode, the REAL channel tool was classified OUT of Axis B and gated as
+// `unclassified-tool` in every posture, `bypass` included.
+test("F3/F-139: the channel tool is matched by SHORT NAME under ANY server, not one literal", () => {
   for (const name of [DOPL_CHANNEL_TOOL, "dopl_channel", "mcp__dopl__dopl_channel_v2",
-    "dopl_channel_v2", "mcp__dopl__dopl_channel_beta"]) {
+    "dopl_channel_v2", "mcp__dopl__dopl_channel_beta",
+    // The three server names seen in the field, plus the variant suffix under each.
+    "mcp__claude_ai_Dopl__dopl_channel", "mcp__claude_ai_Dopl__dopl_channel_v2",
+    "mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__dopl_channel",
+    "mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__dopl_channel_v2",
+    "mcp__other__dopl_channel", "mcp__dopl__x__dopl_channel"]) {
     assert.equal(isChannelTool(name), true, name);
   }
-  for (const name of ["mcp__dopl__dopl_kb", "mcp__other__dopl_channel", "Bash", "", null, undefined,
-    "dopl_channels", "mcp__dopl__x__dopl_channel"]) {
+  // A genuinely DIFFERENT tool is still not the channel tool, under any prefix.
+  for (const name of ["mcp__dopl__dopl_kb", "mcp__claude_ai_Dopl__dopl_kb", "mcp__other__dopl_kb",
+    "mcp__claude_ai_Dopl__dopl_search", "Bash", "", null, undefined,
+    "dopl_channels", "mcp__claude_ai_Dopl__dopl_channels", "channel", "mcp__other__post"]) {
     assert.equal(isChannelTool(name), false, String(name));
   }
 });

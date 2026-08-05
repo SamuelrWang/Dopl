@@ -36,17 +36,23 @@
 // a REASON CODE from session-gate-reason.js, because a gate nobody can explain reads as a broken
 // toggle. It explains the decision this table already made; it never makes one.
 //
-// PURE module: requires the (pure) tool-profiles constants + session-gate-reason + node's
-// `crypto`, used ONLY to digest a grant key (no key material, no randomness). The extracted
-// block references the tool-profiles constants + normalizeProfile + shaKey, which
-// test/session-profiles and test/sdk-grant inject as parameters when they evaluate the sliced
-// block (the same source-extraction idiom as tool-profiles, kept electron/fs/path/SDK-free).
+// PURE module: requires the (pure) tool-profiles constants + session-gate-reason +
+// mcp-tool-names + node's `crypto`, used ONLY to digest a grant key (no key material, no
+// randomness). The extracted block references the tool-profiles constants + normalizeProfile +
+// shaKey + the two mcp-tool-names normalizers, which test/session-profiles and test/sdk-grant
+// inject as parameters when they evaluate the sliced block (the same source-extraction idiom
+// as tool-profiles, kept electron/fs/path/SDK-free).
 
 const { makeGateReason, GATE_REASONS } = require('./session-gate-reason');
 const { makeGrantKeyFor, POST_GRANT, postFieldsOk } = require('./session-grant-keys');
+// F-139: the client-agnostic tool-name normalizer the whole table matches through.
+const { mcpShortName, canonicalDoplName } = require('./mcp-tool-names');
 const {
   READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS,
-  DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile,
+  // F-139: DOPL_SERVER_PREFIX is deliberately NOT read here any more. It names ONE server —
+  // ours — and this table must not compare a client-supplied tool name against it. It is
+  // consumed in mcp-tool-names.js, as the canonical form to normalize ONTO.
+  DOPL_CHANNEL_TOOL, normalizeProfile,
 } = require('./tool-profiles');
 
 // ─── BEGIN SESSION-PROFILE TABLE (extracted by session-profiles/sdk-grant tests) ───
@@ -57,6 +63,13 @@ const {
 function shortDoplName(full) {
   return String(full).replace(/^mcp__dopl__/, '');
 }
+
+// F-139 (2026-08-05) — THE SERVER PREFIX IS THE CLIENT'S, NOT OURS. `mcpShortName` /
+// `canonicalDoplName` live in mcp-tool-names.js (the §2 cap; that file carries the whole
+// incident and the residual-risk argument). Every matcher below used to compare against the
+// literal `mcp__dopl__` form our own registration happens to produce, so the same tool arriving
+// as `mcp__claude_ai_Dopl__…` or `mcp__<uuid>__…` missed EVERY list at once — Axis B, the
+// pre-approvals, both Axis-A modes and the hard-deny set. Injected by the extraction tests.
 
 // FIX H2 / H3 — the SESSION HARD-DENY set for the `full` profile. A live session gives the
 // operator a visible window + per-call Allow/Deny buttons, so the VISIBLE + REVERSIBLE work
@@ -162,12 +175,23 @@ function buildSessionToolConfig(profile) {
 // bare short name is accepted too — the server registers tools bare and only the CLI adds
 // the prefix. Over-matching is the SAFE direction here: Axis B gates everything except an
 // own-channel post, so a mis-classified tool asks rather than runs.
+//
+// F-139 (2026-08-05) — THE "SERVER PREFIX" WAS ONE HARDCODED SERVER NAME. The reasoning above
+// is right; the implementation only ever honoured `mcp__dopl__`. Under any other server
+// segment the strip missed, `short` stayed the full dotted name, neither test hit, and the
+// REAL channel tool was classified OUT of Axis B (mcpShortName's header carries the live
+// evidence). Matched by SHORT NAME UNDER ANY SERVER now.
+//
+// WHY OVER-MATCHING STILL COSTS NOTHING, restated for the wider match. Axis B is the STRICTER
+// axis: only an own-channel post — and, since M3/M4, an own-channel read or thread marker —
+// auto-allows; every other shape gates in every posture. The HARD-DENY set is checked BEFORE
+// this branch either way, so nothing can be demoted out of `deny` by landing here. Misrouting
+// an unrelated tool INTO Axis B therefore makes it ASK. The old behaviour misrouted the real
+// tool OUT of Axis B and into "unclassified", which also asks — so neither direction is
+// unsafe, and only one of them lets the operator's posture work at all.
 const CHANNEL_SHORT_NAME = shortDoplName(DOPL_CHANNEL_TOOL);
 function isChannelTool(toolName) {
-  const n = typeof toolName === 'string' ? toolName : '';
-  const prefix = DOPL_SERVER_PREFIX + '__';
-  const short = n.indexOf(prefix) === 0 ? n.slice(prefix.length) : n;
-  if (short !== n && short.indexOf('__') !== -1) return false; // another server's tool
+  const short = mcpShortName(typeof toolName === 'string' ? toolName : '');
   return short === CHANNEL_SHORT_NAME || short.indexOf(CHANNEL_SHORT_NAME + '_') === 0;
 }
 
@@ -215,6 +239,55 @@ const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'me
 function isOwnChannelRead(input, sessionChannelId) {
   const i = input || {};
   if (OWN_CHANNEL_READ_OPS.indexOf(i.op) === -1) return false;
+  const target = i.channel;
+  if (target == null || target === '') return true;
+  return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
+}
+
+// M4 (2026-08-05, F-139) — THE PROPOSAL IS NOT THE CLOSE. Live on `bypass` + `auto_both`:
+// `session gate: dopl_channel op=propose_close gate channel-op-approval-required`. So the
+// operator answered TWO prompts for ONE decision — once to permit the agent's CALL, then again
+// to confirm the close itself. The second is the FEATURE (propose-then-confirm: an agent
+// proposes, the human decides) and is untouched here. The first bought nothing.
+//
+// WHY THESE TWO OPS AUTO-ALLOW, AND WHY IT IS NOT A WIDENING. Both are STRICTLY LESS POWERFUL
+// than the plain own-channel `post` that `auto_outbound` already auto-allows, into the same
+// channel, from the same session:
+//   propose_close  posts a marked note and surfaces a confirmable prompt to the operator. It
+//                  closes NOTHING — the thread stays open, routing and live until the human
+//                  acts (packages/mcp-server channel-description), and the server refuses an
+//                  agent-token close outright. Gating the call costs a click per exchange and
+//                  removes no consent point, because the consent point is the confirm.
+//   milestone      a one-line marker that a step landed. It addresses nobody, notifies nobody
+//                  and carries no deliverable. Its ONLY effect is agent-authored text in this
+//                  session's own thread — which is precisely what an auto-allowed `post` does
+//                  with more reach. The marginal exfil surface over `post` is therefore zero,
+//                  and prompt-framing actively INSTRUCTS the agent to log milestones, so
+//                  gating it is the product asking permission for what it just ordered.
+// Deciding `milestone` the other way would have left the same incoherence M3 removed, one op
+// along: the more powerful op permitted, the weaker one asking.
+//
+// WHICH AXIS: OUTBOUND. Both put CONTENT into the shared channel — they are statements that
+// leave this machine, which is what `auto_outbound` ("send my replies for me") consents to.
+// The M3 read set went to the INBOUND half for the mirror-image reason (a read sends nothing;
+// it brings the peer's words in). Neither of these can be reached by `auto_inbound` alone.
+//
+// WHAT DELIBERATELY STAYS GATED IN EVERY POSTURE: `close_thread` above all — it is the
+// operator's act, it settles a SHARED thread for both members, and it is never conflated with
+// its proposal here. Plus everything F-138 M3 named: `open`, `invite`, `create_thread`,
+// `set_thread_mode`, `join_thread`/`leave_thread`, the agent-lifecycle ops, `list`, and any
+// cross-channel shape of ANY op including these two.
+const OWN_CHANNEL_MARKER_OPS = ['propose_close', 'milestone'];
+
+// The outbound twin of isOwnChannelRead, on the SAME footing as isOwnChannelPost: scoped by
+// CHANNEL, absent/empty meaning this session's own, and a `channel` naming anything else — a
+// slug included — classified as another channel and gated. (The THREAD is not scoped here: the
+// gate is handed the session's channelId and not its taskId, and the blast radius of the wrong
+// thread id is a confirm prompt the operator reads, inside the channel they are already bound
+// to. Flagged in F-139 rather than silently widened.)
+function isOwnChannelMarker(input, sessionChannelId) {
+  const i = input || {};
+  if (OWN_CHANNEL_MARKER_OPS.indexOf(i.op) === -1) return false;
   const target = i.channel;
   if (target == null || target === '') return true;
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
@@ -277,9 +350,13 @@ function normalizeToolMode(mode) {
 // Does Axis A auto-allow this tool? MultiEdit is deliberately NOT in the accept_edits set
 // (contract A2 names exactly Write / Edit / NotebookEdit) — the restrictive reading.
 // Nothing here ever sees a dopl_channel call: grantDecision branches to Axis B first.
+// F-139: the name is CANONICALIZED first, so the dopl entries in AUTO_TOOLS / BYPASS_TOOLS
+// (written `mcp__dopl__…`) match the same tool arriving under any other server prefix. Every
+// non-Dopl name passes through untouched, so an unknown tool still gates in every mode.
+// Canonicalization is idempotent, so callers that already normalized lose nothing.
 function toolModeAllows(mode, toolName) {
   const m = normalizeToolMode(mode);
-  const name = typeof toolName === 'string' ? toolName : '';
+  const name = canonicalDoplName(toolName);
   if (m === 'manual') return false;
   if (m === 'accept_edits') return EDIT_TOOLS.indexOf(name) !== -1;
   if (m === 'auto') return AUTO_TOOLS.indexOf(name) !== -1;
@@ -324,9 +401,20 @@ function grantDecision(args) {
   const a = args || {};
   const allowForTask = a.allowForTask || [];
   const cfg = buildSessionToolConfig(a.profile);
+  // 0. F-139 — THE NAME, NORMALIZED ONCE. Every list this function consults is written in the
+  //    `mcp__dopl__…` form our own registration produces, and the SAME tool reaches this gate
+  //    as `mcp__claude_ai_Dopl__…` (connector) or `mcp__<uuid>__…` (other clients). One
+  //    canonicalization covers all three lookups below, so hard-deny, pre-approval and the
+  //    Axis-A modes can never again disagree about which server a tool came from. Non-Dopl
+  //    names are returned untouched. The GRANT KEY deliberately keeps the REAL tool name
+  //    (below): a grant is scoped to the shape the operator was shown, server included.
+  const name = canonicalDoplName(a.toolName);
   // 1. HARD DENY. Checked first so a denied tool can never be opened — not by a task
   //    grant, and not by `bypass` (which is why `bypass` is not permissionMode:bypass).
-  if (cfg.disallowedTools.indexOf(a.toolName) !== -1) return 'deny';
+  //    F-139: on the canonical name, because a deny list that a different server prefix walks
+  //    past is not a deny list — `mcp__<other>__dopl_kb_admin` used to resolve 'gate', which
+  //    is one operator click away from a tool this table says can never be opened.
+  if (cfg.disallowedTools.indexOf(name) !== -1) return 'deny';
   // 2. THE INVARIANT — a message operation branches to AXIS B here and NEVER reaches the
   //    Axis A mode below. No tool posture, `bypass` included, can send a message. FIX F3:
   //    matched by server prefix + short name, so a renamed/versioned channel tool cannot
@@ -343,6 +431,12 @@ function grantDecision(args) {
     // auto_outbound / auto_both send the agent's own replies with no click. ONLY an
     // own-channel post: everything else on this tool is the exfil surface, so it gates.
     if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
+    // M4: and the two own-channel THREAD MARKERS follow the same outbound half. Both put
+    // content into the channel this session is already bound to and both are strictly less
+    // powerful than the post above — `propose_close` closes nothing (the operator's confirm
+    // is the consent point and is untouched) and `milestone` carries no deliverable. See
+    // OWN_CHANNEL_MARKER_OPS. `close_thread` is NOT among them and gates in every posture.
+    if (autoOutboundMode(a.messageMode) && isOwnChannelMarker(a.input, a.channelId)) return 'allow';
     // M3: and the READ half of that same channel follows the INBOUND half of the axis. A read
     // sends nothing; what it does is bring the peer's words into this agent's context without an
     // operator seeing them first, which is precisely what auto_inbound / auto_both consent to
@@ -351,12 +445,13 @@ function grantDecision(args) {
     if (autoInboundMode(a.messageMode) && isOwnChannelRead(a.input, a.channelId)) return 'allow';
     return 'gate';
   }
-  if (cfg.preApproved.indexOf(a.toolName) !== -1) return 'preapproved';
-  // 3. THE SCOPED standing grant (HIGH-1): the key covers the SHAPE the operator saw.
+  if (cfg.preApproved.indexOf(name) !== -1) return 'preapproved';
+  // 3. THE SCOPED standing grant (HIGH-1): the key covers the SHAPE the operator saw — which
+  //    includes the tool name they were shown, so this one stays on the RAW name.
   if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
   // 4. AXIS A. Message flow is never consulted here, so no message posture can run a
   //    work tool — the other half of the invariant.
-  if (toolModeAllows(a.toolMode, a.toolName)) return 'allow';
+  if (toolModeAllows(a.toolMode, name)) return 'allow';
   return 'gate';
 }
 
@@ -369,6 +464,10 @@ function grantDecision(args) {
 const gateReason = makeGateReason({
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
+  // F-139: the explainer classifies by the SAME canonical name and the SAME marker predicate
+  // the gate decided on, or it would report `unclassified-tool` for a tool the gate just
+  // covered — the diagnostic hole and the bug would come back paired, exactly as they did.
+  canonicalDoplName, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS,
 });
 // { decision, reason } — the reason is a GATE_REASONS code, or null for a verdict nothing can
 // honestly explain. Callers that only route on the verdict keep using grantDecision unchanged.
@@ -380,6 +479,8 @@ function grantDecisionDetail(args) {
 module.exports = {
   buildSessionToolConfig, grantDecision, shortDoplName, isOwnChannelPost,
   isOwnChannelRead, OWN_CHANNEL_READ_OPS, // M3: the own-channel READ set Axis B's inbound half covers
+  isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, // M4: the own-channel MARKER set its outbound half covers
+  mcpShortName, canonicalDoplName, // F-139, re-exported from mcp-tool-names so no caller moved
   grantDecisionDetail, GATE_REASONS, // 2026-08-02: the verdict + the code that explains it
   BYPASS_READS, // the NAMED read-only tools `bypass` covers on top of the classified work set
   grantKeyFor, // v2.9 HIGH-1: the scoped allowForTask key for EVERY tool class

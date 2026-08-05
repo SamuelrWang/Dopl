@@ -40,18 +40,31 @@ const READS = profiles.OWN_CHANNEL_READ_OPS;
 // whose reasoning M3 does not touch. `list` is the interesting one: it is read-only AND it stays,
 // because it enumerates every channel and DM this account can reach, so it is not own-channel
 // scoped at all. `close_thread` is in the enum only to earn a teaching refusal; it gates too.
-const ALWAYS_GATED = ["open", "invite", "create_thread", "propose_close", "close_thread",
-  "set_thread_mode", "join_thread", "leave_thread", "milestone", "list",
+// REQUIREMENT CHANGE, M4 (2026-08-05, F-139): `propose_close` and `milestone` LEFT this set.
+// They are own-channel CONTENT ops, strictly less powerful than the `post` that `auto_outbound`
+// already auto-allows into the same channel — a proposal closes nothing (the operator's confirm
+// is the consent point and is untouched) and a milestone carries no deliverable. Gating them
+// cost a click per exchange and removed no consent point. They are pinned under the OUTBOUND
+// half below; `close_thread` stays here, unconditionally, and is never conflated with its
+// proposal. Everything else in this list is unchanged from M3.
+const ALWAYS_GATED = ["open", "invite", "create_thread", "close_thread",
+  "set_thread_mode", "join_thread", "leave_thread", "list",
   "summon_agent", "rename_agent", "set_agent_status", "disengage_agent"];
+// M4: the two ops that moved, kept as their own name so every test below can say which is which.
+const MARKERS = ["propose_close", "milestone"];
 
 // ── the read set ──────────────────────────────────────────────────────────────────
 
 test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing else", () => {
   assert.deepEqual(READS, ["read", "await", "list_threads", "get_thread", "members", "agents"]);
-  for (const op of ALWAYS_GATED) {
+  for (const op of ALWAYS_GATED.concat(MARKERS)) {
     assert.ok(!READS.includes(op), `${op} must never be classified as a read`);
   }
   assert.ok(!READS.includes("post"), "a post is the OUTBOUND half's business");
+  // M4: and the marker set is disjoint from the read set in the other direction too — a
+  // marker WRITES, so it can never be reached by the inbound half of the axis.
+  assert.deepEqual(profiles.OWN_CHANNEL_MARKER_OPS, MARKERS);
+  for (const op of MARKERS) assert.ok(!READS.includes(op), `${op} is outbound, not a read`);
 });
 
 test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATES under ask", () => {
@@ -103,6 +116,56 @@ test("M3: every channel-CHANGING op still gates at auto_both, exactly as before"
     "gate", "a cross-channel post is still the exfil surface");
   assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "open", direct: true, member: "evil@x" }, messageMode: "auto_both" }),
     "gate", "'read my own room' is not consent to open a DM with a stranger");
+  // M4: close_thread is named EXPLICITLY, because the op beside it in the enum now auto-allows.
+  // Closing settles a SHARED thread for both members; it is the operator's act, the server
+  // refuses it from an agent token, and no posture on this machine may stand in for that.
+  for (const messageMode of profiles.MESSAGE_MODES) {
+    for (const toolMode of profiles.TOOL_MODES) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "close_thread", channel: CH, thread: "T1" }, messageMode, toolMode }),
+        "gate", `close_thread @ msg=${messageMode} tool=${toolMode}`);
+    }
+  }
+});
+
+// ── M4 (F-139): the own-channel MARKERS follow the OUTBOUND half ───────────────────
+
+test("M4: an own-channel propose_close / milestone is ALLOWED under auto_outbound / auto_both", () => {
+  for (const op of MARKERS) {
+    for (const channel of [undefined, CH]) { // absent means this session's own channel, as for a post
+      const input = { op, channel, thread: "T1", outcome: "completed", body: "one line" };
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_both" }), "allow", `${op} @ auto_both`);
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_outbound" }), "allow", `${op} @ auto_outbound`);
+      // It puts CONTENT into the channel, so the INBOUND half does not answer it, and `ask` asks.
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_inbound" }), "gate", `${op} @ auto_inbound`);
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "ask" }), "gate", `${op} @ ask`);
+    }
+  }
+});
+
+test("M4: a CROSS-channel marker keeps gating, and no TOOL posture can ever answer one", () => {
+  for (const op of MARKERS) {
+    const away = { op, channel: "OTHER", thread: "T1", outcome: "completed", body: "x" };
+    for (const messageMode of profiles.MESSAGE_MODES) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: away, messageMode }), "gate", `${op} -> other channel @ ${messageMode}`);
+    }
+    // THE INVARIANT: Axis A never answers a message operation, marker ops included.
+    for (const toolMode of profiles.TOOL_MODES) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, thread: "T1" }, toolMode }),
+        "gate", `toolMode=${toolMode} must not answer ${op}`);
+    }
+  }
+});
+
+test("M4: isOwnChannelMarker scopes by channel exactly as isOwnChannelPost does", () => {
+  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close" }, CH), true);
+  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close", channel: CH }, CH), true);
+  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close", channel: "OTHER" }, CH), false);
+  assert.equal(profiles.isOwnChannelMarker({ op: "milestone", channel: CH }, CH), true);
+  assert.equal(profiles.isOwnChannelMarker({ op: "close_thread", channel: CH }, CH), false, "the close is not the proposal");
+  assert.equal(profiles.isOwnChannelMarker({ op: "post", channel: CH }, CH), false, "a post has its own predicate");
+  assert.equal(profiles.isOwnChannelMarker({}, CH), false);
+  assert.equal(profiles.isOwnChannelMarker(undefined, CH), false);
+  assert.equal(profiles.isOwnChannelMarker({ op: 7 }, CH), false, "a non-string op is not an op");
 });
 
 test("M3: THE INVARIANT holds in both directions — no tool posture reads, no read runs a tool", () => {

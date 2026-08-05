@@ -182,7 +182,10 @@ test("INVARIANT: the channel branch returns BEFORE Axis A is consulted (source p
   const fn = src.slice(src.indexOf("function grantDecision(args) {"), src.indexOf("// ─── END SESSION-PROFILE TABLE"));
   const channelBranch = fn.indexOf("isChannelTool(a.toolName)");
   const axisA = fn.indexOf("toolModeAllows(a.toolMode");
-  const hardDeny = fn.indexOf("cfg.disallowedTools.indexOf(a.toolName)");
+  // F-139 (2026-08-05): the lookup is on the CANONICAL name now (`canonicalDoplName(a.toolName)`
+  // one line above), because a deny list a different server prefix walks past is not a deny
+  // list. The ORDER this test exists to pin is untouched.
+  const hardDeny = fn.indexOf("cfg.disallowedTools.indexOf(name)");
   assert.ok(hardDeny !== -1 && hardDeny < channelBranch, "hard-deny is decided FIRST of all");
   assert.ok(channelBranch !== -1 && channelBranch < axisA, "channel ops branch out before the tool mode");
   assert.ok(!/messageMode/.test(fn.slice(axisA)), "no message posture is read after the channel branch");

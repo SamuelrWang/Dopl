@@ -9,7 +9,7 @@
 // and NO electron / SDK handle, so the engine remains the only stateful, electron-bound module.
 
 const crypto = require('crypto');
-const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool } = require('./session-profiles');
+const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool, mcpShortName } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
 // The own-channel-post classifier (`isOutboundPost`) and the FORCED thread tag live in
 // session-outbound-tag.js (§2 cap). isOutboundPost is re-exported below, so no caller changed.
@@ -157,10 +157,10 @@ function postWillGate(s, input, toolName) {
 // the tool NAME (server prefix stripped, capped), M3's channel OP, the verdict, the reason code,
 // both postures, and an 8-char session prefix to join on — attended-handoff's diag discipline.
 // NEVER the tool input, the drafted body, prompt text, or a full id: listener.log is plaintext.
+// F-139: the strip is `mcpShortName`, the gate's OWN normalizer, never a third copy of the rule.
 const DIAG_NAME_CAP = 40; const DIAG_OP_CAP = 24;
 function shortToolLabel(name) {
-  const n = String(name == null ? '' : name).replace(/^mcp__[a-z0-9-]+?__/i, '');
-  return n.slice(0, DIAG_NAME_CAP) || 'unnamed';
+  return mcpShortName(name).slice(0, DIAG_NAME_CAP) || 'unnamed';
 }
 // M3 (2026-08-05) — THE OP, ON THE LINE. `dopl_channel gate channel-op-approval-required` read
 // identically for a read, an invite and a DM open, so the read/post incoherence took code

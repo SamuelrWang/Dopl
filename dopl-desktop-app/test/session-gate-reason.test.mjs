@@ -281,6 +281,63 @@ test("M3: a channel verdict names the op; nothing else on the line moves", () =>
   assert.ok(open.logged[0].includes("op=open"), "the field that turns archaeology into reading");
 });
 
+// ── F-139: the diagnostic hole and the defect had ONE root ────────────────────────
+// The line only prints `op=` for a tool that CLASSIFIES as the channel tool, so on the broken
+// machine the op was absent from every line — the bug hid its own diagnosis. These pin that
+// fixing the matcher resolves the diag by itself, and that the name is stripped for a server
+// segment carrying underscores (the old label regex was `[a-z0-9-]+?`, so it stripped nothing
+// and the field printed the whole dotted name).
+
+test("F-139: a connector-named channel tool logs the SAME line as our own registration", () => {
+  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
+  const SERVERS = ["mcp__dopl__", "mcp__claude_ai_Dopl__", "mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__"];
+  for (const server of SERVERS) {
+    const read = gateOnce({ state: modes }, server + "dopl_channel", { op: "read" });
+    // THE WORKING MACHINE'S LINE, now produced under every server name.
+    assert.match(read.logged[0],
+      /^session gate: dopl_channel op=read allow auto-inbound-read tool=bypass msg=auto_both session=sess-123$/,
+      server);
+    // ...and the BROKEN machine's line — `gate unclassified-tool`, with no `op=` at all — is gone.
+    assert.ok(!read.logged[0].includes("unclassified-tool"), server);
+    assert.ok(read.logged[0].includes("op=read"), `${server} must name the op`);
+    const open = gateOnce({ state: modes }, server + "dopl_channel", { op: "open", direct: true });
+    assert.match(open.logged[0], /^session gate: dopl_channel op=open gate channel-op-approval-required /, server);
+  }
+});
+
+test("F-139: a Dopl tool's name is stripped for a server segment with underscores", () => {
+  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "ask" };
+  const { logged } = gateOnce({ state: modes }, "mcp__claude_ai_Dopl__dopl_kb", { op: "write_file" });
+  assert.match(logged[0], /^session gate: dopl_kb allow tool-mode /,
+    "the label prints the tool, not the client's server name");
+});
+
+test("M4: the diag distinguishes a marker allow from a message allow", () => {
+  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
+  const propose = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "propose_close", thread: "T1", outcome: "completed" });
+  assert.match(propose.logged[0], /^session gate: dopl_channel op=propose_close allow auto-outbound-marker /);
+  const milestone = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "milestone", thread: "T1", body: "step" });
+  assert.match(milestone.logged[0], /^session gate: dopl_channel op=milestone allow auto-outbound-marker /);
+  // A post keeps its OWN code: "did my agent send a message?" is a different audit question.
+  const post = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "post", body: "hi" });
+  assert.match(post.logged[0], /^session gate: dopl_channel op=post allow auto-outbound /);
+  // ...and the close itself still stops, in the posture that auto-allows its proposal.
+  const close = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "close_thread", thread: "T1" });
+  assert.match(close.logged[0], /^session gate: dopl_channel op=close_thread gate channel-op-approval-required /);
+});
+
+test("M4: an own-channel marker that GATES says message approval, not 'this operation'", () => {
+  // The old code claimed "message approval covers this channel's messages, not this operation",
+  // which stopped being true for these two the moment the axis started covering them.
+  const ask = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
+    DOPL_CHANNEL_TOOL, { op: "propose_close", thread: "T1", outcome: "completed" });
+  assert.match(ask.logged[0], /op=propose_close gate message-approval-required /);
+  // A marker aimed elsewhere (a SLUG is the common case) gets the code that names the fix.
+  const away = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" } },
+    DOPL_CHANNEL_TOOL, { op: "milestone", channel: "team-alpha", thread: "T1", body: "x" });
+  assert.match(away.logged[0], /op=milestone gate cross-channel-post /);
+});
+
 test("M3: a NON-channel tool's line is byte-unchanged (no `op=` segment at all)", () => {
   const { logged } = gateOnce({ state: { allowForTask: [], toolMode: "auto", messageMode: "auto_both" } },
     "Bash", { command: "ls" });

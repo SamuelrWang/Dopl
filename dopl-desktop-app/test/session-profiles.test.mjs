@@ -63,15 +63,22 @@ const BLOCK = SRC.slice(from, to);
 const shaKey = (value) =>
   createHash("sha256").update(String(value == null ? "" : value)).digest("hex");
 const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
+// F-139 (2026-08-05): the block matches every tool name through mcp-tool-names' normalizers
+// (the server segment is the CLIENT's — `mcp__dopl__`, `mcp__claude_ai_Dopl__`, `mcp__<uuid>__`
+// are all the same server). Injected like makeGrantKeyFor, and the REAL implementations, so the
+// block stays pinned to what ships.
+const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 
-const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost } = new Function(
+const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
+  isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
-  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName",
   `${BLOCK}
-   return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost };`
+   return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
+            isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
-  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk);
+  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName);
 
 const CHANNEL_SHORT = "dopl_channel";
 // The work tools kept live-gated under `full` (everything else in DENIED_BUILTINS is

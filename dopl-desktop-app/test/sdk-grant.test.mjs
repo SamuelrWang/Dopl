@@ -40,15 +40,18 @@ const shaKey = (v) => createHash("sha256").update(String(v == null ? "" : v)).di
 // block reads `makeGrantKeyFor` / `POST_GRANT` / `postFieldsOk` off the module head. Injected
 // like normalizeProfile, and the REAL implementations, so the block stays pinned to what ships.
 const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
+// F-139 (2026-08-05): the block matches tool names through mcp-tool-names' normalizers, because
+// the `mcp__<server>__` segment is the CLIENT's and never ours. Injected like makeGrantKeyFor.
+const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
-  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
-  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk);
+  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });
