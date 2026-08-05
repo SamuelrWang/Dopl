@@ -11,6 +11,11 @@ import { FlushGrid } from "@/shared/design";
 const NON_WORKSPACE_ROOTS = new Set([
   "admin",
   "auth",
+  // The post-retirement billing + account surface (`/billing/{segment}`). The
+  // segment is the SECOND path part here, not the first, so without this entry
+  // `isAppShellRoute` reads "billing" as a workspace slug and dresses the page
+  // as app chrome. Same reason `get-started` is listed below.
+  "billing",
   "canvas",
   "design",
   // The post-auth download page. It draws its own full-viewport surface (like

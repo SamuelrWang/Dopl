@@ -1,0 +1,15 @@
+/*
+ * /billing/[segment] — layout only. Every surface, border, shadow and colour
+ * comes from the kit classes and tokens in the TSX (docs/DESIGN-SYSTEM.md);
+ * this file declares no palette.
+ */
+
+/*
+ * The page is a LIGHT surface standing on the app's dark frame, so it makes the
+ * same declaration the settings-modal card makes (`settings-modal.module.css`
+ * `.scope`) for the same reason: form controls, scrollbars and Stripe's own
+ * fields inside it must render light regardless of the visitor's OS theme.
+ */
+.scope {
+  color-scheme: light;
+}

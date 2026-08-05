@@ -23,16 +23,27 @@ import styles from "../settings-modal.module.css";
  */
 export function PlansBilling({
   billingReturn = null,
+  initialCheckoutPlan = null,
   role,
   workspaceId,
 }: {
   billingReturn?: "success" | "return" | null;
+  /**
+   * Open checkout on this plan at mount instead of on a click. Set by the
+   * `/billing/[segment]` page from `?billing=upgrade&plan=…`, so a desktop
+   * user who already chose Pro or Team in the app is not asked again in the
+   * browser (`src/features/billing/url.ts`). Null everywhere else — the
+   * settings modal opens on the plan list, unchanged.
+   */
+  initialCheckoutPlan?: CheckoutPlan | null;
   role: Role;
   workspaceId?: string;
 }) {
   // Same args as the core's read → one cache entry, one request.
   const ent = useWorkspaceEntitlements(workspaceId);
-  const [checkoutPlan, setCheckoutPlan] = useState<CheckoutPlan | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<CheckoutPlan | null>(
+    initialCheckoutPlan
+  );
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
 
