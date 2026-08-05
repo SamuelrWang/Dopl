@@ -52,6 +52,28 @@ const { diag } = require('./diag');
 
 function feedLiveSession(entry, m, myUserId) {
   if (!settings.getWindowMode()) return false;
+  // P0-4 DECISION (2026-08-04) — THIS FILTER STAYS, and the reason it stays is
+  // the reason it was dangerous before.
+  //
+  // It was dangerous because PROSE COULD RIDE IN A task_* KIND: a responder's
+  // whole answer arrived as `task_finished` and this line dropped it, so the
+  // peer's live session was never fed the thing it was waiting for. With the
+  // server refusing those three kinds from an agent
+  // (`service-writes.assertLifecycleKindIsServerOwned`), a non-'message' post
+  // reaching here is now one of exactly two things, and NEITHER is a turn:
+  //   - a LIFECYCLE marker written by a runtime or by a thread close. It says
+  //     something about a SESSION, and feeding it would answer a machine's
+  //     status line as though a person had spoken.
+  //   - a `task_progress` MILESTONE. Feeding those would spend one turn of the
+  //     peer's session per milestone — on a stream the product tells agents to
+  //     post freely as work lands — which is a cost with no message in it.
+  // Widening it would also un-do the loop brake in the one place a loop is
+  // cheapest to start.
+  //
+  // What a milestone DOES reach is `channel-agents.routeAddressedAgent`, which
+  // delivers task_* kinds to an agent that is addressed or is a participant of
+  // the thread (F1, `test/channel-milestone-kinds.test.mjs`). That is the
+  // deliberate lane for them, and it is unaffected by this line.
   if (!m || m.kind !== 'message') return false;
   if (!myUserId || m.authorUserId === myUserId) return false;
   const taskId = targeting.firstClassTaskId(m);

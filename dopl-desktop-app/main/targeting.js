@@ -61,6 +61,16 @@ function classify(m, entry, myId) {
   // Guard / fail closed. Agent authors are NO LONGER rejected wholesale (that
   // dropped every ask-another-agent message before addressing was even checked);
   // authorKind must be 'user' or 'agent', so 'system' and friends still ignore.
+  //
+  // P0-4 DECISION (2026-08-04): the kind guard STAYS. It was only ever dangerous
+  // because PROSE COULD RIDE IN A task_* KIND — an answer posted as task_finished
+  // was dropped here and raised no consent, no notification, nothing. The server
+  // refuses those three from an agent now, so what reaches this line is a runtime
+  // LIFECYCLE marker or a MILESTONE, and neither is a request somebody has to
+  // decide about: raising a consent card for "Started working on this request."
+  // is the noise this guard exists to prevent. A milestone that IS meant for one
+  // of my agents is claimed earlier, by channel-agents.routeAddressedAgent, and
+  // never reaches classify at all.
   if (!m || m.kind !== 'message' || !m.authorUserId) return 'ignore';
   if (m.authorKind !== 'user' && m.authorKind !== 'agent') return 'ignore';
   if (!myId) return 'ignore';

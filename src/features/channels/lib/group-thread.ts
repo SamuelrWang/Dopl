@@ -228,12 +228,78 @@ export function truncateSummary(text: string, max = 120): string {
 }
 
 /**
+ * The bodies the RUNTIME and the close route generate for a terminal marker.
+ *
+ * Every one of them is boilerplate a card already says better with its status
+ * chip ("Finished this request." under a Done chip is noise). Anything NOT in
+ * this set is somebody's own words, and {@link substantiveEndBody} is what makes
+ * the difference renderable.
+ *
+ * Enumerated rather than guessed at by length, because the guess fails in both
+ * directions: "Task failed" is short and generated, and a one-line human close
+ * summary is short and real. The sources are `channel-post.postTaskEvent`'s
+ * `bodies` map, `session-window.onEnded`'s derived bodies, `session-effects`'
+ * `endLifecycle`, and `service-tasks.closeTask`'s default echo — the four places
+ * that write a terminal marker at all.
+ */
+const GENERATED_TERMINAL_BODIES: ReadonlySet<string> = new Set([
+  "Finished this request.",
+  "Could not complete this request.",
+  "Request interrupted",
+  "Request declined",
+  "Limit reached",
+  "Session ended",
+  "Turn limit reached",
+  "Cost limit reached",
+  "Task completed",
+  "Task failed",
+]);
+
+/**
+ * A terminal marker's body when it carries CONTENT, else null.
+ *
+ * P0-4 (2026-08-04) — THE STRUCTURAL HALF OF THE VANISHING ANSWER. A
+ * `task_finished` / `task_failed` sets `draft.endEvent` and is never pushed to
+ * `draft.entries`, so its body has no render path AT ALL: an agent that posted
+ * its whole answer as `task_finished` had that answer stored, delivered, and
+ * shown nowhere. `service-writes` now refuses that post from an agent, which
+ * stops NEW ones — but rows like it already exist in the transcript, the desktop
+ * runtime legitimately posts a `bodyOverride` on some ends, and a human's close
+ * summary rides out as the echo's body. All three are content, and content the
+ * renderer drops is the bug class this whole round is about.
+ *
+ * So the rule is about the BODY, not about who wrote it: if a terminal marker
+ * says something the generators do not, show it.
+ */
+export function substantiveEndBody(message: ChannelMessage): string | null {
+  // A CALM-FLAGGED marker is STATUS, never content, whatever its body says. The
+  // desktop writes those flags for an outcome the operator chose (declined,
+  // dropped, interrupted, capped, ended) and the card already renders each as a
+  // one-line calm note off the flag — so its body ("Reply not sent", "Request
+  // interrupted", whatever a later build words it as) is a second copy of the
+  // chip, and promoting it to the reply lane would put a status line where a
+  // deliverable goes. Checked FIRST and by FLAG rather than by string, so the
+  // rule holds for wordings nobody has written yet.
+  if (calmTerminalStatus(message) !== null) return null;
+  const body = message.body.trim();
+  if (!body || GENERATED_TERMINAL_BODIES.has(body)) return null;
+  return body;
+}
+
+/**
  * Split a session's body entries into the two render lanes the card shows
  * separately: `task_progress` milestones (the live accomplishment log) and
  * `message` chat replies. Both preserve the input seq order. This is a pure
  * RENDER-layer split — `groupThread` deliberately keeps `task_progress` inside
  * {@link SessionGroup.entries} (its output is byte-for-byte unchanged), and the
  * card separates the two lanes only at render time.
+ *
+ * P0-4: a TERMINAL marker that reached `entries` (it got there only by carrying
+ * a substantive body — see {@link substantiveEndBody}) joins the REPLIES lane.
+ * It has to land in one of the two or the belt does nothing: this function is
+ * what the card actually renders from, and an entry in neither lane is invisible
+ * exactly the way `endEvent` was. Replies rather than milestones because that is
+ * what it is — somebody's words, not a checklist tick.
  */
 export function splitSessionEntries(entries: ChannelMessage[]): {
   milestones: ChannelMessage[];
@@ -244,6 +310,9 @@ export function splitSessionEntries(entries: ChannelMessage[]): {
   for (const entry of entries) {
     if (entry.kind === "task_progress") milestones.push(entry);
     else if (entry.kind === "message") replies.push(entry);
+    else if (entry.kind === "task_finished" || entry.kind === "task_failed") {
+      replies.push(entry);
+    }
   }
   return { milestones, replies };
 }
@@ -298,18 +367,44 @@ function computeStatus(draft: Draft): SessionStatus {
 }
 
 function computeSummary(draft: Draft): string | null {
-  // 1. An explicit `metadata.summary` on any event wins.
-  const candidates = [draft.startedEvent, draft.endEvent, ...draft.entries];
-  for (const event of candidates) {
+  // 1. An explicit `metadata.summary`, read OUTCOME-FIRST.
+  //
+  // P0-4: this used to scan `[startedEvent, endEvent, ...entries]`, so the
+  // START's summary won — and a `task_started`'s summary is the requester's
+  // ORIGINAL ASK, stamped by the server when the thread opened. The header
+  // therefore described the question for the whole life of the card, including
+  // after it was answered, which is how "a well-behaved agent that writes a good
+  // summary hides its own answer" became literally true. The header should say
+  // how the exchange stands, so the end and the entries are read first and the
+  // opening ask is the last resort.
+  //
+  // AND THE END SPEAKS BEFORE ANY OTHER EVENT'S SUMMARY, by its summary and then
+  // by its body. This is the half the diagnosis named exactly: a summary-first
+  // scan means "a well-behaved agent that writes a good summary hides its own
+  // answer harder than a sloppy one", because the ANSWER lives in a body while
+  // the ASK lives in a summary one event earlier. On a first-class thread the
+  // requester's own opening request is itself an ENTRY (it carries the thread
+  // tag) with the ask as its summary, so simply reordering the event list is not
+  // enough — the end's own words have to outrank an earlier event's summary.
+  const end = draft.endEvent;
+  if (end) {
+    const endSummary = readSummary(end.metadata);
+    if (endSummary) return truncateSummary(endSummary);
+    const endBody = substantiveEndBody(end);
+    if (endBody) return truncateSummary(endBody);
+  }
+  // 2. Then any explicit `metadata.summary`, entries NEWEST-FIRST (the most
+  //    recent statement of intent), and the opening ask only as a last resort.
+  for (const event of [...[...draft.entries].reverse(), draft.startedEvent]) {
     if (!event) continue;
     const summary = readSummary(event.metadata);
     if (summary) return truncateSummary(summary);
   }
-  // 2. The last agent reply's text, truncated.
+  // 3. The last agent reply's text, truncated.
   const replies = draft.entries.filter((e) => e.kind === "message");
   const lastReply = replies[replies.length - 1];
   if (lastReply && lastReply.body.trim()) return truncateSummary(lastReply.body);
-  // 3. Fall back to the task event's human-readable body.
+  // 4. Fall back to the task event's human-readable body.
   const taskEvent = draft.startedEvent ?? draft.endEvent;
   if (taskEvent && taskEvent.body.trim()) return truncateSummary(taskEvent.body);
   return null;
@@ -547,6 +642,13 @@ export function groupThread(
       case "task_finished":
       case "task_failed":
         draft.endEvent = message;
+        // P0-4 — AND IT IS ALSO AN ENTRY WHEN IT SAYS SOMETHING. The header chip
+        // is derived from `endEvent`; that stays. What changes is that a marker
+        // carrying a body the generators never write is content, and content
+        // needs a render path. Without this line its body has NONE — which is
+        // how a finished piece of work was stored, delivered, and shown nowhere.
+        // Pushed here, in seq order, so it reads as the last thing said.
+        if (substantiveEndBody(message)) draft.entries.push(message);
         if (openTaskId === taskId) openTaskId = null;
         break;
       case "task_progress":
