@@ -130,18 +130,53 @@ function createReconcileHealer(opts = {}) {
     return true;
   }
 
-  // A reconcile pass could not enumerate `failedCount` workspaces. Schedule ONE
-  // follow-up pass; a second failing pass re-uses the pending timer, so this can
-  // never stack into a reconcile storm.
-  function onEnumerationFailure(failedCount) {
-    if (!failedCount || retryTimer) return false;
-    log('reconcile self-heal: retrying', failedCount, 'unenumerated workspace(s) in', `${retryMs}ms`);
+  // ONE pending follow-up pass, whatever asked for it. Both re-ask paths below
+  // share this timer, so a workspace-list failure and a per-workspace enumeration
+  // failure can never stack into two reconcile storms (F-072).
+  function scheduleRetry(what) {
+    if (retryTimer) return false;
+    log('reconcile self-heal:', what, 'in', `${retryMs}ms`);
     retryTimer = T.setTimeout(() => {
       retryTimer = null;
       run();
     }, retryMs);
     if (retryTimer && retryTimer.unref) retryTimer.unref();
     return true;
+  }
+
+  // A reconcile pass listed the workspaces fine but could not enumerate
+  // `failedCount` of them. Their loops are kept; one follow-up pass re-asks.
+  function onEnumerationFailure(failedCount) {
+    if (!failedCount) return false;
+    return scheduleRetry(`retrying ${failedCount} unenumerated workspace(s)`);
+  }
+
+  // A DIFFERENT FAILURE, and it used to be reported as this one. reconcile called
+  // `onEnumerationFailure(1)` when `/api/workspaces` itself never answered, so the
+  // log read "retrying 1 unenumerated workspace(s)" — naming a per-workspace
+  // channel enumeration that was never even attempted, and implying one workspace
+  // was affected when in fact NONE were listed. That misdirection cost hours
+  // during the 1.8.x Channels outage: the true state was "the workspace list 401'd,
+  // so presence, push, identity and every channel loop were starved", and nothing
+  // in the log said it. Same bounded timer, honest copy.
+  //
+  // THE ORDERING QUESTION this branch raises, answered here because this is where
+  // the failure is named. reconcile returns BEFORE presence.setWorkspaces and
+  // realtime.setWorkspaces — should a failed list starve them? It does not, and
+  // the early return is right as it stands: the branch never CLEARS either set, and
+  // `lastGoodWorkspaceIds` is assigned in lockstep with `presence.setWorkspaces` on
+  // every successful pass (and cleared with it on sign-out), so both keep exactly
+  // the set the last good pass installed. A transient failure therefore cannot take
+  // the operator offline. Realtime has the extra `shouldReapplyWorkspaces` repair
+  // below for the want=0 case, which runs BEFORE the list and so is unaffected too.
+  //
+  // The ONE state with nothing to keep is a cold start whose very first list fails
+  // — Samuel's outage. Persisting the last-good set to disk would not have fixed it:
+  // the heartbeat POSTs the same origin with the same credential, so whatever killed
+  // `/api/workspaces` kills `/api/channels/presence`. The credential is the bug, and
+  // the 401 repair (api-repair.js) is where it is fixed.
+  function onWorkspaceListFailure() {
+    return scheduleRetry('the WORKSPACE LIST itself failed (nothing enumerated) — re-asking');
   }
 
   function pendingRetry() {
@@ -155,7 +190,7 @@ function createReconcileHealer(opts = {}) {
     missCounts.clear(); // S7: a restart is the operator's reset for a parked channel
   }
 
-  return { onLoopMiss, onEnumerationFailure, pendingRetry, stop };
+  return { onLoopMiss, onEnumerationFailure, onWorkspaceListFailure, pendingRetry, stop };
 }
 
 module.exports = {

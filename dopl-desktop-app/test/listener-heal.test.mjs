@@ -320,7 +320,7 @@ test("reconcile records the empty workspace set too, so want=0 stops oscillating
   // …and the reapply predicate is what makes an empty set harmless rather than a no-op.
   assert.equal(heal.shouldReapplyWorkspaces(true, 0, 0), false, "nothing known-good to re-apply");
   // A FAILED enumeration is still different from an empty one: it returns before here.
-  assert.match(fn, /if \(workspaces === null\) \{ healer\.onEnumerationFailure\(1\); setStatus\(\); return; \}/);
+  assert.match(fn, /if \(workspaces === null\) \{ healer\.onWorkspaceListFailure\(\); setStatus\(\); return; \}/);
 });
 
 // ── FIX S6 (io half): the refresh dance is for AUTH failures only ───────────

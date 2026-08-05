@@ -37,6 +37,8 @@ const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const TOKENS = M("auth-tokens.js");
 const AUTH = M("auth.js");
 const API = M("api.js");
+const IO = M("listener-io.js");
+const REPAIR = M("api-repair.js");
 const BRIDGE = M("ui-bridge.js");
 
 const PURE = between(
@@ -364,17 +366,36 @@ test("powerMonitor wake re-decides immediately and does NOT forgive definitive f
   );
 });
 
-test("api.js repairs a 401 exactly once and keeps the COOKIE transport alive", () => {
-  const fn = fnOf(API, "apiFetch");
+test("the cookie transports repair a 401 exactly once — from ONE shared implementation", () => {
+  // Was `fnOf(API, "apiFetch")`. The repair moved to api-repair.js because keeping
+  // a SECOND copy of it is what produced the 1.8.x Channels outage: api.js got the
+  // Phase-2 repair, listener-io.js — the transport under listWorkspaces, the
+  // `/await` long-polls, channel-post, roster, threads and consent — did not, and
+  // the whole subsystem died on a stale cookie jar.
+  const fn = fnOf(REPAIR, "fetchWithAuthRepair");
   assert.match(fn, /shouldRepairAuth\(res\.status, false\)/);
   assert.match(fn, /forceRefresh\(\)/);
   assert.match(fn, /writeSessionCookies\(fresh\)/, "the retry must carry a DIFFERENT credential");
   assert.equal(
-    (fn.match(/sendOnce\(/g) || []).length,
+    (fn.match(/await send\(\)/g) || []).length,
     2,
     "exactly one original attempt and one retry — never a loop"
   );
   assert.match(fn, /emitAuthState\('signed-out'\)/, "a surviving 401 is surfaced, not swallowed");
+  // …and BOTH transports actually route through it. This is the regression guard:
+  // a new bare `fetch` seam that forgets the repair is the bug class, not a nit.
+  for (const [name, src] of [["api.js", API], ["listener-io.js", IO]]) {
+    assert.match(src, /require\('\.\/api-repair'\)/, `${name} does not use the shared repair`);
+    assert.match(
+      fnOf(src, "apiFetch"),
+      /fetchWithAuthRepair\('(api|listener)', pathname, \(\) => sendOnce\(pathname, opts\)\)/,
+      `${name}'s apiFetch does not go through the shared repair`
+    );
+    assert.ok(
+      !/shouldRepairAuth|forceRefresh/.test(src),
+      `${name} has grown its own copy of the repair again`
+    );
+  }
 });
 
 test("the ui-bridge seam is implemented and still token-free across IPC", () => {
@@ -390,7 +411,7 @@ test("the ui-bridge seam is implemented and still token-free across IPC", () => 
 
 test("I11 — no token value can reach a log", () => {
   // Only the SOURCE, the seconds-left and the failure kind are ever logged.
-  for (const [name, src] of [["auth-tokens.js", TOKENS]]) {
+  for (const [name, src] of [["auth-tokens.js", TOKENS], ["api-repair.js", REPAIR]]) {
     const logs = src.match(/\bdiag\([^;]*\)/g) || [];
     for (const line of logs) {
       assert.ok(

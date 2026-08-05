@@ -16,6 +16,7 @@ const Store = require('electron-store');
 const auth = require('./auth');
 const appVersion = require('./app-version');
 const heal = require('./listener-heal');
+const { fetchWithAuthRepair } = require('./api-repair');
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
 
@@ -200,7 +201,12 @@ function isFeatureAvailable() {
 }
 
 // ── HTTP ────────────────────────────────────────────────────────────────────
-async function apiFetch(pathname, opts = {}) {
+// ONE attempt. Split out of apiFetch so the 401 repair below can run it twice
+// with a jar it repaired in between — every call re-reads `getAuthCookie()`, so
+// the retry genuinely carries a different credential. The request itself is
+// unchanged: same headers, same abort wiring, same timeout semantics the
+// long-poll depends on.
+async function sendOnce(pathname, opts) {
   const { method = 'GET', workspaceId, body, timeoutMs, signal } = opts;
   const cookie = await auth.getAuthCookie();
   // Q10: this build's version rides on the TRANSPORT (see api.js for the same
@@ -234,6 +240,23 @@ async function apiFetch(pathname, opts = {}) {
   }
 }
 
+// THE REPAIR THE LISTENER NEVER HAD (the 1.8.x Channels outage). This file kept
+// its own bare cookie fetch while api.js was given a 401 repair, so on the
+// bundled SPA — where nothing keeps the Supabase cookie jar fresh and
+// `getAuthCookie()` only repairs an EMPTY jar, never a STALE one — every Channels
+// call died on an expired credential: listWorkspaces, listChannels, the `/await`
+// long-polls, channel-post's lifecycle posts, the roster, threads, consent. It
+// recovered only when some other api.js caller happened to 401 and repair the
+// shared jar first. api-repair.js is now the ONE copy of that rule (force one
+// single-flighted rotation, write it back to the jar, retry EXACTLY once); the
+// send above stays ours, because the abort signal and the timeouts are.
+//
+// An abort between the two attempts (a wake kick, our own timeout) rejects out of
+// here as AbortError exactly as before — channelLoop still reads that as turnover.
+function apiFetch(pathname, opts = {}) {
+  return fetchWithAuthRepair('listener', pathname, () => sendOnce(pathname, opts));
+}
+
 // Health-gated await. Healthy → a cheap immediate catch-up (tiny timeoutMs, no
 // held function); unhealthy → today's EXACT held long-poll (same URL + same
 // fetch options, so the fallback is byte-for-byte). See the CHEAP-AWAIT block.
@@ -264,9 +287,22 @@ function normalizeList(data, key) {
 // NULL means "could not ask" (401 / non-OK), NOT "you are in no workspaces".
 // reconcile treats null as abort-this-pass and keeps every existing loop; an
 // empty array would prune them all.
+//
+// THE 401 BRANCH LOGGED NOTHING, and that silence is why the 1.8.x outage was
+// invisible for hours. It is the FIRST call of every reconcile pass and its
+// failure returns before presence, realtime, identity resolution and every
+// channel loop — so a subsystem that was entirely dead produced only `reconcile
+// self-heal: retrying …` every 30s, with no line anywhere naming the cause. A
+// subsystem that dies must say so: every exit from this function is now on the
+// record, and the 401 one says what it costs.
 async function listWorkspaces() {
   const res = await apiFetch('/api/workspaces', { timeoutMs: 15000 });
-  if (res.status === 401) { notifyStale(); return null; }
+  if (res.status === 401) {
+    notifyStale();
+    diag('listWorkspaces 401 — session stale even after the repair; NO workspaces this pass,',
+      'so presence, push and every channel loop are starved until one succeeds');
+    return null;
+  }
   if (!res.ok) { diag('listWorkspaces', res.status); return null; }
   return normalizeList(await res.json(), 'workspaces');
 }

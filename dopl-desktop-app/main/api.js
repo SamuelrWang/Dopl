@@ -1,16 +1,18 @@
 // Shared authenticated HTTP helper for the newer main-process modules
-// (mcp-config). The Channels listener keeps its own copy (E2E-verified — not
-// refactored here); this is the same shape: cookie-forwarded, X-Workspace-Id
-// optional, AbortController timeout.
+// (mcp-config, consent, presence, session-history, session-peer-post,
+// session-close-task). The Channels listener still keeps its own SEND (E2E-
+// verified — its long-poll wires a caller abort signal into the controller and
+// its timeouts are load-bearing), but the two no longer keep separate 401
+// REPAIRS: that half is api-repair.js and both call it. Keeping a second copy of
+// the repair is what produced the 1.8.x Channels outage — see api-repair.js.
 //
 // Auth is via the Electron session's Supabase cookies (see auth.js for why not
 // a bearer). withUserAuth endpoints ({ sessionOnly: true } included) honor them.
 
 const auth = require('./auth');
-const authTokens = require('./auth-tokens');
 const appVersion = require('./app-version');
+const { fetchWithAuthRepair } = require('./api-repair');
 const { API_BASE } = require('./config');
-const { diag } = require('./diag');
 
 async function sendOnce(pathname, opts) {
   const { method = 'GET', workspaceId, body, headers: extra, timeoutMs, noStore } = opts;
@@ -46,35 +48,12 @@ async function sendOnce(pathname, opts) {
 // the cookie jar fresh; the bundled SPA removes the page and with it the
 // refresher, and `getAuthCookie()` only repairs an EMPTY jar, never a STALE one.
 //
-// So: on a 401, force ONE rotation through the token authority (which shares
-// auth.js's single-flight refresh — never a second refresher against a rotating
-// refresh token), write the fresh session back into the jar so the retry actually
-// carries a different credential, and retry EXACTLY ONCE. A 401 that survives a
-// fresh token is a real authorization answer (a revoked session, a sessionOnly
-// route, the wrong workspace) and must surface, not spin.
-async function apiFetch(pathname, opts = {}) {
-  const res = await sendOnce(pathname, opts);
-  if (!authTokens.shouldRepairAuth(res.status, false)) return res;
-
-  const fresh = await authTokens.forceRefresh();
-  if (!fresh || !fresh.access_token) {
-    diag('api: 401 and the refresh did not produce a session —', pathname);
-    return res;
-  }
-  // Keep the COOKIE transport working: this file still authenticates with the
-  // jar (auth-flows.md §4 — the token authority is additive until Phase 4), so a
-  // refreshed blob is worthless to the retry until the jar carries it.
-  try {
-    await auth.writeSessionCookies(fresh);
-  } catch (err) {
-    diag('api: jar repair after 401 failed —', (err && err.message) || String(err));
-  }
-  const retried = await sendOnce(pathname, opts);
-  if (retried.status === 401) {
-    diag('api: 401 survived a forced refresh —', pathname);
-    authTokens.emitAuthState('signed-out');
-  }
-  return retried;
+// The repair itself now lives in api-repair.js and is SHARED with listener-io.js,
+// which shipped without it and took the whole Channels subsystem down on 1.8.x.
+// `sendOnce` stays here because the SEND is what differs between the two
+// transports; the 401 rule is what must never differ again.
+function apiFetch(pathname, opts = {}) {
+  return fetchWithAuthRepair('api', pathname, () => sendOnce(pathname, opts));
 }
 
 // The main process uses the global `fetch` — which in Electron main is Node's

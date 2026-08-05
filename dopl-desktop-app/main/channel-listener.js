@@ -221,9 +221,9 @@ async function reconcileInner() {
     diag('reconcile: listWorkspaces error —', err && err.message);
     workspaces = null;
   }
-  // A workspace list we never got is the same class of failure as a channel list
-  // we never got: retry it soon instead of idling until the 5-minute timer.
-  if (workspaces === null) { healer.onEnumerationFailure(1); setStatus(); return; }
+  // Nothing was enumerated — NOT "one unenumerated workspace" (listener-heal owns
+  // the copy AND the ordering note: presence/realtime keep their last-good sets).
+  if (workspaces === null) { healer.onWorkspaceListFailure(); setStatus(); return; }
 
   const desired = new Map();
   const failedWorkspaces = new Set(); // enumeration never answered for these
