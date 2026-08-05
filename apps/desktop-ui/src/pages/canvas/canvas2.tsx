@@ -13,11 +13,12 @@ import { Navigate, useLocation, useParams } from "react-router";
  * not a fork. Web `redirect()` → `<Navigate replace>`: the alias leaves no
  * history entry, same as the 308.
  *
- * The search string is forwarded for the same reason the RSC forwards it — a
- * Stripe return lands on `?billing=success`, and the app shell is what reads
- * it. Nothing in the SPA shell reads it TODAY (the settings modal is the
- * settings slice's), so this preserves the input for when it does rather than
- * dropping it here and needing it re-added there.
+ * The search string is forwarded for the same reason the RSC forwards it: an
+ * alias that eats its own query is a bug waiting for the first caller that
+ * carries one. (Stripe returns used to be that caller; they now land on the web
+ * `/billing/{segment}` page instead — `src/features/billing/url.ts`.) Nothing in
+ * the SPA shell reads the query today, so this preserves the input for whatever
+ * does rather than dropping it here and needing it re-added there.
  */
 export default function Canvas2AliasPage() {
   const { workspaceSegment = "" } = useParams();

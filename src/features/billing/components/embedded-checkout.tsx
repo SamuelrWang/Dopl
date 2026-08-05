@@ -140,9 +140,11 @@ function CheckoutPaymentForm({ plan }: { plan: "solo" | "team" }) {
     setConfirming(true);
     setConfirmError(null);
     // No args → the session's server-set return_url drives the post-payment
-    // redirect (the app shell handles `/canvas?billing=success`). A successful
-    // card confirm typically redirects the page — that is the intended flow,
-    // so we leave the button in its "Processing…" state on success.
+    // redirect: `/billing/{segment}?billing=success&session_id=…`, the page that
+    // reads `billing=success` as the signal to poll for the webhook (see
+    // `features/billing/url.ts`). A successful card confirm typically redirects
+    // the page — that is the intended flow, so we leave the button in its
+    // "Processing…" state on success.
     const confirmResult = await checkout.confirm();
     if (confirmResult.type === "error") {
       setConfirmError(confirmResult.error.message);
