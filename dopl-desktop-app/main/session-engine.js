@@ -199,9 +199,8 @@ function runLifecycle(s, kind, extra, body) {
 
 // The task status flip (op:"close") lives in session-close-task.js (§2 split); the lifecycle echo stays here.
 // Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it), free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
-// `keepWindow` is the abandonment case (session-effects.endEffects): everything below still runs
-// — the session is terminal and off the map either way — but the painted transcript is left on
-// screen for an operator who was not here to see it end.
+// `keepWindow` — the abandonment case alone; the argument is at session-effects.endEffects.
+// Everything below still runs (terminal either way); only the painted transcript survives.
 function settle(s, outcome, keepWindow) {
   if (s.settled) return;
   s.settled = true;
@@ -226,13 +225,11 @@ function getSessionBySender(sender) { // renderer->main resolution for session-i
   return null;
 }
 
-function setWindowFactory(fn) {
+function setWindowFactory(fn) { // consent windows use the same factory
   windowFactory = typeof fn === 'function' ? fn : null;
-  sessionConsent.setWindowFactory(windowFactory); // consent windows use the same factory
+  sessionConsent.setWindowFactory(windowFactory);
 }
-function setLifecycleHandlers(h) {
-  lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded };
-}
+function setLifecycleHandlers(h) { lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded }; }
 
 // Build the session object, open (or ADOPT) its window, start the query (launch + resume). The per-session nonce is
 // minted HERE so the first turn's fence + every fed-inbound continuation share the SAME token (else injected content
