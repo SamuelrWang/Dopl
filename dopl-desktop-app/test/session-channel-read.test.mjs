@@ -47,16 +47,20 @@ const READS = profiles.OWN_CHANNEL_READ_OPS;
 // cost a click per exchange and removed no consent point. They are pinned under the OUTBOUND
 // half below; `close_thread` stays here, unconditionally, and is never conflated with its
 // proposal. Everything else in this list is unchanged from M3.
+// The six named-agent / breakout ops that were listed here (`join_thread`, `leave_thread`,
+// `summon_agent`, `rename_agent`, `set_agent_status`, `disengage_agent`) are gone with the
+// tool's own enum (channels rollback §1), and naming ops the tool does not publish would make
+// this table read as coverage it does not have.
 const ALWAYS_GATED = ["open", "invite", "create_thread", "close_thread",
-  "set_thread_mode", "join_thread", "leave_thread", "list",
-  "summon_agent", "rename_agent", "set_agent_status", "disengage_agent"];
+  "set_thread_mode", "list"];
 // M4: the two ops that moved, kept as their own name so every test below can say which is which.
 const MARKERS = ["propose_close", "milestone"];
 
 // ── the read set ──────────────────────────────────────────────────────────────────
 
 test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing else", () => {
-  assert.deepEqual(READS, ["read", "await", "list_threads", "get_thread", "members", "agents"]);
+  // `agents` was a seventh read — the channel's named-agent roster — and went with the op.
+  assert.deepEqual(READS, ["read", "await", "list_threads", "get_thread", "members"]);
   for (const op of ALWAYS_GATED.concat(MARKERS)) {
     assert.ok(!READS.includes(op), `${op} must never be classified as a read`);
   }

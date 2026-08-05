@@ -232,12 +232,12 @@ test("M3: auto_inbound reads the OWN channel with no dispatch, and opens nothing
   const s = mkSession({ messageMode: "auto_inbound" });
   const rec = recorder();
   const canUse = io.makeCanUseTool(s, rec.dispatch);
-  for (const op of ["read", "await", "list_threads", "get_thread", "members", "agents"]) {
+  for (const op of ["read", "await", "list_threads", "get_thread", "members"]) {
     assert.deepEqual(await canUse(CHANNEL_TOOL, { op }, { requestId: "m-" + op }), { behavior: "allow" }, op);
   }
   assert.equal(rec.events.length, 0, "the operator opted into receiving; asking again is the bug");
   // The exfil surface is untouched: each of these still earns its own card at auto_inbound.
-  const gated = ["open", "invite", "create_thread", "propose_close", "summon_agent", "list"];
+  const gated = ["open", "invite", "create_thread", "propose_close", "set_thread_mode", "list"];
   gated.forEach((op, i) => canUse(CHANNEL_TOOL, { op, direct: true, member: "evil@x" }, { requestId: "g" + i }));
   assert.equal(rec.events.length, gated.length, "every channel-changing op still asks");
   // ...and so is a read of ANOTHER channel, and a POST (that is the outbound half's business).

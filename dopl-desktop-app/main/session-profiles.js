@@ -222,16 +222,19 @@ function isOwnChannelPost(input, sessionChannelId) {
 //   read / await   the channel's messages (await is the same read, long-polled: it is what an
 //                  agent blocked on the peer is doing, and gating it gates waiting itself)
 //   list_threads / get_thread   this channel's threads and one thread's contents
-//   members / agents            this channel's roster, which the session's own prompt framing
+//   members        this channel's roster, which the session's own prompt framing
 //                  already carries; enumerating it discloses nothing the agent was not told
 // WHAT DELIBERATELY STAYS GATED IN EVERY POSTURE, because the v1.9 FIX H1 exfil reasoning is
 // sound and untouched: `open` (opens a channel or a DM with another member), `invite`,
-// `create_thread`, `propose_close` and `close_thread`, `set_thread_mode`, `join_thread` /
-// `leave_thread`, the agent-lifecycle ops (`summon_agent` / `rename_agent` / `set_agent_status` /
-// `disengage_agent`), `milestone` and every post — plus `list`, which is read-only but enumerates
+// `create_thread`, `propose_close` and `close_thread`, `set_thread_mode`,
+// `milestone` and every post — plus `list`, which is read-only but enumerates
 // EVERY channel and DM this account can reach and is therefore not own-channel-scoped at all.
 // "Read my own room for me" is not consent to open a DM with a stranger.
-const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members', 'agents'];
+// `agents` was a seventh entry — the channel's named-agent roster — and it went with the op
+// (channels rollback §1). `join_thread` / `leave_thread` and the four agent-lifecycle ops were
+// named above as deliberately GATED and are gone the same way; they are not listed any more
+// because a containment table that names ops the tool does not publish reads as coverage.
+const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members'];
 
 // The read twin of isOwnChannelPost, with the SAME scoping rule and the same safe failure: a
 // `channel` naming anything but this session's id (a slug included) is classified as ANOTHER

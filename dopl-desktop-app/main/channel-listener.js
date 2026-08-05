@@ -29,7 +29,6 @@ const trigger = require('./trigger');
 // Per-message dispatch (the three session-window routes, classify, and the three
 // verdict outcomes) lives in listener-messages.js — extracted at the 500-line cap.
 const messages = require('./listener-messages');
-const channelAgents = require('./channel-agents'); // D2: my summons + the agent roster
 const watcher = require('./consent-watcher');
 const sessionEngine = require('./session-engine');
 const realtime = require('./realtime');
@@ -300,9 +299,10 @@ async function reconcileInner() {
         // LIVE so messages that landed while the app was quit/asleep surface as
         // real triggers instead of being swallowed. See io.seedModeFor.
         seedMode: io.shouldSeed(id),
-        // FIX B1: the "address to act" law must be armed BEFORE the first roster read.
-        teamAgents: io.getTeamAgentCount(id), // last known; 0 for a channel never known to have any
-        rosterKnown: false, // flipped by channel-agents.js on a SUCCESSFUL read this run
+        // The entry used to carry `teamAgents` / `rosterKnown` — the tri-state behind the
+        // "address to act" law, which disabled the implicit 2-member trigger while this
+        // operator had summoned agents in the room. Both are gone with summoning
+        // (channels rollback §1).
       };
       loops.set(id, entry);
       // Fire-and-forget: a thrown loop must not become an unhandledRejection that
@@ -328,11 +328,9 @@ async function reconcileInner() {
       existing.workspaceSegment = d.workspaceSegment;
     }
   }
-  // D2: read every watched channel's agent roster and start any of MY rows that are still
-  // `summoned`. Deliberately the LAST thing a pass does and deliberately not awaited — a
-  // slow roster read must never delay channel watching — and single-flight per channel, so
-  // this pass and a realtime doorbell can never both summon the same row.
-  channelAgents.reconcileAll(loops, myUserId);
+  // A pass used to end by reading every watched channel's agent roster and starting any of
+  // this operator's rows that were still `summoned`. Summoning is gone (channels rollback
+  // §1), and with it the only reason this listener ever read that table.
   // One bounded follow-up pass when a workspace never answered; no-op otherwise.
   healer.onEnumerationFailure(failedWorkspaces.size);
   setStatus();
@@ -402,9 +400,6 @@ function start(statusCb, h) {
       getAccessTokenInfo: auth.getAccessTokenInfo,
       getAccessToken: auth.getAccessToken,
       onInsert: wakeChannel,
-      // D2: a `channel_agents` INSERT or UPDATE is a doorbell for the ROSTER, not for
-      // messages — it re-reads that channel's agents (channel-agents.js owns the read).
-      onAgentChange: (id) => channelAgents.wakeChannel(loops.get(id)),
       onHealthChange: onRealtimeHealth,
     });
   }

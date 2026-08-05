@@ -69,7 +69,7 @@ test("REPRO: the message is HELD at the in-window gate, and the agent is never s
   // HELD. The card is the head of the real FIFO, and the pill says a message waits.
   assert.equal(s.pendingInbound.length, 1);
   assert.equal(s.pendingInbound[0].message, BODY);
-  assert.equal(s.pendingInbound[0].authorName, `agent-of:${PEER}`, "the AUTHOR, not the peer's account name");
+  assert.equal(s.pendingInbound[0].authorName, `name:${PEER}'s agent`, "the AUTHOR, not the peer's account name");
   assert.equal(s.state.hasPendingInbound, true);
   assert.equal(s.state.phase, "awaiting_inbound");
   assert.equal(h.calls.notices.length, 1, "and the operator is told, once");

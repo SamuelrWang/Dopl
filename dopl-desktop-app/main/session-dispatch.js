@@ -44,13 +44,35 @@
 const settings = require('./settings');
 const targeting = require('./targeting');
 const io = require('./listener-io');
-const roster = require('./channel-roster'); // 2026-08-01: WHO wrote the message being fed
 const store = require('./session-store'); // (5): the durable record that says this exchange ran here
 const sessionEngine = require('./session-engine');
 const { notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-DISPATCH-PURE (routing; unit-tested via source extraction) ──
+
+// WHO WROTE THIS MESSAGE, for the wrapper a session is fed it inside.
+//
+// `io.displayNameFor` names the ACCOUNT a post was made from, and a peer's AGENT posts from
+// the peer's account, so "<name> replied in the channel..." credited a person for words a
+// machine wrote (incident 2026-08-01). `author_kind` is what tells the two apart, and it is
+// derived server-side from the caller's credential rather than claimed on the wire.
+//
+// IT USED TO NAME A HANDLE. `channel-roster.authorLabel` resolved `metadata.author_agent_id`
+// against the channel's agent roster and answered "quartz, Ada's agent" - one authenticated
+// GET per channel per reconcile pass, kept warm for exactly this line. Named agents are gone
+// (channels rollback, plan section 1): nothing stamps that key on a new message, no handle is
+// addressable, and the roster read went with the summoning it existed for. The distinction
+// this line is actually for - person or machine - survives intact, and the WEB transcript
+// still resolves handles on OLD rows through the read that survived there.
+//
+// Inside the PURE block on purpose: the truth tables slice this block whole and drive the
+// real routes, so a helper the routes call has to be sliced with them.
+function authorLabel(m) {
+  const person = String((io.displayNameFor(m && m.authorUserId)) || '').trim();
+  if (!(m && m.authorKind === 'agent')) return person;
+  return person ? person + "'s agent" : 'an agent';
+}
 // Node-only routing — every dependency (settings, targeting, sessionEngine, io,
 // notifyLocal, diag) is a module-scope binding the test injects, so the routing truth
 // table is pinned without any host-bound module import.
@@ -93,10 +115,10 @@ function feedLiveSession(entry, m, myUserId) {
     // THE ATTRIBUTION (incident 2026-08-01). `io.displayNameFor(m.authorUserId)` names the
     // ACCOUNT a post was made from, and a peer's AGENT posts from the peer's account — so the
     // wrapper this text ends up in ("<name> replied in the channel…") credited a person for
-    // words a machine wrote. roster.authorLabel says which it was. A self-echo cannot reach
-    // this route at all (the `m.authorUserId === myUserId` conjunct above), so the label is
-    // the only thing that changes here.
-    authorName: roster.authorLabel(entry.channel.id, m),
+    // words a machine wrote. `authorLabel` says which it was. A self-echo cannot reach this
+    // route at all (the `m.authorUserId === myUserId` conjunct above), so the label is the
+    // only thing that changes here.
+    authorName: authorLabel(m),
   });
 }
 
@@ -200,7 +222,7 @@ async function maybeSurfaceRequesterReply(entry, m, myUserId) {
     channelId: entry.channel.id,
     taskId,
     message: m.body,
-    authorName: roster.authorLabel(entry.channel.id, m), // the AUTHOR, not just the account
+    authorName: authorLabel(m), // the AUTHOR, not just the account
   });
   if (ok) diag('requester reply gated', 'task', taskId.slice(0, 8));
   return ok;
@@ -311,7 +333,7 @@ async function maybeReopenAddressedThread(entry, m, myUserId) {
     message: m.body,
     // The AUTHOR, not the account: a peer's agent posts from the peer's account, and the
     // wrapper this text lands in names whoever this says wrote it.
-    authorName: roster.authorLabel(channelId, m),
+    authorName: authorLabel(m),
   });
   diag('thread follow-up', channelId.slice(0, 8), 'thread', taskId.slice(0, 8),
     ok ? 'reopened in place (gated)' : 'not reopened — falling through to consent');

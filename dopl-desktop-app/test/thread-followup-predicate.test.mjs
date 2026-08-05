@@ -148,10 +148,12 @@ test("SEAM: route (6) runs AFTER classify, inside the 'trigger' branch, and guar
     /if \(!\(await sessionDispatch\.maybeReopenAddressedThread\(entry, m, myUserId\)\)\) await trigger\.handleTrigger\(entry, m\);/,
     "a claimed message must not ALSO raise consent"
   );
-  // And the other three verdicts are dispatched exactly as before — the route cannot reach them.
+  // And the other verdicts are dispatched exactly as before — the route cannot reach them.
+  // There was a fourth, 'agent-escalation', and it is gone with the named agents whose
+  // `author_agent_id` stamp was its whole trigger (channels rollback §1).
   assert.match(LISTENER, /else if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m\);/);
   assert.match(LISTENER, /else if \(verdict === 'task-reply'\) taskNotify\.notifyTaskReply\(entry, m\);/);
-  assert.match(LISTENER, /else if \(verdict === 'agent-escalation'\) taskNotify\.notifyAgentEscalation\(/);
+  assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
 });
 
 test("SEAM: the reopen spends no consent-entry arm — it is a recreate, not an adoption", () => {

@@ -74,12 +74,11 @@ function harness(over = {}) {
     feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
-  // 2026-08-01: the label a fed message is titled with is the AUTHOR's, resolved by
-  // channel-roster.authorLabel — a peer's AGENT posts from the peer's account, so the account's
-  // display name is the wrong answer for it. Mirrored here in miniature.
-  const roster = {
-    authorLabel: (channelId, m) => (m.authorKind === "agent" ? `agent-of:${m.authorUserId}` : `name:${m.authorUserId}`),
-  };
+  // 2026-08-01: the label a fed message is titled with is the AUTHOR's — a peer's AGENT posts
+  // from the peer's account, so the account's display name is the wrong answer for it. The
+  // resolver is `authorLabel`, INSIDE the sliced block, so it is the real one here rather
+  // than a fake. It used to be `channel-roster.authorLabel` and to name a HANDLE off the
+  // channel's agent roster; that went with named agents (channels rollback §1).
   // Kept injectable to prove the routing layer no longer READS the resume map itself.
   const store = {
     sessionKey: (c, t) => { calls.storeReads++; return `${c}:${t}`; },
@@ -89,9 +88,9 @@ function harness(over = {}) {
   const notifyLocal = (title, body) => calls.notify.push({ title, body });
   const diag = () => {};
   const api = new Function(
-    "settings", "targeting", "sessionEngine", "io", "roster", "store", "notifyLocal", "diag",
+    "settings", "targeting", "sessionEngine", "io", "store", "notifyLocal", "diag",
     `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };`
-  )(settings, targeting, sessionEngine, io, roster, store, notifyLocal, diag);
+  )(settings, targeting, sessionEngine, io, store, notifyLocal, diag);
   return { ...api, calls, cfg };
 }
 

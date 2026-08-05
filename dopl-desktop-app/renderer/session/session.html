@@ -213,13 +213,12 @@
          idle (click = send the steer), a pause glyph while a turn is running (click =
          interrupt). Both glyphs are INLINE SVG — the CSP allows no external asset. -->
     <div class="composer">
-      <!-- v2.8: the @-tag popup. Absolutely positioned OUT OF FLOW above the field (it can
-           never join the composer's flex sizing), rows built by session-mention-ui.js via
-           replaceChildren + textContent only. Empty and hidden until an `@` is typed. -->
-      <div class="mention-pop hidden" id="mentionPop" role="listbox" aria-label="Tag an agent"></div>
+      <!-- v2.8 put an @-TAG POPUP here, out of flow above the field: one row to steer this
+           session, one to post the operator's own words to the peer. Both halves are gone
+           (channels rollback §1); phase 4 replaces the peer half with a PILL inside the
+           input, and every draft is a steer until it does. -->
       <div class="composer__field concave-field">
-        <textarea class="steer-input" id="steerInput" rows="1" role="combobox"
-                  aria-controls="mentionPop" aria-expanded="false" aria-autocomplete="list"></textarea>
+        <textarea class="steer-input" id="steerInput" rows="1"></textarea>
         <div class="composer__controls">
           <button class="send-btn auth-btn-3d" id="btnSend" type="button" aria-label="Send">
             <svg class="send-btn__glyph send-btn__glyph--send" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -246,11 +245,6 @@
   <script src="session-viewmodel.js"></script>
   <script src="session-chrome.js"></script>
   <script src="session-render.js"></script>
-  <!-- v2.8 composer @-addressing: the pure layer first (it reads session-format.js), then
-       the DOM layer (it reads session-mention.js + session-render.js + session-chrome.js),
-       both BEFORE the controller that wires them. -->
-  <script src="session-mention.js"></script>
-  <script src="session-mention-ui.js"></script>
   <!-- F-118: the attended-handoff button on the pre-consent card. Loaded BEFORE the
        controller, which reads its global and hands it to session-render's makeConsent. -->
   <script src="session-attended-ui.js"></script>

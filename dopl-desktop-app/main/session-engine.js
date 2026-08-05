@@ -28,7 +28,6 @@ const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
 const sessionHistory = require('./session-history'); // v2.5 D3: reopened-shell history
-const sessionTeam = require('./session-team'); // D2: summoned, room-bound TEAM sessions
 const sessionShell = require('./session-shell'); // §2 split: the electron window plumbing
 
 // settings.js owns the window-mode switch + caps; required defensively so the engine still
@@ -70,11 +69,9 @@ sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: de
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 sessionHistory.bind({ emit });
-// D2: the TEAM lane (a summon greets the CHANNEL and opens NO window; a later wake opens the
-// room-bound parked shell, and the pair/room feed predicate). Same injection discipline as
-// session-park / session-gate — it gets the engine's private registry and its single
-// construction site, and requires nothing back.
-sessionTeam.bind({ sessions, startSession, getSdk, emit, windowModeEnabled, atWindowCap: sessionPark.atCapAfterEvict, windowFactoryReady: () => !!windowFactory, getSelfId: () => selfUserId });
+// D2 bound a TEAM lane here (session-team.js): a summon greeted the CHANNEL and opened NO
+// window, and a later wake opened the room-bound parked shell. Gone with summoning (channels
+// rollback §1).
 // §2 split: the electron window plumbing (replay wiring, hide-on-close, the crash signal, the
 // folder label). It gets `emit` rather than owning it — the RESHOW rule is session policy.
 sessionShell.bind({ dispatch, refreshTray, emit });
@@ -483,8 +480,11 @@ module.exports = {
   launchRequesterSession,
   hasLiveSession,
   counterpartyFor,
-  summonTeamSession: sessionTeam.summon, // D2 — /new-agent GREETS the channel; it opens no window
-  wakeTeamSession: sessionTeam.ensureSession, // D2 — being addressed is what opens the shell
+  // `summonTeamSession` / `wakeTeamSession` were exported here, delegating to session-team.js:
+  // a summoned, ROOM-BOUND session that greeted the channel on `/new-agent` and opened its
+  // dormant shell the first time its handle was addressed. Both are gone with summoning
+  // (channels rollback §1). The room-vs-pair SLOT SHAPE they used (`agentId` beside `taskId`
+  // in a session key) is left in place and inert — nothing sets `agentId` any more.
   acceptsInboundFrom: sessionTeam.acceptsInboundFrom, // D2 — the pair fence vs the room binding
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell

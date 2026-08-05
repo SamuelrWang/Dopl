@@ -95,10 +95,11 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
   const deps = [...NOTIFY.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
   assert.deepEqual(deps, ["./diag", "./listener-io", "./targeting", "electron"],
     "task-notify reaches nothing that could spawn, gate or record a consent");
-  // D2 — the SECOND passive verdict rides the same module, so the same pin covers it. The
-  // agent handle is resolved by the CALLER and passed in precisely so that dependency set
-  // above cannot grow: looking it up here would drag the engine in behind channel-agents.
-  assert.match(LISTENER, /else if \(verdict === 'agent-escalation'\) taskNotify\.notifyAgentEscalation\(/);
+  // D2 added a SECOND passive verdict on the same module, 'agent-escalation', with the agent
+  // handle resolved by the CALLER and passed in precisely so the dependency set above could
+  // not grow. It is gone with named agents (channels rollback §1); the DEPENDENCY PIN is what
+  // mattered and it still holds.
+  assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
 });
 
 // ── STATIC PIN 2: "no durable record" really is a FALSE, not a swallow ────────────
@@ -170,16 +171,14 @@ function harness(over = {}) {
     feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
-  // 2026-08-01: a fed message is titled with its AUTHOR (channel-roster.authorLabel), which is
-  // not the same string as the account's display name when an AGENT wrote the post.
-  const roster = {
-    authorLabel: (channelId, m) => (m.authorKind === "agent" ? `agent-of:${m.authorUserId}` : `name:${m.authorUserId}`),
-  };
+  // 2026-08-01: a fed message is titled with its AUTHOR, which is not the same string as the
+  // account's display name when an AGENT wrote the post. The resolver (`authorLabel`) lives
+  // inside the sliced block, so it needs no injection.
   const notifyLocal = (title, body) => calls.notifyLocal.push({ title, body });
   const routes = new Function(
-    "settings", "targeting", "sessionEngine", "io", "roster", "notifyLocal", "diag",
+    "settings", "targeting", "sessionEngine", "io", "notifyLocal", "diag",
     `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };`
-  )(settings, targeting, sessionEngine, io, roster, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
+  )(settings, targeting, sessionEngine, io, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
 
   // channel-listener.js:152-168 verbatim in shape (pinned by STATIC PIN 1 above).
   async function dispatch(entry, m) {

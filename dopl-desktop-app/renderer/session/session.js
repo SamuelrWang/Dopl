@@ -14,26 +14,22 @@
   const render = globalThis.DoplSessionRender;
   const { pretty, initial, avatarNode } = render;
 
-  // v2.8 composer @-addressing. BOTH modules are OPTIONAL at boot: session.html always loads
-  // them, but a harness that stubs only VM / chrome / render degrades to today's composer.
-  const mention = globalThis.DoplSessionMention || null;
-  const mentionUi = globalThis.DoplSessionMentionUI || null;
   const attendedUi = globalThis.DoplSessionAttendedUI || null; // F-118 consent-card button
   const modesUi = globalThis.DoplSessionModesUI || null; // FIX 2: the posture selects + their revert
   const closeUi = globalThis.DoplSessionCloseUI || null; // P1-6: the human close affordance
   const folderUi = globalThis.DoplSessionFolderUI || null; // §2 cap: the working-folder pill
   let closeThread = null;
-  // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
-  // session-mention.js (the view-model is at its 500-line cap) and run over its output.
-  const reduce = mention ? (st, evt) => mention.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
+  // The stream reducer used to be COMPOSED: `session-mention.js` folded in two peer_message
+  // cases (operator_post / _result) around this one, because the composer's `@` picker had a
+  // PEER half that posted the operator's own words into the channel addressed to the peer.
+  // That half is gone (channels rollback §1); phase 4 brings the capability back as a PILL
+  // inside the input, which is a control rather than a syntax nobody had to discover.
+  const reduce = vm.reduceEvent;
 
   // Bridge (contextIsolation preload). A no-op stub lets session.html open
   // standalone for manual/mock testing; window.__sessionFeed drives a mock stream.
   const noop = function () {};
   const resolved = () => Promise.resolve({ label: null });
-  // FIX F8: the stub deliberately has NO sendToPeer. It used to be a noop, so a standalone
-  // open cleared the field and painted nothing at all; now it takes the same version-skew
-  // path as an older preload (a notice, and the draft left in the field).
   const bridge = window.doplSession || {
     sessionId: "", onEvent: noop, send: noop, permission: noop,
     inboundDecision: noop, interrupt: noop, end: noop, closeTask: noop,
@@ -54,7 +50,7 @@
     permSummary: $("permSummary"), permPostLabel: $("permPostLabel"), permPostTo: $("permPostTo"),
     permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
     consentView: $("consentView"), endedBanner: $("endedBanner"), thinking: $("thinkingChip"),
-    steerInput: $("steerInput"), mentionPop: $("mentionPop"), send: $("btnSend"),
+    steerInput: $("steerInput"), send: $("btnSend"),
     // P1-6: the close affordance (session-close-ui.js owns everything it does).
     closeBtn: $("btnCloseThread"), closePanel: $("closePanel"), closeNote: $("closeNote"),
     closeSummary: $("closeSummary"), closeCancel: $("btnCloseCancel"),
@@ -123,7 +119,6 @@
   };
   const FACTORY = render.makeFactories(ctx);
   // v2.8: GRAFTED on, not added to render.makeFactories (that file is at its cap too).
-  if (mentionUi) FACTORY.peer_message = (item) => mentionUi.makePeerMessage(item, ctx);
 
   // ── header / status / folder ──────────────────────────────────────────────
   // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title, the subtitle, the
@@ -342,9 +337,9 @@
   // One button, two states (chromeVm.sendButtonMode): idle shows the up-arrow glyph and sends
   // the steer; a running turn shows the pause glyph and interrupts the agent. The glyphs are
   // static inline SVG in session.html — CSS swaps which one is visible, so nothing is ever
-  // built from a string here. v2.8: a PEER-addressed draft always shows the send glyph.
+  // built from a string here.
   function renderSend() {
-    const mode = composer.peerTagged() ? "send" : chromeVm.sendButtonMode(state);
+    const mode = chromeVm.sendButtonMode(state);
     els.send.classList.toggle("is-running", mode === "pause");
     els.send.setAttribute("aria-label", chromeVm.sendButtonLabel(mode));
   }
@@ -369,43 +364,29 @@
   }
 
   // ── composer / controls wiring ───────────────────────────────────────────
-  // The @-tag popup + the address parse live in session-mention-ui.js / session-mention.js
-  // (this file is at the hard §2 cap). Either module absent -> the stub: everything is a steer.
-  const composer = mention && mentionUi
-    ? mentionUi.createComposer({ input: els.steerInput, host: els.mentionPop, getPeerName: () => (state.init && state.init.from) || "",
-        onAccept: () => { autoGrow(); renderSend(); } }) // accepting a tag NEVER sends
-    : { handleKey: () => false, isOpen: () => false, address: (raw) => ({ to: "self", text: raw }), peerTagged: () => false };
 
   // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority (it queues as the next
-  // turn), and interrupting is the pause button's job. v2.8: ONE composer, TWO addressees. A
-  // leading `@my-agent` (or no tag) is today's steer; a leading `@their-agent` posts the operator's
-  // OWN words into the channel addressed to the peer — never a steer (no session:send, no turn, no
-  // permission). The tag is stripped either way, so the delivered text is unchanged. FIX F8: a
-  // preload with no sendToPeer (a version-skewed install) returned SILENTLY here — the draft
-  // survived, but the glyph read Send and the click did nothing. Say it in the stream.
-  const NO_PEER_BRIDGE = "Could not send that message to the peer. Restart Dopl and try again.";
+  // turn), and interrupting is the pause button's job.
+  //
+  // v2.8 MADE THIS ONE COMPOSER WITH TWO ADDRESSEES: a leading `@my-agent` (or no tag) was the
+  // steer, and a leading `@their-agent` posted the operator's OWN words into the channel
+  // addressed to the peer — never a steer (no session:send, no turn, no permission). The `@`
+  // picker is gone (channels rollback §1) and every draft is a steer again. Phase 4 brings the
+  // peer half back as a PILL inside the input, which is a control rather than a syntax nobody
+  // had to discover; `bridge.sendToPeer` is left wired for it.
   function sendSteer() {
-    const { to, text } = composer.address(els.steerInput.value.trim());
+    const text = els.steerInput.value.trim();
     if (!text || state.ended) return;
-    if (to === "peer") {
-      if (typeof bridge.sendToPeer !== "function") {
-        state = reduce(state, { type: "notice", level: "error", text: NO_PEER_BRIDGE });
-        renderAll(); // the draft stays in the field: nothing was delivered
-        return;
-      }
-      bridge.sendToPeer(text);
-    } else {
-      bridge.send(text);
-      state = reduce(state, { type: "turn", role: "operator", text, streaming: false });
-    }
+    bridge.send(text);
+    state = reduce(state, { type: "turn", role: "operator", text, streaming: false });
     els.steerInput.value = "";
     autoGrow(); // D7: back to a single line after send
     renderAll();
   }
 
-  // Click = pause mid-turn, send otherwise; a peer-addressed draft always SENDS.
+  // Click = pause mid-turn, send otherwise.
   function onSendClick() {
-    if (chromeVm.sendButtonMode(state) === "pause" && !composer.peerTagged()) {
+    if (chromeVm.sendButtonMode(state) === "pause") {
       bridge.interrupt();
       return;
     }
@@ -433,14 +414,12 @@
       // this machine and cannot be recalled. FIRST line, ahead of the popup delegation, so
       // neither the send nor a tag-accept can run mid-composition.
       if (e.isComposing || e.keyCode === 229) return;
-      if (composer.handleKey(e)) return; // the @-popup takes Arrow / Tab / Enter-accept first
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendSteer();
       }
     });
     els.steerInput.addEventListener("input", autoGrow);
-    els.steerInput.addEventListener("input", renderSend); // a peer tag flips the glyph to Send
     autoGrow();
 
     // The header's Stop button is gone (v3.1): the send button's pause morph is the ONE

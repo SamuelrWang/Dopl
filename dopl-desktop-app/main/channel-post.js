@@ -127,33 +127,12 @@ async function postCourtesy(entry, m, text) {
   return postResult(entry, m, text, null, { intent: 'chat' });
 }
 
-// D2 — THE AGENT'S OWN VOICE. A message this machine posts on behalf of one of the
-// operator's `channel_agents` rows: the summon greeting today (session-greeting.js), and
-// anything else the desktop itself has to say AS a named agent.
-//
-// `authorAgentId` is a TOP-LEVEL wire field, never a metadata key: the server strips
-// `metadata.author_agent_id` unconditionally and re-stamps it only from the validated
-// top-level value (service-writes-metadata.resolvePostMetadata), and the validation is
-// ownership — posting as an agent the caller does not own is a 403
-// (service-writes-agents.resolveAgentAddressing). This machine owns the row it summons,
-// and the fetch carries that operator's own cookies, so the claim is true by construction.
-//
-// `toUserId` is normally ABSENT: an unaddressed agent post is what keeps the loop brake
-// armed (targeting.classify). It is passed only where the server would otherwise address
-// the message for us — see session-greeting.directAddressee.
-//
-// The caller owns the `clientMsgId`, because the idempotency unit here is neither the
-// message nor the thread: for a greeting it is (channel, agent, row stamp).
-async function postAgentMessage(entry, a) {
-  return postWithRetry(entry, {
-    body: consent.clampBody(a && a.text),
-    authorKind: 'agent',
-    authorAgentId: a && a.agentId,
-    clientMsgId: a && a.clientMsgId,
-    ...(a && a.toUserId ? { toUserId: a.toUserId } : {}),
-    ...(a && a.metadata ? { metadata: a.metadata } : {}),
-  });
-}
+// `postAgentMessage` lived here — a post this machine made on behalf of one of the operator's
+// `channel_agents` rows, carrying a top-level `authorAgentId` (never a metadata key: the
+// server strips `metadata.author_agent_id` and re-stamped it only from the validated
+// ownership-checked field). Its one caller was the summon greeting. Named agents are gone
+// (channels rollback §1), so nothing on this machine has an agent identity to post under and
+// the server refuses the field outright.
 
 // M5a: bounded retry with backoff, shared by both agent-authored writers. The caller's
 // `clientMsgId` is what makes it safe — the server dedupes, so a retry can never
@@ -190,4 +169,4 @@ function notifyLocal(title, body) {
   } catch (_) { /* best-effort */ }
 }
 
-module.exports = { postTaskEvent, postResult, postCourtesy, postAgentMessage, notifyLocal };
+module.exports = { postTaskEvent, postResult, postCourtesy, notifyLocal };

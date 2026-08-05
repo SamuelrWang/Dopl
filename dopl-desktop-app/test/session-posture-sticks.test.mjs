@@ -11,7 +11,7 @@
 //   FIX 2   THE CONTROL LIED. Nothing on either side of the bridge read the answer.
 //   FIX 3   THE IDLE TIMER measured time since the last turn ENDED, not idleness, so a card open
 //           for 15 minutes parked the session underneath the operator and reset both axes.
-//   FIX 4   A TEAM SESSION COULD NEVER BE ARMED. startSession discarded startModes for any
+//   FIX 4   A PARKED SHELL COULD NEVER BE ARMED. startSession discarded startModes for any
 //           parkedShell; session-team spawns every team session as one.
 //
 // METHOD: the directory idiom — slice the REAL functions (helpers/source-probe fnOf/between)
@@ -35,9 +35,7 @@ const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const IPC = M("session-ipc.js");
 const CONSENT = M("session-consent.js");
 const ENGINE = M("session-engine.js");
-const TEAM = M("session-team.js");
 const PARK = M("session-park.js");
-const DELIVER = M("channel-deliver.js");
 
 const { normalizeToolMode, normalizeMessageMode } = require("../main/session-profiles.js");
 const { initialSessionState, sessionReducer, POSTURE_RESET_NOTE, idleTimeout,
@@ -326,9 +324,7 @@ test("FIX 1b: exactly ONE site sets the flag, and it is launch()'s own adopt tes
   const body = fnOf(ENGINE, "launch");
   assert.match(body, /const adoptable = sessionConsent\.has\(key\)/, "off the value the cap branch uses");
   assert.match(body, /adoptsConsent: adoptable/, "and handed to startSession");
-  for (const [name, src] of [["session-park", PARK], ["session-team", TEAM]]) {
-    assert.ok(!/adoptsConsent/.test(src), `${name} must never hand the flag in`);
-  }
+  assert.ok(!/adoptsConsent/.test(PARK), "session-park must never hand the flag in");
 });
 
 // ── 3. FIX 4: the team-session arm ───────────────────────────────────────────
@@ -358,25 +354,13 @@ test("FIX 4: a bare recreate / reopen / wake still starts at manual/ask", () => 
   }
 });
 
-test("FIX 4: session-team hands both fields to startSession instead of dropping them", () => {
-  // Source-level because the alternative is booting the engine: what a spawn shape PASSES is
-  // the whole defect (`parkedShell: true` + a discarded `startModes`), and it is not
-  // observable from the outside.
-  const body = fnOf(TEAM, "ensureSession");
-  assert.match(body, /parkedShell: true/, "a team session is still a dormant shell");
-  assert.match(body, /startModes: a\.startModes/, "and the posture is no longer dropped on the floor");
-  assert.match(body, /operatorArmed: a\.operatorArmed === true/, "strict: only an explicit true arms");
-});
-
-test("FIX 4: the PEER-DRIVEN wake carries neither field, so a room message arms nothing", () => {
-  // agentSpec is what channel-deliver hands wakeTeamSession. A message from the room is not a
-  // human approving a posture, and this is the assertion that keeps it that way.
-  const spec = new Function("io", "targeting", `${fnOf(DELIVER, "agentSpec")}\n return agentSpec;`)(
-    { displayNameFor: () => "Sam" }, { resolveToolProfile: () => "full" }
-  )({ channel: { id: "c1", name: "Ops" }, workspaceId: "w1" }, { id: "a1", name: "quartz" }, "u1");
-  assert.equal(spec.startModes, undefined);
-  assert.equal(spec.operatorArmed, undefined);
-});
+// TWO CASES ENDED HERE, and both were about `session-team.js`: that it handed
+// `startModes` / `operatorArmed` through to startSession instead of dropping
+// them, and that `channel-deliver.agentSpec` — the PEER-DRIVEN wake — carried
+// neither, so a room message armed nothing. Both modules are gone with the
+// summoned room-bound TEAM session (channels rollback §1). The rule they
+// guarded survives above and is now stated once: a parked shell starts at
+// manual/ask unless something explicitly arms it.
 
 // ── 4. FIX 3 / M1 / M2: THE IDLE TIMER ────────────────────────────────────────
 // §2 SPLIT (2026-08-05): the virtual-clock section moved WHOLE to

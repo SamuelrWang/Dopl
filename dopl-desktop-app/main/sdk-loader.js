@@ -189,14 +189,14 @@ function buildMcpServers(doplToolsPolicy, workspaceId) {
 
 // F2 — WHICH SESSION IS CALLING, stamped onto an entry buildMcpServers just made.
 //
-// One `channel_agents` row can be claimed by any number of concurrent processes
-// holding this device's credential — `as_agent` is per-call and ownership-checked
-// only — and on THIS machine that is BY DESIGN: session-store's `slotKey` gives a
-// ROOM session (channel, agent) and a PAIR session (channel, thread) disjoint
-// keys, so one handle legitimately runs several at once. Nothing on the wire said
-// which of them wrote a message, so two sessions posted as one handle and gave a
-// peer contradictory instructions 79 seconds apart with nothing able to attribute
-// either. The header closes that: the server strips any caller-supplied
+// One device credential can be held by any number of concurrent sessions at once,
+// and on THIS machine that is BY DESIGN. Nothing on the wire said which of them
+// wrote a message, so two sessions posted under one identity and gave a peer
+// contradictory instructions 79 seconds apart with nothing able to attribute
+// either. (The identity in question was a `channel_agents` handle, claimed
+// per-call with `as_agent`; named agents are gone — channels rollback §1 — and a
+// SESSION is now the only agent identity there is, which is what this header
+// names.) The header closes that: the server strips any caller-supplied
 // `metadata.session_id` and stamps the reserved key ONLY from this header — the
 // identical discipline X-Dopl-Runtime is on, one lane over.
 //

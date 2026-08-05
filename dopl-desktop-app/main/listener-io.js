@@ -49,45 +49,11 @@ function markSeeded(channelId) {
   store.set('seeded', s);
 }
 
-// ── Per-channel team-agent count (FIX B1) ────────────────────────────────────
-// THE LAST KNOWN number of THIS operator's agents in a channel, persisted here
-// beside the cursors and the seeded flags because it is the same kind of state:
-// a durable fact about a channel that this machine has to remember across runs.
-//
-// WHY IT HAS TO BE DURABLE. `entry.teamAgents` is what targeting.classify gates
-// the "address to act" law on, and channel-agents.js can only set it AFTER a
-// successful roster read. Channel loops start LIVE before the first reconcile
-// pass calls reconcileAll, and a roster read returns null on a network error, a
-// 5xx, or the 404 a server that has not shipped the route yet answers with. So
-// on every restart there was a window — and against a persistently failing
-// route, a permanent state — in which a channel full of team agents read as ZERO
-// and an unaddressed human message classified 'trigger', silently applying the
-// pre-multiplayer rule in a room the law was written for.
-//
-// Seeding the count from disk closes it: a channel EVER known to hold agents
-// keeps its last known count until a read says otherwise, which fails CLOSED
-// toward the law. A channel never known to hold agents has no record and reads
-// 0, so nothing changes for the overwhelming majority of channels.
-function getTeamAgentCount(channelId) {
-  const m = store.get('teamAgents') || {};
-  const n = Number(m[channelId]);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-}
-
-// Record what a SUCCESSFUL roster read found. An unchanged count writes nothing
-// (F-072: no pointless writes on a hot path), and a ZERO deletes the record
-// rather than storing one — "no agents here" is the default this file already
-// answers with, so it needs no row of its own.
-function setTeamAgentCount(channelId, count) {
-  if (!channelId) return;
-  const m = store.get('teamAgents') || {};
-  const n = Number(count) > 0 ? Math.floor(Number(count)) : 0;
-  const prev = Number(m[channelId]) || 0;
-  if (prev === n) return;
-  if (n > 0) m[channelId] = n;
-  else delete m[channelId];
-  store.set('teamAgents', m);
-}
+// A PER-CHANNEL TEAM-AGENT COUNT lived here (FIX B1): the last known number of this
+// operator's summoned agents in a channel, persisted beside the cursors because
+// `targeting.classify` gated the "address to act" law on it and a roster read could fail.
+// Summoning is gone (channels rollback §1) and so is the law, the count and its two
+// accessors. Any `teamAgents` key still in the store is inert; nothing reads it.
 
 // ─── BEGIN SEED-DECISION (pure; unit-tested via source extraction) ───────────
 // THE seed-vs-missed decision, isolated as a pure function so
@@ -467,8 +433,6 @@ module.exports = {
   setCursor,
   isSeeded,
   markSeeded,
-  getTeamAgentCount, // B1: the durable last-known roster count the loop entry seeds from
-  setTeamAgentCount,
   seedModeFor,
   shouldSeed,
   notifyStale,

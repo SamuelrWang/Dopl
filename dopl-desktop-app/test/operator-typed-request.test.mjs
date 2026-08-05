@@ -269,12 +269,11 @@ function harness(over = {}) {
     noteRequestStatus: (slot, status) => { calls.strip.push({ ...slot, status }); return cfg.stripMoved; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
-  const roster = { authorLabel: (c, m) => (m.authorKind === "agent" ? `agent-of:${m.authorUserId}` : `name:${m.authorUserId}`) };
   const notifyLocal = (title, body) => calls.notify.push({ title, body });
   const routes = new Function(
-    "settings", "targeting", "sessionEngine", "io", "roster", "notifyLocal", "diag",
+    "settings", "targeting", "sessionEngine", "io", "notifyLocal", "diag",
     `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply, noteRequestLifecycle };`
-  )(settings, targeting, sessionEngine, io, roster, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
+  )(settings, targeting, sessionEngine, io, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
 
   // listener-messages.js dispatchMessage, mirrored (its order is pinned above).
   async function dispatch(entry, m) {

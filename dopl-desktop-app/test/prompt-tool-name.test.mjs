@@ -73,12 +73,9 @@ function everyTurn() {
       ]);
     }
   }
-  for (const over of [{}, { taskId: TASK, agentId: AGENT }, { channelId: "" }]) {
-    turns.push([
-      `team ${JSON.stringify(over)}`,
-      framing.buildTeamTurn({ message: "the room says hello", nonce: "n2", context: ctx(over) }),
-    ]);
-  }
+  // A THIRD SHAPE used to be swept here: `buildTeamTurn`, the room-bound TEAM session's first
+  // turn. It went with summoning (channels rollback §1), so the two ASSIST sides are every
+  // composed turn there is.
   turns.push(["milestones", framing.milestoneGuidance({ hasPostingTool: true })]);
   turns.push(["continuation", seed.frameContinuation("n3", "here is the answer", "David")]);
   turns.push(["history seed", seed.frameHistorySeed("n4", "David: morning\nYou: on it")]);
@@ -111,8 +108,8 @@ test("…and the QUALIFIED name really is stated, in every turn that teaches del
 // branches, so it could only ever be read after them.
 const DELIVERY = /Deliver every message to the peer|DELIVERY: post your reply/;
 
-// EVERY DELIVERY BRANCH: both sides with the concrete call, both sides degraded to the id-less
-// wording, and the room-bound turn.
+// EVERY DELIVERY BRANCH: both sides with the concrete call, and both degraded to the id-less
+// wording. The room-bound turn was a third branch and is gone (channels rollback §1).
 function deliveryBranches() {
   const out = [];
   for (const side of ["responder", "requester"]) {
@@ -123,7 +120,6 @@ function deliveryBranches() {
       ]);
     }
   }
-  out.push(["team", framing.buildTeamTurn({ message: "x", nonce: "n6", context: ctx({ agentId: AGENT }) })]);
   return out;
 }
 

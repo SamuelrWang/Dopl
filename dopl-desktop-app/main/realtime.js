@@ -70,9 +70,10 @@ const {
   wsHealthy,
   joinableSet,
 } = require('./realtime-core');
-// D2 (§2 split): the `channel_agents` roster doorbell. Its own realtime channel, deliberately
-// outside this module's breaker, health calculation and wake coalescer — see realtime-agents.js.
-const agentDoorbell = require('./realtime-agents');
+// A second realtime channel used to ride beside this one: the `channel_agents` ROSTER
+// doorbell (realtime-agents.js), deliberately outside this module's breaker, health
+// calculation and wake coalescer. Nothing writes that table any more (channels rollback §1),
+// so a subscription to it would deliver nothing forever.
 
 // ── Live Realtime client (the electron/network boundary) ─────────────────────
 let client = null;
@@ -342,7 +343,6 @@ function start({ getAccessToken, getAccessTokenInfo, onInsert: onInsertHandler, 
   getTokenInfo = getAccessTokenInfo || null;
   getToken = getAccessToken || null;
   onInsertCb = onInsertHandler || null;
-  agentDoorbell.setHandler(onAgentChangeHandler); // D2: the roster doorbell (realtime-agents.js)
   onHealthCb = onHealthChange || null;
   coalescer = createWakeCoalescer(REALTIME.WAKE_COALESCE_MS, (id) => {
     try { if (onInsertCb) onInsertCb(id); } catch (_) { /* one wake must not kill the rest */ }
@@ -374,8 +374,7 @@ function reconcileChannels() {
     diag('realtime subscribe deferred', `${desiredWorkspaces.size} ws`, 'waiting for a user JWT');
   }
   for (const wsId of Array.from(subs.keys())) if (!desired.has(wsId)) removeChannel(wsId);
-  for (const wsId of agentDoorbell.joined()) if (!desired.has(wsId)) agentDoorbell.remove(client, wsId);
-  for (const wsId of desired) { addChannel(wsId); agentDoorbell.add(client, wsId); } // D2: messages + roster
+  for (const wsId of desired) addChannel(wsId);
   emitHealth(); // snapshot the transport even when no sub ever calls back (cred=none)
 }
 
@@ -399,7 +398,6 @@ function refreshAuth() {
 function stop() {
   started = false;
   for (const wsId of Array.from(subs.keys())) removeChannel(wsId);
-  agentDoorbell.clear(client); // D2
   try { if (client) client.disconnect(); } catch (_) { /* best-effort */ }
   client = null;
   clientReady = null;
