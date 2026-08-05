@@ -229,19 +229,35 @@ describe("ChannelMessageCreateSchema", () => {
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", intent: "fyi" }).success).toBe(false);
   });
 
-  it("toAgents: 1..8 non-empty refs, ids or handles", () => {
-    // An EMPTY array is a 400, not a synonym for absence: "empty means absent"
-    // used to be encoded here AND in the service, so the one rule had two homes
-    // and a caller that built an empty list learned it addressed nobody from an
-    // agent that never woke. Omit the field to address nobody.
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: [] }).success).toBe(false);
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x" }).success).toBe(true);
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: ["quartz", UUID] }).success).toBe(true);
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: Array(8).fill("quartz") }).success).toBe(true);
-    // A working set, not a mailing list — every entry wakes a real machine.
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: Array(9).fill("quartz") }).success).toBe(false);
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: [""] }).success).toBe(false);
-    expect(ChannelMessageCreateSchema.safeParse({ body: "x", toAgents: "quartz" }).success).toBe(false);
+  /**
+   * THE REMOVED PARAMS ARE REFUSED, NOT DROPPED (rollback §1).
+   *
+   * `toAgent` / `toAgents` / `authorAgentId` used to be the agent-addressing
+   * surface. Simply deleting the fields would have been SILENT — zod strips
+   * unknown keys — so an old client's `to_agent` would post successfully and
+   * address nobody, which is exactly the invisible-delivery failure the
+   * addressing contract existed to prevent. They are declared `z.never()`, so
+   * a caller that sends one gets a 400 naming the field.
+   */
+  it("REFUSES toAgent / toAgents / authorAgentId with a message, not silence", () => {
+    for (const key of ["toAgent", "toAgents", "authorAgentId"]) {
+      const parsed = ChannelMessageCreateSchema.safeParse({
+        body: "x",
+        [key]: key === "toAgents" ? ["quartz"] : "quartz",
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.error?.issues[0];
+      expect(issue?.path).toEqual([key]);
+      expect(issue?.message).toMatch(/removed/i);
+    }
+  });
+
+  it("stamps nothing for the removed keys when they are ABSENT", () => {
+    // The whole point of the `.optional()`: an ordinary post's parsed shape is
+    // byte-for-byte what it was.
+    const parsed = ChannelMessageCreateSchema.safeParse({ body: "x" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && Object.keys(parsed.data)).toEqual(["body"]);
   });
 });
 
@@ -398,6 +414,23 @@ describe("TaskCreateSchema", () => {
     expect(TaskCreateSchema.safeParse({ ...base, mode: "interactive" }).success).toBe(true);
     expect(TaskCreateSchema.safeParse({ ...base, mode: "autonomous" }).success).toBe(true);
     expect(TaskCreateSchema.safeParse({ ...base, mode: "turbo" }).success).toBe(false);
+  });
+
+  /**
+   * `participants` seeded a BREAKOUT ROOM — a thread whose set, rather than its
+   * creator/target pair, decided who may post. Removed (rollback §1) and
+   * REFUSED rather than dropped, for the same reason the agent-address params
+   * are: a silently-ignored participant list is a room the caller believes is
+   * wider than it is.
+   */
+  it("REFUSES participants with a message, not silence", () => {
+    const parsed = TaskCreateSchema.safeParse({
+      ...base,
+      participants: [{ kind: "agent", id: UUID }],
+    });
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0].path).toEqual(["participants"]);
+    expect(parsed.error?.issues[0].message).toMatch(/removed/i);
   });
 });
 

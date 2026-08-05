@@ -73,86 +73,24 @@ export type ChannelThread = {
 };
 
 /**
- * An agent's lifecycle inside a channel. `summoned` = created, not yet running;
- * `active` = a session is working; `parked` = suspended but resumable;
- * `dismissed` = retired (the row survives so the messages it already authored
- * keep their attribution). `summoned` + `active` are the ADDRESSABLE states.
- */
-export type AgentStatus = "summoned" | "active" | "parked" | "dismissed";
-
-/**
- * A first-class named agent inside a channel, summoned by its owner and running
- * on THAT owner's machine. It is addressed by handle (`@quartz`) under the one
- * law: nothing acts unless addressed. The handle is auto-picked from a curated
- * pool (`server/agent-names.ts`), unique per channel case-folded, and
- * renameable by its owner.
+ * A NAMED AGENT of a channel, as it survives the rollback: an ATTRIBUTION
+ * RECORD and nothing more.
+ *
+ * It used to be a first-class entity — summoned by its owner, addressed by
+ * handle (`@quartz`), engaged for an hour by a human, parked and renamed and
+ * dismissed. All of that is gone (rollback §1) along with every write to the
+ * row. `channel_agents` is now read on ONE path: a stored message stamped with
+ * `metadata.author_agent_id` still has to render "quartz · Ada's agent", and
+ * the handle lives only here. The lifecycle fields (`status`, `engagedAt`,
+ * `engagedBy`) are dropped from the DTO because nothing reads them; the COLUMNS
+ * stay, so a later cleanup migration decides their fate, not this one.
  */
 export type ChannelAgent = {
   id: string;
-  channelId: string;
-  workspaceId: string;
-  /** The member who summoned it; the only one who may rename or dismiss it. */
+  /** The member whose machine it ran on — "Your agent" / "Ada's agent". */
   ownerUserId: string;
-  /** The handle as typed in an @-mention: `^[a-z][a-z0-9-]{1,30}$`. */
+  /** The handle as it was typed in an @-mention: `^[a-z][a-z0-9-]{1,30}$`. */
   name: string;
-  status: AgentStatus;
-  /**
-   * ENGAGEMENT — when a HUMAN last addressed this agent, or null while it is
-   * IDLE. An idle agent sees everything in the room and acts on nothing; an
-   * engaged one also acts on UNTAGGED messages from humans in that channel.
-   *
-   * It is a FACT, not a state. The server records it and never expires it: the
-   * DESKTOP applies `ENGAGEMENT_TTL_MS` (`constants.ts`) against this timestamp
-   * and refreshes engagement by ACTING. So a stamp older than the window is
-   * still a stamp — read it through the TTL, never as a boolean.
-   *
-   * An AGENT-AUTHORED message never sets it. That is the loop brake and it is
-   * absolute (`server/service-writes-agents.ts`).
-   */
-  engagedAt: string | null;
-  /** The human who engaged it — audit, and the one non-owner who may disengage. */
-  engagedBy: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** A thread participant is either a human member or a summoned agent. */
-export type ParticipantKind = "user" | "agent";
-
-/**
- * One identity admitted to a thread's participant set — the breakout room's
- * membership. Exactly one of `userId` / `agentId` is set, matching `kind` (a DB
- * CHECK enforces the pairing in both directions).
- *
- * BOUNDARY: the storage table is `channel_task_participants` and its column is
- * `task_id`; `threadId` is the domain spelling of the same id.
- */
-export type ThreadParticipant = {
-  id: string;
-  threadId: string;
-  workspaceId: string;
-  kind: ParticipantKind;
-  /** Set iff `kind === "user"`. */
-  userId: string | null;
-  /** Set iff `kind === "agent"`. */
-  agentId: string | null;
-  addedBy: string | null;
-  createdAt: string;
-};
-
-/**
- * A thread as the READ paths return it: the row plus its participant set. The
- * set is `[]` for every thread that has none — a legacy (pair-gated) thread is
- * not a thread with a missing set, it is a thread whose set is empty, and the
- * wire says so rather than making a client distinguish absent from empty.
- *
- * Kept separate from {@link ChannelThread} instead of adding an optional field:
- * the write paths (create / close / set mode / reopen) return the thread row
- * alone, and an optional `participants` would make every consumer ask whether
- * `undefined` means "none" or "not loaded".
- */
-export type ChannelThreadDetail = ChannelThread & {
-  participants: ThreadParticipant[];
 };
 
 /** Channel-scoped role: the creator is `owner`, everyone added is `member`. */

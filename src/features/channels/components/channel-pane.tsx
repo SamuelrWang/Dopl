@@ -31,7 +31,6 @@ import { ChannelActionsMenu } from "./channel-actions-menu";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
-import { AgentChipsBar } from "./agent-chips-bar";
 import { NotifyScopeButton } from "./notify-scope-button";
 import { RoomsSidebar } from "./rooms-sidebar";
 import { ThreadsButton } from "./threads-button";
@@ -132,18 +131,14 @@ export function ChannelPane({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManage = channel.role === "owner";
-  // The agent roster is fetched HERE rather than threaded down from
-  // `channels-view`: three of this pane's children need it (chips bar, composer
-  // mentions, transcript attribution), it is scoped to exactly this channel,
-  // and the view file is already over the §2 cap. Skipped entirely for a
+  // The HISTORICAL agent roster, fetched HERE rather than threaded down from
+  // `channels-view`: it is scoped to exactly this channel and the view file is
+  // already over the §2 cap. It used to feed three children (the chips bar, the
+  // composer's mention list, the transcript's attribution); the first two are
+  // gone with named agents (rollback §1) and only ATTRIBUTION is left — an old
+  // message stamped `author_agent_id` still renders its handle. Skipped for a
   // non-member (the route would refuse, and there is nothing to draw).
-  const {
-    agents,
-    createAgent,
-    renameAgent,
-    setAgentStatus,
-    disengageAgent,
-  } = useChannelAgents(channel.id, channel.workspaceId, {
+  const agents = useChannelAgents(channel.id, channel.workspaceId, {
     enabled: channel.isMember,
   });
   // Direct-channel rendering: the header + composer speak to the resolved peer
@@ -360,20 +355,10 @@ export function ChannelPane({
         />
       </div>
 
-      {/* Who else is in the room: one chip per non-dismissed agent, directly
-          under the header so agents read as part of the membership, not as a
-          transcript event. Renders nothing when the channel has none. */}
-      {channel.isMember && (
-        <AgentChipsBar
-          agents={agents}
-          members={members}
-          memberNames={memberNames}
-          currentUserId={currentUserId}
-          onRename={renameAgent}
-          onSetStatus={setAgentStatus}
-          onDisengage={disengageAgent}
-        />
-      )}
+      {/* The AGENT CHIPS BAR sat here — one chip per live named agent, with
+          rename / park / disengage in a popover. It is deleted, not stubbed:
+          rollback plan §3.3 replaces it with SESSION PILLS in phase 3, and a
+          placeholder would have to be un-designed first. */}
 
       {/* Body row: the conversation column, plus the optional rooms column. */}
       <div className="flex min-h-0 flex-1">
@@ -432,8 +417,6 @@ export function ChannelPane({
               members={members}
               currentUserId={currentUserId}
               isDirect={channel.isDirect}
-              agents={agents}
-              onCreateAgent={createAgent}
               disabled={channel.archivedAt !== null}
               placeholder={
                 channel.archivedAt
@@ -467,7 +450,6 @@ export function ChannelPane({
           <RoomsSidebar
             threads={threads}
             threadsLoading={threadsLoading}
-            agents={agents}
             onSelectThread={handleSelectThread}
             onCollapse={() => setRoomsOpen(false)}
           />

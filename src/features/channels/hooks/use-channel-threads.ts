@@ -1,17 +1,18 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import type { ChannelThreadDetail } from "../types";
+import type { ChannelThread } from "../types";
 
 // BOUNDARY: wire/storage name `task` == domain name `thread`. The route path
 // and the response envelope key stay `tasks` (storage names); everything this
 // hook hands back is a `thread`.
 //
-// The READ path returns `ChannelThreadDetail` — the row PLUS its participant
-// set (`[]` when it has none), which the rooms sidebar reads for its "N
-// participants" line. Typed here so the endpoint's real shape survives the
-// client boundary instead of riding along untyped.
-const selectThreads = (body: { tasks: ChannelThreadDetail[] }) =>
+// The READ path returns the thread rows and nothing else. It used to return a
+// `ChannelThreadDetail` — the row PLUS its participant set — which the rooms
+// sidebar read for its "N participants" line; breakout rooms are gone
+// (rollback §1) and so is the extra shape. Typed here so the endpoint's real
+// shape survives the client boundary instead of riding along untyped.
+const selectThreads = (body: { tasks: ChannelThread[] }) =>
   body.tasks ?? [];
 
 /**
@@ -25,8 +26,8 @@ export function useChannelThreads(
   workspaceId: string
 ) {
   const query = useApiQuery<
-    { tasks: ChannelThreadDetail[] },
-    ChannelThreadDetail[]
+    { tasks: ChannelThread[] },
+    ChannelThread[]
   >(
     channelId ? `/api/channels/${encodeURIComponent(channelId)}/tasks` : null,
     { workspaceId, select: selectThreads, keepPreviousData: true }

@@ -12,7 +12,7 @@
  *    input ⇒ the DM auto-address still fires and no `intent` key is stored. This
  *    is the regression risk of the whole change and is asserted on the WHOLE
  *    metadata object, not on one key.
- *  - **`chat` reaches nobody's agent.** The peer is not resolved AT ALL, so
+ *  - **`chat` reaches nobody.** The peer is not resolved AT ALL, so
  *    there is nothing for any later fold to fall back to: no `to_user_id`, and
  *    no DM thread inheritance either (that path is part of the same
  *    auto-addressing machinery).
@@ -31,17 +31,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
-vi.mock("./repository-participants");
-vi.mock("./repository-agents");
 
 import * as repo from "./repository";
-import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
-import * as repoParticipants from "./repository-participants";
 import * as repoTasks from "./repository-tasks";
 import { ChannelChatAddressedError } from "./errors";
 import { postMessage } from "./service-writes";
-import type { ChannelAgentRow } from "./agents-dto";
 import type {
   ChannelMemberRow,
   ChannelMessageRow,
@@ -53,7 +48,6 @@ import type { ChannelContext } from "./service-shared";
 const WS = "ws-1";
 const USER = "11111111-e29b-41d4-a716-446655440000";
 const PEER = "22222222-e29b-41d4-a716-446655440000";
-const AGENT_ID = "44444444-e29b-41d4-a716-446655440000";
 const TASK_ID = "55555555-e29b-41d4-a716-446655440000";
 
 const ctx: ChannelContext = {
@@ -94,22 +88,6 @@ function memberRow(userId: string): ChannelMemberRow {
     agent_tool_profile: "full",
     added_by: USER,
     joined_at: "2026-07-31T00:00:00Z",
-  };
-}
-
-function agentRow(overrides: Partial<ChannelAgentRow> = {}): ChannelAgentRow {
-  return {
-    id: AGENT_ID,
-    channel_id: "chan-1",
-    workspace_id: WS,
-    owner_user_id: PEER,
-    name: "quartz",
-    status: "active",
-    engaged_at: null,
-    engaged_by: null,
-    created_at: "2026-07-31T00:00:00Z",
-    updated_at: "2026-07-31T00:00:00Z",
-    ...overrides,
   };
 }
 
@@ -176,10 +154,6 @@ beforeEach(() => {
     insertedRow(row)
   );
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
-  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
-  vi.mocked(repoAgents.findAgentByName).mockResolvedValue(agentRow());
-  vi.mocked(repoAgents.findAgentById).mockResolvedValue(agentRow());
-  vi.mocked(repoAgents.markAgentsEngaged).mockResolvedValue(undefined);
 });
 
 describe("postMessage — the DEFAULT intent is unchanged", () => {
@@ -278,106 +252,6 @@ describe("postMessage — intent:chat reaches nobody's agent", () => {
     expect(capturedMetadata()).toEqual({ intent: "chat" });
   });
 
-  it("never engages an agent (nothing was addressed)", async () => {
-    await postMessage(ctx, "dm", { body: "sounds good", intent: "chat" });
-
-    expect(repoAgents.markAgentsEngaged).not.toHaveBeenCalled();
-  });
-});
-
-/**
- * THE OPERATOR'S CORE FLOW, from the server's side. "@quartz @onyx work
- * together on X" is a CHAT message that has to make two agents act. It used to
- * be a 400 (`CHANNEL_CHAT_ADDRESSED` fired on any addressee at all), which is
- * why the composer could not send it and why nobody acted.
- */
-describe("postMessage — chat MAY address agents, and they act", () => {
-  const ONYX = "66666666-e29b-41d4-a716-446655440000";
-
-  function twoAgents() {
-    vi.mocked(repoAgents.findAgentByName).mockImplementation(
-      async (_channelId, name) =>
-        name.toLowerCase() === "onyx"
-          ? agentRow({ id: ONYX, name: "onyx" })
-          : agentRow()
-    );
-  }
-
-  it("stamps the address, the compat mirror, and the OWNER BRIDGE", async () => {
-    twoAgents();
-
-    await postMessage(ctx, "dm", {
-      body: "@quartz @onyx work together on X",
-      intent: "chat",
-      toAgents: ["quartz", "onyx"],
-    });
-
-    expect(capturedMetadata()).toEqual({
-      intent: "chat",
-      to_agent_ids: [AGENT_ID, ONYX],
-      // The scalar installed desktops still read.
-      to_agent_id: AGENT_ID,
-      // The bridge: the FIRST agent's owner, because the listener triggers on
-      // the addressed USER and the agent runs on that user's machine.
-      to_user_id: PEER,
-    });
-  });
-
-  it("ENGAGES exactly the addressed agents, on behalf of the human author", async () => {
-    twoAgents();
-
-    await postMessage(ctx, "dm", {
-      body: "@quartz @onyx go",
-      intent: "chat",
-      toAgents: ["quartz", "onyx"],
-    });
-
-    expect(repoAgents.markAgentsEngaged).toHaveBeenCalledWith(
-      [AGENT_ID, ONYX],
-      USER
-    );
-  });
-
-  it("does NOT additionally peer-auto-address, or inherit the DM thread", async () => {
-    // The bridge is the ONLY reason `to_user_id` is set here. The peer fallback
-    // is never even resolved under chat, so the open thread between the two DM
-    // members is not inherited either — a tagged aside is not a turn in it.
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
-
-    await postMessage(ctx, "dm", {
-      body: "@quartz look at this",
-      intent: "chat",
-      toAgents: ["quartz"],
-    });
-
-    const meta = capturedMetadata();
-    expect(repo.listMembers).not.toHaveBeenCalled();
-    expect(has(meta, "taskId")).toBe(false);
-    expect(meta.to_user_id).toBe(PEER);
-  });
-
-  it("engages nobody when the author is an AGENT (the loop brake is absolute)", async () => {
-    await postMessage(ctx, "dm", {
-      body: "@quartz your turn",
-      intent: "chat",
-      toAgents: ["quartz"],
-      authorKind: "agent",
-    });
-
-    expect(repoAgents.markAgentsEngaged).not.toHaveBeenCalled();
-    // Addressed all the same — the brake is on ENGAGEMENT, not on delivery.
-    expect(capturedMetadata().to_agent_ids).toEqual([AGENT_ID]);
-  });
-
-  it("accepts the singular toAgent under chat too", async () => {
-    await postMessage(ctx, "dm", {
-      body: "@quartz go",
-      intent: "chat",
-      toAgent: "quartz",
-    });
-
-    expect(capturedMetadata().to_agent_ids).toEqual([AGENT_ID]);
-  });
 });
 
 describe("postMessage — chat + a HUMAN addressee is still a contradiction", () => {
@@ -388,25 +262,14 @@ describe("postMessage — chat + a HUMAN addressee is still a contradiction", ()
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
-  it("400s on toUserId even beside a legitimate agent address", async () => {
-    // Requesting a PERSON's agent is what request mode is for; mentioning an
-    // agent does not buy the right to also start a teammate's machine.
-    await expect(
-      postMessage(ctx, "dm", {
-        body: "@quartz hi",
-        intent: "chat",
-        toUserId: PEER,
-        toAgents: ["quartz"],
-      })
-    ).rejects.toThrow(ChannelChatAddressedError);
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("accepts an EMPTY toAgents beside chat (it addresses nobody)", async () => {
+  it("treats an @handle in the BODY as prose, not as an address", async () => {
+    // "@quartz work on X" used to resolve against the channel's named agents
+    // and travel as `toAgents`, which was the primary way an agent got work.
+    // Nothing resolves it now (rollback §1): the body is text and the post
+    // addresses nobody.
     await postMessage(ctx, "dm", {
-      body: "hi",
+      body: "@quartz work on X",
       intent: "chat",
-      toAgents: [],
     });
 
     expect(capturedMetadata()).toEqual({ intent: "chat" });

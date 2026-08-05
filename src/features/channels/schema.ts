@@ -6,27 +6,31 @@ import {
   MAX_MESSAGE_LIMIT,
 } from "./constants";
 import type { MessageIntent } from "./types";
-import { ThreadParticipantSeedSchema } from "./schema-agents";
 
 /**
- * The multiplayer schemas (agents + thread participants) live in
- * `schema-agents.ts` for the §2 size cap and are re-exported here, so every
- * caller still imports channel request schemas from ONE module.
+ * THE REMOVED MULTIPLAYER PARAMS (channels rollback phase 2, 2026-08-05).
+ *
+ * Named-agent addressing (`toAgent` / `toAgents` / `authorAgentId`) and breakout
+ * rooms (`participants`) are gone — see `docs/CHANNELS-ROLLBACK-PLAN.md` §1.
+ * They are declared as `z.never()` rather than simply deleted, because a plain
+ * deletion is SILENT: zod strips unknown keys, so an old client's `to_agent`
+ * would post successfully and address nobody, which is the invisible-delivery
+ * failure the addressing contract existed to prevent. Present → a 400 naming
+ * the field and its replacement; absent → the field never appears at all, so
+ * every current caller's payload is byte-for-byte what it was.
+ *
+ * Delete these lines once no build in the field still sends them.
  */
-export {
-  AGENT_HANDLE_RE,
-  ChannelAgentCreateSchema,
-  ChannelAgentUpdateSchema,
-  ThreadParticipantMutateSchema,
-  ThreadParticipantRefSchema,
-  ThreadParticipantSeedSchema,
-} from "./schema-agents";
-export type {
-  ChannelAgentCreateInput,
-  ChannelAgentUpdateInput,
-  ThreadParticipantMutateInput,
-  ThreadParticipantRef,
-} from "./schema-agents";
+function removedParam(message: string) {
+  return z.never({ error: message }).optional();
+}
+
+const REMOVED_TO_AGENT =
+  "Agent addressing was removed. Address a PERSON with `toUserId`, or leave the message unaddressed.";
+const REMOVED_AUTHOR_AGENT =
+  "Named-agent authorship was removed. A message is its human author's; there is no agent identity to post as.";
+const REMOVED_PARTICIPANTS =
+  "Breakout-room participants were removed. A thread is between its creator and the member in `toUserId`.";
 
 const VisibilitySchema = z.enum(["private", "public"]);
 
@@ -150,54 +154,29 @@ export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
  *
  * So intent is now first-class rather than inferred:
  *  - `request` (the DEFAULT, and what every existing caller gets) — today's
- *    behaviour, byte for byte. The DM auto-address still fires, `to` / `toAgent`
- *    still address, and the receiving listener still triggers.
+ *    behaviour, byte for byte. The DM auto-address still fires and the
+ *    receiving listener still triggers.
  *  - `chat` — HUMAN TALK. The DM auto-address is SKIPPED ENTIRELY: no
  *    `to_user_id` is manufactured from the peer, so nothing on the far side
  *    classifies an aside as an ask. Everything else about the post is normal
  *    (seq, realtime, read watermark, an explicit `thread` tag if the caller
  *    passes one).
  *
- * `chat` WITH `toAgent` / `toAgents` is ALLOWED, and is the PRIMARY way an agent
- * is given work: "@quartz @onyx work together on X" typed into the composer is a
- * human talking in the room and naming who should act. The addressed agents are
- * stamped, engaged, and reached through the owner bridge; nobody else is.
- *
- * `chat` WITH an explicit human `to` is still a CONTRADICTION and is refused 400
+ * `chat` WITH an explicit human `to` is a CONTRADICTION and is refused 400
  * `CHANNEL_CHAT_ADDRESSED` (`server/errors.ts`) rather than silently resolved.
  * Addressing a PERSON starts that person's agent on a subject they never saw a
  * title for; asking for someone else's machine is what `request` is for, and it
  * carries the title their consent prompt renders.
+ *
+ * These two are now the WHOLE addressing vocabulary. Named-agent addressing
+ * (`toAgent` / `toAgents`) used to be a third thing a post could do and is gone
+ * (rollback §1) — a channel reaches PEOPLE, and a person's machine decides what
+ * to start.
  */
 const MessageIntentSchema: z.ZodType<MessageIntent> = z.enum([
   "chat",
   "request",
 ]);
-
-/**
- * How many agents ONE post may address. A multi-address is "@quartz @onyx work
- * together" — a small working set, each of which wakes a real machine — not a
- * mailing list, and every entry costs a resolution + a membership read. Eight
- * is well above any room we have seen and low enough that a runaway loop cannot
- * fan out through it.
- *
- * EXPORTED because the composer has to cap the SAME way: it resolves `@handle`
- * tokens out of the typed body and sends them as `toAgents`, so a body naming
- * nine agents must stop at eight on the client rather than being built into a
- * payload the server rejects wholesale (`lib/mention.ts`). One number, not a
- * restated one.
- *
- * IT BOUNDS THE MERGED ADDRESS, not one field of it. `toAgent` is exactly a
- * one-element `toAgents` and the two are merged before anything is resolved
- * (`server/service-writes-agents.ts`), so the bound that actually holds is
- * enforced there, on the deduped merge. The `.max()` on the array below is the
- * cheap first line for the commonest shape; without the merged check a caller
- * could address NINE — one over every bound the rest of the system states,
- * including `MAX_DERIVED_AGENTS` in `server/service-thread-handshake.ts`, which
- * imports this same constant and would silently truncate the ninth agent out of
- * the handshake thread it was told to join.
- */
-export const MAX_ADDRESSED_AGENTS = 8;
 
 /**
  * Post a message or activity event. `body` carries the human-readable
@@ -209,28 +188,13 @@ export const MAX_ADDRESSED_AGENTS = 8;
  * one-line intent used in the receiver's notification. Both are persisted
  * into `metadata` as `{to_user_id, summary}`.
  *
- * AGENT ADDRESSING (multiplayer): `toAgent` names the agent a message is FOR —
- * an agent id or its handle (`@quartz` minus the `@`), resolved case-folded
- * against THIS channel's agents. `toAgents` is the SAME thing for N agents
- * ("@quartz @onyx work together"); `toAgent` is exactly a one-element
- * `toAgents`. `authorAgentId` names the agent a message is FROM, and is
- * honoured only for that agent's own owner (an agent identity is not
- * assumable). All are stamped as reserved metadata by the server; none is
- * settable through `metadata` (`server/service-writes-metadata.ts`).
- * `toAgent` / `toAgents` are deliberately NOT `.uuid()` — a handle is the point.
+ * `intent` says whether this post is meant to reach the addressee's machine at
+ * all — see {@link MessageIntentSchema}. Together with `toUserId` that is the
+ * whole addressing surface: a channel reaches PEOPLE.
  *
- * `toAgents` is `.min(1)`: an EMPTY array is a 400, not a synonym for absence.
- * "Empty means absent" used to be encoded twice — the schema tolerated `[]` and
- * the service quietly folded it into "addressed nobody" — so one behaviour had
- * two homes and neither stated it. Nothing on the wire sends `[]` (the composer
- * spreads the field only when the body resolved mentions; the MCP lane emits it
- * only for a genuine multi-address), so the rule lives once, here, and a caller
- * that builds an empty list is told it addressed nobody instead of learning it
- * from an agent that never woke. The `.max()` is the CHEAP HALF of the bound —
- * see {@link MAX_ADDRESSED_AGENTS} for the merged one that actually holds.
- *
- * `intent` says whether this post is meant to REACH AN AGENT at all — see
- * {@link MessageIntentSchema}.
+ * The three `z.never()` fields below are the REMOVED named-agent params, kept
+ * declared so an old client is told rather than silently unaddressed — see
+ * {@link removedParam}.
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
@@ -240,14 +204,10 @@ export const ChannelMessageCreateSchema = z.object({
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
   summary: z.string().trim().min(1).max(200).optional(),
-  toAgent: z.string().trim().min(1).max(64).optional(),
-  toAgents: z
-    .array(z.string().trim().min(1).max(64))
-    .min(1)
-    .max(MAX_ADDRESSED_AGENTS)
-    .optional(),
-  authorAgentId: z.string().uuid().optional(),
   intent: MessageIntentSchema.optional(),
+  toAgent: removedParam(REMOVED_TO_AGENT),
+  toAgents: removedParam(REMOVED_TO_AGENT),
+  authorAgentId: removedParam(REMOVED_AUTHOR_AGENT),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
@@ -276,14 +236,8 @@ export const TaskCreateSchema = z.object({
   body: z.string().min(1).max(16000),
   toUserId: z.string().uuid(),
   clientMsgId: z.string().min(1).max(200).optional(),
-  /**
-   * The extra identities admitted to the thread — teammates and/or their agents
-   * — which is what turns it into a BREAKOUT ROOM. The creator and `toUserId`
-   * are added by the service, so this carries only the EXTRAS. Absent (or
-   * empty) means no participant rows at all, which leaves the thread on today's
-   * creator/target pair gate.
-   */
-  participants: ThreadParticipantSeedSchema.optional(),
+  /** REMOVED (rollback §1) — see {@link removedParam}. */
+  participants: removedParam(REMOVED_PARTICIPANTS),
 });
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
 

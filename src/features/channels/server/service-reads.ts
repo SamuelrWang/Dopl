@@ -1,13 +1,15 @@
 import "server-only";
 import type {
   Channel,
+  ChannelAgent,
   ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
-  ChannelThreadDetail,
+  ChannelThread,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
 import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
+import { mapAgentRow } from "./agents-dto";
 import {
   mapChannelRow,
   mapMemberRow,
@@ -17,14 +19,11 @@ import {
   type ChannelRow,
 } from "./dto";
 import * as repo from "./repository";
+import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
 import type { DerivedPresence } from "./repository-collab";
-import {
-  listThreadParticipants,
-  participantsByThread,
-} from "./service-participants";
 import {
   loadVisibleChannel,
   profilesById,
@@ -330,22 +329,46 @@ export async function pollChannelMessages(
  * the message thread. Read access is gated by the same visibility rule as the
  * transcript (public channel, or the caller is a member).
  *
- * Each thread carries its PARTICIPANT SET (`[]` when it has none) — the
- * breakout room's membership, hydrated in ONE grouped query for the whole page
- * rather than one per card. Participant sets are channel-visible for the same
- * reason threads are: breakouts separate attention, not visibility (§8).
+ * A thread used to carry a PARTICIPANT SET here — a breakout room's membership,
+ * hydrated in one grouped query for the page. Breakout rooms are gone (rollback
+ * §1), so the read is the thread rows and nothing else, and the extra query per
+ * page goes with them.
  */
 export async function listChannelTasks(
   ctx: ChannelContext,
   ref: string
-): Promise<ChannelThreadDetail[]> {
+): Promise<ChannelThread[]> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repoTasks.listTasksByChannel(channel.id);
-  const participants = await participantsByThread(rows.map((row) => row.id));
-  return rows.map((row) => ({
-    ...mapTaskRow(row),
-    participants: participants.get(row.id) ?? [],
-  }));
+  return rows.map(mapTaskRow);
+}
+
+/**
+ * THE ATTRIBUTION ROSTER — every named agent that ever existed in this channel.
+ *
+ * The one thing left of the named-agent surface (rollback §1). Summoning, the
+ * lifecycle, engagement and addressing are all gone, and no write touches
+ * `channel_agents` any more; what remains is that stored messages carry
+ * `metadata.author_agent_id`, and the transcript has to turn that id into the
+ * handle it rendered on the day it was posted. Without this read an agent
+ * message from last week silently loses its name.
+ *
+ * Visibility is the CHANNEL's read gate, unchanged — a private channel reads as
+ * not-found to a non-member, so an outsider cannot enumerate a room's history
+ * through it. Dismissed rows are INCLUDED: they are the ones most likely to own
+ * old messages.
+ *
+ * It lives here, in the read lane, rather than in the `service-agents.ts` this
+ * replaces, because it is no longer a lifecycle question — there is no lifecycle
+ * left to ask about.
+ */
+export async function listAgents(
+  ctx: ChannelContext,
+  ref: string
+): Promise<ChannelAgent[]> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  const rows = await repoAgents.listAgentsByChannel(channel.id);
+  return rows.map(mapAgentRow);
 }
 
 /**
@@ -358,12 +381,9 @@ export async function getChannelTask(
   ctx: ChannelContext,
   ref: string,
   taskId: string
-): Promise<ChannelThreadDetail> {
+): Promise<ChannelThread> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const row = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
   if (!row) throw new TaskNotFoundError(taskId);
-  return {
-    ...mapTaskRow(row),
-    participants: await listThreadParticipants(row.id),
-  };
+  return mapTaskRow(row);
 }

@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { COMPOSER_MODE_LABEL, MessageComposer } from "./message-composer";
 import type { SendOptions } from "../lib/composer-mode";
 import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
-import type { ChannelAgent, ChannelMember } from "../types";
+import type { ChannelMember } from "../types";
 
 const ME = "me";
 const PEER = "peer";
@@ -205,46 +205,21 @@ describe("MessageComposer chrome (shared with the desktop thread window)", () =>
   });
 });
 
-describe("MessageComposer — the slash-command hint (discoverability)", () => {
-  function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
-    return {
-      id: "a1",
-      channelId: "c1",
-      workspaceId: "w1",
-      ownerUserId: ME,
-      name: "quartz",
-      status: "active",
-      engagedAt: null,
-      engagedBy: null,
-      createdAt: "2026-07-31T00:00:00.000Z",
-      updatedAt: "2026-07-31T00:00:00.000Z",
-      ...over,
-    };
-  }
-
-  function composer(over: {
-    onCreateAgent?: (name?: string) => Promise<unknown>;
-    agents?: ChannelAgent[];
-  }) {
+describe("MessageComposer — the surfaces that are GONE", () => {
+  // The `@` mention popup and the `/new-agent` slash hint both existed to reach
+  // NAMED AGENTS, and went with them (rollback §1). Pinned as absences so a
+  // future composer change cannot quietly reintroduce either.
+  function composer() {
     return renderToStaticMarkup(
-      <MessageComposer
-        onSend={noop}
-        members={roster}
-        currentUserId={ME}
-        isDirect
-        agents={over.agents}
-        onCreateAgent={over.onCreateAgent}
-      />
+      <MessageComposer onSend={noop} members={roster} currentUserId={ME} isDirect />
     );
   }
 
-  it("stays silent on an empty draft (the hint is typed into, not always on)", () => {
-    expect(composer({ onCreateAgent: async () => {} })).not.toContain(
-      "/new-agent"
-    );
+  it("offers no slash-command hint", () => {
+    expect(composer()).not.toContain("/new-agent");
   });
 
-  it("renders no mention popup until an @ is typed", () => {
-    expect(composer({ agents: [agent()] })).not.toContain("quartz");
+  it("offers no agent mention list", () => {
+    expect(composer()).not.toContain("quartz");
   });
 });

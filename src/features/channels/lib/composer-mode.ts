@@ -10,32 +10,31 @@
  * So a send is now one of two shapes, and the composer says which BEFORE you
  * press Enter:
  *
- * - CHAT (the default) — a plain channel message. No subject, no thread, and no
- *   HUMAN addressee. `intent: "chat"` says so on the wire, so the routing side
- *   never has to infer "they probably didn't mean to start anything" from the
- *   absence of a field. Left alone it reaches nobody's agent. **`@mention` an
- *   agent and that agent ACTS** — that is not an exception to chat, it is the
- *   primary way an agent is given work: a person talking in the room, naming
- *   who should pick it up. The mentions are resolved from the composed BODY at
- *   send time (`lib/mention.ts`) and travel as `toAgents`.
+ * - CHAT (the default) — a plain channel message. No subject, no thread, no
+ *   addressee. `intent: "chat"` says so on the wire, so the routing side never
+ *   has to infer "they probably didn't mean to start anything" from the absence
+ *   of a field. It reaches nobody's machine, full stop.
  * - REQUEST — the old behavior, made explicit and given back its subject line:
  *   a titled thread addressed to one member, opened through the create-thread
  *   path, which posts the opening message and starts that member's agent.
  *
- * THE LINE BETWEEN THEM is who you may reach, not whether anything happens:
- * chat may start AGENTS BY NAME, request is how you ask for a PERSON's agent —
- * and a person's consent prompt needs the title only request carries. The
- * server draws the same line (`server/service-writes-agents.ts`: a human `to`
- * under chat is a 400, `toAgents` is not).
+ * THE LINE BETWEEN THEM is whether anything is started on somebody else's
+ * machine, and a person's consent prompt needs the title only request carries.
+ * The server draws the same line (a human `to` under chat is a 400).
+ *
+ * CHAT USED TO HAVE A SECOND CONSEQUENCE. An `@handle` in the body resolved
+ * against the channel's named agents and travelled as `toAgents`, so a chat
+ * message could start agents by name — the primary way work was handed out.
+ * Named agents are gone (rollback §1), so chat has exactly one consequence
+ * again and `@` in a body is plain text. Phase 4 replaces the mode toggle with
+ * a pill in the input; nothing here changes for that.
  *
  * Everything here is pure so both shapes can be pinned without a DOM: which
  * payload a draft becomes, and what the composer refuses to send, are the two
  * facts this feature turns on.
  */
 
-import type { ChannelAgent, MessageIntent } from "../types";
-import { parseSlashCommand, NEW_AGENT_COMMAND } from "./composer-commands";
-import { extractMentionedAgentIds } from "./mention";
+import type { MessageIntent } from "../types";
 
 /**
  * Chat or Request. Deliberately an ALIAS of the wire `MessageIntent` rather
@@ -59,19 +58,8 @@ export const COMPOSER_MODE_OPTIONS: ReadonlyArray<{
   { key: "request", label: "Request" },
 ];
 
-/** "quartz" / "quartz and onyx" / "quartz, onyx and vega". */
-function joinHandles(handles: readonly string[]): string {
-  if (handles.length <= 1) return handles[0] ?? "";
-  return `${handles.slice(0, -1).join(", ")} and ${handles[handles.length - 1]}`;
-}
-
 /** What else the help line needs to know beyond the mode and the addressee. */
 export interface ComposerHelpState {
-  /**
-   * Handles of the agents the CURRENT body resolves to (chat mode only). See
-   * {@link composerModeHelp} for why the resolved ones and not the raw text.
-   */
-  mentionedHandles?: readonly string[];
   /** Why the draft cannot send yet, from {@link buildComposerPayload}. */
   blocked?: ComposerBlockedReason | null;
 }
@@ -85,12 +73,11 @@ export interface ComposerHelpState {
  * one, request mode says what is still missing rather than promising an
  * outcome it cannot deliver.
  *
- * `mentionedHandles` is why this line now MOVES in chat mode. Chat used to have
- * exactly one consequence; it has two, and which one you get depends on
- * characters in the body rather than on any visible control. So the line names
- * the agents that will act, from the RESOLVED handles — a typo'd `@quarzt`
- * resolves to nothing and visibly does not appear, which is the only warning an
- * operator gets before pressing Enter.
+ * CHAT'S LINE IS FIXED AGAIN. It briefly MOVED with the body: an `@handle` that
+ * resolved to a named agent replaced it with "quartz will act on this", because
+ * chat had two consequences and which one you got depended on characters in the
+ * text rather than on any visible control. With named agents gone (rollback §1)
+ * chat has one consequence and the line simply states it.
  *
  * `blocked` closes the other half of the same gap. `buildComposerPayload`
  * already knows WHY a request refuses, and until now only its boolean reached
@@ -104,21 +91,14 @@ export interface ComposerHelpState {
  *    guessed from the body is that a person reads it in a consent prompt.
  * `empty-body` is deliberately NOT surfaced: an empty composer explains itself,
  * and a nag on a field the operator has not started filling is noise.
- *
- * REQUEST ignores mentions entirely, and so does its copy: a request's whole
- * shape is a title plus one person, and the create-thread path takes no agent
- * list. Handles typed there stay decorative text.
  */
 export function composerModeHelp(
   mode: ComposerMode,
   targetName: string | null,
   state: ComposerHelpState = {}
 ): string {
-  const handles = state.mentionedHandles ?? [];
   if (mode === "chat") {
-    return handles.length > 0
-      ? `${joinHandles(handles)} will act on this.`
-      : "Message the channel. No agent is started.";
+    return "Message the channel. No agent is started.";
   }
   if (!targetName) {
     return "Pick who this is for. Sending opens a thread and starts their agent.";
@@ -133,7 +113,7 @@ export function composerModeHelp(
  * Options for a plain message post. `intent` rides along so the server can tell
  * a deliberate chat from an unaddressed request.
  *
- * IT CARRIES NO HUMAN ADDRESSEE, and the absence is the enforcement. `toUserId`
+ * IT CARRIES NO ADDRESSEE AT ALL, and the absence is the enforcement. `toUserId`
  * and `summary` used to sit here and were plumbed all the way into
  * `postMessage`, long after the last thing that populated them went away: the
  * composer's only `onSend` call is the chat one. They are exactly the two fields
@@ -141,32 +121,21 @@ export function composerModeHelp(
  * the shape through which the bug this whole change fixes comes back — one
  * component reaching past the builder and calling `onSend` with an addressee,
  * which no test of a PURE payload builder can see. Deleting them makes that a
- * type error instead.
- *
- * `toAgents` stays, because agent addressing is what a chat message legitimately
- * carries: those agents act, and nobody's machine is prompted on their behalf.
+ * type error instead. `toAgents` sat here for the same span and is gone for the
+ * same reason plus one more: nothing it addressed exists (rollback §1).
  *
  * Lives here rather than in the component so the payload builders and the
  * component agree on one shape.
  */
 export interface SendOptions {
   intent?: ComposerMode;
-  /** Agent ids resolved from the body's `@handle` tokens. */
-  toAgents?: string[];
 }
 
-/**
- * A plain channel message: no human addressee, no summary, no thread.
- *
- * `toAgents` is present only when the body actually mentions resolvable agents,
- * and it is ABSENT (not `[]`) otherwise — an empty array on the wire would be a
- * second way to say "addressed nobody", and the two would drift.
- */
+/** A plain channel message: no addressee, no summary, no thread. */
 export interface ChatPayload {
   kind: "chat";
   body: string;
   intent: "chat";
-  toAgents?: string[];
 }
 
 /** A titled thread addressed to one member (the create-thread path). */
@@ -201,12 +170,6 @@ export interface ComposerDraft {
   peerId: string | null;
   /** The picked addressee in a normal channel. */
   toUserId: string | null;
-  /**
-   * The channel's agent roster, which is what an `@handle` in the body is
-   * resolved AGAINST. Optional so a surface with no agents (and every existing
-   * caller) keeps building exactly the payload it built before.
-   */
-  agents?: readonly ChannelAgent[];
 }
 
 /**
@@ -226,16 +189,11 @@ export function resolveRequestTarget(draft: {
  *
  * THE INVARIANT THIS FILE EXISTS FOR: chat mode can only ever produce a
  * {@link ChatPayload}. There is no branch, no fallback, and no "well, it was
- * addressed, so…" that lets a chat draft open a thread. The HUMAN addressing
- * state (a stale picked addressee, a DM's peer) is not even read in chat mode.
- *
- * AGENT addressing is the one thing chat does carry, and it comes from the BODY
- * rather than from any control: `@handle` tokens resolved against the roster
- * become `toAgents`, so the mentioned agents act. Human `@mentions` stay
- * DECORATIVE TEXT on this path and always will — there is no human-notify path
- * in chat mode by design. Reaching a person means starting their machine, and
- * that is request mode's job precisely because it is the shape that carries a
- * title for their consent prompt.
+ * addressed, so…" that lets a chat draft open a thread. The addressing state (a
+ * stale picked addressee, a DM's peer) is not even read in chat mode, and
+ * `@mentions` in the body are DECORATIVE TEXT — reaching a person means
+ * starting their machine, and that is request mode's job precisely because it
+ * is the shape that carries a title for their consent prompt.
  *
  * Request mode is the mirror image: it REQUIRES both a recipient and a subject
  * and refuses rather than inventing either. The old composer derived a missing
@@ -248,14 +206,7 @@ export function buildComposerPayload(draft: ComposerDraft): ComposerBuildResult 
   if (body.length === 0) return { ok: false, reason: "empty-body" };
 
   if (draft.mode === "chat") {
-    const toAgents = extractMentionedAgentIds(body, draft.agents ?? []);
-    return {
-      ok: true,
-      payload:
-        toAgents.length > 0
-          ? { kind: "chat", body, intent: "chat", toAgents }
-          : { kind: "chat", body, intent: "chat" },
-    };
+    return { ok: true, payload: { kind: "chat", body, intent: "chat" } };
   }
 
   const toUserId = resolveRequestTarget(draft);
@@ -276,22 +227,19 @@ export function buildComposerPayload(draft: ComposerDraft): ComposerBuildResult 
 // that is not a convenience.
 
 /** What a submitted draft DID. */
-export type ComposerSubmitResult = "created" | "sent" | "opened" | "blocked";
+export type ComposerSubmitResult = "sent" | "opened" | "blocked";
 
 /**
- * Run a submitted draft.
+ * Run a submitted draft. The payload decides the path: a chat payload posts a
+ * message with `intent: "chat"` and no addressing; a thread payload goes
+ * through the create-thread path (title = subject, body = message, to = the
+ * picked member). A surface with no create-thread path wired refuses rather
+ * than silently downgrading a request into an unaddressed post.
  *
- * `/new-agent` is checked FIRST and in both modes: it is the one place a
- * keystroke stops being a message at all, and it must NEVER also post (a
- * mistyped command leaking into the transcript while also summoning an agent
- * was the original reason this decision is a function).
- *
- * After that the payload decides the path: a chat payload posts a message with
- * `intent: "chat"` and no HUMAN addressing (plus `toAgents` when the body named
- * agents); a thread payload goes through the
- * create-thread path (title = subject, body = message, to = the picked
- * member). A surface with no create-thread path wired refuses rather than
- * silently downgrading a request into an unaddressed post.
+ * A THIRD OUTCOME used to be checked FIRST, ahead of both: `/new-agent`, the
+ * one place a keystroke stopped being a message at all. It summoned a named
+ * agent, and it is gone with them (rollback §1) — as is the whole slash-command
+ * surface, which had exactly that one entry.
  */
 export async function submitComposerDraft(
   params: ComposerDraft & {
@@ -301,24 +249,15 @@ export async function submitComposerDraft(
       body: string;
       toUserId: string;
     }) => Promise<unknown>;
-    onCreateAgent?: (name?: string) => Promise<unknown>;
   }
 ): Promise<ComposerSubmitResult> {
-  const { onSend, onCreateThread, onCreateAgent } = params;
-  const command = parseSlashCommand(params.body.trim());
-  if (command?.name === NEW_AGENT_COMMAND && onCreateAgent) {
-    await onCreateAgent(command.arg ?? undefined);
-    return "created";
-  }
+  const { onSend, onCreateThread } = params;
 
   const built = buildComposerPayload(params);
   if (!built.ok) return "blocked";
 
   if (built.payload.kind === "chat") {
-    const { body, toAgents } = built.payload;
-    // `toAgents` is spread only when the body resolved some, so an ordinary
-    // chat send puts exactly the options on the wire it always did.
-    await onSend(body, { intent: "chat", ...(toAgents ? { toAgents } : {}) });
+    await onSend(built.payload.body, { intent: "chat" });
     return "sent";
   }
 

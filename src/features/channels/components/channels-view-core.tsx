@@ -235,13 +235,12 @@ export function ChannelsViewCore({
         {
           body,
           // Chat mode says so explicitly rather than leaving the server to
-          // infer "no addressee, probably chat" from missing fields.
+          // infer "no addressee, probably chat" from missing fields. It is the
+          // WHOLE of what a chat send may carry: `toUserId` / `summary` /
+          // `toAgents` are gone from `SendOptions` entirely rather than left
+          // forwarded-but-unset (see `lib/composer-mode.ts` — that live wire is
+          // how the bug returns).
           intent: opts?.intent,
-          // The agents the body @-mentioned, and chat's ONLY addressing: these
-          // act, nobody else is reached. `toUserId` / `summary` are gone from
-          // `SendOptions` entirely rather than left forwarded-but-unset (see
-          // `lib/composer-mode.ts` — that live wire is how the bug returns).
-          toAgents: opts?.toAgents,
         },
         workspaceId
       );

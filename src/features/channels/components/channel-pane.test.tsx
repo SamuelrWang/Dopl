@@ -9,19 +9,14 @@ import type {
 } from "../types";
 
 /**
- * The pane fetches its own agent roster (three of its children need it and the
- * view file is already over the §2 cap), so the hook is mocked at the data
- * layer — these cases render statically and are about layout, not fetching.
+ * The pane fetches its own HISTORICAL agent roster (for transcript attribution
+ * — see `lib/agent-display.ts`), so the hook is mocked at the data layer:
+ * these cases render statically and are about layout, not fetching.
  * `agentRows` is the knob a case turns to put agents in the room.
  */
 const agentRows: ChannelAgent[] = [];
 vi.mock("../hooks/use-channel-agents", () => ({
-  useChannelAgents: () => ({
-    agents: agentRows,
-    createAgent: async () => undefined,
-    renameAgent: async () => undefined,
-    setAgentStatus: async () => undefined,
-  }),
+  useChannelAgents: () => agentRows,
 }));
 
 // Imported AFTER the mock declaration for readability; `vi.mock` is hoisted.
@@ -241,32 +236,19 @@ describe("ChannelPane pending requests placement", () => {
 });
 
 describe("ChannelPane multiplayer surfaces", () => {
-  it("renders the agent chips bar under the header when the room has agents", () => {
-    agentRows.push({
-      id: "ag-1",
-      channelId: CHANNEL_ID,
-      workspaceId: "w1",
-      ownerUserId: ME,
-      name: "quartz",
-      status: "active",
-      engagedAt: null,
-      engagedBy: null,
-      createdAt: "2026-07-31T00:00:00.000Z",
-      updatedAt: "2026-07-31T00:00:00.000Z",
-    });
+  /**
+   * The AGENT CHIPS BAR sat under the header, one chip per live named agent.
+   * It is DELETED, not stubbed — rollback plan §3.3 replaces it with session
+   * pills in phase 3 — so the pane must render no trace of it even when the
+   * historical roster is non-empty.
+   */
+  it("renders no agent chips bar, roster loaded or not", () => {
+    agentRows.push({ id: "ag-1", ownerUserId: ME, name: "quartz" });
     try {
-      const markup = render([]);
-      const chips = markup.indexOf('aria-label="Channel agents"');
-      expect(chips).toBeGreaterThan(-1);
-      // Under the header, above the transcript.
-      expect(chips).toBeLessThan(markup.indexOf("THE-LAST-MESSAGE"));
-      expect(markup).toContain("quartz");
+      expect(render([])).not.toContain('aria-label="Channel agents"');
     } finally {
       agentRows.length = 0;
     }
-  });
-
-  it("renders no agent surface at all in a channel with no agents", () => {
     expect(render([])).not.toContain('aria-label="Channel agents"');
   });
 

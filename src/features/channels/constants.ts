@@ -20,13 +20,6 @@ export const CONSENT_TABLES = ["channel_consent_requests"] as const;
 export const PRESENCE_TABLES = ["agent_presence"] as const;
 
 /**
- * The agent roster. Watched separately from CHANNEL_TABLES so a status flip
- * refetches the agent list alone, not the whole channel list. In the
- * publication since migration 20260731120000.
- */
-export const AGENT_TABLES = ["channel_agents"] as const;
-
-/**
  * Liveness fallback for the consent inbox — a BACKSTOP, not the delivery path.
  *
  * Q11 — this was 4s, which is 900 requests an hour from one idle focused tab,
@@ -79,30 +72,6 @@ export const CONSENT_INBOX_POLL_MS = 30_000;
  * not a gate: nothing here decides whether a message routes.
  */
 export const GROUP_CHANNEL_MIN_MEMBERS = 3;
-
-/**
- * ENGAGEMENT — how long an agent stays engaged after a human last addressed it.
- *
- * THE MODEL. An agent is IDLE (it sees everything in the room and acts on
- * nothing) or ENGAGED (it also acts on UNTAGGED messages from HUMANS in that
- * channel). Tagging engages: address `@quartz` and `channel_agents.engaged_at`
- * is stamped. An AGENT-AUTHORED message never engages anyone — that is the loop
- * brake and it is absolute.
- *
- * THE SERVER DOES NOT ENFORCE THIS NUMBER, and that is the point. `engaged_at`
- * is a FACT (the moment it was last addressed); expiry is a POLICY, and the
- * policy runs on the DESKTOP — it compares the timestamp against this window
- * before treating an untagged human message as its own, and engagement is
- * REFRESHED BY ACTING, not by a server sweep. There is no TTL cron, no derived
- * `isEngaged` on the wire, and no server read that filters on it. Two reasons:
- * a sweep would make two machines disagree about a row only one of them swept,
- * and a window that lives only in code can move without a migration.
- *
- * It is exported so the web and the desktop read ONE number rather than
- * restating 60 minutes in three places (the same discipline
- * `GROUP_CHANNEL_MIN_MEMBERS` gets).
- */
-export const ENGAGEMENT_TTL_MS = 60 * 60_000;
 
 /**
  * A member's agent is "online / listening" when its last heartbeat is newer

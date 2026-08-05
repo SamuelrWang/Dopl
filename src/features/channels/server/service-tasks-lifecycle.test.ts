@@ -13,12 +13,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
-vi.mock("./repository-participants");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import * as repoParticipants from "./repository-participants";
 import { closeTask, reopenTask } from "./service-tasks";
 import { TaskForbiddenError, TaskNotFoundError } from "./errors";
 import type { ChannelContext } from "./service-shared";
@@ -87,11 +85,6 @@ function insertedRow(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Multiplayer: every thread-tagged post runs the participant-aware write
-  // gate, and every thread read hydrates a participant set. No participants =
-  // the pair gate, which is what these suites are about.
-  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
-  vi.mocked(repoParticipants.listParticipantsByTasks).mockResolvedValue(new Map());
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER, "owner"));
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);

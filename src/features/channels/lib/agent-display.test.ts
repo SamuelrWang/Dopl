@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_HANDLE_RE } from "../schema";
 import {
   agentAttributionFor,
   agentOwnerLabel,
-  agentStatusDotClass,
-  isAddressableAgent,
-  isAgentOwner,
-  isValidAgentHandle,
-  normalizeAgentHandle,
   readAuthorAgentId,
-  visibleAgents,
 } from "./agent-display";
-import type { AgentStatus, ChannelAgent } from "../types";
+import type { ChannelAgent } from "../types";
+
+/**
+ * HISTORICAL ATTRIBUTION, and only that. The handle charset, the status labels,
+ * the owner rule and the addressable-state predicates were all pinned here and
+ * all went with named agents (rollback §1). What must not regress is the one
+ * thing the rollback promised to preserve: a message posted by an agent BEFORE
+ * the rollback still renders with its handle.
+ */
 
 const ME = "u-me";
 const ADA = "u-ada";
@@ -21,150 +22,69 @@ const NAMES = new Map([
 ]);
 
 function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
-  return {
-    id: "a1",
-    channelId: "c1",
-    workspaceId: "w1",
-    ownerUserId: ADA,
-    name: "quartz",
-    status: "active",
-    engagedAt: null,
-    engagedBy: null,
-    createdAt: "2026-07-31T00:00:00.000Z",
-    updatedAt: "2026-07-31T00:00:00.000Z",
-    ...over,
-  };
+  return { id: "a1", ownerUserId: ADA, name: "quartz", ...over };
 }
 
-describe("agent handle charset", () => {
-  it("accepts the pool's shape: lowercase, starts with a letter", () => {
-    for (const name of ["quartz", "vega", "a1", "deep-thought", "x-9-b"]) {
-      expect(isValidAgentHandle(name)).toBe(true);
-    }
+describe("readAuthorAgentId", () => {
+  it("reads a stamped id", () => {
+    expect(readAuthorAgentId({ author_agent_id: "a1" })).toBe("a1");
   });
 
-  it("normalizes the way the server does before judging (trim + case-fold)", () => {
-    expect(normalizeAgentHandle("  Quartz  ")).toBe("quartz");
-    // Accepted here because `AgentHandleSchema` case-folds before its charset
-    // test — refusing it locally would contradict the server.
-    expect(isValidAgentHandle("Quartz")).toBe(true);
-    expect(isValidAgentHandle("  vega ")).toBe(true);
-  });
-
-  it("refuses everything the DB CHECK refuses", () => {
-    for (const name of [
-      "9lives", // leading digit
-      "-lead", // leading dash
-      "a", // one char (min is 2)
-      "has space",
-      "under_score",
-      "a".repeat(32), // 32 chars (max is 31)
-      "",
-    ]) {
-      expect(isValidAgentHandle(name)).toBe(false);
-    }
-  });
-
-  it("uses the ONE charset from schema.ts — never a local copy", () => {
-    // Pins the contract regex itself: if the schema's charset moves, this and
-    // the DB CHECK move together, and the UI cannot drift looser than either.
-    expect(AGENT_HANDLE_RE.source).toBe("^[a-z][a-z0-9-]{1,30}$");
+  it("is defensive about the jsonb bag", () => {
+    expect(readAuthorAgentId(null)).toBeNull();
+    expect(readAuthorAgentId(undefined)).toBeNull();
+    expect(readAuthorAgentId({})).toBeNull();
+    expect(readAuthorAgentId({ author_agent_id: "" })).toBeNull();
+    expect(readAuthorAgentId({ author_agent_id: 7 })).toBeNull();
+    expect(readAuthorAgentId({ author_agent_id: ["a1"] })).toBeNull();
   });
 });
 
-describe("agent status presentation", () => {
-  it("pulses a summoned agent, inks an active one, hollows the rest", () => {
-    expect(agentStatusDotClass("summoned")).toContain("animate-pulse");
-    expect(agentStatusDotClass("active")).toBe("bg-success");
-    expect(agentStatusDotClass("parked")).toContain("bg-transparent");
-    expect(agentStatusDotClass("dismissed")).toContain("bg-transparent");
+describe("agentOwnerLabel", () => {
+  it("says whose machine it ran on", () => {
+    expect(agentOwnerLabel(agent(), NAMES, ADA)).toBe("Your agent");
+    expect(agentOwnerLabel(agent(), NAMES, ME)).toBe("Ada's agent");
   });
 
-  it("uses design tokens only — no hex, no raw px", () => {
-    const statuses: AgentStatus[] = ["summoned", "active", "parked", "dismissed"];
-    for (const status of statuses) {
-      expect(agentStatusDotClass(status)).not.toMatch(/#[0-9a-f]{3,6}/i);
-      expect(agentStatusDotClass(status)).not.toMatch(/\[\d+px\]/);
-    }
-  });
-
-  it("hides a dismissed agent's chip but keeps its row for attribution", () => {
-    const rows = [agent({ id: "a1" }), agent({ id: "a2", status: "dismissed" })];
-    expect(visibleAgents(rows).map((a) => a.id)).toEqual(["a1"]);
-  });
-
-  it("treats summoned + active as the addressable states", () => {
-    expect(isAddressableAgent(agent({ status: "summoned" }))).toBe(true);
-    expect(isAddressableAgent(agent({ status: "active" }))).toBe(true);
-    expect(isAddressableAgent(agent({ status: "parked" }))).toBe(false);
-    expect(isAddressableAgent(agent({ status: "dismissed" }))).toBe(false);
-  });
-});
-
-describe("ownership (who may rename / park / dismiss)", () => {
-  it("is the summoner, and nobody else", () => {
-    expect(isAgentOwner(agent({ ownerUserId: ME }), ME)).toBe(true);
-    expect(isAgentOwner(agent({ ownerUserId: ADA }), ME)).toBe(false);
-  });
-
-  it("claims nothing when the viewer is unknown", () => {
-    expect(isAgentOwner(agent({ ownerUserId: ME }), undefined)).toBe(false);
-  });
-
-  it("says whose agent it is, in the viewer's terms", () => {
-    expect(agentOwnerLabel(agent({ ownerUserId: ME }), NAMES, ME)).toBe(
-      "Your agent"
-    );
-    expect(agentOwnerLabel(agent({ ownerUserId: ADA }), NAMES, ME)).toBe(
-      "Ada's agent"
-    );
-    // An owner who is not on the loaded roster stays unnamed rather than wrong.
+  it("falls back for an owner who has left the roster", () => {
     expect(agentOwnerLabel(agent({ ownerUserId: "u-gone" }), NAMES, ME)).toBe(
       "A teammate's agent"
     );
   });
 });
 
-describe("message attribution (metadata.author_agent_id)", () => {
-  const agents = [agent({ id: "a1", name: "quartz", ownerUserId: ADA })];
+describe("agentAttributionFor", () => {
+  it("names the handle of a HISTORICAL agent-authored message", () => {
+    const attribution = agentAttributionFor(
+      { metadata: { author_agent_id: "a1" } },
+      [agent()],
+      NAMES,
+      ME
+    );
+    expect(attribution).toEqual({ handle: "quartz", ownerLabel: "Ada's agent" });
+  });
 
-  it("resolves a stamped message to its agent's handle + owner", () => {
+  it("still resolves an agent that was DISMISSED before the rollback", () => {
+    // The roster read keeps dismissed rows precisely for this: the agents most
+    // likely to own old messages are the retired ones.
+    const attribution = agentAttributionFor(
+      { metadata: { author_agent_id: "a-old" } },
+      [agent({ id: "a-old", name: "flint" })],
+      NAMES,
+      ME
+    );
+    expect(attribution?.handle).toBe("flint");
+  });
+
+  it("returns null for an unstamped or unresolvable message", () => {
+    expect(agentAttributionFor({ metadata: {} }, [agent()], NAMES, ME)).toBeNull();
     expect(
       agentAttributionFor(
-        { metadata: { author_agent_id: "a1" } },
-        agents,
+        { metadata: { author_agent_id: "nope" } },
+        [agent()],
         NAMES,
         ME
       )
-    ).toEqual({ handle: "quartz", ownerLabel: "Ada's agent" });
-  });
-
-  it("falls back when the message carries no agent id", () => {
-    expect(agentAttributionFor({ metadata: {} }, agents, NAMES, ME)).toBeNull();
-  });
-
-  it("falls back when the id names an agent this client has not loaded", () => {
-    expect(
-      agentAttributionFor(
-        { metadata: { author_agent_id: "a-unknown" } },
-        agents,
-        NAMES,
-        ME
-      )
-    ).toBeNull();
-  });
-
-  it("reads the key defensively — a non-string is simply not an agent", () => {
-    for (const raw of [42, null, {}, [], true, ""]) {
-      expect(readAuthorAgentId({ author_agent_id: raw })).toBeNull();
-    }
-    expect(readAuthorAgentId(undefined)).toBeNull();
-    expect(readAuthorAgentId({ author_agent_id: "a1" })).toBe("a1");
-  });
-
-  it("falls back when the agent list is empty (not yet loaded)", () => {
-    expect(
-      agentAttributionFor({ metadata: { author_agent_id: "a1" } }, [], NAMES, ME)
     ).toBeNull();
   });
 });

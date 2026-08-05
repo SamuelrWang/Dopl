@@ -32,12 +32,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
-vi.mock("./repository-participants");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import * as repoParticipants from "./repository-participants";
 import { postMessage } from "./service-writes";
 import { closeTask } from "./service-tasks";
 import { proposeTaskClose } from "./service-tasks-propose";
@@ -152,8 +150,6 @@ function inserted() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
-  vi.mocked(repoParticipants.listParticipantsByTasks).mockResolvedValue(new Map());
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER));
   vi.mocked(repo.listMembers).mockResolvedValue([memberRow(USER), memberRow(PEER)]);

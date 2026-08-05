@@ -1,28 +1,18 @@
 "use client";
 
 import { useMemo } from "react";
-import { PanelRightClose, Users } from "lucide-react";
+import { PanelRightClose } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import type { ChannelAgent, ChannelThread } from "../types";
-import {
-  participantCountLabel,
-  readThreadParticipants,
-  sortRoomThreads,
-} from "../lib/rooms";
-import {
-  threadAgentEntries,
-  threadAgentsLabel,
-  type ThreadAgentEntry,
-} from "../lib/thread-agents";
+import type { ChannelThread } from "../types";
 
 /**
  * The ROOMS SIDEBAR — the channel's threads as a persistent column.
  *
- * A breakout room is a THREAD with a participant set, so the room list is the
- * thread list: title, whether it is still open, how many participants it has
- * once the server serves them, and — the thing an operator actually scans for —
- * WHICH AGENTS are working in it. Two agents collaborating inside one thread is
- * the feature; a row that only counted heads never said so.
+ * A "room" is just a THREAD. It used to be a thread with a PARTICIPANT SET, and
+ * this column showed the set's size plus which named AGENTS were seated in it;
+ * breakout rooms and named agents are gone (rollback §1) and so are both rows.
+ * What is left is the thread list: title, whether it is still open, and
+ * navigation.
  *
  * OPEN rooms sit above closed ones (a closed room is history; an open one is
  * where work is), and clicking a row scrolls to that thread's card through the
@@ -36,18 +26,11 @@ import {
 export function RoomsSidebar({
   threads,
   threadsLoading,
-  agents,
   onSelectThread,
   onCollapse,
 }: {
   threads: ChannelThread[];
   threadsLoading: boolean;
-  /**
-   * The channel's agent roster, joined against each thread's participants for
-   * handles + live status. Omitted (or still loading) degrades to handles-only
-   * fallbacks, never to an error or an empty claim.
-   */
-  agents?: ChannelAgent[];
   onSelectThread: (threadId: string) => void;
   onCollapse: () => void;
 }) {
@@ -89,7 +72,6 @@ export function RoomsSidebar({
             <RoomRow
               key={room.id}
               room={room}
-              agents={agents ?? []}
               onSelect={() => onSelectThread(room.id)}
             />
           ))}
@@ -100,22 +82,36 @@ export function RoomsSidebar({
 }
 
 /**
- * One room row. Exported so the participant/agent join can be asserted on real
- * markup without a DOM (the sidebar's other rows are unaffected).
+ * Open rooms above closed ones, each group keeping the order it arrived in (the
+ * server returns `created_at DESC`, so newest-first survives inside both
+ * groups). A stable partition, not a re-sort: nothing else about the order is
+ * this component's to decide.
+ *
+ * It lived in `lib/rooms.ts` beside the participant-set readers; those went with
+ * breakout rooms and this was the only survivor, so it came here rather than
+ * leaving a one-function module behind.
  */
+export function sortRoomThreads(
+  threads: readonly ChannelThread[]
+): ChannelThread[] {
+  const open: ChannelThread[] = [];
+  const closed: ChannelThread[] = [];
+  for (const thread of threads) {
+    (thread.status === "open" ? open : closed).push(thread);
+  }
+  return [...open, ...closed];
+}
+
+/** One room row. Exported so its status rendering can be asserted directly. */
 export function RoomRow({
   room,
-  agents,
   onSelect,
 }: {
   room: ChannelThread;
-  agents: readonly ChannelAgent[];
   onSelect: () => void;
 }) {
   const open = room.status === "open";
   const failed = room.status === "closed" && room.outcome === "failed";
-  const participants = participantCountLabel(readThreadParticipants(room).length);
-  const agentEntries = threadAgentEntries(room, agents);
 
   return (
     <button
@@ -143,61 +139,7 @@ export function RoomRow({
         <span className={cn(failed && "text-danger")}>
           {open ? "Open" : failed ? "Failed" : "Closed"}
         </span>
-        {participants && (
-          <span className="flex items-center gap-1">
-            <Users size={10} className="shrink-0" />
-            {participants}
-          </span>
-        )}
       </span>
-      <ThreadAgentsRow entries={agentEntries} />
     </button>
-  );
-}
-
-/**
- * The agents seated in a thread, as compact handle pills with a live dot.
- *
- * RENDERS NOTHING when there are none. Today's legacy threads carry no
- * participant set at all, and an empty set means "we don't know", so the row
- * stays silent rather than asserting "0 agents" over a thread that may well
- * have two.
- */
-export function ThreadAgentsRow({
-  entries,
-}: {
-  entries: readonly ThreadAgentEntry[];
-}) {
-  if (entries.length === 0) return null;
-  return (
-    <span
-      className="flex flex-wrap items-center gap-1 pl-3"
-      title={threadAgentsLabel(entries) ?? undefined}
-    >
-      {entries.map((entry) => (
-        <span
-          key={entry.agentId}
-          className={cn(
-            "inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-px text-micro font-medium",
-            entry.live
-              ? "border-border-strong bg-bg-elevated text-text-primary"
-              : "border-border-default bg-bg-inset text-text-secondary"
-          )}
-        >
-          <span
-            aria-hidden
-            className={cn(
-              "h-1 w-1 shrink-0 rounded-full",
-              entry.live ? "bg-success" : "bg-text-disabled"
-            )}
-          />
-          <span className="truncate">@{entry.handle}</span>
-          {/* The live word, so "working" never rests on the dot's color alone. */}
-          {entry.live && (
-            <span className="shrink-0 text-text-secondary">working</span>
-          )}
-        </span>
-      ))}
-    </span>
   );
 }

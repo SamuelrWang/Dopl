@@ -2,10 +2,9 @@ import "server-only";
 import { parseLegacyTaskSeq } from "../lib/group-thread";
 import type { ChannelTaskRow } from "./dto";
 import * as repoMessages from "./repository-messages";
-import * as repoParticipants from "./repository-participants";
 
 /**
- * MAY THIS POST WRITE INTO THIS THREAD — the participation gates, both id
+ * MAY THIS POST WRITE INTO THIS THREAD — the participation gate, both id
  * shapes, plus the CLOSED-status read the post path now does.
  *
  * Split out of `service-writes-metadata.ts` at the §2 500-line cap (F2 + F6
@@ -18,63 +17,25 @@ import * as repoParticipants from "./repository-participants";
  * predates the split and drives through `postMessage`) already carried the name.
  */
 
-/** The two people a first-class thread belongs to (creator + addressee). */
+/**
+ * The two people a first-class thread belongs to (creator + addressee), and the
+ * WHOLE first-class write gate.
+ *
+ * It was briefly wrapped by an async `mayWriteThread` that consulted
+ * `channel_task_participants`: a thread with rows in that table was a BREAKOUT
+ * ROOM whose SET decided who may post, with the original pair staying valid.
+ * Breakout rooms are gone (rollback §1) — no route seeds a set, no op joins one
+ * — so consulting the table would be a query per threaded post against rows
+ * nothing can add to. The pair is the rule again, and it is synchronous.
+ *
+ * Rows written before the rollback are LEFT IN PLACE and simply stop being
+ * consulted; a later cleanup migration may drop the table.
+ */
 export function isThreadParticipant(
   task: ChannelTaskRow,
   userId: string
 ): boolean {
   return task.created_by === userId || task.target_user_id === userId;
-}
-
-/**
- * May this post write into `task`? The PARTICIPANT-AWARE gate (multiplayer),
- * which SUPERSEDES the pair check for a thread that has a participant set.
- *
- * Two regimes, and the split is "does this thread have rows in
- * `channel_task_participants`":
- *  - **No rows (every thread created before this wave, and every thread created
- *    without `participants`): today's pair gate, unchanged.** Creator or
- *    target, nothing else.
- *  - **Rows present (a BREAKOUT ROOM): the set decides, and the original pair
- *    stays valid.** A user participant may post as themselves; an agent
- *    participant may post when the caller SUPPLIED `authorAgentId` (already
- *    validated as the caller's own agent of this channel — see
- *    `service-writes-agents.ts`). The creator / target keep their access
- *    because they are the thread's two original parties: a set that admitted
- *    collaborators must not evict the person who opened the exchange.
- *
- * The agent half requires the caller to CLAIM the identity rather than
- * inferring it from ownership. Inferring would mean "any member who owns any
- * agent in the set may post into the thread as themselves", which quietly
- * widens a human's write access on the strength of a process they started.
- *
- * WHAT KEEPS AN ORDINARY THREAD'S AUTHORIZATION FIXED is NOT "participants are
- * seeded only when a create asks for them" — that was true of `createTask` and
- * said nothing about the join route, so a bystander could write themselves a
- * set and be admitted here. It is the CURATION RULE in
- * `service-participants.ts`: only a thread's creator, its target, or an
- * existing user participant may add a row at all. So a thread's set can only
- * ever grow by the decision of someone already inside it, and a thread nobody
- * inside it curated stays a two-party thread forever.
- *
- * ONE query, and only for a caller-supplied first-class id (an inherited id's
- * pair is {author, peer} by construction and never reaches here).
- */
-export async function mayWriteThread(
-  task: ChannelTaskRow,
-  userId: string,
-  authorAgentId: string | undefined
-): Promise<boolean> {
-  const participants = await repoParticipants.listParticipantsByTask(task.id);
-  if (participants.length === 0) return isThreadParticipant(task, userId);
-  if (isThreadParticipant(task, userId)) return true;
-  return participants.some(
-    (row) =>
-      (row.kind === "user" && row.user_id === userId) ||
-      (row.kind === "agent" &&
-        authorAgentId !== undefined &&
-        row.agent_id === authorAgentId)
-  );
 }
 
 /**

@@ -19,30 +19,8 @@ import {
   submitComposerDraft,
   type ComposerDraft,
 } from "./composer-mode";
-import type { ChannelAgent } from "../types";
 
 const PEER = "u-ada";
-
-function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
-  return {
-    id: "a1",
-    channelId: "c1",
-    workspaceId: "w1",
-    ownerUserId: PEER,
-    name: "quartz",
-    status: "active",
-    engagedAt: null,
-    engagedBy: null,
-    createdAt: "2026-07-31T00:00:00.000Z",
-    updatedAt: "2026-07-31T00:00:00.000Z",
-    ...over,
-  };
-}
-
-const ROSTER = [
-  agent({ id: "a1", name: "quartz" }),
-  agent({ id: "a2", name: "onyx" }),
-];
 
 function draft(over: Partial<ComposerDraft> = {}): ComposerDraft {
   return {
@@ -106,71 +84,6 @@ describe("buildComposerPayload — CHAT never becomes a thread", () => {
       ok: false,
       reason: "empty-body",
     });
-  });
-});
-
-/**
- * THE OPERATOR'S CORE FLOW. Chat + @mentions is how an agent is given work, and
- * it is the one consequence in the composer decided by characters in the body
- * rather than by a control. It must address the AGENTS and never a person.
- */
-describe("buildComposerPayload — CHAT addresses the agents the body mentions", () => {
-  it("carries toAgents for a body that mentions agents, and no human addressee", () => {
-    const built = buildComposerPayload(
-      draft({ body: "@quartz @onyx work together on X", agents: ROSTER })
-    );
-    expect(built).toEqual({
-      ok: true,
-      payload: {
-        kind: "chat",
-        body: "@quartz @onyx work together on X",
-        intent: "chat",
-        toAgents: ["a1", "a2"],
-      },
-    });
-  });
-
-  it("OMITS toAgents entirely when nothing resolves (not an empty array)", () => {
-    const built = buildComposerPayload(draft({ body: "morning", agents: ROSTER }));
-    expect(built).toEqual({
-      ok: true,
-      payload: { kind: "chat", body: "morning", intent: "chat" },
-    });
-    if (!built.ok) return;
-    expect(built.payload).not.toHaveProperty("toAgents");
-  });
-
-  it("still refuses to carry a human addressee, mentions or not", () => {
-    const built = buildComposerPayload(
-      draft({ body: "@quartz look", agents: ROSTER, toUserId: PEER, isDirect: true, peerId: PEER })
-    );
-    expect(built.ok).toBe(true);
-    if (!built.ok) return;
-    expect(built.payload).not.toHaveProperty("toUserId");
-    expect(built.payload).toHaveProperty("toAgents", ["a1"]);
-  });
-
-  it("addresses nobody when the surface has no agent roster", () => {
-    const built = buildComposerPayload(draft({ body: "@quartz look" }));
-    expect(built.ok).toBe(true);
-    if (!built.ok) return;
-    expect(built.payload).not.toHaveProperty("toAgents");
-  });
-
-  it("REQUEST mode ignores mentions — a request is a title plus one person", () => {
-    const built = buildComposerPayload(
-      draft({
-        mode: "request",
-        body: "@quartz please",
-        agents: ROSTER,
-        toUserId: PEER,
-        subject: "Migrate",
-      })
-    );
-    expect(built.ok).toBe(true);
-    if (!built.ok) return;
-    expect(built.payload).not.toHaveProperty("toAgents");
-    expect(built.payload.kind).toBe("thread");
   });
 });
 
@@ -308,26 +221,16 @@ describe("composerModeHelp — the consequence, in one line", () => {
   });
 
   /**
-   * The consequence of a chat send now depends on characters in the body, so
-   * the line has to move with them — and it names the RESOLVED handles, which
-   * is the only way a typo announces itself before Enter.
+   * Chat's line used to MOVE with the body: an `@handle` that resolved to a
+   * named agent replaced it with "quartz will act on this". Named agents are
+   * gone (rollback §1), so `@` is plain text and chat's consequence is fixed
+   * whatever is typed — which is what this pins.
    */
-  it("names the agents that will act, from the resolved handles", () => {
-    expect(composerModeHelp("chat", null, { mentionedHandles: ["quartz"] })).toBe(
-      "quartz will act on this."
+  it("says the same thing whatever the body mentions", () => {
+    expect(composerModeHelp("chat", null)).toBe(
+      "Message the channel. No agent is started."
     );
-    expect(
-      composerModeHelp("chat", null, { mentionedHandles: ["quartz", "onyx"] })
-    ).toBe("quartz and onyx will act on this.");
-    expect(
-      composerModeHelp("chat", null, {
-        mentionedHandles: ["quartz", "onyx", "vega"],
-      })
-    ).toBe("quartz, onyx and vega will act on this.");
-  });
-
-  it("falls back to 'no agent is started' when nothing resolved", () => {
-    expect(composerModeHelp("chat", null, { mentionedHandles: [] })).toBe(
+    expect(composerModeHelp("chat", "Ada", { blocked: null })).toBe(
       "Message the channel. No agent is started."
     );
   });
@@ -347,7 +250,6 @@ describe("composerModeHelp — the consequence, in one line", () => {
   it("uses no em dashes anywhere (product copy rule)", () => {
     const copy = [
       composerModeHelp("chat", null),
-      composerModeHelp("chat", null, { mentionedHandles: ["quartz", "onyx"] }),
       composerModeHelp("request", "Ada"),
       composerModeHelp("request", "Ada", { blocked: "missing-subject" }),
       composerModeHelp("request", null),
@@ -361,7 +263,6 @@ describe("submitComposerDraft — which path a draft actually takes", () => {
     return {
       onSend: vi.fn(async () => {}),
       onCreateThread: vi.fn(async () => ({})),
-      onCreateAgent: vi.fn(async () => ({})),
     };
   }
 
@@ -373,15 +274,17 @@ describe("submitComposerDraft — which path a draft actually takes", () => {
     expect(s.onCreateThread).not.toHaveBeenCalled();
   });
 
-  it("sends the mentioned agents as toAgents, and still no human addressee", async () => {
+  it("treats an @handle as plain text, addressing nobody", async () => {
+    // It used to resolve against the channel's named agents and travel as
+    // `toAgents`. Nothing resolves an `@` any more (rollback §1), so the body
+    // goes out verbatim and the options carry the intent alone.
     const s = spies();
     await submitComposerDraft({
-      ...draft({ body: "@quartz @onyx work together on X", agents: ROSTER }),
+      ...draft({ body: "@quartz @onyx work together on X" }),
       ...s,
     });
     expect(s.onSend).toHaveBeenCalledWith("@quartz @onyx work together on X", {
       intent: "chat",
-      toAgents: ["a1", "a2"],
     });
     expect(s.onCreateThread).not.toHaveBeenCalled();
   });
@@ -437,39 +340,16 @@ describe("submitComposerDraft — which path a draft actually takes", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("summons on /new-agent and NEVER posts, in either mode", async () => {
-    for (const mode of ["chat", "request"] as const) {
-      const s = spies();
-      const result = await submitComposerDraft({
-        ...draft({ mode, body: "/new-agent scout" }),
-        ...s,
-      });
-      expect(result).toBe("created");
-      expect(s.onCreateAgent).toHaveBeenCalledWith("scout");
-      expect(s.onSend).not.toHaveBeenCalled();
+  it("posts a SLASH DRAFT as ordinary text — there are no commands left", async () => {
+    // `/new-agent` was the whole slash-command surface and it summoned a named
+    // agent, so it never posted. Both are gone (rollback §1): the composer has
+    // no command lane at all, and a leading slash is prose.
+    const s = spies();
+    for (const body of ["/new-agent scout", "/deploy now"]) {
+      const result = await submitComposerDraft({ ...draft({ body }), ...s });
+      expect(result).toBe("sent");
+      expect(s.onSend).toHaveBeenCalledWith(body, { intent: "chat" });
       expect(s.onCreateThread).not.toHaveBeenCalled();
     }
-  });
-
-  it("posts an UNKNOWN command as chat text rather than swallowing it", async () => {
-    const s = spies();
-    await submitComposerDraft({ ...draft({ body: "/deploy now" }), ...s });
-    expect(s.onCreateAgent).not.toHaveBeenCalled();
-    expect(s.onSend).toHaveBeenCalledWith("/deploy now", { intent: "chat" });
-  });
-
-  it("propagates a failed create so the composer keeps the draft", async () => {
-    const onSend = vi.fn(async () => {});
-    const onCreateAgent = vi.fn(async () => {
-      throw new Error("nope");
-    });
-    await expect(
-      submitComposerDraft({
-        ...draft({ body: "/new-agent" }),
-        onSend,
-        onCreateAgent,
-      })
-    ).rejects.toThrow("nope");
-    expect(onSend).not.toHaveBeenCalled();
   });
 });

@@ -24,12 +24,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
-vi.mock("./repository-participants");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import * as repoParticipants from "./repository-participants";
 import { postMessage } from "./service-writes";
 import type {
   ChannelMemberRow,
@@ -154,7 +152,6 @@ beforeEach(() => {
     insertedRow(row)
   );
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
-  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
   // The legacy opener: PEER asked USER, so USER is a participant of it.
   vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
     insertedRow({

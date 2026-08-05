@@ -2,31 +2,30 @@
 
 import { useWorkspaceTablesRealtime } from "@/shared/realtime/use-workspace-tables-realtime";
 import {
-  AGENT_TABLES,
   CHANNEL_TABLES,
   CONSENT_TABLES,
   PRESENCE_TABLES,
 } from "../constants";
 
 /**
- * THE TABLE THAT IS NOT WATCHED, and why there is no hook for it below.
+ * THE TWO TABLES THAT ARE NOT WATCHED, and why there is no hook for either.
  *
- * `channel_task_participants` — the "who is in this thread" set behind the rooms
- * sidebar's agent pills — is deliberately OUT of the realtime publication.
- * Migration 20260731130000 says so in as many words, on the F-072 grounds that
- * publishing a rarely-changing child table re-creates read amplification for no
- * live benefit (the same call 20260728010000 made when it pulled `channel_tasks`
- * back out). There is therefore no stream to subscribe to from here: a
- * `useWorkspaceTablesRealtime` call naming it would register a channel that
- * never delivers an event, which is WORSE than no subscription, because it
- * looks like coverage. Publishing it is a migration plus a publication
- * decision, not a client change, and neither belongs in this file.
+ * `channel_agents` was watched here until the channels rollback (§1): the chips
+ * bar learned about a summon, a rename and a status flip only through that
+ * stream. Nothing writes the table any more — the one read left is historical
+ * attribution — so a subscription to it would deliver nothing forever, and
+ * `useChannelAgentsRealtime` is deleted rather than left registering an empty
+ * channel. It is still IN the publication (migration 20260731120000); dropping
+ * it from there is a migration, and belongs with the later cleanup.
  *
- * THE CONSEQUENCE, STATED RATHER THAN HIDDEN: the participant set refreshes
- * only when the thread list refetches (any `channel_messages` event coalesces
- * one), so a second agent that joins a thread WITHOUT posting leaves the pills
- * a beat behind. `lib/thread-agents.ts#threadAgentsLabel` carries that caveat
- * in the row's own copy, so the sidebar never presents the set as live.
+ * `channel_task_participants` was never watched: migration 20260731130000 kept
+ * it out of the publication on the F-072 grounds that publishing a
+ * rarely-changing child table re-creates read amplification for no live
+ * benefit. Breakout rooms are gone too, so nothing reads it at all now.
+ *
+ * A `useWorkspaceTablesRealtime` call naming either would register a channel
+ * that never delivers an event, which is WORSE than no subscription because it
+ * looks like coverage.
  */
 
 /**
@@ -62,32 +61,6 @@ export function useConsentRealtime(
     workspaceId,
     CONSENT_TABLES,
     "channels-consent-realtime",
-    onChange
-  );
-}
-
-/**
- * Realtime signal for the channel's agent roster. `channel_agents` is in the
- * publication (migration 20260731120000), and every write to it happens
- * service-side (`/new-agent` from either machine, a desktop session flipping an
- * agent to `active`, a park), so the chips bar only ever learns about them this
- * way. Watched separately from CHANNEL_TABLES so a status flip refetches the
- * agent list alone, not the whole channel list.
- *
- * IT DOES NOT COVER EXPIRY. `engaged_at` is a stamp the server never clears on
- * a timer, so an agent falling out of the engagement window produces no row
- * change and therefore no event here. The chips bar schedules its own wake for
- * that (`components/agent-chips-bar.tsx#useEngagementClock`); this stream and
- * that clock are the two halves of a chip that stays true.
- */
-export function useChannelAgentsRealtime(
-  workspaceId: string | null | undefined,
-  onChange: () => void
-): void {
-  useWorkspaceTablesRealtime(
-    workspaceId,
-    AGENT_TABLES,
-    "channels-agents-realtime",
     onChange
   );
 }

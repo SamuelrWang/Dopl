@@ -1,10 +1,8 @@
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
-  AgentStatus,
   AgentToolProfile,
   AgentTrustRule,
   Channel,
-  ChannelAgent,
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
@@ -119,14 +117,6 @@ export interface PostMessageBody {
   summary?: string;
   /** Says this post is chat, so nothing infers a request from a missing field. */
   intent?: MessageIntent;
-  /**
-   * The agents this message addresses — agent ids or handles, capped at the
-   * schema's `MAX_ADDRESSED_AGENTS`. The composer fills it by resolving the
-   * body's `@handle` tokens against the channel roster (`lib/mention.ts`), and
-   * it is the ONLY addressing a chat message may carry: those agents act, and
-   * the server engages them for the untagged human messages that follow.
-   */
-  toAgents?: string[];
 }
 
 export async function postMessage(
@@ -271,93 +261,15 @@ export async function setChannelThreadMode(
 
 // ─── Agents ─────────────────────────────────────────────────────────
 //
-// The agent route surface, all of it live:
+// NO WRAPPERS, and that is the whole entry. `POST /agents` (summon) and
+// `PATCH /agents/[agentId]` (rename / set_status / disengage) had one each, and
+// the routes are gone with named agents (rollback §1).
 //
-//   POST   /api/channels/[channelId]/agents { name? }  -> 201 { agent }
-//   PATCH  /api/channels/[channelId]/agents/[agentId]
-//            { op: "rename",     name }                -> { agent }
-//            { op: "set_status", status }              -> { agent }
-//            { op: "disengage" }                       -> { agent }
-//
-// `disengage` is the ENGAGEMENT contract's write (`server/service-agents.ts`;
-// see `lib/agent-engagement.ts` for the matching read fields). It clears the
-// agent's `engaged_at` so it stops listening to the channel; it does NOT park
-// or dismiss, because an agent that stopped listening is still a member.
-//
-// The WRITES only. `GET /api/channels/[channelId]/agents -> { agents }` has no
-// wrapper here on purpose: `use-channel-agents.ts` reads it through
-// `useApiQuery`, which owns the cache key, and a second entry point would be a
-// read the cache never sees.
-//
-// The agent's handle is picked SERVER-side from the curated pool when `name` is
-// omitted (`server/agent-names.ts`), so the composer's bare `/new-agent` sends
-// no name at all rather than inventing one.
-
-/** The path of one agent under its channel. */
-function agentPath(channelId: string, agentId: string): string {
-  return channelPath(
-    channelId,
-    `/agents/${encodeURIComponent(agentId)}`
-  );
-}
-
-/** Summon an agent of your own. Omit `name` to take the next pool handle. */
-export async function createChannelAgent(
-  channelId: string,
-  name: string | undefined,
-  workspaceId: string
-): Promise<ChannelAgent> {
-  const data = await request<{ agent: ChannelAgent }>(
-    channelPath(channelId, "/agents"),
-    { method: "POST", body: name ? { name } : {}, workspaceId }
-  );
-  return data.agent;
-}
-
-/** Rename your own agent (owner-only; the server re-checks). */
-export async function renameChannelAgent(
-  channelId: string,
-  agentId: string,
-  name: string,
-  workspaceId: string
-): Promise<ChannelAgent> {
-  const data = await request<{ agent: ChannelAgent }>(
-    agentPath(channelId, agentId),
-    { method: "PATCH", body: { op: "rename", name }, workspaceId }
-  );
-  return data.agent;
-}
-
-/** Park / resume / dismiss your own agent (owner-only; the server re-checks). */
-export async function setChannelAgentStatus(
-  channelId: string,
-  agentId: string,
-  status: AgentStatus,
-  workspaceId: string
-): Promise<ChannelAgent> {
-  const data = await request<{ agent: ChannelAgent }>(
-    agentPath(channelId, agentId),
-    { method: "PATCH", body: { op: "set_status", status }, workspaceId }
-  );
-  return data.agent;
-}
-
-/**
- * Stop your own agent listening to this channel (owner-only; the server
- * re-checks). Leaves its status alone — it is still a member, it is just no
- * longer engaged.
- */
-export async function disengageChannelAgent(
-  channelId: string,
-  agentId: string,
-  workspaceId: string
-): Promise<ChannelAgent> {
-  const data = await request<{ agent: ChannelAgent }>(
-    agentPath(channelId, agentId),
-    { method: "PATCH", body: { op: "disengage" }, workspaceId }
-  );
-  return data.agent;
-}
+// One route survives and deliberately has no wrapper here, exactly as before:
+// `GET /api/channels/[channelId]/agents -> { agents }`, the historical
+// attribution roster. `use-channel-agents.ts` reads it through `useApiQuery`,
+// which owns the cache key, and a second entry point would be a read the cache
+// never sees.
 
 // ─── Consent ────────────────────────────────────────────────────────
 

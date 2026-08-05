@@ -18,13 +18,11 @@ vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-collab");
 vi.mock("./repository-tasks");
-vi.mock("./repository-participants");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
-import * as repoParticipants from "./repository-participants";
 import {
   getChannelTask,
   listChannelMembers,
@@ -88,11 +86,6 @@ function memberRow(userId: string, notifyScope: string): ChannelMemberRow {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Multiplayer: every thread-tagged post runs the participant-aware write
-  // gate, and every thread read hydrates a participant set. No participants =
-  // the pair gate, which is what these suites are about.
-  vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([]);
-  vi.mocked(repoParticipants.listParticipantsByTasks).mockResolvedValue(new Map());
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   // loadVisibleChannel gate: caller is a member of the private channel.
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER, "none"));
@@ -353,68 +346,6 @@ describe("listChannelTasks / getChannelTask — reads", () => {
     ).rejects.toBeInstanceOf(TaskNotFoundError);
   });
 
-  /**
-   * Both thread reads carry the PARTICIPANT SET — the breakout room's
-   * membership. A thread without one reports `[]`, never a missing field: a
-   * legacy thread is not a thread whose set failed to load.
-   */
-  it("hydrates each listed thread's participant set in ONE grouped query", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([
-      taskRow({ id: TASK_ID }),
-      taskRow({ id: "other" }),
-    ]);
-    vi.mocked(repoParticipants.listParticipantsByTasks).mockResolvedValue(
-      new Map([
-        [
-          TASK_ID,
-          [
-            {
-              id: "p-1",
-              task_id: TASK_ID,
-              workspace_id: WS,
-              kind: "agent",
-              user_id: null,
-              agent_id: "agent-1",
-              added_by: USER,
-              created_at: "2026-07-31T00:00:00Z",
-            },
-          ],
-        ],
-      ])
-    );
-
-    const tasks = await listChannelTasks(ctx, "general");
-
-    expect(repoParticipants.listParticipantsByTasks).toHaveBeenCalledWith([
-      TASK_ID,
-      "other",
-    ]);
-    expect(tasks[0].participants.map((p) => p.agentId)).toEqual(["agent-1"]);
-    // The thread with no set reports an empty one, not `undefined`.
-    expect(tasks[1].participants).toEqual([]);
-  });
-
-  it("carries the participant set on the single-thread read too", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
-    vi.mocked(repoParticipants.listParticipantsByTask).mockResolvedValue([
-      {
-        id: "p-1",
-        task_id: TASK_ID,
-        workspace_id: WS,
-        kind: "user",
-        user_id: OTHER,
-        agent_id: null,
-        added_by: USER,
-        created_at: "2026-07-31T00:00:00Z",
-      },
-    ]);
-
-    const task = await getChannelTask(ctx, "general", TASK_ID);
-
-    expect(task.participants).toHaveLength(1);
-    expect(task.participants[0].userId).toBe(OTHER);
-    expect(task.participants[0].threadId).toBe(TASK_ID);
-  });
 });
 
 describe("listChannels — direct peer resolution", () => {

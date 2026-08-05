@@ -8,6 +8,7 @@ import type {
 } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
+  ChannelChatAddressedError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
   ChannelSlugConflictError,
@@ -27,10 +28,6 @@ import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
 import { resolvePostMetadata } from "./service-writes-metadata";
 import {
-  assertChatIsUnaddressed,
-  recordAgentEngagement,
-} from "./service-writes-agents";
-import {
   canManageChannel,
   loadVisibleChannel,
   profilesById,
@@ -46,10 +43,32 @@ import {
  * to manage) — the route-level `minRole` is only the workspace floor.
  *
  * Siblings, each with its own reason to change: the membership lane is
- * `service-writes-members.ts`, the task lifecycle `service-tasks.ts`, the
- * metadata folds a post goes through `service-writes-metadata.ts`, and the
- * agent identities a post may name `service-writes-agents.ts`.
+ * `service-writes-members.ts`, the task lifecycle `service-tasks.ts`, and the
+ * metadata folds a post goes through `service-writes-metadata.ts`.
  */
+
+/**
+ * Refuse a post that says `intent:"chat"` and then addresses a PERSON.
+ *
+ * The two halves say opposite things — chat means "do not raise a prompt on
+ * anyone's machine", an addressee means "raise one on exactly this machine" —
+ * and reconciling either way is the invisible-delivery failure the addressing
+ * contract exists to prevent. So it is a 400, not a silent pick.
+ *
+ * It used to live in `service-writes-agents.ts` beside the named-agent
+ * resolution, and its name meant "unaddressed BY A HUMAN ADDRESSEE" because a
+ * `toAgent` under chat was allowed. With agent addressing gone (rollback §1)
+ * there is only one kind of addressee left and the name is simply true.
+ *
+ * Cheap and pure, so it runs in {@link postMessage} BESIDE the addressee-
+ * membership check — i.e. BEFORE the idempotency short-circuit, exactly like
+ * that one. A contradictory post must 400 on the retry too, not be answered
+ * with the stored message from a request that never had the contradiction.
+ */
+function assertChatIsUnaddressed(input: ChannelMessageCreateInput): void {
+  if (input.intent !== "chat") return;
+  if (input.toUserId) throw new ChannelChatAddressedError("toUserId");
+}
 
 // ─── Channel lifecycle ──────────────────────────────────────────────
 
@@ -285,33 +304,12 @@ export async function deleteChannel(
 /**
  * Post a message (or an activity event) into a channel.
  *
- * TWO WRITES, ONE IDEMPOTENCY ENVELOPE. The message insert and the ENGAGEMENT
- * stamp (`channel_agents.engaged_at`) are separate statements with no
- * transaction around them, and the engagement one used to sit outside every
- * retry path. If it threw, the message HAD posted, the caller got a 500, and
- * the operator's natural retry hit the `client_msg_id` short-circuit — which
- * returned the stored message and engaged NOBODY. One transient failure lost
- * that engagement permanently, and a retry WITHOUT the same key duplicated the
- * message instead.
- *
- * The fix is the one `create_thread` already uses for its opening post (v3.1,
- * `service-tasks.ts` `postOpeningMessage`): re-drive the second write on EVERY
- * path that returns the message — the fresh insert, the `client_msg_id`
- * short-circuit, and the lost-insert race. Engagement is idempotent by nature
- * (the same two columns, the same values, one statement), so re-driving costs a
- * write and repairs a hole.
- *
- * THE ERROR STILL SURFACES ON THE FIRST ATTEMPT — deliberately, and it is the
- * half that makes the repair work. Swallowing it would mean the post returns
- * 200 with no engagement, nothing tells anyone, and the retry that would have
- * repaired it never happens because nothing looked broken. A 500 on a post the
- * operator can see landed is confusing for one round-trip; an agent that
- * silently never listens is confusing for an hour. The engagement write is a
- * single UPDATE on an already-located set, so this is the rare failure, not the
- * common one.
- *
- * What a replay re-drives is read from the STORED ROW, never the retry's input:
- * a re-send cannot re-address a message or change who it engaged for.
+ * ONE WRITE. It used to be two — the message insert plus an ENGAGEMENT stamp on
+ * `channel_agents` — wrapped in a shared idempotency envelope so a lost stamp
+ * could be repaired by a retry. Engagement is gone with the named agents it
+ * described (rollback §1), so the second write, its replay repair and the
+ * `replayStoredMessage` seam are gone with it: an idempotent hit now returns the
+ * stored row and writes nothing at all.
  *
  * F6 — THE RETURN CARRIES ONE NOTICE, `threadClosed`, and it is a notice about
  * THIS CALL rather than a property of the message. A closed thread still ACCEPTS
@@ -348,12 +346,11 @@ export async function postMessage(
     throw new ChannelAddresseeNotMemberError(input.toUserId);
   }
 
-  // Idempotency: a re-sent client_msg_id returns the stored message — and
-  // re-drives its engagement, which is what repairs a stamp that was lost after
-  // the insert landed (see the docblock).
+  // Idempotency: a re-sent client_msg_id returns the stored message and writes
+  // nothing.
   if (input.clientMsgId) {
     const existing = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
-    if (existing) return replayStoredMessage(ctx, existing);
+    if (existing) return hydrateOne(existing);
   }
 
   // Addressing (incl. the DM auto-address), the reserved-key anti-spoof fold
@@ -386,22 +383,14 @@ export async function postMessage(
       client_msg_id: input.clientMsgId ?? null,
     });
   } catch (err) {
-    // Lost an idempotency race — converge on the stored winner, engagement
-    // included: this is the short-circuit reached a second way and must answer
-    // identically.
+    // Lost an idempotency race — converge on the stored winner: this is the
+    // short-circuit reached a second way and must answer identically.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
       const raced = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
-      if (raced) return replayStoredMessage(ctx, raced);
+      if (raced) return hydrateOne(raced);
     }
     throw err;
   }
-
-  // ENGAGEMENT. Tagging an agent is what makes it act on the untagged human
-  // messages that follow. Recorded AFTER the insert (a post that failed leaves
-  // no engagement behind) and from the INSERTED ROW, so the loop brake in
-  // `recordAgentEngagement` judges what the server actually stored — and judges
-  // a replay by exactly the same facts.
-  await recordAgentEngagement(ctx, row);
 
   // Surface the channel as active (list sorts by updated_at).
   await repo.touchChannel(ctx.workspaceId, channel.id);
@@ -411,29 +400,7 @@ export async function postMessage(
   return threadClosed ? { ...message, threadClosed: true } : message;
 }
 
-/**
- * Return an ALREADY-STORED message, repairing its engagement on the way out.
- *
- * The one place both idempotent paths meet — the `client_msg_id` short-circuit
- * and the lost-insert race — so they cannot drift. It does NOT re-post, does
- * not re-stamp metadata and does not touch the channel: the stored message is
- * the source of truth and nothing about it changes. The only write is the
- * engagement stamp, which is idempotent (the same two columns, the same
- * values), gated by exactly the same loop brake as a first attempt, and read
- * off the STORED row — so a caller replaying somebody else's key can only ever
- * re-assert the engagement that message already earned, for its own author.
- */
-async function replayStoredMessage(
-  ctx: ChannelContext,
-  row: ChannelMessageRow
-): Promise<ChannelMessage> {
-  await recordAgentEngagement(ctx, row);
-  return hydrateOne(row);
-}
-
-async function hydrateOne(
-  row: Awaited<ReturnType<typeof repoMessages.insertMessage>>
-): Promise<ChannelMessage> {
+async function hydrateOne(row: ChannelMessageRow): Promise<ChannelMessage> {
   if (!row.author_user_id) return mapMessageRow(row, undefined);
   const profiles = await profilesById([row.author_user_id]);
   return mapMessageRow(row, profiles.get(row.author_user_id));

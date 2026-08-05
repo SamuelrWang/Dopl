@@ -193,19 +193,7 @@ describe("ChannelTranscript full-width rows (not chat bubbles)", () => {
  * back to the plain "agent" pill this surface has always rendered.
  */
 function agent(over: Partial<ChannelAgent> = {}): ChannelAgent {
-  return {
-    id: "ag-1",
-    channelId: CHANNEL_ID,
-    workspaceId: "w1",
-    ownerUserId: PEER,
-    name: "quartz",
-    status: "active",
-    engagedAt: null,
-    engagedBy: null,
-    createdAt: "2026-07-28T00:00:00.000Z",
-    updatedAt: "2026-07-28T00:00:00.000Z",
-    ...over,
-  };
+  return { id: "ag-1", ownerUserId: PEER, name: "quartz", ...over };
 }
 
 function renderWithAgents(

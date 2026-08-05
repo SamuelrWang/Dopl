@@ -9,7 +9,6 @@ import {
 } from "./errors";
 import { mapMemberRow } from "./dto";
 import * as repo from "./repository";
-import * as repoAgents from "./repository-agents";
 import {
   canManageChannel,
   loadVisibleChannel,
@@ -24,10 +23,11 @@ import {
  * its own reason to change — that file decides what a CHANNEL and a MESSAGE
  * are, this one decides who is in the room and what leaving costs.
  *
- * The seam is not only line count. A departure now has to reach into a
- * NEIGHBOURING lane's state (agent engagement), and that is the kind of
- * cross-lane cleanup that gets forgotten when it is buried in the middle of a
- * 480-line file — see {@link removeMember}.
+ * A departure used to reach into a NEIGHBOURING lane on the way out, ending
+ * every AGENT ENGAGEMENT the leaver had created in the room (engagement
+ * outlived membership, and the leaver could no longer see the channel to undo
+ * it). Engagement is gone with the named agents (rollback §1) and so is the
+ * sweep: leaving is a membership write again.
  */
 
 /**
@@ -121,47 +121,6 @@ export async function removeMember(
   }
 
   await repo.deleteMember(channel.id, targetUserId);
-  await clearDepartedEngagement(channel.id, targetUserId);
-}
-
-/**
- * End every engagement the departing member created in THIS channel.
- *
- * WHY A DEPARTURE HAS TO TOUCH THE AGENT LANE. `channel_agents` has no FK to
- * `channel_members`, so engagement outlives membership: Sam tags `@quartz` in a
- * private channel and then leaves, and quartz stays ENGAGED for the rest of the
- * TTL — acting on the UNTAGGED messages of everyone still in the room, on
- * standing orders from someone who is no longer there. Nobody can undo it
- * either. Sam cannot: `disengageAgent` starts at `loadVisibleChannel`, and a
- * private channel reads as not-found to a non-member, so the one person the
- * permission was granted to is locked out of using it. The OWNER can park the
- * agent, but that stops their own process rather than ending a relationship
- * they were never party to. The removal is the last moment at which anyone
- * still holds both facts, so it is where the cleanup belongs.
- *
- * AFTER the delete, not before: a clear that ran first and then hit a failed
- * delete would have disengaged an agent for a member who is still in the room.
- *
- * FAIL-SOFT, and deliberately so. The member IS removed by the time this runs —
- * that write has already committed — so throwing here would report a failed
- * removal that actually happened, and the caller's retry would find no
- * membership row (`removeMember` returns early on a missing target) and never
- * reach this line again. A logged failure leaves the old, already-shipped
- * behaviour: an engagement that expires on the desktop's TTL instead of being
- * cut short. Strictly better than the alternative, and never worse than before.
- */
-async function clearDepartedEngagement(
-  channelId: string,
-  userId: string
-): Promise<void> {
-  try {
-    await repoAgents.clearEngagementByEngager(channelId, userId);
-  } catch (err) {
-    console.error(
-      `[channels] failed to clear agent engagement for departed member ${userId} in channel ${channelId}:`,
-      err
-    );
-  }
 }
 
 /**

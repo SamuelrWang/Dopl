@@ -6,22 +6,24 @@ import "server-only";
  * each file has one clear purpose; cross-cutting context + gates live in
  * `service-shared.ts`.
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
- *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await poll
+ *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await
+ *                            poll + the named-agent ATTRIBUTION roster
  *   - `service-await.ts`   — the await long-poll HOLD loop (tick + recheck cadence)
  *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message
- *   - `service-writes-members.ts` — channel membership (add / remove / own prefs),
- *                            incl. clearing a departing member's agent engagement
+ *   - `service-writes-members.ts` — channel membership (add / remove / own prefs)
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
  *                            the server stamps (addressing, DM auto-address, task keys)
  *   - `service-tasks.ts`   — first-class task lifecycle (create / close / mode / reopen)
- *   - `service-agents.ts`  — channel agents (summon / list / rename / status /
- *                            disengage)
- *   - `service-participants.ts` — thread participant sets (breakout membership)
- *   - `service-writes-agents.ts` — agent addressing on a post (`toAgent` /
- *                            `authorAgentId` resolution + authorization)
  *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
  *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
+ *
+ * GONE in the channels rollback (§1, 2026-08-05): `service-agents.ts` (summon /
+ * rename / status / disengage), `service-participants.ts` (breakout membership),
+ * `service-thread-handshake.ts` (the two-agent thread derivation) and
+ * `service-writes-agents.ts` (agent addressing + engagement). What survived each
+ * of them: the attribution roster read moved into `service-reads.ts`, and
+ * `assertChatIsUnaddressed` moved into `service-writes.ts`.
  */
 
 export { buildChannelContext } from "./service-shared";
@@ -30,6 +32,7 @@ export type { ChannelContext, AuthLike } from "./service-shared";
 export {
   listChannels,
   getChannel,
+  listAgents,
   listChannelMembers,
   listChannelTasks,
   getChannelTask,
@@ -66,21 +69,6 @@ export {
 // DECISION 2 (2026-08-04): an agent PROPOSES, a human CLOSES. Its own module
 // because the two acts have different authorities over one shared thread.
 export { proposeTaskClose } from "./service-tasks-propose";
-
-export {
-  createAgent,
-  disengageAgent,
-  listAgents,
-  renameAgent,
-  setAgentStatus,
-} from "./service-agents";
-
-export {
-  joinThreadParticipant,
-  leaveThreadParticipant,
-  listThreadParticipants,
-} from "./service-participants";
-export type { ParticipantJoinResult } from "./service-participants";
 
 export {
   createConsentRequest,

@@ -5,13 +5,12 @@ import type { ChannelRow, ChannelTaskRow } from "./dto";
 import { ChannelTaskNotInChannelError, TaskForbiddenError } from "./errors";
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
-import { resolveAgentAddressing } from "./service-writes-agents";
 // The thread half — who may write into a thread (both id shapes) and what the
 // thread row says about accepting the post — is its own module (§2 split).
 import {
   isLegacyThreadParticipant,
   isThreadClosed,
-  mayWriteThread,
+  isThreadParticipant,
 } from "./service-writes-metadata-thread";
 import type { ChannelContext } from "./service-shared";
 
@@ -30,6 +29,15 @@ import type { ChannelContext } from "./service-shared";
  * and re-added only from server-validated values. `taskId` stays
  * caller-settable — but EVERY thread id, first-class or legacy, now has to
  * BELONG to the poster (see {@link resolvePostMetadata}).
+ *
+ * THE THREE AGENT KEYS ARE STRIPPED AND NEVER RE-STAMPED (rollback §1,
+ * 2026-08-05). `to_agent_id` / `to_agent_ids` / `author_agent_id` have no
+ * writer left — named-agent addressing and authorship are gone — but they stay
+ * in the strip list rather than dropping out of this file, because that is what
+ * keeps them UNFORGEABLE: `author_agent_id` is what the transcript reads to
+ * attribute an OLD message to a handle, and a caller who could set it on a new
+ * post could attribute their own words to somebody's retired agent. Stored rows
+ * keep theirs and keep rendering; nothing new ever grows one.
  *
  * The THREAD half — `mayWriteThread`, `isLegacyThreadParticipant` and the
  * closed-status read — moved to `service-writes-metadata-thread.ts` at the §2
@@ -223,12 +231,6 @@ export interface PostMetadataOptions {
  *    can fall back to it. That is the operator's report ("if I send a message
  *    it's just going as a message to the channel... doesn't prompt an agent")
  *    made true, without giving back the delivery guarantee a `request` needs.
- *    **A chat post that ADDRESSES AGENTS still stamps `to_user_id` — from the
- *    OWNER BRIDGE in (4b), never from the peer.** The two are not the same
- *    fallback: the bridge names the machine an explicitly-named agent runs on,
- *    which is the whole point of naming it, while the peer fallback is the guess
- *    chat exists to suppress. So `@quartz` in a DM reaches quartz's owner and
- *    stops there, and an untagged aside in the same DM reaches nobody.
  * 3. **Task keys.** The reserved four are stripped and re-stamped from the
  *    resolved task row, so `taskMode` reflects the latest `set_task_mode` and
  *    cannot be spoofed. `taskId` itself stays caller-settable (a responder
@@ -266,28 +268,10 @@ export interface PostMetadataOptions {
  *      poster's.
  *    Inherited ids need no check — inheritance only resolves a task whose
  *    participants are {author, peer} by construction.
- *    **Multiplayer:** the first-class check is now {@link mayWriteThread}, not
- *    the bare pair test. A thread with rows in `channel_task_participants` is a
- *    BREAKOUT ROOM and its SET decides (the original pair stays valid); a
- *    thread with no rows keeps the pair gate exactly as it was. What makes that
- *    safe is the CURATION RULE on the set itself (`service-participants.ts`) —
- *    only the thread's creator, its target, or an existing user participant may
- *    add a row — so a bystander cannot manufacture a set to be admitted by.
- * 4b. **Agent addressing (multiplayer).** `to_agent_ids`, `to_agent_id` and
- *    `author_agent_id` join the reserved set: stripped from caller metadata
- *    unconditionally, then re-stamped only from the validated top-level
- *    `toAgent` / `toAgents` / `authorAgentId` fields
- *    (`service-writes-agents.ts` owns that validation — an agent of another
- *    channel is a 400, another member's agent as AUTHOR is a 403, and EVERY
- *    addressed agent's owner must be a member).
- *    **`to_agent_ids` is the address; `to_agent_id` is a COMPAT MIRROR of its
- *    head** — installed desktop 1.7.17 reads only the scalar, so a
- *    multi-address has to keep saying something it understands. Addressing an
- *    agent ALSO stamps the FIRST one's owner as `to_user_id`: the v1 bridge to
- *    the existing delivery path, since the listener triggers on the addressed
- *    user and the agent runs on that user's machine. The message's
- *    `author_user_id` is untouched — an agent id supplements an author, it
- *    never replaces one.
+ *    **The first-class check is {@link isThreadParticipant} — creator or
+ *    target, and nothing else.** It was briefly the participant-set-aware
+ *    `mayWriteThread`, so that a BREAKOUT ROOM's set could widen who may post;
+ *    breakout rooms are gone (rollback §1) and the gate is the pair again.
  * 5. **Runtime stamp (WAKE-V1; `desktop-ui` added 2026-08-05).** `runtime` is
  *    reserved: stripped from caller metadata unconditionally, then re-stamped
  *    from `ctx.runtime` — which the auth layer resolved from
@@ -315,17 +299,15 @@ export interface PostMetadataOptions {
  *    unconditionally, then re-stamped only from the REQUEST's
  *    `X-Dopl-Session-Id` header (resolved by the auth layer into
  *    `ctx.sessionId`, and shape-checked there). Absent header → no key at all.
- *    It exists because ONE `channel_agents` row can be claimed by any number of
- *    concurrent processes holding the owner's credential — `as_agent` is
- *    per-call and ownership-checked only, and on the desktop a ROOM slot
- *    `(channel, agent)` and a PAIR slot `(channel, thread)` are disjoint by
- *    design, so three live sessions of one handle is the documented behavior.
- *    With nothing on the wire naming a session, "flint said X" was not a
- *    well-formed statement, and two sessions of one handle issued a peer
- *    contradictory instructions 79 seconds apart with no way to attribute
- *    either. A LABEL, NOT A LOCK: nothing here enforces one live session per
- *    agent id, which would break the three-slot design and would not touch an
- *    external CLI session passing `as_agent` at all.
+ *    It exists because one account's credential can be held by any number of
+ *    concurrent sessions at once, so "the agent said X" was not a well-formed
+ *    statement: two sessions on one machine issued a peer contradictory
+ *    instructions 79 seconds apart with no way to attribute either. A LABEL,
+ *    NOT A LOCK — nothing here enforces one live session per anything, and an
+ *    external CLI session that sends no header is simply unattributed. It
+ *    OUTLIVES the named agents it was introduced beside (rollback §1): a
+ *    session is now the only agent identity there is, and this key is what
+ *    names one.
  * 7. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
  *    re-stamped only when the post ends up carrying a thread tag the poster is
  *    entitled to — which, since (4), is exactly "a `taskId` survived". Both
@@ -356,6 +338,9 @@ export async function resolvePostMetadata(
   delete metadata.summary;
   delete metadata.runtime;
   delete metadata.appVersion;
+  // Rollback §1 — stripped, never re-stamped. Nothing writes these any more;
+  // the strip is what keeps a new post from FORGING the attribution an old row
+  // legitimately carries. See the module docblock.
   delete metadata.to_agent_id;
   delete metadata.to_agent_ids;
   delete metadata.author_agent_id;
@@ -382,17 +367,6 @@ export async function resolvePostMetadata(
   // beyond the shape check `session-header.ts` already applied.
   if (ctx.sessionId) metadata.session_id = ctx.sessionId;
 
-  // Both agent identities are validated before anything is stamped: a
-  // `toAgent` that names no agent of this channel is a 400, and an
-  // `authorAgentId` the caller does not own is a 403.
-  const agents = await resolveAgentAddressing(ctx, channel.id, input);
-  if (agents.authorAgentId) metadata.author_agent_id = agents.authorAgentId;
-  if (agents.toAgentIds) metadata.to_agent_ids = agents.toAgentIds;
-  // COMPAT MIRROR of `to_agent_ids[0]`, not a second address. Installed desktop
-  // 1.7.17 reads only this key and `to_user_id`; drop it once every desktop in
-  // the field routes on the array (see `service-writes-agents.ts`).
-  if (agents.toAgentId) metadata.to_agent_id = agents.toAgentId;
-
   // CHAT never resolves a peer at all. Not "resolves one and discards it" — the
   // fallback below reads whatever `peerUserId` holds, so the only way a chat
   // post can never be auto-addressed is for there to be nothing to fall back to.
@@ -400,15 +374,10 @@ export async function resolvePostMetadata(
     input.intent === "chat"
       ? undefined
       : await resolveDirectPeer(channel, ctx.userId);
-  // THE OWNER BRIDGE (v1). An addressed agent's OWNER is stamped as
-  // `to_user_id`, because that is still the only thing the delivery path reads:
-  // the desktop listener triggers on the addressed USER, and the agent runs on
-  // that user's machine. Without it a `@quartz` post would carry a perfectly
-  // valid `to_agent_id` and wake nobody. It takes precedence over an explicit
-  // `toUserId` because a handle names ONE machine unambiguously while a
-  // disagreeing pair of addressees names none. Remove this line only once the
-  // listener routes on `to_agent_id` directly (the desktop lane's later work).
-  const toUserId = agents.toAgentOwnerUserId ?? input.toUserId ?? peerUserId;
+  // The caller's addressee, else the DM peer. There used to be a third source
+  // in front of both — the OWNER BRIDGE, which stamped an addressed agent's
+  // owner here — and it went with the addressing (rollback §1).
+  const toUserId = input.toUserId ?? peerUserId;
   if (toUserId) metadata.to_user_id = toUserId;
   if (input.summary) metadata.summary = input.summary;
 
@@ -431,7 +400,7 @@ export async function resolvePostMetadata(
       task = await repoTasks.findTaskByChannelAndId(channel.id, callerTaskId);
       if (!task) throw new ChannelTaskNotInChannelError(callerTaskId);
       // Membership in the channel is not membership in the THREAD.
-      if (!(await mayWriteThread(task, ctx.userId, agents.authorAgentId))) {
+      if (!isThreadParticipant(task, ctx.userId)) {
         throw new TaskForbiddenError("post into this task");
       }
     } else if (
