@@ -145,24 +145,32 @@ export class TaskSelfTargetError extends ChannelError {
 /**
  * A post declared `intent:"chat"` AND addressed a PERSON (`toUserId`). 400.
  *
- * NARROWED 2026-07-31, and the narrowing is the rule: `toAgent` / `toAgents`
- * under chat are ALLOWED and no longer reach here. A human tagging `@quartz`
- * mid-conversation is chat, and it is the primary way an agent is given work;
- * refusing it made the composer's core flow unsendable.
+ * WHY IT IS REFUSED rather than reconciled. A human addressee is the one address
+ * that starts ANOTHER PERSON'S agent on a subject they never saw a title for.
+ * Chat means "raise no prompt on anyone's machine"; a `toUserId` means "raise
+ * one on exactly this machine". Dropping the address would silently fail to
+ * deliver a message the caller believes was routed, and dropping the intent
+ * would poke a machine the caller explicitly said not to — so the pair is
+ * refused and the CALLER chooses. Requesting a person's agent is what REQUEST
+ * mode is for, and it carries the title their consent prompt renders.
  *
- * What stays refused is a human addressee, because that is the one address that
- * starts ANOTHER PERSON'S agent on a subject they never saw a title for. Chat
- * means "raise no prompt on anyone's machine"; a human `to` means "raise one on
- * exactly this machine". Refused rather than reconciled — dropping the address
- * would silently fail to deliver a message the caller believes was routed, and
- * dropping the intent would poke a machine the caller explicitly said not to.
- * Requesting a person's agent is what REQUEST mode is for, and it carries the
- * title their consent prompt renders.
+ * F-145 — THE MESSAGE AND THIS DOCBLOCK BOTH TAUGHT A DELETED PARAM. The
+ * sentence sent to callers read "Mention an agent with toAgents to have it
+ * act", and the docblock above it still recorded the 2026-07-31 narrowing
+ * ("`toAgent` / `toAgents` under chat are ALLOWED and no longer reach here").
+ * Both outlived the surface: rollback §1 deleted named-agent addressing, and
+ * `schema.ts#removedParam` now declares `toAgent` / `toAgents` as `z.never()`,
+ * so following this advice produces a 400 — the error told the caller to do the
+ * one thing guaranteed to fail again. The MCP twin was corrected at the time
+ * (`packages/mcp-server/src/tools/channel-post-notes.ts`'s
+ * `CHAT_ADDRESSED_REFUSAL`) and this HTTP copy was not; the wording now says the
+ * same thing that one does, because two statements of one rule is how the copy
+ * in this feature drifted from the code three times already.
  */
 export class ChannelChatAddressedError extends ChannelError {
   constructor(public readonly field: string) {
     super(
-      `A chat message cannot be addressed to a person (${field}). Mention an agent with toAgents to have it act, or post with intent "request" to reach a teammate.`
+      `A chat message cannot be addressed to a person (${field}). Drop the address to send it as chat, or post with intent "request" to reach that teammate's machine — a request carries the title their consent prompt renders.`
     );
   }
 }

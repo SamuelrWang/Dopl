@@ -189,7 +189,14 @@ function posted(threadClosed) {
         // NOT that the thread has gone silent: the thread still takes posts, and
         // addressing somebody still starts them.
         (0, vitest_1.expect)(text).toContain("does NOT stop the thread accepting posts");
-        (0, vitest_1.expect)(text).toContain('to_agent="<handle>" starts that agent');
+        // F-145 — this assertion USED to pin `to_agent="<handle>" starts that
+        // agent`, a param deleted in rollback §1. It was not a stale test over dead
+        // copy: it was a test HOLDING LIVE COPY IN PLACE that taught an agent to
+        // send an argument the SDK accepts and silently drops. Rewritten, not
+        // deleted — the sentence still has to say that a close does not sever
+        // addressing, it just has to say it with the one address that exists.
+        (0, vitest_1.expect)(text).toContain('to="<member>" triggers that member\'s machine');
+        (0, vitest_1.expect)(text).toContain("There is no way to address an agent by name");
         // It points at the action the agent CAN take, and says plainly that the
         // other one is a human's — this tool has no reopen op.
         (0, vitest_1.expect)(text).toContain('dopl_channel(op="create_thread", channel="chan-1"');

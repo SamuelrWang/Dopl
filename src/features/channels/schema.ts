@@ -450,6 +450,21 @@ export const ConsentListQuerySchema = z.object({
 });
 export type ConsentListQuery = z.infer<typeof ConsentListQuerySchema>;
 
+/**
+ * `?channelId=<uuid>` for read-session-state (rollback §3.5).
+ *
+ * F-145 — IT WAS UNVALIDATED. The route read the param and handed it straight to
+ * `.eq("channel_id", …)`, so `?channelId=oops` reached Postgres as a uuid cast
+ * and came back as a raw driver error that `mapChannelError` does not own — a
+ * 500 for what is plainly a malformed request. Same shape and same fix as the
+ * consent inbox's {@link ConsentListQuerySchema} one screen up, which is the
+ * only other `?channelId=` on this surface.
+ */
+export const SessionStateQuerySchema = z.object({
+  channelId: z.string().uuid().optional(),
+});
+export type SessionStateQuery = z.infer<typeof SessionStateQuerySchema>;
+
 // ─── Trust (per-teammate standing consent) ──────────────────────────────────
 
 /** POST / DELETE /trust body: the teammate whose agent is (un)trusted. */

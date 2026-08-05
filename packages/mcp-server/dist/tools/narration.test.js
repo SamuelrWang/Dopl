@@ -50,7 +50,8 @@ vitest_1.vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
         constructor(_info, opts) {
             registry.instructions = opts?.instructions ?? "";
         }
-        tool(name, _d, _s, handler) {
+        // `registerTool`, not `tool` — see server.test.ts's note (F-145).
+        registerTool(name, _config, handler) {
             registry.tools.set(name, handler);
         }
     },

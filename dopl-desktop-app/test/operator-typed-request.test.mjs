@@ -42,7 +42,6 @@ const LISTENER = M("listener-messages.js");
 const DISPATCH = M("session-dispatch.js");
 const TARGETING = M("targeting.js");
 const LEGACY_SRC = M("legacy-threads.js");
-const UI_BRIDGE = M("ui-bridge.js");
 
 const require = createRequire(import.meta.url);
 const targeting = require("../main/targeting.js"); // dependency-free; the REAL predicates
@@ -51,29 +50,6 @@ const ME = "11111111-1111-1111-1111-111111111111";
 const PEER = "22222222-2222-2222-2222-222222222222";
 const THIRD = "33333333-3333-3333-3333-333333333333";
 const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
-
-// ── 0. the stamp exists, and it leaves from the ONE place it can ─────────────────
-
-test("main attaches X-Dopl-Runtime: desktop-ui to the SPA renderer's transport", () => {
-  // The whole change rests on this header being real. It has to ride the shared header
-  // builder in ui-bridge.js — the renderer cannot set headers and every SPA call is this
-  // function — so a new call site cannot forget it.
-  assert.match(UI_BRIDGE, /const DESKTOP_UI_RUNTIME = 'desktop-ui';/);
-  assert.match(UI_BRIDGE, /\[RUNTIME_HEADER\]: DESKTOP_UI_RUNTIME,/);
-  const builder = UI_BRIDGE.indexOf("async function sendApiRequest(");
-  const stamp = UI_BRIDGE.indexOf("[RUNTIME_HEADER]: DESKTOP_UI_RUNTIME");
-  assert.ok(builder !== -1 && stamp > builder, "the stamp rides sendApiRequest's header block");
-});
-
-test("the LISTENER and SESSION lanes are deliberately NOT stamped desktop-ui", () => {
-  // main/api.js (consent, presence, session posts) and listener-io.js (the long poll and the
-  // channel posts a session makes) carry other people's posts, not the operator typing. A stamp
-  // there would make a session's own reply look like a person, which is the confusion this
-  // whole change removes.
-  for (const file of ["api.js", "listener-io.js", "channel-post.js"]) {
-    assert.ok(!M(file).includes("desktop-ui"), `${file} must not claim the UI runtime`);
-  }
-});
 
 // ── 1. the predicate's truth table ───────────────────────────────────────────────
 

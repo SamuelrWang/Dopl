@@ -344,3 +344,54 @@ describe("postMessage — intent is a RESERVED metadata key", () => {
     expect(capturedMetadata().intent).toBe("chat");
   });
 });
+
+/**
+ * F-145 — WHAT THE REFUSAL TELLS THE CALLER TO DO INSTEAD.
+ *
+ * `ChannelChatAddressedError`'s message read "Mention an agent with toAgents to
+ * have it act", which was correct for exactly the four days between the
+ * 2026-07-31 narrowing and rollback §1. After §1, `toAgents` is a `z.never()`
+ * in `schema.ts#removedParam`: a caller who follows this instruction gets a
+ * SECOND 400, from a different layer, naming a param the first error just
+ * recommended. Nothing pinned the sentence, so nothing noticed — the MCP twin
+ * (`channel-post-notes.ts#CHAT_ADDRESSED_REFUSAL`) was rewritten at the time and
+ * this HTTP one was missed.
+ *
+ * The message is the whole product surface of this error (the route returns it
+ * verbatim in the envelope), so it is pinned like any other shipped string.
+ */
+describe("the chat+addressed refusal names a route that still EXISTS", () => {
+  const message = () => new ChannelChatAddressedError("toUserId").message;
+
+  it("names the field that caused it", () => {
+    expect(message()).toContain("toUserId");
+    expect(new ChannelChatAddressedError("to").message).toContain("(to)");
+  });
+
+  it("offers the two things a caller can actually do", () => {
+    // Both halves, because the refusal exists precisely so the CALLER picks
+    // which one they meant rather than the server guessing.
+    expect(message()).toContain("Drop the address to send it as chat");
+    expect(message()).toContain('intent "request"');
+  });
+
+  it("names NO removed param — following it must not produce a second 400", () => {
+    for (const gone of ["toAgent", "toAgents", "as_agent", "participants"]) {
+      expect(message(), `the refusal still recommends ${gone}`).not.toContain(gone);
+    }
+    expect(message()).not.toMatch(/\bMention an agent\b/);
+  });
+
+  it("says the same thing the MCP twin says, so the two lanes cannot drift again", () => {
+    // Not a string comparison — the two surfaces phrase it for different
+    // callers (a field name here, a tool argument there). What must match is
+    // the DECISION offered: drop the address, or send it as a request.
+    const mcp =
+      'A message with `intent`="chat" cannot be addressed — nothing was sent. "chat" means the people in the room and reaches nobody\'s machine; `to` means the opposite, and the server refuses the pair rather than guessing which half you meant. Send it as CHAT by dropping `to`, or as a REQUEST by dropping `intent` (a request is the default).';
+    for (const text of [message(), mcp]) {
+      expect(text).toMatch(/drop(ping)? the address|dropping `to`/i);
+      expect(text).toMatch(/request/i);
+      expect(text).not.toMatch(/toAgents?\b/);
+    }
+  });
+});

@@ -20,6 +20,7 @@ import {
   MessageReadQuerySchema,
   AwaitQuerySchema,
   ConsentListQuerySchema,
+  SessionStateQuerySchema,
 } from "./schema";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -103,5 +104,36 @@ describe("ConsentListQuerySchema", () => {
     expect(ConsentListQuerySchema.parse({ status: "decided" }).status).toBe("decided");
     expect(ConsentListQuerySchema.parse({ status: "all" }).status).toBe("all");
     expect(ConsentListQuerySchema.safeParse({ status: "allowed" }).success).toBe(false);
+  });
+});
+
+/**
+ * F-145 — read-session-state's `?channelId=`.
+ *
+ * It had NO schema: `src/app/api/channels/sessions/route.ts` read the raw param
+ * and handed it to `.eq("channel_id", …)`, so a non-uuid reached Postgres as a
+ * uuid cast and came back as a driver error `mapChannelError` does not own —
+ * a 500 for a malformed request. It is the second `?channelId=` on this
+ * surface and it now parses exactly like the first.
+ */
+describe("SessionStateQuerySchema", () => {
+  it("channelId: optional uuid — the whole point is that a non-uuid is a 400", () => {
+    expect(SessionStateQuerySchema.safeParse({}).success).toBe(true);
+    expect(SessionStateQuerySchema.safeParse({ channelId: UUID }).success).toBe(true);
+    for (const bad of ["x", "", "  ", `${UUID}extra`, "'; drop table", "null"]) {
+      expect(
+        SessionStateQuerySchema.safeParse({ channelId: bad }).success,
+        JSON.stringify(bad)
+      ).toBe(false);
+    }
+  });
+
+  it("matches the consent inbox's identical param, so the two cannot drift", () => {
+    for (const value of [undefined, UUID, "x"]) {
+      const arg = value === undefined ? {} : { channelId: value };
+      expect(SessionStateQuerySchema.safeParse(arg).success).toBe(
+        ConsentListQuerySchema.safeParse(arg).success
+      );
+    }
   });
 });

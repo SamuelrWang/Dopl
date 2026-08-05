@@ -75,9 +75,17 @@ export function mapSessionStateRow(row: SessionStateRow): ChannelSessionState {
     channelId: row.channel_id,
     threadId: row.task_id,
     name: row.name,
-    // The column carries a CHECK constraint on exactly these three values, so
-    // the cast is safe at the boundary (the same pattern the rest of this file
-    // uses for the untyped admin client).
+    // The column carries a CHECK constraint on exactly these three values, and
+    // this is the same cast the rest of this file makes for the untyped admin
+    // client.
+    //
+    // F-145 — IT IS AN ASSERTION, NOT A CHECK, and the migration it leans on is
+    // UNAPPLIED (F-144's flagged gap), so today it leans on nothing. The value
+    // ends up spliced into `dopl_channel(op="read_sessions")`'s SERVER
+    // NARRATION, so the layer that actually holds is the render's closed-set
+    // test (`channel-ops-read.formatSessionLine`), which says
+    // "(unrecognized state)" rather than emitting whatever the row carried.
+    // Named here so the next reader does not take this cast for a guarantee.
     state: row.state as SessionPillState,
     channelName: row.channel_name,
     threadTitle: row.thread_title,

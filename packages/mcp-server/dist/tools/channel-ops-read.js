@@ -214,6 +214,36 @@ async function opReadSessions(client, ref) {
     lines.push(`\nEach line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished — its window is still open). To act on what a session is doing, open its window in the Dopl app; to reach the PEER a thread is with, post into that thread.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
+/**
+ * The three states this render knows how to say, and the label for anything
+ * else.
+ *
+ * F-145 — THE ONE FIELD ON THIS LINE THAT WENT IN RAW. `channelName`,
+ * `threadTitle`, `threadId` and `name` all pass through `inlineOr`, which
+ * neutralizes and wraps them in a code span; `state` was spliced verbatim into
+ * SERVER NARRATION — the zone a model reads as the tool speaking, not as
+ * quoted content — with nothing between the database and the sentence. Its only
+ * guard was the column's `CHECK (state IN (…))`, which is a guard in a
+ * migration that is UNAPPLIED, plus an unchecked `as SessionPillState` in
+ * `collab-dto.ts`. A row whose state carried a newline could open a second
+ * `_dopl_status` block, which is the shape the whole untrusted-text discipline
+ * exists to stop.
+ *
+ * UNREACHABLE TODAY and defended anyway, on the same reasoning
+ * `20260731100000_channels_name_topic_bounds.sql` states about its own
+ * constraints: the layer that has to hold is the one that survives the NEXT
+ * writer. This column's writer does not exist yet (F-144's delivery gap), the
+ * CHECK is not on the live database, and a closed set is the cheapest predicate
+ * in this file. It is a MEMBERSHIP test rather than a neutralizer because the
+ * set is closed and three elements long — anything outside it is not a state we
+ * can render, so we say that instead of rendering it.
+ */
+const SESSION_STATES = new Set([
+    "working",
+    "idle",
+    "ended",
+]);
+const UNKNOWN_STATE = "(unrecognized state)";
 /** One session row, all peer-influenced text neutralized. */
 function formatSessionLine(s) {
     const where = s.channelName ? ` · in ${(0, channel_shared_1.inlineOr)(s.channelName, NO_NAME)}` : "";
@@ -222,7 +252,8 @@ function formatSessionLine(s) {
         : s.threadId
             ? ` · thread ${(0, channel_shared_1.inlineOr)(s.threadId, NO_TITLE)}`
             : " · no thread";
-    return `- **${(0, channel_shared_1.inlineOr)(s.name, NO_NAME)}** — ${s.state}${on}${where}`;
+    const state = SESSION_STATES.has(s.state) ? s.state : UNKNOWN_STATE;
+    return `- **${(0, channel_shared_1.inlineOr)(s.name, NO_NAME)}** — ${state}${on}${where}`;
 }
 async function opListThreads(client, ref, selfUserId = null) {
     // Hot-path parity with read/await: hand the ref straight to the route

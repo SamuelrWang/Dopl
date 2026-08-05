@@ -262,6 +262,37 @@ export async function opReadSessions(
   return ok(lines.join("\n"));
 }
 
+/**
+ * The three states this render knows how to say, and the label for anything
+ * else.
+ *
+ * F-145 — THE ONE FIELD ON THIS LINE THAT WENT IN RAW. `channelName`,
+ * `threadTitle`, `threadId` and `name` all pass through `inlineOr`, which
+ * neutralizes and wraps them in a code span; `state` was spliced verbatim into
+ * SERVER NARRATION — the zone a model reads as the tool speaking, not as
+ * quoted content — with nothing between the database and the sentence. Its only
+ * guard was the column's `CHECK (state IN (…))`, which is a guard in a
+ * migration that is UNAPPLIED, plus an unchecked `as SessionPillState` in
+ * `collab-dto.ts`. A row whose state carried a newline could open a second
+ * `_dopl_status` block, which is the shape the whole untrusted-text discipline
+ * exists to stop.
+ *
+ * UNREACHABLE TODAY and defended anyway, on the same reasoning
+ * `20260731100000_channels_name_topic_bounds.sql` states about its own
+ * constraints: the layer that has to hold is the one that survives the NEXT
+ * writer. This column's writer does not exist yet (F-144's delivery gap), the
+ * CHECK is not on the live database, and a closed set is the cheapest predicate
+ * in this file. It is a MEMBERSHIP test rather than a neutralizer because the
+ * set is closed and three elements long — anything outside it is not a state we
+ * can render, so we say that instead of rendering it.
+ */
+const SESSION_STATES: ReadonlySet<string> = new Set([
+  "working",
+  "idle",
+  "ended",
+]);
+const UNKNOWN_STATE = "(unrecognized state)";
+
 /** One session row, all peer-influenced text neutralized. */
 function formatSessionLine(s: ChannelSessionState): string {
   const where = s.channelName ? ` · in ${inlineOr(s.channelName, NO_NAME)}` : "";
@@ -270,7 +301,8 @@ function formatSessionLine(s: ChannelSessionState): string {
     : s.threadId
       ? ` · thread ${inlineOr(s.threadId, NO_TITLE)}`
       : " · no thread";
-  return `- **${inlineOr(s.name, NO_NAME)}** — ${s.state}${on}${where}`;
+  const state = SESSION_STATES.has(s.state) ? s.state : UNKNOWN_STATE;
+  return `- **${inlineOr(s.name, NO_NAME)}** — ${state}${on}${where}`;
 }
 
 export async function opListThreads(

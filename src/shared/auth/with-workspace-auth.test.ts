@@ -360,8 +360,19 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
    * with exactly that device token, and requiring a session credential would
    * refuse the caller the value was invented for.
    *
-   * This is what makes rollback §3.4's third case hold: an external MCP post
-   * cannot buy itself the requester window the operator's own typing gets.
+   * WHAT THAT DOES AND DOES NOT BUY (corrected 2026-08-05, F-145). This block
+   * used to end "an external MCP post cannot buy itself the requester window the
+   * operator's own typing gets", which overstates it: the bound is on the
+   * `desktop-ui` VALUE, not on the window. `targeting.requesterTaskOpen` accepts
+   * EITHER stamp, and `desktop-session` is credential-agnostic by design — so an
+   * agent token that sends `X-Dopl-Runtime: desktop-session` clears the stamp
+   * conjunct, and with the identity pair (author === me AND task creator === me)
+   * it opens a window on that account's machine. Not a regression (there was no
+   * bound at all before this change) and not a PEER's path (the identity pair is
+   * what stops a peer, and it holds). It is the account's own credential acting
+   * as the account, so the real boundary is TOKEN CUSTODY. The cases below pin
+   * what the bound actually is: `desktop-ui` is refused to an agent token, and
+   * `desktop-session` is not.
    */
   describe("the desktop-ui credential bound", () => {
     it("a SESSION caller may claim desktop-ui", async () => {
@@ -382,6 +393,15 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
     });
 
     it("...and that SAME caller still gets desktop-session, which is its own lane", async () => {
+      // READ THIS AS THE LIMIT OF THE BOUND, not as a loophole to close (F-145).
+      // A desktop-spawned session authenticates with exactly this device token,
+      // so the value must stay credential-agnostic or the caller it exists for
+      // is refused. The consequence is that an agent token CAN clear
+      // `targeting.requesterTaskOpen`'s stamp conjunct by claiming this value —
+      // opening a window on its own account's machine, which is what §3.5's
+      // `handoff` offers as a declared feature. The stopper for a PEER is the
+      // identity pair, not this header; for the account itself it is token
+      // custody. Do not "fix" this by bounding the value.
       grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
       state.token = { userId: "user-1", scopes: ["dopl.write"], tokenId: "tok-1" };
       const res = await echoRuntime(

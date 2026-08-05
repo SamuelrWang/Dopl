@@ -324,6 +324,49 @@ const WORKSPACE_ARG_SHAPE = {
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
 
+/**
+ * F-145 — AN UNKNOWN ARGUMENT IS REFUSED, NOT STRIPPED.
+ *
+ * THE DEFECT. Every tool here was registered with a RAW SHAPE, which the SDK
+ * turns into a plain `z.object` and parses with `safeParseAsync`. A plain
+ * `z.object` DROPS unknown keys, so `dopl_channel {op:"post", body:"hi",
+ * to_agent:"quartz"}` was accepted, `to_agent` vanished before the handler saw
+ * `args`, the post landed UNADDRESSED, and `opPost` narrated a success. The
+ * route layer already refuses exactly this shape — `schema.ts#removedParam`
+ * declares the deleted named-agent params as `z.never()` precisely because "a
+ * plain deletion is SILENT: zod strips unknown keys … which is the
+ * invisible-delivery failure the addressing contract existed to prevent" — and
+ * the MCP layer in front of it had the hole the route had closed.
+ *
+ * IT WAS REACHABLE, not theoretical: `closedThreadNote` shipped a sentence
+ * teaching `to_agent="<handle>"` on every post into a closed thread, so the
+ * tool's own output taught the argument its own parser then swallowed.
+ *
+ * THE FIX IS THE SCHEMA, because copy fixes do not compose — the model can
+ * invent a param from a stale blog post, a cached tool list, or its own prior.
+ * `z.strictObject` sets zod's catchall to `never`, so an unrecognized key is an
+ * `unrecognized_keys` issue that the SDK surfaces as `-32602 … Unrecognized key:
+ * "to_agent"` — the field is NAMED, which is what lets the calling agent
+ * correct itself instead of believing a delivery that never happened.
+ *
+ * WHY `registerTool` AND NOT `tool()`. The SDK's positional `tool()` overload
+ * only accepts a RAW SHAPE: `isZodRawShapeCompat` returns false for a schema
+ * INSTANCE, and the arm below it then reads the object as annotations and
+ * throws "expected a Zod schema or ToolAnnotations". The config-object form
+ * (`registerTool`) takes a built schema, and `normalizeObjectSchema` passes an
+ * object schema through untouched. Verified against the pinned SDK: the
+ * published JSON Schema is byte-identical apart from a gained
+ * `additionalProperties: false` — no property, description, cap or `required`
+ * entry changes — so this narrows what is ACCEPTED and nothing else.
+ *
+ * COST, stated: a caller that today sends a stray key gets an error where it
+ * used to get a silent strip. That is the point, and it is the same trade the
+ * route made. It is pinned in `server.test.ts`.
+ */
+function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
+  return z.strictObject(shape) as unknown as z.ZodObject<S>;
+}
+
 export function createServer(
   client: DoplClient,
   options: {
@@ -769,10 +812,9 @@ export function createServer(
       return appendDoplStatus(result, sessionEffective(), caller);
     };
 
-    server.tool(
+    server.registerTool(
       name,
-      description,
-      enhancedSchema,
+      { description, inputSchema: strictInput(enhancedSchema) },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       wrapped as any,
     );
@@ -788,10 +830,9 @@ export function createServer(
     schema: S,
     handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>,
   ): void {
-    server.tool(
+    server.registerTool(
       name,
-      description,
-      schema,
+      { description, inputSchema: strictInput(schema) },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       withDoplStatus(handler as any, sessionEffective, caller) as any,
     );

@@ -17,16 +17,30 @@ type Handler = (args: Record<string, unknown>) => Promise<{
 
 const registry = vi.hoisted(() => ({
   tools: new Map<string, Handler>(),
+  schemas: new Map<string, unknown>(),
   instructions: "",
 }));
 
+/**
+ * The mock exposes `registerTool` and DELIBERATELY NOT `tool` (F-145). The
+ * positional `tool()` overload cannot carry a built schema — the SDK reads a
+ * schema instance as annotations and throws — so it is the one API through
+ * which the strict input schema silently degrades back to "unknown keys are
+ * dropped". A regression to it does not quietly re-register here; it is a
+ * TypeError naming the method.
+ */
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
     constructor(_info: unknown, opts: { instructions?: string }) {
       registry.instructions = opts?.instructions ?? "";
     }
-    tool(name: string, _d: string, _s: unknown, handler: Handler) {
+    registerTool(
+      name: string,
+      config: { description?: string; inputSchema?: unknown },
+      handler: Handler,
+    ) {
       registry.tools.set(name, handler);
+      registry.schemas.set(name, config?.inputSchema);
     }
   },
 }));
@@ -71,6 +85,7 @@ function mockClient(directory: WorkspaceListItem[]): DoplClient {
 
 function build(options: Parameters<typeof createServer>[1]) {
   registry.tools.clear();
+  registry.schemas.clear();
   const client = mockClient(options?.directory ?? []);
   createServer(client, { scopes: ["dopl.read", "dopl.write"], ...options });
   const map = registry.tools.get("dopl_map");

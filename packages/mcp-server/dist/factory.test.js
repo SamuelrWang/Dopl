@@ -10,9 +10,13 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
+// `registerTool` and deliberately NOT `tool` — see the note on the same mock in
+// `server.test.ts` (F-145): the positional overload cannot carry a strict input
+// schema, so a regression to it must be a TypeError here rather than a silent
+// re-registration.
 vitest_1.vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
     McpServer: class {
-        tool() { }
+        registerTool() { }
     },
 }));
 const factory_js_1 = require("./factory.js");

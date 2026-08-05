@@ -46,6 +46,19 @@ import type { ChannelMessage, DoplClient } from "@dopl/client";
  * drives it, and the MCP surface deliberately has no counterpart — so telling an
  * agent to "reopen it" full stop would send it hunting for an op that does not
  * exist. Opening a NEW thread is the action it can actually take.
+ *
+ * F-145 — THE ADDRESSING CLAUSE TAUGHT A PARAM THAT NO LONGER EXISTS. Until now
+ * this sentence read `to_agent="<handle>" starts that agent, to="<member>"
+ * triggers their machine`, which survived the rollback's §1 deletion of named
+ * agents and shipped on EVERY post into a closed thread. It contradicted the
+ * tool's own law (`channel-description.ts`: "There is no way to address an agent
+ * by name") and it was ACTIONABLE: the MCP SDK parses arguments with a
+ * NON-STRICT object, so a `to_agent` an agent learned here was accepted and
+ * silently dropped, and the post landed unaddressed while the result narrated
+ * success. That is the exact invisible delivery the route's `z.never()` params
+ * exist to refuse. The copy now names the one address there is, and the
+ * class is closed at the schema (`server.ts` registers every tool with a
+ * `z.strictObject`, so an unknown key is a -32602 that names the field).
  */
 export declare function closedThreadNote(channelId: string): string;
 /**

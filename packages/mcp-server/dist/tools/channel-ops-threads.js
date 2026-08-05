@@ -124,12 +124,37 @@ handoff) {
     // SPAWN-WITH-HANDOFF (rollback §3.5) — a create that DECLARED handoff does NOT
     // wait for the reply here: a full session opens on the operator's OWN machine
     // and carries the exchange, so telling this external session to arm `await`
-    // would put two agents on one thread, each trying to consume the reply. Say
-    // plainly that the machine took it, and stop.
+    // would put two agents on one thread, each trying to consume the reply.
+    //
+    // F-145 — IT IS A REQUEST, AND THE COPY SAID IT WAS AN OUTCOME. This branch
+    // shipped "A full session IS OPENING on your operator's Dopl app … You are
+    // done", said unconditionally, off nothing but the caller's own flag. The
+    // server has no evidence of any of it: the handoff is a metadata STAMP that a
+    // desktop LISTENER may later act on, and `session-dispatch
+    // .maybeOpenRequesterSession` answers false — silently — when window mode is
+    // off, when `requesterTaskOpen` refuses, when the window budget is spent, and
+    // (the common case) when the operator's desktop is not running at all. So the
+    // sentence could be false in four ways, and its consequence was the worst
+    // available: an agent told "you are done" leaves NOBODY awaiting the reply,
+    // which is the same abandoned exchange the wake guidance exists to prevent.
+    //
+    // WHY THE FIX IS COPY AND NOT A CHECK. The non-handoff branch decides from the
+    // OBSERVED runtime (`createThreadReplyLines`), and there is no equivalent
+    // observation here: the desktop's decision happens minutes later, on another
+    // machine, and never reports back. So this states the REQUEST as a request,
+    // keeps the do-not-race instruction as the default (a real handoff is the
+    // common case and two watchers on one thread is a genuine failure), and adds
+    // the fallback the old copy denied the caller — how to notice that nothing
+    // picked it up, and what to do then.
     if (handoff) {
+        const since = created.openingSeq === null
+            ? `<the seq of your opening message, from dopl_channel(op="read", channel="${ch.id}", limit=1)>`
+            : String(created.openingSeq);
         return (0, respond_1.ok)([
             `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}, WITH HANDOFF.`,
-            `A full session is opening on your operator's Dopl app to drive this thread — it, not you, carries the conversation with ${member.label} from here. Do NOT arm op="await" on this thread: the reply is the operator's window's to handle, and a second watcher here would race it. You are done with this thread unless your operator asks you to look again; if you do, op="read"/op="get_thread" show its state without claiming the reply.`,
+            `The handoff was REQUESTED, not confirmed. The thread is stamped for your operator's Dopl app to pick up and drive; this server hands the request off and never learns whether a window opened, and the app opens none if it is not running, if session windows are off, or if its window budget is spent.`,
+            `So: do NOT arm op="await" yet — if a session DID open, it owns the reply, and a second watcher here would race it for the same message. Check instead with dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}") — a session that took the thread shows activity on it.`,
+            `IF NOTHING PICKS IT UP (no progress and no reply after a few minutes), the handoff did not land, and nobody is waiting on ${member.label}. Say so to your operator — they can open the thread in the Dopl app — or drive the exchange yourself from here with dopl_channel(op="await", channel="${ch.id}", since=${since}).`,
         ].join("\n"));
     }
     const cursor = created.openingSeq === null

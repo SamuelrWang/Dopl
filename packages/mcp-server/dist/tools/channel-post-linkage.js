@@ -58,9 +58,22 @@ const OPEN_THREAD_WARN_MAX = 5;
  * drives it, and the MCP surface deliberately has no counterpart — so telling an
  * agent to "reopen it" full stop would send it hunting for an op that does not
  * exist. Opening a NEW thread is the action it can actually take.
+ *
+ * F-145 — THE ADDRESSING CLAUSE TAUGHT A PARAM THAT NO LONGER EXISTS. Until now
+ * this sentence read `to_agent="<handle>" starts that agent, to="<member>"
+ * triggers their machine`, which survived the rollback's §1 deletion of named
+ * agents and shipped on EVERY post into a closed thread. It contradicted the
+ * tool's own law (`channel-description.ts`: "There is no way to address an agent
+ * by name") and it was ACTIONABLE: the MCP SDK parses arguments with a
+ * NON-STRICT object, so a `to_agent` an agent learned here was accepted and
+ * silently dropped, and the post landed unaddressed while the result narrated
+ * success. That is the exact invisible delivery the route's `z.never()` params
+ * exist to refuse. The copy now names the one address there is, and the
+ * class is closed at the schema (`server.ts` registers every tool with a
+ * `z.strictObject`, so an unknown key is a -32602 that names the field).
  */
 function closedThreadNote(channelId) {
-    return `THAT THREAD IS CLOSED, and the post landed anyway (it is stored, attributed, and on the thread's card). Closing records the OUTCOME and stops the thread's PASSIVE routing: peers' sessions stop being woken by activity in it, so an unaddressed post here can sit unread. It does NOT stop the thread accepting posts, and addressing somebody still reaches them: to_agent="<handle>" starts that agent, to="<member>" triggers their machine. If this was a final word after the close echo, you are done. If it is new work, open a new thread with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="..."), or ask a human to reopen the closed one (reopening is a web action; this tool has no reopen op).`;
+    return `THAT THREAD IS CLOSED, and the post landed anyway (it is stored, attributed, and on the thread's card). Closing records the OUTCOME and stops the thread's PASSIVE routing: peers' sessions stop being woken by activity in it, so an unaddressed post here can sit unread. It does NOT stop the thread accepting posts, and addressing a PERSON still reaches them: to="<member>" triggers that member's machine, and their side decides what runs. There is no way to address an agent by name. If this was a final word after the close echo, you are done. If it is new work, open a new thread with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="..."), or ask a human to reopen the closed one (reopening is a web action; this tool has no reopen op).`;
 }
 /**
  * Q7 — the SELF-VERIFICATION line for a post: did this land as a continuation

@@ -37,7 +37,13 @@
  * Captured through the real registrar with a recording `register` and a stub
  * client (registration is all this needs — no handler ever runs).
  */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+const node_fs_1 = require("node:fs");
+const node_path_1 = __importDefault(require("node:path"));
+const typescript_1 = __importDefault(require("typescript"));
 const vitest_1 = require("vitest");
 const channel_1 = require("./channel");
 function description() {
@@ -52,6 +58,35 @@ function description() {
     return text;
 }
 const DESCRIPTION = description();
+/**
+ * THE SECOND GUARD IS AN ABSENCE, and it is the stronger form of what it
+ * replaced.
+ *
+ * It used to be a truth guard: any sentence asserting that ENGAGEMENT happens
+ * had to name the HUMAN it depended on, because `recordAgentEngagement` opened
+ * with `if (ctx.source === "agent") return;` and every post through this tool
+ * is agent-credentialed — so "address it by handle again, that re-engages it"
+ * (shipped until 2026-07-31) promised the reader an outcome the reader could
+ * not cause.
+ *
+ * Engagement is GONE (channels rollback §1), and so is every other named-agent
+ * surface. A description that still mentions any of them does not merely
+ * mislead about a mechanism; it names ops an MCP client will reject as invalid
+ * enum values. So the pin is total: the words must not appear.
+ *
+ * MODULE SCOPE since F-145, because the DESCRIPTION was never the whole shipped
+ * surface — see the source-wide scan at the bottom of this file.
+ */
+const REMOVED_VOCABULARY = [
+    ["engagement", /\bengage/i],
+    ["summoning", /\bsummon/i],
+    ["to_agent / to_agents", /to_agents?\b/],
+    ["as_agent", /as_agent/],
+    ["breakout rooms", /breakout|participant set|\bparticipants\b/i],
+    ["the thread-open handshake", /thread-open-|handshake/i],
+    ["the agent lifecycle ops", /rename_agent|set_agent_status|disengage_agent|join_thread|leave_thread/],
+    ["the agents roster op", /op="agents"/],
+];
 (0, vitest_1.describe)("THE LAW is stated, in full, in the tool description", () => {
     (0, vitest_1.it)("is the FIRST thing after the opening line — an agent must not have to find it", () => {
         const law = DESCRIPTION.indexOf("THE LAW OF THIS ROOM");
@@ -192,32 +227,6 @@ const DESCRIPTION = description();
         const bare = "Post it and that member's listener is then the only one triggered.";
         (0, vitest_1.expect)(OTHER_SIDE.test(bare) && STARTS.test(bare) && !KEYED.test(bare), "the negative guard would not catch a bare claim").toBe(true);
     });
-    /**
-     * THE SECOND GUARD IS NOW AN ABSENCE, and it is the stronger form of what it
-     * replaced.
-     *
-     * It used to be a truth guard: any sentence asserting that ENGAGEMENT happens
-     * had to name the HUMAN it depended on, because `recordAgentEngagement` opened
-     * with `if (ctx.source === "agent") return;` and every post through this tool
-     * is agent-credentialed — so "address it by handle again, that re-engages it"
-     * (shipped until 2026-07-31) promised the reader an outcome the reader could
-     * not cause.
-     *
-     * Engagement is GONE (channels rollback §1), and so is every other named-agent
-     * surface. A description that still mentions any of them does not merely
-     * mislead about a mechanism; it names ops an MCP client will reject as invalid
-     * enum values. So the pin is total: the words must not appear.
-     */
-    const REMOVED_VOCABULARY = [
-        ["engagement", /\bengage/i],
-        ["summoning", /\bsummon/i],
-        ["to_agent / to_agents", /to_agents?\b/],
-        ["as_agent", /as_agent/],
-        ["breakout rooms", /breakout|participant set|\bparticipants\b/i],
-        ["the thread-open handshake", /thread-open-|handshake/i],
-        ["the agent lifecycle ops", /rename_agent|set_agent_status|disengage_agent|join_thread|leave_thread/],
-        ["the agents roster op", /op="agents"/],
-    ];
     (0, vitest_1.it)("never mentions a removed named-agent surface", () => {
         const found = REMOVED_VOCABULARY.filter(([, re]) => re.test(DESCRIPTION)).map(([label]) => label);
         (0, vitest_1.expect)(found, `the description names surfaces that no longer exist: ${found.join(", ")}`).toEqual([]);
@@ -262,4 +271,91 @@ const DESCRIPTION = description();
             (0, vitest_1.expect)(DESCRIPTION, `op="${op}" lost its documentation`).toContain(`"${op}"`);
         }
     });
+});
+/**
+ * F-145 — THE SCAN THAT SHOULD HAVE EXISTED: every SHIPPED STRING, not just the
+ * description.
+ *
+ * The guard above reads `CHANNEL_DESCRIPTION` and nothing else, and
+ * `channel-discovery.test.ts` reads `buildInstructions` and nothing else. Both
+ * were green while `closedThreadNote` — emitted on EVERY post into a closed
+ * thread — taught `to_agent="<handle>" starts that agent`, a param deleted in
+ * rollback §1. A tool result is read by exactly the same model that reads the
+ * description, and it arrives at the moment the agent is deciding what to do
+ * next, so it teaches HARDER. Two scopes and neither covered the result lane.
+ *
+ * SO THE SCAN IS THE WHOLE SURFACE, and it reads the AST rather than the raw
+ * text: `ts.createSourceFile` gives back string / template literals only, so a
+ * COMMENT may still discuss `to_agent` (this file's own history depends on
+ * being able to) while a shipped sentence may not. Every `channel-*.ts` module
+ * in this directory is in scope — descriptions, `.describe()` prose, error
+ * copy, render helpers and result lines are all the same lane to a reader.
+ *
+ * WHEN THIS FAILS, THE FIX IS THE WORDS. There is no allowlist on purpose: an
+ * exemption is how the closed-thread note survived four phases of the rollback.
+ * If a legitimate English sentence collides (the ad-hoc legend's "no recorded
+ * parties" was "no participants" until this scan landed), rephrase it — the
+ * banned tokens are the removed PRODUCT's vocabulary and an agent cannot tell
+ * a descriptive use from an instructive one.
+ */
+(0, vitest_1.describe)("no SHIPPED STRING in the channel tool teaches removed vocabulary", () => {
+    // Resolved off `process.cwd()` (the package root under vitest) for the reason
+    // `parity.test.ts` states: `import.meta` is disallowed by this package's
+    // CommonJS tsc target and `__dirname` is not guaranteed under the
+    // ESM-transformed test.
+    const HERE = node_path_1.default.resolve(process.cwd(), "src", "tools");
+    /** Every non-test `channel-*.ts` module — the tool's whole authored surface. */
+    const sources = (0, node_fs_1.readdirSync)(HERE)
+        .filter((f) => (f.startsWith("channel-") || f === "channel.ts") &&
+        f.endsWith(".ts") &&
+        !f.endsWith(".test.ts"))
+        .sort();
+    /** Literal TEXT only — comments are not literals, so they are never scanned. */
+    function shippedStrings(file) {
+        const source = typescript_1.default.createSourceFile(file, (0, node_fs_1.readFileSync)(node_path_1.default.join(HERE, file), "utf8"), typescript_1.default.ScriptTarget.Latest, true);
+        const out = [];
+        const walk = (node) => {
+            if (typescript_1.default.isStringLiteral(node) ||
+                typescript_1.default.isNoSubstitutionTemplateLiteral(node) ||
+                typescript_1.default.isTemplateHead(node) ||
+                typescript_1.default.isTemplateMiddle(node) ||
+                typescript_1.default.isTemplateTail(node)) {
+                out.push({
+                    text: node.text,
+                    line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+                });
+            }
+            typescript_1.default.forEachChild(node, walk);
+        };
+        walk(source);
+        return out;
+    }
+    (0, vitest_1.it)("finds the modules at all (a scan over nothing is not a guard)", () => {
+        (0, vitest_1.expect)(sources.length).toBeGreaterThan(10);
+        (0, vitest_1.expect)(sources).toContain("channel-post-linkage.ts");
+        (0, vitest_1.expect)(sources).toContain("channel-ops-write.ts");
+        (0, vitest_1.expect)(sources).toContain("channel-render-threads.ts");
+        // …and it is really reading strings out of them.
+        (0, vitest_1.expect)(shippedStrings("channel-post-linkage.ts").length).toBeGreaterThan(3);
+    });
+    (0, vitest_1.it)("the scan can SEE the defect it was written for", () => {
+        // RED PROOF, inline: the exact sentence that shipped until F-145, run
+        // through the same predicate. A scan that cannot fail is not a guard.
+        const shipped = 'to_agent="<handle>" starts that agent, to="<member>" triggers their machine.';
+        const hit = REMOVED_VOCABULARY.filter(([, re]) => re.test(shipped));
+        (0, vitest_1.expect)(hit.map(([label]) => label)).toEqual(["to_agent / to_agents"]);
+    });
+    for (const file of sources) {
+        (0, vitest_1.it)(`${file} ships no removed vocabulary`, () => {
+            const found = [];
+            for (const { text, line } of shippedStrings(file)) {
+                for (const [label, re] of REMOVED_VOCABULARY) {
+                    if (re.test(text)) {
+                        found.push(`${file}:${line} [${label}] ${JSON.stringify(text.slice(0, 120))}`);
+                    }
+                }
+            }
+            (0, vitest_1.expect)(found, `a shipped string teaches a surface that no longer exists:\n${found.join("\n")}`).toEqual([]);
+        });
+    }
 });

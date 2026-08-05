@@ -67,7 +67,12 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
     constructor(_info: unknown, opts: { instructions?: string }) {
       registry.instructions = opts?.instructions ?? "";
     }
-    tool(name: string, _d: string, _s: unknown, handler: Handler) {
+    // `registerTool`, not `tool` — see server.test.ts's note (F-145).
+    registerTool(
+      name: string,
+      _config: { description?: string; inputSchema?: unknown },
+      handler: Handler,
+    ) {
       registry.tools.set(name, handler);
     }
   },

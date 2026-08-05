@@ -24,6 +24,12 @@ import type { ChannelContext } from "./service-shared";
  * lands. The op reports that honestly ("no live sessions") rather than
  * fabricating state. The chosen delivery is push-on-state-change (plan §5
  * option a), not a heartbeat: a handful of writes per session lifetime.
+ *
+ * F-145 — AND THE `[]` IS NOW ACTUALLY WHAT COMES BACK. The migration is
+ * unapplied, so the select answered `PGRST205` and the throw became a 500; the
+ * repository degrades that ONE code to the empty list (and nothing else — see
+ * `repository-collab.listSessionStates`), which is what makes this paragraph
+ * true rather than aspirational.
  */
 export async function listSessionStates(
   ctx: ChannelContext,

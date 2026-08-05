@@ -231,3 +231,61 @@ test("a HELD peer pick collapses to the steer when a re-init drops the counterpa
   assert.equal(sent[before][0], "send",
     "the words stay on this machine rather than posting with no addressee");
 });
+
+// ── FIX F8: the VERSION-SKEW refusal, which nothing above ever drives ─────────
+//
+// A preload with NO `sendToPeer` — a version-skewed install, or session.js's own standalone
+// stub, which deliberately omits it — used to return SILENTLY: the draft survived, the click
+// did nothing, and the glyph still said Send. `composer.send()` answers FALSE and says why,
+// and `session.js` leaves the draft alone on a false (`if (!composer.send(text)) return;`).
+//
+// F-145 — THIS PATH HAD NO TEST. Every case above installs a working `sendToPeer` on the
+// bridge, so the guard at session-address-ui.js's `send()` was never entered and the whole
+// refusal (predicate, copy, and the controller's early return) could be deleted with all 2293
+// desktop tests green. Driven here on the REAL booted controller by taking the bridge member
+// away, which is exactly the shape a skewed preload presents, then putting it back so the
+// file's one stateful controller is left as it was found.
+
+test("FIX F8: a bridge with NO sendToPeer refuses, says why, and KEEPS the draft", () => {
+  // The case above dropped the counterparty on purpose; give it back, since a refusal is only
+  // reachable once there IS a peer to address.
+  feed({ type: "init", sessionId: "s1", channelName: "Ops", taskTitle: "Ship it", from: "David" });
+  pill.fire("click");
+  rowsOf()[1].fire("mousedown", { preventDefault() {} }); // address the peer
+  assert.equal(pillLabel.textContent, "Message David");
+
+  const realSendToPeer = globalThis.doplSession.sendToPeer;
+  delete globalThis.doplSession.sendToPeer; // the version-skewed preload
+  try {
+    steer.value = "  can you take this one?  ";
+    const before = sent.length;
+    send.fire("click");
+
+    // NOTHING left this machine — not as a peer post, and not smuggled into the steer lane.
+    assert.equal(sent.length, before, "a missing bridge member must not fall through to send()");
+    // The draft is still there, so the operator can retry after a restart without retyping.
+    assert.equal(steer.value, "  can you take this one?  ", "a refusal leaves the draft in the field");
+    // And it SAYS so: silence is the defect this fix exists to remove.
+    const painted = stream.children.map((c) => textOf(c)).join("\n");
+    assert.match(painted, /Could not send that message to the peer/);
+    assert.match(painted, /Restart Dopl/);
+  } finally {
+    globalThis.doplSession.sendToPeer = realSendToPeer;
+  }
+});
+
+test("FIX F8: the copy is the module's own constant, so the notice cannot drift from it", () => {
+  const ui = require(R("session-address-ui.js"));
+  assert.equal(typeof ui.NO_PEER_BRIDGE, "string");
+  assert.ok(ui.NO_PEER_BRIDGE.length > 0);
+  assert.ok(!ui.NO_PEER_BRIDGE.includes("\n"), "a notice is one line");
+});
+
+test("FIX F8: with the bridge back, the SAME draft sends — the refusal was the missing member", () => {
+  // The control that makes the case above mean something: nothing else about this composer
+  // changed, so a refusal that stayed on would be visible here as a second silent failure.
+  const before = sent.length;
+  send.fire("click");
+  assert.deepEqual(sent.slice(before), [["sendToPeer", "can you take this one?"]]);
+  assert.equal(steer.value, "");
+});
