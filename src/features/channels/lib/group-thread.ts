@@ -220,6 +220,45 @@ export function calmSessionEndStatus(message: ChannelMessage): SessionStatus | n
   return status !== null && CALM_SESSION_END_STATUSES.has(status) ? status : null;
 }
 
+/**
+ * P1-7 (Samuel's decision 3, 2026-08-04) — A LOCAL SESSION ENDING IS NOT AN
+ * OUTCOME FOR THE SHARED THREAD.
+ *
+ * `session-effects.endLifecycle('operator')` used to map "the operator closed
+ * this window" onto `task_failed` + `{ ended: true }`. The flag kept the CHIP
+ * calm, but the KIND is terminal: `groupThread` folds a `task_failed` into
+ * `draft.endEvent`, `computeStatus` reads a terminal marker as the exchange's
+ * outcome, and the peer's card therefore reported that the THREAD had ended when
+ * what ended was one machine's window. The thread had not failed and had not
+ * finished; it was still open, still routing, and the other member could still be
+ * working it.
+ *
+ * THE SIGNAL IS NON-TERMINAL BY CONSTRUCTION, not by flag: it rides on
+ * `task_progress`, which `groupThread` treats as an ENTRY and never as an
+ * `endEvent`, so there is no path by which it can become the exchange's outcome.
+ * The flag then only decides how the card WORDS it.
+ *
+ * NO MIGRATION, and that was the deciding constraint. `channel_messages.kind`
+ * carries a CHECK constraint (`'message','task_started','task_progress',
+ * 'task_finished','task_failed','system'` — verified against the live database),
+ * so a first-class `session_ended` KIND is a schema change, deployed ahead of
+ * every desktop that would write it, for what is a render hint. A reserved
+ * metadata marker on an existing kind buys the same distinction with none of
+ * that — the same trade the five calm flags already made, and it is reserved on
+ * the same terms (`service-writes-metadata.CALM_FLAG_KEYS`): stripped from caller
+ * metadata unconditionally and re-stamped only onto a thread tag the poster is
+ * entitled to, so nobody can narrate somebody else's thread as stopped.
+ */
+export const SESSION_ENDED_KEY = "session_ended";
+
+/** True for the non-terminal "this member's session stopped" marker. */
+export function isSessionEndedMarker(message: ChannelMessage): boolean {
+  return (
+    message.kind === "task_progress" &&
+    message.metadata[SESSION_ENDED_KEY] === true
+  );
+}
+
 /** Collapse whitespace and cap length with an ellipsis (header previews). */
 export function truncateSummary(text: string, max = 120): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -338,6 +377,14 @@ interface Draft {
   requester: string | null;
   /** The `N` in a legacy `task-{channelId}-{N}` id, for the seq-N backfill. */
   legacySeq: number | null;
+  /**
+   * P1-7 — the latest NON-TERMINAL session-end marker (`task_progress` +
+   * `session_ended`). Deliberately NOT `endEvent`: it must never become the
+   * exchange's outcome. It only feeds {@link SessionGroup.calmEndStatus}, so the
+   * card can stop saying "Working…" for a session that stopped without claiming
+   * the shared thread ended.
+   */
+  sessionEndedEvent: ChannelMessage | null;
 }
 
 function computeStatus(draft: Draft): SessionStatus {
@@ -601,6 +648,7 @@ export function groupThread(
         responder: null,
         requester: null,
         legacySeq: null,
+        sessionEndedEvent: null,
       };
       drafts.set(taskId, draft);
       // Placeholder session object; finalized in place after the full pass.
@@ -653,6 +701,10 @@ export function groupThread(
         break;
       case "task_progress":
         draft.entries.push(message);
+        // P1-7: a session-end marker is an ordinary entry AND the source of the
+        // card's honest end note. It is recorded here rather than in `endEvent`
+        // precisely so it can never become the exchange's outcome.
+        if (isSessionEndedMarker(message)) draft.sessionEndedEvent = message;
         break;
       default:
         // A substantive body message — an agent reply, or (for a first-class
@@ -710,12 +762,20 @@ export function groupThread(
     // with NO restart after it means the session stopped, not that it is still
     // working. A later `task_started` (a resume that re-opened work) clears it.
     // Kept independent of `status` so an "active" overlay can't hide the end.
+    // P1-7 — TWO SOURCES, ONE NOTE. A terminal marker's calm flag as before, and
+    // the non-terminal `session_ended` marker for the case that used to be forced
+    // through `task_failed` just to be visible. The terminal one wins when both
+    // are present (a real end outranks a parked window), and either is cleared by
+    // a later `task_started` — a resume re-opened the work.
     const endEvent = draft.endEvent;
-    const endStatus = endEvent ? calmSessionEndStatus(endEvent) : null;
+    const terminalEnd = endEvent ? calmSessionEndStatus(endEvent) : null;
+    const marker = draft.sessionEndedEvent;
+    const source = terminalEnd !== null ? endEvent : marker;
+    const endStatus = terminalEnd !== null ? terminalEnd : marker ? "ended" : null;
     const restarted =
-      endEvent !== null &&
+      source !== null &&
       draft.startedEvent !== null &&
-      draft.startedEvent.seq > endEvent.seq;
+      draft.startedEvent.seq > source.seq;
     session.calmEndStatus = endStatus !== null && !restarted ? endStatus : null;
   }
 

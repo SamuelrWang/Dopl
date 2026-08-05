@@ -96,7 +96,43 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
  * this THREAD's high-water mark, not the channel's, and the watch hint it hands
  * back is a plain channel-wide await. Suggesting a thread-scoped wait here is
  * how an agent ends up armed on a call that cannot exist.
+ *
+ * P1-8 (2026-08-04) — AND THE HINT USED TO CARRY THE WRONG NUMBER, WHICH LOST
+ * MESSAGES SILENTLY. The line said "Highest seq shown: N", warned in prose that N
+ * is thread-local and not channel-wide, and then interpolated THAT SAME N into
+ * `op="await", since=N`. `await` is channel-wide with a strict `gt("seq", since)`,
+ * so an agent following the tool's own suggestion skipped EVERY message below N
+ * in every other exchange — permanently, since the cursor only moves forward. The
+ * warning made it worse: it told the agent the number was wrong and then used it.
+ *
+ * So the CHANNEL-WIDE max is fetched and that is what the await suggestion
+ * carries; the thread max stays as display only. It costs one extra round-trip,
+ * on a cold path — a thread-scoped read, never the poll loop — and it FAILS SOFT:
+ * if the channel-wide max cannot be read, the suggestion states no number at all
+ * rather than falling back to the one that is known to be wrong.
  */
+
+/**
+ * The channel's own highest seq, or null when it cannot be read.
+ *
+ * `limit=1` with no `since` is the NEWEST message (the route's documented
+ * behaviour, and the same shape `create_thread`'s cursor advice names), so one
+ * row answers it. Null on ANY failure — an empty channel, a transport error, a
+ * shape this build does not expect — because the whole point is that a wrong
+ * number here is worse than no number.
+ */
+async function channelWideMaxSeq(
+  client: DoplClient,
+  ref: string,
+): Promise<number | null> {
+  try {
+    const newest = await client.readChannelMessages(ref, { limit: 1 });
+    const seq = newest[newest.length - 1]?.seq;
+    return typeof seq === "number" ? seq : null;
+  } catch {
+    return null;
+  }
+}
 export async function opRead(
   client: DoplClient,
   ref: string,
@@ -158,10 +194,20 @@ export async function opRead(
     : undefined;
   lines.push(...formatMessages(messages, ref, selfUserId, agentNames));
   const lastSeq = messages[messages.length - 1].seq;
+  if (!scope) {
+    // A channel-wide read already IS the channel-wide cursor.
+    lines.push(
+      `\nHighest seq shown: ${lastSeq}. Watch for newer messages with ${watch}${lastSeq}).`,
+    );
+    return ok(lines.join("\n"));
+  }
+  // P1-8 — the await cursor is the CHANNEL's high-water mark, never this
+  // thread's. See the docblock for the message loss the old line caused.
+  const channelSeq = await channelWideMaxSeq(client, ref);
   lines.push(
-    scope
-      ? `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel; messages in other exchanges may sit above it. Watch for newer messages with ${watch}${lastSeq}): await is channel-wide and takes no thread, so it returns whatever lands next, in any exchange. Drop \`thread\` for the full transcript.`
-      : `\nHighest seq shown: ${lastSeq}. Watch for newer messages with ${watch}${lastSeq}).`,
+    channelSeq === null
+      ? `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel; messages in other exchanges may sit above it. DO NOT pass that number to \`await\`: await is channel-wide with a strict "greater than", so a thread-local seq skips every message below it in every other exchange, permanently. This call could not read the channel's own highest seq, so get it first — dopl_channel(op="read", channel="${ref}", limit=1) — and await from THAT. Drop \`thread\` for the full transcript.`
+      : `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel; messages in other exchanges may sit above it, and the channel's own highest is ${channelSeq}. Watch for newer messages with ${watch}${channelSeq}): that is the CHANNEL-wide cursor, which is the only kind await takes — passing the thread-local ${lastSeq} would skip everything between the two, permanently. await returns whatever lands next, in any exchange. Drop \`thread\` for the full transcript.`,
   );
   return ok(lines.join("\n"));
 }

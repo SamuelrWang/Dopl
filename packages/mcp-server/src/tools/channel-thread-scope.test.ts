@@ -114,21 +114,71 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(text).toContain("ONE exchange, not the whole channel");
   });
 
-  it("never offers a thread-filtered wait — await has no thread parameter", async () => {
-    const client = stubClient({
-      readChannelMessages: vi.fn(async () => [msg(44, "thread-1")]),
+  /**
+   * P1-8 — a client whose two reads DIFFER, which is the whole point: the
+   * thread-scoped call returns the exchange, the unfiltered `limit=1` call
+   * returns the channel's newest message. A stub that answered both the same
+   * (the old one did) cannot tell the fix from the bug.
+   */
+  function twoLaneClient(threadSeqs: number[], channelMax: number | null) {
+    return stubClient({
+      readChannelMessages: vi.fn(async (_ref: string, opts: Record<string, unknown>) => {
+        if (opts?.thread) return threadSeqs.map((n) => msg(n, "thread-1"));
+        if (channelMax === null) throw new Error("channel read failed");
+        return [msg(channelMax)];
+      }),
     });
+  }
 
-    const text = (await opRead(client, "general", undefined, undefined, null, "thread-1"))
-      .content[0].text;
+  it("the await cursor is the CHANNEL's max, never this thread's (P1-8)", async () => {
+    // THE BUG THIS REPLACES. The line printed "Highest seq shown: 44", warned in
+    // prose that 44 is thread-local and NOT channel-wide, and then interpolated
+    // that same 44 into `op="await", since=44`. await is channel-wide with a
+    // strict greater-than, so following the tool's own suggestion skipped every
+    // message between 44 and the channel's real head — permanently, since the
+    // cursor only moves forward. The warning made it worse: it told the agent the
+    // number was wrong and then used it.
+    const text = (
+      await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
+    ).content[0].text;
 
-    // The re-arm hint is a plain channel await on the thread's high-water seq...
-    expect(text).toContain('dopl_channel(op="await", channel="general", since=44)');
-    // ...explicitly described as unfiltered, and the seq as this thread's own.
-    expect(text).toContain("await is channel-wide and takes no thread");
-    expect(text).toContain("the highest in THIS thread, not in the channel");
+    expect(text).toContain('dopl_channel(op="await", channel="general", since=91)');
+    expect(text).not.toContain("since=44");
+    // The thread max stays as DISPLAY, which is what it was always good for.
+    expect(text).toContain("Highest seq shown: 44");
+    expect(text).toContain("the channel's own highest is 91");
+    // The reason rides along, because an agent that understands it will not
+    // reconstruct the mistake from a stale transcript.
+    expect(text).toContain("would skip everything between the two, permanently");
     // ...and nothing anywhere suggests passing a thread INTO an await.
     expect(text).not.toMatch(/op="await"[^)]*thread/);
+  });
+
+  it("FAILS SOFT: no channel-wide seq means NO number, not the wrong one", async () => {
+    // The failure mode being avoided is silent message loss, so an unreadable
+    // channel head must not fall back to the thread-local seq that caused it.
+    const text = (
+      await opRead(twoLaneClient([41, 44], null), "general", undefined, undefined, null, "thread-1")
+    ).content[0].text;
+
+    expect(text).not.toContain("since=44");
+    expect(text).not.toMatch(/since=\d/);
+    expect(text).toContain("DO NOT pass that number to `await`");
+    // …and it names the call that gets the right cursor.
+    expect(text).toContain('dopl_channel(op="read", channel="general", limit=1)');
+  });
+
+  it("a CHANNEL-wide read pays for no second round-trip", async () => {
+    // The extra read is a cold-path cost on a thread-scoped call only. The
+    // unfiltered read IS its own cursor, and this is the hot path.
+    const readChannelMessages = vi.fn<ReadSpy>();
+    readChannelMessages.mockResolvedValue([msg(44)]);
+    const client = stubClient({ readChannelMessages });
+
+    const text = (await opRead(client, "general")).content[0].text;
+
+    expect(readChannelMessages).toHaveBeenCalledTimes(1);
+    expect(text).toContain('dopl_channel(op="await", channel="general", since=44)');
   });
 
   it("an empty filtered read says it FILTERED, not that the thread is missing", async () => {

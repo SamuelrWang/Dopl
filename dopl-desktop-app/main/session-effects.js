@@ -31,12 +31,32 @@ function endedEmit(state, outcome, reason, summary) {
 }
 
 // P3: the calm lifecycle a real end posts. turn/cost caps ride extra:{capped:true} (the web renders
-// "Limit reached", task stays open); the operator End rides extra:{ended:true}. Both ride metadata
-// like `interrupted` — no server-stamped keys, no closeTask. Any other reason posts nothing.
+// "Limit reached", task stays open). Both ride metadata like `interrupted` — no server-stamped keys,
+// no closeTask. Any other reason posts nothing.
+//
+// P1-7 (Samuel's decision 3, 2026-08-04) — A LOCAL SESSION ENDING IS NOT A THREAD FAILURE.
+// The operator End used to post `task_failed` + { ended: true }. The flag kept the CHIP calm, but
+// the KIND is terminal: group-thread.ts folds a task_failed into `endEvent` and computeStatus reads
+// a terminal marker as the exchange's OUTCOME, so one member parking their own window painted the
+// SHARED thread as failed on the peer's card. Nothing had failed — the thread was open, still
+// routing, and the other member could still be working it. One machine's session had stopped.
+//
+// So the End posts a NON-TERMINAL `session_ended`: kind `task_progress`, which group-thread treats
+// as an ENTRY and never as an endEvent, so there is no path by which it can become an outcome. The
+// card still stops saying "Working…" — `groupThread` reads the marker into `calmEndStatus` — which
+// was the only thing the terminal kind was ever buying.
+//
+// WHY A METADATA MARKER AND NOT A NEW KIND: `channel_messages.kind` carries a CHECK constraint
+// (verified against the live database), so a first-class `session_ended` kind is a schema change
+// deployed ahead of every desktop that would write it, for a render hint. The marker is reserved
+// server-side on the same terms as the five calm flags, so it is no more forgeable than they are.
+//
+// THE CAPS STAY TERMINAL, deliberately. A turn/cost cap is this machine refusing to continue, not a
+// window being tidied away, and the peer is owed that as an outcome.
 function endLifecycle(reason) {
   if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
   if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
-  if (reason === 'operator') return { type: 'lifecycle', kind: 'task_failed', extra: { ended: true }, body: 'Session ended' };
+  if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
   return null;
 }
 

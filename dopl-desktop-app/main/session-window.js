@@ -78,18 +78,46 @@ function createSessionWindow(sessionId) {
 //           cycles that both die before init still get distinct rows.
 // The DELIBERATE same-cycle dedupe (I-LOW(b)) is preserved: a crash echo and the reload
 // interrupted-echo share one cycle's sdk id, so they still collapse to ONE server row.
-function echoSeq(info) {
+//
+// P2-9 (2026-08-04) — THE CYCLE DISCRIMINATOR IS DROPPED FOR A FIRST-CLASS THREAD, and the
+// TERMINAL echo only. FIX #2 asked "is this a distinct RUN", which is a fact about this
+// machine; the thread card asks "how did this exchange END", which is a fact about the
+// exchange. Folding the SDK resume cycle into the key answered the first question on a row
+// that renders the second, so a session that parked and resumed five times posted FIVE
+// terminal rows for ONE logical failure — and nothing deduped across machines either, since
+// an sdk id is local. Keyed on (kind, taskId) they collapse, on the server, for every
+// machine and every cycle.
+//
+//   - TERMINAL only. `task_started` KEEPS the cycle: a resume genuinely IS a new start and
+//     the card's restart detection reads those seqs (`groupThread`'s `restarted`). Collapsing
+//     them would make a resumed session look like it never restarted.
+//   - FIRST-CLASS only. A legacy `task-<channel>-<seq>` id is minted per MESSAGE, so keying
+//     on it dedupes nothing a cycle key did not already dedupe, and the legacy path keeps its
+//     shape byte for byte.
+//
+// Precedent for the local half of this is `queued-notice.js`'s `announced` set; here the
+// server's own `client_msg_id` uniqueness is enough, and it is the only one that works
+// across machines.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isTerminalKind(kind) {
+  return kind === 'task_finished' || kind === 'task_failed';
+}
+function echoSeq(info, kind) {
   const i = info || {};
   if (i.seq != null) return i.seq;
   const base = i.taskId || i.key || i.sessionId || 'session';
+  // P2-9: one terminal row per (kind, thread), across cycles and across machines.
+  if (isTerminalKind(kind) && UUID_RE.test(String(i.taskId || ''))) return base;
   const cycle = i.sdkSessionId || i.sessionId || 'init';
   return base + '#' + cycle;
 }
-function echoTargets(info) {
+// `kind` rides in because the echo id now depends on it (P2-9): a terminal row is keyed on
+// the THREAD so cycles collapse, while task_started keeps its per-cycle discriminator.
+function echoTargets(info, kind) {
   const i = info || {};
   return {
     entry: { channel: { id: i.channelId }, workspaceId: i.workspaceId },
-    m: { seq: echoSeq(i) },
+    m: { seq: echoSeq(i, kind) },
     taskId: i.taskId || undefined,
   };
 }
@@ -97,7 +125,7 @@ function echoTargets(info) {
 
 // task_started the instant the session's SDK system/init lands (§A.3 launched).
 function onLaunched(info) {
-  const { entry, m, taskId } = echoTargets(info);
+  const { entry, m, taskId } = echoTargets(info, 'task_started');
   if (!entry.channel.id) return;
   Promise.resolve(postTaskEvent(entry, m, 'task_started', taskId))
     .catch((err) => diag('session onLaunched echo error', err && err.message));
@@ -111,15 +139,24 @@ function onLaunched(info) {
 // (P4) exactly like the interrupted/declined echoes; the task stays OPEN (no closeTask).
 // `bodyOverride` wins; else we derive a generic body from the metadata flags.
 function onEnded(info, kind, extra, bodyOverride) {
-  const { entry, m, taskId } = echoTargets(info);
-  if (!entry.channel.id) return;
   const meta = extra || {};
-  const k = kind === 'task_failed' || kind === 'task_finished' ? kind : 'task_finished';
+  // P1-7 (2026-08-04): `task_progress` joins the accepted kinds, because a LOCAL
+  // session end is no longer a terminal claim about the SHARED thread — see
+  // `session-effects.endLifecycle`. Without it the coercion below would have
+  // silently turned the non-terminal marker back into a `task_finished`, which is
+  // the same bug wearing the opposite label.
+  const k =
+    kind === 'task_failed' || kind === 'task_finished' || kind === 'task_progress'
+      ? kind
+      : 'task_finished';
+  // The RESOLVED kind decides the echo id (P2-9), so the targets are built after it.
+  const { entry, m, taskId } = echoTargets(info, k);
+  if (!entry.channel.id) return;
   const body = bodyOverride
     || (meta.interrupted ? 'Request interrupted'
       : meta.declined ? 'Request declined'
         : meta.capped ? 'Limit reached'
-          : meta.ended ? 'Session ended'
+          : (meta.ended || meta.session_ended) ? 'Session ended'
             : undefined);
   Promise.resolve(postTaskEvent(entry, m, k, taskId, meta, body))
     .catch((err) => diag('session onEnded echo error', err && err.message));

@@ -390,16 +390,23 @@ test("interrupt (Stop): -> interrupted, interruptQuery + status emit", () => {
 
 // ── ends ───────────────────────────────────────────────────────────────────────
 
-test("end (operator End): -> ended + P3 calm ended lifecycle, task stays open", () => {
+test("end (operator End): -> ended + a NON-TERMINAL session_ended signal, task stays open", () => {
   const s = running();
   const r = sessionReducer(s, { type: "end" });
   assert.equal(r.state.phase, "ended");
-  // P3: the operator End now posts a calm lifecycle (extra:{ended:true}) BEFORE settle.
+  // P3: the operator End posts a lifecycle BEFORE settle.
   assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
   const lc = findEff(r.effects, "lifecycle");
-  assert.equal(lc.kind, "task_failed");
-  assert.deepEqual(lc.extra, { ended: true });
+  // P1-7 (decision 3, 2026-08-04): it used to be `task_failed` + { ended: true }.
+  // The flag kept the CHIP calm, but the KIND is terminal — group-thread folds a
+  // task_failed into `endEvent` and reads it as the exchange's OUTCOME — so one
+  // member parking their own window painted the SHARED thread as failed on the
+  // peer's card. `task_progress` cannot become an outcome at all, which is the
+  // property being pinned here rather than the string.
+  assert.equal(lc.kind, "task_progress");
+  assert.deepEqual(lc.extra, { session_ended: true });
   assert.equal(lc.body, "Session ended");
+  assert.ok(!["task_failed", "task_finished"].includes(lc.kind), "never a terminal kind");
   const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
   assert.equal(ended.payload.reason, "operator");
   assert.equal(findEff(r.effects, "settle").outcome, "ended");

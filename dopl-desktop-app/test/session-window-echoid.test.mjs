@@ -99,3 +99,75 @@ test("(3b) two distinct P2-recreate cycles that both die pre-init get distinct i
   const cycleC = tasked(null, "sess-C");
   assert.notEqual(cid("task_failed", cycleB), cid("task_failed", cycleC));
 });
+
+// ── P2-9 (2026-08-04): ONE TERMINAL ROW PER THREAD, ACROSS CYCLES AND MACHINES ────
+//
+// THE DEFECT. FIX #2 above folds the SDK resume cycle into every echo id, which
+// answers "is this a distinct RUN" — a fact about THIS MACHINE. The thread card
+// renders a different question: "how did this exchange END". So a session that
+// parked and resumed five times posted FIVE terminal rows for ONE logical failure,
+// and nothing deduped across machines either, because an sdk session id is local.
+//
+// THE FIX is scoped twice over, and both scopes are load-bearing:
+//   - TERMINAL kinds only. `task_started` KEEPS its cycle: a resume really is a new
+//     start, and `groupThread`'s restart detection reads those seqs — collapsing
+//     them would make a resumed session look like it never restarted.
+//   - FIRST-CLASS (UUID) thread ids only. A legacy `task-<channel>-<seq>` id is
+//     minted per MESSAGE, so keying on it dedupes nothing the cycle key did not
+//     already dedupe, and that path stays byte for byte.
+
+const THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const firstClass = (cycle, sessionId = "sess-A") => ({
+  channelId: "c1", taskId: THREAD, key: `c1:${THREAD}`, sessionId, sdkSessionId: cycle,
+});
+
+test("P2-9: a terminal echo collapses across resume cycles for a first-class thread", () => {
+  // The incident shape: same thread, five cycles, one failure.
+  const cycles = ["sdk-1", "sdk-2", "sdk-3", null, "sdk-5"];
+  for (const kind of ["task_finished", "task_failed"]) {
+    const ids = new Set(cycles.map((c) => echoTargets(firstClass(c), kind).m.seq));
+    assert.equal(ids.size, 1, `${kind}: five cycles must collapse to one row`);
+    assert.equal([...ids][0], THREAD, `${kind}: keyed on the thread itself`);
+  }
+});
+
+test("P2-9: it collapses across MACHINES too — no local id is in the key", () => {
+  // The half a local `announced` set could never buy: two desktops answering the
+  // same thread share no sdk id and no sessionId, and must still post one row.
+  const a = echoTargets({ channelId: "c1", taskId: THREAD, sessionId: "mac-A", sdkSessionId: "sdk-A" }, "task_failed");
+  const b = echoTargets({ channelId: "c1", taskId: THREAD, sessionId: "mac-B", sdkSessionId: "sdk-B" }, "task_failed");
+  assert.equal(a.m.seq, b.m.seq);
+});
+
+test("P2-9: task_started KEEPS the cycle — a resume IS a new start", () => {
+  const one = echoTargets(firstClass("sdk-1"), "task_started").m.seq;
+  const two = echoTargets(firstClass("sdk-2"), "task_started").m.seq;
+  assert.notEqual(one, two, "collapsing starts would hide every restart");
+  assert.equal(one, `${THREAD}#sdk-1`);
+});
+
+test("P2-9: task_finished and task_failed do NOT collide with each other", () => {
+  // They share a seq, and that is correct: the clientMsgId the server dedupes on
+  // is `${kind}-${channelId}-${seq}`, so the KIND is already in the key.
+  const info = firstClass("sdk-1");
+  assert.equal(echoTargets(info, "task_finished").m.seq, echoTargets(info, "task_failed").m.seq);
+  assert.notEqual(cid("task_finished", info), cid("task_failed", info));
+});
+
+test("P2-9: a LEGACY thread id keeps the cycle discriminator, byte for byte", () => {
+  // `task-<channel>-<seq>` is minted per message, so there is nothing to gain and
+  // an existing behaviour to lose.
+  const legacy = { channelId: "c1", taskId: "task-c1-42", key: "c1:task-c1-42", sessionId: "s", sdkSessionId: "sdk-1" };
+  assert.equal(echoTargets(legacy, "task_failed").m.seq, "task-c1-42#sdk-1");
+  const other = { ...legacy, sdkSessionId: "sdk-2" };
+  assert.notEqual(echoTargets(legacy, "task_failed").m.seq, echoTargets(other, "task_failed").m.seq);
+});
+
+test("P2-9: a session with NO thread id keeps the cycle too", () => {
+  const taskless = { channelId: "c1", key: "c1:none", sessionId: "s", sdkSessionId: "sdk-1" };
+  assert.equal(echoTargets(taskless, "task_failed").m.seq, "c1:none#sdk-1");
+});
+
+test("P2-9: an explicit `seq` still wins over everything (the live-trigger path)", () => {
+  assert.equal(echoTargets({ ...firstClass("sdk-1"), seq: 7 }, "task_failed").m.seq, 7);
+});
