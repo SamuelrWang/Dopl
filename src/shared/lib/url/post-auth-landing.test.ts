@@ -27,10 +27,12 @@ describe("a PLAIN web sign-in", () => {
     expect(WEB_POST_AUTH_LANDING).toBe("/get-started");
   });
 
-  it("reads as 'asked for nothing', which is what suppresses the onboarding detour", () => {
-    // `/auth/callback` sends a first-run user through `/onboarding` only when the
-    // URL named a place to come back to. A plain signup finishes onboarding INSIDE
-    // the app, so this null is load-bearing, not cosmetic.
+  it("reads as 'asked for nothing', which is what selects the download page", () => {
+    // The null is the signal, and it is load-bearing wherever a branch asks
+    // "did this URL name a destination": the middleware's signed-in `/login`
+    // bounce and the `/onboarding` retirement carry-through both fall back on
+    // it. (`/auth/callback`'s first-run onboarding detour read it too, until
+    // F-136 deleted the detour — web onboarding is retired.)
     expect(explicitPostAuthTarget(null)).toBeNull();
     expect(explicitPostAuthTarget("")).toBeNull();
   });

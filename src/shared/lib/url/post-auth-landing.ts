@@ -43,9 +43,11 @@ export const WEB_POST_AUTH_LANDING = "/get-started";
 /**
  * The target the URL actually ASKED for, or `null` when it asked for nothing
  * usable. A hostile value ("https://evil.example", "//evil.example") is not a
- * request — it is an attack — so it reads as `null` rather than as "somewhere",
- * which is what keeps a crafted `redirectTo` from being able to suppress the
- * onboarding detour or the default landing as a side effect of being rejected.
+ * request — it is an attack — so it reads as `null` rather than as "somewhere":
+ * rejection is TOTAL, and a crafted `redirectTo` therefore cannot steer any
+ * branch that hangs off "did this URL name a destination", only fail to steer
+ * the URL. Its callers are the middleware's signed-in `/login` bounce, the
+ * `/onboarding` retirement carry-through, and `webPostAuthDestination` below.
  */
 export function explicitPostAuthTarget(raw: string | null | undefined): string | null {
   if (!raw) return null;

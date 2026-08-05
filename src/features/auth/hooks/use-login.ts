@@ -43,10 +43,12 @@ export function useLoginActions(): LoginActions {
     const params = new URLSearchParams();
     // ONLY when the URL actually named a target. The callback reads the presence
     // of this param as "this sign-in came from somewhere and owes it a return
-    // trip", and routes a first-run user through `/onboarding` on the strength of
-    // it. Threading the DEFAULT through here would make every plain signup look
-    // like a deep link and put the web onboarding flow back in front of the
-    // download — which is the detour this whole change removes.
+    // trip", and a deep link OVERRIDES the download-page landing on the strength
+    // of it. Threading the DEFAULT through here would make every plain signup
+    // look like a deep link, which is how `redirectTo=/canvas` on every callback
+    // URL used to defeat the landing change. (It also used to force the web
+    // onboarding detour; that detour is gone with F-136, but the signal still
+    // has to mean what it says.)
     if (explicitTarget) params.set("redirectTo", explicitTarget);
     if (installCluster) params.set("installCluster", installCluster);
     const qs = params.toString();

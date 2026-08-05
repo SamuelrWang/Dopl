@@ -252,6 +252,12 @@ describe("the retired set matches the route tree on disk", () => {
   it("retires the bare workspace page and /onboarding too", () => {
     expect(retirementRedirect(`/${SEGMENT}`, "")).toBe(LANDING);
     expect(retirementRedirect("/onboarding", "")).toBe(LANDING);
+    // ONE EXCEPTION, and it is the only place in this map where a generic
+    // redirect reads the query: `/onboarding?redirectTo=<deep link>` carries
+    // the link through instead of dropping it (F-136). Owned by
+    // `src/first-run-deep-link.test.ts`, named here so this file's "the query
+    // is dropped" rule is not read as absolute.
+    expect(retirementRedirect("/onboarding", "?redirectTo=%2Fjoin%2Ftok_x")).toBe("/join/tok_x");
   });
 
   it("leaves a LEGACY slug-only workspace URL to the app, which retires it one hop later", () => {

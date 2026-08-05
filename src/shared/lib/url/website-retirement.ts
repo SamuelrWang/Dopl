@@ -1,6 +1,6 @@
 import { BILLING_SURFACE_ROOT } from "@/features/billing/url";
 import { parseSegment } from "./parse-segment";
-import { WEB_POST_AUTH_LANDING } from "./post-auth-landing";
+import { WEB_POST_AUTH_LANDING, explicitPostAuthTarget } from "./post-auth-landing";
 
 /**
  * STAGE B OF THE WEBSITE RETIREMENT — the redirect map, and nothing else.
@@ -114,7 +114,8 @@ const RESERVED_TOP_LEVEL = new Set([
   "terms",
 ]);
 
-/** The two top-level pages that retire outright. */
+/** The two top-level pages that retire outright. `onboarding` reads one param
+ *  on the way out (`onboardingDestination`); `canvas` reads none. */
 const RETIRED_TOP_LEVEL = new Set(["canvas", "onboarding"]);
 
 /**
@@ -135,6 +136,31 @@ const BILLING_INBOUND_PAGES = new Set(["canvas", "canvas2"]);
  */
 const SEGMENT_SHAPE = /^[a-z0-9][a-z0-9-]*$/;
 
+/**
+ * BELT AND SUSPENDERS FOR THE ONE RETIRED PAGE THAT EVER CARRIED A DESTINATION
+ * (F-136). `/onboarding?redirectTo=<deep link>` was `/auth/callback`'s first-run
+ * detour, and the generic redirect — which drops the query — silently deleted
+ * the deep link it was carrying: an invite, a join link, an MCP OAuth consent
+ * screen. The callback no longer emits this shape, and it was that URL's only
+ * producer, so this branch is INSURANCE, not a route: a 302 already in flight
+ * when the deploy lands, or a bookmark, still arrives here, and honouring it
+ * costs one line while dropping it costs the arrival.
+ *
+ * The value is validated by the SAME function the login bounce and the callback
+ * use, so a hostile `redirectTo` reads as "asked for nothing" and falls to the
+ * landing. It cannot loop, either: the value handed back was ENCODED inside the
+ * URL it came from, so the string strictly shortens on every hop and a nested
+ * `/onboarding?redirectTo=/onboarding?…` bottoms out at the landing.
+ *
+ * `/canvas` deliberately does NOT get this. No producer ever put a `redirectTo`
+ * on it, and inventing a destination contract for a page on the RETIRE list
+ * would be a new behaviour rather than the recovery of a lost one.
+ */
+function onboardingDestination(search: string): string {
+  const carried = new URLSearchParams(search).get("redirectTo");
+  return explicitPostAuthTarget(carried) ?? RETIREMENT_LANDING;
+}
+
 function billingDestination(segment: string | null, search: string): string {
   const base =
     segment && SEGMENT_SHAPE.test(segment)
@@ -147,11 +173,12 @@ function billingDestination(segment: string | null, search: string): string {
  * Where a retired URL goes, or `null` if the URL is not retired at all — which
  * is the answer for every KEEP route, every `/api/**`, and anything unrecognised.
  *
- * `search` is forwarded VERBATIM on the billing rewrites and DROPPED on the
- * generic ones. Both are deliberate: a Stripe return carries `session_id` and
- * `billing`, which the billing page needs in full (and which no builder here
- * could reconstruct); a retired canvas URL's `?tab=` means nothing to a download
- * page and would only survive as noise.
+ * `search` is forwarded VERBATIM on the billing rewrites, READ on `/onboarding`
+ * (its `redirectTo` names a destination — see `onboardingDestination`) and
+ * DROPPED on every other generic redirect. All three are deliberate: a Stripe
+ * return carries `session_id` and `billing`, which the billing page needs in
+ * full (and which no builder here could reconstruct); a retired canvas URL's
+ * `?tab=` means nothing to a download page and would only survive as noise.
  */
 export function retirementRedirect(pathname: string, search: string): string | null {
   const segments = pathname.split("/").filter(Boolean);
@@ -189,8 +216,11 @@ export function retirementRedirect(pathname: string, search: string): string | n
 
   // ── THE GENERIC RETIRED SET ───────────────────────────────────────────────
 
-  // `/canvas` and `/onboarding` with no billing intent: plain retired pages.
+  // `/canvas` and `/onboarding` with no billing intent: plain retired pages —
+  // with one carry-through, for the only one of them that ever carried a
+  // destination.
   if (segments.length === 1 && RETIRED_TOP_LEVEL.has(first)) {
+    if (first === "onboarding") return onboardingDestination(search);
     return RETIREMENT_LANDING;
   }
 
