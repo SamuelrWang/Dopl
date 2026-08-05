@@ -60,10 +60,21 @@ function endLifecycle(reason) {
   return null;
 }
 
+// M2b (2026-08-05, Samuel's call) — AN ABANDONMENT KEEPS ITS WINDOW.
+// Every other end is something the operator watched happen: they clicked End, or a cap fired
+// while they were there, so tidying the window away is the tail of an action they took. An
+// abandonment fires hours later with nobody present, and destroying the window makes a
+// transcript disappear from the desktop of someone who only stepped away — indistinguishable
+// from a crash, and the one end where the operator has no idea it happened.
+// It costs NOTHING that mattered: the window is UI. `phase: 'ended'` is what stops a peer
+// reply, a stale dock click or a drained SDK tail from waking the session, and `settle` still
+// denies every pending permission, closes the iterator, aborts the query and drops the map
+// entry. What survives is a painted, inert transcript the operator can read and close.
 function endEffects(state, outcome, reason, summary) {
   const lc = endLifecycle(reason);
   return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
-    [endedEmit(state, outcome, reason, summary), { type: 'settle', outcome: outcome }]);
+    [endedEmit(state, outcome, reason, summary),
+      { type: 'settle', outcome: outcome, keepWindow: reason === 'abandoned' }]);
 }
 
 // v2.9 — the header posture echo: ONE shape for BOTH axes, so the renderer never sees half a one.

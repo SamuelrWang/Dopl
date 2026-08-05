@@ -131,7 +131,7 @@ function runEffect(s, eff) {
     case 'resumeQuery': sessionPark.resumeParked(s); break; // P1 lazy resume: the SAME object
     case 'lifecycle': runLifecycle(s, eff.kind, eff.extra, eff.body); break;
     case 'closeTask': closeTask(s, eff.outcome, eff.summary); break;
-    case 'settle': settle(s, eff.outcome); break;
+    case 'settle': settle(s, eff.outcome, eff.keepWindow === true); break;
     default: diag('session-engine: unknown effect', eff && eff.type);
   }
 }
@@ -199,7 +199,10 @@ function runLifecycle(s, kind, extra, body) {
 
 // The task status flip (op:"close") lives in session-close-task.js (§2 split); the lifecycle echo stays here.
 // Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it), free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
-function settle(s, outcome) {
+// `keepWindow` is the abandonment case (session-effects.endEffects): everything below still runs
+// — the session is terminal and off the map either way — but the painted transcript is left on
+// screen for an operator who was not here to see it end.
+function settle(s, outcome, keepWindow) {
   if (s.settled) return;
   s.settled = true;
   // C3 (CRITICAL) — a settled session must leave NOTHING live. The CRASH path settles WITHOUT parking, so until
@@ -213,7 +216,7 @@ function settle(s, outcome) {
   store.saveRecord(baseRecord(s)); // FIX #9: full record (phase 'ended') persists cap counters for a P2 rehydrate
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
   sessions.delete(s.key);
-  if (s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
+  if (!keepWindow && s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
   refreshTray();
 }
 

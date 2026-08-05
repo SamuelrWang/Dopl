@@ -140,6 +140,30 @@ test("M2: the park re-arms the ABANDONMENT bound, and reaching it ENDS the sessi
   assert.equal(c.s.state.phase, "ended", "a session nobody came back to stops existing, honestly");
 });
 
+test("M2b: an abandonment KEEPS its window; every watched end still tidies one away", () => {
+  // Samuel's call (2026-08-05). Every other end is the tail of something the operator watched
+  // happen — they clicked End, or a cap fired while they were there. An abandonment fires hours
+  // later with nobody present, so destroying the window makes a transcript vanish from the desktop
+  // of someone who only stepped away: indistinguishable from a crash, and the ONE end they never
+  // saw. The flag rides the settle effect and touches nothing else about being terminal — the
+  // phase, the permission denials, the iterator close and the abort are all unchanged.
+  // Driven through the real reducer, like the stale-timer assertion above: `advance` fires the
+  // event internally, so the effects are read from a direct call on the parked state it produced.
+  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both" });
+  c.dispatch({ type: "launched", payload: {} });
+  c.advance(TTL);
+  assert.equal(c.s.state.parked, true);
+  const abandoned = sessionReducer(c.s.state, { type: "abandon_timeout" });
+  assert.equal(abandoned.state.phase, "ended", "still terminal — this changes nothing about that");
+  const settle = abandoned.effects.find((e) => e.type === "settle");
+  assert.equal(settle.keepWindow, true, "the abandoned transcript stays on screen to be read");
+
+  // …and the contrast: an operator End is watched, so its window is tidied as it always was.
+  const ended = sessionReducer(armedRunning({}).s.state, { type: "end" });
+  const s2 = ended.effects.find((e) => e.type === "settle");
+  assert.notEqual(s2.keepWindow, true, "an end the operator clicked still closes its window");
+});
+
 test("FIX 3 / M2: the AUTH HOLD still resets, still says so, and still clears the timer", () => {
   // The note and the modes echo did not die with the idle park's reset; they moved to the one
   // park that still revokes. A held session arms nothing: it is waiting on a human.

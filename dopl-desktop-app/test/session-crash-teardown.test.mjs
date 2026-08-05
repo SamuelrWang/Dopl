@@ -49,7 +49,7 @@ function harness(over = {}) {
   const api = new Function(
     "store", "sessions", "refreshTray", "baseRecord",
     `${cut("function denyPendingPermissions(s, message) {", "// A hidden window RESHOWS")}
-     ${cut("function settle(s, outcome) {", "function getSessionBySender(")}
+     ${cut("function settle(s, outcome, keepWindow) {", "function getSessionBySender(")}
      return { settle, denyPendingPermissions };`
   )(store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }));
 
@@ -116,7 +116,7 @@ test("C3: a session with no live handles settles without throwing (parked shell 
 });
 
 test("C3: the shipped settle really runs the teardown BEFORE it drops the handles", () => {
-  const body = cut("function settle(s, outcome) {", "function getSessionBySender(");
+  const body = cut("function settle(s, outcome, keepWindow) {", "function getSessionBySender(");
   const order = ["denyPendingPermissions(s, 'Session ended')", "s.pushIterator.close()", "s.abortController.abort()", "sessions.delete(s.key)"];
   let at = -1;
   for (const needle of order) {
