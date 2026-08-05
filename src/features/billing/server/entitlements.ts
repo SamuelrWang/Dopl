@@ -1,6 +1,7 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import type { PlanId, BillingStatus } from "../plans";
+import { billingUrl } from "../url";
 import {
   countActiveMembers,
   countOntologyObjects,
@@ -138,26 +139,30 @@ export class EntitlementError extends Error {
  * returns silently otherwise. Reads / edits / exports never call this.
  */
 /**
- * The URL every 402/403 plan-gate envelope points at.
+ * The URL every 402/403 plan-gate envelope points at: THE POST-RETIREMENT
+ * BILLING SURFACE, `/billing` (`src/app/billing/[segment]/page.tsx`, reached
+ * here through its segment-less forwarder). Built by `../url` so this and the
+ * five other billing entry points cannot drift apart again.
  *
- * IN-APP, not `/pricing`. `/pricing` is a marketing page the desktop
- * migration's Phase 4 deletes with the website (journey-audit GAP-11), and
- * these envelopes are read by API-FIRST clients — MCP agents included — that
- * follow the link literally. `/canvas?billing=…` is the app's own upgrade
- * surface: `src/app/canvas/page.tsx` resolves the caller's default workspace
- * and forwards the query string, and the (app) shell opens the settings
- * modal's Plans & Billing pane whenever a `billing` param is present. It is
- * the same destination Stripe's own checkout/portal return URLs use, so it is
- * already on the keep list.
+ * NOT `/canvas?billing=upgrade`, which is what this returned until decision D1
+ * landed, and NOT `/pricing`. THE NOTE THAT USED TO SIT HERE HAD BOTH FACTS
+ * BACKWARDS — it claimed `/canvas` was on the keep list and `/pricing` was
+ * being deleted. docs/migration-research/website-retirement-plan.md says the
+ * opposite on both: the whole `[workspaceSlug]` tree RETIRES (and the top-level
+ * `/canvas` redirect with it), while `/pricing` is KEEP-PUBLIC (decision D6).
+ * The correction matters more here than in most comments, because these
+ * envelopes are read by API-FIRST clients — MCP agents included — that follow
+ * the link literally, and the old target is about to start 302ing.
  *
- * Workspace-agnostic on purpose: these three builders are reached from
- * contexts with no resolved workspace SEGMENT (only an id), and the redirect
- * resolving the DEFAULT workspace is a better landing than a page slated for
- * deletion. Plumbing the segment through is the follow-up, not a blocker.
+ * Workspace-agnostic on purpose, unchanged: these three builders are reached
+ * from contexts with no resolved workspace SEGMENT (only an id), and `/billing`
+ * resolving the caller's DEFAULT workspace is the same trade `/canvas` made.
+ * Plumbing the segment through is the follow-up, not a blocker — the Stripe
+ * return URLs, which DO know their workspace, already pass one.
  */
 export function upgradeUrl(): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
-  return `${appUrl}/canvas?billing=upgrade`;
+  return billingUrl(appUrl, { intent: "upgrade" });
 }
 
 export async function assertCanCreateObject(

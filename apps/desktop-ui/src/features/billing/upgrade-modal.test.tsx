@@ -79,9 +79,12 @@ describe("UpgradeModal in the desktop SPA", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue in your browser" }));
 
+    // The standalone billing page (`src/app/billing/[segment]/page.tsx`), NOT
+    // the retiring `/{segment}/canvas`, and carrying the plan the user just
+    // chose so the browser opens straight into that checkout.
     await waitFor(() =>
       expect(openExternal).toHaveBeenCalledWith(
-        `https://www.usedopl.com/${SEGMENT}/canvas?billing=upgrade`
+        `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=solo`
       )
     );
     // The origin is the preload constant, never the file:// document, and the

@@ -68,7 +68,7 @@ describe("POST /api/ontology/objects — free-cap denial", () => {
     const body = await res.json();
     expect(body.error).toBe("over_free_cap");
     expect(body.message.toLowerCase()).toContain("upgrade");
-    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
+    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
   it("returns 201 with the created object on success", async () => {

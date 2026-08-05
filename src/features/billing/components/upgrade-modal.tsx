@@ -10,6 +10,7 @@ import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { getSpaBridge, isSpaRenderer } from "@/shared/lib/spa-bridge";
 import { getAppOrigin } from "@/shared/lib/app-origin";
+import { billingUrl, type CheckoutPlan } from "../url";
 import { EmbeddedCheckoutForm } from "./embedded-checkout";
 import {
   formatMoney,
@@ -23,8 +24,6 @@ const PAID_UNLOCKS = [
   "Full chat history restored",
   "Priority support",
 ] as const;
-
-type CheckoutPlan = "solo" | "team";
 
 interface Props {
   open: boolean;
@@ -179,7 +178,7 @@ function CheckoutView({
             )} / month`}
       </p>
       {isSpaRenderer() ? (
-        <BrowserCheckoutHandoff />
+        <BrowserCheckoutHandoff plan={plan} />
       ) : (
         <EmbeddedCheckoutForm workspaceId={workspaceId} plan={plan} />
       )}
@@ -198,14 +197,14 @@ function CheckoutView({
  * to the browser, which lands on this identical checkout signed in
  * (journey-audit GAP-9; before this the button dead-ended on an error card).
  */
-function BrowserCheckoutHandoff() {
+function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
   const [opened, setOpened] = useState(false);
   return (
     <div>
       <button
         type="button"
         onClick={() => {
-          void getSpaBridge()?.openExternal(browserBillingUrl());
+          void getSpaBridge()?.openExternal(browserBillingUrl(plan));
           setOpened(true);
         }}
         className="auth-btn-3d flex h-9 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white"
@@ -223,17 +222,23 @@ function BrowserCheckoutHandoff() {
 
 /**
  * The web billing surface for the workspace the desktop app is CURRENTLY
- * showing. `?billing=upgrade` is the param the web app shell opens Plans &
- * Billing on (the same one Stripe's return URLs carry), and the segment comes
- * off the desktop hash router's own location — `#/{segment}/…` — because a
- * bare `/canvas?billing=upgrade` resolves the user's DEFAULT workspace, which
- * is not necessarily the one being upgraded. The origin comes from the preload
- * constant, never `window.location` (a `file://` document here).
+ * showing: `/billing/{segment}?billing=upgrade&plan=…` — THE POST-RETIREMENT
+ * BILLING PAGE (`src/app/billing/[segment]/page.tsx`), not the
+ * `/{segment}/canvas?billing=upgrade` this used to open, which dies with the
+ * app tree (docs/migration-research/website-retirement-plan.md).
+ *
+ * The segment comes off the desktop hash router's own location — `#/{segment}/…`
+ * — because a segment-less `/billing` resolves the user's DEFAULT workspace,
+ * which is not necessarily the one being upgraded. The origin comes from the
+ * preload constant, never `window.location` (a `file://` document here).
+ *
+ * `plan` rides along because the user already answered that question in the app:
+ * the browser opens straight into checkout for the plan they picked, instead of
+ * asking again on the other side of an `openExternal`.
  */
-function browserBillingUrl(): string {
+function browserBillingUrl(plan: CheckoutPlan): string {
   const segment = window.location.hash.replace(/^#\/?/, "").split(/[/?#]/)[0];
-  const path = segment ? `/${segment}/canvas` : "/canvas";
-  return `${getAppOrigin()}${path}?billing=upgrade`;
+  return billingUrl(getAppOrigin(), { segment, intent: "upgrade", plan });
 }
 
 function GenericUpsell({

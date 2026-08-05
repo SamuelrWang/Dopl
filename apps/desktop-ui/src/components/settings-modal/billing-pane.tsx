@@ -57,7 +57,9 @@ export function BillingPane({ workspaceSegment, workspaceId, role }: Props) {
       <PlansBillingCore
         role={role}
         workspaceId={workspaceId}
-        onUpgrade={() => openInBrowser(billingPath(workspaceSegment))}
+        // The chosen plan rides to the browser, so the billing page opens on
+        // that checkout instead of re-asking (`features/billing/url.ts`).
+        onUpgrade={(plan) => openInBrowser(billingPath(workspaceSegment, plan))}
         onManage={handleManage}
         portalLoading={portalLoading}
         portalError={portalError}

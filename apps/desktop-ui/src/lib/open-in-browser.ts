@@ -1,3 +1,7 @@
+import {
+  billingPath as webBillingPath,
+  type CheckoutPlan,
+} from "@/features/billing/url";
 import { openExternalPath, openExternalUrl } from "@/shared/lib/open-external";
 
 /**
@@ -26,13 +30,33 @@ export function openInBrowser(path: string): void {
 }
 
 /**
- * The web app's billing surface for a specific workspace: the (app) layout
- * mounts the settings modal and its effect opens Plans & Billing whenever a
- * `billing` query param is present (`src/shared/layout/app-shell/app-shell.tsx`
- * — the same param Stripe's return URLs carry). Workspace-scoped on purpose:
- * the bare `/canvas?billing=…` redirect resolves the user's DEFAULT workspace,
- * which is not necessarily the one open here.
+ * The web billing surface for a specific workspace — `/billing/{segment}`,
+ * THE POST-RETIREMENT BILLING PAGE (`src/app/billing/[segment]/page.tsx`).
+ *
+ * It used to be `/{segment}/canvas?billing=upgrade`, which mounted the whole
+ * app shell to open a settings modal; that tree is being deleted
+ * (docs/migration-research/website-retirement-plan.md), and this handoff is one
+ * of the two flows that tethered the desktop app to it. Built by the web tree's
+ * one billing-URL module so this and Stripe's return URLs cannot drift apart.
+ *
+ * Workspace-scoped on purpose: a segment-less `/billing` resolves the user's
+ * DEFAULT workspace, which is not necessarily the one open here. `plan` is
+ * passed when the user already chose one, so the browser opens straight into
+ * that checkout instead of asking the same question twice.
  */
-export function billingPath(workspaceSegment: string): string {
-  return `/${workspaceSegment}/canvas?billing=upgrade`;
+export function billingPath(
+  workspaceSegment: string,
+  plan?: CheckoutPlan
+): string {
+  return webBillingPath({ segment: workspaceSegment, intent: "upgrade", plan });
+}
+
+/**
+ * The same page with no intent — where account DELETION lives. Deletion is
+ * irreversible and runs a Supabase sign-out + redirect the renderer cannot
+ * reproduce, so it stays on the web (plan decision D4) and the desktop Account
+ * pane links here (`../components/settings-modal/account-actions.tsx`).
+ */
+export function accountPagePath(workspaceSegment: string): string {
+  return webBillingPath({ segment: workspaceSegment });
 }

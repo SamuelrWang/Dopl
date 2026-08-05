@@ -226,8 +226,9 @@ describe("settings modal", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade — $7.99/seat" }));
 
+    // The standalone billing page, plan included — see `lib/open-in-browser.ts`.
     expect(openExternal).toHaveBeenCalledWith(
-      `https://www.usedopl.com/${SEGMENT}/canvas?billing=upgrade`
+      `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=team`
     );
     // No checkout mounted inside the app — the CSP refuses Stripe outright.
     expect(screen.queryByText("Subscribe to Team")).not.toBeInTheDocument();
@@ -269,6 +270,24 @@ describe("settings modal", () => {
     expect(
       screen.getByRole("button", { name: /Delete account in browser/ })
     ).toBeInTheDocument();
+  });
+
+  it("sends deletion to the standalone billing/account page, not the retiring canvas", async () => {
+    // The web page that carries the account danger zone after the website
+    // retirement (plan decision D4). This string is minted inside a shipped
+    // desktop build, so a wrong one cannot be fixed by a deploy.
+    renderShell();
+    await screen.findByText("page body");
+
+    fireEvent.click(gear());
+    await screen.findByRole("heading", { name: "Account" });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Delete account in browser/ })
+    );
+
+    expect(openExternal).toHaveBeenCalledWith(
+      `https://www.usedopl.com/billing/${SEGMENT}`
+    );
   });
 
   it("signs out through the bridge when the op exists", async () => {

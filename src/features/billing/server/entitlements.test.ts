@@ -275,7 +275,7 @@ describe("assertCanAddMember", () => {
       expect(e.status).toBe(402);
       expect(e.code).toBe("SOLO_MEMBER_LIMIT");
       expect((e.details as { upgrade_url: string }).upgrade_url).toMatch(
-        /\/canvas\?billing=upgrade$/
+        /\/billing\?billing=upgrade$/
       );
     }
   });
@@ -317,15 +317,17 @@ describe("entitlementDeniedBody", () => {
     expect(body.error).toBe("over_free_cap");
     expect(body.message.toLowerCase()).toContain("nothing");
     expect(body.message.toLowerCase()).toContain("upgrade");
-    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
+    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
-  // GAP-11: `/pricing` is a marketing page Phase 4 deletes with the website,
-  // and API-first clients (MCP agents) follow this URL literally — so the
-  // envelope points at the IN-APP upgrade surface instead.
-  it("points at the in-app upgrade surface, never /pricing or the 404 billing route", () => {
+  // GAP-11, as re-decided by the retirement plan (D1): API-first clients (MCP
+  // agents) follow this URL literally, so it must name a page that both
+  // SURVIVES the website retirement and can take money. `/canvas?billing=…` is
+  // on the RETIRE list; `/pricing` is a marketing page that sells nothing.
+  it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {
     const body = entitlementDeniedBody();
-    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
+    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
+    expect(body.upgrade_url).not.toContain("/canvas");
     expect(body.upgrade_url).not.toContain("/pricing");
     expect(body.upgrade_url).not.toContain("/settings/billing");
   });

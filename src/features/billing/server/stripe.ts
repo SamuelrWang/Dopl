@@ -1,5 +1,29 @@
 import "server-only";
 import Stripe from "stripe";
+import { STRIPE_SESSION_ID_TEMPLATE, billingUrl } from "../url";
+
+/**
+ * Where Stripe sends the browser back — the post-retirement billing surface
+ * (`src/app/billing/[segment]/page.tsx`), not `/{segment}/canvas?billing=…`,
+ * which is on the RETIRE list (docs/migration-research/
+ * website-retirement-plan.md §2.3). Sessions minted today are redeemed days
+ * later, so this URL has to name a page that will still be there.
+ *
+ * The segment is passed in wherever the caller has one — `withWorkspaceAuth`
+ * hands every billing route a `workspaceSlug` + `workspacePublicId` — so the
+ * return lands on the billing page for the workspace that was actually paid
+ * for. Without it the bare `/billing` resolves the caller's DEFAULT workspace,
+ * which for a multi-workspace user is a different workspace than the one whose
+ * subscription just started.
+ */
+function returnUrl(
+  segment: string | null | undefined,
+  intent: "success" | "return",
+  sessionId?: string
+): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
+  return billingUrl(appUrl, { segment, intent, sessionId });
+}
 
 let _stripe: Stripe | null = null;
 
@@ -71,6 +95,10 @@ export interface WorkspaceCheckoutArgs {
   quantity: number;
   email: string;
   stripeCustomerId?: string | null;
+  /** Canonical `{slug}-{publicId}` segment of the workspace being bought for,
+   *  so the post-payment return lands on ITS billing page rather than the
+   *  buyer's default workspace. */
+  segment?: string | null;
 }
 
 /**
@@ -92,7 +120,6 @@ export async function createWorkspaceCheckoutSession(
   args: WorkspaceCheckoutArgs
 ): Promise<string> {
   const stripe = getStripe();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
   const priceId = args.plan === "solo" ? getSoloPriceId() : getSeatPriceId();
   if (!priceId) {
@@ -109,7 +136,7 @@ export async function createWorkspaceCheckoutSession(
     ui_mode: "elements",
     mode: "subscription",
     line_items: [{ price: priceId, quantity }],
-    return_url: `${appUrl}/canvas?billing=success&session_id={CHECKOUT_SESSION_ID}`,
+    return_url: returnUrl(args.segment, "success", STRIPE_SESSION_ID_TEMPLATE),
     metadata,
     subscription_data: {
       metadata,
@@ -135,14 +162,14 @@ export async function createWorkspaceCheckoutSession(
 }
 
 export async function createPortalSession(
-  stripeCustomerId: string
+  stripeCustomerId: string,
+  segment?: string | null
 ): Promise<string> {
   const stripe = getStripe();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
-    return_url: `${appUrl}/canvas?billing=return`,
+    return_url: returnUrl(segment, "return"),
   });
 
   return session.url;

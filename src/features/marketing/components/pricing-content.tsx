@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { PLANS, type PlanDef } from "@/features/billing/plans";
+import { billingPath } from "@/features/billing/url";
 import type { User } from "@supabase/supabase-js";
 
 /**
@@ -117,19 +118,21 @@ export function PricingContent() {
     }
     // Checkout is workspace-scoped, but this public page can't pick a
     // workspace for multi-workspace users — an in-place checkout would
-    // silently bill the wrong one. Hand off to the in-app Plans & Billing
-    // pane (app shell reads the `billing` param), where the target workspace
-    // is explicit and the checkout carries its id. Multi-workspace users land
-    // on the billing pane to choose; single-workspace users go straight to
-    // upgrade.
-    router.push(multiWorkspace ? "/canvas?billing=return" : "/canvas?billing=upgrade");
+    // silently bill the wrong one. Hand off to the billing surface, where the
+    // target workspace is explicit and the checkout carries its id.
+    // Multi-workspace users land on the billing page to choose; single-workspace
+    // users go straight to upgrade. `/billing` (no segment) resolves the
+    // caller's default workspace — the post-retirement replacement for the
+    // `/canvas?billing=…` redirect this used to push (`features/billing/url.ts`).
+    router.push(billingPath({ intent: multiWorkspace ? "return" : "upgrade" }));
   }
 
-  // Route into the in-app Plans & Billing pane (via the /canvas redirect
-  // the app shell reads) where the past_due warning + Stripe portal live —
-  // no duplicate portal logic on this public page.
+  // Route into the billing page, where the past_due warning + Stripe portal
+  // live — no duplicate portal logic on this public page.
   function handleManageBilling() {
-    router.push(user ? "/canvas?billing=return" : "/login?redirect=/pricing");
+    router.push(
+      user ? billingPath({ intent: "return" }) : "/login?redirect=/pricing"
+    );
   }
 
   function handleGetStarted() {

@@ -51,10 +51,16 @@ export function AppShell({
   );
   const [createWsOpen, setCreateWsOpen] = useState(false);
 
-  // Stripe checkout/portal return URLs land on the app with a `billing`
-  // query param (via the /canvas legacy redirect). Open the settings
-  // modal on Plans & Billing and strip the params from the URL.
-  // `success` = checkout return (celebrate + poll for the webhook);
+  // LEGACY INBOUND ONLY, as of the billing-page repoint. Nothing MINTS
+  // `/{segment}/canvas?billing=…` any more — Stripe's return URLs, the 402
+  // envelopes and both desktop handoffs now name `/billing/{segment}`
+  // (`src/features/billing/url.ts`, plan decision D1). What still arrives here
+  // is what was already in the wild when that changed: checkout sessions minted
+  // before the deploy, and bookmarks. This branch stays until those drain, and
+  // then dies with the tree (Stage B middleware redirects it at the edge).
+  //
+  // Open the settings modal on Plans & Billing and strip the params from the
+  // URL. `success` = checkout return (celebrate + poll for the webhook);
   // `return` = portal return, e.g. a cancel/downgrade (poll quietly so a
   // stale Pro pane settles). Any other value just opens the pane.
   useEffect(() => {

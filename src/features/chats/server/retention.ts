@@ -40,9 +40,10 @@ export async function resolveChatsWindow(
  * upgrade_url }` envelope. Emphasizes that nothing is deleted — the chat
  * is safely stored, Pro restores full history.
  *
- * `upgrade_url` comes from billing's shared `upgradeUrl()` — the in-app
- * upgrade surface. The per-workspace `/{slug}/settings/billing` route does
- * not exist (404).
+ * `upgrade_url` comes from billing's shared `upgradeUrl()` — the standalone
+ * billing page (`/billing`, see `features/billing/url.ts`), which is the one
+ * upgrade surface that outlives the website retirement. The per-workspace
+ * `/{slug}/settings/billing` route does not exist (404).
  */
 export function chatRetentionDeniedBody() {
   return {

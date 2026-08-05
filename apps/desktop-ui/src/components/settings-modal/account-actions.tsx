@@ -2,7 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
 import { getBridge } from "#/lib/dopl-bridge";
-import { openInBrowser } from "#/lib/open-in-browser";
+import { accountPagePath, openInBrowser } from "#/lib/open-in-browser";
 
 /**
  * The desktop Account pane's footer — what replaces the web section's
@@ -37,12 +37,17 @@ export function AccountActions({ workspaceSegment }: { workspaceSegment: string 
           </button>
         )}
         <p className="text-caption text-text-secondary">
-          Deleting your account is permanent, so it stays in the browser. Open
-          Dopl on the web and go to Settings → Account.
+          Deleting your account is permanent, so it stays in the browser. The
+          button below opens the page that does it.
         </p>
         <button
           type="button"
-          onClick={() => openInBrowser(`/${workspaceSegment}/canvas`)}
+          // `/billing/{segment}` — the post-retirement billing + account page
+          // (`src/app/billing/[segment]/page.tsx`), which carries the account
+          // danger zone. It used to open `/{segment}/canvas` and ask the user
+          // to find Settings → Account in a modal; that whole tree is being
+          // deleted (docs/migration-research/website-retirement-plan.md, D4).
+          onClick={() => openInBrowser(accountPagePath(workspaceSegment))}
           className="btn-light flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-small font-medium text-danger"
         >
           Delete account in browser

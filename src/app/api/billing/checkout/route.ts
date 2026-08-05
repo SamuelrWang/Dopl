@@ -11,6 +11,7 @@ import {
   getWorkspaceBilling,
   releaseWorkspaceCheckout,
 } from "@/features/billing/server/workspace-billing";
+import { composeSegment } from "@/shared/lib/url/parse-segment";
 
 /** Read the requested plan from an optional JSON body. Absent or invalid
  *  bodies default to "team" (the per-seat plan). */
@@ -38,7 +39,11 @@ function checkoutConflict(portalUrl: string | null) {
  * single-member workspace.
  */
 export const POST = withWorkspaceAuth(
-  async (request, { userId, workspaceId }) => {
+  async (request, { userId, workspaceId, workspaceSlug, workspacePublicId }) => {
+    // Every Stripe URL minted below returns to THIS workspace's billing page
+    // (`/billing/{segment}`), never the caller's default workspace and never
+    // the retiring `/canvas` — see `features/billing/url.ts`.
+    const segment = composeSegment(workspaceSlug, workspacePublicId);
     // Block a second checkout whenever a live subscription already exists —
     // any non-canceled status (active AND past_due) means Stripe is still
     // billing this workspace, so a new session would create a duplicate sub.
@@ -46,7 +51,7 @@ export const POST = withWorkspaceAuth(
     const billing = await getWorkspaceBilling(workspaceId);
     if (billing?.stripeSubscriptionId && billing.status !== "canceled") {
       const portalUrl = billing.stripeCustomerId
-        ? await createPortalSession(billing.stripeCustomerId)
+        ? await createPortalSession(billing.stripeCustomerId, segment)
         : null;
       return checkoutConflict(portalUrl);
     }
@@ -69,7 +74,7 @@ export const POST = withWorkspaceAuth(
     // 20260720210814_workspace_billing_checkout_claim.sql.
     if (!(await claimWorkspaceCheckout(workspaceId))) {
       const portalUrl = billing?.stripeCustomerId
-        ? await createPortalSession(billing.stripeCustomerId)
+        ? await createPortalSession(billing.stripeCustomerId, segment)
         : null;
       return checkoutConflict(portalUrl);
     }
@@ -111,7 +116,7 @@ export const POST = withWorkspaceAuth(
       const fresh = await getWorkspaceBilling(workspaceId);
       if (fresh?.stripeSubscriptionId && fresh.status !== "canceled") {
         const portalUrl = fresh.stripeCustomerId
-          ? await createPortalSession(fresh.stripeCustomerId)
+          ? await createPortalSession(fresh.stripeCustomerId, segment)
           : null;
         return checkoutConflict(portalUrl);
       }
@@ -122,6 +127,7 @@ export const POST = withWorkspaceAuth(
         quantity,
         email: profile.email,
         stripeCustomerId: fresh?.stripeCustomerId ?? billing?.stripeCustomerId,
+        segment,
       });
 
       return NextResponse.json({ clientSecret });

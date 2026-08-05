@@ -16,7 +16,7 @@ vi.mock("@/features/billing/server/entitlements", () => ({
   // Real implementation on purpose: the envelope's `upgrade_url` is the
   // contract under test here (GAP-11), not an incidental dependency.
   upgradeUrl: () =>
-    `${process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com"}/canvas?billing=upgrade`,
+    `${process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com"}/billing?billing=upgrade`,
 }));
 vi.mock("./repository", () => ({
   retentionCutoff: vi.fn(),
@@ -67,15 +67,17 @@ describe("chatRetentionDeniedBody", () => {
     expect(body.error).toBe("chat_outside_retention");
     expect(body.message.toLowerCase()).toContain("nothing");
     expect(body.message.toLowerCase()).toContain("upgrade");
-    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
+    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
-  // GAP-11: `/pricing` is a marketing page Phase 4 deletes with the website,
-  // and API-first clients (MCP agents) follow this URL literally — so the
-  // envelope points at the IN-APP upgrade surface instead.
-  it("points at the in-app upgrade surface, never /pricing or the 404 billing route", () => {
+  // GAP-11, as re-decided by the retirement plan (D1): API-first clients (MCP
+  // agents) follow this URL literally, so it must name a page that both
+  // SURVIVES the website retirement and can take money. `/canvas?billing=…` is
+  // on the RETIRE list; `/pricing` is a marketing page that sells nothing.
+  it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {
     const body = chatRetentionDeniedBody();
-    expect(body.upgrade_url).toMatch(/\/canvas\?billing=upgrade$/);
+    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
+    expect(body.upgrade_url).not.toContain("/canvas");
     expect(body.upgrade_url).not.toContain("/pricing");
     expect(body.upgrade_url).not.toContain("/settings/billing");
   });
