@@ -23,11 +23,18 @@
 import type {
   ChannelMember,
   ChannelMessage,
+  ChannelSessionState,
   ChannelThread,
   DoplClient,
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
-import { channelNotFound, inlineOr, memberNames } from "./channel-shared";
+import {
+  channelNotFound,
+  inlineOr,
+  isErr,
+  memberNames,
+  resolveChannelOr,
+} from "./channel-shared";
 import {
   UNTRUSTED_BODY_HEADER,
   UNTRUSTED_LISTING_HEADER,
@@ -187,6 +194,83 @@ export async function opRead(
     `\nHighest seq shown: ${lastSeq} — the highest in THIS thread, not in the channel. THIS READ DID NOT ADVANCE A CHANNEL-WIDE CURSOR, so do not await from ${lastSeq}: \`await\` is channel-wide with a strict "greater than", and this page deliberately left other exchanges out, so any number taken from it skips messages you have never seen — permanently, because the cursor only moves forward. Await from the highest seq below which you have seen EVERYTHING in this channel. If you do not have one, establish it first by reading the channel unscoped (drop \`thread\`) and awaiting from that page's last seq.`,
   );
   return ok(lines.join("\n"));
+}
+
+/** Peer-influenced display text (a session's channel name / thread title),
+ *  neutralized for a rendered result — never an empty span. */
+const NO_NAME = "(unnamed)";
+const NO_TITLE = "(untitled)";
+
+/**
+ * READ-SESSION-STATE (rollback §3.5) — "what is flint doing?".
+ *
+ * Answers the CALLER'S OWN live sessions, each with its handle, its reduced
+ * state (working / idle / ended — the desktop's `session-summary.js`
+ * vocabulary, and there is deliberately NO "thinking": it needs streaming,
+ * which is off), and the thread it is on. `ref` narrows to one channel; omitted,
+ * it is every session of the caller's in the active workspace.
+ *
+ * OWN-SCOPED, and that is the whole security model: a session runs on one
+ * member's machine, and the server read keys on the caller's own user id (and
+ * RLS backs it), so a peer's sessions never come back. There is nothing to
+ * neutralize about WHOSE they are — they are the caller's — but the channel
+ * names and thread titles they carry are counterparty-influenced (a peer typed
+ * the thread title; a channel the caller joined was named by someone else), so
+ * they render through the same inline-neutralizer every other peer string does,
+ * under the listing framing.
+ *
+ * DELIVERY GAP (flagged, F-144). The desktop WRITE — pushing a row on each state
+ * change — is not wired in this phase, so an operational desktop currently
+ * reports nothing and this comes back empty. The empty answer says so honestly
+ * ("no live sessions being reported") rather than inventing state; it is not the
+ * same as "you have no sessions". When the push lands, the same op renders them.
+ */
+export async function opReadSessions(
+  client: DoplClient,
+  ref?: string,
+): Promise<ToolResponse> {
+  // Resolve a channel filter to its id (a slug would not match the stored
+  // channel_id). Omitted → every session of the caller's.
+  let channelId: string | undefined;
+  let channelLabel = "";
+  if (ref && ref.trim()) {
+    const ch = await resolveChannelOr(client, ref.trim());
+    if (isErr(ch)) return ch;
+    channelId = ch.id;
+    channelLabel = ` in **${inlineOr(ch.name, NO_NAME)}**`;
+  }
+
+  const sessions: ChannelSessionState[] =
+    await client.listChannelSessions(channelId);
+
+  if (sessions.length === 0) {
+    return ok(
+      `No live sessions of yours are being reported${channelLabel} right now. This lists the sessions running on YOUR OWN machine (the agent windows your Dopl app opened), not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`,
+    );
+  }
+
+  const lines = [
+    `## Your sessions — ${sessions.length}${channelLabel}\n`,
+    // Framing FIRST: the channel names and thread titles below are
+    // counterparty-influenced text, the same class as a channel listing's.
+    `${UNTRUSTED_LISTING_HEADER}\n`,
+  ];
+  for (const s of sessions) lines.push(formatSessionLine(s));
+  lines.push(
+    `\nEach line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished — its window is still open). To act on what a session is doing, open its window in the Dopl app; to reach the PEER a thread is with, post into that thread.`,
+  );
+  return ok(lines.join("\n"));
+}
+
+/** One session row, all peer-influenced text neutralized. */
+function formatSessionLine(s: ChannelSessionState): string {
+  const where = s.channelName ? ` · in ${inlineOr(s.channelName, NO_NAME)}` : "";
+  const on = s.threadTitle
+    ? ` · thread ${inlineOr(s.threadTitle, NO_TITLE)}`
+    : s.threadId
+      ? ` · thread ${inlineOr(s.threadId, NO_TITLE)}`
+      : " · no thread";
+  return `- **${inlineOr(s.name, NO_NAME)}** — ${s.state}${on}${where}`;
 }
 
 export async function opListThreads(

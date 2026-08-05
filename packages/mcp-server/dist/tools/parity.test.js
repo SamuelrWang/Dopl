@@ -147,6 +147,11 @@ const READ_OPS = {
         "members",
         "list_threads",
         "get_thread",
+        // read-session-state (rollback §3.5): `opReadSessions` calls only
+        // `listChannelSessions` (GET /api/channels/sessions) and renders it —
+        // own-scoped, no write. The desktop WRITE that feeds it is a separate,
+        // flagged delivery gap, not an MCP op.
+        "read_sessions",
     ],
 };
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────

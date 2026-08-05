@@ -52,6 +52,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";
+        read_sessions: "read_sessions";
         create_thread: "create_thread";
         propose_close: "propose_close";
         close_thread: "close_thread";
@@ -87,6 +88,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         interactive: "interactive";
         autonomous: "autonomous";
     }>>;
+    handoff: z.ZodOptional<z.ZodBoolean>;
     thread: z.ZodOptional<z.ZodString>;
     outcome: z.ZodOptional<z.ZodEnum<{
         completed: "completed";

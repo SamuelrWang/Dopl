@@ -26,7 +26,7 @@
  */
 import type { DoplClient, ThreadMode, ThreadOutcome } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null): Promise<ToolResponse>;
+export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null, handoff?: boolean): Promise<ToolResponse>;
 /**
  * DECISION 2 (Samuel, 2026-08-04) — `close_thread` IS NOT AN AGENT'S OP.
  *

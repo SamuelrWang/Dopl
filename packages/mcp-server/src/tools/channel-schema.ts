@@ -62,6 +62,11 @@ export const CHANNEL_INPUT_SHAPE = {
       "members",
       "list_threads",
       "get_thread",
+      // READ-SESSION-STATE (rollback §3.5) — "what is flint doing?" answered
+      // over MCP: the CALLER'S OWN live sessions, each with its handle, its
+      // state (working/idle/ended) and the thread it is on. Read-only and
+      // own-scoped; `channel` narrows it to one channel.
+      "read_sessions",
       "create_thread",
       // DECISION 2 (2026-08-04) — an agent PROPOSES a close and a human confirms
       // it. `close_thread` is kept in the enum so the call an older agent makes
@@ -215,6 +220,12 @@ export const CHANNEL_INPUT_SHAPE = {
     .optional()
     .describe(
       'op="create_thread" (optional, default "interactive") / op="set_thread_mode" (required): the thread execution mode.',
+    ),
+  handoff: z
+    .boolean()
+    .optional()
+    .describe(
+      'op="create_thread" (optional, default false): SPAWN-WITH-HANDOFF. Set true when YOU are an external agent (this Claude Desktop / Claude Code) opening a thread that your operator\'s Dopl app should then DRIVE — a full session opens on their machine and carries the conversation, instead of this external session keeping it. Default (omitted/false) is unchanged: the thread is created and THIS session keeps the reply, nothing opens on their machine. Only meaningful on YOUR OWN operator\'s create — the desktop honors it only for a thread you created as yourself, so it can never open a window on anyone else\'s machine. Use it when the operator asked you to "spin up an agent on Dopl to talk to <someone> about X"; leave it off when you are the one who will handle the replies here.',
     ),
   thread: z
     .string()

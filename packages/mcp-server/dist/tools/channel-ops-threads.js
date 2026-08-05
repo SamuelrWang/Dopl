@@ -44,7 +44,13 @@ const NO_ID = "(unreadable id)";
 async function opCreateThread(client, channelRef, title, body, to, mode, clientMsgId, 
 // The caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes
 // nothing this op does — only what the result claims about waiting.
-runtime = null) {
+runtime = null, 
+// SPAWN-WITH-HANDOFF (rollback §3.5). When true, the create declares that the
+// driving session should open on the OPERATOR'S machine (a full requester
+// session) rather than being kept by this external session. It rides the
+// opening message's reserved `metadata.handoff` stamp; the desktop honors it
+// only for a thread the operator created as themselves.
+handoff) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
@@ -67,6 +73,7 @@ runtime = null) {
             toUserId: member.userId,
             mode,
             clientMsgId,
+            handoff,
         });
     }
     catch (e) {
@@ -114,6 +121,17 @@ runtime = null) {
     // OUTRIGHT — the older text told the agent to go find it with `read limit=1`,
     // which cost a round-trip and raced the peer (a reply landing in between
     // becomes "the newest message", and the await then starts past it).
+    // SPAWN-WITH-HANDOFF (rollback §3.5) — a create that DECLARED handoff does NOT
+    // wait for the reply here: a full session opens on the operator's OWN machine
+    // and carries the exchange, so telling this external session to arm `await`
+    // would put two agents on one thread, each trying to consume the reply. Say
+    // plainly that the machine took it, and stop.
+    if (handoff) {
+        return (0, respond_1.ok)([
+            `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}, WITH HANDOFF.`,
+            `A full session is opening on your operator's Dopl app to drive this thread — it, not you, carries the conversation with ${member.label} from here. Do NOT arm op="await" on this thread: the reply is the operator's window's to handle, and a second watcher here would race it. You are done with this thread unless your operator asks you to look again; if you do, op="read"/op="get_thread" show its state without claiming the reply.`,
+        ].join("\n"));
+    }
     const cursor = created.openingSeq === null
         ? `dopl_channel(op="read", channel="${ch.id}", limit=1) reports the highest seq (your request is the newest message), then call dopl_channel(op="await", channel="${ch.id}", since=<that seq>)`
         : `call dopl_channel(op="await", channel="${ch.id}", since=${created.openingSeq}) — that since is your request's own seq, so the reply is the very next message it returns`;

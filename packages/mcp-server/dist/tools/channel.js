@@ -184,6 +184,12 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     return miss;
                 return (0, channel_ops_read_1.opGetThread)(client, args.channel, args.thread, selfUserId);
             }
+            // READ-SESSION-STATE (rollback §3.5). `channel` is an OPTIONAL filter —
+            // omitted, it lists every session of the caller's — so no missingParams
+            // check. Own-scoped in the service; no identity is passed here because
+            // the transport's own credential is the caller.
+            case "read_sessions":
+                return (0, channel_ops_read_1.opReadSessions)(client, args.channel);
             case "create_thread": {
                 const miss = (0, respond_1.missingParams)("create_thread", args, [
                     "channel",
@@ -193,7 +199,10 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id, runtime);
+                return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id, runtime, 
+                // SPAWN-WITH-HANDOFF (rollback §3.5) — a create that DECLARES it
+                // opens the driving session on the operator's own machine.
+                args.handoff);
             }
             // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM. An agent's terminal act
             // on a thread is a PROPOSAL its operator confirms; the close itself is a

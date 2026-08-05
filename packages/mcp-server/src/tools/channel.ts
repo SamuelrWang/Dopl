@@ -53,6 +53,7 @@ import {
   opListThreads,
   opMembers,
   opRead,
+  opReadSessions,
 } from "./channel-ops-read";
 import { opAwait } from "./channel-ops-await";
 import { opInvite, opOpen } from "./channel-ops-open";
@@ -211,6 +212,12 @@ export function registerChannelTool(
             selfUserId,
           );
         }
+        // READ-SESSION-STATE (rollback §3.5). `channel` is an OPTIONAL filter —
+        // omitted, it lists every session of the caller's — so no missingParams
+        // check. Own-scoped in the service; no identity is passed here because
+        // the transport's own credential is the caller.
+        case "read_sessions":
+          return opReadSessions(client, args.channel);
         case "create_thread": {
           const miss = missingParams("create_thread", args, [
             "channel",
@@ -228,6 +235,9 @@ export function registerChannelTool(
             args.mode,
             args.client_msg_id,
             runtime,
+            // SPAWN-WITH-HANDOFF (rollback §3.5) — a create that DECLARES it
+            // opens the driving session on the operator's own machine.
+            args.handoff,
           );
         }
         // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM. An agent's terminal act
