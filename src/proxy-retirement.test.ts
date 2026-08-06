@@ -31,7 +31,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 type Cookie = { name: string; value: string; options?: Record<string, unknown> };
@@ -230,21 +230,51 @@ describe("every retired route, signed OUT", () => {
 });
 
 describe("the retired set matches the route tree on disk", () => {
-  it("covers every page under src/app/[workspaceSlug]/(app)/", () => {
-    // The map names its pages rather than retiring "any second segment", which
-    // is what keeps it from swallowing a route nobody has written yet — and
-    // what makes THIS test necessary: a page added to the app tree without a
-    // line in the map would quietly stay live after the flip.
-    const appDir = path.join(process.cwd(), "src/app/[workspaceSlug]/(app)");
-    const pages = readdirSync(appDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
+  // ── STAGE D CHANGED WHAT THIS GUARDS, RATHER THAN ENDING IT ──────────────
+  // Until the hard delete this test read the app tree off disk and asserted
+  // the map named every page in it, because a page added without a map line
+  // would quietly stay live after the flip. THE TREE IS GONE, so that failure
+  // mode is gone with it — there is no longer any page that could stay live.
+  //
+  // What replaces it is the opposite assertion, and it is the one that matters
+  // now: the tree must STAY deleted, and the map must go on answering for the
+  // pages that used to be there. Bookmarks and shipped desktop builds still
+  // arrive at these URLs; the map is what they land on instead of a 404, and
+  // APP_PAGES is now a historical list that nothing on disk can confirm. A
+  // resurrected directory would mean somebody reverted Stage D halfway.
+  it("keeps the retired page tree deleted", () => {
+    for (const dir of ["src/app/[workspaceSlug]", "src/app/canvas", "src/app/onboarding"]) {
+      expect(
+        existsSync(path.join(process.cwd(), dir)),
+        `${dir} is back on disk — Stage D deleted it, and the SPA is the only host for these pages now`
+      ).toBe(false);
+    }
+  });
 
-    expect(pages.length).toBeGreaterThan(10);
-    for (const page of pages) {
+  it("still retires every page name the app tree used to carry", () => {
+    // Verbatim the set that lived under `(app)/` at the moment of deletion
+    // (commit of Stage D). It is a HISTORICAL list on purpose: these are the
+    // URLs in the wild, so the map must answer for them forever, and nothing
+    // on disk can regenerate it.
+    const historical = [
+      "canvas",
+      "canvas2",
+      "channels",
+      "chats",
+      "configuration",
+      "knowledge",
+      "members",
+      "ontology",
+      "overview",
+      "settings",
+      "skills",
+      "workflows",
+    ];
+    expect(historical.length).toBeGreaterThan(10);
+    for (const page of historical) {
       expect(
         retirementRedirect(`/${SEGMENT}/${page}`, ""),
-        `${page} is in the app tree but not in the retirement map`
+        `${page} was a real app URL and the retirement map no longer answers for it`
       ).toBe(LANDING);
     }
   });
