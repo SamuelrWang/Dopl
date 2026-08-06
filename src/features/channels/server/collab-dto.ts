@@ -70,6 +70,25 @@ export type SessionStateRow = {
   updated_at: string;
 };
 
+/**
+ * ONE ROW AS THE DESKTOP REPORTS IT (rollback §3.5, the write half). Column
+ * names, because this is what goes to the database — the API's camelCase shape
+ * is `SessionStateEntryInput` and the service maps between them.
+ *
+ * `user_id` and `workspace_id` are ABSENT ON PURPOSE: they come from the
+ * authenticated context and never from a caller's payload, so there is no field
+ * here for a caller to put someone else's id in. The repository stamps both.
+ */
+export type SessionStateUpsert = {
+  session_key: string;
+  channel_id: string;
+  task_id: string | null;
+  name: string;
+  state: string;
+  channel_name: string | null;
+  thread_title: string | null;
+};
+
 export function mapSessionStateRow(row: SessionStateRow): ChannelSessionState {
   return {
     channelId: row.channel_id,
@@ -80,7 +99,9 @@ export function mapSessionStateRow(row: SessionStateRow): ChannelSessionState {
     // client.
     //
     // F-145 — IT IS AN ASSERTION, NOT A CHECK, and the migration it leans on is
-    // UNAPPLIED (F-144's flagged gap), so today it leans on nothing. The value
+    // still UNAPPLIED (Samuel's gate), so today it leans on nothing. F-147's
+    // writer validates `state` against the same closed set on the way IN, which
+    // is a second layer and not a replacement for this one. The value
     // ends up spliced into `dopl_channel(op="read_sessions")`'s SERVER
     // NARRATION, so the layer that actually holds is the render's closed-set
     // test (`channel-ops-read.formatSessionLine`), which says

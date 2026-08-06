@@ -125,8 +125,9 @@ function resumeWatchTarget(stash, userId) {
 
 // The whenReady SPA-mode service wiring: bridge registration, auth-state
 // fan-out (stop the sync feed on sign-out, restart + rotate on sign-in),
-// the ui-sync start, and (§3.3) the session-pill push. `deps` adds: uiBridge,
-// authTokens, uiSync, sessionSummary, broadcastTo() → the live window.
+// the ui-sync start, (§3.3) the session-pill push and (§3.5) the session-state
+// writer. `deps` adds: uiBridge, authTokens, uiSync, sessionSummary,
+// sessionStatePush, broadcastTo() → the live window.
 function wireSpaServices(deps) {
   const startUiSync = () =>
     deps.uiSync.start({ getWindow: deps.getMainWindow, getAccessToken: deps.authTokens.getAccessToken });
@@ -138,6 +139,20 @@ function wireSpaServices(deps) {
   const startSessionSummary = () => {
     if (!deps.sessionSummary) return; // mid-wave / harness
     deps.sessionSummary.start({ getWindow: deps.getMainWindow });
+  };
+  // THE SESSION-STATE WRITER (rollback §3.5 / F-147) — the server half of the same
+  // projection, so `read_sessions` can answer "what is flint doing?" over MCP. It is armed
+  // HERE because this is where the pill projection and the operator's identity already meet:
+  // it subscribes to session-summary's change event (its trigger) and reads `getAuthState()`
+  // for the operator it may honestly report as (its cross-account guard). SPA-only for the
+  // same reason the pills are — the remote shell is the retired website (§9.3) and does not
+  // grow capabilities, and `authTokens` does not even start there.
+  const startSessionStatePush = () => {
+    if (!deps.sessionStatePush || !deps.sessionSummary) return; // mid-wave / harness
+    deps.sessionStatePush.start({
+      getUserId: () => (deps.authTokens.getAuthState() || {}).userId || null,
+      summary: deps.sessionSummary,
+    });
   };
   let stash = null; // { workspaceId, userId } — what the feed was watching when it stopped
   let lastUserId = null; // the operator it was watching FOR (signed-out carries no id)
@@ -157,6 +172,11 @@ function wireSpaServices(deps) {
       // A sign-in swaps the renderer out of the signed-out screen, so the fresh one has
       // seen no summaries frame; start() resets the digest and repaints it.
       try { startSessionSummary(); } catch (err) { deps.diag('session-summary restart error', err && err.message); }
+      // A fresh credential is not a STATE change, so the writer's own trigger would never
+      // fire on it — and a run that starts signed out has a previous run's rows to clear
+      // and possibly a live session to report. One cycle, off the current projection.
+      try { if (deps.sessionStatePush) deps.sessionStatePush.kick(); }
+      catch (err) { deps.diag('session-state push kick error', err && err.message); }
       const resume = resumeWatchTarget(stash, state && state.userId);
       stash = null;
       if (resume) {
@@ -168,6 +188,7 @@ function wireSpaServices(deps) {
   });
   startUiSync();
   startSessionSummary();
+  startSessionStatePush();
 }
 
 // Tray sign-out, SPA shape: drop the credential and PUSH the transition —

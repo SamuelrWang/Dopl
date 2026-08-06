@@ -181,11 +181,18 @@ const NO_TITLE = "(untitled)";
  * they render through the same inline-neutralizer every other peer string does,
  * under the listing framing.
  *
- * DELIVERY GAP (flagged, F-144). The desktop WRITE — pushing a row on each state
- * change — is not wired in this phase, so an operational desktop currently
- * reports nothing and this comes back empty. The empty answer says so honestly
- * ("no live sessions being reported") rather than inventing state; it is not the
- * same as "you have no sessions". When the push lands, the same op renders them.
+ * DELIVERY. ~~The desktop WRITE is not wired in this phase, so an operational
+ * desktop currently reports nothing.~~ **F-147 WIRED IT** — `main/session-state-push.js`
+ * posts the machine's whole live set to `POST /api/channels/sessions` when the
+ * pill projection's digest moves (a handful of writes per session lifetime, NOT
+ * a heartbeat — plan §5). This op did not change to receive it, which was the
+ * point of shipping the read first.
+ *
+ * THE EMPTY ANSWER STILL MEANS WHAT IT SAID: "no live sessions being reported",
+ * never "you have no sessions". A machine that is asleep, signed out, running
+ * the retired remote shell, or on a build older than the writer reports nothing
+ * — and the honest answer to "what is flint doing?" in that case is silence
+ * about the machine, not a claim about the sessions.
  */
 async function opReadSessions(client, ref) {
     // Resolve a channel filter to its id (a slug would not match the stored
@@ -232,9 +239,12 @@ async function opReadSessions(client, ref) {
  * UNREACHABLE TODAY and defended anyway, on the same reasoning
  * `20260731100000_channels_name_topic_bounds.sql` states about its own
  * constraints: the layer that has to hold is the one that survives the NEXT
- * writer. This column's writer does not exist yet (F-144's delivery gap), the
- * CHECK is not on the live database, and a closed set is the cheapest predicate
- * in this file. It is a MEMBERSHIP test rather than a neutralizer because the
+ * writer. ~~This column's writer does not exist yet.~~ **F-147 wrote it**, and
+ * it validates `state` against the same closed set before the row is stored —
+ * but the CHECK is still not on the live database (the migration is Samuel's
+ * gate), so this remains the layer that actually holds. A closed set is the
+ * cheapest predicate in this file. It is a MEMBERSHIP test rather than a
+ * neutralizer because the
  * set is closed and three elements long — anything outside it is not a state we
  * can render, so we say that instead of rendering it.
  */

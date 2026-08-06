@@ -169,8 +169,10 @@ const READ_OPS: Record<string, string[]> = {
     "get_thread",
     // read-session-state (rollback §3.5): `opReadSessions` calls only
     // `listChannelSessions` (GET /api/channels/sessions) and renders it —
-    // own-scoped, no write. The desktop WRITE that feeds it is a separate,
-    // flagged delivery gap, not an MCP op.
+    // own-scoped, no write. The desktop WRITE that feeds it (F-147) posts
+    // straight to the route from the main process; it is not an MCP op and
+    // must not become one — an external agent does not get to say what a
+    // session on somebody's machine is doing.
     "read_sessions",
   ],
 };

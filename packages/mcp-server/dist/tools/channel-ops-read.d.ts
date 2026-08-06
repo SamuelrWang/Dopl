@@ -88,11 +88,18 @@ export declare function opRead(client: DoplClient, ref: string, since?: number, 
  * they render through the same inline-neutralizer every other peer string does,
  * under the listing framing.
  *
- * DELIVERY GAP (flagged, F-144). The desktop WRITE — pushing a row on each state
- * change — is not wired in this phase, so an operational desktop currently
- * reports nothing and this comes back empty. The empty answer says so honestly
- * ("no live sessions being reported") rather than inventing state; it is not the
- * same as "you have no sessions". When the push lands, the same op renders them.
+ * DELIVERY. ~~The desktop WRITE is not wired in this phase, so an operational
+ * desktop currently reports nothing.~~ **F-147 WIRED IT** — `main/session-state-push.js`
+ * posts the machine's whole live set to `POST /api/channels/sessions` when the
+ * pill projection's digest moves (a handful of writes per session lifetime, NOT
+ * a heartbeat — plan §5). This op did not change to receive it, which was the
+ * point of shipping the read first.
+ *
+ * THE EMPTY ANSWER STILL MEANS WHAT IT SAID: "no live sessions being reported",
+ * never "you have no sessions". A machine that is asleep, signed out, running
+ * the retired remote shell, or on a build older than the writer reports nothing
+ * — and the honest answer to "what is flint doing?" in that case is silence
+ * about the machine, not a claim about the sessions.
  */
 export declare function opReadSessions(client: DoplClient, ref?: string): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;

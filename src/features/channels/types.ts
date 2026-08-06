@@ -157,9 +157,14 @@ export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
  * vocabulary a session's state is ever reported in — over IPC to the desktop
  * pills, and over MCP to an external agent asking "what is flint doing?".
  *
- * There is deliberately NO `thinking`: it needs streaming
- * (`includePartialMessages`), which is off (rollback §3.3 dependency note /
- * sequencing item 6), so a state that can never be derived never appears.
+ * There is deliberately NO `thinking`. ~~It needs streaming
+ * (`includePartialMessages`), which is off.~~ **Corrected by F-146** — that
+ * reason was wrong here as it was in three other places, and this copy was
+ * missed. The session WINDOW already renders a Thinking chip with no stream at
+ * all (`session-chrome.js#thinkingVisible`). What blocks the PILL is its INPUT:
+ * `pillState` sees only the reducer's `{ phase, activity, parked }`, never what
+ * has been RENDERED for the current turn. A fourth state needs that fact lifted
+ * into the reducer, not a stream.
  */
 export type SessionPillState = "working" | "idle" | "ended";
 

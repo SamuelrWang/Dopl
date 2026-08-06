@@ -14,10 +14,19 @@
 // works", plan §2). So the mapping is written ONCE, here, and every consumer is handed
 // the RESULT. Phase 5 lifts `list()` to MCP and adds no second derivation.
 //
-// THIS PHASE ADDS NO SERVER WRITE. `agent_presence` is untouched (plan §5 / sequencing
-// item 7 — its retirement is to be measured, not assumed), no table gains a column, and
-// nothing here reaches the network. A summary is derived from in-memory state and pushed
-// to the renderer over IPC.
+// THIS MODULE STILL REACHES NO NETWORK. ~~This phase adds no server write.~~ **F-147
+// added one — SOMEWHERE ELSE.** `channel_sessions` now holds a row per live session so
+// §3.5's "what is flint doing?" can be answered over MCP, and the writer is
+// `main/session-state-push.js`, which SUBSCRIBES to `subscribe()` below. Separate ON
+// PURPOSE: this file is the ONE place engine state becomes a pill state (F-142), it is
+// import-free below the sentinel, and every one of its tests reads it as SOURCE — an HTTP
+// call here would end all three. `agent_presence` is still untouched (plan §5 / item 7:
+// its retirement is to be MEASURED against that store).
+//
+// THE TRIGGER IS THE DIGEST, and there is only one. `flush()` already coalesces a burst of
+// engine dispatches into one comparison and fires only when the projection really moved,
+// so a server write costs a state CHANGE and never a turn. Do not add a second derivation,
+// a second timer, or a heartbeat.
 //
 // ── THE STATE MAPPING ────────────────────────────────────────────────────────────────
 // The engine's own vocabulary is two fields wide (`session-state.js` / `session-reducer.js`):
@@ -199,6 +208,28 @@ function endedSummary(e, name) {
 }
 
 /**
+ * ONE ENTRY, WIDENED WITH THE TWO FACTS A SERVER ROW CANNOT DO WITHOUT (F-147).
+ * `channel_sessions` keys on `(user_id, session_key)` and fences on `workspace_id`, and
+ * the wire shape carries neither — `sessionId` is the EPHEMERAL internal id (a park or a
+ * recreate mints a new one), so it is the wrong upsert key. Both are facts this module
+ * ALREADY holds (`s.key` keys the name ledger; `s.workspaceId` rides the session object),
+ * so threading them derives nothing new. They do NOT go on the wire: `wireSummary` takes
+ * them back off, so the IPC payload and `DesktopSessionSummary` are byte-unchanged. One
+ * derivation, two projections.
+ */
+function reportEntry(wire, key, workspaceId) {
+  return { ...wire, key: String(key || ''), workspaceId: String(workspaceId || '') };
+}
+
+/** The wire shape, from a report entry: the two report-only fields removed. */
+function wireSummary(entry) {
+  const out = { ...entry };
+  delete out.key;
+  delete out.workspaceId;
+  return out;
+}
+
+/**
  * Have the summaries actually changed? The engine dispatches on EVERY SDK event, so
  * without this the renderer would be woken by a message it cannot see the effect of —
  * a tool result, a token count, a cost delta — dozens of times per turn.
@@ -234,6 +265,9 @@ let deps = { sessions: null };
 let getWindowFn = null;
 let pushTimer = null;
 let lastDigest = null;
+// F-147: the SERVER writer's gate, separate from the window's — see `subscribe`.
+const changeSubscribers = new Set();
+let lastChangeDigest = null;
 
 /** The engine binds its in-memory registry here at load (the session-reopen idiom). */
 function bind(d) {
@@ -268,15 +302,19 @@ function sweepEnded() {
  * Names are assigned HERE, lazily, which is what keeps the ledger from growing with every
  * session that ever ran: a key that has left both the registry and the ended set is
  * released below and its handle goes back to the pool.
+ *
+ * THE ONE PASS BEHIND BOTH CONSUMERS (F-147): this builds REPORT entries, `list()` narrows
+ * them for the renderer, and the server writer takes them whole.
  */
-function list() {
+function reportList() {
   const out = [];
   const seen = new Set();
   if (deps.sessions) {
     for (const s of deps.sessions.values()) {
       if (s.settled) continue;
       seen.add(s.key);
-      out.push(liveSummary(s, nameFor(ledger, s.key, String(s.channelId || ''))));
+      const name = nameFor(ledger, s.key, String(s.channelId || ''));
+      out.push(reportEntry(liveSummary(s, name), s.key, s.workspaceId));
     }
   }
   for (const e of sweepEnded()) {
@@ -284,12 +322,17 @@ function list() {
     // abandonment. The live session wins: it is the one the pill should open.
     if (seen.has(e.key)) continue;
     seen.add(e.key);
-    out.push(endedSummary(e, nameFor(ledger, e.key, e.channelId)));
+    out.push(reportEntry(endedSummary(e, nameFor(ledger, e.key, e.channelId)), e.key, e.workspaceId));
   }
   for (const key of [...ledger.keys()]) {
     if (!seen.has(key)) ledger.delete(key);
   }
   return out;
+}
+
+/** The renderer's view: `reportList()` minus the two fields only a server row needs. */
+function list() {
+  return reportList().map(wireSummary);
 }
 
 /**
@@ -325,6 +368,9 @@ function noteEnded(s, keepWindow) {
       key: s.key,
       sessionId: s.sessionId,
       channelId: String(s.channelId || ''),
+      // F-147: frozen with the rest of the identity, because a retained ended entry is
+      // no longer in the registry and there is nowhere else left to read it from.
+      workspaceId: String(s.workspaceId || ''),
       taskId: String(s.taskId || ''),
       channelName: ctx.channelName || null,
       threadTitle: ctx.taskTitle || null,
@@ -368,14 +414,45 @@ function sendToWindow(payload) {
   return true;
 }
 
+/**
+ * THE CHANGE SUBSCRIPTION (F-147) — "the projection moved", for a consumer that is not a
+ * window. Its one subscriber today is `main/session-state-push.js`.
+ *
+ * IT IS NOT THE WINDOW'S GATE, and the two must not be merged back. `start()` resets
+ * `lastDigest` so a REBUILT renderer is repainted with a frame it has not seen — a rebuilt
+ * renderer is not a state change and must not cost a server write. `lastChangeDigest` is
+ * therefore its own, is never reset, and records WHETHER OR NOT anything consumed the
+ * frame: delivery is the subscriber's problem.
+ *
+ * A THROWING SUBSCRIBER CANNOT BREAK THE ENGINE — `touch()` is called from `dispatch`, so
+ * an exception here would unwind into the SDK event loop (the argument `emitAuthState`
+ * makes about the refresh loop).
+ */
+function subscribe(fn) {
+  if (typeof fn !== 'function') return () => {};
+  changeSubscribers.add(fn);
+  return () => changeSubscribers.delete(fn);
+}
+
+function emitChange(entries) {
+  for (const fn of changeSubscribers) {
+    try { fn(entries); }
+    catch (err) { diag('session-summary: change subscriber threw —', (err && err.message) || String(err)); }
+  }
+}
+
 function flush() {
   pushTimer = null;
-  const sessions = list();
-  const digest = summariesDigest(sessions);
+  const entries = reportList();
+  const digest = summariesDigest(entries);
+  if (digest !== lastChangeDigest) {
+    lastChangeDigest = digest;
+    emitChange(entries);
+  }
   if (digest === lastDigest) return; // nothing a pill could show has moved
   // Only record the frame as delivered when it really was: a send into a window that is
   // not there yet must not suppress the next identical one.
-  if (sendToWindow({ sessions: sessions })) lastDigest = digest;
+  if (sendToWindow({ sessions: entries.map(wireSummary) })) lastDigest = digest;
 }
 
 /** Something about a session may have changed. Cheap and coalesced; call it freely. */
@@ -400,6 +477,8 @@ module.exports = {
   bind,
   start,
   list,
+  reportList,
+  subscribe,
   nameForSession,
   noteEnded,
   keptWindow,

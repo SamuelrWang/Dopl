@@ -85,4 +85,7 @@ export {
 
 export { heartbeatPresence } from "./presence-service";
 
-export { listSessionStates } from "./session-state-service";
+export {
+  listSessionStates,
+  reportSessionStates,
+} from "./session-state-service";

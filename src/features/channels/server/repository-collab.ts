@@ -5,7 +5,6 @@ import type { AgentPresenceStatus } from "../types";
 import type {
   ConsentRequestRow,
   PresenceRow,
-  SessionStateRow,
   TrustRuleRow,
 } from "./collab-dto";
 
@@ -20,10 +19,6 @@ import type {
 const CONSENT_LIST_LIMIT = 200;
 const PRESENCE_ROWS_LIMIT = 5_000;
 const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
-// One member's live sessions are bounded by the desktop's window budget
-// (MAX_SESSION_WINDOWS), so this is far above any real machine and exists only
-// to make a truncation loud rather than silent.
-const SESSION_ROWS_LIMIT = 500;
 
 /**
  * Pure data access for the v1.2 collaboration tables (consent requests,
@@ -323,78 +318,6 @@ export async function presenceForWorkspace(
     });
   }
   return out;
-}
-
-// ─── Session states (rollback §3.5, read-session-state) ─────────────
-
-/**
- * PostgREST's code for "that relation is not in the schema cache" — the answer
- * a select gets when the table does not exist (or has not been reloaded into
- * the API's cache yet). See {@link listSessionStates} for why it is not an
- * error here. Matched on the CODE, never on the message, which is prose.
- */
-const PGRST_MISSING_RELATION = "PGRST205";
-
-function isMissingRelation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === PGRST_MISSING_RELATION
-  );
-}
-
-/**
- * The caller's OWN live sessions, newest change first, optionally narrowed to
- * one channel. Scoped to `userId` here (and by RLS) because a session belongs
- * to one member's machine and read-session-state answers about the caller's own
- * — a peer has no read on it.
- *
- * The write half (the desktop pushing rows on state change) is NOT wired in
- * this phase — see the read-session-state DELIVERY GAP flag in F-144. Until it
- * lands this returns `[]`, which the read op reports honestly as "no live
- * sessions" rather than fabricating any.
- *
- * F-145 — AND THE MIGRATION IS THE OTHER HALF OF THAT SENTENCE. F-144 shipped
- * `channel_sessions` UNAPPLIED (Samuel's gauntlet applies it), so on the live
- * database this select answered `PGRST205` and the throw travelled all the way
- * out: `mapChannelError` has no arm for a raw PostgREST error, so the route
- * returned a 500 INTERNAL_ERROR. Four places — this function's own docblock,
- * `session-state-service`, the route, and F-144 — all claimed it "returns []
- * live", and none of them was true.
- *
- * SO THE MISSING RELATION IS DEGRADED TO THE HONEST EMPTY ANSWER, and the op is
- * correct whether or not the migration has landed: "no live sessions are being
- * reported" is exactly what a table with no rows and a table that does not yet
- * exist both mean to the caller, because the WRITER does not exist either. This
- * is deliberately NARROW — one PostgREST code, nothing else. A permission
- * error, a column mismatch, a dead connection and a timeout all still throw,
- * because each of those means the answer is UNKNOWN rather than EMPTY, and an
- * empty list is a claim.
- *
- * DELETE THIS DEGRADE once the table is applied everywhere and the desktop push
- * has landed: past that point a missing relation is a real deployment fault and
- * should be loud.
- */
-export async function listSessionStates(
-  userId: string,
-  workspaceId: string,
-  channelId?: string
-): Promise<SessionStateRow[]> {
-  const db = supabaseAdmin();
-  let query = db
-    .from("channel_sessions")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("workspace_id", workspaceId);
-  if (channelId) query = query.eq("channel_id", channelId);
-  const { data, error } = await query
-    .order("updated_at", { ascending: false })
-    .limit(SESSION_ROWS_LIMIT);
-  if (error) {
-    if (isMissingRelation(error)) return [];
-    throw error;
-  }
-  return (data ?? []) as SessionStateRow[];
 }
 
 /** Member user-ids per channel — pairs with presence for online counts. */

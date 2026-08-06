@@ -361,6 +361,7 @@ if (!gotLock) {
       wireSpaServices({
         uiBridge, authTokens, uiSync, diag,
         sessionSummary: require('./session-summary'), // §3.3: the session-pill push
+        sessionStatePush: require('./session-state-push'), // §3.5 / F-147: the server half
         getMainWindow: () => mainWindow,
       });
       createShellWindow({ show: false });

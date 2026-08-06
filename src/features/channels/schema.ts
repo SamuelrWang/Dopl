@@ -451,19 +451,21 @@ export const ConsentListQuerySchema = z.object({
 export type ConsentListQuery = z.infer<typeof ConsentListQuerySchema>;
 
 /**
- * `?channelId=<uuid>` for read-session-state (rollback §3.5).
- *
- * F-145 — IT WAS UNVALIDATED. The route read the param and handed it straight to
- * `.eq("channel_id", …)`, so `?channelId=oops` reached Postgres as a uuid cast
- * and came back as a raw driver error that `mapChannelError` does not own — a
- * 500 for what is plainly a malformed request. Same shape and same fix as the
- * consent inbox's {@link ConsentListQuerySchema} one screen up, which is the
- * only other `?channelId=` on this surface.
+ * Read-session-state's schemas (rollback §3.5) live in `schema-sessions.ts` and
+ * are re-exported here so every existing `@/features/channels/schema` import is
+ * unchanged. They moved because the WRITE half's schema did not fit: this file
+ * stood at 487/500 and §2's answer to that is a split on a real seam, not a
+ * trimmed comment. See that file for the query param's F-145 history.
  */
-export const SessionStateQuerySchema = z.object({
-  channelId: z.string().uuid().optional(),
-});
-export type SessionStateQuery = z.infer<typeof SessionStateQuerySchema>;
+export {
+  SessionStateQuerySchema,
+  SessionStateReportSchema,
+} from "./schema-sessions";
+export type {
+  SessionStateQuery,
+  SessionStateEntryInput,
+  SessionStateReportInput,
+} from "./schema-sessions";
 
 // ─── Trust (per-teammate standing consent) ──────────────────────────────────
 
