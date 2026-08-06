@@ -56,9 +56,22 @@
 // saying "idle" over a working one makes them re-ask. The first is worse — waiting has no
 // natural end and no feedback — so an activity this table does not know reads as idle.
 //
-// THERE IS NO 'thinking'. Plan §3.3 lists it and its own dependency note says why not yet:
-// it needs `includePartialMessages: true`, which is off. Adding a fourth state that can
-// only ever be derived from a stream we do not have would be a state that never appears.
+// THERE IS NO 'thinking' PILL, AND THE REASON IS NOT "no stream". Plan §3.3 lists the state
+// and its dependency note blames `includePartialMessages: false`, which is off (LOAD-BEARING
+// for the outbound card, FIX F4). That is not the whole truth, and stating it that way has
+// already misled a reviewer: the SESSION WINDOW ships a Thinking chip TODAY, derived with no
+// token stream at all — `renderer/session/session-chrome.js` `thinkingVisible` is "a turn is in
+// flight AND the last transcript item is not agent output".
+//
+// THE REAL OBSTACLE IS WHERE THE FACT LIVES. That chip reads the WINDOW'S OWN item list. This
+// projection reads `pillState`, whose entire input is the reducer's `{ phase, activity, parked }`
+// — three fields that say what the SESSION is doing and nothing about what has been RENDERED for
+// the current turn. So a fourth pill state needs the "nothing yet" fact lifted into the reducer,
+// or a second source spliced into this projection. Both are real work with a real cost (the
+// reducer would gain a field every suite pins), and neither is blocked on a stream.
+//
+// WHAT A STREAM WOULD BUY is a *finer* signal — thinking vs. tool-running vs. drafting — not the
+// binary one. Do not re-derive "we cannot" from the dependency note.
 //
 // ── ENDED SESSIONS: THE RETENTION RULE ───────────────────────────────────────────────
 // An ended session's pill survives exactly as long as its WINDOW does, and no longer.

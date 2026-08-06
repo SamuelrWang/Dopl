@@ -7,6 +7,8 @@
  * carries none of the request affordances.
  */
 
+import { existsSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { COMPOSER_MODE_LABEL, MessageComposer } from "./message-composer";
@@ -230,7 +232,30 @@ describe("MessageComposer — the surfaces that are GONE", () => {
     expect(composer()).not.toContain("/new-agent");
   });
 
-  it("offers no agent mention list", () => {
-    expect(composer()).not.toContain("quartz");
+  it("offers no agent mention list, and the modules behind one are gone", () => {
+    // `expect(composer()).not.toContain("quartz")` STOOD ALONE HERE AND WAS
+    // VACUOUS (F-146): the roster fixture above is Me + Ada and has never
+    // contained the string "quartz", so the assertion held whether or not a
+    // mention popup rendered. It described the intent and tested nothing.
+    //
+    // A mention list would render the ROSTER, so the honest markup check is
+    // against a name the fixture actually has — and one that must not appear,
+    // because a composer at rest shows a placeholder, not a member list.
+    expect(composer()).not.toContain("Ada");
+
+    // AND THE STRUCTURAL HALF, which is what would actually have to come back:
+    // the three modules the `@` popup and `/new-agent` hint were built from were
+    // deleted with named agents (rollback §1). A markup assertion cannot notice
+    // a re-import that has not been wired to a visible surface yet; this can.
+    for (const rel of [
+      "./mention-popup.tsx",
+      "../lib/mention.ts",
+      "../lib/composer-commands.ts",
+    ]) {
+      expect(
+        existsSync(new URL(rel, import.meta.url)),
+        `${rel} is back — it was deleted in the channels rollback §1`
+      ).toBe(false);
+    }
   });
 });

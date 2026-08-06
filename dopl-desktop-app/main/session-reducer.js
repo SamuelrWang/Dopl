@@ -68,15 +68,12 @@ function inboundAutoAccepted(state) {
 // as a `counterparty` bubble, push it as the next user turn, clear the activity back to `working`
 // (statused only on change). A PARKED session wakes FIRST (resumeQuery) so the push lands on the
 // fresh iterator (P1 lazy resume).
-// The push effect for ONE inbound turn. `threadId` is the thread that turn arrived in — carried
-// from channel-deliver through the gate so the FIRST turn of a room-bound shell can be told to
-// read the exchange it is joining (prompt-framing.firstActions, via session-seed.takeFraming).
-// It rides ONLY when there is one, so a thread-less turn produces the exact effect object it
-// always did and the shapes pinned across the reducer suites do not move.
+// The push effect for ONE inbound turn. It used to carry a per-turn `threadId` from
+// channel-deliver, so the first turn of a room-bound shell could be told to read the exchange it
+// was joining; that producer is deleted (channels rollback, 2026-08-05) and the value was `''`
+// end to end, so the effect is the two fields the engine's `pushInbound` case actually reads.
 function pushInboundEffect(event) {
-  const eff = { type: 'pushInbound', message: event.message, authorName: event.authorName };
-  if (event.threadId) eff.threadId = String(event.threadId);
-  return eff;
+  return { type: 'pushInbound', message: event.message, authorName: event.authorName };
 }
 
 function feedInboundEffects(state, event) {
@@ -275,11 +272,12 @@ function sessionReducer(state, event) {
 
   if (type === 'inbound_arrived') {
     // v2.5 D1 — THE INBOUND GATE, now universal. A COUNTERPARTY turn NEVER reaches the agent
-    // before the operator accepts it: only an explicit AXIS B / task opt-in feeds it.
-    // `selfAuthored` is the operator's OWN message to their OWN team agent — nobody is left to
-    // approve it to (session-gate.selfBypass), under the SAME authHeld conjunct as everything
-    // else here, because a held session has no iterator to push onto.
-    if (inboundAutoAccepted(state) || (state.authHeld !== true && event.selfAuthored === true)) {
+    // before the operator accepts it: only an explicit AXIS B / task opt-in feeds it. A second
+    // arm used to bypass for `event.selfAuthored` — the operator's OWN message routed to their
+    // OWN team agent, which had already had its human decision. Nothing writes that flag since
+    // channel-agents.deliverToAgent was deleted (channels rollback, 2026-08-05), and every
+    // feedInbound caller excludes own-authored messages, so AXIS B is the whole opt-out.
+    if (inboundAutoAccepted(state)) {
       return { state: clone(state, { phase: 'running', activity: 'working', parked: false }), effects: feedInboundEffects(state, event) };
     }
     // HOLD it as a pending inbound the operator answers (Accept / Accept for this task /

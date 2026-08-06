@@ -1,10 +1,13 @@
 /**
  * Unit tests for the agent handle pool + picker. Pure module, no mocks.
  *
- * THE MODULE HAS NO PRODUCTION CALLER RIGHT NOW, and this suite is why it can be trusted to
- * still work when it gets one. Summoning is gone (channels rollback §1); the plan's §3.3
- * reuses this exact pool to name SESSION PILLS, so the contract below is what phase 3 will
- * build on rather than dead code kept out of sentiment.
+ * THE MODULE HAS NO PRODUCTION CALLER IN THIS TREE, and that is not the same as having no
+ * caller. §3.3 shipped: session pills are named in the desktop main process, from
+ * `dopl-desktop-app/main/agent-names.js`, a port of this module that CANNOT import it
+ * (CommonJS, no build step). This suite pins the CONTRACT that port has to satisfy, and
+ * `agent-names-desktop-parity.test.ts` pins the port against the canonical copy. Together
+ * they are the only thing standing between an edit here and a different pool of names in
+ * front of a user.
  *
  * The contract under test: `pickAgentName` is the only thing standing between a
  * summon and a 409, so it must (a) never return a handle the caller already

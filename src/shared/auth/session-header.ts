@@ -1,17 +1,22 @@
 /**
  * `X-Dopl-Session-Id` — which SESSION of an agent a request speaks for (F2).
  *
- * WHY IT EXISTS. `channel_agents` holds ONE row per agent handle, and `as_agent`
- * is validated per CALL against ownership alone: any process holding the
- * operator's credential may post as any agent that operator owns. On the
- * desktop that is not a leak but the documented design — a ROOM slot
- * `(channel, agent)` and a PAIR slot `(channel, thread)` are disjoint key
- * spaces (`main/session-store.js` `slotKey`), so one handle legitimately has
- * several concurrent sessions on one machine. What was missing is anything ON
- * THE WIRE that says WHICH of them wrote a message. Two sessions posted as the
- * same handle and issued a peer contradictory instructions 79 seconds apart, and
- * `metadata` alone could not attribute either one; "flint said X" was not a
- * well-formed statement.
+ * WHY IT EXISTS. The incident was two concurrent sessions of ONE agent handle:
+ * `channel_agents` held one row per handle, `as_agent` was validated per CALL
+ * against ownership alone, and a ROOM slot `(channel, agent)` and a PAIR slot
+ * `(channel, thread)` were disjoint key spaces — so several live sessions of one
+ * handle was the documented design. Two of them issued a peer contradictory
+ * instructions 79 seconds apart, and nothing ON THE WIRE said which had spoken;
+ * "flint said X" was not a well-formed statement.
+ *
+ * THE MECHANISM IS GONE AND THE HEADER IS NOT (channels rollback §1). `as_agent`
+ * is a removed param, nothing writes `channel_agents`, and the room slot shape
+ * survives inert. The header outlives them because the question generalized: a
+ * peer's ACCOUNT is what authors an agent post, one operator runs many sessions
+ * at once, and `metadata.session_id` is still the only field that says which
+ * process wrote a line. It is what the transcript's session suffix renders
+ * (`packages/mcp-server/src/tools/channel-render.ts`) and what makes a named
+ * session pill answerable.
  *
  * A LABEL, NOT A LOCK, and that distinction is the whole design. Nothing
  * enforces one live session per agent id — that would break the legitimate

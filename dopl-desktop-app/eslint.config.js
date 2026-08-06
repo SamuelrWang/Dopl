@@ -11,6 +11,21 @@ const globals = require('globals');
 
 const MAX_LINES = ['error', { max: 500, skipBlankLines: false, skipComments: false }];
 
+// `no-redeclare` — THE RULE F-143 EARNED, added 2026-08-05 (F-146).
+//
+// It is off in `eslint:recommended`'s absence and this config takes no preset, so a second
+// `function nameForSession(...)` in one file was silently legal: the later declaration won,
+// the earlier one became unreachable, and the file read as though both were live. That is
+// exactly what shipped in F-143 and it cost a real debugging round. `max-lines` cannot catch
+// it — a duplicate makes a file BIGGER, so the cap reads it as ordinary growth.
+//
+// `builtinGlobals: false` on purpose. These files run with the `globals.node` +
+// `globals.browser` union declared below, and that union legitimately contains names a
+// main-process module may shadow (`name`, `status`, `origin`, `close`, `event`, `length`).
+// Flagging those would be a rename wave with no defect behind it; the defect this rule is
+// here for is a duplicate declaration inside one file.
+const NO_REDECLARE = ['error', { builtinGlobals: false }];
+
 module.exports = [
   { ignores: ['renderer/app/**', 'node_modules/**', 'dist/**', 'build/**'] },
 
@@ -24,6 +39,7 @@ module.exports = [
     },
     rules: {
       'max-lines': MAX_LINES,
+      'no-redeclare': NO_REDECLARE,
     },
   },
 
@@ -37,6 +53,7 @@ module.exports = [
     },
     rules: {
       'max-lines': MAX_LINES,
+      'no-redeclare': NO_REDECLARE,
     },
   },
 ];

@@ -11,7 +11,9 @@
 //
 // THE metaStr FREE VARIABLE. The block below calls `metaStr` without declaring it — it is a
 // module-scope binding here, ABOVE the sentinel, exactly the way session-reducer.js consumes
-// session-effects.js and channel-agents.js consumes channel-roster.js. That is what lets the
+// session-effects.js. (There was a second example, `channel-agents.js consumes
+// channel-roster.js`; both of those modules were deleted in the channels rollback §1, so the
+// one live pair is the precedent now.) That is what lets the
 // classify truth tables keep slicing this block into a bare `new Function` scope alongside
 // targeting.js's own copy of the same three lines. It is restated rather than imported for one
 // reason only: importing it back from targeting.js would be a require cycle, and this module

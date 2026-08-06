@@ -38,10 +38,10 @@ export {
   getChannelTask,
   readMessages,
   resolveReadableChannelId,
-  revalidateAwaitAccess,
-  pollChannelMessages,
-  hasNewMessages,
 } from "./service-reads";
+// `revalidateAwaitAccess` / `pollChannelMessages` / `hasNewMessages` are NOT re-exported.
+// Their one consumer is `service-await.ts`, which imports them from `./service-reads`
+// directly; a second name for a long-poll internal only invites a handler to call one.
 
 export { awaitNewMessages } from "./service-await";
 export type { AwaitHoldCounters, AwaitHoldResult } from "./service-await";

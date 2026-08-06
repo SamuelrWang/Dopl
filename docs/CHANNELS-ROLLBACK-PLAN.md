@@ -93,9 +93,17 @@ States: **working** (running tools) · **thinking** · **idle** · **ended**.
 
 Click a pill → dropdown → open it → land in the thread that session is working in.
 
-> **Dependency:** "thinking" requires streaming, which is currently off
-> (`includePartialMessages: false`). "working" is available today. This was already #2 on
-> the SDK gap list. Streaming must land for the full state set.
+> **Dependency (CORRECTED 2026-08-05, F-146 — the original wording was wrong and it
+> propagated).** It said "thinking" requires streaming, which is currently off
+> (`includePartialMessages: false`). That is not what blocks it. **The session window already
+> ships a Thinking chip with no stream at all** — `renderer/session/session-chrome.js`
+> `thinkingVisible` is "a turn is in flight AND the last transcript item is not agent output".
+> What blocks the PILL is that the pill projects from `main/session-summary.js#pillState`,
+> whose whole input is the reducer's `{ phase, activity, parked }` — three fields about what
+> the session is DOING, none about what has been RENDERED for the current turn. A fourth pill
+> state therefore needs that fact lifted into the reducer or a second source spliced into the
+> projection; streaming would only buy a FINER signal (thinking vs. tool-running vs. drafting),
+> not the binary one. "working" is available today.
 
 ### 3.4 One behaviour for initiating, not three
 

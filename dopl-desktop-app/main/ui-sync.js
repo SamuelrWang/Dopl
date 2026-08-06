@@ -10,11 +10,11 @@
 // per-component channels eating >80% of DB time.
 //
 // THE CHANNELS EXEMPTION (DESKTOP-MIGRATION-PLAN.md Phase 3) is about the LISTENER
-// MODULES: realtime.js + realtime-agents.js keep their own sockets, breakers and health
-// model for AGENT delivery — nothing here touches them. The UI feed watches
-// channel_messages/channel_agents/agent_presence TOO (web parity: messages appear live,
-// roster/presence dots update) on ITS OWN socket; the first dogfood proved excluding
-// them left the app's channel transcript frozen until a manual refetch.
+// MODULE, and it is ONE module now, not two: realtime.js keeps its own socket, breaker
+// and health model for delivery (`realtime-agents.js` is deleted — realtime.js `:73`).
+// The UI feed watches channel_messages + agent_presence TOO, on ITS OWN socket, for web
+// parity — the first dogfood proved excluding them froze the transcript. `channel_agents`
+// is bound too and is EXPECTED SILENT: nothing writes it since the rollback §1 (F-146).
 //
 // THE CREDENTIAL RULE, inherited verbatim from realtime.js. Realtime authorizes
 // postgres_changes with the USER JWT from setAuth. With NO JWT realtime-js joins on

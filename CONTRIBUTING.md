@@ -30,13 +30,28 @@ npm run build -w @dopl/client
 npm run build -w @dopl/mcp-server
 ```
 
-The CI workflow in `.github/workflows/packages.yml` does this in order on every PR.
+The CI workflow in `.github/workflows/ci.yml` does this in order on every PR.
 
 ## Test
 
 ```sh
-npm test -w @dopl/client       # vitest
+npm test                          # root suite (src/**)          — 2133
+npm test -w @dopl/client          #                              —   48
+npm test -w @dopl/mcp-server      #                              —  483
+npm test -w @dopl/desktop-ui      # the bundled SPA              —  143
+npm --prefix dopl-desktop-app test  # the Electron main process  — 2313
+
+npm run test:all                  # the four workspace suites in one go
 ```
+
+`dopl-desktop-app/` is a SEPARATE npm project, not a workspace — it has its own
+`package.json` and lockfile, so `-w` does not reach it and it needs its own
+`npm install`. Its suite is `node --test` over source-extraction truth tables and
+launches no Electron binary.
+
+**All five run in CI** (`.github/workflows/ci.yml`), on every push and PR, with no
+path filters. Until 2026-08-05 only `@dopl/client` did — 48 of 5 120 tests — and
+the root and mcp-server projects had no `test` script for a workflow to call.
 
 Tests live next to source (`foo.ts` → `foo.test.ts` in the same folder), per `docs/ENGINEERING.md` §13.
 

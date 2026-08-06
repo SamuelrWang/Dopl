@@ -79,14 +79,17 @@ export declare function formatAuthor(m: ChannelMessage): string;
 /**
  * WHICH SESSION WROTE THIS LINE — `metadata.session_id` (F2).
  *
- * ONE `channel_agents` row can be claimed by any number of concurrent processes
- * holding its owner's credential: `as_agent` is per-call and ownership-checked
- * only, and on the desktop a ROOM slot `(channel, agent)` and a PAIR slot
- * `(channel, thread)` are disjoint key spaces, so several live sessions of one
- * handle is the documented design rather than a race. Two of them posted as the
- * same handle and gave a peer contradictory instructions 79 seconds apart, and
- * `metadata` carried nothing that could attribute either — "flint said X" was
- * not a well-formed statement. This is the field that makes it one.
+ * THE INCIDENT was two concurrent sessions of one agent HANDLE: `as_agent` was
+ * per-call and ownership-checked only, so any process holding the owner's
+ * credential could claim a `channel_agents` row, and they gave a peer
+ * contradictory instructions 79 seconds apart with nothing in `metadata` able to
+ * attribute either. "flint said X" was not a well-formed statement.
+ *
+ * Named agents are gone (channels rollback §1) and this field is not, because
+ * the ambiguity was never really about handles: an agent post is authored by its
+ * OWNER'S ACCOUNT, and one operator runs many sessions at once, so an author
+ * label alone still cannot name the process. `session_id` is the only thing on
+ * the wire that can. The suffix below is what renders it.
  *
  * NOT PEER-CONTROLLED TEXT: `resolvePostMetadata` deletes any caller copy
  * unconditionally and re-stamps only from the `X-Dopl-Session-Id` header, which

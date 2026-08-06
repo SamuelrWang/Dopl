@@ -166,9 +166,15 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
   });
 
   it("addresses nobody: a milestone marks the thread, it does not reach for anyone", async () => {
-    // `to` / `to_agent` / `to_agents` are deliberately not routed through. A
-    // milestone that could address somebody would be a reply wearing a marker's
-    // clothes, which is the confusion this op exists to remove.
+    // `to` is a real, live param of `post` and is deliberately NOT routed through
+    // here. A milestone that could address somebody would be a reply wearing a
+    // marker's clothes, which is the confusion this op exists to remove.
+    //
+    // IT USED TO ALSO ASSERT `toAgent` / `toAgents` WERE UNSET, and those two
+    // assertions were vacuous from the moment named agents were deleted (F-146):
+    // `ChannelMessageInput` has no such fields, so `undefined` was the only
+    // answer possible and the check could never fail. Asserting the absence of a
+    // field the TYPE lacks is not coverage, it is a comment that runs.
     const client = stubClient();
     await callTool(client)({
       op: "milestone",
@@ -176,13 +182,15 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
       thread: THREAD_ID,
       body: "step two",
       to: "peer@example.com",
-      to_agent: "quartz",
     });
     const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
     const sent = input as unknown as Record<string, unknown>;
     expect(sent.toUserId).toBeUndefined();
-    expect(sent.toAgent).toBeUndefined();
-    expect(sent.toAgents).toBeUndefined();
+    // ...and it DID send the thread and the body, so the absence above is a
+    // routing decision rather than a call that never happened. (`thread` folds
+    // into the STORAGE key `metadata.taskId` at the client boundary.)
+    expect((sent.metadata as Record<string, unknown>).taskId).toBe(THREAD_ID);
+    expect(sent.body).toBe("step two");
   });
 
 });

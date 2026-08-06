@@ -1,10 +1,11 @@
 /**
- * The curated handle pool a summoned agent is auto-named from, plus the picker.
+ * The curated handle pool an agent is auto-named from, plus the picker.
  *
  * Design constraints, all load-bearing:
- * - Every entry matches the addressing charset `^[a-z][a-z0-9-]{1,30}$`, which
- *   the `channel_agents.name` CHECK enforces — a name this module returns must
- *   never be rejected by the DB.
+ * - Every entry matches the addressing charset `^[a-z][a-z0-9-]{1,30}$` — the shape a handle
+ *   has to have to be typed as an @-mention and to satisfy the `channel_agents.name` CHECK.
+ *   Nothing writes that table since the rollback, so the charset is a property of the NAME
+ *   now rather than a DB round trip, and it is still the reason a handle is safe to render.
  * - Single word, pronounceable, unambiguous when typed as an @-mention. Three
  *   families (minerals, stars, plants) so a room of agents reads as a set of
  *   NAMES rather than a numbered list.
@@ -15,11 +16,21 @@
  * This module is pure data + one function; it has no server-only import and is
  * safe to reuse anywhere the pool needs to be rendered.
  *
- * IT OUTLIVED WHAT IT WAS BUILT FOR. Summoning is gone (channels rollback §1) and nothing
- * calls `pickAgentName` today; the module survives on purpose because the plan's §3.3 names
- * it as the generator SESSION PILLS will use — each launched session gets a friendly name
- * from this same pool, and they are still called "agents" in the UI because a session IS an
- * agent session. Keep it importable. Its only current consumer is its own test.
+ * IT IS THE CANONICAL SPEC OF A SHIPPED GENERATOR, NOT A RESERVATION FOR A FUTURE ONE.
+ * Summoning is gone (channels rollback §1) and nothing in THIS tree calls `pickAgentName`.
+ * §3.3 shipped and session pills are named in the desktop MAIN process, which is CommonJS
+ * with no build step and cannot import this file — so it names them from
+ * `dopl-desktop-app/main/agent-names.js`, a deliberate byte-for-byte PORT of this module.
+ *
+ * That port is what makes this file load-bearing rather than residue. The pool ORDER is
+ * behaviour (`pickAgentName` returns the first free entry), and the only thing holding the
+ * two copies together is `agent-names-desktop-parity.test.ts`, which compares the live
+ * desktop copy against THIS one element-wise and runs both pickers over one corpus. Delete
+ * this module and that guard has nothing to compare against, so the pool a user actually
+ * sees becomes unpinned. `agent-names.test.ts` pins the contract the port must satisfy
+ * (charset, no repeats, suffixing past the end of the pool).
+ *
+ * CHANGE ONE, CHANGE BOTH — and this is the one to change first.
  */
 
 /** 60 handles: 20 minerals, 20 stars, 18 plants + `ember` and `wren`. */
@@ -97,12 +108,11 @@ export const AGENT_NAME_POOL: readonly string[] = [
  * one base, so a busy channel still reads as varied names instead of
  * `quartz-2..quartz-9`.
  *
- * `taken` is compared case-folded, matching the `(channel_id, lower(name))`
- * unique index — the DB is the real arbiter, and this must not hand back a
- * handle that only differs by case. The result is a CANDIDATE, not a
- * reservation: the caller still races other summons, and the unique index is
- * what actually decides. A service that loses that race re-picks with the
- * loser's handle added to `taken`.
+ * `taken` is compared case-folded: two handles that differ only by case read as the same name
+ * to a person, and the rule predates the rollback, where the `(channel_id, lower(name))` unique
+ * index was the real arbiter. There is no such index in the path today — the desktop port names
+ * in-process from the handles it already holds — so the caller passing a complete `taken` set is
+ * what makes the answer correct, and it stays a CANDIDATE rather than a reservation.
  */
 export function pickAgentName(taken: Set<string>): string {
   const used = new Set<string>();

@@ -13,6 +13,9 @@
  *                               ONE neutralizer every peer-authored string that
  *                               reaches a result must pass through
  *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
+ *                               / read_sessions (rollback §3.5: what MY OWN
+ *                               sessions are doing; `channel` is an optional
+ *                               filter there, not a requirement)
  *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
  *                               §2 cap — it is the only op here that loops)
  *   - `channel-ops-open.ts`   — open / invite (the ROOM and who is in it; split
@@ -21,7 +24,11 @@
  *                               `channel-post-linkage.ts`, which own the
  *                               result lines a post's addressing and threading
  *                               produce
- *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
+ *   - `channel-ops-threads.ts`— create_thread / propose_close / close_thread /
+ *                               set_thread_mode. DECISION 2 (2026-08-04): an
+ *                               agent PROPOSES and a human CLOSES, so
+ *                               `close_thread` stays in the enum only to hand
+ *                               an older agent a teaching refusal.
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
  *                               headers, which the write side now shares
  *

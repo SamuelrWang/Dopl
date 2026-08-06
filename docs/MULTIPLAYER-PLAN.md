@@ -1,5 +1,13 @@
 # Multiplayer AI — implementation plan (2026-07-31)
 
+> **⛔ STATUS 2026-08-05: THE MODEL IN THIS FILE IS DELETED, NOT "SUPERSEDED IN PART".**
+>
+> The channels rollback (`docs/CHANNELS-ROLLBACK-PLAN.md` §1, F-141) removed the entire surface this plan built: named agents, `@handle` addressing, `to_agent` / `to_agents` / `as_agent`, summoning, engagement, breakout-room participant sets, the two-agent thread-open handshake, and THE LAW. The seven MCP ops are dropped from the enum; the four removed params are declared `z.never()`; eight desktop modules are deleted. **The whole addressing surface is `toUserId` plus `intent`.**
+>
+> **THE MIGRATIONS WERE NOT REVERTED.** `channel_agents` and `channel_task_participants` keep every row and every `engaged_at` / `engaged_by` value; nothing writes any of them. The three agent metadata keys stay in the reserved STRIP list with no writer left, which is load-bearing rather than tidy — `author_agent_id` on a STORED row is what the web transcript reads to render historical attribution, so a caller able to set it on a NEW post could attribute their own words to somebody's retired agent.
+>
+> **Read ENGINEERING §8 / §18 "PHASE 2 OF THE ROLLBACK" and F-141 for what is true.** Everything below — including the "SUPERSEDED IN PART" note, which was about a same-day rework and not about this — is history. (Banner added 2026-08-05, F-146: the file previously never said the model was deleted, so a reader who got past the first paragraph found a live-sounding contract.)
+
 > **STATUS: SHIPPED AND COMMITTED, THEN SUPERSEDED IN PART — 2026-07-31.** Waves 1–4 landed on
 > `75faf31`, were committed as `4e1252d` (F-110), and the desktop was bumped to **1.7.17**
 > (`7940d97`). Three adversarial reviews found four blockers; three fix passes closed them.

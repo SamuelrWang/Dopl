@@ -46,8 +46,11 @@ const HOLD_SECONDS = Math.round(AWAIT_HOLD_DEFAULT_MS / 1000);
  * Did the request carry the desktop's runtime stamp? An observation, and the
  * only thing that branches the text below. Nothing here gates access — the
  * header grants nothing (`src/shared/auth/runtime-header.ts`).
+ *
+ * MODULE-PRIVATE: the four tier builders below are its only callers, and they are what the
+ * rest of the package imports.
  */
-export function isDesktopRuntime(runtime: string | null | undefined): boolean {
+function isDesktopRuntime(runtime: string | null | undefined): boolean {
   return runtime === DESKTOP_SESSION_RUNTIME;
 }
 

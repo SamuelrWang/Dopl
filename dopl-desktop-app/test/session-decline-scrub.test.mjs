@@ -101,7 +101,7 @@ test("F1: DECLINE records the head's body even when nothing recorded it on the w
   const h = harness();
   const s = session();
   const secret = "the acquisition price is 4.2M, do not act on this";
-  s.pendingInbound = [{ pendingId: "p-1", message: secret, authorName: "David", threadId: "" }];
+  s.pendingInbound = [{ pendingId: "p-1", message: secret, authorName: "David" }];
   assert.equal(wouldReachTheAgent(s, secret), true, "precondition: nothing has scrubbed it yet");
 
   assert.equal(h.decideInbound(s, "p-1", "decline"), true);
@@ -132,8 +132,8 @@ test("F1: it is the HEAD's body that is scrubbed, not the queue's latest", () =>
   const h = harness();
   const s = session();
   s.pendingInbound = [
-    { pendingId: "p-1", message: "refuse me", authorName: "David", threadId: "" },
-    { pendingId: "p-2", message: "still waiting on an answer", authorName: "David", threadId: "" },
+    { pendingId: "p-1", message: "refuse me", authorName: "David" },
+    { pendingId: "p-2", message: "still waiting on an answer", authorName: "David" },
   ];
 
   h.decideInbound(s, "p-1", "decline");
@@ -150,7 +150,7 @@ test("F1: fail-closed — any decision that is not an explicit accept scrubs", (
     const h = harness();
     const s = session();
     const body = `refused via ${JSON.stringify(verdict)}`;
-    s.pendingInbound = [{ pendingId: "p-1", message: body, authorName: "David", threadId: "" }];
+    s.pendingInbound = [{ pendingId: "p-1", message: body, authorName: "David" }];
     h.decideInbound(s, "p-1", verdict);
     assert.equal(wouldReachTheAgent(s, body), false, JSON.stringify(verdict));
   }

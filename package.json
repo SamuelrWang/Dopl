@@ -15,6 +15,9 @@
     "dev:ui": "npm run dev -w @dopl/desktop-ui",
     "build:ui": "npm run build -w @dopl/desktop-ui",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:all": "npm test && npm test -w @dopl/client && npm test -w @dopl/mcp-server && npm test -w @dopl/desktop-ui",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

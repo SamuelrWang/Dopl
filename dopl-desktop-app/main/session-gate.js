@@ -124,41 +124,16 @@ function surface(s, item, hadFocus) {
 //   auto  -> never held: dispatch straight through (the reducer feeds it, waking a
 //            parked session first).
 //   gated -> queued; only the HEAD is surfaced, the rest wait their turn.
-// PURE: is this message the OPERATOR'S OWN, so that there is nobody left to approve it to?
 //
-// The gate exists to put a human between a COUNTERPARTY'S words and this machine's agent.
-// A message this operator typed into the channel, routed to this operator's own team agent
-// (channel-agents.deliverToAgent sets the flag), has already had its human decision: pressing
-// Enter. A card asking them to accept their own sentence is not a safety property, it is the
-// primary flow reading as broken — you summon your agent, you tell it to do something, and it
-// sits there until you approve yourself.
-//
-// AN AUTH-HELD SESSION STILL HOLDS IT (H1). "Feed straight through" means pushing onto a live
-// prompt iterator, and a held session has none — the push would land on a closed iterator and
-// the message would simply vanish. Holding is the honest answer there, for my own words as
-// much as a peer's. This is the same conjunct the reducer's own branch applies, so the two
-// paths agree.
-//
-// The flag is set by MAIN from `m.authorUserId === myUserId`, never from anything on the
-// wire, so a counterparty cannot claim it.
-function selfBypass(s, a) {
-  if (!a || a.selfAuthored !== true) return false;
-  const st = (s && s.state) || {};
-  return st.authHeld !== true;
-}
-
-// The THREAD a queued message arrived in, bounded and normalized to a string. It rides the ITEM
-// rather than the session because the queue can hold several messages from several threads: the
-// framing built when the operator finally accepts the HEAD must describe the head's thread, not
-// whichever message happened to arrive last. Empty for every main-room turn.
-function itemThread(a) {
-  const id = a && typeof a.threadId === 'string' ? a.threadId.trim() : '';
-  return id.slice(0, 64);
-}
-
+// THERE IS NO SELF-BYPASS AND NO PER-TURN THREAD (channels rollback, 2026-08-05). Both rode in
+// on `channel-agents.deliverToAgent` / `channel-deliver`, which routed the operator's own words
+// to their own team agent and stamped the thread the turn arrived in. Those modules are deleted:
+// every caller of feedInbound / feedInboundForTask (session-dispatch `:111`, `:226`, `:335`)
+// structurally excludes own-authored messages before it calls, so `a.selfAuthored` had no writer
+// left, and `a.threadId` was `''` end to end. AXIS B (autoInbound) is the only opt-out now.
 function enqueue(s, a) {
-  const auto = autoInbound(s) || selfBypass(s, a);
-  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, threadId: itemThread(a) };
+  const auto = autoInbound(s);
+  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName };
   const disp = io.queueInbound(s, item, !auto);
   // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this
   // early return, so a reply that overflowed the queue (MAX_PENDING_INBOUND) fell through to
@@ -180,8 +155,6 @@ function enqueue(s, a) {
     const hadFocus = windowHasFocus(s);
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
-      threadId: item.threadId, // the thread this turn arrived in (the framing's per-turn context)
-      selfAuthored: a.selfAuthored === true, // the reducer decides again, on the same rule
     });
     if (!auto) surface(s, item, hadFocus);
   }
@@ -263,7 +236,6 @@ function decideInbound(s, pendingId, decision) {
     deps.dispatch(s, {
       type: d === 'accept-task' ? 'inbound_accept_for_task' : 'inbound_accept',
       pendingId: head.pendingId, message: head.message, authorName: head.authorName,
-      threadId: head.threadId, // THIS message's thread, not the queue's latest
     });
   }
   drainQueue(s);
@@ -277,7 +249,7 @@ function drainQueue(s) {
   const next = s.pendingInbound[0];
   if (!next) return;
   const hadFocus = windowHasFocus(s); // FIX #8: before the reshow the dispatch can trigger
-  deps.dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName, threadId: next.threadId });
+  deps.dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
   surface(s, next, hadFocus);
 }
 
@@ -293,7 +265,7 @@ function drainInbound(s) {
   if (!deps || !s || s.settled || !autoInbound(s)) return false;
   let next = io.shiftInbound(s);
   while (next) {
-    deps.dispatch(s, { type: 'inbound_accept', pendingId: next.pendingId, message: next.message, authorName: next.authorName, threadId: next.threadId });
+    deps.dispatch(s, { type: 'inbound_accept', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
     next = io.shiftInbound(s);
   }
   return true;

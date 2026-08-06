@@ -210,8 +210,10 @@ function buildPrompt(message, context, nonce) {
 //
 // THE FOUR D2 ARGUMENTS ARE GONE (2026-07-31). `agentId`, `prompt`, `timeoutMs` and
 // `budgetUsd` were added for exactly one caller — the summon greeting's bounded read-the-room
-// turn — and the operator cut that turn: an arrival is now a canned string posted straight
-// into the channel (session-greeting.js). Nothing HEADLESS is agent-shaped any more, so no
+// turn — and the operator cut that turn: an arrival became a canned string posted straight into
+// the channel by `session-greeting.js`. THERE IS NO ARRIVAL AT ALL NOW — summoning and
+// `session-greeting.js` were both deleted in the channels rollback §1, which only strengthens the
+// argument below. Nothing HEADLESS is agent-shaped any more, so no
 // caller passed an `agentId`, and a parameter no caller sets is not a seam, it is an untested
 // second key space in the machine-wide pool. It comes back with the caller that needs it.
 // The other three degraded to exactly today's behaviour when absent: every remaining spawn is

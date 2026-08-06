@@ -438,5 +438,4 @@ module.exports = {
   buildFencedTurn,
   PROSE_RULE, // P0-1: prose is a message, final answer included — asserted on every branch
   VOCABULARY, // P0-1: the kinds are no longer an interchangeable list (prompt-framing-text.js)
-  deliveryCall, // the exact mcp__dopl__dopl_channel call a session posts through
 };

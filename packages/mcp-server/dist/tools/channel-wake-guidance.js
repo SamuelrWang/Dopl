@@ -37,7 +37,6 @@
  * re-arm at all.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isDesktopRuntime = isDesktopRuntime;
 exports.postReplyLines = postReplyLines;
 exports.createThreadReplyLines = createThreadReplyLines;
 exports.awaitTimedOutLines = awaitTimedOutLines;
@@ -50,6 +49,9 @@ const HOLD_SECONDS = Math.round(channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS / 1
  * Did the request carry the desktop's runtime stamp? An observation, and the
  * only thing that branches the text below. Nothing here gates access — the
  * header grants nothing (`src/shared/auth/runtime-header.ts`).
+ *
+ * MODULE-PRIVATE: the four tier builders below are its only callers, and they are what the
+ * rest of the package imports.
  */
 function isDesktopRuntime(runtime) {
     return runtime === identity_1.DESKTOP_SESSION_RUNTIME;

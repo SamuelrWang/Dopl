@@ -35,12 +35,6 @@
  * unchanged, and is dropped only where we are no longer telling anyone to
  * re-arm at all.
  */
-/**
- * Did the request carry the desktop's runtime stamp? An observation, and the
- * only thing that branches the text below. Nothing here gates access — the
- * header grants nothing (`src/shared/auth/runtime-header.ts`).
- */
-export declare function isDesktopRuntime(runtime: string | null | undefined): boolean;
 /** After a successful `post`: how to be there when the answer lands. */
 export declare function postReplyLines(channelId: string, seq: number, runtime: string | null, stopRule: string): string[];
 /**

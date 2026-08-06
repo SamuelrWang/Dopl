@@ -189,17 +189,9 @@ export async function updateMyToolProfile(
 // read and write path. Every function below hands the rest of the web a
 // `thread`.
 
-/** Every thread in a channel (feeds the transcript's status overlay). */
-export async function listChannelThreads(
-  channelId: string,
-  workspaceId: string
-): Promise<ChannelThread[]> {
-  const data = await request<{ tasks: ChannelThread[] }>(
-    channelPath(channelId, "/tasks"),
-    { workspaceId }
-  );
-  return data.tasks ?? [];
-}
+// NO `listChannelThreads` WRAPPER. `GET /tasks` is read by `use-channel-threads.ts` through
+// `useApiQuery`, which owns the cache key; the bare wrapper here had no caller and would have
+// been a read the cache never sees. Same reasoning as the agents roster below.
 
 /** Open a thread addressed to a channel member. */
 export async function createChannelThread(
@@ -245,19 +237,9 @@ export async function reopenChannelThread(
   return data.task;
 }
 
-/** Set a thread's mode (creator only). */
-export async function setChannelThreadMode(
-  channelId: string,
-  threadId: string,
-  body: { mode: ThreadMode },
-  workspaceId: string
-): Promise<ChannelThread> {
-  const data = await request<{ task: ChannelThread }>(
-    channelPath(channelId, `/tasks/${encodeURIComponent(threadId)}`),
-    { method: "PATCH", body: { op: "set_mode", ...body }, workspaceId }
-  );
-  return data.task;
-}
+// NO `setChannelThreadMode` WRAPPER. `PATCH {op:"set_mode"}` is an MCP/desktop act — the web
+// thread panel offers close and reopen and nothing else — so the wrapper had no caller. The
+// route and `@dopl/client.setChannelThreadMode` are untouched.
 
 // ─── Agents ─────────────────────────────────────────────────────────
 //
@@ -273,17 +255,8 @@ export async function setChannelThreadMode(
 
 // ─── Consent ────────────────────────────────────────────────────────
 
-/** The caller's pending consent inbox (optionally scoped to one channel). */
-export async function listConsentRequests(
-  workspaceId: string,
-  channelId?: string
-): Promise<ChannelConsentRequest[]> {
-  const data = await request<{ requests: ChannelConsentRequest[] }>(
-    "/api/channels/consent",
-    { workspaceId, ...(channelId ? { query: { channelId } } : {}) }
-  );
-  return data.requests ?? [];
-}
+// NO `listConsentRequests` WRAPPER — the consent inbox is a `useApiQuery` read like the
+// rosters, so the cache owns the key; only the DECIDE write goes through here.
 
 /** Record the operator's Allow / Deny (or Send / Cancel) decision. */
 export async function decideConsent(
@@ -300,16 +273,8 @@ export async function decideConsent(
 
 // ─── Trust ──────────────────────────────────────────────────────────
 
-/** The caller's standing trust rules in the workspace. */
-export async function listTrustRules(
-  workspaceId: string
-): Promise<AgentTrustRule[]> {
-  const data = await request<{ rules: AgentTrustRule[] }>(
-    "/api/channels/trust",
-    { workspaceId }
-  );
-  return data.rules ?? [];
-}
+// NO `listTrustRules` WRAPPER — same reason as the consent inbox: the standing rules are a
+// `useApiQuery` read, and only the add / delete writes go through here.
 
 /** Always allow a teammate's agent (add a standing trust rule). */
 export async function addTrustRule(

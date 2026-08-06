@@ -11,8 +11,8 @@
 // unrelated. These two are genuinely unrelated: neither is reachable from classify.
 //
 // Re-exported from targeting.js verbatim, so every existing caller
-// (channel-listener.setHandlers, channel-agents / session-dispatch resolveToolProfile) is
-// unchanged.
+// (`channel-listener.setHandlers`, `session-dispatch`'s `resolveToolProfile`) is unchanged.
+// `channel-agents.js` was a third caller and is deleted (channels rollback §1).
 
 let handlers = {}; // window-control callbacks from index.js (openChannel)
 

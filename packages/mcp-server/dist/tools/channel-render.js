@@ -107,14 +107,17 @@ function formatAuthor(m) {
 /**
  * WHICH SESSION WROTE THIS LINE — `metadata.session_id` (F2).
  *
- * ONE `channel_agents` row can be claimed by any number of concurrent processes
- * holding its owner's credential: `as_agent` is per-call and ownership-checked
- * only, and on the desktop a ROOM slot `(channel, agent)` and a PAIR slot
- * `(channel, thread)` are disjoint key spaces, so several live sessions of one
- * handle is the documented design rather than a race. Two of them posted as the
- * same handle and gave a peer contradictory instructions 79 seconds apart, and
- * `metadata` carried nothing that could attribute either — "flint said X" was
- * not a well-formed statement. This is the field that makes it one.
+ * THE INCIDENT was two concurrent sessions of one agent HANDLE: `as_agent` was
+ * per-call and ownership-checked only, so any process holding the owner's
+ * credential could claim a `channel_agents` row, and they gave a peer
+ * contradictory instructions 79 seconds apart with nothing in `metadata` able to
+ * attribute either. "flint said X" was not a well-formed statement.
+ *
+ * Named agents are gone (channels rollback §1) and this field is not, because
+ * the ambiguity was never really about handles: an agent post is authored by its
+ * OWNER'S ACCOUNT, and one operator runs many sessions at once, so an author
+ * label alone still cannot name the process. `session_id` is the only thing on
+ * the wire that can. The suffix below is what renders it.
  *
  * NOT PEER-CONTROLLED TEXT: `resolvePostMetadata` deletes any caller copy
  * unconditionally and re-stamps only from the `X-Dopl-Session-Id` header, which
@@ -200,19 +203,6 @@ function namesFromMessages(messages) {
  * the state a reader most needs told, because in a 3+ member channel those
  * messages woke every armed listener and triggered no one.
  *
- * BLOCKER-3 — AND WHICH AGENTS IT NAMES, which is a different question with a
- * different answer. The server stamps `to_user_id` from the FIRST addressed
- * agent's owner, so a message addressing two agents rendered as one address to
- * one person: the second agent's side read `· to <the other owner>` and had no
- * way to see it had been named. `· to agents ...` is emitted whenever the
- * message names any, ALONGSIDE the member tag rather than instead of it —
- * they are two facts (which machine the server addressed, and which agents it
- * named), and collapsing them is what hid the second one.
- *
- * ONE TAG, NOT A PLURALIZED PAIR: `· to agents` is written the same way for
- * one agent as for five, so a reader (or a grep) has a single token to scan
- * for. The count is legible from the list itself.
- *
  * F2 — AND WHICH SESSION WROTE IT, when the poster stamped one. An author label
  * names an ACCOUNT (and, for an agent post, a handle); neither names the process,
  * and one handle legitimately runs several concurrent sessions. The suffix is
@@ -223,10 +213,14 @@ function namesFromMessages(messages) {
  * F4 — the thread clause is now `channel-render-threads.ts`'s, because a
  * `task-<channel>-<seq>` id is NOT a thread and must stop rendering as one.
  *
- * There was an AGENT ADDRESS clause too — `· @quartz (id)` off
- * `metadata.to_agent_ids`, which needed a roster read to name — and it went
- * with named-agent addressing (channels rollback §1). An address is a PERSON
- * again, so `· unaddressed` means what it says with no second half to clear it.
+ * THERE WERE TWO AGENT CLAUSES, AND BOTH WENT WITH NAMED-AGENT ADDRESSING
+ * (channels rollback §1): `· @quartz (id)` off `metadata.to_agent_ids`, which
+ * needed a roster read to name, and BLOCKER-3's `· to agents ...` — a second tag
+ * emitted ALONGSIDE the member one, because the server stamped `to_user_id` from
+ * the FIRST addressed agent's owner and a message naming two agents otherwise
+ * rendered as one address to one person. Nothing stamps `to_agent_ids` now, so
+ * neither has anything to say. An address is a PERSON again, and `· unaddressed`
+ * means what it says with no second half to clear it.
  */
 function formatMessage(m, anyThreaded, view) {
     const author = formatAuthor(m);

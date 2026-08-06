@@ -92,7 +92,9 @@ export async function addMember(
  * A DM is exempt entirely: its 1:1 membership is immutable in BOTH directions
  * (`addMember` already refused to add a third).
  *
- * LEAVING ALSO ENDS WHAT YOU STARTED — see {@link clearDepartedEngagement}.
+ * LEAVING IS A MEMBERSHIP WRITE AND NOTHING MORE. It used to also end every agent engagement
+ * the leaver had started in the room (`clearDepartedEngagement`, fail-soft, after the delete);
+ * that helper went with the named agents — see the module docblock above.
  */
 export async function removeMember(
   ctx: ChannelContext,

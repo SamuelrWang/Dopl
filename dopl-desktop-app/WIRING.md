@@ -1,10 +1,16 @@
 # Wiring the bundled SPA window
 
 Phase 2 of [docs/DESKTOP-MIGRATION-PLAN.md](../docs/DESKTOP-MIGRATION-PLAN.md)
-adds three files that are **built but not wired**. `main/index.js` still creates
-today's remote main window; nothing in this repo calls the new modules yet. That
-is deliberate — the remote path stays the rollback until the ported pages cover
-the daily workflows.
+added the three files below.
+
+**THE SPA IS THE DEFAULT NOW — this page said "built but not wired" long after it
+was (corrected 2026-08-05, F-146).** `main/shell-mode.js`'s `isSpaMode()` is
+`process.env.DOPL_UI !== 'remote'`, so the bundled window is what a normal launch
+creates and the REMOTE path is the opt-out, not the default. Setting
+`DOPL_UI=remote` still loads the retired website in a `BrowserWindow` and is the
+manual rollback lever; it is not a shipping surface (the website is retired, see
+ENGINEERING §9.3) and it sends no `X-Dopl-Runtime` stamp, so a request typed
+there opens no session.
 
 | File | Role |
 |---|---|

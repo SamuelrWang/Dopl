@@ -20,8 +20,9 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * `next/link` binding for the first-run explainer's step cards, and this app
  * passes its own `RouterLink` instead. Nothing else in the tree touched Next.
  *
- * WHAT DEGRADES HERE, AND WHAT DOES NOT (the four realtime subscriptions the
- * web page opens are deliberate no-ops in the bundled SPA —
+ * WHAT DEGRADES HERE, AND WHAT DOES NOT (the three realtime subscriptions the
+ * web page opens — `useChannelsRealtime` / `useConsentRealtime` /
+ * `usePresenceRealtime` — are deliberate no-ops in the bundled SPA —
  * `shared-channel-registry.ts` short-circuits on `window.dopl`, Phase 3 owns
  * the replacement):
  *
@@ -37,9 +38,11 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  *   and the online rings go stale between refetches (the 90 s freshness window
  *   is client-side arithmetic over `lastSeenAt`, so a stale roster reads as
  *   offline rather than as falsely online — it fails safe).
- * - **Agent chips** — the roster query fetches on mount; `useEngagementClock`
- *   still schedules its own wake for the 60 min engagement TTL, which never
- *   depended on realtime.
+ *   (There was a fourth bullet here — **agent chips**, whose `useEngagementClock`
+ *   scheduled its own wake for the 60 min engagement TTL. The chips bar, the
+ *   clock and engagement itself went with named agents in the channels rollback
+ *   (§1); the roster read that survived is the historical ATTRIBUTION one, which
+ *   renders old rows and has nothing to keep fresh.)
  *
  * NOT WIRED, and not wireable from here: the consent card's desktop-only rows
  * (working folder, permission preset) feature-detect `window.dopl.channels`,

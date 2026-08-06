@@ -97,10 +97,17 @@ function feedLiveSession(entry, m, myUserId) {
   // Widening it would also un-do the loop brake in the one place a loop is
   // cheapest to start.
   //
-  // What a milestone DOES reach is `channel-agents.routeAddressedAgent`, which
-  // delivers task_* kinds to an agent that is addressed or is a participant of
-  // the thread (F1, `test/channel-milestone-kinds.test.mjs`). That is the
-  // deliberate lane for them, and it is unaffected by this line.
+  // THE MILESTONE LANE UNDER THIS LINE IS GONE, AND NOTHING REPLACED IT.
+  // `channel-agents.routeAddressedAgent` used to deliver task_* kinds to a NAMED
+  // agent addressed on, or a participant of, the thread (F1). That module went
+  // with named agents (channels rollback §1) and its suite went with it, so this
+  // filter is the LAST word on a desktop machine: a non-'message' post reaches no
+  // session here at all.
+  //
+  // NOTHING ABOUT RENDERING CHANGED, which is why the filter is still right. A
+  // milestone is a thing you LOOK AT, and the web transcript still groups and
+  // draws it (`lib/group-thread.ts`, `components/activity-event-row.tsx`); what it
+  // no longer does is spend a turn of somebody's session.
   if (!m || m.kind !== 'message') return false;
   if (!myUserId || m.authorUserId === myUserId) return false;
   const taskId = targeting.firstClassTaskId(m);

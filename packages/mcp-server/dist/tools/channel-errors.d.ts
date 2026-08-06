@@ -66,15 +66,22 @@ export declare function classifyBadRequest(e: unknown): BadRequestKind;
  *   - `not_a_member`         — `CHANNEL_FORBIDDEN`: the caller is not a member
  *     of the channel at all.
  *   - `thread_authorization` — `TASK_FORBIDDEN`: the caller IS in the channel
- *     and is not authorized on THIS THREAD. Three different rules raise it —
- *     the write gate (creator / target / participant set), the CURATION rule on
- *     join (creator, target, or an existing user participant), and the narrower
- *     eject rule on leave — so the arm that reports it has to say which write it
- *     was refusing. It emphatically does NOT mean the caller left the channel,
- *     which is what the participant arms used to tell them.
- *   - `agent_owner`          — `CHANNEL_AGENT_FORBIDDEN`: an agent identity the
- *     caller does not own (`as_agent`, rename, park).
+ *     and is not authorized on THIS THREAD. Every raiser is now the same rule —
+ *     a thread's two parties are its creator and its target, and only those two
+ *     may post into it, propose its close, close it, set its mode or reopen it
+ *     (`service-tasks.ts`, `service-tasks-propose.ts`,
+ *     `service-writes-metadata.ts`) — so the arm still has to say WHICH write it
+ *     was refusing. It emphatically does NOT mean the caller left the channel.
+ *     The CURATION rule on join and the narrower eject rule on leave used to
+ *     raise it too; breakout participants are gone (channels rollback §1) and
+ *     `join_thread` / `leave_thread` are not ops of this tool any more.
  *   - `unknown`              — a 403 with no code we recognize. Say so.
+ *
+ * THERE IS NO `agent_owner` ARM. It classified `CHANNEL_AGENT_FORBIDDEN` — an
+ * agent identity the caller did not own (`as_agent`, rename, park) — and went
+ * with named agents; the server records that code among the six nothing raises
+ * (`src/features/channels/server/http-mapping.ts`). A build that somehow saw one
+ * would land on `unknown`, which says so rather than guessing.
  */
 export type ForbiddenKind = "not_a_member" | "thread_authorization" | "lifecycle_kind" | "close_is_human" | "unknown";
 export declare function classifyForbidden(e: unknown): ForbiddenKind;

@@ -145,9 +145,15 @@ function callTool(client) {
         (0, vitest_1.expect)(client.postChannelMessage).not.toHaveBeenCalled();
     });
     (0, vitest_1.it)("addresses nobody: a milestone marks the thread, it does not reach for anyone", async () => {
-        // `to` / `to_agent` / `to_agents` are deliberately not routed through. A
-        // milestone that could address somebody would be a reply wearing a marker's
-        // clothes, which is the confusion this op exists to remove.
+        // `to` is a real, live param of `post` and is deliberately NOT routed through
+        // here. A milestone that could address somebody would be a reply wearing a
+        // marker's clothes, which is the confusion this op exists to remove.
+        //
+        // IT USED TO ALSO ASSERT `toAgent` / `toAgents` WERE UNSET, and those two
+        // assertions were vacuous from the moment named agents were deleted (F-146):
+        // `ChannelMessageInput` has no such fields, so `undefined` was the only
+        // answer possible and the check could never fail. Asserting the absence of a
+        // field the TYPE lacks is not coverage, it is a comment that runs.
         const client = stubClient();
         await callTool(client)({
             op: "milestone",
@@ -155,13 +161,15 @@ function callTool(client) {
             thread: THREAD_ID,
             body: "step two",
             to: "peer@example.com",
-            to_agent: "quartz",
         });
         const [, input] = vitest_1.vi.mocked(client.postChannelMessage).mock.calls[0];
         const sent = input;
         (0, vitest_1.expect)(sent.toUserId).toBeUndefined();
-        (0, vitest_1.expect)(sent.toAgent).toBeUndefined();
-        (0, vitest_1.expect)(sent.toAgents).toBeUndefined();
+        // ...and it DID send the thread and the body, so the absence above is a
+        // routing decision rather than a call that never happened. (`thread` folds
+        // into the STORAGE key `metadata.taskId` at the client boundary.)
+        (0, vitest_1.expect)(sent.metadata.taskId).toBe(THREAD_ID);
+        (0, vitest_1.expect)(sent.body).toBe("step two");
     });
 });
 // ── 3. the surface still teaches the rule ──────────────────────────────────────

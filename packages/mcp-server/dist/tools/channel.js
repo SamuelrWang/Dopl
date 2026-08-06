@@ -14,6 +14,9 @@
  *                               ONE neutralizer every peer-authored string that
  *                               reaches a result must pass through
  *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
+ *                               / read_sessions (rollback §3.5: what MY OWN
+ *                               sessions are doing; `channel` is an optional
+ *                               filter there, not a requirement)
  *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
  *                               §2 cap — it is the only op here that loops)
  *   - `channel-ops-open.ts`   — open / invite (the ROOM and who is in it; split
@@ -22,7 +25,11 @@
  *                               `channel-post-linkage.ts`, which own the
  *                               result lines a post's addressing and threading
  *                               produce
- *   - `channel-ops-threads.ts`— create_thread / close_thread / set_thread_mode
+ *   - `channel-ops-threads.ts`— create_thread / propose_close / close_thread /
+ *                               set_thread_mode. DECISION 2 (2026-08-04): an
+ *                               agent PROPOSES and a human CLOSES, so
+ *                               `close_thread` stays in the enum only to hand
+ *                               an older agent a teaching refusal.
  *   - `channel-render.ts`     — the read renderers + the untrusted-content
  *                               headers, which the write side now shares
  *
@@ -133,8 +140,11 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
             // It delegates to `opPost` rather than growing a second delivery path:
             // one set of error narration, one result-line vocabulary, and the lines
             // a post produces (did it thread? who was addressed?) are exactly the
-            // ones a milestone's author needs. `to` / `to_agent` / `to_agents` are
-            // NOT routed through — a milestone marks the thread, it addresses nobody.
+            // ones a milestone's author needs. `to` is NOT routed through — a
+            // milestone marks the thread, it addresses nobody. (`to_agent` /
+            // `to_agents` were on that list until named agents went; they are not
+            // params of this tool at all now — `channel-schema.ts` refuses them by
+            // name and `channel-ops-write.ts:232` narrates the refusal.)
             case "milestone": {
                 const miss = (0, respond_1.missingParams)("milestone", args, [
                     "channel",

@@ -1,0 +1,166 @@
+# CI for the whole repo, not just `packages/`.
+#
+# WHAT THIS FILE USED TO BE, and why it changed (2026-08-05, F-146). It ran on
+# `packages/**` only, and its one test step was `npm test -w @dopl/client` — 48
+# tests. The root suite (2133), `@dopl/mcp-server` (483), the desktop
+# (2313) and the SPA (143) were MANUAL-INVOCATION ONLY: 4 963 tests that no
+# push or PR has ever run, guarding the code that actually changes. The root
+# `package.json` had no `test` script at all and `packages/mcp-server`'s had
+# none either, so there was nothing for a workflow to call even if it wanted to.
+# Both scripts now exist; every suite runs here.
+#
+# THE PATH FILTERS ARE GONE ON PURPOSE. They existed to keep a packages-only job
+# off unrelated PRs. Now that the job covers the repo, a filter would reintroduce
+# exactly the gap this change closes — a `src/` PR skipping the `src/` suite —
+# and the whole matrix is a few minutes.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  build-test:
+    name: node ${{ matrix.node }} / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build @dopl/client
+        run: npm run build -w @dopl/client
+
+      - name: Build @dopl/mcp-server
+        run: npm run build -w @dopl/mcp-server
+
+      - name: Test @dopl/client
+        run: npm test -w @dopl/client
+
+      # THE FOUR SUITES THAT WERE NEVER RUN BY CI (F-146). Each is its own step so
+      # a failure names the tree it is in instead of one opaque red X. Expected
+      # counts at the time of writing, as a sanity anchor for whoever reads a
+      # surprising number here: root 2133, mcp-server 483, SPA 143, desktop 2313.
+      - name: Test root suite
+        run: npm test
+
+      - name: Test @dopl/mcp-server
+        run: npm test -w @dopl/mcp-server
+
+      - name: Test @dopl/desktop-ui (the bundled SPA)
+        run: npm test -w @dopl/desktop-ui
+
+  # The desktop app is a SEPARATE npm project (its own package.json and lockfile,
+  # not a workspace of the root), so it needs its own install and its own job. It
+  # is `node --test` over source-extraction truth tables — no Electron binary is
+  # launched, so it runs headless on ubuntu with no display server.
+  desktop:
+    name: desktop app (node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dopl-desktop-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # `npm ci` would also fetch the Electron binary, which this suite never
+      # launches. `--ignore-scripts` skips its postinstall download.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Test
+        run: npm test
+
+      # The 500-line cap and `no-redeclare` both live here and both are `error`.
+      - name: Lint
+        run: npm run lint
+
+  typecheck-lint:
+    name: typecheck + lint (root)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The SPA's build script is `tsc --noEmit && vite build`, and `apps/*/src`
+      # is covered by the root tsconfig, so the root typecheck is the whole TS
+      # surface bar the packages, which their own builds cover above.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # 0 errors is the bar. Two warnings are known and tracked; `--max-warnings`
+      # is deliberately NOT set, so a new warning does not fail the build while a
+      # new ERROR does.
+      - name: Lint
+        run: npm run lint
+
+  size-check:
+    name: file size cap (500 lines)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enforce 500-line hard cap in packages/
+        shell: bash
+        run: |
+          set -eu
+          # Files explicitly exempted in ENGINEERING.md §2 (Known files >500 lines).
+          # When a new file lands here, add it to that table too.
+          ALLOW=$(printf '%s\n' \
+            'packages/mcp-server/src/server.ts' \
+            'packages/dopl-client/src/client.ts')
+
+          BAD=$(find packages -type f \( -name '*.ts' -o -name '*.tsx' \) \
+            ! -path '*/dist/*' ! -path '*/node_modules/*' \
+            -exec awk 'END { if (NR > 500) print FILENAME, NR }' {} \; \
+            | grep -vF "$ALLOW" || true)
+          if [ -n "$BAD" ]; then
+            echo "Files over 500 lines (ENGINEERING.md §2):"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "All files within the 500-line cap."
+
+  type-drift:
+    name: knowledge type-drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Diff knowledge types between server and SDK
+        run: npx tsx scripts/check-knowledge-type-drift.ts

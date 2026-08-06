@@ -109,10 +109,8 @@ function runEffect(s, eff) {
     case 'pushTurn':
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, eff.text), eff.priority === 'now' ? 'now' : undefined));
       break;
-    // `eff.threadId` is the thread THIS turn arrived in: a fresh room-bound shell's first turn is
-    // framed with it, so the agent is ordered to read the exchange it is being woken into.
     case 'pushInbound':
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName), eff.threadId)));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName))));
       break;
     case 'interruptQuery':
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
@@ -258,10 +256,12 @@ async function startSession(spec, sdk) {
   // The gate rides the KEY, because the arm is entry-keyed: a null key takes nothing.
   //
   // FIX 4 — OPERATOR-ARMED, the one thing that reaches a PARKED SHELL. A shell is normally woken
-  // by something that is NOT the approving human, so it refuses a handed-in posture; but
-  // session-team.js spawns EVERY team session as a parked shell, which made a team session
-  // unarmable rather than careful. The gate opens for a consent card just accepted, or a caller
-  // that explicitly threads `operatorArmed`; a bare recreate, reopen, resume or wake sets neither.
+  // by something that is NOT the approving human, so it refuses a handed-in posture. THE CASE IT
+  // WAS BUILT FOR IS GONE — `session-team.js` spawned every team session as a parked shell, and
+  // it was deleted with summoning (channels rollback §1). The gate stays because the CONSENT arm
+  // is a real producer: it opens for a consent card just accepted, or a caller that explicitly
+  // threads `operatorArmed`; a bare recreate, reopen, resume or wake sets neither. That arm is
+  // now the ONLY producer — the whole picture, not a gap (F-119 residual (d), moot).
   const consentModes = sessionConsent.takeStartModes(spec.adoptsConsent === true ? spec.key : null);
   const armedModes = consentModes || spec.startModes;
   const operatorArmed = !!consentModes || spec.operatorArmed === true;

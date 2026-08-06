@@ -293,8 +293,18 @@ describe("write-op completeness", () => {
     // rollback §1), so what has to hold now is that neither list still claims
     // to gate them — a stale WRITE_OPS entry for a non-existent op is dead law
     // that reads as coverage.
+    // BOTH ASSERTIONS READ PRODUCTION SOURCE, and the second one did not used to
+    // (F-146). `WRITE_OPS` is PARSED out of `server.ts`, so checking it is real
+    // coverage; `READ_OPS` is a LITERAL declared at `:141` of this very file, so
+    // `READ_OPS.dopl_channel.includes(op)` was asking whether a list 170 lines
+    // above contained something the same author had just not written into it —
+    // it could not fail, and it could not notice the op coming back. The honest
+    // second check is against the tool's OWN op enum, which is the thing that
+    // would have to change for these to exist again.
     const write = WRITE_OPS.dopl_channel ?? new Set<string>();
-    const read = READ_OPS.dopl_channel ?? [];
+    const channelEnum = opEnum(
+      TOOLS.find((t) => t.name === "dopl_channel")!,
+    )!;
     for (const op of [
       "agents",
       "summon_agent",
@@ -307,9 +317,10 @@ describe("write-op completeness", () => {
       expect(write.has(op), `dopl_channel op="${op}" is still gated as a write`).toBe(
         false,
       );
-      expect(read.includes(op), `dopl_channel op="${op}" is still listed as a read`).toBe(
-        false,
-      );
+      expect(
+        channelEnum.includes(op),
+        `dopl_channel op="${op}" is back in the tool's op enum — it was dropped outright in the channels rollback §1`,
+      ).toBe(false);
     }
   });
 

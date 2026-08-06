@@ -32,8 +32,11 @@ const framing = require('./prompt-framing'); // FIX F2: the fresh-shell first-tu
 // "END-REQUEST-..." or a forged instruction reads as ours, not as data. The profile
 // API accepts any string for display_name, so this is counterparty-controlled text.
 // THE NAME IS THE AUTHOR'S, NOT THE ACCOUNT'S (incident 2026-08-01). `authorName` reaches here
-// from channel-roster.authorLabel, which answers "a person", "<handle> (<person>'s agent)" or
-// "<person>'s agent" — because an agent's post is authored by its OWNER'S account, and passing
+// from `session-dispatch.authorLabel`, which answers "a person" or "<person>'s agent" — it named
+// a HANDLE too ("quartz, Ada's agent") until named agents went (channels rollback §1), and it
+// resolved that handle through `channel-roster`, one authenticated GET per channel per reconcile
+// pass. The person-or-machine distinction is the half that mattered and it survived intact,
+// because an agent's post is authored by its OWNER'S account, and passing
 // the bare display name made this preamble say "Samuel Wang replied" over words a MACHINE
 // wrote. That is the dangerous half of the incident: the operator is the one voice the framing
 // tells a session to weigh, so a mislabel hands an agent's own output operator authority. The
@@ -158,44 +161,28 @@ function pendingTranscript(s) {
 // above: the channel history rides inside the fence as the request DATA, minus every
 // held / declined / accepted body. One-shot (`freshFraming` is cleared), and a resumed
 // session never reaches it — the sdk session already carries its own framing.
-// THE PER-TURN THREAD (2026-08-01, the adversarial review of F1-F7). A TEAM session is keyed
-// (channel, agent) and is deliberately built with `taskId: ''` — an agent lives in the ROOM, not
-// in one thread (session-team.js). prompt-framing.firstActions gates the "SECOND action: read
-// thread=<id>" order on `ctx.taskId`, so the one session shape that wakes up INSIDE an exchange
-// it holds none of was the one shape never told to read it. F1 made that the common case by
-// thread-routing milestones into team sessions.
-//
-// The thread therefore reaches the framing as a fact about THIS TURN — which message woke the
-// shell — carried from channel-deliver through the gate and the reducer's pushInbound effect. It
-// is NOT written to `s.context`: the session still belongs to the room and a later turn from
-// another thread must frame itself, not inherit this one.
-//
-// A CONTEXT THAT ALREADY NAMES A THREAD WINS. Every pair (ASSIST) session is constructed with
-// its own bound `taskId`, and that binding is the session's identity — the per-turn value only
-// ever FILLS A HOLE, so both ASSIST sides are byte for byte what they were.
-function turnContext(s, threadId) {
-  const ctx = (s && s.context) || {};
-  const id = typeof threadId === 'string' ? threadId.trim() : '';
-  if (!id || ctx.taskId) return ctx;
-  return { ...ctx, taskId: id };
-}
-
-function takeFraming(s, transcript, threadId) {
+// THERE IS NO PER-TURN THREAD (channels rollback, 2026-08-05). A `turnContext(s, threadId)` used
+// to fill a hole in `s.context` from the thread the waking message arrived in, because a TEAM
+// session is keyed (channel, agent) and built with `taskId: ''`, so the one shape that woke up
+// INSIDE an exchange it held none of was the one shape prompt-framing.firstActions never told to
+// read it. Its producer was `channel-deliver`, which is deleted; the value was `''` at every call
+// site, so the framing reads the session's OWN context, exactly as a pair (ASSIST) session always
+// did.
+function takeFraming(s, transcript) {
   if (!s || s.freshFraming !== true) return '';
   s.freshFraming = false;
   // D2: `bind` rides through, so a room-bound TEAM shell wakes with the team framing
   // (identity + the room model + THE LAW) instead of the pair-bound responder framing.
   return framing.buildFencedTurn({
-    side: s.side, bind: s.bind, message: transcript, context: turnContext(s, threadId), nonce: s.nonce,
+    side: s.side, bind: s.bind, message: transcript, context: (s && s.context) || {}, nonce: s.nonce,
   });
 }
 
 // Prepend the one-shot preamble to the NEXT user turn: the full framed turn on a fresh
 // shell, else the bare fenced history seed. A later turn passes straight through.
-// `threadId` (optional) is the thread the turn arrived in — see turnContext.
-function withSeed(s, text, threadId) {
+function withSeed(s, text) {
   const transcript = pendingTranscript(s);
-  const framed = takeFraming(s, transcript, threadId);
+  const framed = takeFraming(s, transcript);
   if (framed) return `${framed}\n\n${text}`;
   if (!transcript) return text;
   return `${frameHistorySeed(s.nonce, transcript)}\n\n${text}`;
@@ -234,6 +221,5 @@ module.exports = {
   isGatedEntry, // FIX F4
   pendingTranscript,
   takeFraming,
-  turnContext, // the per-turn thread a room-bound shell is framed with
   withSeed,
 };

@@ -277,11 +277,17 @@ client that blocks on it. Budget it.
 non-empty, and **`window.dopl.isDesktop` present** (`:50-56`) — i.e. it verifies the
 preload bridge landed. Prints `SMOKE_RESULT {json}`, exits 0/1.
 
-**CI: none for the desktop app.** `.github/workflows/packages.yml` is the only
+**⛔ FIXED 2026-08-05 (F-146) — the paragraph below is the OLD state and is left as the record of
+the gap.** The workflow is now `.github/workflows/ci.yml`, it has NO path filters, and it runs the
+desktop suite plus the desktop lint in a dedicated `desktop` job (`npm ci --ignore-scripts`, so no
+Electron binary is downloaded — the suite launches none), alongside the root, mcp-server and SPA
+suites and a root typecheck+lint job. All 5 120 tests run on every push and PR.
+
+~~**CI: none for the desktop app.** `.github/workflows/packages.yml` is the only
 workflow in the repo. Triggers are path-filtered to `packages/**`, `package.json`,
 `package-lock.json`, `src/features/knowledge/types.ts`,
 `scripts/check-knowledge-type-drift.ts` (`:3-22`) — which cannot match
-`dopl-desktop-app/**`. Jobs:
+`dopl-desktop-app/**`.~~ Jobs (as they stood):
 
 1. `build-test` — matrix node 20/22 × ubuntu/windows: build both packages, then
    `npm test -w @dopl/client` (`:25-51`).

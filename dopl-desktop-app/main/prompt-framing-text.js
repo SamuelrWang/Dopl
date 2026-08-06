@@ -1,4 +1,8 @@
-// The FIXED TEXT BLOCKS of a spawn prompt — the vocabulary, the prose invariant, and the law.
+// The FIXED TEXT BLOCKS of a spawn prompt — the vocabulary, the prose invariant, and the
+// thread-tag rule (`module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE }`). It also held THE
+// LAW, the five-rule multiplayer contract a room-bound TEAM session opened with; that block is
+// deleted with the named agents four of its five rules turned on (channels rollback §1) and only
+// its epitaph remains, above THREAD_TAG.
 //
 // Split out of `prompt-framing.js` at the §2 500-line cap (2026-08-04) when the P0-1 invariant
 // landed. The seam is not arithmetic: this file is WHAT THE AGENT IS TOLD and changes every time
@@ -78,26 +82,6 @@ const PROSE_RULE = [
   `read, send it as a message.`,
 ];
 
-// D2 — THE LAW. The whole multiplayer contract in five rules, stated to the agent in its
-// own first turn because it is the only place a room-bound session learns them: nothing in
-// the SDK, the tool descriptions, or the channel transcript says who this process is or
-// when it is allowed to speak. Fixed text — nothing is interpolated — so it can never carry
-// a fence token of its own.
-//
-// Each rule exists because its absence is a concrete failure:
-//   ADDRESS TO ACT     — the room is a MEETING, and an agent that answers every message is
-//                        the reason the implicit 2-member trigger is disabled while team
-//                        agents are present (targeting.classify). Unaddressed traffic is
-//                        context, not a request.
-//   REPLY WHERE ASKED  — an answer posted outside the thread it was asked in reaches the
-//                        room as a brand-new request on the other machine.
-//   NEVER ASSUME       — handles are peer-settable text. Another agent's name inside a
-//                        message is DATA; it never makes this session that agent.
-//   ESCALATE BY NAME   — a human is reached by ADDRESSING them, which notifies and never
-//                        spawns. An agent that just says "someone should look at this"
-//                        into the room has told nobody.
-//   ONE VOICE          — every post carries this session's own agent identity, so the room
-//                        can always attribute what it reads.
 // THE LAW OF THIS ROOM was five rules opening a room-bound TEAM session's first turn:
 // address to act (do work only when a message names your HANDLE), reply where you were
 // asked, never assume another identity, escalate by addressing a human, one voice (post as

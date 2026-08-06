@@ -110,12 +110,16 @@ export function stripNulDeep<T>(value: T): T {
   return value;
 }
 
-export function isWorkspaceAdmin(ctx: ChannelContext): boolean {
+// MODULE-PRIVATE (channels rollback, 2026-08-05). Both of these were exported for the deleted
+// agent / participant services; the only callers left are `canManageChannel` and
+// `loadVisibleChannel` below, and unexporting them keeps the RAW resolve — the one that skips
+// the visibility gate — from being reachable outside this file.
+function isWorkspaceAdmin(ctx: ChannelContext): boolean {
   return ctx.role !== null && meetsMinRole(ctx.role, "admin");
 }
 
 /** Resolve a `channel` ref (UUID id or slug) to its row, or throw not-found. */
-export async function resolveChannelRef(
+async function resolveChannelRef(
   ctx: ChannelContext,
   ref: string
 ): Promise<ChannelRow> {

@@ -78,7 +78,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     channel: zod_1.z
         .string()
         .optional()
-        .describe('Channel slug or id. Required for every op except "open" (which creates a channel) and "list" (which lists them all).'),
+        .describe('Channel slug or id. Required for every op except three: "open" (which creates a channel), "list" (which lists them all), and "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace).'),
     direct: zod_1.z
         .boolean()
         .optional()

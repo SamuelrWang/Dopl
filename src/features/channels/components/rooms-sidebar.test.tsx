@@ -108,12 +108,39 @@ describe("RoomRow, on its own markup", () => {
     expect(markup).toContain("Open");
   });
 
-  it("says nothing about participants or agents any more", () => {
+  it("says nothing about participants or agent status any more", () => {
+    // The participant count row and the seated-agent row went with breakout
+    // rooms and named agents (rollback §1). Both were PROSE, so pinning them as
+    // absent strings is the right shape.
     const markup = renderToStaticMarkup(
       <RoomRow room={thread()} onSelect={() => {}} />
     );
     expect(markup).not.toContain("participant");
     expect(markup).not.toContain("working");
-    expect(markup).not.toContain("@");
+    // `expect(markup).not.toContain("@")` STOOD HERE AND WAS A LANDMINE (F-146).
+    // It was meant to say "no @handle is rendered", but a bare `@` matches far
+    // more than a handle: an email in a title, a Tailwind container-query class
+    // (`@container`, `@md:`), an `@media` string in an inline style, or a
+    // CSS-in-JS at-rule would all trip it, and NONE of those would mean an agent
+    // handle came back. It also passed for the wrong reason — the fixture has no
+    // `@` in it at all, so the assertion could not fail either way. The absence
+    // that actually matters is structural and is asserted below.
+  });
+
+  it("no handle-shaped token can render, because the row reads only the thread row", () => {
+    // THE REAL PROPERTY, pinned against a HOSTILE fixture rather than an empty
+    // one. An `@handle` could only reach this markup from data, so feed the one
+    // field that reaches the DOM a handle-shaped string and check the row treats
+    // it as ordinary text in the title rather than resolving it to anything —
+    // there is no roster to resolve against any more.
+    const markup = renderToStaticMarkup(
+      <RoomRow room={thread({ title: "ship @quartz's branch" })} onSelect={() => {}} />
+    );
+    expect(markup).toContain("ship @quartz");
+    // ...and nothing was hydrated around it: no agent chip, no status dot, no
+    // "N participants" line — the three affordances the old sidebar drew.
+    expect(markup).not.toContain("participant");
+    expect(markup).not.toContain("agent");
+    expect(markup).not.toContain("Idle");
   });
 });

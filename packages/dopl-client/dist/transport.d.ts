@@ -41,12 +41,15 @@ export interface DoplTransportOptions {
      */
     runtime?: string;
     /**
-     * WHICH SESSION of an agent this client acts for, echoed on every request as
+     * WHICH SESSION this client acts for, echoed on every request as
      * `X-Dopl-Session-Id` (F2). The ONLY consumer is the server's reserved
      * `metadata.session_id` stamp, which is what lets a reader tell two concurrent
-     * sessions of ONE agent handle apart — `as_agent` is ownership-checked and
-     * per-call, so it never said which process was speaking. Set by the in-app MCP
-     * route, which forwards the value it was called with; unset stamps nothing.
+     * sessions of one POSTER apart. It was written for named agents — `as_agent`
+     * was ownership-checked and per-call, so it never said which process was
+     * speaking — and it outlived them (channels rollback §1) because an agent post
+     * is authored by its owner's ACCOUNT, so the author label still names a person
+     * rather than a process. Set by the in-app MCP route, which forwards the value
+     * it was called with; unset stamps nothing.
      *
      * A LABEL, NOT A LOCK: nothing gates on it, and no session count is enforced.
      */

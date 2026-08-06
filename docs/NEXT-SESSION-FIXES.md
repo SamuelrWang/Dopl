@@ -1,5 +1,13 @@
 # NEXT-SESSION-FIXES — handoff from the live two-agent run, 2026-08-01
 
+> **⛔ SUPERSEDED 2026-08-05 BY THE CHANNELS ROLLBACK (F-141). READ THIS BEFORE ACTING ON ANYTHING BELOW.**
+>
+> This document is a handoff from a TWO-AGENT run, and two-agent runs are not a thing this product does any more. Named agents, `@handle` addressing, `to_agents`, summoning, engagement and breakout-room participant sets are all deleted. **Every "Verify" and "How to test" instruction below points at `dopl-desktop-app/test/live/` and `npm run test:live`; BOTH ARE DELETED** — all nine of that tier's contract checks were built on summoning two agents into a throwaway channel and addressing them, and the script is gone from `dopl-desktop-app/package.json`. A session that follows those instructions gets "npm ERR! Missing script: test:live" and no explanation, which is exactly the failure mode this correction exists to prevent (F-146).
+>
+> **There is no live-contract tier right now.** Rebuilding one against the session-pill model is owed work — see ENGINEERING §18 Phase 2 and F-141. Until then, verify against `npm test` in `dopl-desktop-app/` (the source-extraction truth tables) and the root / mcp-server vitest suites.
+>
+> **What is still worth reading here:** §2's F2 (the `session_id` wire stamp) SHIPPED and is live; the reserved-key note in the STATUS block below is the correct account of it. Everything about routing, lanes and addressing is history.
+
 > **STATUS 2026-08-01 (later session): F1–F7 ALL FIXED, uncommitted on master.**
 > Findings recorded as F-112 (F1 kind gate), F-113 (F2 session stamp), F-114 (F6 closed-thread
 > warn), F-115 (F4 ad-hoc label) in docs/REFACTOR-FINDINGS.md; F3/F5/F7 landed without new
@@ -115,11 +123,12 @@ echo per hop, and this reopens the auto-posture ping-pong bound documented at
 `channel-agents.js:281-284`. Do not widen `targeting.classify` in the same change — that would
 turn every peer milestone into a consent card.
 
-**Verify.** `dopl-desktop-app/test/live/` — add a check that posts `kind="task_progress"` with
-`to_agents=[<my other agent>]` and asserts `routeAddressedAgent` returns `'fed'` for the peer's
-`myUserId`. The harness already evaluates the same real message as both machines
-(`test/live/run.js:19-23`), so this needs no second Mac. `npm run test:live` from
-`dopl-desktop-app/`.
+**~~Verify.~~ ⛔ UNRUNNABLE (F-146).** ~~`dopl-desktop-app/test/live/` — add a check that posts
+`kind="task_progress"` with `to_agents=[<my other agent>]` and asserts `routeAddressedAgent`
+returns `'fed'` for the peer's `myUserId`. The harness already evaluates the same real message as
+both machines (`test/live/run.js:19-23`), so this needs no second Mac. `npm run test:live` from
+`dopl-desktop-app/`.~~ The harness, the script and `routeAddressedAgent` itself are all deleted
+(F-141). A `task_progress` reaches no session on this machine at all now — see the header banner.
 
 ---
 
@@ -329,17 +338,26 @@ own param, since a model obeys `maxLength`, not prose. That is a §3 decision, n
 
 ## 4. How to test
 
-**The harness.** `dopl-desktop-app/test/live/` — `npm run test:live` from `dopl-desktop-app/`.
+**⛔ THE HARNESS DESCRIBED IN THIS SECTION IS DELETED (F-141, 2026-08-05). `npm run test:live` is
+not a script that exists.** Kept as the design record, because a rebuilt tier should inherit it
+rather than re-derive it — see F-146.
+
+~~**The harness.** `dopl-desktop-app/test/live/` — `npm run test:live` from `dopl-desktop-app/`.
 It posts real messages through the real API and feeds each returned message through the **real
 desktop decision modules twice, once as the sender's machine and once as the peer's**
 (`test/live/run.js:8-23`). Two agents owned by the same caller in a throwaway
 `harness-<stamp>` channel is enough to exercise addressing, multi-address, threading, the
 handshake and delivery. **No credential → clean skip, exit 0.** It refuses the operator's real
-DM (`FORBIDDEN_CHANNEL_IDS`) and deletes its own channel.
+DM (`FORBIDDEN_CHANNEL_IDS`) and deletes its own channel.~~
 
-**This is the right vehicle for every fix above.** A single harness check on
+**The half worth keeping is the IDEA, not the fixtures:** one process evaluating one real message
+as BOTH machines is what made it a one-Mac cross-account test, and that property is independent of
+named agents. The fixtures are not — every one of the nine checks summoned two agents and addressed
+them by handle, which is why the tier died whole rather than shrinking.
+
+~~**This is the right vehicle for every fix above.** A single harness check on
 `routeAddressedAgent(entry, {kind:'task_progress', to_agent_ids:[…]}, peerId)` would have
-caught F1 in one second, without a second Mac.
+caught F1 in one second, without a second Mac.~~
 
 **The two-agent live protocol.** Summon one agent per machine, address both from a human
 message, and have them run probes rather than describe them. Then **verify their findings

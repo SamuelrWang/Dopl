@@ -373,8 +373,15 @@ function emitParkedShell(s) {
   // state instead; session-history owns the two cases where no history lands (no bound
   // counterparty / a failed fetch) and says where to read it there.
   // D2: a SUMMONED team shell is not a REOPEN. It was never open before, nothing was
-  // interrupted, and session-team emits its own line naming the handle and the law. Saying
-  // "Reopened" over it would describe a restore that did not happen.
+  // interrupted, and `session-team.js` emitted its own line naming the handle and the law, so
+  // saying "Reopened" over it would have described a restore that did not happen.
+  //
+  // THE BRANCH IS NOW UNREACHABLE AND STAYS ANYWAY. `session-team.js` was deleted with summoning
+  // (channels rollback §1) and nothing constructs a `bind: 'room'` session, so `s.bind !== 'room'`
+  // is true on every path that gets here. It is kept because the room-vs-pair SLOT SHAPE
+  // deliberately survived the rollback as inert scaffolding (ENGINEERING §18, "WHAT DELIBERATELY
+  // SURVIVED") — deleting the guard would be the one edit that makes the shape wrong the day
+  // anything sets it again. Read it as "the pair case, stated by exclusion", not as live routing.
   if (s.bind !== 'room') deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. Nothing is running yet, so send a message to continue.' });
   deps.emit(s, { type: 'status', phase: 'parked' });
 }

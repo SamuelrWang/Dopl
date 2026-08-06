@@ -358,11 +358,7 @@ export type AgentTrustRule = {
   trustedAvatarUrl: string | null;
 };
 
-/** Channel header + its transcript (detail read). */
-export type ChannelDetail = Channel & { messages: ChannelMessage[] };
-
-/** Long-poll result: new messages since a cursor + whether it timed out. */
-export type AwaitResult = {
-  messages: ChannelMessage[];
-  timedOut: boolean;
-};
+// `ChannelDetail` (header + transcript) and `AwaitResult` (long-poll result) lived here and had
+// zero readers on the web side — the detail read hands back the two halves separately, and the
+// long poll is an MCP/SDK shape, still declared in `packages/dopl-client/src/channel-types.ts`
+// where its only callers are.

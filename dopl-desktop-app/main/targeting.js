@@ -65,9 +65,12 @@ function classify(m, entry, myId) {
   // refuses those three from an agent now, so what reaches this line is a runtime
   // LIFECYCLE marker or a MILESTONE, and neither is a request somebody has to
   // decide about: raising a consent card for "Started working on this request."
-  // is the noise this guard exists to prevent. A milestone that IS meant for one
-  // of my agents is claimed earlier, by channel-agents.routeAddressedAgent, and
-  // never reaches classify at all.
+  // is the noise this guard exists to prevent. There USED TO BE a lane underneath
+  // it — `channel-agents.routeAddressedAgent` claimed a milestone meant for one of
+  // my named agents ahead of classify — and that module is gone with named agents
+  // (channels rollback §1, see `:160` and `:176` below). So a milestone now reaches
+  // this line and is DROPPED here, full stop; `session-dispatch.feedLiveSession`
+  // states the same thing from its own side.
   if (!m || m.kind !== 'message' || !m.authorUserId) return 'ignore';
   if (m.authorKind !== 'user' && m.authorKind !== 'agent') return 'ignore';
   if (!myId) return 'ignore';
@@ -165,9 +168,11 @@ function classify(m, entry, myId) {
   // Two humans talking in a DM with no agents behaved exactly as before the feature shipped.
   // WHERE IT SITS AND WHY: AFTER the two task-reply branches and the escalation (all three are
   // passive notices that spawn nothing, so chat has nothing to suppress there) and BEFORE
-  // every branch that can return trigger. Explicit AGENT addressing is unaffected and is not
-  // even reached here: chat WITH to_agent_ids is the documented primary way an agent is given
-  // work, and channel-agents.routeAddressedAgent claims those messages ahead of classify.
+  // every branch that can return trigger. It USED TO CARVE OUT explicit AGENT addressing —
+  // chat WITH `to_agent_ids` was the documented primary way an agent was given work, and
+  // `channel-agents.routeAddressedAgent` claimed those messages ahead of classify. Neither
+  // exists (channels rollback §1: the key is unstampable, the module is deleted), so the rule
+  // is now unconditional: a post that declared it addresses nobody triggers nobody.
   // FAILS TOWARD TODAY'S BEHAVIOUR: only the exact string suppresses. An absent intent — every
   // message an older server, an older desktop or the MCP surface writes — is a request.
   // READ RAW, NOT THROUGH metaStr, and that is not an oversight. metaStr TRIMS, which is right
