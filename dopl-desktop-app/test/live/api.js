@@ -116,8 +116,16 @@ class Api {
     return this.request('GET', `/api/channels/${channelId}/agents`);
   }
 
-  post(channelId, payload) {
-    return this.request('POST', `/api/channels/${channelId}/messages`, payload);
+  /**
+   * `opts` IS LOAD-BEARING and was missing from this signature for the whole first live
+   * run: check 6 passes `{ headers: { 'X-Dopl-Runtime': … } }` here, and a two-parameter
+   * `post` dropped it silently. The header never left the harness, the server correctly
+   * stamped nothing, and the check reported a product defect that did not exist. A
+   * forwarded-options parameter that is quietly discarded produces exactly this — a
+   * confident failure about somebody else's code.
+   */
+  post(channelId, payload, opts) {
+    return this.request('POST', `/api/channels/${channelId}/messages`, payload, opts);
   }
 
   async messages(channelId, since) {
