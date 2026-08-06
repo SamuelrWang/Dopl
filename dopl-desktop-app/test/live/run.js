@@ -34,8 +34,15 @@ const { CHECKS, CAP_WHY, PASS, FAIL, SKIP, readOf } = require('./checks');
 
 const say = (...a) => console.log(redact(a.join(' ')));
 
-/** The stamp the desktop puts on its own posts (main/targeting.js DESKTOP_RUNTIMES). */
-const RUNTIME_STAMP = 'dopl-desktop-ui';
+// The two recognized X-Dopl-Runtime values (src/shared/auth/runtime-header.ts, and
+// main/targeting.js DESKTOP_RUNTIMES). They are NOT interchangeable here:
+//   desktop-session  credential-agnostic by design — a spawned session presents exactly the
+//                    device token this harness holds, so this one MUST stamp.
+//   desktop-ui       "a person typed this" — narrowRuntime REFUSES it for an agent
+//                    credential, so from this harness it MUST NOT stamp.
+// Check 6 sends both and asserts the asymmetry.
+const RUNTIME_STAMP = 'desktop-session';
+const RUNTIME_SPOOF = 'desktop-ui';
 
 async function main() {
   const cred = readToken();
@@ -184,12 +191,12 @@ async function setup(ctx, who, tg) {
   if (forged.ok) posted.forged = forged.json.message;
   else ctx.forgedError = `HTTP ${forged.status} ${forged.text.slice(0, 300)}`;
 
-  // THE RUNTIME STAMP (check 6). Sent as a HEADER, which is the only way the desktop sets
-  // it — `metadata.runtime` is stripped, so a metadata-borne stamp would prove nothing.
+  // THE RUNTIME STAMP (check 6). Sent as a HEADER, which is the only way the stamp is ever
+  // set — `metadata.runtime` is stripped, so a metadata-borne stamp would prove nothing.
   const stamped = await api.post(
     ctx.channel.id,
     {
-      body: 'live harness: a post carrying the desktop runtime header. Automated probe, no action needed.',
+      body: 'live harness: a post carrying the desktop-session runtime header. Automated probe, no action needed.',
       authorKind: 'user',
       clientMsgId: `harness-${tg.stamp}-stamped`,
     },
@@ -197,6 +204,22 @@ async function setup(ctx, who, tg) {
   );
   if (stamped.ok) posted.stamped = stamped.json.message;
   else ctx.stampedError = `HTTP ${stamped.status} ${stamped.text.slice(0, 300)}`;
+
+  // THE SPOOF, and the reason check 6 is an asymmetry rather than a single assertion. This
+  // credential is a device token — an AGENT credential — claiming "a person typed this in
+  // the app". `narrowRuntime` must refuse to stamp it. The post itself is expected to
+  // SUCCEED; it is the STAMP that must not land.
+  const spoofed = await api.post(
+    ctx.channel.id,
+    {
+      body: 'live harness: an agent credential claiming the desktop-ui stamp. Automated probe, no action needed.',
+      authorKind: 'user',
+      clientMsgId: `harness-${tg.stamp}-spoof`,
+    },
+    { headers: { 'X-Dopl-Runtime': RUNTIME_SPOOF } }
+  );
+  if (spoofed.ok) posted.spoofedRuntime = spoofed.json.message;
+  else ctx.spoofError = `HTTP ${spoofed.status} ${spoofed.text.slice(0, 300)}`;
 
   // ── A THREAD, for the tasks/{taskId} route ────────────────────────────────────
   if (!ctx.threadSkip) {
@@ -208,10 +231,13 @@ async function setup(ctx, who, tg) {
     });
     if (res.ok) {
       ctx.thread = res.json.task;
-      ctx.cleanup.push({
-        what: `thread ${ctx.thread.id}`,
-        run: () => api.closeThread(ctx.channel.id, ctx.thread.id),
-      });
+      // NO CLEANUP STEP FOR THE THREAD, and this is not an oversight. CLOSING A THREAD IS
+      // HUMAN-ONLY (`CHANNEL_CLOSE_IS_HUMAN_ONLY`): an agent may propose a close, a person
+      // confirms it, and this harness holds an agent credential. The first version
+      // registered a `closeThread` teardown step and every run ended by SHOUTING that it
+      // had left a thread behind — the server refusing exactly as designed, reported as
+      // harness debris. Deleting the CHANNEL takes its threads with it, which is why the
+      // channel step is the only one needed.
     } else {
       say(`NOTE: create_thread refused: HTTP ${res.status} ${res.text.slice(0, 300)}`);
     }

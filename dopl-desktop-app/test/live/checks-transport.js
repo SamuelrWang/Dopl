@@ -161,34 +161,61 @@ async function checkStrictArgs(ctx) {
 }
 
 /**
- * 6. X-Dopl-Runtime END TO END. The stamp the desktop sets on its own posts, read back off
- * the message the server stored. It is what lets the app prove its own UI posted, and it
- * is the half of F-140 that no test crosses.
+ * 6. X-Dopl-Runtime END TO END — AND THE HONESTY BOUND ON IT.
  *
- * The CONTROL is the harness's other posts, which carry no stamp: if the field came back
- * populated on a post that never set it, the field is not carrying what it claims to.
+ * Two recognized values (`src/shared/auth/runtime-header.ts`), and this harness can only
+ * legitimately produce ONE of them, which is the whole point of the check:
+ *
+ *   `desktop-session`  DELIBERATELY CREDENTIAL-AGNOSTIC — a desktop-spawned session
+ *                      authenticates with exactly the device token this harness holds, so
+ *                      bounding it would refuse the caller it was invented for. This one
+ *                      MUST stamp.
+ *   `desktop-ui`       "a person typed this in the app". `narrowRuntime` REFUSES it for an
+ *                      agent credential, which is every credential this harness can hold.
+ *                      This one MUST NOT stamp.
+ *
+ * So the check drives both and asserts the ASYMMETRY. A run where both stamp has lost the
+ * bound; a run where neither stamps has lost the feature. The first draft of this check
+ * sent `desktop-ui` and read its (correct) refusal as a product bug — the asymmetry is the
+ * only reading that can tell those two apart.
  */
 function checkRuntimeStamp(ctx) {
   const stamped = ctx.msg.stamped;
+  const spoofed = ctx.msg.spoofedRuntime;
   const plain = ctx.msg.control;
-  if (!stamped) return result(SKIP, 'the stamped post was not accepted by the server, so there is nothing to read back');
-  const meta = stamped.metadata || {};
-  const seen = meta.runtime || meta.dopl_runtime || meta.author_runtime;
+  if (!stamped) return result(SKIP, 'the desktop-session post was not accepted, so there is nothing to read back');
+  const runtimeOf = (m) => ((m && m.metadata) || {}).runtime;
+  const seen = runtimeOf(stamped);
+  const spoofSeen = runtimeOf(spoofed);
+  const plainSeen = runtimeOf(plain);
+
   const fails = [];
   if (!seen) {
     fails.push(
-      'the post carried X-Dopl-Runtime but the stored message exposes no runtime field ' +
-        `(metadata keys: ${Object.keys(meta).join(', ') || 'none'})`
+      'a post carrying X-Dopl-Runtime: desktop-session stored NO runtime field ' +
+        `(metadata keys: ${Object.keys((stamped && stamped.metadata) || {}).join(', ') || 'none'}). ` +
+        'That stamp is credential-agnostic by design and must survive a device token.'
     );
-  } else if (seen !== ctx.runtimeStamp) {
-    fails.push(`stamped "${ctx.runtimeStamp}" but read back "${seen}"`);
+  } else if (seen !== 'desktop-session') {
+    fails.push(`sent desktop-session but the server stored runtime="${seen}"`);
   }
-  const plainMeta = (plain && plain.metadata) || {};
-  const plainSeen = plainMeta.runtime || plainMeta.dopl_runtime || plainMeta.author_runtime;
-  if (seen && plainSeen === seen) {
-    fails.push(`the CONTROL post (no stamp sent) also reads back "${plainSeen}" — the field is not caller-derived`);
+  // THE BOUND. An agent credential claiming to be a person must be refused.
+  if (spoofed && spoofSeen === 'desktop-ui') {
+    fails.push(
+      'an AGENT credential sent X-Dopl-Runtime: desktop-ui and the server STAMPED it — ' +
+        'narrowRuntime is supposed to refuse that claim outright, and the desktop reads this ' +
+        'stamp when deciding whether to open a window'
+    );
   }
-  return verdict(fails, { extraLines: [`stamped=${seen || '(absent)'} control=${plainSeen || '(absent)'}`] });
+  // THE CONTROL. A post that sent no header at all must carry no stamp.
+  if (plainSeen) {
+    fails.push(`the CONTROL post (no header sent) reads back runtime="${plainSeen}" — the field is not caller-derived`);
+  }
+  return verdict(fails, {
+    extraLines: [
+      `desktop-session=${seen || '(absent)'} desktop-ui-spoof=${spoofSeen || '(refused, absent)'} control=${plainSeen || '(absent)'}`,
+    ],
+  });
 }
 
 const describe = (r) =>

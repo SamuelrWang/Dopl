@@ -52,8 +52,15 @@ async function checkRouteCoverage(ctx) {
     ['GET  /api/channels/{id}/await', () => api.awaitRoute(id, ctx.lastSeq || 0), (s) => okish(s) || s === 408],
     ['GET  /api/channels/{id}/tasks', () => api.listThreads(id), okish],
     ['GET  /api/channels/consent', () => api.consent(id), (s) => okish(s) || refusal(s)],
-    ['GET  /api/channels/presence', () => api.presence(id), (s) => okish(s) || refusal(s)],
-    ['GET  /api/channels/sessions', () => api.sessions(id), okish],
+    // PRESENCE IS POST-ONLY — it is a heartbeat, not a read. A GET here answers 405, which
+    // the first draft of this table recorded as a route failure. The 405 is the route being
+    // right; asserting it is what pins the verb.
+    ['POST /api/channels/presence', () => api.presence(id), (s) => okish(s) || refusal(s)],
+    ['GET  /api/channels/presence (405 expected)', () => api.request('GET', '/api/channels/presence'), (s) => s === 405],
+    // 404 IS AN ALLOWED ANSWER HERE, and only here: the route ships in this working tree but
+    // is not deployed until master is pushed. Check 10 is the one that reads what that 404
+    // means; this row only asserts it is not a 5xx.
+    ['GET  /api/channels/sessions', () => api.sessions(id), (s) => okish(s) || absent(s)],
     ['GET  /api/channels/trust', () => api.trust(), (s) => okish(s) || refusal(s)],
   ];
   if (thread) {
@@ -115,22 +122,45 @@ async function checkAuthBoundary(ctx) {
 }
 
 /**
- * THE RETIRED ROUTES. Named agents are gone for good (settled decision, rollback §5). A
- * server still answering the roster route is serving a model that no longer exists.
+ * THE AGENT ROUTE'S SURVIVING HALF, AND ITS DEAD ONES.
+ *
+ * "Named agents are gone" does NOT mean this route is gone, and the first draft of this
+ * check got that backwards — it read a correct 200 as residue. `GET .../agents` survives
+ * DELIBERATELY, for one consumer: the transcript resolving a stored `metadata.author_agent_id`
+ * back to the handle it rendered under. THE MESSAGES OUTLIVE THE FEATURE. It is the same
+ * call as `agent-names.ts` staying in the web tree — the role changed rather than expired,
+ * so deleting it removes a guard, not residue. Its own docblock says to delete it when
+ * historical attribution stops mattering, not before.
+ *
+ * What DID die is the lifecycle: `POST` (summon) here, and rename / status / disengage at
+ * `agents/[agentId]`. Those are what this check asserts are gone — a write verb still
+ * answering would mean the summon lifecycle is reachable with no model behind it.
  */
 async function checkRetiredRoutes(ctx) {
   const id = ctx.channel.id;
-  const res = await ctx.api.agentsRoute(id);
   const fails = [];
-  if (okish(res.status)) {
+  const lines = [];
+
+  const read = await ctx.api.agentsRoute(id);
+  lines.push(`GET  /{id}/agents -> ${read.status} (kept: historical attribution)`);
+  if (!okish(read.status)) {
     fails.push(
-      `GET /api/channels/{id}/agents answered ${res.status} — the summon-era roster route is ` +
-        `still live. Body: ${String(res.text).slice(0, 200)}`
+      `GET /api/channels/{id}/agents answered ${read.status}. It is KEPT on purpose — the ` +
+        'transcript resolves stored author_agent_id values through it, and old messages still ' +
+        'render. Losing it silently breaks attribution on every historical row.'
     );
-  } else if (res.status >= 500) {
-    fails.push(`the retired route answered ${res.status} rather than a clean 404/410`);
   }
-  return verdict(fails, { extraLines: [`GET /{id}/agents -> ${res.status}`] });
+
+  // The summon verb. 404/405/410 all mean "gone"; a 2xx means it still summons.
+  const summon = await ctx.api.request('POST', `/api/channels/${id}/agents`, { name: 'hxprobe' });
+  lines.push(`POST /{id}/agents -> ${summon.status} (must be gone)`);
+  if (okish(summon.status)) {
+    fails.push(`POST /api/channels/{id}/agents answered ${summon.status} — summon is still reachable`);
+  } else if (summon.status >= 500) {
+    fails.push(`the retired summon verb answered ${summon.status} rather than a clean refusal`);
+  }
+
+  return verdict(fails, { extraLines: lines });
 }
 
 /**
@@ -141,6 +171,19 @@ async function checkRetiredRoutes(ctx) {
  */
 async function checkSessionsDegrade(ctx) {
   const res = await ctx.api.sessions(ctx.channel.id);
+
+  // A 404 IS THE ROUTE NOT BEING DEPLOYED, which is a different fact from the route
+  // degrading well — and the first draft of this check PASSED on it, silently, by falling
+  // through both branches. That is the vacuous pass this harness is not allowed to report:
+  // check 7 was failing on the same 404 in the same run. SKIP names it instead.
+  if (absent(res.status)) {
+    return result(
+      SKIP,
+      `GET /api/channels/sessions answered ${res.status} — the route is not deployed on this ` +
+        'target, so the degrade path cannot be exercised. It ships in this working tree; push ' +
+        'master and re-run.'
+    );
+  }
   const fails = [];
   if (res.status >= 500) {
     fails.push(
@@ -151,6 +194,8 @@ async function checkSessionsDegrade(ctx) {
     const list = (res.json && (res.json.sessions || res.json.entries)) || null;
     if (!Array.isArray(list)) fails.push(`200 OK but no sessions array in the body: ${String(res.text).slice(0, 200)}`);
     ctx.caps.sessions_table = Array.isArray(list) && list.length > 0;
+  } else {
+    fails.push(`GET /api/channels/sessions answered ${res.status}, which is neither a success, a 404, nor a 5xx`);
   }
   return verdict(fails, { extraLines: [`GET /api/channels/sessions -> ${res.status}`] });
 }

@@ -174,9 +174,9 @@ class Api {
     return this.request('GET', `/api/channels/consent${q}`);
   }
 
+  /** POST-only: presence is a HEARTBEAT, not a read. A GET answers 405 by design. */
   presence(channelId) {
-    const q = channelId ? `?channelId=${encodeURIComponent(channelId)}` : '';
-    return this.request('GET', `/api/channels/presence${q}`);
+    return this.request('POST', '/api/channels/presence', { channelId });
   }
 
   trust() {
