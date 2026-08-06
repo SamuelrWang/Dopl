@@ -34,7 +34,7 @@ import {
 //  2. The empty answer is REAL. `channel_sessions` is unapplied, so this read
 //     answered PGRST205 and the route returned INTERNAL_ERROR — while the
 //     comment above claimed "[] until the push lands". The repository degrades
-//     that ONE code (`repository-collab.listSessionStates`); every other DB
+//     that ONE code (`repository-sessions.listSessionStates`); every other DB
 //     failure still reaches the caller as a failure.
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
