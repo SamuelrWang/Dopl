@@ -55,8 +55,11 @@ const LEGACY = LEGACY_SRC.slice(
 );
 assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 
+// `isChatIntent` (2026-08-06) is a free variable inside classify — hoisted out of its body so
+// the dispatcher can ask the same question before classify runs. Self-contained, so the plain
+// brace-matcher above slices all of it.
 const { classify } = new Function(
-  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("classify")}\nreturn { classify, metaStr };`
+  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("classify")}\nreturn { classify, metaStr };`
 )();
 
 const ME = "me-uuid"; // the REQUESTER (I created the thread)

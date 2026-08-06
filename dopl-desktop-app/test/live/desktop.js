@@ -49,9 +49,13 @@ async function load() {
       '// ─── END LEGACY-THREADS',
       'legacy-threads.js'
     );
+    // `isChatIntent` (2026-08-06) is a free variable inside classify — hoisted out of its body
+    // so listener-messages can refuse a chat post ahead of the two session-STARTING routes.
+    // Self-contained (its const is inside the function), so `fnOf` slices all of it.
     const built = new Function(
-      `${probe.fnOf(targeting, 'metaStr')}\n${legacy}\n${probe.fnOf(targeting, 'classify')}\n` +
-        'return { classify, metaStr, noteMyLegacyThread };'
+      `${probe.fnOf(targeting, 'metaStr')}\n${legacy}\n${probe.fnOf(targeting, 'isChatIntent')}\n` +
+        `${probe.fnOf(targeting, 'classify')}\n` +
+        'return { classify, metaStr, isChatIntent, noteMyLegacyThread };'
     )();
     classify = built.classify;
   } catch (err) {

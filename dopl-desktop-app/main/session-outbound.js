@@ -40,7 +40,7 @@ const io = require('./session-io');
 // gated one does not — "no recipient named" about a message the server addresses to the peer.
 // Stamped ONLY when true, like `addressed` and `postKind`: a non-direct post's payload stays
 // byte-identical to the one every existing surface already renders.
-function outboundResolveEvents(requestId, toolUseId, input, counterpartyName, directChannel) {
+function outboundResolveEvents(requestId, toolUseId, input, counterpartyName, directChannel, counterpartyId) {
   return [
     io.withPostSurface({
       type: 'outbound_gate',
@@ -49,7 +49,7 @@ function outboundResolveEvents(requestId, toolUseId, input, counterpartyName, di
       ownChannel: true,
       ...(directChannel === true ? { directChannel: true } : {}),
       text: input && input.body != null ? String(input.body) : '',
-    }, input, counterpartyName),
+    }, input, counterpartyName, counterpartyId),
     { type: 'permission_resolved', requestId, decision: 'allow-once' },
   ];
 }
@@ -66,7 +66,7 @@ function wrapCanUseTool(s, inner, emit) {
     if (!toolUseId || !io.isOutboundPost(name, input, s.channelId)) return result;
     return Promise.resolve(result).then((verdict) => {
       if (verdict && verdict.behavior === 'allow') {
-        const events = outboundResolveEvents(crypto.randomUUID(), toolUseId, input, s.counterpartyName, s.direct === true);
+        const events = outboundResolveEvents(crypto.randomUUID(), toolUseId, input, s.counterpartyName, s.direct === true, s.counterpartyId);
         for (const ev of events) emit(s, ev);
       }
       return verdict;

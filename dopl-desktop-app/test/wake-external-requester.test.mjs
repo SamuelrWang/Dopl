@@ -148,8 +148,10 @@ const LEGACY = LEGACY_SRC.slice(
   LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
 assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
+// `isChatIntent` (2026-08-06) is a free variable inside classify — hoisted out of its body so
+// listener-messages can refuse a chat post ahead of the two session-STARTING routes.
 const { classify } = new Function(
-  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
+  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "isChatIntent")}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
 )();
 
 const ME = "11111111-1111-1111-1111-111111111111";

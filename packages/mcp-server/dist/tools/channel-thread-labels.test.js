@@ -193,6 +193,31 @@ const readText = async (messages) => (await (0, channel_ops_read_1.opRead)(stubC
         (0, vitest_1.expect)(text).toContain("THREADED into `Wire the listener`");
         (0, vitest_1.expect)(text).not.toContain("ad-hoc");
     });
+    // WHO CHOSE THE THREAD (2026-08-06). A post that NAMED a thread and one the server
+    // INHERITED one for used to render byte-identical text — `mismatch` only fires when
+    // `askedThread` is present AND different, so an omitted argument and a correct one both
+    // produced the empty string. Two agents spent three turns arguing about which had happened,
+    // each quoting the same sentence for the opposite conclusion; the stored row cannot settle
+    // it either, since both paths converge on the same `metadata.taskId`.
+    (0, vitest_1.it)("says so when the SERVER inherited the thread the caller did not name", async () => {
+        const text = (await (0, channel_ops_write_1.opPost)(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {})).content[0].text;
+        (0, vitest_1.expect)(text).toContain("THREADED into `Wire the listener`");
+        (0, vitest_1.expect)(text).toContain("You named no thread");
+        // The rule, not just the fact: inheritance stops once a second thread is open, and an
+        // agent that does not know that reads the change as a regression.
+        (0, vitest_1.expect)(text).toContain("SECOND thread");
+        (0, vitest_1.expect)(text).toContain(`thread=\`${THREAD_UUID}\``);
+    });
+    (0, vitest_1.it)("stays silent about inheritance when the caller named the thread itself", async () => {
+        // THE CONTROL. Without it, "the note appeared" is free — it would also hold for a note
+        // that fires unconditionally, which would be a new way of saying nothing.
+        const text = (await (0, channel_ops_write_1.opPost)(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {
+            thread: THREAD_UUID,
+        })).content[0].text;
+        (0, vitest_1.expect)(text).toContain("THREADED into `Wire the listener`");
+        (0, vitest_1.expect)(text).not.toContain("You named no thread");
+        (0, vitest_1.expect)(text).not.toContain("SECOND thread");
+    });
 });
 (0, vitest_1.describe)("F2 — the session suffix on a message line", () => {
     (0, vitest_1.it)("names the session when the message carries the server's stamp", async () => {

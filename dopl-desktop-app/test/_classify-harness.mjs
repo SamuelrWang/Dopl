@@ -62,10 +62,14 @@ assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinel
 
 // Build the real classify() in an isolated scope alongside its metaStr helper. Every
 // `new Function` call gets a FRESH registry, so no test can leak state into another.
+// `isChatIntent` was hoisted out of classify's body on 2026-08-06 (the dispatcher needs the
+// same answer BEFORE classify runs), so it is now a free variable inside the extracted
+// classify and has to be evaluated alongside it. It is self-contained by design — its
+// CHAT_INTENT const sits inside the function body — so the plain brace-matcher gets all of it.
 const build = () =>
   new Function(
-    `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("classify")}\n` +
-      `return { classify, metaStr, noteMyLegacyThread, knownLegacyReply, legacyThreadId };`
+    `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("classify")}\n` +
+      `return { classify, metaStr, isChatIntent, noteMyLegacyThread, knownLegacyReply, legacyThreadId };`
   )();
 const { classify } = build();
 

@@ -172,7 +172,29 @@ export async function threadLinkageNote(
     const named = safeTitle
       ? `${safeTitle} (thread ${safeLanded})`
       : `thread ${safeLanded}`;
-    return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}`;
+    // WHO CHOSE THIS THREAD — and until 2026-08-06 this line refused to say.
+    //
+    // The ad-hoc branch above has always split on it ("You passed no thread, so the
+    // receiving side grouped this for you"); the first-class branch never did, so a post
+    // that NAMED a thread and a post the server INHERITED one for rendered byte-identical
+    // text. `mismatch` is no help: it fires only when `askedThread` is present AND differs,
+    // so an omitted argument and a correct one both produce the empty string.
+    //
+    // THAT AMBIGUITY IS NOT THEORETICAL. On 2026-08-06 two agents spent three turns arguing
+    // about which had happened, each quoting this same sentence as evidence for the opposite
+    // conclusion, and neither could settle it — the stored row cannot either, because both
+    // paths converge on the same `metadata.taskId`. The server is the only party that knows,
+    // so it is the one that has to say.
+    //
+    // THE INHERITANCE RULE IS WORTH STATING, not just the fact: `resolveInheritableTask`
+    // attaches the ONE open thread between these two members and returns null when there are
+    // several (`candidates.length === 1`). So an agent that opens a second thread will see
+    // this stop happening, which reads as a regression unless it knows the rule.
+    const inherited =
+      !askedThread
+        ? ` You named no thread — the server attached this to your one open exchange with that member. Pass thread=${safeLanded} explicitly to keep it there: once a SECOND thread is open between you, nothing is inherited and an untagged post reads as a new request.`
+        : "";
+    return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}${inherited}`;
   }
 
   if (askedThread) {

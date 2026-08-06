@@ -41,7 +41,7 @@ const LEGACY = LEGACY_SRC.slice(
 );
 
 const { classify } = new Function(
-  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("classify")}\n` +
+  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("classify")}\n` +
     `return { classify };`
 )();
 

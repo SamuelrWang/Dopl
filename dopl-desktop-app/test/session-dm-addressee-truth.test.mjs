@@ -128,6 +128,45 @@ test("H2: main stamps `directChannel` on a DM session's post surface, and only t
   }
 });
 
+// ── THE CARD NAMES A PERSON, NEVER A UUID (2026-08-06) ────────────────────────────
+// Observed live: an agent addressed its counterparty BY USER ID — which the tool description
+// actively invites ("an email or user id") and which the peer's own agent had handed over as a
+// standing order — and the operator's card read `Sent to 2dac1943-da3b-4fd9-aee6-1716ddfc25f9`
+// while the SERVER's echo of the same post said "addressed to Samuel Wang". Both call sites in
+// session-io already documented the contract ("`to` is a display NAME"); `withPostSurface` was
+// the one place that broke it, because `postAddress` returns the caller's argument verbatim.
+test("the card resolves the counterparty's id to their name", () => {
+  const ID = "2dac1943-da3b-4fd9-aee6-1716ddfc25f9";
+  const post = (input) =>
+    io.withPostSurface({ type: "outbound_gate" }, input, "Samuel Wang", ID);
+
+  // Addressed by ID -> the NAME is painted, and `addressed` still reports that the CALL named
+  // someone (it drives the renderer's "Sent to X" vs "Posted to channel" branch).
+  const byId = post({ op: "post", body: "hi", to: ID });
+  assert.equal(byId.to, "Samuel Wang", "the raw user id reached the card");
+  assert.equal(byId.addressed, true, "resolving the label must not un-address the post");
+
+  // Addressed by NAME already -> unchanged.
+  assert.equal(post({ op: "post", body: "hi", to: "Samuel Wang" }).to, "Samuel Wang");
+
+  // UNADDRESSED -> the bound-counterparty fill, and NOT flagged as addressed. This is the
+  // pre-existing behaviour the fix must not disturb.
+  const bare = post({ op: "post", body: "hi" });
+  assert.equal(bare.to, "Samuel Wang");
+  assert.equal("addressed" in bare, false);
+
+  // A DIFFERENT member's id is LEFT VERBATIM rather than guessed at — this session knows one
+  // counterparty and nothing else, and a wrong name is worse than an ugly id.
+  const third = "33333333-3333-3333-3333-333333333333";
+  assert.equal(post({ op: "post", body: "hi", to: third }).to, third);
+
+  // No name to substitute -> the id stands. Never `null`, never "undefined".
+  assert.equal(
+    io.withPostSurface({ type: "outbound_gate" }, { op: "post", to: ID }, null, ID).to,
+    ID
+  );
+});
+
 test("H2: an AUTO-ALLOWED post paints the same destination as a gated one", () => {
   // Axis B auto_outbound resolves the card itself (session-outbound). If the flag rode only
   // the gated path, turning auto-send on would silently downgrade the record's copy.

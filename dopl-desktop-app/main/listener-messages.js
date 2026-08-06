@@ -64,8 +64,28 @@ async function dispatchMessage(entry, m, myUserId) {
   // now, so route 2 claims the operator's typing as well and starts the agent on it — one
   // initiating behaviour instead of two. An UNSTAMPED create still reaches no route at all.
   if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
-  if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
-  if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;
+  // CHAT MAY BE SEEN BY A LIVE SESSION; IT MAY NEVER START ONE (2026-08-06, operator's call).
+  //
+  // The chat brake used to live ONLY inside classify, which is the LAST thing this function
+  // runs — so the three routes above reached it first and none of them had ever heard of
+  // `intent`. The tool description's promise ("addresses nobody and starts nobody") was
+  // therefore true of the spawn path and false of these two, and a peer's chat line could
+  // open a requester window (route 2) or REOPEN A SETTLED SESSION (route 3). Found live on
+  // 2026-08-06 by a two-agent probe in a real DM.
+  //
+  // ROUTE 1 IS DELIBERATELY ABOVE THIS LINE and stays unguarded. It feeds a session that is
+  // ALREADY RUNNING, which is "seen", not "started" — the distinction the operator drew.
+  // Routes 2 and 3 both bring a session INTO existence, so they are the two this refuses.
+  //
+  // AND IT DOES NOT RETURN. Falling through to classify is the whole point: chat from a
+  // member classifies as 'fyi', which drives `trigger.sendFyi` — the notification the human
+  // actually sees. An early return here would silence chat entirely, which is a worse bug
+  // than the one being fixed.
+  const chat = targeting.isChatIntent(m);
+  if (!chat) {
+    if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
+    if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;
+  }
   const verdict = targeting.classify(m, entry, myUserId);
   diag(
     'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,

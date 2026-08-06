@@ -54,6 +54,36 @@ function metaStr(m, key) {
 // treated as multi-member (FYI, no prompt). Rationale: a stale DTO must never
 // mass-prompt a group channel (the exact bug addressing exists to prevent);
 // addressed-to-me requests are unaffected and always trigger.
+// THE `intent="chat"` MARKER, AND THE MACHINE'S ONE READER OF IT.
+//
+// Hoisted out of classify's body (2026-08-06) because it acquired a SECOND caller: the
+// dispatcher has to answer the same question BEFORE classify runs. `listener-messages.js`
+// checks three session routes ahead of classify, two of which START a session, and a chat
+// post must reach neither — so the marker is now read in two places and must be read the
+// same way in both. That is exactly the failure this comment already recorded once: ' chat'
+// suppressed here while `channel-engagement.isChat` (a plain ===) called the same message a
+// request, and the two readers of one marker disagreed about the same post. A predicate,
+// rather than a second copy of the comparison, is what keeps that from recurring.
+//
+// READ RAW, NOT THROUGH metaStr, and that is not an oversight. metaStr TRIMS, which is right
+// for an id and wrong for a reserved enum — the server validates the enum, so no other
+// spelling occurs, and a trimming read here would be a rule this file states differently
+// from the server. The marker is restated from src/features/channels/schema.ts
+// MessageIntentSchema and is reserved + server-stamped, so it is a fact about the post
+// rather than a claim in it.
+//
+// FAILS TOWARD TODAY'S BEHAVIOUR: only the exact string answers true. An absent intent —
+// every message an older server, an older desktop or the MCP surface writes — is a request.
+// SELF-CONTAINED ON PURPOSE: the const lives INSIDE the function rather than beside it.
+// Three separate test harnesses slice this file with a `function <name>` brace-matcher
+// (test/_classify-harness.mjs, test/main-audit-targeting.test.mjs, test/live/desktop.js), and
+// a module-level const would be a free variable each of them had to plumb in by hand. One
+// self-contained function is one thing to slice and nothing to forget.
+function isChatIntent(m) {
+  const CHAT_INTENT = 'chat';
+  return (m && m.metadata ? m.metadata.intent : undefined) === CHAT_INTENT;
+}
+
 function classify(m, entry, myId) {
   // Guard / fail closed. Agent authors are NO LONGER rejected wholesale (that
   // dropped every ask-another-agent message before addressing was even checked);
@@ -158,10 +188,8 @@ function classify(m, entry, myId) {
   // addressed rule below exactly as it did before D2.
   //
   // CHAT — A POST THAT DECLARED IT ADDRESSES NOBODY TRIGGERS NOBODY.
-  // The marker is restated from src/features/channels/schema.ts MessageIntentSchema and is
-  // reserved + server-stamped, so it is a fact about the post rather than a claim in it (the
-  // desktop's other reader was channel-engagement.isChat, which kept the same const; that
-  // module is gone and this is now the marker's ONE reader on this machine).
+  // The marker itself is read by `isChatIntent` above — one predicate, because the dispatcher
+  // asks the same question ahead of this function and the two answers must never diverge.
   // WHY IT MATTERED: chat is the composer's DEFAULT, and under chat the server stamps no
   // to_user_id from the peer at all, so an ordinary "sounds good" in a DM fell straight past
   // the addressed rules into the implicit 2-member rule and spawned an ASSIST session anyway.
@@ -173,17 +201,7 @@ function classify(m, entry, myId) {
   // `channel-agents.routeAddressedAgent` claimed those messages ahead of classify. Neither
   // exists (channels rollback §1: the key is unstampable, the module is deleted), so the rule
   // is now unconditional: a post that declared it addresses nobody triggers nobody.
-  // FAILS TOWARD TODAY'S BEHAVIOUR: only the exact string suppresses. An absent intent — every
-  // message an older server, an older desktop or the MCP surface writes — is a request.
-  // READ RAW, NOT THROUGH metaStr, and that is not an oversight. metaStr TRIMS, which is right
-  // for an id and wrong for a reserved enum: it made ' chat' suppress here while
-  // channel-engagement.isChat (a plain ===) called the same message a request, so the two
-  // readers of one marker disagreed about the same post. That second reader is gone, and the
-  // raw read stays — the server validates the enum, so no other spelling occurs, and a
-  // trimming read here would be a rule this file states differently from the server.
-  const CHAT_INTENT = 'chat';
-  const intent = m.metadata ? m.metadata.intent : undefined;
-  if (intent === CHAT_INTENT) return isMember ? 'fyi' : 'ignore';
+  if (isChatIntent(m)) return isMember ? 'fyi' : 'ignore';
   if (toUserId) {
     // Explicit address always prompts — for USER *and* AGENT authors. This is
     // the fix: an agent addressed to me triggers a consented answering turn.
@@ -378,6 +396,7 @@ module.exports = {
   truncate,
   metaStr,
   classify,
+  isChatIntent, // 2026-08-06: read by classify AND by listener-messages' dispatch guard
   firstClassTaskId,
   LEGACY_THREAD_CAP,
   LEGACY_THREAD_TTL_MS, // S5: the registry's two bounds, asserted by the truth tables

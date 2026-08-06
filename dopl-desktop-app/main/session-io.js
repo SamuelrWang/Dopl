@@ -181,46 +181,17 @@ function logGateVerdict(log, s, toolName, verdict, op) {
       'msg=' + (st.messageMode || 'ask'), 'session=' + String(s && s.sessionId ? s.sessionId : '').slice(0, 8)]));
 }
 
-// ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
-// MEDIUM-2 — WHO this post is really addressed to, and WHAT kind it claims to be. The card used
-// to print the session's bound counterparty for every post, so a post addressed to a DIFFERENT
-// channel member (`to:`) or forged as a lifecycle event (`kind:task_finished`) looked exactly like
-// a plain reply. Both now ride the payload and are painted (session-labels.postDestinationText),
-// and both are folded into the grant key, so approving one reply cannot authorize either.
-const TO_CAP = 60;
-const KIND_CAP = 40;
-// FIX F9 (v2.9 review) — THE KEY AND THE CARD MUST NAME THE SAME THING. postScope keys ANY
-// non-'message' kind, but this named only the four-value enum, so `kind:'Task_Finished'` earned
-// its OWN grant key while the card showed NOTHING and the operator approved what read as a plain
-// reply. Every non-empty kind is rendered now. And a NON-STRING `to`/`kind` is never rendered as a
-// value it is not (String({a:1}) is '[object Object]', String(['alice']) is 'alice'), so a
-// malformed field says so in plain words — and grantDecision refuses to auto-allow those calls at
-// all (postFieldsOk), so this label is always shown before anything is sent.
-function oneLineField(value, cap) {
-  const raw = String(value).replace(/\s+/g, ' ').trim();
-  return raw.length > cap ? raw.slice(0, cap - 1).trimEnd() + '…' : raw;
-}
-function postAddress(input) {
-  const to = input ? input.to : null;
-  if (to == null || to === '') return null; // unaddressed -> the bound counterparty
-  return typeof to === 'string' ? (oneLineField(to, TO_CAP) || null) : 'an invalid recipient';
-}
-function postKindOf(input) {
-  const k = input ? input.kind : null;
-  if (k == null || k === '' || k === 'message') return null; // the plain-chat default
-  return typeof k === 'string' ? (oneLineField(k, KIND_CAP) || null) : 'an invalid kind';
-}
-// Stamp the two fields on a post payload, ONLY when they are really set: an absent field
-// must leave the payload byte-identical to the one every existing surface already renders.
-function withPostSurface(payload, input, fallbackTo) {
-  const addressed = postAddress(input);
-  const kind = postKindOf(input);
-  payload.to = addressed || fallbackTo || null;
-  if (addressed) payload.addressed = true;
-  if (kind) payload.postKind = kind;
-  return payload;
-}
-// ─── END SESSION-IO-POST-SURFACE ──────────────────────────────────────────────
+// ─── THE POST SURFACE MOVED OUT (§2 split, 2026-08-06) ────────────────────────
+// `TO_CAP` / `KIND_CAP` / `oneLineField` / `postAddress` / `postKindOf` /
+// `withPostSurface` now live in `main/session-post-surface.js`. This file was at EXACTLY the
+// 500-line cap with zero headroom, and threading the counterparty id through
+// `withPostSurface` (so `to` is a display NAME, not the raw id an agent typed) pushed it
+// over. The block was already marked pure and already sliced out by source extraction, so
+// it was a module in everything but filename.
+//
+// RE-EXPORTED BELOW, so `io.withPostSurface(...)` keeps working for every existing caller.
+const postSurface = require('./session-post-surface');
+const { withPostSurface, postKindOf } = postSurface;
 
 // Map ONE SDK message to the reducer events the renderer needs. Only assistant (text turns +
 // tool_use cards + op=post outbound messages) and user (tool_result fills) produce render events;
@@ -228,7 +199,7 @@ function withPostSurface(payload, input, fallbackTo) {
 // types -> []. `sessionChannelId` + `peerName` (item 2 / §B.4) classify an own-channel post as an
 // `outbound_post` addressed to the peer. `willGatePost` (v2.7 L3, optional — an absent predicate
 // reads as "never gates") marks that post PENDING so the renderer paints the decision card.
-function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
+function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost, peerId) {
   const out = [];
   const blocks = (msg && msg.message && msg.message.content) || [];
   if (msg && msg.type === 'assistant') {
@@ -248,7 +219,7 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
             type: 'outbound_post',
             toolUseId: b.id,
             text: b.input && b.input.body != null ? String(b.input.body) : '',
-          }, b.input, peerName);
+          }, b.input, peerName, peerId);
           // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits,
           // then resolves in place. `ownChannel` feeds the card's destination line (the
           // renderer is fail-suspicious: anything but an explicit true reads as another
@@ -385,7 +356,7 @@ function makeCanUseTool(s, dispatch, log) {
           toolUseId: opts && opts.toolUseID,
           ownChannel: true, ...(s.direct === true ? { directChannel: true } : {}), // H2: in a DM the server addresses this post, so the card names who gets it
           text: input && input.body != null ? String(input.body) : '',
-        }, input, s.counterpartyName)
+        }, input, s.counterpartyName, s.counterpartyId)
         : {
           type: 'permission_request',
           requestId,
@@ -458,7 +429,7 @@ function handleSdkMessage(s, msg, dispatch, store) {
     // adds the gate PREDICTION so that one artifact starts as the decision card when the
     // post is going to stop on an operator button.
     const willGate = (input, toolName) => postWillGate(s, input, toolName);
-    for (const ev of sdkRenderEvents(msg, s.channelId, s.counterpartyName, willGate)) dispatch(s, ev);
+    for (const ev of sdkRenderEvents(msg, s.channelId, s.counterpartyName, willGate, s.counterpartyId)) dispatch(s, ev);
     return;
   }
   if (msg.type === 'result') {
@@ -485,7 +456,9 @@ module.exports = {
   withSeed: seed.withSeed,
   postWillGate, // v2.7 L3: does an own-channel post stop on an operator decision?
   grantArgs, // v2.9: the ONE argument builder both the prediction and the gate use
-  postAddress, // MEDIUM-2: the call's REAL addressee (null when unaddressed)
+  // §2 SPLIT (2026-08-06): these three moved to session-post-surface.js and are RE-EXPORTED
+  // here unchanged, so every existing `io.<name>` caller and test is untouched by the move.
+  postAddress: postSurface.postAddress, // MEDIUM-2: the call's REAL addressee (null when unaddressed)
   postKindOf, // MEDIUM-2: the lifecycle kind it claims (null for a plain message)
   withPostSurface,
   summarizeInput,

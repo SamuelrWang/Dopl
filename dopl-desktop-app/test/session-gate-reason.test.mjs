@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -386,7 +387,14 @@ test("FIX 3: no log function, no throw — the diag is a diagnostic, never a dep
 
 test("FIX 3 (source pin): the diag call passes CODES and postures, never an input or a body", () => {
   const src = readFileSync(M("session-io.js"), "utf8");
-  const fn = src.slice(src.indexOf("function logGateVerdict("), src.indexOf("─── BEGIN SESSION-IO-POST-SURFACE"));
+  // BRACE-MATCHED, NOT BOUNDED BY THE NEXT COMMENT (2026-08-06). This used to slice from
+  // `function logGateVerdict(` up to the `BEGIN SESSION-IO-POST-SURFACE` sentinel that
+  // happened to follow it. That block moved to session-post-surface.js in the §2 split, so
+  // the end bound became `indexOf(...) === -1` and the slice silently ran to the END OF THE
+  // FILE — every assertion below would then be scanning the whole module. The `< 900` guard
+  // caught it, but only by luck of ordering; a slice whose end bound is a DIFFERENT feature's
+  // sentinel is one refactor away from being wrong again.
+  const fn = fnOf(src, "logGateVerdict");
   assert.ok(fn.length > 0 && fn.length < 900, "the diag builder stays small enough to read");
   for (const f of ["input", "body", "command", "inputFull", "inputSummary"]) {
     assert.ok(!new RegExp("\\b" + f + "\\b").test(fn), `the diag line must not reach for \`${f}\``);
