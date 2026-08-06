@@ -59,6 +59,23 @@ The first real multiplayer run against 1.9.0: two operator-owned agent sessions 
 
 - Status: **resolved**; committed on `master`. Desktop halves (1) and (2) need a build after 1.9.0 to reach an operator; (3) is server-side and ships on push.
 
+### F-149: Stage D, the desktop half — and two modules the plan was wrong to list (2026-08-06, master) — RESOLVED
+
+The remote wrapper is deleted: `createMainWindow`, `main/load-guard.js` (252 lines), the `isSpaMode()` switch and every branch on it (`index.js`, `shell-mode.js`, `deep-link.js`), `DOPL_UI=remote`, `authActions.signOut`, the `kick('guard', …)` wake participant, and `src/app/auth/desktop-complete/page.tsx`. `index.js` fell 443 → 351. It had to go with the page deletion rather than after it: **the rollback path now leads to 404s**, so leaving it in shipped a build whose escape hatch was broken.
+
+**THE PLAN'S DELETION LIST WAS WRONG ABOUT TWO MODULES, and both were traced rather than trusted.** `website-retirement-plan.md` §"Stage D" names `version-skew.js` and `auth-cookies.js` (plus "the cookie halves of `auth-state.js`") as part of the remote shell. Neither is:
+
+- **`version-skew.js` is a PEER diagnostic, not a shell.** It reads the server-stamped `metadata.appVersion` off *another member's* message and says one quiet line when their Mac is running a build old enough to explain a behaviour gap (the 2026-07-31 incident: a peer silently ran 1.7.14 for an evening). Its live consumer is `listener-messages.dispatchMessage`, which runs in every mode. Deleting it would have removed a diagnostic, not a wrapper.
+- **`auth-cookies.js` is LIVE in the SPA.** `channel-listener.js:108`, `listener-io.js:338` and `api-repair.js:82` (the F-132 401 repair) all write session cookies, and none of them is the remote shell. Deleting it would have broken the running app rather than cleaned up dead code.
+
+The plan was written while the SPA was still the new thing; the list describes the world before 1.8.0. **Trace each name to its callers before deleting it** — that is the whole finding, and it is cheap: two greps caught both.
+
+**WHAT THE TEST TREE COST, and the F-145 rule applied again.** Deleting the shell broke seven assertions across four files, every one of them pinning a remote path. `test/load-guard.test.mjs` went with its module. `shell-mode.test.mjs` was REWRITTEN down to the surviving behaviour rather than removed, and its remote-branch assertions became assertions that the branch is **gone** — which is the guard that matters now, because a half-reverted Stage D reintroduces a factory the **min-version gate does not cover** (`createShellWindow` being the only way to make a window is what makes the block total). Same inversion in `tray-auth`, `update-required-screen` and the `wake` participant list.
+
+**Verified:** desktop 2361 pass, lint 0; root 2180 pass, typecheck 0, `next build` clean. **Plus the electron smoke test, repointed** — it used to `loadURL(https://www.usedopl.com/)`, so it was a smoke test for the wrapper and needed the network; it now `loadFile`s the bundled SPA and reports `ok:true, title:"Dopl"`. That is a real launch of the shell after the refactor, not a source assertion.
+
+- Status: **resolved**; committed on `master`. Needs a build to reach an operator.
+
 ### F-016: Legacy slug-only workspace URL fallback awaiting deletion
 - Location: `src/features/workspaces/server/segment.ts:36` (`resolveWorkspaceSegmentForUser` legacy branch, falls back via `findWorkspaceForMember`; `legacy_slug_redirect` event emitted at :62-64)
 - Found during: workspace publicId rollout (PR #1)

@@ -1,23 +1,23 @@
-// Which shell is the main window — the bundled SPA (default since 1.8.0) or
-// the retired remote wrapper (DOPL_UI=remote, the rollback path) — and the
-// helpers every "make/show/navigate the window" call site must go through.
-// Calling createMainWindow directly resurrects the remote shell in SPA mode
-// (fleet audit 2026-08-03, high): dock activate, tray show and notification
-// clicks all recreated the wrong window.
+// The helpers every "make/show/navigate the window" call site must go through.
+//
+// THERE USED TO BE TWO SHELLS, and a mode switch chose between them: the bundled SPA
+// (default since 1.8.0) and a retired remote wrapper that loaded the website. This module
+// exists because calling the wrapper's factory directly resurrected the wrong window in SPA
+// mode (fleet audit 2026-08-03, high) — dock activate, tray show and notification clicks all
+// did it. Stage D (2026-08-06) deleted that shell: the web pages it loaded went with the rest
+// of the retirement, so the rollback led to 404s.
+//
+// ONE SHELL NOW, AND THE SINGLE-FACTORY RULE STILL MATTERS — for a different reason. The
+// MIN-VERSION GATE rides `createShellWindow`, so that being the only way to make a window is
+// what makes the block total. A second factory is a window the gate does not cover.
 //
 // State stays in index.js; this module is given accessors, never the
 // variables. `deps`:
 //   getMainWindow()/setMainWindow(win)  — the one main-window slot
-//   createMainWindow(opts)              — the legacy remote factory
 //   createSpaWindow()                   — the bundled factory
 //   versionGate                         — the min-version gate module
-//   getLoadGuard()                      — remote mode's load guard (or null)
 //   showMainWindow()                    — reveal/recreate (calls back in)
 //   appOrigin, diag
-
-function isSpaMode() {
-  return process.env.DOPL_UI !== 'remote';
-}
 
 function makeShellHelpers(deps) {
   function createShellWindow(opts = {}) {
@@ -39,19 +39,15 @@ function makeShellHelpers(deps) {
       win.on('closed', () => deps.setMainWindow(null));
       return win;
     }
-    if (isSpaMode()) {
-      const win = deps.createSpaWindow();
-      deps.setMainWindow(win);
-      win.on('closed', () => deps.setMainWindow(null));
-      if (opts.show !== false) win.show();
-      return win;
-    }
-    return deps.createMainWindow(opts);
+    const win = deps.createSpaWindow();
+    deps.setMainWindow(win);
+    win.on('closed', () => deps.setMainWindow(null));
+    if (opts.show !== false) win.show();
+    return win;
   }
 
-  // SPA mode: the renderer owns routing, so main asks for a route over the
-  // bridge (app-preload's onNavigate). Returns false when it could not be
-  // delivered, so a caller with a remote-mode fallback can take it.
+  // The renderer owns routing, so main asks for a route over the bridge
+  // (app-preload's onNavigate). Returns false when it could not be delivered.
   function navigateTo(path) {
     const win = deps.getMainWindow();
     if (!path || !win || win.isDestroyed()) return false;
@@ -65,14 +61,11 @@ function makeShellHelpers(deps) {
   }
 
   // Feature B: a clicked channel notification opens the app and navigates to
-  // that workspace's Channels page. SPA mode routes over the bridge (GAP-16's
-  // other half); remote mode keeps the loadGuard URL load.
+  // that workspace's Channels page, over the bridge (GAP-16's other half).
   function navigateToChannels(segment) {
     deps.showMainWindow();
     if (!segment) return;
-    if (isSpaMode()) { navigateTo(`/${segment}/channels`); return; }
-    const guard = deps.getLoadGuard();
-    if (guard) guard.load(`${deps.appOrigin}/${segment}/channels`);
+    navigateTo(`/${segment}/channels`);
   }
 
   // Replace whatever is on screen with the window the CURRENT gate verdict calls
@@ -201,4 +194,4 @@ function spaSignOut(deps) {
   });
 }
 
-module.exports = { isSpaMode, makeShellHelpers, wireSpaServices, spaSignOut };
+module.exports = { makeShellHelpers, wireSpaServices, spaSignOut };

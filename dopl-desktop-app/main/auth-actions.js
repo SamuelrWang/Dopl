@@ -8,7 +8,7 @@
 // place, whichever entry point starts the flow.
 
 const { shell } = require('electron');
-const { APP_ORIGIN, HOME_URL } = require('./config');
+const { APP_ORIGIN } = require('./config');
 const auth = require('./auth');
 const { diag } = require('./diag');
 
@@ -72,18 +72,12 @@ function beginSignIn({ showWindow, provider } = {}) {
   diag('auth: sign-in — opening external flow via', p);
   return shell.openExternal(url).catch((err) => diag('auth: sign-in open failed —', err && err.message));
 }
+// SIGN-OUT MOVED OUT (Stage D, 2026-08-06). `signOut({showWindow, load, onSignedOut})`
+// lived here and its whole shape was the retired remote shell's: it reloaded HOME_URL so
+// the WEB app would resolve server-side to /login. The SPA has no page to reload — the
+// renderer swaps to the sign-in screen off the pushed auth state — so the tray now calls
+// `shell-mode.spaSignOut`, and `ui-bridge` already routed around this function
+// deliberately ("NOT authActions.signOut(): that loads the remote page"). With the shell
+// deleted it had no caller left.
 
-// Tray "Sign out". Drops the encrypted blob AND the cookie jar (the jar is what
-// renders the web UI signed in — clearing only the blob would leave the app
-// looking signed in, which is the exact confusion this whole fix is about), then
-// loads the app home, which resolves server-side to /login for a signed-out user.
-// Finally nudges the listener so it reconciles to the signed-out state now rather
-// than on its 5-minute timer.
-async function signOut({ showWindow, load, onSignedOut } = {}) {
-  await auth.signOut();
-  try { if (typeof showWindow === 'function') showWindow(); } catch (_) { /* best-effort */ }
-  try { if (typeof load === 'function') load(HOME_URL); } catch (err) { diag('auth: sign-out reload failed —', err && err.message); }
-  try { if (typeof onSignedOut === 'function') onSignedOut(); } catch (err) { diag('auth: sign-out listener nudge failed —', err && err.message); }
-}
-
-module.exports = { SIGN_IN_URL, isAppOrigin, maybeBeginAuth, beginSignIn, signOut };
+module.exports = { SIGN_IN_URL, isAppOrigin, maybeBeginAuth, beginSignIn };

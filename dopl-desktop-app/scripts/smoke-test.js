@@ -1,12 +1,23 @@
 /**
- * Headless-ish smoke test: launch Electron, load the wrapped URL with the same
+ * Headless-ish smoke test: launch Electron, load the BUNDLED SPA with the same
  * webPreferences as production, and assert the page loads. Prints a JSON result
  * and exits non-zero on failure. Run: `node_modules/.bin/electron scripts/smoke-test.js`
+ *
+ * STAGE D (2026-08-06): this used to `loadURL(https://www.usedopl.com/)` — it was a smoke
+ * test for the remote WRAPPER, and it needed the network to pass. That shell is deleted and
+ * those web pages are gone, so the old target now 302s to /get-started at best. It loads the
+ * same local `renderer/app/index.html` the product does, which makes it both accurate and
+ * offline-capable.
+ *
+ * IT NEEDS A BUILT SPA. `renderer/app/` is produced by `npm run build:ui` from the repo
+ * root; a tree that has never built one fails here with `reason: 'no-spa-bundle'` rather
+ * than a confusing did-fail-load.
  */
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
-const APP_URL = process.env.DOPL_APP_URL || 'https://www.usedopl.com/';
+const fs = require('fs');
+const INDEX_HTML = path.join(__dirname, '..', 'renderer', 'app', 'index.html');
 const TIMEOUT_MS = 30000;
 
 function done(ok, info) {
@@ -15,13 +26,17 @@ function done(ok, info) {
 }
 
 app.whenReady().then(() => {
+  if (!fs.existsSync(INDEX_HTML)) {
+    done(false, { reason: 'no-spa-bundle', path: INDEX_HTML, hint: 'run `npm run build:ui` from the repo root' });
+    return;
+  }
   const errors = [];
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../renderer/preload.js'),
+      preload: path.join(__dirname, '../renderer/app-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -62,7 +77,7 @@ app.whenReady().then(() => {
     }
   });
 
-  win.loadURL(APP_URL);
+  win.loadFile(INDEX_HTML);
 });
 
 app.on('window-all-closed', () => {});

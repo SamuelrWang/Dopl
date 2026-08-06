@@ -13,7 +13,7 @@
 //   showMainWindow()                       — reveal/recreate the shell
 //   navigateTo(path)                       — the SPA bridge (shell-mode.js)
 //   getMainWindow(), getLoadGuard()        — the window and remote-mode loader
-//   isSpaMode(), appOrigin, diag
+//   appOrigin, diag
 
 const { app } = require('electron');
 const { PROTOCOL } = require('./config');
@@ -82,7 +82,6 @@ function openApp(url, parsed, deps) {
   if (route === null && parsed.target) {
     deps.diag('deeplink open: unusable target, opening home —', url);
   }
-  if (!deps.isSpaMode()) return;
   if (route === null || route === target.HOME_ROUTE) return;
   let signedIn = false;
   try {
@@ -121,19 +120,14 @@ function adoptSession(fragment, deps) {
   // Surface the app — CREATING the window when the link arrived with it closed, which the
   // SPA window makes routine (it is destroyed on close, not hidden).
   deps.showMainWindow();
-  if (!deps.isSpaMode()) {
-    // Remote rollback shell only: the completion page plants the cookie jar. In SPA mode
-    // the captured tokens ARE the session — loading it stranded the window on "Signing
-    // you in…"; onSignIn() above pushed the flip.
-    const url = `${deps.appOrigin}/auth/desktop-complete#${fragment}`;
-    const guard = deps.getLoadGuard();
-    const win = deps.getMainWindow();
-    if (guard) guard.load(url);
-    else if (win) win.loadURL(url).catch((err) => deps.diag('deeplink load failed —', err && err.message));
-  }
+  // THE COMPLETION-PAGE LOAD IS GONE (Stage D, 2026-08-06). The retired remote shell
+  // navigated to the web auth-completion route here so that page could plant the cookie
+  // jar. In the SPA the captured tokens ARE the session — `onSignIn()` above pushed the
+  // flip — and loading that page stranded the window on "Signing you in…". With the shell
+  // deleted the branch has no caller, and the page itself was deleted with it.
 
-  // Let the remote completion page plant its cookies, then restart the listener against
-  // the fresh session and ensure the CLI's Dopl MCP config.
+  // Let the session settle, then restart the listener against it and ensure the CLI's
+  // Dopl MCP config.
   setTimeout(() => {
     deps.listener.restart();
     deps.mcpConfig.ensureMcpConfig().catch((err) => deps.diag('mcp-config post-signin error', err && err.message));

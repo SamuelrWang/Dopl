@@ -102,7 +102,6 @@ const KEEP = [
   "/auth/callback?code=abc",
   "/auth/desktop-start?provider=github&state=n1",
   "/auth/desktop-handoff?state=n1",
-  "/auth/desktop-complete",
   "/auth/reset-password",
   "/oauth/authorize?client_id=x&state=y",
   "/api/version",
@@ -142,7 +141,6 @@ describe("the KEEP list is untouched with the flag ON", () => {
     "/auth/callback?code=abc",
     "/auth/desktop-start?provider=google&state=n1",
     "/auth/desktop-handoff?state=n1",
-    "/auth/desktop-complete",
     "/oauth/authorize?client_id=x&state=y",
     "/api/version",
     "/api/mcp",
@@ -208,7 +206,6 @@ describe("the desktop is provably unaffected", () => {
     "/auth/desktop-start?provider=github&state=n1",
     "/auth/callback?code=abc&desktop=1&state=n1",
     "/auth/desktop-handoff?state=n1",
-    "/auth/desktop-complete",
     // The min-version gate's server half. A 302 here reads to the client as
     // "no answer", it fails open, and the whole forced-upgrade gate silently
     // stops blocking anybody — the exact failure the gate already shipped once.

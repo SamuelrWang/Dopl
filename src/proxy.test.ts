@@ -239,7 +239,6 @@ describe("pages", () => {
     "/auth/callback?code=abc",
     "/auth/desktop-start",
     "/auth/desktop-handoff",
-    "/auth/desktop-complete",
     "/terms",
     "/privacy",
     "/pricing",

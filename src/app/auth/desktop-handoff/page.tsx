@@ -7,8 +7,13 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
  * Reached in the SYSTEM BROWSER right after a successful desktop OAuth exchange
  * (/auth/callback?desktop=1 redirects here). The browser now holds the session;
  * we read it and bounce to a `dopl://auth#<tokens>` deep link so the desktop app
- * can adopt the session in its own window. The app loads /auth/desktop-complete
- * with the same tokens and calls setSession there.
+ * can adopt the session in its own window.
+ *
+ * The app used to finish by loading /auth/desktop-complete with the same tokens and
+ * calling setSession there — a page that existed so the retired remote shell could plant
+ * its cookie jar. Stage D (2026-08-06) deleted both: the desktop captures the tokens
+ * straight off the deep-link fragment, and loading that page stranded the window on
+ * "Signing you in…". This page is unchanged; only what happens after the handoff is.
  */
 function buildDeepLink(
   accessToken: string,

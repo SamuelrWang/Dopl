@@ -1120,7 +1120,7 @@ nothing imports it).
 
 ### Layout
 - `main/index.js` — app entry (window, menu, navigation/link handling).
-- `main/load-guard.js` — owns the main window's load lifecycle (loading screen + hung-load watchdog + auto-retry; see "Desktop app resilience" below).
+- ~~`main/load-guard.js`~~ — **DELETED (Stage D, 2026-08-06).** It owned the main window's load lifecycle (loading screen + hung-load watchdog + auto-retry) and every line of it existed because the product UI arrived **over the network**. It has not since 1.8.0: `spa-window.js` does `loadFile(renderer/app/index.html)` off local disk, so there is no hung remote load to recover, no black-frame window to cover, and no `did-fail-load` to retry. Deleted together with the remote shell it served — `createMainWindow`, the `isSpaMode()` switch, `DOPL_UI=remote`, `authActions.signOut` (which reloaded `HOME_URL` so the WEB app would resolve `/login`), and the `/auth/desktop-complete` page (which existed so that shell could plant its cookie jar). The "Desktop app resilience" section below is kept as **history of a problem that no longer exists**; read it that way. **`version-skew.js` and `auth-cookies.js` were on the plan's deletion list and did NOT go** — see the Stage D note in that section.
 - `renderer/preload.js` — minimal context-isolated bridge (`window.dopl`).
 - `renderer/offline.html` — shown on a fast load failure (`did-fail-load`).
 - `renderer/loading.html` — local loading screen shown before the first remote paint and during retries (so the window is never a bare black backgroundColor).

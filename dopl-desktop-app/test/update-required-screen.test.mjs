@@ -50,14 +50,17 @@ const HTML = R("update-required.html");
 
 // ── The one enforcement point ────────────────────────────────────────────────
 
-test("the gate branch is INSIDE the one shell factory, ahead of both shells", () => {
+test("the gate branch is INSIDE the one shell factory, ahead of the shell", () => {
   const fn = fnOf(SHELL, "createShellWindow");
   assert.match(fn, /deps\.versionGate && deps\.versionGate\.isBlocked\(\)/);
   assert.match(fn, /createUpdateRequiredWindow\(\)/);
-  // Ahead of BOTH shells, or a blocked build would still get the app.
+  // Ahead of the shell, or a blocked build would still get the app. There used to be TWO
+  // shells to sit ahead of; Stage D (2026-08-06) deleted the remote one, which makes this
+  // stricter rather than weaker — the factory now has exactly one branch and one exit, so
+  // there is nowhere for a second window path to hide.
   const gate = fn.indexOf("isBlocked()");
   assert.ok(gate < fn.indexOf("createSpaWindow"), "before the SPA");
-  assert.ok(gate < fn.indexOf("createMainWindow"), "before the remote rollback shell");
+  assert.ok(!/createMainWindow/.test(fn), "a second factory is a window the gate does not cover");
 });
 
 test("index.js hands the gate to that factory and to nothing else", () => {
@@ -90,9 +93,15 @@ test("wake re-asks for the floor: a Mac can sleep across a release", () => {
   assert.match(INDEX, /wake\.arm\(\{[\s\S]*?versionGate,/);
   // The extraction kept every previous participant; losing one here would be a
   // silent multi-minute hang after every unlock.
-  for (const name of ["listener", "pool-reset", "token", "ui-sync", "guard"]) {
+  //
+  // 'guard' LEFT THE LIST on 2026-08-06, and it is the one removal that is correct: it woke
+  // `load-guard.js`, which existed to recover a hung REMOTE page load. The SPA paints from
+  // local disk, so there is no network load to recover and no guard to wake. Stage D deleted
+  // the module; a `kick('guard', …)` reappearing here would mean the remote shell came back.
+  for (const name of ["listener", "pool-reset", "token", "ui-sync"]) {
     assert.match(WAKE, new RegExp(`kick\\('${name}'`), `wake dropped ${name}`);
   }
+  assert.ok(!/kick\('guard'/.test(WAKE), "the load guard is back — it only ever served a remote load");
 });
 
 // ── The window ───────────────────────────────────────────────────────────────

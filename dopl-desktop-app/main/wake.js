@@ -31,7 +31,7 @@ const { diag } = require('./diag');
 
 const COALESCE_MS = 3000;
 
-// `deps`: listener, api, authTokens, uiSync, versionGate, getLoadGuard().
+// `deps`: listener, api, authTokens, uiSync, versionGate.
 // Returns the handler, so a caller (or a test) can drive a wake directly.
 // powerMonitor is only valid after the app is ready.
 function arm(deps) {
@@ -51,7 +51,6 @@ function arm(deps) {
     kick('token', () => deps.authTokens.onWake());
     kick('ui-sync', () => deps.uiSync.onWake());
     kick('version-gate', () => deps.versionGate.onWake());
-    kick('guard', () => { const g = deps.getLoadGuard && deps.getLoadGuard(); if (g) g.onWake(); });
   };
 
   try {

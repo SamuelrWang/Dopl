@@ -4,7 +4,7 @@ const Store = require('electron-store');
 
 // Shared origins/URLs live in config.js so the window shell and the background
 // listener never drift. See config.js for APP_URL / HOME_URL / PROTOCOL.
-const { APP_ORIGIN, HOME_URL, PROTOCOL } = require('./config');
+const { APP_ORIGIN, PROTOCOL } = require('./config');
 const auth = require('./auth');
 const authActions = require('./auth-actions');
 const appMenu = require('./app-menu');
@@ -17,12 +17,11 @@ const channelDirs = require('./channel-dirs');
 const channelDirIpc = require('./channel-dir-ipc');
 const mcpConfig = require('./mcp-config');
 const api = require('./api');
-const { createLoadGuard } = require('./load-guard');
 const { diag } = require('./diag');
 // v1.9 Session Window: engine seam + window factory / lifecycle echoes + window-mode.
 const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
-const { isSpaMode, makeShellHelpers, wireSpaServices, spaSignOut } = require('./shell-mode');
+const { makeShellHelpers, wireSpaServices, spaSignOut } = require('./shell-mode');
 const deepLinkModule = require('./deep-link');
 const uiBridge = require('./ui-bridge');
 const authTokens = require('./auth-tokens');
@@ -36,7 +35,6 @@ const wake = require('./wake');
 
 const store = new Store();
 let mainWindow = null;
-let loadGuard = null; // owns the main window's load lifecycle (load-guard.js)
 let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
 
 // isAppOrigin / maybeBeginAuth (the M4 sign-in CSRF nonce) live in auth-actions.js
@@ -45,83 +43,16 @@ let latestPendingSegment = null; // most-recent pending channel (tray "Pending: 
 const { isAppOrigin, maybeBeginAuth } = authActions;
 
 // ── Window ────────────────────────────────────────────────────────────────────
-// `opts.show === true` forces the window visible once painted even on a hidden
-// login launch — an explicit open (tray, notification click, deep link) must
-// always surface the window, whereas the initial background launch respects
-// openAsHidden. Without this, recreating the window while wasOpenedHidden() is
-// still true would silently leave it hidden.
-function createMainWindow(opts = {}) {
-  const forceShow = opts.show === true;
-  const saved = store.get('windowBounds');
-  const bounds = saved && typeof saved.width === 'number'
-    ? saved
-    : { width: 1280, height: 860 };
-
-  mainWindow = new BrowserWindow({
-    ...bounds,
-    minWidth: 480,
-    minHeight: 600,
-    title: 'Dopl',
-    backgroundColor: '#0b0b0f',
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, '../renderer/preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      spellcheck: true,
-    },
-  });
-
-  if (saved && typeof saved.x === 'number') {
-    mainWindow.setPosition(saved.x, saved.y);
-  }
-
-  // The guard owns every remote load: it shows a local loading screen before the
-  // first paint (so the window is never a black backgroundColor), runs a watchdog
-  // that recovers a hung load in seconds, and auto-retries did-fail-load.
-  loadGuard = createLoadGuard({
-    window: mainWindow,
-    homeUrl: HOME_URL,
-    loadingFile: path.join(__dirname, '../renderer/loading.html'),
-    offlineFile: path.join(__dirname, '../renderer/offline.html'),
-    resetMainPool: api.resetPool,
-    diag,
-  });
-
-  loadApp();
-
-  // When launched at login as a hidden background listener, stay in the tray —
-  // don't pop the window. Otherwise show once the content is painted.
-  mainWindow.once('ready-to-show', () => {
-    if (forceShow || !wasOpenedHidden()) mainWindow.show();
-  });
-
-  // Persist window bounds.
-  const persist = () => {
-    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) return;
-    store.set('windowBounds', mainWindow.getBounds());
-  };
-  mainWindow.on('resize', persist);
-  mainWindow.on('move', persist);
-
-  // Closing the window HIDES it (keeps the renderer — and thus the live
-  // Supabase session cookies — alive for the background listener). The app
-  // only really exits via tray Quit / before-quit, which sets app.isQuitting.
-  mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
-  });
-  mainWindow.on('closed', () => {
-    if (loadGuard) { loadGuard.dispose(); loadGuard = null; }
-    mainWindow = null;
-  });
-
-  wireNavigation(mainWindow.webContents);
-}
-
+// THE REMOTE WRAPPER IS GONE (Stage D, 2026-08-06). `createMainWindow` built a
+// BrowserWindow around `loadURL(https://www.usedopl.com/canvas)` and handed its load
+// lifecycle to `load-guard.js` — a loading screen before first paint, a watchdog for a
+// hung network load, and did-fail-load retries. All of that existed because the product
+// UI arrived over the network. It has not since 1.8.0: `spa-window.js` does
+// `loadFile(renderer/app/index.html)`, off local disk, and the web pages it used to load
+// were deleted with the rest of Stage D — so the rollback path now leads to 404s.
+//
+// `createShellWindow` (shell-mode.js) is the ONE factory every "make or show the window"
+// path goes through, and the min-version gate is its single enforcement point.
 // True when macOS launched us as a hidden login item (openAsHidden).
 function wasOpenedHidden() {
   try {
@@ -137,9 +68,9 @@ function showMainWindow() {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  // Never reveal a window that has never painted remote content (a hung load
-  // would show the bare dark backgroundColor) — put the loading screen up first.
-  if (loadGuard) loadGuard.ensureNotBlank();
+  // The old remote shell primed a loading screen here so a hung network load never
+  // revealed the bare backgroundColor. The SPA paints from disk, so there is no hung
+  // load to cover and nothing to prime.
   mainWindow.show();
   mainWindow.focus();
 }
@@ -147,11 +78,9 @@ function showMainWindow() {
 const shellHelpers = makeShellHelpers({
   getMainWindow: () => mainWindow,
   setMainWindow: (win) => { mainWindow = win; },
-  createMainWindow,
   createSpaWindow: spaWindow.createSpaWindow,
   // The min-version gate rides this ONE factory (see shell-mode.js).
   versionGate,
-  getLoadGuard: () => loadGuard,
   showMainWindow: (...a) => showMainWindow(...a),
   appOrigin: APP_ORIGIN,
   diag,
@@ -159,11 +88,9 @@ const shellHelpers = makeShellHelpers({
 const createShellWindow = shellHelpers.createShellWindow;
 const navigateToChannels = shellHelpers.navigateToChannels;
 
-// The menu's "Home" (and the remote shell's initial load). SPA mode has no loadGuard, so
-// this was a silent no-op on a user-visible control — route the renderer to boot instead.
+// The menu's "Home". The renderer owns routing, so this asks it to go to boot.
 function loadApp() {
-  if (isSpaMode()) { shellHelpers.navigateTo('/'); return; }
-  if (loadGuard) loadGuard.load(HOME_URL);
+  shellHelpers.navigateTo('/');
 }
 
 // ── Navigation / link handling ─────────────────────────────────────────────────
@@ -213,8 +140,6 @@ const deepLink = deepLinkModule.arm({
   showMainWindow: (...a) => showMainWindow(...a),
   navigateTo: (path) => shellHelpers.navigateTo(path),
   getMainWindow: () => mainWindow,
-  getLoadGuard: () => loadGuard,
-  isSpaMode,
   appOrigin: APP_ORIGIN,
   diag,
 });
@@ -264,19 +189,7 @@ if (!gotLock) {
       // web login page does; "Sign out" clears the blob AND the cookie jar, then
       // reloads the app (which resolves to /login) and re-reconciles the listener.
       onSignIn: () => authActions.beginSignIn({ showWindow: showMainWindow }),
-      onSignOut: () => {
-        if (isSpaMode()) {
-          void spaSignOut({ auth, authTokens, listener, showMainWindow });
-          return;
-        }
-        authActions
-          .signOut({
-            showWindow: showMainWindow,
-            load: (url) => { if (loadGuard) loadGuard.load(url); },
-            onSignedOut: () => listener.restart(),
-          })
-          .catch((err) => diag('sign-out error', err && err.message));
-      },
+      onSignOut: () => { void spaSignOut({ auth, authTokens, listener, showMainWindow }); },
       // Round B: clicking "Pending: N" opens the app to the most-recent pending
       // channel (reusing the notification-click open path), else just the window.
       onPending: () => {
@@ -349,14 +262,14 @@ if (!gotLock) {
     // the tray keeps the latest as a quiet, disabled line.
     versionSkew.setHandlers({ onSkew: (skew) => tray.setPeerSkew(skew) });
 
-    // Desktop migration: SPA is the default shell; DOPL_UI=remote is the rollback. The
-    // token authority's PROACTIVE timer starts in SPA mode ONLY — in remote mode the
-    // page's own supabase-js still refreshes the jar, and both sides share ONE rotating
-    // refresh-token family, so main rotating at ~80% of token life left the page holding
-    // a stale refresh token and Supabase's reuse detection revoked the family (hourly
-    // sign-outs of the rollback shell). On-demand refresh needs no timer and is
-    // unaffected. wireSpaServices owns the ONE uiBridge.register call.
-    if (isSpaMode()) {
+    // The token authority's PROACTIVE timer. It used to be gated on SPA mode, because the
+    // retired remote page ran its own supabase-js against the SAME rotating refresh-token
+    // family — main rotating at ~80% of token life left that page holding a stale refresh
+    // token, and Supabase's reuse detection revoked the family (hourly sign-outs of the
+    // rollback shell). With the remote shell deleted there is no second refresher, so this
+    // is now the only one and runs unconditionally. wireSpaServices owns the ONE
+    // uiBridge.register call.
+    {
       try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
       wireSpaServices({
         uiBridge, authTokens, uiSync, diag,
@@ -365,8 +278,6 @@ if (!gotLock) {
         getMainWindow: () => mainWindow,
       });
       createShellWindow({ show: false });
-    } else {
-      createMainWindow();
     }
     deepLink.flushPending();
 
@@ -409,7 +320,6 @@ if (!gotLock) {
     // joined it; resume + unlock-screen fire together and are coalesced there.
     wake.arm({
       listener, api, authTokens, uiSync, versionGate,
-      getLoadGuard: () => loadGuard,
     });
 
     app.on('activate', () => {

@@ -19,10 +19,15 @@ const PUBLIC_ROUTES = [
   "/login",
   "/auth/callback",
   // Desktop app sign-in bridge: /auth/desktop-start (pre-auth, kicks off OAuth
-  // in the system browser), /auth/desktop-handoff (hands the session to the
-  // dopl:// deep link), /auth/desktop-complete (loaded in the app window to
-  // adopt the session). All must bypass the session gate — the user isn't
-  // signed in within the app window until desktop-complete runs.
+  // in the system browser) and /auth/desktop-handoff (hands the session to the
+  // dopl:// deep link). Both must bypass the session gate — the app window has
+  // no session until the deep link is adopted.
+  //
+  // A THIRD ONE IS GONE (Stage D, 2026-08-06): /auth/desktop-complete was loaded
+  // IN the app window so that page could plant the cookie jar for the retired
+  // remote shell. The SPA adopts the captured tokens directly — the page stranded
+  // the window on "Signing you in…" — so it was deleted with that shell. The
+  // `/auth/desktop` prefix below still covers the two that remain.
   "/auth/desktop",
   "/api/billing/webhook",
   // Cron + scheduled jobs are machine-to-machine: invoked by Vercel Cron with

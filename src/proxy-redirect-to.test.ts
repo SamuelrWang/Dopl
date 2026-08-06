@@ -276,7 +276,6 @@ describe("the desktop and OAuth flows are untouched", () => {
   it.each([
     "/auth/desktop-start?provider=github&state=n1",
     "/auth/desktop-handoff?state=n1",
-    "/auth/desktop-complete",
     "/auth/callback?code=abc&desktop=1&state=n1",
     "/oauth/authorize?client_id=x&state=y",
     "/invite/SomeSignedToken",

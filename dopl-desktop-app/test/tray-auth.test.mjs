@@ -31,6 +31,8 @@ const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const TRAY = M("tray.js");
 const INDEX = M("index.js");
 const ACTIONS = M("auth-actions.js");
+// Stage D moved the sign-out body here (see the sign-out test below).
+const SHELL = M("shell-mode.js");
 const LISTENER = M("channel-listener.js");
 
 const { authMenuState } = new Function(
@@ -107,8 +109,11 @@ test("the tray rebuilds on every status change, so the affordance tracks the sta
 
 test("index.js supplies both handlers", () => {
   assert.match(INDEX, /onSignIn: \(\) => authActions\.beginSignIn/);
-  assert.match(INDEX, /onSignOut: \(\) => \{/);
-  assert.match(INDEX, /authActions\s*\n?\s*\.signOut\(/);
+  // STAGE D (2026-08-06): the sign-out handler is `shell-mode.spaSignOut`. It used to be
+  // `authActions.signOut`, whose whole shape was the retired remote shell's — it reloaded
+  // HOME_URL so the WEB app would resolve server-side to /login. There is no page to reload.
+  assert.match(INDEX, /onSignOut: \(\) => \{ void spaSignOut\(/);
+  assert.ok(!/authActions\s*\n?\s*\.signOut\(/.test(INDEX), "the remote sign-out path is back");
 });
 
 // ── What must NOT regress ───────────────────────────────────────────────────
@@ -140,10 +145,20 @@ test("there is exactly one place that arms the nonce, shared by both entry point
   assert.match(INDEX, /shell\.openExternal\(maybeBeginAuth\(url\)\)/, "the window-open path still arms it");
 });
 
-test("sign-out clears the cookie jar and shows the sign-in page", () => {
-  const fn = fnOf(ACTIONS, "signOut");
-  assert.match(fn, /await auth\.signOut\(\)/, "clears the blob AND the jar (auth-state.signOut)");
-  assert.match(fn, /load\(HOME_URL\)/, "…and reloads, which resolves server-side to /login");
-  assert.match(fn, /onSignedOut/, "…and nudges the listener rather than waiting out its 5-min timer");
-  assert.match(INDEX, /onSignedOut: \(\) => listener\.restart\(\)/);
+test("sign-out clears the cookie jar and shows the sign-in screen", () => {
+  // REWRITTEN FOR STAGE D (2026-08-06). The behaviour this pinned is intact — drop the
+  // credential, surface the app, nudge the listener instead of waiting out its 5-min timer —
+  // but it now lives in `shell-mode.spaSignOut`, because the step it CANNOT do any more is
+  // `load(HOME_URL)`: that reloaded the retired web app so the SERVER could resolve /login.
+  // The SPA swaps to the sign-in screen off the pushed auth state instead.
+  const fn = fnOf(SHELL, "spaSignOut");
+  assert.match(fn, /deps\.auth\.signOut\(\)/, "clears the blob AND the jar (auth-state.signOut)");
+  assert.match(fn, /deps\.authTokens\.onSignOut\(\)/, "…and pushes signed-out so the renderer swaps");
+  assert.match(fn, /deps\.listener\.restart\(\)/, "…and nudges the listener");
+  assert.match(fn, /deps\.showMainWindow\(\)/, "…and surfaces the app");
+  assert.ok(!/HOME_URL|load\(/.test(fn), "no remote page may be reloaded on sign-out");
+  assert.ok(
+    !/function signOut\(/.test(ACTIONS),
+    "auth-actions.signOut is back — it existed only to reload the retired web app"
+  );
 });
