@@ -6,6 +6,7 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { PLANS, type PlanDef } from "@/features/billing/plans";
 import { billingPath } from "@/features/billing/url";
+import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 import type { User } from "@supabase/supabase-js";
 
 /**
@@ -113,7 +114,7 @@ export function PricingContent() {
 
   function handleSubscribe() {
     if (!user) {
-      router.push("/login?redirect=/pricing");
+      router.push(`/login?redirectTo=${encodeURIComponent("/pricing")}`);
       return;
     }
     // Checkout is workspace-scoped, but this public page can't pick a
@@ -131,15 +132,27 @@ export function PricingContent() {
   // live — no duplicate portal logic on this public page.
   function handleManageBilling() {
     router.push(
-      user ? billingPath({ intent: "return" }) : "/login?redirect=/pricing"
+      user
+        ? billingPath({ intent: "return" })
+        : `/login?redirectTo=${encodeURIComponent("/pricing")}`
     );
   }
 
+  // F-131 half 2 (2026-08-06) — TWO dead things in three lines, both silent.
+  //
+  // The param was `?redirect=`, which NOTHING reads: the canonical name is `redirectTo`
+  // (`shared/lib/url/post-auth-landing.ts`, and the `?redirectTo=` round-trip contract in
+  // ENGINEERING §9.2). A signed-out visitor clicking these therefore signed in and landed on
+  // the default post-auth page, having silently lost the page they asked for.
+  //
+  // And the destination was `/canvas`, which STAGE D DELETED. It still "worked" — the
+  // retirement map 302s it to /get-started — so the bug was invisible: a redirect that fires
+  // correctly through a route that no longer exists. Both now name the landing directly.
   function handleGetStarted() {
     if (user) {
-      router.push("/canvas");
+      router.push(WEB_POST_AUTH_LANDING);
     } else {
-      router.push("/login?redirect=/canvas");
+      router.push(`/login?redirectTo=${encodeURIComponent(WEB_POST_AUTH_LANDING)}`);
     }
   }
 

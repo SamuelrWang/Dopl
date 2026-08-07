@@ -14,7 +14,7 @@
 // and health model for delivery (`realtime-agents.js` is deleted — realtime.js `:73`).
 // The UI feed watches channel_messages + agent_presence TOO, on ITS OWN socket, for web
 // parity — the first dogfood proved excluding them froze the transcript. `channel_agents`
-// is bound too and is EXPECTED SILENT: nothing writes it since the rollback §1 (F-146).
+// was bound here; GONE 2026-08-06, write-dead since rollback §1 (the TABLE stays).
 //
 // THE CREDENTIAL RULE, inherited verbatim from realtime.js. Realtime authorizes
 // postgres_changes with the USER JWT from setAuth. With NO JWT realtime-js joins on
@@ -74,7 +74,7 @@ const SYNC_TABLES = Object.freeze([
   'ontology_relationships',
   'chats', 'chat_messages', 'chat_folders',
   'channel_consent_requests', 'channels', 'channel_members',
-  'channel_messages', 'channel_agents', 'agent_presence',
+  'channel_messages', 'agent_presence',
 ]);
 
 // Historically the channels exemption excluded the three listener tables from this feed;

@@ -10,5 +10,10 @@
     "skipLibCheck": true,
     "declaration": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/tools/narration-fixtures.ts",
+    "src/tools/tool-group-files.ts"
+  ]
 }

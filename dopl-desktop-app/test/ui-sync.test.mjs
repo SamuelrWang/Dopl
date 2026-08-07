@@ -1,19 +1,21 @@
-// Phase 3 — the bundled SPA's live-update feed (main/ui-sync.js).
+// Phase 3 — the bundled SPA's live-update feed: HOW IT BEHAVES (main/ui-sync.js).
 //
-// THE FAILURES THIS LOCKS OUT:
-//   1. A DEAD TABLE KILLS THE WHOLE FEED — realtime refuses the CHANNEL if any one
-//      binding is refused, so ONE bad name costs every table's live updates. Review
-//      found exactly that (`skill_files`, dropped outright by 20260716064733), so the
-//      list is CHECKED against the migrations rather than trusted.
-//   2. A TABLE THE UI WATCHES BUT MAIN DOESN'T BIND is a page that never updates
-//      live; the union is re-derived from src/features/*/client/realtime.ts.
-//   3. THE CHANNELS EXEMPTION GETS QUIETLY LOST (channel_messages / channel_agents /
-//      agent_presence belong to realtime.js + realtime-agents.js).
+// §2 SPLIT (2026-08-06). This file sat at EXACTLY 500 lines and the next assertion added to
+// it failed lint. The half that reads the DATABASE — the table list checked against
+// supabase/migrations, the publication cross-check, the renderer-coverage union and the
+// channels exemption, plus the ~40 lines of SQL parsing that serve only those — moved to
+// `ui-sync-tables.test.mjs`. What is left reads nothing but the sliced pure block, which is
+// why the migration helpers went with the other half rather than being shared.
+//
+// THE FAILURES THIS HALF LOCKS OUT:
 //   4. A REUSED TOPIC RETURNS A CORPSE whose `subscribe()` silently no-ops.
 //   5. AN ANON JOIN BREAKS PUSH FOR EVERY CLIENT (realtime.js's CREDENTIAL RULE),
 //      and a hung token read strands the join latch with no retry armed.
 //   6. A BURST BECOMES A REFETCH STORM — one signal per (workspace, table), and ONE
 //      empty-table catch-up event rather than one per table.
+//
+// The numbering is deliberately NOT renumbered: 1-3 are in the sibling file, and the
+// numbers are referenced from ui-sync.js's own comments.
 //
 // WHY SOURCE EXTRACTION: ui-sync.js is CommonJS and requires @supabase/realtime-js +
 // ws + electron, so it cannot be imported under `node --test`. Its decision core is
@@ -50,141 +52,6 @@ const WS = "11111111-1111-4111-8111-111111111111";
 const WS2 = "22222222-2222-4222-8222-222222222222";
 const live = (o) => ({ started: true, watched: WS, generation: 7, ...o });
 const frame = (o) => ({ workspaceId: WS, table: "skills", generation: 7, ...o });
-
-// ── THE TABLE LIST vs THE ACTUAL PUBLICATION ────────────────────────────────
-// Parsed once from supabase/migrations: bare `ADD TABLE` statements plus the
-// idempotent DO-block loops that ADD every name in an ARRAY[...] literal.
-
-function publicationState() {
-  const dir = join(HERE, "..", "..", "supabase", "migrations");
-  const sql = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()
-    .map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
-  const added = new Set();
-  const dropped = new Set();
-  for (const m of sql.matchAll(
-    /ALTER PUBLICATION supabase_realtime (ADD|DROP) TABLE (?:public\.)?(\w+)/g
-  )) (m[1] === "ADD" ? added : dropped).add(m[2]);
-  // The loop form: `FOREACH tbl IN ARRAY ARRAY[ 'a', 'b' ] LOOP … ADD TABLE public.%I`
-  const RE_LOOP = /FOREACH\s+tbl\s+IN\s+ARRAY\s+ARRAY\[([^\]]*)\]([\s\S]*?)END LOOP/g;
-  for (const m of sql.matchAll(RE_LOOP)) {
-    const set = /ADD TABLE/.test(m[2]) ? added : /DROP TABLE/.test(m[2]) ? dropped : null;
-    if (set) for (const q of m[1].matchAll(/'(\w+)'/g)) set.add(q[1]);
-  }
-  // A BARE `DROP TABLE` un-publishes implicitly, leaving the original ADD in the
-  // history looking authoritative — that is what let `skill_files` pass review.
-  for (const m of sql.matchAll(/DROP TABLE (?:IF EXISTS )?(?:public\.)?(\w+)/g)) {
-    dropped.add(m[1]);
-  }
-  // `ALTER TABLE x RENAME TO y` — the CREATE for `y` is filed under `x`.
-  const renames = new Map();
-  for (const m of sql.matchAll(/ALTER TABLE (?:public\.)?(\w+) RENAME TO (\w+)/g)) renames.set(m[2], m[1]);
-  return { added, dropped, renames, sql };
-}
-
-const PUB = publicationState();
-
-// The CREATE TABLE body for a table, following renames back to its original name.
-function createBody(table, seen = new Set()) {
-  const m = new RegExp(
-    `CREATE TABLE (?:IF NOT EXISTS )?(?:public\\.)?${table}\\s*\\(([\\s\\S]*?)\\n\\);`
-  ).exec(PUB.sql);
-  if (m) return m[1];
-  const prev = PUB.renames.get(table);
-  if (prev && !seen.has(prev)) return createBody(prev, seen.add(table));
-  return null;
-}
-
-test("every watched table is real: published, never dropped, workspace-scoped", () => {
-  // Failure 1, all three routes into it. A name that is unpublished, dropped, or
-  // missing workspace_id refuses its binding — and one refused binding refuses the
-  // WHOLE channel, so it costs every other table's live updates too.
-  const missing = SYNC_TABLES.filter((t) => !PUB.added.has(t));
-  assert.deepEqual(missing, [], `not published by any migration: ${missing.join(", ")}`);
-  const gone = SYNC_TABLES.filter((t) => PUB.dropped.has(t));
-  assert.deepEqual(gone, [], `dropped table still bound: ${gone.join(", ")}`);
-  for (const t of SYNC_TABLES) {
-    const body = createBody(t);
-    assert.ok(body, `no CREATE TABLE found for ${t}`);
-    assert.match(body, /\bworkspace_id\b/, `${t} has no workspace_id column`);
-  }
-  // Both scanners must keep working, or this test silently stops checking anything:
-  // the bare-DROP scan is what `skill_files` slipped past, and the rename follower is
-  // what keeps skill_versions (created as skill_file_versions) from reading as bare.
-  assert.ok(PUB.dropped.has("skill_files"), "the bare-DROP scan has stopped working");
-  assert.ok(createBody("skill_versions"), "the rename follower has stopped working");
-});
-
-test("the watched set is exactly the 23 tables, in a pinned order", () => {
-  assert.deepEqual(SYNC_TABLES, [
-    "knowledge_bases", "knowledge_folders", "knowledge_entries",
-    "skills", "skill_versions",
-    "workflows", "workflow_steps", "workflow_step_edges",
-    "workflow_knowledge_bases", "workflow_skills",
-    "ontology_clusters", "ontology_objects", "ontology_memberships",
-    "ontology_relationships",
-    "chats", "chat_messages", "chat_folders",
-    "channel_consent_requests", "channels", "channel_members",
-    "channel_messages", "channel_agents", "agent_presence",
-  ]);
-  assert.equal(new Set(SYNC_TABLES).size, SYNC_TABLES.length, "duplicate binding");
-  assert.ok(!SYNC_TABLES.includes("skill_files"), "skill_files no longer exists as a table");
-});
-
-// ── THE RENDERER CONTRACT ──────────────────────────────────────────────────
-// A table a hook watches but main never binds is a page that silently never updates
-// live. Re-derived from the feature sources so none can drop out by omission.
-function featureWatchedTables() {
-  const root = join(HERE, "..", "..", "src", "features");
-  const tables = new Map(); // table -> the file that subscribes to it
-  for (const feat of readdirSync(root)) {
-    for (const rel of [["client", "realtime.ts"], ["constants.ts"]]) {
-      const f = join(root, feat, ...rel);
-      let src;
-      try {
-        src = readFileSync(f, "utf8");
-      } catch {
-        continue; // this feature has no realtime surface
-      }
-      // `const X_TABLES = [ "a", "b" ] as const;` — the only shape these files use.
-      for (const m of src.matchAll(/_TABLES\s*=\s*\[([\s\S]*?)\]\s*as const/g)) {
-        for (const q of m[1].matchAll(/"(\w+)"/g)) if (!tables.has(q[1])) tables.set(q[1], f);
-      }
-    }
-  }
-  return tables;
-}
-
-test("every table the SPA's feature hooks watch is covered by main", () => {
-  const watched = featureWatchedTables();
-  assert.ok(watched.size >= 20, `only found ${watched.size} feature tables — parser drifted`);
-  const covered = new Set([...SYNC_TABLES, ...LISTENER_OWNED_TABLES]);
-  const un = [...watched].filter(([t]) => !covered.has(t));
-  assert.deepEqual(un.map(([t]) => t), [],
-    `hooks subscribe but main binds nothing: ${un.map(([t, f]) => `${t} (${f})`).join(", ")}`);
-  // Regression pin: these five were absent from the first cut of SYNC_TABLES, so the
-  // chats, skills and workflows pages would never have updated live.
-  for (const t of ["chat_messages", "skill_versions", "workflow_step_edges",
-    "workflow_knowledge_bases", "workflow_skills"]) {
-    assert.ok(watched.has(t), `${t} is no longer hook-watched — re-check the union`);
-    assert.ok(SYNC_TABLES.includes(t), `${t} must be bound by main`);
-  }
-});
-
-// ── THE CHANNELS EXEMPTION ──────────────────────────────────────────────────
-
-test("the channels exemption protects the listener MODULES, not the UI feed", () => {
-  // First dogfood: excluding the channel tables from THIS feed froze the
-  // app's transcript. The UI watches them on its own socket; the exemption
-  // means realtime.js / realtime-agents.js stay untouched (asserted by the
-  // desktop suite generally), so the once-excluded set is now empty.
-  assert.deepEqual(LISTENER_OWNED_TABLES, []);
-  for (const t of ["channel_messages", "channel_agents", "agent_presence"]) {
-    assert.ok(SYNC_TABLES.includes(t), `${t} must feed the UI (web parity)`);
-    assert.ok(PUB.added.has(t), `${t} is not published`);
-  }
-  const fn = fnOf(SRC, "connect");
-  assert.match(fn, /for \(const table of SYNC_TABLES\)/, "bindings must come from the list");
-});
 
 // ── TOPIC GENERATION (failure mode 3) ───────────────────────────────────────
 

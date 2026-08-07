@@ -278,6 +278,23 @@ describe("refreshLatestRelease", () => {
 
 // ── The request path ─────────────────────────────────────────────────────────
 
+/**
+ * THE REAL-TIMER FLAKE, FIXED (2026-08-06). These three assertions waited on
+ * `vi.waitFor`'s DEFAULT 1000ms budget, and the work they wait for is deferred through
+ * `after()` — so the wait is a race against however loaded the machine is. It passed in
+ * isolation and failed under the full suite, which is the signature of exactly that, and it
+ * was carried as a known flake rather than fixed.
+ *
+ * FAKE TIMERS ARE NOT THE FIX HERE: the deferred work is a real promise chain around a
+ * stubbed `fetch`, not a scheduled timer, so advancing a clock would not release it. What is
+ * wrong is the BUDGET, not the mechanism — 1000ms is a guess about machine speed sitting in
+ * the middle of an assertion about caching. A budget wide enough that only a genuine hang
+ * can exhaust it removes the guess without weakening what is asserted: the polling interval
+ * is unchanged, so a passing run is exactly as fast as it was.
+ */
+const waitForCache = (fn: () => void) =>
+  vi.waitFor(fn, { timeout: 15_000, interval: 10 });
+
 describe("scheduleLatestReleaseRefresh", () => {
   it("returns before the round trip does, always", () => {
     // The guarantee the route depends on. A never-resolving fetch is GitHub at
@@ -305,7 +322,7 @@ describe("scheduleLatestReleaseRefresh", () => {
     scheduleLatestReleaseRefresh();
     scheduleLatestReleaseRefresh();
     scheduleLatestReleaseRefresh();
-    await vi.waitFor(() => expect(cachedLatestRelease()).toBe("1.7.24"));
+    await waitForCache(() => expect(cachedLatestRelease()).toBe("1.7.24"));
     scheduleLatestReleaseRefresh(); // and the warm cache is left alone after
     expect(spy).toHaveBeenCalledTimes(1);
   });
@@ -315,7 +332,7 @@ describe("scheduleLatestReleaseRefresh", () => {
     // is the `scheduleEntryEmbedding` idiom. Without it every test below this
     // one would be asserting against a cache nothing ever fills.
     scheduleLatestReleaseRefresh();
-    await vi.waitFor(() => expect(cachedLatestRelease()).toBe("1.7.24"));
+    await waitForCache(() => expect(cachedLatestRelease()).toBe("1.7.24"));
   });
 
   it("honours an injected clock, so the TTL is testable without a timer stub", async () => {
@@ -324,6 +341,6 @@ describe("scheduleLatestReleaseRefresh", () => {
     scheduleLatestReleaseRefresh(Date.now() + LATEST_RELEASE_TTL_MS - 1);
     expect(spy).not.toHaveBeenCalled();
     scheduleLatestReleaseRefresh(Date.now() + LATEST_RELEASE_TTL_MS + 1);
-    await vi.waitFor(() => expect(cachedLatestRelease()).toBe("1.9.0"));
+    await waitForCache(() => expect(cachedLatestRelease()).toBe("1.9.0"));
   });
 });
