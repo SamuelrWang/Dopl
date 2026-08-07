@@ -106,9 +106,10 @@ test("MAPPING: every engine state the reducer produces becomes the right pill", 
 test("MAPPING: there are exactly three pill states, and no 'thinking'", () => {
   const m = load();
   assert.deepEqual(m.PILL_STATES, ["working", "idle", "ended"]);
-  // Every row of the table must land on one of the three. 'thinking' needs
-  // includePartialMessages, which is off (plan §3.3's own dependency note) — a fourth
-  // state that can never be derived is a state that never appears.
+  // Every row of the table must land on one of the three. 'thinking' is absent NOT because
+  // includePartialMessages is off (F-146 corrected that; the window's Thinking chip needs no
+  // stream) but because pillState's whole input is { phase, activity, parked } — and because
+  // the value is PERSISTED: see session-pill-db-contract.test.mjs for the CHECK constraint.
   for (const [activity, pill] of Object.entries(m.ACTIVITY_PILL)) {
     assert.ok(m.PILL_STATES.includes(pill), `${activity} maps to "${pill}", which is not a pill state`);
   }
