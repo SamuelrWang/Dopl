@@ -252,6 +252,25 @@ describe("F4 — the POST result says the same thing the read render does", () =
     expect(text).toContain(`thread=\`${THREAD_UUID}\``);
   });
 
+  it("stays silent when the caller named the thread through metadata.taskId", async () => {
+    // THE HOLE THE FIRST CUT LEFT (found by audit, 2026-08-07). `thread` is the documented
+    // argument, but `metadata` is a caller-settable passthrough whose own schema description
+    // tells agents to put `taskId` in it, and opPost forwards it untouched when `thread` is
+    // absent. So a post tagged that way looked unthreaded to the note, which then claimed the
+    // server had inherited a thread the caller had explicitly named — and warned that a second
+    // open thread would break it. Both halves false, and the warning tells an agent its
+    // working code is about to stop working.
+    const text = (
+      await opPost(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {
+        metadata: { taskId: THREAD_UUID },
+      })
+    ).content[0].text;
+
+    expect(text).toContain("THREADED into `Wire the listener`");
+    expect(text).not.toContain("You named no thread");
+    expect(text).not.toContain("SECOND thread");
+  });
+
   it("stays silent about inheritance when the caller named the thread itself", async () => {
     // THE CONTROL. Without it, "the note appeared" is free — it would also hold for a note
     // that fires unconditionally, which would be a new way of saying nothing.

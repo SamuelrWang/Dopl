@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { safeRedirect } from "./safe-redirect";
+import { WEB_POST_AUTH_LANDING } from "./post-auth-landing";
 
 describe("safeRedirect", () => {
   it("allows same-origin paths", () => {
-    expect(safeRedirect("/canvas")).toBe("/canvas");
+    expect(safeRedirect("/get-started")).toBe("/get-started");
     expect(safeRedirect("/foo/bar")).toBe("/foo/bar");
     expect(safeRedirect("/foo?bar=1")).toBe("/foo?bar=1");
     expect(safeRedirect("/foo#anchor")).toBe("/foo#anchor");
@@ -11,22 +12,22 @@ describe("safeRedirect", () => {
   });
 
   it("rejects absolute URLs", () => {
-    expect(safeRedirect("https://evil.com")).toBe("/canvas");
-    expect(safeRedirect("http://evil.com/x")).toBe("/canvas");
-    expect(safeRedirect("javascript:alert(1)")).toBe("/canvas");
-    expect(safeRedirect("data:text/html,<script>")).toBe("/canvas");
+    expect(safeRedirect("https://evil.com")).toBe("/get-started");
+    expect(safeRedirect("http://evil.com/x")).toBe("/get-started");
+    expect(safeRedirect("javascript:alert(1)")).toBe("/get-started");
+    expect(safeRedirect("data:text/html,<script>")).toBe("/get-started");
   });
 
   it("rejects protocol-relative URLs", () => {
-    expect(safeRedirect("//evil.com")).toBe("/canvas");
-    expect(safeRedirect("//evil.com/x")).toBe("/canvas");
-    expect(safeRedirect("/\\evil.com")).toBe("/canvas");
+    expect(safeRedirect("//evil.com")).toBe("/get-started");
+    expect(safeRedirect("//evil.com/x")).toBe("/get-started");
+    expect(safeRedirect("/\\evil.com")).toBe("/get-started");
   });
 
   it("rejects empty / missing values", () => {
-    expect(safeRedirect("")).toBe("/canvas");
-    expect(safeRedirect(null)).toBe("/canvas");
-    expect(safeRedirect(undefined)).toBe("/canvas");
+    expect(safeRedirect("")).toBe("/get-started");
+    expect(safeRedirect(null)).toBe("/get-started");
+    expect(safeRedirect(undefined)).toBe("/get-started");
   });
 
   it("respects a custom fallback", () => {
@@ -35,8 +36,8 @@ describe("safeRedirect", () => {
   });
 
   it("rejects relative paths without a leading slash", () => {
-    expect(safeRedirect("canvas")).toBe("/canvas");
-    expect(safeRedirect("../etc/passwd")).toBe("/canvas");
+    expect(safeRedirect("canvas")).toBe("/get-started");
+    expect(safeRedirect("../etc/passwd")).toBe("/get-started");
   });
 
   it("normalizes encoded paths", () => {
@@ -54,5 +55,15 @@ describe("safeRedirect", () => {
     // URL normalizes /../etc/passwd → /etc/passwd; same origin so it's allowed.
     expect(result.startsWith("/")).toBe(true);
     expect(result.includes("evil")).toBe(false);
+  });
+
+  // THE DRIFT GUARD. `safe-redirect.ts` is the LEAF — `post-auth-landing.ts` imports
+  // `safeRedirect` from it — so it cannot import `WEB_POST_AUTH_LANDING` back without
+  // closing a cycle, and carries its own literal instead. This is what keeps the two from
+  // parting company. It matters because the previous literal was `/canvas`, which Stage D
+  // deleted: an unreachable default that any NEW caller would have silently inherited.
+  it("the local fallback literal still equals the post-auth landing", () => {
+    expect(safeRedirect(null)).toBe(WEB_POST_AUTH_LANDING);
+    expect(safeRedirect("https://evil.com")).toBe(WEB_POST_AUTH_LANDING);
   });
 });

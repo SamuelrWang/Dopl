@@ -301,7 +301,19 @@ export async function opPost(
     ch.id,
     chName,
     message,
-    opts.thread,
+    // THE CALLER NAMED A THREAD IF EITHER ARGUMENT CARRIED ONE (2026-08-07). `thread` is the
+    // documented way, but `metadata` is a caller-settable passthrough whose own schema
+    // description tells agents to put `taskId` in it ("{taskId, status, durationMs, refs}"),
+    // and `opPost` forwards it untouched when `thread` is absent — so a post tagged that way
+    // reached the note looking unthreaded. It then asserted "You named no thread — the server
+    // attached this to your one open exchange" and warned that a second open thread would
+    // break the linkage: both halves false, and the warning tells an agent its working code
+    // is about to stop working, which is the exact "reads as a regression" harm the note was
+    // added to prevent.
+    opts.thread ??
+      (typeof opts.metadata?.taskId === "string" && opts.metadata.taskId.trim()
+        ? opts.metadata.taskId
+        : undefined),
   );
   return ok(
     [

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 
 interface Props {
   workspaceName: string;
@@ -47,11 +48,13 @@ export function JoinLinkCard({
       if (body.outcome === "already_member") {
         router.push(`/${body.workspaceSlug}-${body.workspacePublicId}`);
       } else {
-        // Land in the visitor's own workspace — /canvas resolves their
-        // default workspace + canvas, where the awaiting-approval popup
-        // (driven by /api/me/join-requests) is mounted. "/" would dump
-        // them on the public marketing page with no feedback.
-        router.push("/canvas");
+        // Land the visitor somewhere that exists. This used to push `/canvas`
+        // to reach the awaiting-approval popup mounted on the workspace canvas;
+        // Stage D deleted both the page and the popup, and the push only still
+        // "worked" because the retirement map 302s it. `/` would dump them on
+        // the marketing page with no feedback, so this goes to the post-auth
+        // landing directly — one hop, and a route that is actually there.
+        router.push(WEB_POST_AUTH_LANDING);
       }
       router.refresh();
     } catch (err) {

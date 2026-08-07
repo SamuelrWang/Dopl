@@ -21,13 +21,23 @@
  *   ""                   → fallback           (empty)
  *   undefined / null     → fallback           (missing)
  *
- * The fallback defaults to `/canvas` (the post-auth landing) but
- * callers can pass a different default — e.g. an OAuth callback might
- * want to fall back to `/login` on a sketchy value.
+ * The fallback defaults to the post-auth landing but callers can pass a
+ * different default — e.g. an OAuth callback might want to fall back to
+ * `/login` on a sketchy value. It used to default to `/canvas`, which Stage D
+ * deleted; every current caller passes its own fallback, so that default was
+ * unreachable — but a NEW caller would have silently inherited a dead route.
+ *
+ * WHY THE LITERAL RATHER THAN IMPORTING `WEB_POST_AUTH_LANDING`: this module is the LEAF —
+ * `post-auth-landing.ts` imports `safeRedirect` from here, so importing its constant back
+ * would close a cycle. The two are pinned equal by a test instead, which is the honest
+ * trade: one duplicated string, guarded, versus an import cycle in the redirect path.
  */
+/** Must equal `WEB_POST_AUTH_LANDING`. Pinned by safe-redirect.test.ts — see the note above. */
+const POST_AUTH_LANDING_FALLBACK = "/get-started";
+
 export function safeRedirect(
   redirectTo: string | null | undefined,
-  fallback: string = "/canvas",
+  fallback: string = POST_AUTH_LANDING_FALLBACK,
 ): string {
   if (!redirectTo || typeof redirectTo !== "string") return fallback;
   // Must start with a single forward slash.

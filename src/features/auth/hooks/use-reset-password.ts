@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { evaluatePassword, PASSWORD_REQUIREMENT_MESSAGE } from "../password-policy";
+import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 
 type Status = "checking" | "ready" | "invalid";
 
@@ -61,7 +62,9 @@ export function useResetPassword() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setMessage("Password updated. Redirecting…");
-      window.location.assign("/canvas");
+      // Stage D deleted /canvas; this reached it only through the retirement
+      // 302. A password reset is a real user path, so it names a live route.
+      window.location.assign(WEB_POST_AUTH_LANDING);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setPending(false);
