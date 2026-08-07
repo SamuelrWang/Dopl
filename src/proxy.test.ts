@@ -403,6 +403,33 @@ describe("config.matcher", () => {
     expect(re.test(path)).toBe(false);
   });
 
+  // STAGE E (2026-08-06): the SELF-AUTHENTICATING routes no longer reach the middleware at
+  // all. They already short-circuited at the top of the proxy, so this changes no verdict —
+  // it stops the work from being scheduled. `/api/mcp` is the one that matters: it STREAMS,
+  // and its correctness rests on headers reaching the client inside a 60s budget.
+  it.each([
+    "/api/mcp",
+    "/api/oauth/authorize",
+    "/api/version",
+    "/api/cron/thread-sweep",
+    "/api/billing/webhook",
+    "/.well-known/oauth-authorization-server",
+  ])("self-authenticating route %s never reaches the proxy", (path) => {
+    expect(re.test(path)).toBe(false);
+  });
+
+  // …and the rest of /api/** still does. Dropping ALL of it is the plan's end state and is
+  // deliberately NOT done: the middleware is what refreshes the Supabase session cookie, and
+  // cookie-authed API calls would silently lose that. See the comment on `config` in proxy.ts.
+  it.each([
+    "/api/workspaces/me",
+    "/api/channels",
+    "/api/channels/sessions",
+    "/api/auth/mcp-device-token",
+  ])("cookie-authed API route %s still reaches the proxy", (path) => {
+    expect(re.test(path)).toBe(true);
+  });
+
   it.each(["/canvas", "/api/workspaces/me", "/login", "/"])(
     "%s does reach the proxy",
     (path) => {

@@ -455,8 +455,32 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse;
 }
 
+/**
+ * STAGE E (2026-08-06) — THE SELF-AUTHENTICATING ROUTES LEAVE THE MATCHER.
+ *
+ * These are exactly {@link SELF_AUTH_ROUTES}: no human session is involved, nothing below
+ * the auth call can change what they do, and they already short-circuit at the top of the
+ * proxy. Excluding them here means the middleware never *runs* for them rather than running
+ * and immediately returning — which is the point for `/api/mcp`, whose whole correctness
+ * rests on response headers reaching the client inside its 60s time-to-headers budget.
+ *
+ * WHY NOT ALL OF `/api/**`, WHICH IS WHAT THE PLAN SAYS. `docs/migration-research/auth-flows.md`
+ * calls dropping the lot the "Phase-4 end state" and then flags the reason to sequence it:
+ * the middleware is currently the only thing 401-ing an unauthenticated `/api` call before
+ * the route wrapper runs. That half is now safe — `withUserAuth`/`withWorkspaceAuth` 401 on
+ * their own (`with-auth.ts:243`) — but it is NOT the whole story. The middleware also
+ * REFRESHES the Supabase session cookie on every request it sees, and cookie-authed API
+ * calls (the desktop's main process sends a `Cookie` header via `getSessionCookieHeader`)
+ * would silently lose that refresh. The failure mode is a session that expires earlier than
+ * it used to, recovered only by `api-repair`'s 401 retry — a real behaviour change traded
+ * for latency on routes that are not the hot path. Left for its own change, with the live
+ * harness's auth-boundary check run either side of it.
+ *
+ * SELF_AUTH_ROUTES STAYS in the proxy body as defence in depth: if this matcher is ever
+ * widened again, those routes must still short-circuit rather than pay for the claims read.
+ */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -76,6 +76,19 @@ The plan was written while the SPA was still the new thing; the list describes t
 
 - Status: **resolved**; committed on `master`. Needs a build to reach an operator.
 
+### F-150: Stage E part 1 — the self-auth routes leave the matcher; the knip sweep is measured but NOT executed (2026-08-06, master) — PARTIALLY RESOLVED
+
+**DONE — the matcher.** `SELF_AUTH_ROUTES` (`/api/mcp`, `/api/oauth`, `/.well-known/oauth-`, `/api/billing/webhook`, `/api/cron/`, `/api/version`) are excluded from `config.matcher`, so the middleware never RUNS for them rather than running and short-circuiting. `/api/mcp` is the one that matters: it streams, and its correctness rests on response headers reaching the client inside a 60s time-to-headers budget.
+
+**DELIBERATELY NOT DONE — dropping ALL of `/api/**`,** which is what the plan calls the Phase-4 end state. `auth-flows.md` flags half the reason (the middleware is the only thing 401-ing an unauthenticated `/api` call before the wrapper runs) and that half is now safe — `with-auth.ts:243` 401s on its own. The half it does NOT flag is the blocker: **the middleware also refreshes the Supabase session cookie on every request it sees.** The desktop's main process makes cookie-authed API calls (`getSessionCookieHeader`), so dropping the matcher silently shortens session life for them, recovered only by `api-repair`'s 401 retry. A real behaviour change traded for latency on routes that are not the hot path. Its own change, with the live harness's auth-boundary check run either side.
+
+**MEASURED, NOT EXECUTED — the knip sweep.** Two things worth recording:
+
+1. **knip cannot see the desktop tree at all.** Unscoped, it reported **339 unused files** including essentially all of `dopl-desktop-app/main/` — it does not resolve a plain-CommonJS `require` graph from an Electron entry point. Acting on that output deletes the app. `dopl-desktop-app/**` is now in `knip.json`'s ignore list; **treat any future knip run over that tree as noise, not debt.**
+2. **Scoped to the TS tree the finding is real, and bigger than a leaf sweep: 43 unused files, 122 unused exports, 147 unused exported types.** It is a TRANSITIVELY DEAD SUBGRAPH, not independent leaves — `shared/layout/app-shell/app-shell.tsx` has two real importers and `features/tour/index.ts` has fourteen, and every one of those importers is itself dead. So it cannot be verified file-by-file; the closure has to be taken at once. **knip's alias resolution was spot-checked and is trustworthy:** it flags `app-rail.tsx` while correctly KEEPING `app-rail-core`, which the SPA imports through `@/`, and four probes against the shipped bundle's sourcemaps (`channels-view`, `app-shell`, `tour-provider`, `skills-browser`) confirm none is bundled. This belongs with the `@/`-boundary extraction (the 344-module task), not squeezed in beside a window refactor. `scripts/**` and the vitest shims in that list are false positives — dev/ops entry points knip has no reference for.
+
+- Status: **partially resolved**; matcher done and tested, sweep measured and handed to the extraction task.
+
 ### F-016: Legacy slug-only workspace URL fallback awaiting deletion
 - Location: `src/features/workspaces/server/segment.ts:36` (`resolveWorkspaceSegmentForUser` legacy branch, falls back via `findWorkspaceForMember`; `legacy_slug_redirect` event emitted at :62-64)
 - Found during: workspace publicId rollout (PR #1)

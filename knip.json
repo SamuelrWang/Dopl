@@ -3,7 +3,8 @@
   "ignore": [
     ".claude/**",
     "**/dist/**",
-    "supabase/**"
+    "supabase/**",
+    "dopl-desktop-app/**"
   ],
   "ignoreDependencies": []
 }
