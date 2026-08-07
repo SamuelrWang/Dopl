@@ -118,6 +118,18 @@ function retryDelayMs(attempt) {
   return i < RETRY_BACKOFF_MS.length ? RETRY_BACKOFF_MS[i] : RETRY_CEILING_MS;
 }
 
+// THE IN-LINE REFRESH GATE (F-132's residual storm). The ladder above was honoured
+// only by the proactive TIMER; the CALLER-DRIVEN path — getAccessToken() below — had
+// no bound at all, so while the stored token sat inside the near-expiry window every
+// single call re-drove a real network rotation. Same ladder, read off the wall clock.
+// `notBeforeMs` is the stamp the last FAILED refresh left behind; 0 (never failed, or
+// a success cleared it) passes, and an unreadable clock fails OPEN — a rate limit
+// that cannot read the time must not strand a session.
+function mayRefreshNow(nowMs, notBeforeMs) {
+  if (!Number.isFinite(notBeforeMs) || notBeforeMs <= 0) return true;
+  return Number.isFinite(nowMs) ? nowMs >= notBeforeMs : true;
+}
+
 // THE 401 REPAIR RULE — exactly one retry, never a loop. A 401 that survives a
 // fresh token is a real authorization answer (revoked session, wrong workspace,
 // a sessionOnly route), and retrying it again only multiplies the damage.
@@ -153,6 +165,9 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 let started = false;
 let timer = null;
 let failure = { definitive: 0, attempts: 0 };
+// The stamp `mayRefreshNow` reads: earliest a caller-driven rotation may start again.
+// Armed/cleared in noteRefreshOutcome — the ordering note there is the actual fix.
+let retryNotBeforeMs = 0;
 const subscribers = new Set();
 let lastEmitKey = null;
 
@@ -230,9 +245,23 @@ function noteRefreshOutcome(outcome) {
   const next = nextFailureState(failure, outcome);
   if (outcome && outcome.ok) {
     failure = { definitive: 0, attempts: 0 };
+    retryNotBeforeMs = 0;
     return { dropSession: false, kind: 'ok', attempts: 0, definitive: 0 };
   }
   failure = { definitive: next.definitive, attempts: next.attempts };
+  // ARM THE GATE HERE, WHERE `failure` IS WRITTEN — the place matters as much as the
+  // rate limit. F-132's residual: 39 316 refresh attempts in seconds on an offline
+  // machine, each paired with a `ui-sync auth MISSING — rotate` line. THE CYCLE:
+  // refreshNow announces a FAILED rotation with emitAuthState('signed-in') — it must,
+  // or the UI stays stuck on 'refreshing', and the 'refreshing' emit ahead of it means
+  // lastEmitKey can never dedupe it away — main/shell-mode.js answers that by calling
+  // ui-sync's refreshAuth(), and ui-sync answers THAT by reading getAccessToken(). The
+  // failure re-drove the read that produced it. Two reasons for this seam over
+  // refreshNow's tail: (1) it is the ONE place every outcome is reported, including the
+  // cookie path's auth.ensureFresh(), which never enters refreshNow, so the stamp
+  // cannot drift from the `attempts` it is derived from; (2) it runs BEFORE the
+  // announcement, so the bound does not rest on a subscriber's read being deferred.
+  retryNotBeforeMs = Date.now() + retryDelayMs(next.attempts);
   diag(
     'auth-tokens: refresh failed —',
     next.kind,
@@ -241,8 +270,10 @@ function noteRefreshOutcome(outcome) {
       ? '— DROPPING the stored session'
       : '— keeping the stored session; will retry'
   );
-  // The drop is about to happen, so the ladder starts clean for the next sign-in.
-  if (next.dropSession) failure = { definitive: 0, attempts: 0 };
+  // The drop is about to happen, so the ladder starts clean for the next sign-in —
+  // gate included, or the first read after it would be refused for up to
+  // RETRY_CEILING_MS on the strength of a session that no longer exists.
+  if (next.dropSession) { failure = { definitive: 0, attempts: 0 }; retryNotBeforeMs = 0; }
   return {
     dropSession: next.dropSession,
     kind: next.kind,
@@ -360,11 +391,18 @@ async function getAccessToken() {
   if (!s || !s.access_token) return null;
   const exp = sessionExpSec(s);
   if (!needsRefresh(exp, nowSec())) return s.access_token;
-  const next = await refreshNow('near-expiry');
-  if (next && next.access_token) return next.access_token;
-  // The refresh failed but the token we hold may still have real life in it (the
-  // near-expiry window is a safety margin, not death). Past `exp` it is a
-  // guaranteed 401 and null is the honest answer.
+  // GATED (F-132 residual). Every caller funnels through here, so this is the one
+  // place that can stop a caller which re-asks on failure from re-driving a rotation
+  // per ask. Being gated is NOT a failure: the fallthrough below still answers with
+  // the token we hold while it has real life left — which is what the near-expiry
+  // margin is FOR — and the timer goes on climbing the same ladder in the background.
+  if (mayRefreshNow(Date.now(), retryNotBeforeMs)) {
+    const next = await refreshNow('near-expiry');
+    if (next && next.access_token) return next.access_token;
+  }
+  // The refresh failed (or the gate held it) but the token we hold may still have
+  // real life in it (the near-expiry window is a safety margin, not death). Past
+  // `exp` it is a guaranteed 401 and null is the honest answer.
   //
   // RE-READ THE STORE, never the pre-refresh snapshot (refreshNow's own `after =
   // loadSession()` pattern): if that refresh was the third consecutive definitive
@@ -418,6 +456,7 @@ function onWake() {
 /** The deep-link capture just persisted a brand-new session. */
 function onSignIn() {
   failure = { definitive: 0, attempts: 0 };
+  retryNotBeforeMs = 0; // a NEW credential is real evidence; the old ladder is void
   lastEmitKey = null;
   if (!started) {
     emitAuthState('signed-in');
@@ -429,6 +468,7 @@ function onSignIn() {
 /** Explicit sign-out: stop rotating a credential that no longer exists. */
 function onSignOut() {
   failure = { definitive: 0, attempts: 0 };
+  retryNotBeforeMs = 0;
   clearTimer();
   emitAuthState('signed-out');
 }
@@ -452,6 +492,7 @@ module.exports = {
   classifyFailure,
   nextFailureState,
   retryDelayMs,
+  mayRefreshNow,
   shouldRepairAuth,
   NEAR_EXPIRY_SEC,
   MAX_DEFINITIVE_FAILURES,
