@@ -155,6 +155,12 @@ test("the card resolves the counterparty's id to their name", () => {
   assert.equal(bare.to, "Samuel Wang");
   assert.equal("addressed" in bare, false);
 
+  // UUID CASING CARRIES NO MEANING (2026-08-07, found by audit). The first cut compared with
+  // `===`, so an agent addressing by an uppercase uuid — which the tool description invites
+  // and says nothing about casing — still painted the raw id, i.e. the exact symptom this
+  // function exists to fix.
+  assert.equal(post({ op: "post", body: "hi", to: ID.toUpperCase() }).to, "Samuel Wang");
+
   // A DIFFERENT member's id is LEFT VERBATIM rather than guessed at — this session knows one
   // counterparty and nothing else, and a wrong name is worse than an ugly id.
   const third = "33333333-3333-3333-3333-333333333333";

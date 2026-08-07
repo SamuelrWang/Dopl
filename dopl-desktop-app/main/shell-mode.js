@@ -39,7 +39,7 @@ function makeShellHelpers(deps) {
       win.on('closed', () => deps.setMainWindow(null));
       return win;
     }
-    const win = deps.createSpaWindow();
+    const win = deps.createSpaWindow(opts);
     deps.setMainWindow(win);
     win.on('closed', () => deps.setMainWindow(null));
     if (opts.show !== false) win.show();

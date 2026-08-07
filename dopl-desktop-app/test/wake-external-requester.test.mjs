@@ -78,6 +78,13 @@ test("the listener runs the three routes, in order, BEFORE classify", () => {
   assert.ok(feed < open, "feedLiveSession runs first");
   assert.ok(open < surface, "then maybeOpenRequesterSession");
   assert.ok(surface < classify, "then maybeSurfaceRequesterReply, and classify LAST");
+  // …AND THE CHAT GUARD SITS BETWEEN ROUTE 1 AND ROUTE 2 (2026-08-07). This pin used to
+  // compare only the three routes, so the mirror below could diverge from prod on the guard
+  // with every assertion in this file still green. Chat may be SEEN by a live session
+  // (route 1 is deliberately above it) and may never START one (routes 2 and 3 are below).
+  const guard = at("const chat = targeting.isChatIntent(m);");
+  assert.ok(feed < guard, "the guard must sit AFTER feedLiveSession");
+  assert.ok(guard < open, "…and BEFORE the two routes that start a session");
   // …and the loop still AWAITS that dispatch, so a trigger's consent + spawn keeps
   // serializing ahead of the next message in the page (it used to be inline).
   assert.match(LOOP, /await messages\.dispatchMessage\(entry, m, myUserId\);/);
@@ -182,11 +189,23 @@ function harness(over = {}) {
     `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };`
   )(settings, targeting, sessionEngine, io, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
 
-  // channel-listener.js:152-168 verbatim in shape (pinned by STATIC PIN 1 above).
+  // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
+  //
+  // THE CHAT GUARD IS PART OF THAT SHAPE (2026-08-07, found by audit). This mirror had no
+  // guard, so it was strictly MORE PERMISSIVE than prod — and the static pin above only
+  // compares the three routes' indexOf positions, which means deleting the guard from
+  // listener-messages.js left every assertion in this file green. Only
+  // chat-never-starts-a-session.test.mjs (which evaluates the REAL dispatchMessage source)
+  // caught it. A divergent copy of a dispatcher is the exact failure this repo already has
+  // history with, so the mirror carries the guard too: chat may be SEEN by a live session
+  // (route 1) and may never START one (routes 2 and 3).
   async function dispatch(entry, m) {
     if (routes.feedLiveSession(entry, m, ME)) return "feedLiveSession";
-    if (await routes.maybeOpenRequesterSession(entry, m, ME)) return "maybeOpenRequesterSession";
-    if (await routes.maybeSurfaceRequesterReply(entry, m, ME)) return "maybeSurfaceRequesterReply";
+    const chat = targeting.isChatIntent(m);
+    if (!chat) {
+      if (await routes.maybeOpenRequesterSession(entry, m, ME)) return "maybeOpenRequesterSession";
+      if (await routes.maybeSurfaceRequesterReply(entry, m, ME)) return "maybeSurfaceRequesterReply";
+    }
     const verdict = classify(m, entry, ME);
     if (verdict === "trigger") calls.trigger.push(m);
     else if (verdict === "fyi") calls.fyi.push(m);

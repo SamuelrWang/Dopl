@@ -37,10 +37,10 @@ const store = new Store();
 let mainWindow = null;
 let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
 
-// isAppOrigin / maybeBeginAuth (the M4 sign-in CSRF nonce) live in auth-actions.js
-// alongside the tray's sign-in entry point, so every path that starts a sign-in
-// arms the gate identically.
-const { isAppOrigin, maybeBeginAuth } = authActions;
+// `isAppOrigin` / `maybeBeginAuth` were destructured here for `wireNavigation`, which is
+// deleted (see below). index.js no longer opens anything externally, so the M4 sign-in CSRF
+// nonce is armed in exactly ONE place — `authActions.beginSignIn` — which is stronger than
+// the two call sites this line existed to share.
 
 // ── Window ────────────────────────────────────────────────────────────────────
 // THE REMOTE WRAPPER IS GONE (Stage D, 2026-08-06). `createMainWindow` built a
@@ -53,14 +53,10 @@ const { isAppOrigin, maybeBeginAuth } = authActions;
 //
 // `createShellWindow` (shell-mode.js) is the ONE factory every "make or show the window"
 // path goes through, and the min-version gate is its single enforcement point.
-// True when macOS launched us as a hidden login item (openAsHidden).
-function wasOpenedHidden() {
-  try {
-    return process.platform === 'darwin' && !!app.getLoginItemSettings().wasOpenedAsHidden;
-  } catch (_) {
-    return false;
-  }
-}
+// `wasOpenedHidden()` MOVED to main/spa-window.js (2026-08-07). It was read only by the
+// deleted `createMainWindow`, so it sat here unreferenced while the app went on
+// registering itself as a hidden login item below — the intent surviving nowhere but a
+// function nobody called. It now lives beside the one factory that decides whether to show.
 
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -94,30 +90,17 @@ function loadApp() {
 }
 
 // ── Navigation / link handling ─────────────────────────────────────────────────
-function wireNavigation(contents) {
-  // window.open / target=_blank → always open in the system browser. This is how
-  // sign-in leaves the app: the login page calls window.open('/auth/desktop-start')
-  // and OAuth runs in the real browser, then returns via the dopl:// deep link.
-  contents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/i.test(url)) shell.openExternal(maybeBeginAuth(url));
-    return { action: 'deny' };
-  });
-
-  // In-window navigation stays on the app's own EXACT origin (FIX S3: it used to
-  // admit every *.usedopl.com host, which is what made auth-cookies.js's
-  // "origin-locked" claim false); anything else goes to the system browser so the
-  // wrapper never becomes a general-purpose browser.
-  contents.on('will-navigate', (event, url) => {
-    if (!isAppOrigin(url)) {
-      event.preventDefault();
-      shell.openExternal(maybeBeginAuth(url));
-    }
-  });
-
-  // Offline / load failure / hung-load recovery is owned by the load guard
-  // (main/load-guard.js): it shows the offline screen AND auto-retries on a
-  // backoff, replacing the old did-fail-load dead end.
-}
+// `wireNavigation(contents)` LIVED HERE AND IS DELETED (2026-08-07). Its only call site
+// was the last line of `createMainWindow`, so Stage D left it unreachable — and worse than
+// merely dead: its docblock said "this is how sign-in leaves the app: the login page calls
+// window.open('/auth/desktop-start')", which the SPA window now DENIES outright
+// (`spa-window.js` installs `setWindowOpenHandler(() => ({ action: 'deny' }))` plus
+// will-navigate/will-redirect/will-frame-navigate policing). An editor reading it would
+// have believed a mechanism the shell forbids. A test also pinned its CSRF-arming line, so
+// the suite was green about a path that could not run; that assertion now pins the live one.
+//
+// THE LIVE PATH: sign-in leaves through `authActions.beginSignIn` → `maybeBeginAuth(url)` →
+// `shell.openExternal` (`auth-actions.js:73`), which is the one place the M4 nonce is armed.
 
 // ── Menu ────────────────────────────────────────────────────────────────────
 // The menu-bar template lives in app-menu.js (extracted at the 500-line cap).

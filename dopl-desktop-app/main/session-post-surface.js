@@ -69,10 +69,19 @@ function withPostSurface(payload, input, fallbackTo, counterpartyId) {
   // Resolve ONLY an exact match on the bound counterparty, and only when a name exists to
   // put in its place: a partial match or a missing name keeps the raw string, because a
   // wrong name is worse than an ugly id.
-  const named =
-    addressed && counterpartyId && fallbackTo && addressed === counterpartyId
-      ? fallbackTo
-      : addressed;
+  // CASE-INSENSITIVE ON THE ID (2026-08-07). The first cut compared with `===`, so the very
+  // symptom this function was written for still reproduced: an agent addressing by an
+  // UPPERCASE uuid — which the tool description invites ("an email or user id") and says
+  // nothing about casing — still painted `Sent to 2DAC1943-…` while the server's echo of the
+  // same post said "addressed to Samuel Wang". A uuid carries no meaning in its case, so
+  // folding both sides costs nothing and closes the gap. It does NOT widen the rule: still
+  // an exact match on the bound counterparty and nothing else, because a wrong name is worse
+  // than an ugly id.
+  const sameId =
+    addressed &&
+    counterpartyId &&
+    String(addressed).toLowerCase() === String(counterpartyId).toLowerCase();
+  const named = sameId && fallbackTo ? fallbackTo : addressed;
   payload.to = named || fallbackTo || null;
   // `addressed` STAYS DERIVED FROM THE CALL, not from the label. It answers "did this call
   // name a recipient", which is what the renderer's `named` check reads to decide between

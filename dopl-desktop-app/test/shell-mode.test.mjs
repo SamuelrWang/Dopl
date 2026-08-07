@@ -68,7 +68,9 @@ test("createShellWindow is the ONE factory, and the gate is its only branch", ()
   const fn = fnOf(SHELL, "createShellWindow");
   assert.match(fn, /deps\.versionGate\.isBlocked\(\)/, "the min-version gate rides this factory");
   assert.match(fn, /createUpdateRequiredWindow\(\)/, "…and resolves to the update screen when blocked");
-  assert.match(fn, /deps\.createSpaWindow\(\)/, "…otherwise the bundled SPA, unconditionally");
+  // `opts` is threaded through (2026-08-07) so a hidden login launch can stay in the tray:
+  // the factory's own ready-to-show consults it. Before that, `show:false` was inert.
+  assert.match(fn, /deps\.createSpaWindow\(opts\)/, "…otherwise the bundled SPA, unconditionally");
   assert.ok(!/deps\.createMainWindow/.test(fn), "the remote factory must not be reachable");
 });
 

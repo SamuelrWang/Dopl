@@ -261,7 +261,15 @@ test("in-window navigation is locked to the EXACT app origin, not the domain fam
   assert.match(fn, /new URL\(urlStr\)\.origin === APP_ORIGIN/);
   assert.ok(!/hostname\.endsWith/.test(ACTIONS), "no *.usedopl.com family match may survive");
   assert.ok(!/isAppUrl\(/.test(ACTIONS + INDEX), "and the loose predicate has no call site left");
-  assert.match(INDEX, /if \(!isAppOrigin\(url\)\) \{/, "the will-navigate branch uses it");
+  // THE WILL-NAVIGATE LOCK MOVED (2026-08-07). It lived in index.js's `wireNavigation`,
+  // which existed only for the deleted remote wrapper. The SPA window polices navigation
+  // itself and STRICTER: `isAllowedNavigation` locks to the bundled index file rather than
+  // to the app origin, and it covers will-redirect and will-frame-navigate too, which the
+  // old branch did not. `isAppOrigin` survives as the nonce gate's own predicate.
+  const SPA = readFileSync(join(HERE, "..", "main", "spa-window.js"), "utf8");
+  assert.match(SPA, /on\('will-navigate', policeNavigation\)/, "the live lock is the SPA window's");
+  assert.match(SPA, /on\('will-redirect', policeNavigation\)/, "…and it covers redirects too");
+  assert.match(SPA, /if \(!isAllowedNavigation\(url, devUrl\(\), indexHref\)\) event\.preventDefault\(\)/);
 });
 
 // ── EVERY GATE CALL SITE ACTUALLY USES THE NEW ANSWER ───────────────────────

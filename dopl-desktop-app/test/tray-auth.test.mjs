@@ -141,8 +141,22 @@ test("sign-in runs in the SYSTEM browser, not in-window (Supabase PKCE)", () => 
 
 test("there is exactly one place that arms the nonce, shared by both entry points", () => {
   assert.ok(!/beginPendingAuth/.test(INDEX), "index.js must go through auth-actions, not re-implement it");
-  assert.match(INDEX, /const \{ isAppOrigin, maybeBeginAuth \} = authActions;/);
-  assert.match(INDEX, /shell\.openExternal\(maybeBeginAuth\(url\)\)/, "the window-open path still arms it");
+  // The destructure went with `wireNavigation` (2026-08-07): index.js opens nothing
+  // externally any more, so the nonce is armed in exactly ONE place rather than shared
+  // between two call sites — which is what this test is really about.
+  // MATCHED AGAINST CODE, NOT PROSE. The comment recording the deletion names the function,
+  // so a bare /maybeBeginAuth\(/ over the raw source matches its own explanation.
+  const code = INDEX.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+  assert.ok(!/maybeBeginAuth\(/.test(code), "index.js must not arm the nonce itself");
+  // PINS THE LIVE PATH, NOT A DEAD ONE (2026-08-07). This used to assert
+  // `shell.openExternal(maybeBeginAuth(url))` in index.js — a line inside `wireNavigation`,
+  // whose only caller was the deleted `createMainWindow`. It passed on code that could
+  // never run, which is the source-slicing trap inverted: green about a dead path. The
+  // arming now lives in exactly one place, and the SPA window denies window.open outright.
+  assert.match(ACTIONS, /shell\.openExternal\(url\)/, "auth-actions owns the external open");
+  assert.match(ACTIONS, /function maybeBeginAuth/, "…and the nonce gate lives beside it");
+  // Matches the DECLARATION, not the word: the comment recording the deletion names it.
+  assert.ok(!/function wireNavigation\(/.test(INDEX), "the dead remote-shell navigation wiring is back");
 });
 
 test("sign-out clears the cookie jar and shows the sign-in screen", () => {

@@ -21,7 +21,7 @@
 // dopl-desktop-app/WIRING.md for the two-line integration.
 
 const path = require('path');
-const { BrowserWindow } = require('electron');
+const { app, BrowserWindow } = require('electron');
 
 const INDEX_HTML = path.join(__dirname, '../renderer/app/index.html');
 const PRELOAD = path.join(__dirname, '../renderer/app-preload.js');
@@ -69,7 +69,24 @@ function devUrl() {
   return process.env.DOPL_UI_DEV_URL || '';
 }
 
-function createSpaWindow() {
+// TRUE when macOS launched us as a hidden login item (`openAsHidden`). It lived in
+// index.js and was read by the deleted `createMainWindow`; the collapse to one factory
+// left it there with no caller, so the app went on REGISTERING itself as a hidden login
+// item (`index.js` setLoginItemSettings) while nothing honoured the flag. Moved here
+// because this is now the only place a main window decides whether to reveal itself.
+function wasOpenedHidden() {
+  try {
+    return process.platform === 'darwin' && !!app.getLoginItemSettings().wasOpenedAsHidden;
+  } catch (_) {
+    return false;
+  }
+}
+
+// `opts.show === true` FORCES the window visible once painted even on a hidden login
+// launch — an explicit open (tray, notification click, deep link) must always surface it.
+// Anything else defers to `wasOpenedHidden()`, which is what makes a background-listener
+// start actually stay in the tray.
+function createSpaWindow(opts = {}) {
   const dev = devUrl();
 
   const win = new BrowserWindow({
@@ -99,7 +116,10 @@ function createSpaWindow() {
   } else {
     win.loadFile(INDEX_HTML);
   }
-  win.once('ready-to-show', () => win.show());
+  // NOT unconditional. This showed on every paint, which made `createShellWindow`'s
+  // `show:false` inert and stole focus on every login for a user who had ticked "Hide".
+  const forceShow = opts.show === true;
+  win.once('ready-to-show', () => { if (forceShow || !wasOpenedHidden()) win.show(); });
 
   // Defense in depth on top of the page CSP. This window is never a browser.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -122,4 +142,4 @@ function createSpaWindow() {
   return win;
 }
 
-module.exports = { createSpaWindow, isAllowedNavigation, INDEX_HTML };
+module.exports = { createSpaWindow, isAllowedNavigation, wasOpenedHidden, INDEX_HTML };
