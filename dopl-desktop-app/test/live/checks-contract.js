@@ -29,6 +29,11 @@ const { bothMachines } = require('./desktop');
  */
 const FORGED = {
   to_user_id: '00000000-0000-4000-8000-0000000000ff',
+  // Joined the strip on 2026-08-06 (F-151). It has NO consumer and never will — the
+  // escalation verdict it was sketched for is deleted — which is exactly why it is forged
+  // here: a reserved name with no reader is the one a future edit removes as dead code,
+  // and this check is what would notice the day it stops being stripped.
+  to_user_notify: '00000000-0000-4000-8000-0000000000f9',
   summary: 'forged summary',
   runtime: 'forged-runtime',
   appVersion: '0.0.0-forged',

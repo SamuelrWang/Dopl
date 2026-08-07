@@ -251,3 +251,71 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
     expect(has(capturedMetadata(), "author_agent_id")).toBe(false);
   });
 });
+
+/**
+ * F-110 residual (d) / F-111 residual (a), open 2026-07-31 → 2026-08-06.
+ *
+ * `to_user_notify` was declared reserved in `docs/MULTIPLAYER-PLAN.md` and in
+ * this module's own docblock, and was never actually in the strip — so the ONE
+ * caller who read those docs and believed them could set it and have it persist
+ * verbatim. Both residuals carried the same standing instruction: the consumer
+ * and the strip must ship in the SAME change. That instruction is now
+ * unfollowable — the consumer it named (the agent→human escalation verdict) is
+ * deleted with rollback §1 and nobody will build it — so the key was going to
+ * stay caller-settable forever on a promise nobody could keep.
+ *
+ * Stripped unconditionally instead, and pinned HERE rather than beside the
+ * agent keys because the failure mode is the opposite one: those keys have a
+ * live reader, this one has none, which is exactly why a future edit would read
+ * the `delete` as dead code and remove it. The reason to keep it is that the
+ * name is documented as server-owned, so the day something does read it, it
+ * must not already be full of values a caller chose.
+ */
+describe("SECURITY: the documented-but-unbuilt `to_user_notify` is stripped", () => {
+  it("SECURITY: a caller-supplied metadata.to_user_notify never reaches the row", async () => {
+    const msg = await postMessage(ctx, "dm", {
+      body: "please tell the human, not the agent",
+      metadata: { to_user_notify: PEER, keep: 1 },
+    });
+
+    const meta = capturedMetadata();
+    expect(has(meta, "to_user_notify")).toBe(false);
+    expect(has(msg.metadata as Record<string, unknown>, "to_user_notify")).toBe(
+      false
+    );
+    // Scalpel, not a wipe — the same property the agent-key strip is held to.
+    expect(meta.keep).toBe(1);
+  });
+
+  it("SECURITY: the strip is type-blind and source-blind", async () => {
+    for (const value of [PEER, true, "", 0, null, [PEER], { id: PEER }]) {
+      for (const source of ["agent", "user"] as const) {
+        vi.clearAllMocks();
+        vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
+          insertedRow(row)
+        );
+        await postMessage({ ...ctx, source }, "dm", {
+          body: "x",
+          metadata: { to_user_notify: value },
+        });
+        expect(
+          has(capturedMetadata(), "to_user_notify"),
+          `survived ${JSON.stringify(value)} on source=${source}`
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("SECURITY: nothing re-stamps it either — a clean post grows no such key", async () => {
+    await postMessage(
+      { ...ctx, runtime: "desktop-session", appVersion: "1.9.0" },
+      "dm",
+      { body: "plain reply" }
+    );
+
+    const meta = capturedMetadata();
+    expect(has(meta, "to_user_notify")).toBe(false);
+    // Proving an absence inside metadata that is otherwise populated.
+    expect(meta.to_user_id).toBe(PEER);
+  });
+});

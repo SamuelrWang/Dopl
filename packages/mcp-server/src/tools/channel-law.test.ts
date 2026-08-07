@@ -165,7 +165,7 @@ describe("THE LAW is stated, in full, in the tool description", () => {
     DESCRIPTION.indexOf("THE MODEL"),
   );
 
-  it("keeps the law to at most 12 BULLETS — one rule per line, no line per rule", () => {
+  it("keeps the law to at most 8 BULLETS — one rule per line, no line per rule", () => {
     // NIT-9 — THIS TEST IS NAMED FOR WHAT IT MEASURES NOW. It used to be called
     // "keeps the law SHORT (<=12 non-blank lines)", which is a formatting
     // assertion wearing a semantics assertion's name: every bullet here is a
@@ -183,7 +183,19 @@ describe("THE LAW is stated, in full, in the tool description", () => {
     // not go here — it goes in the op bullet that needs it. If a future change
     // wants a 9th line, the question to answer first is which of these eight
     // stopped being a rule.
-    expect(LAW.split("\n").filter((l) => l.trim()).length).toBeLessThanOrEqual(8);
+    //
+    // F-111 RESIDUAL (j), CLOSED 2026-08-06. Neither half of this test said
+    // what it did. The NAME said 12 while the assertion said 8, and the
+    // assertion counted NON-BLANK LINES — which includes the `THE LAW OF THIS
+    // ROOM` header, so the real ceiling was one rule lower than the number
+    // written next to it (7 bullets, not 8). Both halves are corrected here by
+    // measuring the thing the name promises: lines that actually open a bullet,
+    // the same `- ` count the budget test below already derives. This is NOT
+    // the "raise the number to make room" move that residual warned against —
+    // the ceiling is the 8 that was already written down; it is the UNIT that
+    // was wrong, and a header is not a rule.
+    const bullets = LAW.split("\n").filter((l) => l.trim().startsWith("- "));
+    expect(bullets.length).toBeLessThanOrEqual(8);
   });
 
   it("keeps the law SHORT — the budget the bullet count could not enforce", () => {

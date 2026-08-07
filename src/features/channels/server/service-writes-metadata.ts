@@ -22,7 +22,7 @@ import type { ChannelContext } from "./service-shared";
  * and what does the server stamp itself.
  *
  * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`,
- * `session_id`, `taskMode`,
+ * `session_id`, `to_user_notify`, `taskMode`,
  * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `to_agent_ids`,
  * `author_agent_id`, `intent`, `handoff`,
  * and the five calm-terminal flags) are ALWAYS stripped from caller metadata
@@ -343,6 +343,14 @@ export async function resolvePostMetadata(
   // {@link CLOSE_PROPOSAL_KEYS}.
   for (const key of CLOSE_PROPOSAL_KEYS) delete metadata[key];
   delete metadata.to_user_id;
+  // `to_user_notify` was RESERVED IN DOCS AND NEVER STRIPPED (F-110 residual
+  // (d) / F-111 residual (a), open since 2026-07-31). Its consumer — the
+  // agent→human escalation verdict — is DELETED (rollback §1), so the standing
+  // "ship the consumer and the strip together" instruction can never be
+  // honoured and the key would stay caller-settable forever. Stripped and never
+  // re-stamped, for the agent keys' reason: a name the docs call server-owned
+  // must not be forgeable by the one caller that reads those docs.
+  delete metadata.to_user_notify;
   delete metadata.summary;
   delete metadata.runtime;
   delete metadata.appVersion;

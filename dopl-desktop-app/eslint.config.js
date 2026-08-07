@@ -43,6 +43,28 @@ module.exports = [
     },
   },
 
+  // THE LIVE CONTRACT TIER (`npm run test:live`) — F-111 residual (m), closed 2026-08-06.
+  //
+  // These files are `.js` ON PURPOSE: the default runner is `node --test 'test/**/*.mjs'`,
+  // so the extension is what keeps a credential-less `npm test` from trying to run a tier
+  // that needs the network. The cost was that they matched NO block in this config —
+  // `main|scripts|renderer/**/*.js` and `test/**/*.mjs` both miss `test/live/*.js` — so the
+  // one tree in this repo with a ZERO-EXEMPTION cap had a corner with no cap at all, and it
+  // grew from ~1187 lines to 1681 while nothing measured it. A block, not a rename: the
+  // extension is load-bearing and must not change.
+  {
+    files: ['test/live/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'commonjs',
+      globals: { ...globals.node },
+    },
+    rules: {
+      'max-lines': MAX_LINES,
+      'no-redeclare': NO_REDECLARE,
+    },
+  },
+
   // ESM test files (`.mjs`) — the source-extraction truth tables.
   {
     files: ['test/**/*.mjs'],
