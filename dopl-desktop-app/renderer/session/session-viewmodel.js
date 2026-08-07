@@ -3,7 +3,8 @@
 // This module is INTENTIONALLY free of DOM / electron / fs references so it can run both (a) as a
 // plain browser <script> in the sandboxed renderer — where it attaches `globalThis.DoplSessionVM`
 // — and (b) be `require()`d directly by node --test (UMD guard below). Same discipline as
-// main/load-guard.js: keep the pure core importable.
+// main/session-post-surface.js: keep the pure core importable. (This cited main/load-guard.js
+// until 2026-08-07; that module was deleted with the remote shell it existed to serve.)
 //
 // Everything here is a PURE function over plain data:
 //   - initialState()                      -> the empty view-model

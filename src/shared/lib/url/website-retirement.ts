@@ -10,9 +10,23 @@ import { WEB_POST_AUTH_LANDING, explicitPostAuthTarget } from "./post-auth-landi
  * tree is the same product rendered a second time, and the plan retires it in
  * four stages, of which this is the second: A built the replacements (the
  * billing page, `/get-started`), B stops serving the pages, C raises the
- * desktop version floor, D deletes code. **B DELETES NOTHING.** Every retired
- * page is still in the tree, still builds, still renders the moment the flag
- * is off — which is what makes the rollback an env var rather than a revert.
+ * desktop version floor, D deletes code.
+ *
+ * **STAGE D HAS LANDED (2026-08-06), SO THE PARAGRAPH THAT STOOD HERE IS NO LONGER TRUE
+ * AND ITS BEING FALSE IS DANGEROUS.** It read: "B DELETES NOTHING. Every retired page is
+ * still in the tree, still builds, still renders the moment the flag is off — which is
+ * what makes the rollback an env var rather than a revert." That described Stage B
+ * correctly and stopped describing reality the day D deleted
+ * `src/app/[workspaceSlug]/**`, `/canvas` and `/onboarding`.
+ *
+ * **`WEBSITE_RETIRED=0` NO LONGER RESTORES THE WEBSITE — it 404s it.** Nothing on disk
+ * answers those URLs, so turning the flag off stops the redirect that was the only thing
+ * making them resolve at all. Read the off switch below as what it now is: a way to stop
+ * REDIRECTING, not a way to bring the pages back. Restoring them is a revert of Stage D.
+ *
+ * The flag is kept rather than deleted because the redirect map is still doing real work —
+ * bookmarks and shipped desktop builds still arrive at these URLs, and this is what lands
+ * them somewhere that explains itself instead of on a 404.
  *
  * WHY A MAP AND NOT `notFound()` OR A 410. These URLs were session-gated their
  * whole lives: a signed-out visitor was always bounced to `/login`, so no search
@@ -64,7 +78,11 @@ export function isWebsiteRetired(
 }
 
 /**
- * The `(app)` route table, verbatim from `src/app/[workspaceSlug]/(app)/`.
+ * The `(app)` route table. It WAS verbatim from `src/app/[workspaceSlug]/(app)/` and was
+ * checked against that directory by a test; Stage D deleted the directory (2026-08-06), so
+ * this is now a HISTORICAL list — the URLs that exist in the wild, which nothing on disk can
+ * confirm or extend. The test asserts the tree stays deleted and that these names still
+ * resolve here.
  * Naming the pages — rather than retiring "any second segment" — is what keeps
  * this from swallowing a route nobody has written yet. Detail routes
  * (`knowledge/[kbSlug]`, `ontology/[clusterSlug]`, `skills/[skillSlug]`,

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { explicitPostAuthTarget } from "@/shared/lib/url/post-auth-landing";
+import { explicitPostAuthTarget, WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 import {
   LOGIN_BOUNCE_COOKIE,
   LOGIN_BOUNCE_LIMIT,
@@ -115,8 +115,17 @@ const SELF_AUTH_ROUTES = [
 // with the outage argument that explains every one of its choices. It was
 // extracted there under F-134 when this file reached 486 of its 500-line cap.
 
-/** Where a signed-in visitor to `/login` goes when the URL asked for nothing. */
-const DEFAULT_SIGNED_IN_DESTINATION = "/canvas";
+/**
+ * Where a signed-in visitor to `/login` goes when the URL asked for nothing.
+ *
+ * THIS IS THE FLAG-OFF BRANCH ONLY (see `:315`) — with the retirement on, which is the
+ * default and the shipping state, the landing is `RETIREMENT_LANDING`. It used to be
+ * `/canvas`, a page Stage D DELETED, which made the un-retire lever's own front door a
+ * 404: flip `WEBSITE_RETIRED=0` to bring the website back and the first thing a signed-in
+ * visitor hits is a route that no longer exists. Naming the landing costs nothing and
+ * removes one 404 from a path somebody only ever walks during an incident.
+ */
+const DEFAULT_SIGNED_IN_DESTINATION = WEB_POST_AUTH_LANDING;
 
 /**
  * Redirect while KEEPING whatever cookies `getClaims()` rotated onto

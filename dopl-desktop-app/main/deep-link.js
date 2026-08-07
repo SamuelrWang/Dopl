@@ -12,7 +12,7 @@
 //   auth, authTokens, listener, mcpConfig  — the auth handoff's collaborators
 //   showMainWindow()                       — reveal/recreate the shell
 //   navigateTo(path)                       — the SPA bridge (shell-mode.js)
-//   getMainWindow(), getLoadGuard()        — the window and remote-mode loader
+//   getMainWindow()                        — the window (the remote-mode loader is gone)
 //   appOrigin, diag
 
 const { app } = require('electron');
@@ -72,9 +72,10 @@ function pushRoute(deps, route) {
  * anywhere else in this app to reuse and a queue that outlives an OAuth round
  * trip is a feature, not a hardening detail.
  *
- * REMOTE MODE (DOPL_UI=remote, the rollback shell) gets the window and nothing
- * else. Its routing is a URL load through the load guard, and teaching the
- * rollback path a new trick is how a rollback path stops being one.
+ * A REMOTE-MODE BRANCH SAT HERE and went with that shell (Stage D, 2026-08-06). It gave
+ * the rollback window nothing but a show, because its routing was a URL load through the
+ * load guard — and teaching a rollback path a new trick is how it stops being one. Both
+ * the shell and the guard are deleted, so there is one routing path now.
  */
 function openApp(url, parsed, deps) {
   deps.showMainWindow();
@@ -114,7 +115,7 @@ function adoptSession(fragment, deps) {
     return;
   }
   // Deterministic re-arm of the token authority on fresh credentials (C15); no-op when
-  // start() hasn't run (DOPL_UI=remote).
+  // start() hasn't run.
   try { deps.authTokens.onSignIn(); } catch (err) { deps.diag('token re-arm error', err && err.message); }
 
   // Surface the app — CREATING the window when the link arrived with it closed, which the

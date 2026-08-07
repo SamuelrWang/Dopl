@@ -4,9 +4,11 @@
 const APP_URL = process.env.DOPL_APP_URL || 'https://www.usedopl.com/';
 const APP_ORIGIN = new URL(APP_URL).origin;
 
-// The desktop app opens straight into the product, never the marketing site.
-// `/canvas` resolves server-side (signed-out -> /login, new user -> /onboarding,
-// else the default workspace canvas).
+// HOME_URL is DEAD (2026-08-07) and kept only so a stale import fails loudly rather
+// than silently resolving to a 404. It named `/canvas`, which Stage D deleted, and its
+// last consumers went with the remote shell: index.js's loadApp and authActions.signOut
+// both loaded it so the WEB app could resolve a destination server-side. The SPA routes
+// in the renderer and never loads a URL. Delete it once nothing imports it.
 const HOME_URL = new URL('/canvas', APP_URL).toString();
 
 // Custom URL scheme used to hand the OAuth session back from the system browser

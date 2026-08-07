@@ -922,17 +922,29 @@ The web product UI is retired BY REDIRECT, behind one env flag, and
    be changed in the Vercel dashboard, so the state reached by DELETING the
    variable has to be the safe one — a lost env var or a fresh preview must not
    un-retire the website. Read PER REQUEST, never captured at module load.
-2. **Nothing is deleted.** Every retired page is still in the tree, still
+2. ~~**Nothing is deleted.** Every retired page is still in the tree, still
    builds, and renders again the moment the flag is off. That is what makes the
-   rollback an env change rather than a revert, and it is why Stage D (deletion)
-   is a separate, later, saturation-gated PR.
+   rollback an env change rather than a revert.~~ **STAGE D LANDED 2026-08-06 AND
+   THIS IS NO LONGER TRUE — the correction matters because the sentence is wrong in
+   the DANGEROUS direction.** It described Stage B accurately and stopped describing
+   reality the day D deleted `src/app/[workspaceSlug]/**`, `/canvas` and
+   `/onboarding`. **`WEBSITE_RETIRED=0` no longer restores the website; it 404s it**,
+   because turning the flag off only stops the redirect that was the last thing making
+   those URLs resolve. Read the flag as "stop redirecting", not "un-retire" — restoring
+   the pages is a revert of Stage D. The flag is KEPT because the map still does real
+   work: bookmarks and shipped desktop builds keep arriving at these URLs and it lands
+   them somewhere that explains itself.
 3. **The map NAMES its pages.** `[workspaceSlug]` is a ROOT-level dynamic
    segment, so `/pricing` is `/{segment}` as far as a pattern can tell —
    "retire any second segment" would take the KEEP list with it. `APP_PAGES` is
    the `(app)` route table verbatim and `RESERVED_TOP_LEVEL` is the KEEP list as
-   a guard. **A new page under `src/app/[workspaceSlug]/(app)/` must be added to
+   a guard. ~~**A new page under `src/app/[workspaceSlug]/(app)/` must be added to
    `APP_PAGES`**; `proxy-retirement.test.ts` reads the directory and fails if it
-   is not.
+   is not.~~ **OBSOLETE 2026-08-06: that directory is deleted, so no new page can be
+   added to it and nothing on disk can confirm `APP_PAGES` any more — it is now a
+   HISTORICAL list of the URLs in the wild.** `proxy-retirement.test.ts` was rewritten
+   to assert the opposite: that the tree STAYS deleted, and that the map still answers
+   for every one of those historical names.
 4. **`?billing=` is rewritten to `/billing/{segment}` BEFORE the generic
    redirect, query verbatim.** Shipped desktop builds (≤1.8.5), Stripe
    `return_url`s created before the D1 repoint and bookmarks all still produce
