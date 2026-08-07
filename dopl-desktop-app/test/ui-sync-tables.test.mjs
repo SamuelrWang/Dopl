@@ -21,6 +21,9 @@
 //      live; the union is re-derived from src/features/*/client/realtime.ts.
 //   3. THE CHANNELS EXEMPTION GETS QUIETLY LOST (channel_messages / agent_presence
 //      belong to realtime.js).
+//   4. A TABLE IS PUBLISHED THAT NOBODY BINDS — the reverse of (2), and the one
+//      failure with no visible symptom at all: it just costs WAL decode + a
+//      per-subscription RLS evaluation on every write, forever, for no reader.
 //
 // Run: `node --test dopl-desktop-app/test/ui-sync-tables.test.mjs`
 import { test } from "node:test";
@@ -103,7 +106,7 @@ test("every watched table is real: published, never dropped, workspace-scoped", 
   assert.ok(createBody("skill_versions"), "the rename follower has stopped working");
 });
 
-test("the watched set is exactly the 23 tables, in a pinned order", () => {
+test("the watched set is exactly the 22 tables, in a pinned order", () => {
   assert.deepEqual(SYNC_TABLES, [
     "knowledge_bases", "knowledge_folders", "knowledge_entries",
     "skills", "skill_versions",
@@ -179,5 +182,67 @@ test("the channels exemption protects the listener MODULES, not the UI feed", ()
   assert.ok(!SYNC_TABLES.includes("channel_agents"), "a write-dead table needs no change feed");
   const fn = fnOf(SRC, "connect");
   assert.match(fn, /for \(const table of SYNC_TABLES\)/, "bindings must come from the list");
+});
+
+// ── THE PUBLICATION vs EVERY SUBSCRIBER ────────────────────────────────────
+// Failure 4, and it is the one direction the tests above never checked: they all
+// ask "is everything we BIND published", never "is everything PUBLISHED bound".
+// A published table costs WAL decode + a per-subscription RLS evaluation on every
+// write whether or not one client has ever subscribed, so an orphan is permanent
+// amplification that produces no symptom a user could report (F-094 Residual 3
+// measured the poller: realtime.list_changes, 2,968,450 calls / 386.6 min).
+//
+// The third consumer is READ FROM SOURCE rather than restated. realtime.js keeps
+// its own socket outside this feed, so hardcoding what it binds here would let the
+// two drift silently — which is the same mistake as omitting it.
+const LISTENER_SRC = readFileSync(join(HERE, "..", "main", "realtime.js"), "utf8");
+const LISTENER_BOUND = [...LISTENER_SRC.matchAll(/table:\s*'(\w+)'/g)].map((m) => m[1]);
+
+// `public` is a PARSE ARTIFACT, never a table: the DO-loop migrations build their
+// statement with `format('… ADD TABLE public.%I', tbl)`, and `%I` is not `\w+`, so
+// the regex backtracks and captures the schema. Filtered here rather than in
+// publicationState() so the loop scanner keeps reading exactly as it always has.
+function livePublication() {
+  return [...PUB.added].filter((t) => t !== "public" && !PUB.dropped.has(t)).sort();
+}
+
+test("nothing is published that no consumer binds", () => {
+  assert.ok(LISTENER_BOUND.length > 0, "the realtime.js binding scan has stopped working");
+  const bound = new Set([...SYNC_TABLES, ...LISTENER_OWNED_TABLES, ...LISTENER_BOUND]);
+  const orphans = livePublication().filter((t) => !bound.has(t));
+  assert.deepEqual(orphans, [], "published but nobody subscribes — drop from "
+    + `supabase_realtime or ship the subscriber: ${orphans.join(", ")}`);
+  assert.equal(livePublication().length, SYNC_TABLES.length,
+    "the publication and the watched set are no longer the same size");
+});
+
+// UN-PUBLISHED IS NOT DROPPED — and the SQL scanner above cannot tell the two apart,
+// because `ALTER PUBLICATION … DROP TABLE public.x` also matches its bare-`DROP TABLE`
+// pass. So `PUB.dropped` is proof the table left the PUBLICATION and is NOT proof the
+// table is gone. What proves each one still stands is that server code still reads it
+// — which is also the reason each was kept, so the pin and the justification are the
+// same fact. (`clusters` predates this migration directory entirely: there is no
+// CREATE TABLE for it anywhere, so `createBody` cannot be that evidence.)
+const STILL_READ_BY = {
+  channel_agents: ["channels", "server", "repository-agents.ts"], // author attribution
+  clusters: ["clusters", "server", "service.ts"], // cluster CRUD
+};
+
+test("channel_agents and clusters are un-published, and their TABLES still stand", () => {
+  // 20260807000000. Both were bound once — channel_agents by the deleted agent-chips
+  // hook, clusters by the deleted legacy canvas — so each has a real ADD in the
+  // history and the drop is what makes them absent, not an oversight.
+  for (const t of ["channel_agents", "clusters"]) {
+    assert.ok(PUB.added.has(t), `${t} was never published — this pin measures nothing`);
+    assert.ok(PUB.dropped.has(t), `${t} is published again with no subscriber`);
+    assert.ok(!SYNC_TABLES.includes(t) && !LISTENER_BOUND.includes(t),
+      `${t} has a subscriber again — the publication drop must be reverted WITH it, or `
+      + "the channel goes SUBSCRIBED and silently delivers nothing");
+    const reader = readFileSync(
+      join(HERE, "..", "..", "src", "features", ...STILL_READ_BY[t]), "utf8");
+    assert.match(reader, new RegExp(`\\.from\\("${t}"\\)`),
+      `nothing reads ${t} here any more — if that is real, the TABLE is now droppable `
+      + "and this pin should be replaced by that migration, not weakened");
+  }
 });
 
