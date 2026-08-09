@@ -59,6 +59,33 @@ const AWAITING_PEER_IDLE_MS = 4 * 60 * 60 * 1000; // 4 hours
 // a lunch break is still there, still armed, when the operator comes back.
 const ABANDONED_MS = 12 * 60 * 60 * 1000; // 12 hours
 
+// C-4 (2026-08-08) — THE LAUNCH WATCHDOG, and where its number comes from.
+//
+// THE DEFECT: `startSession` set `idleTimer: null` and the timer was armed ONLY by reducer
+// effects that require `launched` — which only the SDK's `system/init` dispatches. A child
+// that boots and never emits one therefore sat at phase 'launching' with NO timer at all:
+// `hasLiveSession` stayed true, every retry into that slot answered `{skipped:'busy'}`, the
+// slot counted against MAX_WINDOWS forever, and no `task_started` was ever posted, so the
+// peer had nothing to look at either. There was no path out except quitting the app.
+//
+// THE BOUND IS FIVE MINUTES, and it is NOT a guess — three constants already in this tree
+// bracket it, and the test pins the relations rather than the literal (the
+// mcp-client-timeout.test.mjs precedent):
+//   `mcp-config.MCP_CLIENT_TIMEOUT_MS` = 290s — the longest a single MCP request may hold
+//     before this process's own client aborts it. The watchdog must sit ABOVE it, or a
+//     launch could be declared dead while the transport's own abort was still the thing
+//     about to unstick it.
+//   `mcp-config.AWAIT_HOLD_MARGIN_MS` = 60s — this repo's own price for "auth + MCP boot +
+//     the workspace handshake", i.e. exactly the work between spawning the child and
+//     `system/init`. Five minutes is 5x that, so a slow-but-healthy first turn (cold model
+//     start behind a slow handshake) can never trip it.
+//   `session-spawner.MAX_RUNTIME_MS` = 300s — the headless lane's existing statement that a
+//     `claude` child which has produced nothing in five minutes has failed. Matching it
+//     keeps ONE answer to that question across both lanes.
+// And it is 1/3 of DEFAULT_IDLE_MS, so a launch timeout can never be confused with the
+// idleness of a session that DID start.
+const LAUNCHING_MS = 5 * 60 * 1000; // 5 minutes
+
 // v2.9 THE MODE TABLES, duplicated ON PURPOSE: session-profiles.js is canonical, but this block is
 // evaluated standalone (source extraction) and is the STATE OWNER, so it defends its own field fail-
 // closed — for a mid-session change AND for the v3.1 preset it starts from. test/session-permission-
@@ -157,7 +184,14 @@ function nextAbandonMs(state) {
 // scheduleIdle is one clearTimeout + one setTimeout over exactly this, so a PARKED session can
 // only ever be armed with the abandonment bound and a live one only ever with the idle TTL —
 // there is no second timer to leak, and a wake's own scheduleIdle overwrites a park's arm.
+// C-4: a session that has not yet emitted `system/init` is neither idle nor parked — it is
+// LAUNCHING, and the only honest bound for it is "how long may a launch take". It is checked
+// FIRST because `parked` is false and `activity` is 'working' on a launching state, so both
+// branches below would otherwise arm a fifteen-minute idle TTL for a child that may never
+// speak. `inactive` is the calm terminal (see session-effects.endLifecycle): it settles the
+// session the way every other terminal path does, posts the status note, and frees the slot.
 function idleTimeout(state) {
+  if (state.phase === 'launching') return { ms: LAUNCHING_MS, type: 'inactive' };
   return state.parked === true
     ? { ms: nextAbandonMs(state), type: 'abandon_timeout' }
     : { ms: nextIdleMs(state), type: 'idle_timeout' };
@@ -177,6 +211,7 @@ module.exports = {
   DEFAULT_COST_CAP_USD,
   AWAITING_PEER_IDLE_MS, // M1: the bound a turn that posted waits under
   ABANDONED_MS, // M2: the bound a PARKED session ends under
+  LAUNCHING_MS, // C-4: the bound a launch that never emitted system/init ends under
   TOOL_MODES,
   MESSAGE_MODES,
   coerceMode,

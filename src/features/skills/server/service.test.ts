@@ -15,6 +15,9 @@
  *       one history version; "force" (no expected version) still records
  *       history; an identical-body save is a no-op; a lost CAS race
  *       (repo returns null) surfaces the conflict.
+ *
+ *   (5) deleteSkill is a PERMANENT hard delete (2026-08-07) and narrowing a
+ *       skill's sharing is no longer blocked by workflow attachments.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,6 +32,7 @@ vi.mock("./repository", () => ({
   updateSkillRow: vi.fn(),
   listSlugsForWorkspace: vi.fn(),
   listSkillUsedBy: vi.fn(),
+  hardDeleteSkill: vi.fn(),
 }));
 
 vi.mock("./history", () => ({
@@ -46,7 +50,7 @@ vi.mock("@/features/teams/server/repository", () => ({
 import * as repo from "./repository";
 import * as history from "./history";
 import * as teamsRepo from "@/features/teams/server/repository";
-import { listSkills, updateSkill, writeBody } from "./service";
+import { deleteSkill, listSkills, updateSkill, writeBody } from "./service";
 import { SkillStaleVersionError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
@@ -285,5 +289,76 @@ describe("updateSkill metadata optimistic concurrency", () => {
     expect(mockRepo.updateSkillRow).toHaveBeenCalledTimes(1);
     // The precondition is forwarded to the repo for the atomic CAS re-check.
     expect(mockRepo.updateSkillRow.mock.calls[0][2]).toBe("v1");
+  });
+});
+
+// ── (5) deleteSkill — PERMANENT delete (soft-delete removal, 2026-08-07) ──
+//
+// Trash is gone as product behaviour (RETIREMENT-UNWIRING-PLAN §2b / D6):
+// `deleteSkill` removes the row immediately. There is no restore and no purge,
+// and the `deleted_at` stamp is never written.
+
+describe("deleteSkill — permanent delete", () => {
+  it("HARD-deletes the row and writes no tombstone", async () => {
+    mockRepo.findSkillBySlug.mockResolvedValue(skill({ id: "s-1" }));
+
+    await deleteSkill(ctx(), "skill-x");
+
+    // A real DELETE, not a `deleted_at` stamp — `markSkillDeleted` is gone
+    // from the repository, so the factory mock above no longer declares it and
+    // any attempt to reintroduce the soft-delete call fails to resolve.
+    expect(mockRepo.hardDeleteSkill).toHaveBeenCalledWith("ws-1", "s-1");
+  });
+
+  it("records NO history event — skill_events cascades with the row", async () => {
+    // The old soft-delete wrote a `skill.trashed` event. A hard delete cannot:
+    // `skill_events.skill_id` FKs to `skills` ON DELETE CASCADE, so the insert
+    // would violate the FK against a row that no longer exists.
+    mockRepo.findSkillBySlug.mockResolvedValue(skill({ id: "s-1" }));
+
+    await deleteSkill(ctx(), "skill-x");
+
+    expect(mockHistory.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent on an agent-read-only skill (no delete)", async () => {
+    mockRepo.findSkillBySlug.mockResolvedValue(
+      skill({ id: "s-1", agentWriteEnabled: false })
+    );
+
+    await expect(
+      deleteSkill(ctx({ source: "agent" }), "skill-x")
+    ).rejects.toThrow();
+    expect(mockRepo.hardDeleteSkill).not.toHaveBeenCalled();
+  });
+});
+
+// ── (5b) Narrowing is no longer blocked by workflow attachments ──────
+//
+// `updateSkill` used to 409 SKILL_ATTACHED_TO_WORKFLOWS when a narrowing
+// (public→private, or public→teams) hit a skill referenced by a workflow. With
+// workflows retired and invisible the user had no surface on which to detach
+// anything, so the error named a feature they cannot see and offered a remedy
+// they cannot perform. The check short-circuits; the `workflow_skills` rows are
+// untouched.
+
+describe("updateSkill sharing narrowing — attachments no longer block", () => {
+  it("narrows to private even when the skill is attached to workflows", async () => {
+    mockRepo.findSkillBySlug.mockResolvedValue(
+      skill({ id: "s-1", visibility: "public", accessMode: "workspace" })
+    );
+    mockRepo.updateSkillRow.mockResolvedValue(
+      skill({ id: "s-1", visibility: "private" })
+    );
+    mockRepo.listSkillUsedBy.mockResolvedValue({
+      workflows: [{ id: "w-1", name: "Workspace upkeep" }],
+    });
+
+    const saved = await updateSkill(ctx(), "skill-x", { visibility: "private" });
+
+    expect(saved.visibility).toBe("private");
+    expect(mockRepo.updateSkillRow).toHaveBeenCalledTimes(1);
+    // The attachment lookup isn't even consulted on the write path any more.
+    expect(mockRepo.listSkillUsedBy).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
+import { SkeletonBar } from "@/shared/ui/skeleton";
 import { KnowledgeApiError } from "../client/api";
 
 /**
@@ -13,21 +14,23 @@ import { KnowledgeApiError } from "../client/api";
 /**
  * Placeholder shown in the editor column while the per-entry body fetch
  * is in flight. Mirrors the editor's geometry (`mx-auto … max-w-3xl
- * px-6`) and the route loader's paragraph-bar treatment so the swap to
- * real content is seamless. A 0%-width entry renders as a paragraph gap.
+ * px-6`) so the swap to real content is seamless. A 0%-width entry
+ * renders as a paragraph gap.
+ *
+ * The bars come from the shared kit (`SkeletonBar`) — this file used to
+ * hand-roll `animate-pulse` + a surface tint, the local clone
+ * `shared/ui/skeleton.tsx` and DESIGN-SYSTEM forbid.
  */
 export function DocBodySkeleton() {
   return (
     <div
       className="mx-auto w-full max-w-3xl px-6 pt-5 flex flex-col gap-2.5"
-      aria-hidden
+      aria-busy="true"
+      aria-live="polite"
     >
+      <span className="sr-only">Loading document</span>
       {DOC_SKELETON_LINE_WIDTHS.map((w, i) => (
-        <div
-          key={i}
-          className="h-3.5 rounded bg-surface-raised-3 animate-pulse"
-          style={{ width: w }}
-        />
+        <SkeletonBar key={i} h={14} w={w} />
       ))}
     </div>
   );

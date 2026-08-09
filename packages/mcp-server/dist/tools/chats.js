@@ -12,6 +12,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerChatTools = registerChatTools;
 const zod_1 = require("zod");
+const delete_policy_js_1 = require("../delete-policy.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const chats_render_1 = require("./chats-render");
@@ -66,19 +67,18 @@ const CHATS_DESCRIPTION = `The user's chat archive — exported conversation rec
 - "export" — save the current (or a finished) conversation into the archive. Requires: title, messages (array of {role: "user"|"agent", summary, verbatim?}). Strongly recommended: client_session_id (stable session id — makes re-export update instead of duplicate), overview, deliverables, learnings, session_date, source, project, folder. Read op="guide" before your first export: summarize per message, verbatim only on explicit request.
 - "append" — add messages to an already-exported chat (mid-session incremental export). Requires: chat_id, messages.
 - "update" — update a chat's header (title, overview, project, session_date, deliverables, learnings, folder, pinned) or share/unshare it (visibility). Owner-only. Requires: chat_id plus the fields to change. NOTE: a chat filed in a folder inherits the folder's sharing — moving it into a folder re-scopes it, and setting visibility on a filed chat is rejected (unfile first or use op="update_folder").
-- "restore" — restore a soft-deleted chat from the trash (recovery, not deletion). Owner-only. Requires: chat_id (from op="list_trash").
-- "list" — chats the user can read (their own, workspace-shared ones, and team-shared ones granted to a team they are on), newest first, with id/title/date/source/visibility/owner. On the FREE PLAN a 90-day history window hides older chats from this listing — nothing is deleted, and the result says so whenever any are hidden. Soft-deleted chats are in op="list_trash". Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive filter on TITLE and OVERVIEW only — transcripts are not searched, and neither is the archive by dopl_search).
+- "list" — chats the user can read (their own, workspace-shared ones, and team-shared ones granted to a team they are on), newest first, with id/title/date/source/visibility/owner. On the FREE PLAN a 90-day history window hides older chats from this listing — nothing is deleted, and the result says so whenever any are hidden. Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive filter on TITLE and OVERVIEW only — transcripts are not searched, and neither is the archive by dopl_search).
 - "get" — read one chat in full: header, deliverables, learnings, and the summarized transcript. Requires: chat_id. Use this to pull past-session context the user references.
-- "list_trash" — list the caller's soft-deleted chats (newest-trashed first) with id/title/date and when each was deleted, so you can pick one to op="restore".
 - "folders" — list the user's chat folders with their sharing scope.
 - "create_folder" — create a chat folder (private by default). Requires: name.
 - "update_folder" — rename a folder and/or change its sharing (visibility "private"|"public" = whole workspace). Changing sharing re-scopes EVERY chat in the folder — confirm with the user first. Team-scoped folder sharing is web-UI only. Requires: folder_id plus name and/or visibility.
 - "guide" — the export etiquette guide (message style, header discipline, idempotency, privacy). Read before your first export of a session.
 
-Delete lives in the separate \`dopl_chats_admin\` tool; it is now a recoverable soft-delete — recover with op="restore" (find the chat via op="list_trash").`;
-const CHATS_ADMIN_DESCRIPTION = `Chat-archive delete — separated from \`dopl_chats\` on purpose. Delete is a SOFT delete: the chat stops appearing in list/get but stays restorable from trash, so this is recoverable, not permanent. Confirm with the user before calling. Set \`op\` to one of:
-- "delete" — soft-delete a chat and its transcript (owner-only). It disappears from list/get but stays restorable — recover with \`dopl_chats\` op="restore" (find it via op="list_trash"). Requires: chat_id.
-- "delete_folder" — delete a chat folder. Chats inside survive and become unfiled. Requires: folder_id.`;
+Deleting is APP-ONLY and permanent — there is no trash and nothing to restore. \`dopl_chats_admin\` lists its delete ops only to refuse them; ask the user to delete an archived chat in the Dopl app.`;
+const CHATS_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
+    { op: "delete", effect: "would have deleted a chat and its transcript" },
+    { op: "delete_folder", effect: "would have deleted a chat folder (leaving its chats unfiled)" },
+], `Reach for instead: \`dopl_chats\` op=update to retitle or re-file a chat, op=update_folder to rename a folder. If an archived chat genuinely has to go, ask the user to delete it in the Dopl app.`);
 const MessageShape = zod_1.z.object({
     role: zod_1.z.enum(["user", "agent"]),
     summary: zod_1.z.string().min(1).max(4000),
@@ -91,9 +91,9 @@ const DeliverableShape = zod_1.z.object({
 function registerChatTools(register, client) {
     register("dopl_chats", CHATS_DESCRIPTION, {
         op: zod_1.z
-            .enum(["export", "append", "update", "restore", "list", "get", "list_trash", "folders", "create_folder", "update_folder", "guide"])
+            .enum(["export", "append", "update", "list", "get", "folders", "create_folder", "update_folder", "guide"])
             .describe("Operation to perform."),
-        chat_id: zod_1.z.string().optional().describe("Chat id. Required for append, update, get, restore."),
+        chat_id: zod_1.z.string().optional().describe("Chat id. Required for append, update, get."),
         title: zod_1.z.string().min(1).max(200).optional().describe("op=export (required) / op=update: chat title — specific enough to disambiguate later."),
         overview: zod_1.z.string().max(2000).optional().describe("op=export / op=update: one-paragraph framing of what the session was about."),
         messages: zod_1.z.array(MessageShape).max(500).optional().describe("op=export (required) / op=append: ordered transcript entries. Summarize each message concisely; verbatim only when the user asked."),
@@ -141,16 +141,8 @@ function registerChatTools(register, client) {
                     return miss;
                 return opUpdate(client, args.chat_id, args);
             }
-            case "restore": {
-                const miss = (0, respond_1.missingParams)("restore", args, ["chat_id"]);
-                if (miss)
-                    return miss;
-                return opRestore(client, args.chat_id);
-            }
             case "list":
                 return opList(client, args.scope ?? "all", args.query);
-            case "list_trash":
-                return opListTrash(client);
             case "get": {
                 const miss = (0, respond_1.missingParams)("get", args, ["chat_id"]);
                 if (miss)
@@ -191,7 +183,7 @@ function registerChatTools(register, client) {
                     return miss;
                 try {
                     await client.deleteChat(args.chat_id);
-                    return (0, respond_1.ok)(`Soft-deleted chat \`${args.chat_id}\`. It's hidden from list/get but still restorable — recover with dopl_chats(op="restore", chat_id="${args.chat_id}"), or list recoverable chats with dopl_chats(op="list_trash").`);
+                    return (0, respond_1.ok)(`Deleted chat \`${args.chat_id}\` and its transcript. Permanent — there is nothing to restore it from.`);
                 }
                 catch (e) {
                     return (0, respond_1.err)(`Delete failed: ${(0, chats_render_1.failureDetail)(e)}`);
@@ -274,29 +266,6 @@ async function opUpdate(client, chatId, args) {
     catch (e) {
         return (0, respond_1.err)(`Update failed: ${(0, chats_render_1.failureDetail)(e)}`);
     }
-}
-async function opRestore(client, chatId) {
-    try {
-        const chat = await client.restoreChat(chatId);
-        return (0, respond_1.ok)(`Restored ${(0, chats_render_1.chatTitle)(chat.title)} (\`${chat.id}\`) — ${chat.visibility}.`);
-    }
-    catch (e) {
-        return (0, respond_1.err)(`Restore failed: ${(0, chats_render_1.failureDetail)(e)}. If nothing matches, the chat may already be active — check dopl_chats(op="list_trash").`);
-    }
-}
-async function opListTrash(client) {
-    const chats = await client.listChatsTrash();
-    if (chats.length === 0) {
-        return (0, respond_1.ok)("Chat trash is empty — no soft-deleted chats to restore.");
-    }
-    const lines = [
-        `## Chat trash — ${chats.length} chat${chats.length === 1 ? "" : "s"}\n`,
-    ];
-    for (const c of chats) {
-        lines.push(`- ${(0, chats_render_1.chatTitle)(c.title)} \`${c.id}\` — ${c.sessionDate} · ${c.source} · deleted ${c.deletedAt}`);
-    }
-    lines.push(`\nRestore one with dopl_chats(op="restore", chat_id=...).`);
-    return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opList(client, scope, query) {
     const { chats: all, hiddenCount } = await client.listChats();

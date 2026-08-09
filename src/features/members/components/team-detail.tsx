@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Popover } from "@/shared/ui/popover-menu";
@@ -8,14 +8,9 @@ import { SectionBox } from "@/shared/ui/section-box";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { WorkspaceMemberView } from "../types";
-import {
-  TeamAccessConflictError,
-  addTeamMembers,
-  deleteTeam,
-  removeTeamMember,
-  setTeamGrant,
-  updateTeam,
-} from "../teams-client";
+import { TeamAccessConflictError } from "../teams-client";
+import { useAccessWrites } from "../hooks/use-access-writes";
+import { useTeamWrites } from "../hooks/use-team-writes";
 import type { ConflictState } from "./conflict-dialog";
 import { Avatar } from "./member-bits";
 import { AccessLevelControl, ScopePill, TeamColorTile } from "./team-bits";
@@ -26,7 +21,7 @@ interface Props {
   members: WorkspaceMemberView[];
   resources: AccessMatrixResource[];
   canManage: boolean;
-  onTeamsChanged: () => void;
+  /** Clears the pane's selection after the team leaves the list. */
   onDeleted: () => void;
   openConflict: (conflict: ConflictState) => void;
 }
@@ -44,22 +39,32 @@ export function TeamDetail({
   members,
   resources,
   canManage,
-  onTeamsChanged,
   onDeleted,
   openConflict,
 }: Props) {
+  const teamWrites = useTeamWrites(workspaceSlug);
+  const accessWrites = useAccessWrites(workspaceSlug);
+  const busy = teamWrites.pending || accessWrites.pending;
   const [name, setName] = useState(team.name);
   const [description, setDescription] = useState(team.description ?? "");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] =
+    useState<WorkspaceMemberView | null>(null);
 
-  useEffect(() => {
-    setName(team.name);
-    setDescription(team.description ?? "");
-    setError(null);
-  }, [team.id, team.name, team.description]);
+  /**
+   * NO PROP-SYNC EFFECT. There used to be one, mirroring `team.name` /
+   * `team.description` back into these two inputs on every change of either.
+   * It existed because the write did not update the cached team until a
+   * refetch landed, so the pane needed to catch up afterwards — and it is
+   * exactly the cascading-render shape `react-hooks/set-state-in-effect`
+   * rejects. Two things replace it: `members-view` renders this pane with
+   * `key={team.id}`, so switching teams REMOUNTS and the `useState`
+   * initialisers are the sync; and the rename now patches the teams cache in
+   * `onMutate`, so the crumb and the list row follow the input rather than the
+   * input having to be corrected back to them.
+   */
 
   const teamMembers = useMemo(
     () => members.filter((m) => team.memberIds.includes(m.userId)),
@@ -70,36 +75,52 @@ export function TeamDetail({
     [members, team.memberIds]
   );
   const kbResources = resources.filter((r) => r.resourceType === "knowledge_base");
-  const wfResources = resources.filter((r) => r.resourceType === "workflow");
+  const skillResources = resources.filter((r) => r.resourceType === "skill");
 
   const grantFor = (type: TeamResourceType, id: string): AccessLevel | null =>
     team.grants.find((g) => g.resourceType === type && g.resourceId === id)?.level ??
     null;
 
-  async function mutate(fn: () => Promise<void>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-      onTeamsChanged();
-    } catch (err) {
-      if (err instanceof TeamAccessConflictError) throw err;
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setBusy(false);
-    }
-  }
+  /** Every write reports into the pane's one error line. */
+  const failed = (err: unknown) =>
+    setError(err instanceof Error ? err.message : "Something went wrong");
 
+  /**
+   * A grant flips the segment on the click (the teams cache carries the level),
+   * and a 409 rolls it back before the ConflictDialog opens — so the retry
+   * re-applies the patch cleanly instead of stacking a second edit on the first.
+   */
   function changeGrant(type: TeamResourceType, id: string, level: AccessLevel | null) {
+    setError(null);
     const run = (autoGrant: boolean) =>
-      mutate(() => setTeamGrant(workspaceSlug, team.id, type, id, level, { autoGrant }));
-    void run(false).catch((err) => {
+      accessWrites.setGrant.mutateAsync({
+        teamId: team.id,
+        resourceType: type,
+        resourceId: id,
+        memberIds: team.memberIds,
+        level,
+        autoGrant,
+      });
+    void run(false).catch((err: unknown) => {
       if (err instanceof TeamAccessConflictError) {
-        openConflict({ details: err.details, retry: () => run(true) });
+        openConflict({
+          details: err.details,
+          retry: async () => {
+            await run(true).catch(failed);
+          },
+        });
+        return;
       }
+      failed(err);
     });
   }
 
+  /**
+   * Rename commits on blur, and the name is read back by the crumb, the left
+   * list row and this input's own reset effect — all three off the teams cache,
+   * which the mutation patches before the PATCH leaves. It used to revert to
+   * the old name for the whole round trip.
+   */
   async function commitName() {
     if (!canManage) return;
     const next = name.trim();
@@ -107,16 +128,36 @@ export function TeamDetail({
       setName(team.name);
       return;
     }
-    await mutate(() => updateTeam(workspaceSlug, team.id, { name: next }));
+    setError(null);
+    // Normalise the field to what was actually sent, so the input and the
+    // crumb it now drives cannot disagree by a trimmed space.
+    setName(next);
+    await teamWrites.update
+      .mutateAsync({ teamId: team.id, patch: { name: next } })
+      .catch((err: unknown) => {
+        // THE INPUT FOLLOWS THE ROLLBACK. The layer restores the cached team
+        // verbatim on a refusal, so the crumb and the list row go back to the
+        // old name — but this field is local state and there is no prop-sync
+        // effect to correct it (see above), and the pane only remounts on a
+        // team switch. Left alone it would keep showing the rejected text as
+        // if it had been saved.
+        setName(team.name);
+        failed(err);
+      });
   }
 
   async function commitDescription() {
     if (!canManage) return;
     const next = description.trim();
     if (next === (team.description ?? "")) return;
-    await mutate(() =>
-      updateTeam(workspaceSlug, team.id, { description: next || null })
-    );
+    setError(null);
+    setDescription(next);
+    await teamWrites.update
+      .mutateAsync({ teamId: team.id, patch: { description: next || null } })
+      .catch((err: unknown) => {
+        setDescription(team.description ?? "");
+        failed(err);
+      });
   }
 
   return (
@@ -215,9 +256,10 @@ export function TeamDetail({
                         disabled={busy}
                         onClick={() => {
                           setPickerOpen(false);
-                          void mutate(() =>
-                            addTeamMembers(workspaceSlug, team.id, [m.userId])
-                          );
+                          setError(null);
+                          void teamWrites.addMembers
+                            .mutateAsync({ team, userIds: [m.userId] })
+                            .catch(failed);
                         }}
                         className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-small text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
                       >
@@ -248,11 +290,7 @@ export function TeamDetail({
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() =>
-                          void mutate(() =>
-                            removeTeamMember(workspaceSlug, team.id, m.userId)
-                          )
-                        }
+                        onClick={() => setConfirmRemoveMember(m)}
                         className="shrink-0 cursor-pointer text-micro font-semibold uppercase tracking-wide text-text-muted transition-colors hover:text-danger disabled:opacity-60"
                       >
                         Remove
@@ -264,6 +302,10 @@ export function TeamDetail({
             )}
           </SectionBox>
 
+          {/* Knowledge bases and skills are the grantable resources this pane
+              renders — both are in the access-matrix payload and both accept a
+              team grant. The workflow section is retired with the feature (D7):
+              workflow grants stay valid in the DB, nothing draws them. */}
           <GrantBox
             label="Knowledge base access"
             resources={kbResources}
@@ -273,8 +315,8 @@ export function TeamDetail({
             onChange={changeGrant}
           />
           <GrantBox
-            label="Workflow access"
-            resources={wfResources}
+            label="Skill access"
+            resources={skillResources}
             grantFor={grantFor}
             canManage={canManage}
             busy={busy}
@@ -284,6 +326,28 @@ export function TeamDetail({
       </div>
 
       <ConfirmDialog
+        open={confirmRemoveMember !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemoveMember(null);
+        }}
+        title="Remove from team?"
+        description={`${confirmRemoveMember?.displayName || confirmRemoveMember?.email || "This member"} will leave ${team.name} and lose any access it granted. Re-adding them restores it.`}
+        confirmLabel="Remove"
+        destructive
+        onConfirm={async () => {
+          const m = confirmRemoveMember;
+          if (!m) return;
+          setError(null);
+          // Failures land in the pane's error line rather than throwing, so
+          // the dialog closes either way — same contract as the delete-team
+          // dialog below.
+          await teamWrites.removeMembers
+            .mutateAsync({ team, userIds: [m.userId] })
+            .catch(failed);
+        }}
+      />
+
+      <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete team?"
@@ -291,8 +355,12 @@ export function TeamDetail({
         confirmLabel="Delete"
         destructive
         onConfirm={async () => {
+          setError(null);
           try {
-            await deleteTeam(workspaceSlug, team.id);
+            await teamWrites.remove.mutateAsync({
+              teamId: team.id,
+              memberIds: team.memberIds,
+            });
             onDeleted();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to delete");

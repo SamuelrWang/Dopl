@@ -1,7 +1,6 @@
 /**
  * `dopl_kb` non-destructive WRITE op handlers: create/update/set_visibility
- * on bases, create/move folders, write/move entries, and the restore
- * (recovery) ops. Every write maps @dopl/client errors — conflict (412),
+ * on bases, create/move folders, write/move entries. Every write maps @dopl/client errors — conflict (412),
  * already-exists (409), agent-write-denied (403), and validation (400) —
  * to actionable tool messages. Routed from the registrar in knowledge.ts.
  */
@@ -85,40 +84,6 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
   }
   return ok(
     `Published knowledge base ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
-  );
-}
-
-export async function opRestoreBase(client: DoplClient, ref: string): Promise<ToolResponse> {
-  // Audit fix #30: was 3 round-trips (listKbBases → listKbTrash →
-  // restoreKbBase). Drop the listKbBases call — if the user
-  // mistakenly tries to restore an already-active base it'll just
-  // fall into the "not in trash" error below, which is clearer
-  // anyway ("No deleted base matches" vs "Base is already active"
-  // both correctly tell them not to retry).
-  //
-  // The restore endpoint takes a UUID, not a slug. Look up the
-  // trashed base by slug or id via workspace-wide trash listing.
-  const trash = await client.listKbTrash();
-  const trashed = trash.bases.find(
-    (b) => b.slug === ref || b.id === ref
-  );
-  if (!trashed) {
-    return err(
-      `No deleted base matches ${inlineOr(ref, NO_NAME)}. Use \`dopl_kb(op='list_trash')\` to see available restores; or the base may already be active.`
-    );
-  }
-  let restored;
-  try {
-    restored = await client.restoreKbBase(trashed.id);
-  } catch (e) {
-    // F-10b: read-only-to-agents base — clean message, not a raw
-    // AGENT_WRITE_DISABLED dump.
-    const denied = agentWriteDenied(e);
-    if (denied) return denied;
-    throw e;
-  }
-  return ok(
-    `Restored ${inlineOr(restored.name, NO_NAME)} (slug: \`${restored.slug}\`).`
   );
 }
 
@@ -229,34 +194,4 @@ export async function opMoveFile(client: DoplClient, ref: string, from_path: str
     );
   }
   return ok(`Entry moved: ${inlineOr(from_path, NO_PATH)} → ${inlineOr(to_path, NO_PATH)}.`);
-}
-
-export async function opRestoreFolder(client: DoplClient, folder_id: string): Promise<ToolResponse> {
-  let folder;
-  try {
-    folder = await client.restoreKbFolder(folder_id);
-  } catch (e) {
-    if (isAlreadyExists(e)) {
-      return err(
-        `Can't restore this folder — an ancestor folder is still in the trash. Restore the ancestor first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`
-      );
-    }
-    throw e;
-  }
-  return ok(`Restored folder ${inlineOr(folder.name, NO_NAME)} (id: \`${folder.id}\`).`);
-}
-
-export async function opRestoreFile(client: DoplClient, entry_id: string): Promise<ToolResponse> {
-  let entry;
-  try {
-    entry = await client.restoreKbEntry(entry_id);
-  } catch (e) {
-    if (isAlreadyExists(e)) {
-      return err(
-        `Can't restore this entry — its parent folder is still in the trash. Restore the folder first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`
-      );
-    }
-    throw e;
-  }
-  return ok(`Restored entry ${inlineOr(entry.title, NO_NAME)} (id: \`${entry.id}\`).`);
 }

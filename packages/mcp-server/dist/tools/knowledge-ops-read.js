@@ -1,7 +1,7 @@
 "use strict";
 /**
  * `dopl_kb` READ op handlers: list_bases, get_tree, list_dir, read_file,
- * list_trash, search. All non-mutating — they resolve a base (or the
+ * search. All non-mutating — they resolve a base (or the
  * workspace) and render metadata / bodies for the agent. Routed from the
  * registrar in knowledge.ts.
  */
@@ -10,7 +10,6 @@ exports.opListBases = opListBases;
 exports.opGetTree = opGetTree;
 exports.opListDir = opListDir;
 exports.opReadFile = opReadFile;
-exports.opListTrash = opListTrash;
 exports.opSearch = opSearch;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
@@ -31,7 +30,11 @@ const knowledge_shared_1 = require("./knowledge-shared");
  *
  *   - THE ENTRY BODY is not touched. It is the document the user wrote for the
  *     agent to read and act on; stripping its markdown would break the product.
- *     `read_file` renders it below a `---` rule, as itself.
+ *     `read_file` renders it below a `---` rule, as itself — but, since 2026-08-08,
+ *     under {@link UNTRUSTED_ENTRY_BODY_HEADER} when the document is ANOTHER
+ *     MEMBER'S. Rendering it as itself was never the gap; rendering it as itself
+ *     with nothing saying whose it was is. See that constant for the shared- vs.
+ *     solo-workspace distinction F-101 recorded on only one of the two surfaces.
  */
 const NO_NAME = "`(unnamed)`";
 /**
@@ -39,8 +42,8 @@ const NO_NAME = "`(unnamed)`";
  *
  * `listBases` is filtered twice server-side before a row reaches us
  * (`canSeeBase` drops another member's private bases; `filterTeamVisibleBases`
- * drops teams-mode bases with no grant, and FAILS CLOSED to an empty list),
- * and trashed bases are excluded unconditionally. None of that left a trace in
+ * drops teams-mode bases with no grant, and FAILS CLOSED to an empty list).
+ * Neither left a trace in
  * the output, so "## Knowledge bases" over four rows read as the workspace
  * having four — the same inference that had two agents escalate a nonexistent
  * `dopl_map` bug after comparing "10 KBs" with "4 KBs".
@@ -48,7 +51,7 @@ const NO_NAME = "`(unnamed)`";
  * Names the FILTERS, not a hidden count: counting what you were not shown is a
  * second query on every list call.
  */
-const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases, bases scoped to a team you have no grant on, and trashed bases (op="list_trash") are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases and bases scoped to a team you have no grant on are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
 async function opListBases(client) {
     const bases = await client.listKbBases();
     if (bases.length === 0)
@@ -119,10 +122,9 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     }
     else {
         // The paging notice above only fires when there IS a next page, so the
-        // complete case said nothing at all about its own scope — and a tree with
-        // no trashed items looks identical to one whose deletions were hidden.
-        // Folders genuinely ship in full; say which half is which.
-        lines.push("", `_Folders complete; entries complete for this base. Trashed folders and entries are excluded — op="list_trash" lists what is recoverable._`);
+        // complete case said nothing at all about its own scope. Both halves
+        // genuinely ship in full here; say so rather than leaving it implied.
+        lines.push("", `_Folders complete; entries complete for this base._`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -167,12 +169,21 @@ async function opListDir(client, ref, path) {
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opReadFile(client, ref, path) {
+async function opReadFile(client, ref, path, 
+// The caller's own user id (`CallerIdentity.userId`), or null when auth could
+// not resolve one. Only the FRAMING reads it — nothing about which entries are
+// readable is decided here, that is the server's job and it already ran.
+callerUserId = null) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
         return base;
     const entry = await client.readKbFileByPath(base.id, path);
     const lines = [
+        // FRAMING FIRST, and only for a document this caller did not write. A header
+        // after the body is read after the injected instruction has been read.
+        ...((0, narration_1.isForeignAuthored)(entry, callerUserId)
+            ? [knowledge_shared_1.UNTRUSTED_ENTRY_BODY_HEADER, ""]
+            : []),
         // The title is a heading; the BODY below the `---` is the document itself
         // and is deliberately untouched.
         `# ${(0, narration_1.inlineOr)(entry.title, NO_NAME)}`,
@@ -185,44 +196,6 @@ async function opReadFile(client, ref, path) {
     ];
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opListTrash(client, ref) {
-    let baseId;
-    if (ref) {
-        const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-        if ((0, knowledge_shared_1.isErr)(base))
-            return base;
-        baseId = base.id;
-    }
-    const trash = await client.listKbTrash(baseId);
-    const total = trash.bases.length + trash.folders.length + trash.entries.length;
-    // "Trash is empty" was an assertion about the workspace made from a
-    // visibility-filtered read: trash is scoped by the same `canSeeBase` rule as
-    // op="list_bases", and admins resolve teams-mode bases a member cannot.
-    if (total === 0)
-        return (0, respond_1.ok)(`Nothing in trash that you can see. ${TRASH_SCOPE_NOTE}`);
-    const lines = [`## Trash (${total} item${total === 1 ? "" : "s"})\n`];
-    if (trash.bases.length > 0) {
-        lines.push("### Bases");
-        for (const b of trash.bases)
-            lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} (slug: \`${b.slug}\`) — deleted ${b.deletedAt}`);
-        lines.push("");
-    }
-    if (trash.folders.length > 0) {
-        lines.push("### Folders");
-        for (const f of trash.folders)
-            lines.push(`- ${(0, narration_1.inlineOr)(f.name, NO_NAME)} (id: \`${f.id}\`) — deleted ${f.deletedAt}`);
-        lines.push("");
-    }
-    if (trash.entries.length > 0) {
-        lines.push("### Entries");
-        for (const e of trash.entries)
-            lines.push(`- ${(0, narration_1.inlineOr)(e.title, NO_NAME)} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
-    }
-    lines.push("", TRASH_SCOPE_NOTE);
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-/** Trash is visibility-scoped exactly like `list_bases`, and said nothing about it. */
-const TRASH_SCOPE_NOTE = `_Scoped like op="list_bases": deleted items in bases you cannot read are not listed, and admins see more here than members do._`;
 async function opSearch(client, query, base, limit) {
     // F-16: `base` accepts a slug OR a UUID, like every other op. Resolve it
     // the same way the other ops do (the search endpoint only narrows by

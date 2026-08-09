@@ -3,7 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
-import { WORKSPACE_PAGES, routes } from "#/routes";
+import { WORKSPACE_HOME_PATH, WORKSPACE_PAGES, routes } from "#/routes";
 
 // The layout is now the real AppShellLayout, which fetches the workspace
 // list + segment resolution on mount — same transport mock as its own test.
@@ -25,6 +25,22 @@ const ok = (body: unknown) => ({ status: 200, statusText: "OK", hasBody: true, b
 
 beforeEach(() => {
   sendRequest.mockImplementation(({ path }: { path: string }) => {
+    // The shell's one read (P0-2) — it carries what resolve/me/my-access
+    // used to answer in three serial hops.
+    if (path === "/api/boot") {
+      return Promise.resolve(
+        ok({
+          isOnboarded: true,
+          surveyCompleted: true,
+          userId: "user-1",
+          workspace: WORKSPACE,
+          segment: "acme-ab12cd",
+          needsRedirect: false,
+          role: "owner",
+          myAccess: { defaultLevel: "edit", overrides: [] },
+        })
+      );
+    }
     if (path.startsWith("/api/workspaces/resolve")) {
       return Promise.resolve(
         ok({ workspace: WORKSPACE, canonical: "acme-ab12cd", needsRedirect: false })
@@ -65,8 +81,10 @@ describe("app routes", () => {
   });
 
   it("redirects the workspace root to the home page", async () => {
-    // Canvas is a real page now — what the root route owes is the
-    // redirect; the page's rendering belongs to its own suite.
+    // What the root route owes is the redirect, and it owes it to whatever
+    // `WORKSPACE_HOME_PATH` names — six funnels (index, boot, workspace
+    // switch, workspace create, ⌘⇧H, auth change) land on it, so a wrong
+    // value here is the app booting into "Not found".
     const router = createMemoryRouter(routes, { initialEntries: ["/acme-ab12cd"] });
     render(
       <QueryClientProvider client={createQueryClient()}>
@@ -74,8 +92,20 @@ describe("app routes", () => {
       </QueryClientProvider>
     );
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/acme-ab12cd/canvas")
+      expect(router.state.location.pathname).toBe(`/acme-ab12cd/${WORKSPACE_HOME_PATH}`)
     );
+    expect(WORKSPACE_HOME_PATH).toBe("overview");
+  });
+
+  it("has no route for the retired pages", () => {
+    // canvas / canvas2 / workflows / configuration are hidden, not deleted —
+    // the page components still exist, so the only thing standing between a
+    // user and them is this table (docs/RETIREMENT-UNWIRING-PLAN.md §3.1).
+    const paths = WORKSPACE_PAGES.map((page) => page.path);
+    for (const retired of ["canvas", "canvas2", "workflows", "configuration"]) {
+      expect(paths).not.toContain(retired);
+      expect(paths.some((p) => p.startsWith(`${retired}/`))).toBe(false);
+    }
   });
 
   it("resolves a detail route with its param", () => {
@@ -93,21 +123,16 @@ describe("app routes", () => {
   it("mirrors the web app's page list", () => {
     expect(WORKSPACE_PAGES.map((page) => page.path)).toEqual([
       "overview",
-      "canvas",
-      "canvas2",
       "ontology",
       "ontology/:clusterSlug",
       "knowledge",
       "knowledge/:kbSlug",
       "skills",
       "skills/:skillSlug",
-      "workflows",
-      "workflows/:workflowSlug",
       "chats",
       "channels",
       "members",
       "settings",
-      "configuration",
     ]);
   });
 });

@@ -5,7 +5,8 @@
  * workspace.
  *
  * Cleans up after itself — creates everything under a "smoke-paths-<ts>"
- * scratch base and soft-deletes the base at the end.
+ * scratch base and hard-deletes the base at the end (deletes have been
+ * permanent since 2026-08-07 — nothing lands in a trash).
  *
  * Usage:
  *   NODE_OPTIONS='--conditions=react-server' npx tsx scripts/smoke-knowledge-paths.ts
@@ -36,7 +37,7 @@ async function main() {
   const {
     buildKnowledgeContext,
     createBase,
-    softDeleteBase,
+    deleteBase,
     writeFileByPath,
     readFileByPath,
     createFolderByPath,
@@ -150,8 +151,8 @@ async function main() {
     if (stillExists) throw new Error("delete didn't take effect");
     console.log(`✅ deleteByPath`);
   } finally {
-    await softDeleteBase(ctx, base.id);
-    console.log(`✅ cleanup: scratch base soft-deleted`);
+    await deleteBase(ctx, base.id);
+    console.log(`✅ cleanup: scratch base deleted`);
   }
 
   console.log(`\nAll Item 4 path-resolver checks passed.`);

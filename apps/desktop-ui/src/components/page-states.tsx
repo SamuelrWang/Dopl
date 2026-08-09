@@ -1,4 +1,5 @@
 import { useRouteError } from "react-router";
+import { PageShellSkeleton, TwoPaneListSkeleton } from "@/shared/ui/skeleton";
 import { ApiError } from "#/lib/api";
 
 /**
@@ -9,20 +10,45 @@ import { ApiError } from "#/lib/api";
  *   isPending → <PageLoading />
  *   error     → <PageError error={error} onRetry={refetch} />
  *
- * `PageLoading` is deliberately quiet rather than a skeleton: once the main
- * process serves reads from its local cache (Phase 2/3), a first paint that
- * flashes a skeleton is the bug, not the feature.
+ * `PageLoading` renders a SHAPE, not a line of text.
+ *
+ * It used to be one grey `<span>`, and the comment here justified that with a
+ * main-process read cache that would make a skeleton flash "the bug, not the
+ * feature". That cache was never built — the SQLite half of Phase 2/3 is still
+ * unwritten — so every launch was a genuine cold fetch over IPC and the
+ * justification described infrastructure that did not exist. A cold launch of
+ * Channels crosses FIVE of these states back to back (boot ×3, the shell, then
+ * the page's own access gate); as bare text that was five flickers of grey
+ * copy in five different positions.
+ *
+ * The IndexedDB persister that DID land (`#/lib/query-client`
+ * `createQueryPersister`) does not bring the old argument back, for two
+ * reasons. A restored snapshot means the pending state is never ENTERED — a
+ * skeleton that doesn't render costs nothing — and restore is itself async and
+ * bounded (`maxAge`, `buster`, success-only dehydration), so a first launch, a
+ * bumped buster, a day-old cache and a runtime with no IndexedDB all still
+ * land here. The right lever for a warm start is to skip the pending state,
+ * never to make it emptier.
+ *
+ * Rendering ONE `.page-float` skeleton across the whole chain is the point:
+ * five sequential pending states read as a single steady surface whose
+ * contents resolve, instead of five separate flashes.
+ *
+ * `variant` picks the shape:
+ *   "page"     — the generic single-surface page (default; also the boot chain)
+ *   "two-pane" — list + detail, for channels/chats/knowledge/skills/members
  */
-
-export function PageLoading({ label = "Loading" }: { label?: string }) {
-  return (
-    <div
-      className="flex flex-1 items-center justify-center"
-      role="status"
-      aria-live="polite"
-    >
-      <span className="text-caption text-text-muted">{label}…</span>
-    </div>
+export function PageLoading({
+  label = "Loading",
+  variant = "page",
+}: {
+  label?: string;
+  variant?: "page" | "two-pane";
+}) {
+  return variant === "two-pane" ? (
+    <TwoPaneListSkeleton label={label} />
+  ) : (
+    <PageShellSkeleton label={label} />
   );
 }
 

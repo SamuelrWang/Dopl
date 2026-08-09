@@ -233,11 +233,21 @@ function classify(m, entry, myId) {
   // you — a group channel, and a DM post that carried an explicit `intent` — and
   // the consent gate remains the belt in front of both.
   if (m.authorKind === 'agent') return isMember ? 'fyi' : 'ignore';
-  // Implicit 1:1 trigger (USER authors only) — but an explicit per-channel mute
-  // ('none') wins over an IMPLICIT target: the sender never addressed us, and
-  // the user asked for silence. Explicitly addressed requests above are never
-  // suppressed.
-  const scope = (entry.channel && entry.channel.myNotifyScope) || 'all';
+  // Implicit 1:1 trigger (USER authors only), and NOTHING SUPPRESSES IT.
+  //
+  // 2026-08-08 (F-170) — this branch used to read a per-channel notify scope and
+  // return 'ignore' when it was 'none': `const scope = (entry.channel &&
+  // entry.channel.myNotifyScope) || 'all'` and then `scope === 'none' ? 'ignore'
+  // : 'trigger'`. Notify scope was removed from the product because two of its
+  // three options were lies — 'addressed' was compared nowhere, and 'none'
+  // ("Muted") never silenced an explicitly addressed request, which is most of
+  // what a channel carries. That read was the ONLY thing in the app that could
+  // stop an implicit two-member trigger, so removing it is a REAL BEHAVIOUR
+  // CHANGE and not a cleanup: a two-member channel or DM now always prompts on
+  // an unaddressed user-authored message, with no per-channel opt-out anywhere.
+  // If a way to be quiet in one channel is wanted back, it has to be designed —
+  // do NOT reinstate the old column, whose semantics are the bug.
+  //
   // D2 GATED THIS ON `entry.teamAgents` — the implicit 2-member trigger was DISABLED while
   // this operator had summoned agents in the room, because the room then held several
   // workers and an unaddressed message that spawned a session was the "everyone answers at
@@ -245,7 +255,7 @@ function classify(m, entry, myId) {
   // rollback §1), so a two-member channel holds one worker per side again and the implicit
   // trigger is the whole rule, as it was before D2. The tri-state that armed it (FIX B1: a
   // durable seed plus `entry.rosterKnown`) went with the roster read it hedged against.
-  if (knownTwo && isMember) return scope === 'none' ? 'ignore' : 'trigger';
+  if (knownTwo && isMember) return 'trigger';
   return isMember ? 'fyi' : 'ignore';
 }
 

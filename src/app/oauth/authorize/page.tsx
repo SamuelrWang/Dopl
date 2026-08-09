@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { getClient } from "@/shared/auth/mcp-oauth";
+import { userHasPriorGrant } from "@/shared/auth/oauth-client-verification";
+import { DEVICE_CLIENT_ID } from "@/shared/auth/mcp-credential";
 import { AuthSplitLayout } from "@/shared/layout/auth-split";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +80,16 @@ export default async function AuthorizePage({
     scope.trim() === "" || scope.split(/\s+/).includes("dopl.write");
   const clientLabel = client?.client_name || "An MCP client";
 
+  // VERIFICATION (anti-phishing). `client_name` is attacker-controllable — DCR
+  // is an open endpoint, so anyone can register a client called "Dopl Official
+  // Desktop" and send this /authorize link to a victim. A client is treated as
+  // verified only if it's the reserved first-party device client, or the user
+  // has connected THIS client before (a prior `mcp_tokens` row). A first-time
+  // client is marked unverified and its self-reported name is framed as a
+  // claim, never rendered as a trusted first-party label.
+  const verified =
+    clientId === DEVICE_CLIENT_ID || (await userHasPriorGrant(user.id, clientId));
+
   return (
     <Screen
       title="Connect to Dopl"
@@ -95,11 +107,38 @@ export default async function AuthorizePage({
           <input type="hidden" name="scope" value={scope} />
           <input type="hidden" name="state" value={state} />
 
-          <p className="text-[14px] leading-relaxed text-[#5a5a5a]">
-            <span className="font-semibold text-[#181818]">{clientLabel}</span>{" "}
-            wants to access your Dopl workspaces as{" "}
-            <span className="font-medium text-[#181818]">{user.email}</span>.
-          </p>
+          {verified ? (
+            <p className="text-[14px] leading-relaxed text-[#5a5a5a]">
+              <span className="font-semibold text-[#181818]">{clientLabel}</span>{" "}
+              wants to access your Dopl workspaces as{" "}
+              <span className="font-medium text-[#181818]">{user.email}</span>.
+            </p>
+          ) : (
+            <>
+              <p className="text-[14px] leading-relaxed text-[#5a5a5a]">
+                An application calling itself{" "}
+                <span className="font-semibold text-[#181818]">
+                  &ldquo;{clientLabel}&rdquo;
+                </span>{" "}
+                wants to access your Dopl workspaces as{" "}
+                <span className="font-medium text-[#181818]">{user.email}</span>.
+              </p>
+              <div
+                role="alert"
+                className="mt-4 rounded-[10px] border border-[#e2b04a] bg-[#fdf6e3] px-[14px] py-3"
+              >
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#8a6d1a]">
+                  Unverified app
+                </p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[#6a5a2a]">
+                  You have not connected this app before, and Dopl cannot verify
+                  its identity. The name above is chosen by the app itself — it is
+                  not proof that it is an official Dopl application. Only approve
+                  if you started this connection yourself.
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="auth-field-3d mt-6 space-y-3.5 rounded-[10px] px-[16px] py-4">
             <div className="flex items-start gap-3">

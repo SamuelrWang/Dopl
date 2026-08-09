@@ -6,8 +6,17 @@ import {
   rotateRefreshToken,
   type IssuedTokens,
 } from "@/shared/auth/mcp-oauth";
+import { enforceOAuthIpRateLimit } from "@/shared/auth/oauth-rate-limit";
 
 export const dynamic = "force-dynamic";
+
+// Per-IP token ceiling. The auth codes / tokens here are 256-bit and single-use
+// so unlike /register this endpoint mints nothing on a bad guess (it's
+// cost-only), hence a higher bound than registration: a real client hits it on
+// the code exchange and once per hour per token on refresh, so 60/min/IP covers
+// even a busy multi-token NAT while still capping a brute-force sweep. Override
+// via env.
+const TOKEN_RPM = Number(process.env.OAUTH_TOKEN_RATE_LIMIT_RPM) || 60;
 
 /**
  * OAuth 2.1 token endpoint. Supports:
@@ -68,6 +77,13 @@ function tokenResponse(tokens: IssuedTokens) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await enforceOAuthIpRateLimit(request, {
+    bucket: "oauth-token-ip",
+    rpm: TOKEN_RPM,
+    endpoint: "POST /api/oauth/token",
+  });
+  if (limited) return limited;
+
   const params = await readParams(request);
   const grantType = params.grant_type ?? "";
 

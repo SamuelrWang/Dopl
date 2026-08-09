@@ -55,6 +55,25 @@ const SITE_TITLE = "Dopl: Supercharge Your Agent's Capabilities";
 const SITE_DESCRIPTION =
   "AI-powered knowledge base of proven agent setups, automations, and integrations. Compose and ship agent stacks faster.";
 
+/**
+ * The OpenGraph / Twitter card, pulled by every link-preview scrape (iMessage,
+ * Slack, Twitter, LinkedIn, Discord) and by nothing else.
+ *
+ * IT WAS A 1.30MB PNG (P0-4, 2026-08-07) — a 1200×630 screenshot of the landing
+ * page, which is photographic content in a format built for flat colour, at ~13×
+ * the size a card of those dimensions should be. PNG could not be fixed by
+ * recompression: `compressionLevel: 9` made it slightly LARGER, and palette
+ * quantization to 128 colours (the only setting that reached the target size)
+ * banded the sky gradient that is most of the frame. The source is fully opaque,
+ * so JPEG loses nothing real: q86, 4:4:4 chroma, mozjpeg → **100,348 bytes, a
+ * 92.3% reduction**, visually indistinguishable at card size and above.
+ *
+ * The extension change is the point of the rename, not an accident of it: JPEG is
+ * the one lossy format every scraper in that list has always accepted (WebP was
+ * 44KB and tempting, and is the thing to try when the tail of scrapers is known).
+ */
+const OG_CARD = "/img/site_thumbnail.jpg";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
@@ -74,7 +93,7 @@ export const metadata: Metadata = {
     url: SITE_URL,
     images: [
       {
-        url: "/img/site_thumbnail.png",
+        url: OG_CARD,
         width: 1200,
         height: 630,
         alt: SITE_TITLE,
@@ -85,7 +104,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: ["/img/site_thumbnail.png"],
+    images: [OG_CARD],
   },
 };
 

@@ -3,6 +3,7 @@ import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson, validationResponseBody } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { WorkspaceCreateSchema } from "@/features/workspaces/schema";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   createWorkspaceForUser,
   listMyWorkspacesWithRole,
@@ -19,8 +20,7 @@ export const GET = withUserAuth(async (_request, { userId }) => {
     const workspaces = await listMyWorkspacesWithRole(userId);
     return NextResponse.json({ workspaces });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces", err);
   }
 });
 
@@ -36,7 +36,6 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
     if (err instanceof HttpError) {
       return NextResponse.json(validationResponseBody(err), { status: err.status });
     }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces", err);
   }
 });

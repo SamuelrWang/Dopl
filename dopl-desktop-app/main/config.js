@@ -4,13 +4,6 @@
 const APP_URL = process.env.DOPL_APP_URL || 'https://www.usedopl.com/';
 const APP_ORIGIN = new URL(APP_URL).origin;
 
-// HOME_URL is DEAD (2026-08-07) and kept only so a stale import fails loudly rather
-// than silently resolving to a 404. It named `/canvas`, which Stage D deleted, and its
-// last consumers went with the remote shell: index.js's loadApp and authActions.signOut
-// both loaded it so the WEB app could resolve a destination server-side. The SPA routes
-// in the renderer and never loads a URL. Delete it once nothing imports it.
-const HOME_URL = new URL('/canvas', APP_URL).toString();
-
 // Custom URL scheme used to hand the OAuth session back from the system browser
 // into this app (dopl://auth#access_token=...&refresh_token=...).
 const PROTOCOL = 'dopl';
@@ -93,6 +86,21 @@ const LISTENER = {
   // Reconnect backoff (capped exponential) after transient failures.
   BACKOFF_BASE_MS: 2_000,
   BACKOFF_MAX_MS: 60_000,
+  // C-3 — HOW MANY TIMES ONE MESSAGE MAY REFUSE TO DISPATCH BEFORE THE LOOP STEPS OVER IT.
+  //
+  // The cursor now advances only PAST a message whose dispatch landed (listener-messages
+  // .drainPage), so a message that keeps failing holds the head of its channel's queue.
+  // That is the correct trade for a TRANSIENT failure and the wrong one forever, so the
+  // hold is bounded and the escape is loud.
+  //
+  // EIGHT, over the SAME capped-exponential ladder the reconnect path uses (2s → 60s):
+  // 2+4+8+16+32+60+60+60 ≈ 4 minutes of held cursor. The motivating incident is "wifi
+  // drops for 15s during the consent POST", so this is ~16x the case it exists for and
+  // comfortably spans a lid-close, a router reboot or a Wi-Fi handoff; and it bounds the
+  // head-of-line block on ONE channel to minutes rather than to the life of the process.
+  // Every deferral is a diag line and the escape says, in as many words, that a message
+  // was dropped — which is the property the old advance-always ordering did not have.
+  DISPATCH_MAX_ATTEMPTS: 8,
   // When the Channels feature isn't deployed yet (routes 404) back off long so
   // we don't spin against a not-yet-shipped endpoint.
   FEATURE_UNAVAILABLE_MS: 5 * 60 * 1000,
@@ -138,7 +146,6 @@ const REALTIME = {
 module.exports = {
   APP_URL,
   APP_ORIGIN,
-  HOME_URL,
   PROTOCOL,
   API_BASE,
   MCP_URL,

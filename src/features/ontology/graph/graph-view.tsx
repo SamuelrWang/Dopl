@@ -6,11 +6,11 @@ import { Plus, Trash2 } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { cn } from "@/shared/lib/utils";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { pendingRow } from "@/shared/ui/pending";
 import { toast } from "@/shared/ui/toast";
 import { CapNotice } from "../components/cap-notice";
+import { DeleteClusterDialog } from "../components/delete-cluster-dialog";
 import { ObjectPanel } from "../components/object-panel";
-import { clusterObjectIds } from "../graph-state";
 import { ontologySnapshotKey, useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { ONTOLOGY_EDGE_STYLES } from "./edge-styles";
@@ -37,13 +37,34 @@ interface Props {
 export function GraphView({ workspaceId, canManageBilling = false, canEdit = true }: Props) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const qc = useQueryClient();
-  const { graph, status, dispatch, createCluster, createObject } = useOntology(
-    workspaceId,
-    () => setUpgradeOpen(true)
-  );
+  // Declared above the store: the store's delete callback refreshes it.
   const ent = useWorkspaceEntitlements(workspaceId);
+  const { isCapped, refresh } = ent;
+  // The cap is a server-side count, so it can only move once the delete has
+  // landed — and deleting is the only way back under it.
+  const refreshCap = useCallback(() => {
+    if (isCapped) void refresh();
+  }, [isCapped, refresh]);
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Optimistic rows are born with provisional ids; when the server answers,
+  // the selection this component holds has to move with them or the panel and
+  // the active cluster blank out exactly when the create succeeds.
+  const handleIdsResolved = useCallback((map: Readonly<Record<string, string>>) => {
+    setClusterId((id) => (id ? (map[id] ?? id) : id));
+    setSelectedId((id) => (id ? (map[id] ?? id) : id));
+  }, []);
+  const { graph, status, dispatch, createCluster, createObject, pendingIds } = useOntology(
+    workspaceId,
+    {
+      onOverCap: () => setUpgradeOpen(true),
+      onDeleted: refreshCap,
+      // The object cap is a server-side count: it moves when the create lands,
+      // not when its optimistic row appears.
+      onCreated: refreshCap,
+      onIdsResolved: handleIdsResolved,
+    }
+  );
   const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
   // Surfaced up from the keyed graph body: the reset-to-auto-layout fn, or
   // null when no node has been dragged. A thunk so setState doesn't invoke it.
@@ -72,6 +93,7 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
   // Selection survives only while the object exists — a delete (panel,
   // cluster cascade, remote) hides the panel and undims without an effect.
   const activeSelectedId = selectedId && graph.objects[selectedId] ? selectedId : null;
+  const clusterPending = cluster ? pendingIds.has(cluster.id) : false;
 
   // Layout-persist failures surface here (the body forwards the raised error):
   // toast + invalidate the snapshot so stored positions re-sync — mirrors
@@ -100,7 +122,7 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
   // needs headroom of 2 — pre-check that, not just the exact cap, so the
   // create can't pass at 999/1000 then trip the server cap mid-sequence.
   // Over the cap (or without room for both), open the upgrade prompt.
-  const handleCreateCluster = async () => {
+  const handleCreateCluster = () => {
     if (
       ent.overCap ||
       (ent.isCapped && ent.objectCap !== null && ent.objectsUsed + 2 > ent.objectCap)
@@ -108,16 +130,17 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
       setUpgradeOpen(true);
       return;
     }
-    const created = await createCluster();
-    if (created) selectCluster(created.id);
-    if (ent.isCapped) ent.refresh();
+    // Synchronous: the cluster and its seed column/card are in the reducer
+    // before this returns, so the view switches to them in the same frame.
+    // The POSTs settle behind the pending rows; `onCreated` moves the meter.
+    selectCluster(createCluster().id);
   };
 
   const handleDeleteCluster = () => {
     if (!cluster) return;
     // The keyed body unmounts on this clusterId change and its unmount flush
     // lands any pending drag on the (about-to-be-deleted) cluster; a layout
-    // write racing the soft-delete no-ops server-side (deleted_at guard).
+    // write racing the delete no-ops server-side (the row is already gone).
     const remaining = graph.clusters.filter((c) => c.id !== cluster.id);
     dispatch({ type: "CLUSTER_DELETE", id: cluster.id });
     setClusterId(remaining[0]?.id ?? null);
@@ -125,16 +148,14 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
     setConfirmDeleteCluster(false);
   };
 
-  const handleCreateObject = async (
+  const handleCreateObject = (
     target: { clusterId: string } | { parentObjectId: string }
   ) => {
     if (ent.overCap) {
       setUpgradeOpen(true);
       return;
     }
-    const object = await createObject(target);
-    if (object) setSelectedId(object.id);
-    if (ent.isCapped) ent.refresh();
+    setSelectedId(createObject(target).id);
   };
 
   if (status === "loading") {
@@ -186,11 +207,14 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
                 key={c.id}
                 type="button"
                 onClick={() => selectCluster(c.id)}
-                className={cn(
-                  "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
-                  c.id === cluster.id
-                    ? "raised-tab text-text-primary"
-                    : "text-text-secondary hover:text-text-primary"
+                {...pendingRow(
+                  pendingIds.has(c.id),
+                  cn(
+                    "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
+                    c.id === cluster.id
+                      ? "raised-tab text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
+                  )
                 )}
               >
                 {c.name}
@@ -208,7 +232,9 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
               </button>
             )}
           </div>
-          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          {/* Inert until the cluster is real: an edit typed into a provisional
+              row would debounce a PATCH at an id the server has never seen. */}
+          <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-baseline gap-2")}>
             <input
               type="text"
               value={cluster.name}
@@ -242,7 +268,10 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
               aria-label={`Delete ${cluster.name || "cluster"}`}
               title="Delete cluster"
               onClick={() => setConfirmDeleteCluster(true)}
-              className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
+              {...pendingRow(
+                clusterPending,
+                "btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
+              )}
             >
               <Trash2 size={11} />
             </button>
@@ -251,7 +280,10 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
             <button
               type="button"
               onClick={() => handleCreateObject({ clusterId: cluster.id })}
-              className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+              {...pendingRow(
+                clusterPending,
+                "btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+              )}
             >
               <Plus size={12} /> Column
             </button>
@@ -285,6 +317,7 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
             graph={graph}
             cluster={cluster}
             canEdit={canEdit}
+            pendingIds={pendingIds}
             selectedId={activeSelectedId}
             onSelect={setSelectedId}
             onAddObject={handleCreateObject}
@@ -297,6 +330,7 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
                 objectId={activeSelectedId}
                 graph={graph}
                 dispatch={dispatch}
+                pending={pendingIds.has(activeSelectedId)}
                 canEdit={canEdit}
                 onSelectObject={setSelectedId}
                 onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
@@ -319,30 +353,15 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
         }
       />
 
-      <ConfirmDialog
+      <DeleteClusterDialog
         open={confirmDeleteCluster}
         onOpenChange={setConfirmDeleteCluster}
-        title="Delete cluster"
-        description={deleteClusterMessage(cluster.name, clusterObjectIds(graph, cluster.id).length)}
-        confirmLabel="Delete"
-        destructive
+        graph={graph}
+        cluster={cluster}
         onConfirm={handleDeleteCluster}
       />
     </OntologyResourcesProvider>
   );
-}
-
-/**
- * Confirm copy for a cascade cluster delete — names the cluster and how many
- * objects go with it (its columns + all nested cards), and that it's
- * recoverable. `count` is the same cascade set the server soft-deletes.
- */
-function deleteClusterMessage(name: string, count: number): string {
-  const label = name || "this cluster";
-  if (count === 0) {
-    return `Delete "${label}"? You can restore it from trash.`;
-  }
-  return `Delete "${label}" and its ${count} object${count === 1 ? "" : "s"}? You can restore it from trash.`;
 }
 
 // Labels only — every swatch's stroke width / dash / color is read from the

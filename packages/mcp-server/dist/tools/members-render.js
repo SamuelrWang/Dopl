@@ -20,6 +20,9 @@ exports.resourceLabel = resourceLabel;
 exports.statusLabel = statusLabel;
 exports.defaultLevel = defaultLevel;
 exports.typeLabel = typeLabel;
+exports.isRetiredResourceType = isRetiredResourceType;
+exports.withoutRetiredResources = withoutRetiredResources;
+exports.pruneRetiredResources = pruneRetiredResources;
 exports.grantDetail = grantDetail;
 exports.matchMember = matchMember;
 exports.formatTeam = formatTeam;
@@ -32,7 +35,7 @@ const narration_1 = require("./narration");
  * columns the channel never touches: `teams.name` / `.description`
  * (`z.string().trim().min(1).max(80)` / `.max(400)` — length only, interior
  * newlines legal) and the NAME of every shareable resource (a knowledge base,
- * workflow, chat, or chat folder, each named by whichever member made it).
+ * skill, chat, or chat folder, each named by whichever member made it).
  *
  * Every one of those is typed by another member of the workspace, and this
  * tool's whole output is server narration: `## <name>` was a real markdown
@@ -110,12 +113,53 @@ function defaultLevel(role) {
 }
 const TYPE_LABELS = {
     knowledge_base: "knowledge base",
-    workflow: "workflow",
     chat: "chat",
     chat_folder: "chat folder",
 };
 function typeLabel(resourceType) {
     return TYPE_LABELS[resourceType] ?? resourceType;
+}
+/**
+ * D7 (retirement, 2026-08-07) — `workflow` is no longer a grantable resource
+ * type anywhere a human or an agent can see.
+ *
+ * THE ROWS DO NOT COME FROM US. Hiding `dopl_workflow` removes the tool; it
+ * does not remove `resource_type = 'workflow'` rows from the access matrix,
+ * which the backend builds from `team_grants` and hands over whole. So an agent
+ * that could no longer list, read or open a workflow was still being shown a
+ * grid of who can edit which one — a feature advertised by its permissions
+ * after the feature itself was gone.
+ *
+ * THE GRANTS STAY IN THE DATABASE. They are valid rows describing real
+ * permissions on real workflows, and the plan is explicit that nothing is
+ * deleted (D7: "Existing grant rows stay valid in the DB (harmless); nothing
+ * renders them"). This is a RENDER filter, applied at the seam where the
+ * payload enters our narration, and un-retiring is deleting one string.
+ */
+const RETIRED_RESOURCE_TYPES = new Set(["workflow"]);
+function isRetiredResourceType(resourceType) {
+    return RETIRED_RESOURCE_TYPES.has(resourceType);
+}
+/** Drop rows for retired resource types from any resource-shaped list. */
+function withoutRetiredResources(rows) {
+    return rows.filter((r) => !isRetiredResourceType(r.resourceType));
+}
+/**
+ * The whole access matrix with retired rows gone from BOTH halves — the
+ * resource inventory AND every team's grant list. Applied once per
+ * `getAccessMatrix()` call in `members.ts`, so every downstream render
+ * (`grantDetail`, `formatTeam`, `visibleOverrides`, the resource-name map)
+ * inherits the filter instead of each needing to remember it.
+ */
+function pruneRetiredResources(matrix) {
+    return {
+        ...matrix,
+        resources: withoutRetiredResources(matrix.resources),
+        teams: matrix.teams.map((t) => ({
+            ...t,
+            grants: withoutRetiredResources(t.grants),
+        })),
+    };
 }
 /**
  * One teams-mode resource's grants, as `<team> (<id>): <level>` pairs — or the
@@ -172,12 +216,17 @@ function formatTeam(team, members, matrix, opts = {}) {
             .join(", ")
         : "no members";
     lines.push(`- Members (${team.memberCount}): ${roster}`);
-    if (team.grants.length === 0) {
+    // `pruneRetiredResources` already filters the matrix this is rendered
+    // beside, but a team's grants arrive on the TEAM object, which reaches
+    // `opTeams` / `opGetTeam` straight from `listWorkspaceTeams()` — a second,
+    // unpruned source. Filtering here is what makes the two halves agree.
+    const grants = withoutRetiredResources(team.grants);
+    if (grants.length === 0) {
         lines.push(`- Grants: none`);
     }
     else {
         lines.push(`- Grants:`);
-        for (const g of team.grants) {
+        for (const g of grants) {
             // The matrix is visibility-filtered for non-admins, so a grant can
             // reference a resource the caller can't see — say so, don't leak.
             const raw = resourceName.get(`${g.resourceType}:${g.resourceId}`);
@@ -197,11 +246,14 @@ function formatEffectiveAccess(rows, role) {
         lines.push(`_${role} — edit on everything._`);
         return lines.join("\n");
     }
-    if (rows.length === 0) {
+    // `getMemberAccess()` is its own endpoint, so it is a third source of
+    // resource rows and needs the D7 filter of its own.
+    const visible = withoutRetiredResources(rows);
+    if (visible.length === 0) {
         lines.push(`_No shareable resources in this workspace yet._`);
         return lines.join("\n");
     }
-    for (const r of rows) {
+    for (const r of visible) {
         const via = r.viaTeam
             ? ` (via team ${teamDisplay(r.viaTeam.name, r.viaTeam.teamId)})`
             : "";

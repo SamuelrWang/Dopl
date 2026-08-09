@@ -1,9 +1,8 @@
-import { BookOpen, Sparkles, Users, Workflow } from "lucide-react";
+import { BookOpen, Sparkles, Users } from "lucide-react";
 import type { LinkLike } from "@/shared/ui/link-like";
 
 export interface OverviewStatsCoreProps {
   segment: string;
-  workflows: number;
   knowledgeBases: number;
   skills: number;
   members: number;
@@ -14,24 +13,18 @@ export interface OverviewStatsCoreProps {
 /**
  * The stat row's Next-free core (see `./overview-stats` for the web binding).
  * Each card is a live count that deep-links into its section, so the row
- * doubles as navigation.
+ * doubles as navigation — which is why the Workflows card left with the
+ * Workflows page (docs/RETIREMENT-UNWIRING-PLAN.md §3.1): a stat card whose
+ * href is not a route is a link to "Not found".
  */
 export function OverviewStatsCore({
   segment,
-  workflows,
   knowledgeBases,
   skills,
   members,
   Link,
 }: OverviewStatsCoreProps) {
   const cards = [
-    {
-      label: "Workflows",
-      count: workflows,
-      href: `/${segment}/workflows`,
-      icon: Workflow,
-      hint: "agent-run steps",
-    },
     {
       label: "Knowledge bases",
       count: knowledgeBases,
@@ -56,7 +49,7 @@ export function OverviewStatsCore({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {cards.map(({ label, count, href, icon: Icon, hint }) => (
         <Link
           key={label}

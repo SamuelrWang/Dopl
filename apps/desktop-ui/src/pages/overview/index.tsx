@@ -22,7 +22,12 @@ import { RouterLink, useWorkspaceRoute } from "#/components/app-shell";
  * `ConnectClients` / `AgentSkillCard` are reused verbatim (they never fetch).
  */
 
-/** `GET /api/workspaces/[workspaceSlug]/overview-counts`. */
+/**
+ * `GET /api/workspaces/[workspaceSlug]/overview-counts`. Still carries
+ * `workflows` — the route and the table are untouched by the retirement
+ * (docs/RETIREMENT-UNWIRING-PLAN.md §3.1); the stat row simply stopped
+ * rendering a card for it, because there is no longer a page to link to.
+ */
 interface OverviewCountsBody extends WorkspaceOverviewCounts {
   isMcpConnected: boolean;
 }
@@ -111,7 +116,6 @@ export default function OverviewPage() {
           {/* ── At a glance ────────────────────────────────────────── */}
           <OverviewStatsCore
             segment={segment}
-            workflows={counts.workflows}
             knowledgeBases={counts.knowledgeBases}
             skills={counts.skills}
             members={counts.members}
@@ -140,7 +144,7 @@ export default function OverviewPage() {
               </h2>
               <p className="mt-0.5 text-[12px] text-text-tertiary">
                 Local skills load when a session boots — this one teaches the
-                tools, the conventions, and how to follow workflow stages.
+                tools and the conventions.
               </p>
             </div>
             <AgentSkillCard />

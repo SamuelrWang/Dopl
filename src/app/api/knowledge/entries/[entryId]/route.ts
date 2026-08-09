@@ -6,7 +6,7 @@ import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
   getEntry,
-  softDeleteEntry,
+  deleteEntry,
   updateEntry,
 } from "@/features/knowledge/server/service";
 import { KnowledgeEntryUpdateSchema } from "@/features/knowledge/schema";
@@ -48,7 +48,7 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = requireEntryId(auth);
     const ctx = buildKnowledgeContext(auth);
-    await softDeleteEntry(ctx, id);
+    await deleteEntry(ctx, id);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

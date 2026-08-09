@@ -1,9 +1,15 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import type { WorkspaceInvitationView } from "../types";
+import { invitationsPath } from "../client/query-keys";
+import type { InvitationsCache } from "../lib/optimistic-cache";
 
-const selectPending = (body: { invitations: WorkspaceInvitationView[] }) =>
+/**
+ * NOTE for writers: this SELECTOR hides accepted/revoked rows, but the cache
+ * still holds them — an optimistic patch operates on the raw
+ * `{ invitations: [...] }` body, never on what this returns.
+ */
+const selectPending = (body: InvitationsCache) =>
   (body.invitations ?? []).filter((i) => !i.acceptedAt && !i.revokedAt);
 
 /**
@@ -12,10 +18,10 @@ const selectPending = (body: { invitations: WorkspaceInvitationView[] }) =>
  * filtered out so the UI only shows actionable invites.
  */
 export function useInvitations(workspaceSlug: string, enabled: boolean) {
-  const query = useApiQuery(
-    `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`,
-    { select: selectPending, enabled }
-  );
+  const query = useApiQuery(invitationsPath(workspaceSlug), {
+    select: selectPending,
+    enabled,
+  });
   return {
     invitations: query.data ?? null,
     // Disabled (non-admin) callers are "not loading", not pending-forever.

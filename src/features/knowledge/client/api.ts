@@ -194,17 +194,6 @@ export async function moveFolder(
   return data.folder;
 }
 
-export async function restoreFolder(
-  folderId: string,
-  workspaceId?: string
-): Promise<KnowledgeFolder> {
-  const data = await request<{ folder: KnowledgeFolder }>(
-    `/api/knowledge/folders/${folderId}/restore`,
-    { method: "POST", workspaceId }
-  );
-  return data.folder;
-}
-
 // ─── Entries ────────────────────────────────────────────────────────
 
 export async function fetchEntry(
@@ -263,17 +252,6 @@ export async function moveEntry(
   const data = await request<{ entry: KnowledgeEntry }>(
     `/api/knowledge/entries/${entryId}/move`,
     { method: "POST", body: input, workspaceId }
-  );
-  return data.entry;
-}
-
-export async function restoreEntry(
-  entryId: string,
-  workspaceId?: string
-): Promise<KnowledgeEntry> {
-  const data = await request<{ entry: KnowledgeEntry }>(
-    `/api/knowledge/entries/${entryId}/restore`,
-    { method: "POST", workspaceId }
   );
   return data.entry;
 }

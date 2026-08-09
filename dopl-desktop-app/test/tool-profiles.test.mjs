@@ -15,7 +15,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -38,12 +38,15 @@ const {
   buildBuiltinTools,
   buildRestrictionArgs,
   DOPL_ADMIN_TOOLS,
+  DOPL_CHANNEL_TOOL,
   DOPL_SAFE_TOOLS,
+  RETIRED_DOPL_TOOLS,
   WEB_TOOLS,
 } = new Function(
   `${BLOCK}
    return { buildAllowedTools, buildDeniedTools, buildBuiltinTools,
-            buildRestrictionArgs, DOPL_ADMIN_TOOLS, DOPL_SAFE_TOOLS, WEB_TOOLS };`
+            buildRestrictionArgs, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL,
+            DOPL_SAFE_TOOLS, RETIRED_DOPL_TOOLS, WEB_TOOLS };`
 )();
 
 const RESTRICTED = ["read_only", "dopl_only"];
@@ -60,23 +63,6 @@ const ESCAPE_TOOLS = [
 test("WEB_TOOLS is exactly WebFetch + WebSearch", () => {
   assert.deepEqual([...WEB_TOOLS].sort(), ["WebFetch", "WebSearch"]);
 });
-
-// ── full: unchanged v1.1 behavior ────────────────────────────────────────────
-
-test("full -> unrestricted (no lists, no flags at all)", () => {
-  assert.deepEqual(buildAllowedTools("full"), []);
-  assert.deepEqual(buildDeniedTools("full"), []);
-  assert.deepEqual(buildBuiltinTools("full"), []);
-  assert.deepEqual(buildRestrictionArgs("full", "/tmp/settings.json"), []);
-});
-
-test("unknown / absent profile defaults to full", () => {
-  for (const p of [undefined, null, "garbage", ""]) {
-    assert.deepEqual(buildAllowedTools(p), [], `allow for ${String(p)}`);
-    assert.deepEqual(buildRestrictionArgs(p, "/tmp/s.json"), [], `args for ${String(p)}`);
-  }
-});
-
 // ── read_only ────────────────────────────────────────────────────────────────
 
 test("read_only -> local read tools only, no web, no MCP", () => {
@@ -123,7 +109,10 @@ test("H-2: dopl_only must NEVER grant the bare mcp__dopl server prefix", () => {
 });
 
 test("H-2: no admin MCP tool is grantable under any restricted profile", () => {
-  assert.ok(DOPL_ADMIN_TOOLS.length === 6, "expected exactly six admin tools");
+  // FOUR since the 2026-08-07 retirement: dopl_cluster_admin / dopl_workflow_admin are
+  // no longer registered by the server, so there is no tool to grant. They did not
+  // simply vanish from the deny path — see RETIRED_DOPL_TOOLS and its own test below.
+  assert.ok(DOPL_ADMIN_TOOLS.length === 4, "expected exactly four admin tools");
   for (const profile of RESTRICTED) {
     const allowed = buildAllowedTools(profile);
     const denied = buildDeniedTools(profile);
@@ -152,19 +141,19 @@ test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
   for (const t of ["Read", "Grep", "Glob", "LS"]) {
     assert.ok(set.includes(t), `dopl_only should include ${t}`);
   }
-  // Verified against packages/mcp-server/src/server.ts registration sites.
-  // NOTE: dopl_channel is intentionally NOT here (see the exfiltration test
-  // below) — it is the one non-admin tool a dopl_only spawn must not reach.
+  // These nine names are pinned against the server's real registration sites
+  // by the drift alarm at the bottom of this file — this list is the readable
+  // copy, that one is the check. NOTE: dopl_channel is intentionally NOT here
+  // (see the exfiltration test below) — it is the one non-admin tool a
+  // dopl_only spawn must not reach.
   for (const t of [
     "mcp__dopl__dopl_kb",
     "mcp__dopl__dopl_search",
     "mcp__dopl__dopl_map",
     "mcp__dopl__dopl_members",
     "mcp__dopl__dopl_skill",
-    "mcp__dopl__dopl_workflow",
     "mcp__dopl__dopl_ontology",
     "mcp__dopl__dopl_chats",
-    "mcp__dopl__dopl_cluster",
     "mcp__dopl__current_workspace",
     "mcp__dopl__list_workspaces",
   ]) {
@@ -220,6 +209,31 @@ test("dopl_only must NOT grant dopl_channel, and must deny it by name", () => {
     denyList.includes("mcp__dopl__dopl_channel"),
     "dopl_only --disallowedTools must name dopl_channel"
   );
+});
+
+// RETIREMENT (2026-08-07). Unregistering a tool must TIGHTEN what a spawn can do, never
+// loosen it. Dropping dopl_cluster_admin / dopl_workflow_admin from DOPL_ADMIN_TOOLS alone
+// would have left them UNCLASSIFIED, which resolves to `gate` — a button, in the profiles
+// that have one, for tools the table says can never be opened. They are denied by their own
+// list instead, so the hard-deny outlives the tool.
+//
+// WIDENED TO EVERY PROFILE (2026-08-08, C-10). It was scoped to RESTRICTED, and that scoping
+// is precisely why the `full` gap survived an audit: the SDK lane denied these under `full`
+// and this lane did not, and no assertion crossed the two. `full` is in the loop now.
+test("retired dopl tools stay denied under EVERY profile, full included", () => {
+  assert.ok(RETIRED_DOPL_TOOLS.length > 0, "the retired list must not be empty");
+  for (const t of RETIRED_DOPL_TOOLS) {
+    assert.ok(!DOPL_SAFE_TOOLS.includes(t), `${t} is retired but still in the safe list`);
+    assert.ok(!DOPL_ADMIN_TOOLS.includes(t), `${t} is retired but still in the admin list`);
+    for (const profile of [...RESTRICTED, "full"]) {
+      assert.ok(!buildAllowedTools(profile).includes(t), `${profile} must not allow ${t}`);
+      assert.ok(buildDeniedTools(profile).includes(t), `${profile} must deny ${t}`);
+      const args = buildRestrictionArgs(profile, "/tmp/s.json").join(" ");
+      const denyFlag = args.split("--disallowedTools ")[1] || "";
+      assert.ok((denyFlag.split(" ")[0] || "").split(",").includes(t),
+        `${profile} --disallowedTools must name ${t}`);
+    }
+  }
 });
 
 test("the safe-tool list and the admin list are disjoint", () => {
@@ -323,4 +337,136 @@ test("--tools bounds built-ins to the read set (+ web for dopl_only) only", () =
 test("restricted profiles return a non-empty allow list (a flag IS emitted)", () => {
   assert.ok(buildAllowedTools("read_only").length > 0);
   assert.ok(buildAllowedTools("dopl_only").length > 0);
+});
+
+// ── THE 14-TOOL AGREEMENT, AS A DRIFT ALARM ──────────────────────────────────
+//
+// Everything above is a HAND COPY of what packages/mcp-server registers, and
+// the only thing that used to link the two was a comment. Matching name-for-name
+// is a CONTAINMENT property, not a coincidence: a tool the server gains that
+// this file never hears about is UNCLASSIFIED in the session gate, and
+// unclassified resolves to `gate` — one operator click from running
+// (main/mcp-tool-names.js documents the same failure from the other direction).
+// Drift the other way makes the desktop's written record of the agent surface
+// lie about what a spawn can reach.
+//
+// Same shape as deep-link-target.test.mjs's route-table alarm: read the real
+// source, parse it, compare. EXECUTING the server instead is not available —
+// the desktop is a separate npm project, CI installs it with `--ignore-scripts`
+// and no root node_modules, so its dist/ has nothing to resolve imports against.
+
+const MCP_SRC = join(HERE, "..", "..", "packages", "mcp-server", "src");
+
+/** Every non-test `.ts` under packages/mcp-server/src, recursively. */
+function mcpSources(dir) {
+  const out = [];
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) out.push(...mcpSources(p));
+    else if (ent.name.endsWith(".ts") && !ent.name.endsWith(".test.ts")) out.push(p);
+  }
+  return out;
+}
+
+// A registration site names its tool as a STRING LITERAL first argument:
+// `register("dopl_map", …)` in the domain registrars (the injected registrar is
+// named `register` there) and `registerMetaTool("list_workspaces", …)` in
+// server.ts. The SDK call underneath — `server.registerTool(name, …)` — passes a
+// variable, so there is no literal to match; the lookbehind drops it regardless.
+const REGISTER_SITE = /(?<![.\w$])register(?:Tool|MetaTool)?\s*\(\s*"([a-z][a-z0-9_]*)"/g;
+
+/**
+ * The bracketed name list of a `<symbol> … = … [ … ]` DECLARATION. Depth-matched
+ * brackets, not a lazy `]`, so a nested array cannot truncate the read.
+ * Tolerates `new Set([…])`, `new Set<string>([…])`, a plain array, and a type
+ * annotation before the `=`. An `import { <symbol> }` line carries no `=` and
+ * `[^=\n]` cannot cross a line, so a re-export never matches — which is what
+ * lets HIDDEN_TOOLS move out of server.ts into its own module without breaking
+ * this test.
+ */
+function declaredNames(src, symbol) {
+  const decl = new RegExp(`\\b${symbol}\\b[^=\\n]*=[^\\[\\n]*\\[`).exec(src);
+  if (!decl) return null;
+  const open = src.indexOf("[", decl.index);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "[") depth++;
+    else if (src[i] === "]" && --depth === 0) {
+      return [...src.slice(open, i).matchAll(/"([a-z][a-z0-9_]*)"/g)].map((m) => m[1]);
+    }
+  }
+  return null;
+}
+
+const registeredTools = [];
+const hiddenDecls = [];
+for (const file of mcpSources(MCP_SRC)) {
+  const src = readFileSync(file, "utf8");
+  for (const m of src.matchAll(REGISTER_SITE)) registeredTools.push(m[1]);
+  const names = declaredNames(src, "HIDDEN_TOOLS");
+  if (names) hiddenDecls.push({ file, names });
+}
+
+// EXACTLY ONE declaration, never "the last one found" — tools/parity-harness.ts
+// re-derives HIDDEN_TOOLS by parsing server.ts, so the name legitimately appears
+// in more than one file and a last-wins read could silently pick a derived copy.
+function hiddenNames() {
+  assert.equal(hiddenDecls.length, 1,
+    `expected 1 HIDDEN_TOOLS declaration under packages/mcp-server/src, found `
+    + `${hiddenDecls.length} [${hiddenDecls.map((d) => d.file).join(", ")}] — it moved, `
+    + "was duplicated, or changed shape; repoint declaredNames()");
+  return hiddenDecls[0].names;
+}
+
+/** `mcp__dopl__dopl_kb` → `dopl_kb`. The server registers tools bare. */
+const shortName = (t) => t.replace(/^mcp__dopl__/, "");
+const ALL_DOPL = [
+  ...DOPL_SAFE_TOOLS, ...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS, DOPL_CHANNEL_TOOL,
+];
+
+// Parser sanity comes FIRST and on its own: a regex that silently stopped
+// matching would make every comparison below vacuous, and a vacuous pass reads
+// exactly like "no drift". Fail here instead, naming what to repoint.
+test("the mcp-server source parser still finds what it is looking for", () => {
+  const hiddenTools = hiddenNames();
+  assert.ok(registeredTools.length >= 15,
+    `only ${registeredTools.length} registration sites parsed — the register(...) call shape changed; repoint REGISTER_SITE`);
+  assert.equal(new Set(registeredTools).size, registeredTools.length,
+    "the same tool name is registered twice");
+  for (const a of ["dopl_kb", "dopl_map", "dopl_channel", "current_workspace", "list_workspaces"]) {
+    assert.ok(registeredTools.includes(a), `parser missed a known tool: ${a}`);
+  }
+  for (const h of hiddenTools) {
+    assert.ok(registeredTools.includes(h), `HIDDEN_TOOLS names ${h}, which no registrar registers`);
+  }
+  // shortName() is only meaningful while every entry carries the prefix, and a
+  // prefix-less one matches nothing at the CLI while still reading as covered.
+  for (const t of ALL_DOPL) {
+    assert.ok(t.startsWith("mcp__dopl__"), `${t} is missing the server prefix`);
+  }
+});
+
+test("the desktop's Dopl tool lists match the MCP server's live surface", () => {
+  const hiddenTools = hiddenNames();
+  const live = registeredTools.filter((t) => !hiddenTools.includes(t)).sort();
+  const desktop = [...DOPL_SAFE_TOOLS, ...DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL]
+    .map(shortName).sort();
+  assert.deepEqual(desktop, live,
+    `main/tool-profiles.js has drifted from packages/mcp-server/src (HIDDEN_TOOLS read from ${hiddenDecls[0].file})`);
+  // The number ENGINEERING.md §7 states in prose, asserted once.
+  assert.equal(live.length, 14, "the agent surface is documented as 14 tools");
+});
+
+test("RETIRED_DOPL_TOOLS is exactly the server's HIDDEN_TOOLS", () => {
+  assert.deepEqual(RETIRED_DOPL_TOOLS.map(shortName).sort(), [...hiddenNames()].sort(),
+    "a hidden tool missing from RETIRED_DOPL_TOOLS is UNCLASSIFIED, which resolves to `gate`, not deny");
+});
+
+test("the admin list is exactly the live *_admin tools", () => {
+  // The split IS the containment boundary — an admin tool that lands in
+  // DOPL_SAFE_TOOLS is one dopl_only spawns get pre-approved.
+  const hiddenTools = hiddenNames();
+  const liveAdmins = registeredTools
+    .filter((t) => !hiddenTools.includes(t) && t.endsWith("_admin")).sort();
+  assert.deepEqual(DOPL_ADMIN_TOOLS.map(shortName).sort(), liveAdmins);
 });

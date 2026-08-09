@@ -135,8 +135,8 @@ export function WelcomePopup({ brand }: WelcomePopupProps = {}) {
 
         <p className="mt-4 text-[14.5px] leading-relaxed text-[#3a414a]">
           Your agent is connected to this workspace over MCP. That means it can
-          do everything you can do here: create objects, write knowledge, save
-          skills, and run workflows, right from chat.
+          do everything you can do here: create objects, write knowledge, and
+          save skills, right from chat.
         </p>
 
         <p className="mt-4 text-[14.5px] leading-relaxed text-[#3a414a]">

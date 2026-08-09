@@ -29,6 +29,10 @@ import { NextRequest, NextResponse } from "next/server";
 const state = vi.hoisted(() => ({
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
   sessionUser: null as { id: string } | null,
+  /** OAuth-bearer rate limiter: whether the caller is within its ceiling, and a
+   *  record of every (subject, rpm, endpoint) the wrapper checked. */
+  rateLimitWithin: true as boolean,
+  rateLimitCalls: [] as { subject: string; rpm: number; endpoint: string }[],
   /** Phase 2 bearer-JWT branch: user resolved from a Supabase JWT presented
    *  as `Authorization: Bearer <jwt>` (no dopl_at_ prefix). */
   jwtUser: null as { id: string } | null,
@@ -40,7 +44,15 @@ const state = vi.hoisted(() => ({
   calls: { getUser: 0, getClaims: 0 },
 }));
 
-vi.mock("./mcp-session", () => ({ touchMcpStatus: vi.fn() }));
+vi.mock("./mcp-session", () => ({
+  touchMcpStatus: vi.fn(),
+  checkAndRecordRateLimitSubject: vi.fn(
+    async (subject: string, rpm: number, endpoint: string) => {
+      state.rateLimitCalls.push({ subject, rpm, endpoint });
+      return state.rateLimitWithin;
+    }
+  ),
+}));
 vi.mock("./mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
   // Real predicate, not a stub — the bearer-kind router depends on it.
@@ -152,6 +164,8 @@ beforeEach(() => {
   state.calls = { getUser: 0, getClaims: 0 };
   state.jwtUser = null;
   state.calls_jwtGetClaims = [];
+  state.rateLimitWithin = true;
+  state.rateLimitCalls = [];
 });
 
 describe("write-scope gate — read-only OAuth token", () => {

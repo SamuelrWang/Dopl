@@ -51,7 +51,7 @@ export default function KnowledgePage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
-  if (isPending || !access) return <PageLoading label="Loading knowledge" />;
+  if (isPending || !access) return <PageLoading label="Loading knowledge" variant="two-pane" />;
 
   // Every knowledge query needs the resolved workspace id, and the knowledge
   // hooks have no `enabled` switch — so the data half only mounts once the
@@ -94,6 +94,19 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
     () => (deepLink.kbSlug && bases ? findBaseBySegment(bases, deepLink.kbSlug) : null),
     [bases, deepLink.kbSlug]
   );
+
+  // Did the deep link EVER have a target? Latched during render (the
+  // sanctioned adjust-state-during-render pattern — no effect round trip),
+  // because it is the only thing separating the two ways `deepLinkBase` can
+  // be null: a segment that never named a base (the page's `notFound()`) from
+  // one whose base has since been DELETED. Deleting is now permanent and is
+  // the ordinary path here, and the frozen `deepLink` above outlives it —
+  // this component serves both knowledge routes and deliberately never
+  // remounts, so the delete handlers' navigate leaves `deepLink.kbSlug`
+  // standing and the page would harden into a full-page error card that only
+  // a reload clears.
+  const [deepLinkResolved, setDeepLinkResolved] = useState(false);
+  if (deepLinkBase && !deepLinkResolved) setDeepLinkResolved(true);
 
   // The page's 301 on a stale/legacy KB segment. No server hop to carry it,
   // so replace the history entry — the shell does the same for a stale
@@ -149,11 +162,14 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
   if (baseList.error) {
     return <PageError error={baseList.error} onRetry={baseList.refetch} />;
   }
-  if (!bases) return <PageLoading label="Loading knowledge" />;
+  if (!bases) return <PageLoading label="Loading knowledge" variant="two-pane" />;
 
-  if (deepLink.kbSlug && !deepLinkBase) {
+  if (deepLink.kbSlug && !deepLinkBase && !deepLinkResolved) {
     // `resolvePageKb` calls `notFound()` here; the SPA has no 404 route, so
-    // the shared error card carries the same message.
+    // the shared error card carries the same message. A base that resolved
+    // once and is now gone falls through instead: a deleted deep-link target
+    // is NO deep link, not an error, and the page renders the knowledge root
+    // the delete already navigated to.
     return <PageError error={new Error("Knowledge base not found")} />;
   }
 
@@ -162,9 +178,9 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
   // arrival would be dropped on the floor.
   if (deepLinkBase) {
     if (tree.error) return <PageError error={tree.error} onRetry={tree.refetch} />;
-    if (!tree.data) return <PageLoading label="Loading knowledge base" />;
+    if (!tree.data) return <PageLoading label="Loading knowledge base" variant="two-pane" />;
     if (selectedEntryId && !initialEntry.data && initialEntry.status !== "error") {
-      return <PageLoading label="Loading knowledge base" />;
+      return <PageLoading label="Loading knowledge base" variant="two-pane" />;
     }
   }
 

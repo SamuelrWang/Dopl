@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { requestJoin } from "@/features/workspaces/server/join-links";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
@@ -23,11 +23,7 @@ export const POST = withUserAuth(
       const result = await requestJoin(token, userId);
       return NextResponse.json(result);
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json({ error: message }, { status: 500 });
+      return toHttpErrorResponse("api/join/[token]", err);
     }
   }
 );

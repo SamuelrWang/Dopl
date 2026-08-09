@@ -20,8 +20,6 @@ import {
 import * as repo from "./repository";
 import {
   assertAgentCanDelete,
-  assertAncestorsActive,
-  assertBaseVisible,
   assertBaseWritable,
   assertSameWorkspace,
 } from "./service-shared";
@@ -168,7 +166,12 @@ export async function moveFolder(
   });
 }
 
-export async function softDeleteFolder(
+/**
+ * PERMANENTLY delete a folder and its whole subtree (descendant folders +
+ * their entries). No trash, no restore (2026-08-07). Gates unchanged from
+ * the old soft-delete path.
+ */
+export async function deleteFolder(
   ctx: KnowledgeContext,
   id: string
 ): Promise<void> {
@@ -179,20 +182,7 @@ export async function softDeleteFolder(
   // route too (an agent API key can hit this directly, not just via MCP).
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
-  await repo.markFolderDeleted(id);
-}
-
-export async function restoreFolder(
-  ctx: KnowledgeContext,
-  id: string
-): Promise<KnowledgeFolder> {
-  const folder = await getFolderInternal(ctx, id, true);
-  const base = await repo.findBaseById(folder.knowledgeBaseId, true);
-  if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
-  await assertBaseVisible(ctx, base);
-  await assertBaseWritable(ctx, base);
-  await assertAncestorsActive(folder.parentId);
-  return repo.restoreFolderRow(id);
+  await repo.hardDeleteFolder(ctx.workspaceId, id);
 }
 
 async function getFolderInternal(

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronRight, Clock, Folder, FolderPlus, Star, X } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { cn } from "@/shared/lib/utils";
+import { pendingRow } from "@/shared/ui/pending";
 import { Popover } from "@/shared/ui/popover-menu";
 import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
@@ -14,6 +15,7 @@ import {
   SOURCE_LABELS,
   UNFILED_LABEL,
 } from "../constants";
+import { isPendingId } from "../lib/optimistic-cache";
 import { formatShortDate } from "@/shared/lib/format-time";
 import { ShareMenu } from "./share-control";
 import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
@@ -53,7 +55,7 @@ interface Props {
   onSelect: (id: string) => void;
   collapsed: ReadonlySet<string>;
   onToggleFolder: (key: string) => void;
-  /** Resolves true on success — the draft input clears only then. */
+  /** Resolves false on failure — the draft input comes back with the name. */
   onCreateFolder: (name: string) => Promise<boolean>;
   /** Folder scope change — propagates to every chat in the folder. */
   onFolderShareChange: (
@@ -95,15 +97,24 @@ export function ListPane({
 }: Props) {
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
 
-  const submitFolder = async () => {
+  /**
+   * CLEAR THE DRAFT ON SUBMIT, NEVER AFTER THE AWAIT. This used to hold the
+   * input open across the round trip and close it only on success, so a
+   * second Enter — a key repeat, an impatient user, a slow POST — submitted
+   * the same name again and created two folders. The input is gone on the
+   * first keystroke's own render, so there is no second Enter to catch; the
+   * folder is already in the list (as a pending row) to say so.
+   *
+   * The draft still comes back on failure (e.g. the duplicate-name 409), so
+   * the typed name isn't lost under the error toast.
+   */
+  const submitFolder = () => {
     const name = folderDraft?.trim();
-    if (!name) {
-      setFolderDraft(null);
-      return;
-    }
-    // Keep the draft on failure (e.g. duplicate-name 409) so the typed
-    // name isn't lost under the error toast.
-    if (await onCreateFolder(name)) setFolderDraft(null);
+    setFolderDraft(null);
+    if (!name) return;
+    void onCreateFolder(name).then((ok) => {
+      if (!ok) setFolderDraft(name);
+    });
   };
 
   return (
@@ -150,7 +161,7 @@ export function ListPane({
             onChange={(e) => setFolderDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
-              if (e.key === "Enter") void submitFolder();
+              if (e.key === "Enter") submitFolder();
               if (e.key === "Escape") setFolderDraft(null);
             }}
             placeholder="New folder name — Enter to create"
@@ -193,9 +204,19 @@ export function ListPane({
               group.kind === "shared"
                 ? SHARED_WITH_ME_LABEL
                 : (group.folder?.name ?? UNFILED_LABEL);
+            // A folder the server has not named yet: real content, dimmed and
+            // inert, so nothing offers to collapse or re-share a row whose id
+            // does not exist on the server.
+            const folderPending =
+              group.folder !== null && isPendingId(group.folder.id);
             return (
               <div key={key} className="border-b border-border-subtle">
-                <div className="flex w-full items-center gap-2 pr-3.5 transition-colors hover:bg-surface-raised-1">
+                <div
+                  {...pendingRow(
+                    folderPending,
+                    "flex w-full items-center gap-2 pr-3.5 transition-colors hover:bg-surface-raised-1"
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => onToggleFolder(key)}

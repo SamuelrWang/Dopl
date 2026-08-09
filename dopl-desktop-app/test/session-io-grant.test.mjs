@@ -65,13 +65,34 @@ test("bypass: a GATE tool resolves {allow} with NO dispatch and NO parked resolv
   assert.equal(s.pendingPermissions.size, 0, "no resolver parked");
 });
 
+// F-177 (2026-08-08): this used to drive `Task`, which is no longer hard-denied under `full` —
+// the SDK lane's hard-deny set is the UNIVERSAL FLOOR now (retired + dopl admins) and nothing
+// else, so `Task` GATES here like Bash. The belt itself is unchanged and is still proven, on a
+// tool that really is on the floor. `Task` under bypass is asserted two tests down, where the
+// new verdict is the point rather than an accident of which name the test happened to pick.
 test("bypass: a hard-DENIED tool STILL resolves {deny} (the belt is immovable, §H-2)", async () => {
   const s = mkSession({ toolMode: "bypass" });
   const rec = recorder();
   const canUse = io.makeCanUseTool(s, rec.dispatch);
-  const res = await canUse("Task", { description: "spawn" }, { requestId: "r3" });
+  const res = await canUse("mcp__dopl__dopl_kb_admin", { op: "delete_base" }, { requestId: "r3" });
   assert.equal(res.behavior, "deny", "no mode ever un-denies a hard-denied tool");
   assert.equal(rec.events.length, 0, "a hard-deny is decided before any gate/dispatch");
+});
+
+// F-177 — THE OTHER HALF, stated positively so the widening is coverage and not a hole. A
+// delegation built-in reaches the dock under `full` instead of being refused outright: it is
+// ALLOWED TO EXIST and it still stops on an operator button, in every mode including `bypass`
+// (nothing released by F-177 is in AUTO_TOOLS or BYPASS_TOOLS, both positive allow-lists).
+test("F-177: Task GATES under full — allowed to exist, still on a button, even at bypass", async () => {
+  for (const toolMode of ["manual", "auto", "bypass"]) {
+    const s = mkSession({ toolMode });
+    const rec = recorder();
+    const pending = io.makeCanUseTool(s, rec.dispatch)("Task", { description: "spawn" }, { requestId: "t-" + toolMode });
+    assert.equal(rec.events.length, 1, `${toolMode}: Task must reach the dock, not be refused`);
+    assert.equal(rec.events[0].type, "permission_request", `${toolMode}: it is a gate`);
+    s.pendingPermissions.get("t-" + toolMode)({ behavior: "deny" });
+    assert.equal((await pending).behavior, "deny", `${toolMode}: the operator's answer is what decides`);
+  }
 });
 
 test("bypass: a preapproved read is allowed exactly as before (the mode does not widen it)", async () => {
@@ -270,8 +291,10 @@ test("M3: bypass STILL cannot read the channel, and auto_both still cannot run a
   io.makeCanUseTool(b, recB.dispatch)("Bash", { command: "cat /etc/passwd" }, { requestId: "b2" });
   assert.equal(recB.events.length, 1, "a MESSAGE posture can never run a work tool");
   b.pendingPermissions.get("b2")({ behavior: "deny" });
-  // And the hard-deny set is immovable under both, as it always was.
-  for (const tool of ["Task", "SendMessage", "CronCreate", "mcp__dopl__dopl_kb_admin"]) {
+  // And the hard-deny set is immovable under both, as it always was. F-177 shrank WHAT is on
+  // that set under `full` (Task / SendMessage / CronCreate came off it and now gate); it did
+  // not touch the belt, so the floor that remains is asserted here instead.
+  for (const tool of ["mcp__dopl__dopl_kb_admin", "mcp__dopl__dopl_chats_admin", "mcp__dopl__dopl_workflow"]) {
     const c = mkSession({ toolMode: "bypass", messageMode: "auto_both" });
     const recC = recorder();
     assert.deepEqual(await io.makeCanUseTool(c, recC.dispatch)(tool, {}, { requestId: "d1" }),

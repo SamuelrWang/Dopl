@@ -47,19 +47,29 @@ const { data, isPending, error, refetch } = useApiQuery<Skill[]>("/api/skills", 
 });
 ```
 
-**Writes:** `useMutation` + `apiRequest` + `invalidateQueries` on the read's key.
+**Writes:** `useApiMutation` (`@/shared/hooks/use-api-mutation`) — the write half
+of the same layer, transport-injected the same way. Do NOT hand-roll
+`useMutation` + `apiRequest` + `invalidateQueries`, and never
+`await write(); await refetch()`: that shape is the launch blocker this hook
+exists to close (ENGINEERING.md §7 "Writes").
 
 ```tsx
-const qc = useQueryClient();
-useMutation({
-  mutationFn: (body: NewSkill) =>
-    apiRequest<Skill>("/api/skills", { method: "POST", body, workspaceId }),
-  onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/skills"] }),
+const create = useApiMutation<NewSkill, { skill: Skill }>({
+  request: (draft) => ({ path: "/api/skills", body: draft, workspaceId }),
+  optimistic: (draft) =>
+    patchCache<{ skills: Skill[] }>(apiPathKey("/api/skills"), (cache) =>
+      cache ? { skills: [...cache.skills, pendingSkill(draft)] } : cache
+    ),
+  reconcile: (data) => /* fold the POST's own answer in — never refetch it */,
 });
+create.mutate(draft); // `create.pending` is the busy flag
 ```
 
-The query key is `[path, workspaceId, query]`. Same args anywhere = one cache
-entry and one in-flight request.
+The query key is `[path, workspaceId, query]` — build it with
+`apiQueryKey` / `apiPathKey` (`@/shared/api/query-keys`), never as an array
+literal. Same args anywhere = one cache entry and one in-flight request.
+A write patches by the one-element PREFIX key, which reaches every workspace /
+query-param variant a reader may have mounted.
 
 Under `apiRequest` sits `src/lib/api-transport.ts`, which picks the transport:
 `window.dopl.apiRequest` (IPC → main process → HTTPS) inside Electron, plain

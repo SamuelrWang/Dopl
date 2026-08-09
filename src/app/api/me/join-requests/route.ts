@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { listMyJoinNotices } from "@/features/workspaces/server/join-links";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
@@ -20,10 +20,6 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId }: Ctx) =
       { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/me/join-requests", err);
   }
 });

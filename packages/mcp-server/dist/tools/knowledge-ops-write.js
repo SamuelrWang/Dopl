@@ -1,8 +1,7 @@
 "use strict";
 /**
  * `dopl_kb` non-destructive WRITE op handlers: create/update/set_visibility
- * on bases, create/move folders, write/move entries, and the restore
- * (recovery) ops. Every write maps @dopl/client errors — conflict (412),
+ * on bases, create/move folders, write/move entries. Every write maps @dopl/client errors — conflict (412),
  * already-exists (409), agent-write-denied (403), and validation (400) —
  * to actionable tool messages. Routed from the registrar in knowledge.ts.
  */
@@ -10,13 +9,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreateBase = opCreateBase;
 exports.opUpdateBase = opUpdateBase;
 exports.opSetVisibility = opSetVisibility;
-exports.opRestoreBase = opRestoreBase;
 exports.opCreateFolder = opCreateFolder;
 exports.opMoveFolder = opMoveFolder;
 exports.opWriteFile = opWriteFile;
 exports.opMoveFile = opMoveFile;
-exports.opRestoreFolder = opRestoreFolder;
-exports.opRestoreFile = opRestoreFile;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
@@ -84,35 +80,6 @@ async function opSetVisibility(client, ref, visibility) {
         throw e;
     }
     return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`);
-}
-async function opRestoreBase(client, ref) {
-    // Audit fix #30: was 3 round-trips (listKbBases → listKbTrash →
-    // restoreKbBase). Drop the listKbBases call — if the user
-    // mistakenly tries to restore an already-active base it'll just
-    // fall into the "not in trash" error below, which is clearer
-    // anyway ("No deleted base matches" vs "Base is already active"
-    // both correctly tell them not to retry).
-    //
-    // The restore endpoint takes a UUID, not a slug. Look up the
-    // trashed base by slug or id via workspace-wide trash listing.
-    const trash = await client.listKbTrash();
-    const trashed = trash.bases.find((b) => b.slug === ref || b.id === ref);
-    if (!trashed) {
-        return (0, respond_1.err)(`No deleted base matches ${(0, narration_1.inlineOr)(ref, NO_NAME)}. Use \`dopl_kb(op='list_trash')\` to see available restores; or the base may already be active.`);
-    }
-    let restored;
-    try {
-        restored = await client.restoreKbBase(trashed.id);
-    }
-    catch (e) {
-        // F-10b: read-only-to-agents base — clean message, not a raw
-        // AGENT_WRITE_DISABLED dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
-    return (0, respond_1.ok)(`Restored ${(0, narration_1.inlineOr)(restored.name, NO_NAME)} (slug: \`${restored.slug}\`).`);
 }
 async function opCreateFolder(client, ref, path, description) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -215,30 +182,4 @@ async function opMoveFile(client, ref, from_path, to_path) {
         return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(from_path, NO_PATH)} resolved to a ${result.kind}, not an entry.`);
     }
     return (0, respond_1.ok)(`Entry moved: ${(0, narration_1.inlineOr)(from_path, NO_PATH)} → ${(0, narration_1.inlineOr)(to_path, NO_PATH)}.`);
-}
-async function opRestoreFolder(client, folder_id) {
-    let folder;
-    try {
-        folder = await client.restoreKbFolder(folder_id);
-    }
-    catch (e) {
-        if ((0, respond_1.isAlreadyExists)(e)) {
-            return (0, respond_1.err)(`Can't restore this folder — an ancestor folder is still in the trash. Restore the ancestor first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`);
-        }
-        throw e;
-    }
-    return (0, respond_1.ok)(`Restored folder ${(0, narration_1.inlineOr)(folder.name, NO_NAME)} (id: \`${folder.id}\`).`);
-}
-async function opRestoreFile(client, entry_id) {
-    let entry;
-    try {
-        entry = await client.restoreKbEntry(entry_id);
-    }
-    catch (e) {
-        if ((0, respond_1.isAlreadyExists)(e)) {
-            return (0, respond_1.err)(`Can't restore this entry — its parent folder is still in the trash. Restore the folder first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`);
-        }
-        throw e;
-    }
-    return (0, respond_1.ok)(`Restored entry ${(0, narration_1.inlineOr)(entry.title, NO_NAME)} (id: \`${entry.id}\`).`);
 }

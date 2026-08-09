@@ -70,11 +70,12 @@ export const BILLING_STATUS_PATH = "/api/billing/status";
 export function useWorkspaceEntitlements(workspaceId?: string) {
   const query = useApiQuery<WorkspaceEntitlementsStatus>(BILLING_STATUS_PATH, {
     workspaceId,
-    // seatCount / memberCount change when members are added or removed, but
-    // those mutations live in the members feature and don't yet invalidate
-    // this key (`useInvalidateBillingStatus` exists for that follow-up). A
-    // short staleTime bounds how long the entitlements read can lag a member
-    // change, versus the 30s provider default.
+    // seatCount / memberCount change when members are added or removed, and
+    // since F-045 the members feature invalidates this key directly on both
+    // (`useInvalidateBillingStatus`, called from the join-request approval and
+    // the member removal). The short staleTime stays as the BACKSTOP for the
+    // membership changes no client initiates — an invite accepted in another
+    // session, a seat reconciled by cron — versus the 30s provider default.
     staleTime: 5_000,
   });
   // Billing UI degrades to Free rather than erroring.
@@ -120,9 +121,14 @@ export type WorkspaceEntitlements = ReturnType<typeof useWorkspaceEntitlements>;
  * Call it after a member add / remove so seat and member counts refresh
  * immediately rather than waiting out the staleTime.
  *
- * FOLLOW-UP: the member mutations live in `src/features/members/**` (invite
- * dialog, members view, join-requests banner) and don't call this yet —
- * wiring those call sites is out of the billing group's scope.
+ * WIRED (F-045, closed): `src/features/members/hooks/use-member-writes.ts`
+ * calls it after a member REMOVAL and `hooks/use-join-requests.ts` after an
+ * APPROVAL — the two writes in this app that change `workspace_members` from
+ * the client. Both call it from `onSuccess` rather than the mutation layer's
+ * `invalidate`, because a membership change that FAILED moved no seats and
+ * re-downloading the entitlements would be a wasted round trip. Sending an
+ * invitation deliberately does NOT call it: an invite adds no member, and
+ * seats reconcile against membership.
  */
 export function useInvalidateBillingStatus() {
   const queryClient = useQueryClient();

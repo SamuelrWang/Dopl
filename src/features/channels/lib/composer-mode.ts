@@ -107,7 +107,10 @@ export interface ComposerHelpState {
  * already knows WHY a request refuses, and until now only its boolean reached
  * the screen: a request with a recipient and no subject greyed the send button
  * out while this line went on promising "Opens a thread and starts Ada's
- * agent." Two states are surfaced, and only two —
+ * agent." Three states are surfaced, and only three —
+ *  - `stale-roster` is checked FIRST and is the reason this list grew: the
+ *    roster on screen still belongs to the channel you switched away from, so
+ *    every other line here would name the wrong person;
  *  - `missing-recipient` is already covered by a null `targetName` (the same
  *    sentence, arrived at from the other direction);
  *  - `missing-subject` gets its own line, which says what the subject is FOR
@@ -123,6 +126,13 @@ export function composerModeHelp(
 ): string {
   if (mode === "chat") {
     return "Message the channel. No agent is started.";
+  }
+  // FIRST, ahead of the target: while the roster is stale the name we WOULD
+  // print is the previous channel's peer, so this line exists precisely to not
+  // say it. It is the only blocked reason that is about the app rather than
+  // about the draft, and it clears itself.
+  if (state.blocked === "stale-roster") {
+    return "Loading who's in this channel…";
   }
   if (!targetName) {
     return "Pick who this is for. Sending opens a thread and starts their agent.";
@@ -176,7 +186,8 @@ export type ComposerPayload = ChatPayload | ThreadPayload;
 export type ComposerBlockedReason =
   | "empty-body"
   | "missing-recipient"
-  | "missing-subject";
+  | "missing-subject"
+  | "stale-roster";
 
 export type ComposerBuildResult =
   | { ok: true; payload: ComposerPayload }
@@ -194,6 +205,16 @@ export interface ComposerDraft {
   peerId: string | null;
   /** The picked addressee in a normal channel. */
   toUserId: string | null;
+  /**
+   * TRUE WHILE THE ROSTER ON SCREEN IS THE PREVIOUS CHANNEL'S
+   * (`useChannelMembers`' `isPlaceholderData`). Request mode is the only thing
+   * that reads the roster — {@link resolveRequestTarget} turns it into the
+   * `toUserId` that goes on the wire — so a request built from a stale one
+   * addresses somebody who is not in this channel and the server answers 400
+   * `ChannelAddresseeNotMemberError` after the optimistic row is already on
+   * screen. Chat sends never read it and are deliberately NOT gated.
+   */
+  rosterStale?: boolean;
 }
 
 /**
@@ -232,6 +253,13 @@ export function buildComposerPayload(draft: ComposerDraft): ComposerBuildResult 
   if (draft.mode === "chat") {
     return { ok: true, payload: { kind: "chat", body, intent: "chat" } };
   }
+
+  // BEFORE the target is resolved, because resolving it is the bug: a DM whose
+  // roster is still the previous channel's has a `peerId`, and it is the wrong
+  // person. Refusing here is what turns "silently addressed the last channel's
+  // peer, 400, roll back" into a disabled Send for the frame or two the roster
+  // takes to arrive.
+  if (draft.rosterStale) return { ok: false, reason: "stale-roster" };
 
   const toUserId = resolveRequestTarget(draft);
   if (!toUserId) return { ok: false, reason: "missing-recipient" };

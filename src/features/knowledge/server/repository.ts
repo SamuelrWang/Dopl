@@ -8,11 +8,12 @@ import "server-only";
  * Convention:
  *   - `find*` returns `T | null` for "not found".
  *   - `list*` returns `T[]` (possibly empty).
- *   - `insert*` / `update*` / `mark*Deleted` / `restore*` throw on error.
- *   - Active vs trashed: every list/find takes `includeDeleted`. Default
- *     `false` (active rows only). Trash views pass `true` and filter
- *     `deletedAt !== null` themselves; restore paths pass `true` so they
- *     can read deleted rows.
+ *   - `insert*` / `update*` / `hardDelete*` throw on error.
+ *   - `includeDeleted` on the list/find helpers is a LEGACY-TOMBSTONE
+ *     escape hatch, not a trash surface: deletes are permanent as of
+ *     2026-08-07, so nothing new is ever soft-deleted. The default
+ *     (`false`) keeps the `deleted_at IS NULL` filter that hides rows
+ *     tombstoned before the switch.
  *   - Service-role client bypasses RLS; the service is responsible for
  *     workspace scoping. Every method that takes a `workspaceId` param
  *     filters by it explicitly so RLS bypass is contained.
@@ -20,10 +21,9 @@ import "server-only";
  * This module is a barrel: the implementation lives in per-domain
  * siblings so each file has one clear purpose. Every existing importer
  * (`import * as repo from "./repository"`) keeps working unchanged.
- *   - `repository-bases.ts`   — base reads + writes + cascade trash/restore
- *   - `repository-folders.ts` — folder reads + ancestor walk + writes
- *   - `repository-entries.ts` — entry reads (incl. path-resolver helpers) + writes
- *   - `repository-trash.ts`   — trash listing + hard-delete (purge)
+ *   - `repository-bases.ts`   — base reads + writes + hard delete
+ *   - `repository-folders.ts` — folder reads + ancestor walk + writes + hard delete
+ *   - `repository-entries.ts` — entry reads (incl. path-resolver helpers) + writes + hard delete
  */
 
 export {
@@ -34,9 +34,9 @@ export {
   listBasesForWorkspace,
   listBaseSlugsForWorkspace,
   insertBase,
+  insertBases,
   updateBaseRow,
-  markBaseDeleted,
-  restoreBaseRow,
+  hardDeleteBase,
   fetchProfileNames,
 } from "./repository-bases";
 export type { InsertBaseArgs, UpdateBasePatch } from "./repository-bases";
@@ -48,8 +48,7 @@ export {
   listFolderAncestors,
   insertFolder,
   updateFolderRow,
-  markFolderDeleted,
-  restoreFolderRow,
+  hardDeleteFolder,
 } from "./repository-folders";
 export type { InsertFolderArgs, UpdateFolderPatch } from "./repository-folders";
 
@@ -62,21 +61,13 @@ export {
   countEntriesForBase,
   listEntriesByIds,
   insertEntry,
+  insertEntries,
   updateEntryRow,
-  markEntryDeleted,
-  restoreEntryRow,
+  hardDeleteEntry,
 } from "./repository-entries";
 export type {
   ListEntriesOpts,
   InsertEntryArgs,
+  InsertEntriesArgs,
   UpdateEntryPatch,
 } from "./repository-entries";
-
-export {
-  listDeletedForWorkspace,
-  hardDeleteOlderThan,
-  purgeBaseRow,
-  purgeFolderRow,
-  purgeEntryRow,
-} from "./repository-trash";
-export type { DeletedRows } from "./repository-trash";

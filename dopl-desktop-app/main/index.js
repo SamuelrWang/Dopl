@@ -3,7 +3,9 @@ const path = require('path');
 const Store = require('electron-store');
 
 // Shared origins/URLs live in config.js so the window shell and the background
-// listener never drift. See config.js for APP_URL / HOME_URL / PROTOCOL.
+// listener never drift. See config.js for APP_URL / APP_ORIGIN / PROTOCOL.
+// (HOME_URL is gone — it named `/canvas`, which the website retirement deleted,
+// and the SPA routes in the renderer rather than loading a URL at all.)
 const { APP_ORIGIN, PROTOCOL } = require('./config');
 const auth = require('./auth');
 const authActions = require('./auth-actions');
@@ -32,6 +34,8 @@ const sessionWindow = require('./session-window');
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
 const wake = require('./wake');
+// C-8: the before-quit teardown — the dialog, the wait path, and the bounded final flush.
+const quitGuard = require('./quit-guard');
 
 const store = new Store();
 let mainWindow = null;
@@ -316,17 +320,24 @@ if (!gotLock) {
     });
   });
 
-  // Tear the listener down cleanly on real quit (tray Quit sets isQuitting).
+  // THE QUIT TEARDOWN (C-8, 2026-08-08). This was a two-line handler — set `isQuitting`,
+  // stop the listener — and the audit's C-8 is what it left out: it never iterated the
+  // session registry, so every live `sdk.query()` kept a bundled `claude` child running
+  // after the app was gone, with this session's pre-approved `dopl_channel` access still
+  // in hand. main/quit-guard.js owns the whole decision now (extracted rather than inlined
+  // because it is a dialog, a wait loop and a bounded flush, and index.js is wiring): it
+  // NAMES the threads a quit would interrupt, offers Quit anyway / Wait for them to finish,
+  // ends each session through the reducer's calm `inactive` terminal so the waiting peer is
+  // told, and races one final session-state push so this machine's rows do not outlive it.
+  // It fails OPEN on every path — a quit the operator asked for always happens.
   //
-  // Round B removed the app-modal consent dialog, so the windowless-modal quit
-  // guard that used to live here (before-quit veto keyed on
-  // consent.isConsentModalGuardActive) is gone as dead code: with no consent
-  // dialog on screen there is no spurious AppKit terminate to veto. Consent is now
-  // a non-blocking native notification + durable server row, neither of which can
-  // take the app down on dismissal. This handler is back to a plain teardown.
-  app.on('before-quit', () => {
-    app.isQuitting = true;
-    try { listener.stop(); } catch (_) {}
+  // (Round B's windowless-modal veto is still gone as dead code: consent is a notification
+  // plus a durable row, neither of which can take the app down on dismissal.)
+  quitGuard.arm({
+    listener,
+    listOrphanRisk: () => sessionEngine.listOrphanRisk(),
+    endLiveSessions: () => sessionEngine.endLiveSessions(),
+    flushSessionState: () => require('./session-state-push').flush(),
   });
 
   // Background listener role: the app stays resident even with no windows.

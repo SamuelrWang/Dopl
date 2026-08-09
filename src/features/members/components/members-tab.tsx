@@ -12,7 +12,7 @@ import type {
   WorkspaceInvitationView,
   WorkspaceMemberView,
 } from "../types";
-import { removeMember, updateMemberRole } from "../teams-client";
+import { useMemberWrites } from "../hooks/use-member-writes";
 import { SelectFilter } from "./member-bits";
 import { MEMBER_ROW_GRID, MemberRow } from "./member-row";
 import { PendingInvitations } from "./pending-invitations";
@@ -32,8 +32,19 @@ interface Props {
   invitations: WorkspaceInvitationView[];
   teams: TeamView[];
   loading: boolean;
-  onChanged: () => void;
-  onInvitationsChanged: () => void;
+  /**
+   * DEAD, and kept only so the settings-modal caller in `shared/layout` keeps
+   * type-checking without an edit from this feature. Both writes below patch
+   * the roster/teams caches the caller reads from, so a post-write refetch is
+   * exactly the round trip the mutation layer exists to remove. Drop these two
+   * props and the `shared/layout/settings-modal/sections/members-section.tsx`
+   * arguments together.
+   *
+   * @deprecated no-op
+   */
+  onChanged?: () => void;
+  /** @deprecated no-op — see `onChanged`. */
+  onInvitationsChanged?: () => void;
   /** Row-click detail hook — omit to render rows non-clickable (the
    *  settings modal has no detail surface; the full page does). */
   onSelectMember?: (userId: string) => void;
@@ -53,14 +64,12 @@ export function MembersTab({
   invitations,
   teams,
   loading,
-  onChanged,
-  onInvitationsChanged,
   onSelectMember,
 }: Props) {
+  const memberWrites = useMemberWrites(workspaceSlug);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<WorkspaceMemberView | null>(null);
 
@@ -94,23 +103,20 @@ export function MembersTab({
       .map((x) => x.m);
   }, [members, search, roleFilter, teamFilter]);
 
-  async function changeRole(target: WorkspaceMemberView, role: AssignableRole) {
+  /**
+   * Both writes patch the roster cache in `onMutate`, and the roster is the
+   * same cache entry this tab renders from — so the role chip moves on the
+   * click and the removed row leaves at once, with no `onChanged` refetch to
+   * wait for. That is why this tab no longer takes one.
+   */
+  function changeRole(target: WorkspaceMemberView, role: AssignableRole) {
     if (!canManage) return;
-    setBusyId(target.userId);
     setError(null);
-    try {
-      await updateMemberRole(workspaceSlug, target.userId, role);
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function remove(target: WorkspaceMemberView) {
-    await removeMember(workspaceSlug, target.userId);
-    onChanged();
+    memberWrites.setRole
+      .mutateAsync({ userId: target.userId, role })
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : "Something went wrong")
+      );
   }
 
   return (
@@ -153,7 +159,6 @@ export function MembersTab({
         workspaceSlug={workspaceSlug}
         workspaceId={workspaceId}
         enabled={canManage}
-        onResolved={onChanged}
       />
 
       {canManage && invitations.length > 0 && (
@@ -161,7 +166,6 @@ export function MembersTab({
           workspaceSlug={workspaceSlug}
           invitations={invitations}
           teams={teams}
-          onRevoked={onInvitationsChanged}
         />
       )}
 
@@ -209,9 +213,9 @@ export function MembersTab({
                     isSelf={isSelf}
                     canEditTarget={canEditTarget}
                     clickable={clickable}
-                    busy={busyId === m.userId}
+                    busy={memberWrites.pending}
                     onOpen={() => clickable && onSelectMember?.(m.userId)}
-                    onChangeRole={(role) => void changeRole(m, role)}
+                    onChangeRole={(role) => changeRole(m, role)}
                     onRemove={() => setRemoveTarget(m)}
                   />
                 </li>
@@ -236,8 +240,9 @@ export function MembersTab({
         destructive
         onConfirm={async () => {
           if (!removeTarget) return;
+          setError(null);
           try {
-            await remove(removeTarget);
+            await memberWrites.remove.mutateAsync({ userId: removeTarget.userId });
           } catch (err) {
             // Surface the server's reason ("Admins cannot remove owners,
             // admins, or themselves", last-owner protection, …) —

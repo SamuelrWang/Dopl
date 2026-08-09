@@ -121,6 +121,32 @@ function echoTargets(info, kind) {
     taskId: i.taskId || undefined,
   };
 }
+
+// C-5 (2026-08-08) — ONE `session_ended` STATUS NOTE PER (thread, cycle), FROM THIS PROCESS.
+//
+// Three terminals now post that marker (the 12h abandonment, the auth hold, the window-budget
+// eviction) where previously none did, and two of them can reach the same session: a held
+// session is PARKED, and a parked untouched shell is exactly what `evictIdleShell` takes. The
+// operator would then see the note twice on one exchange.
+//
+// The key is the echo id the post would carry, so the local guard and the server's own
+// `client_msg_id` uniqueness agree BY CONSTRUCTION rather than by coincidence — and a genuinely
+// NEW cycle (sign in, run, park, abandon) mints a new sdk session id, so it is a different key
+// and it posts, which is right. Belt AND braces: the server dedupes the same id a second time.
+//
+// BOUNDED. A Set that only grows is the shape this tree has been bitten by; 64 is far above
+// the six windows a machine can hold, and the oldest entry goes first (insertion order), which
+// is the least likely to still be relevant.
+const MAX_REMEMBERED_ENDS = 64;
+const saidInactive = new Set();
+
+function firstInactiveNote(channelId, seq) {
+  const k = `${channelId}|${seq}`;
+  if (saidInactive.has(k)) return false;
+  if (saidInactive.size >= MAX_REMEMBERED_ENDS) saidInactive.delete(saidInactive.values().next().value);
+  saidInactive.add(k);
+  return true;
+}
 // ─── END SESSION-WINDOW-PURE ──────────────────────────────────────────────────────────
 
 // task_started the instant the session's SDK system/init lands (§A.3 launched).
@@ -152,6 +178,11 @@ function onEnded(info, kind, extra, bodyOverride) {
   // The RESOLVED kind decides the echo id (P2-9), so the targets are built after it.
   const { entry, m, taskId } = echoTargets(info, k);
   if (!entry.channel.id) return;
+  // C-5: the calm status note is said once per (thread, cycle); see firstInactiveNote.
+  if (meta.session_ended === true && !firstInactiveNote(entry.channel.id, m.seq)) {
+    diag('session onEnded: session_ended already posted for this cycle — not repeating it');
+    return;
+  }
   const body = bodyOverride
     || (meta.interrupted ? 'Request interrupted'
       : meta.declined ? 'Request declined'

@@ -1,0 +1,101 @@
+"use strict";
+/**
+ * Channel method group — link 9 of the chain documented in `client-base.ts`.
+ * Pure delegation to `channel.ts`; no HTTP here.
+ *
+ * Cross-user, agent-to-agent collaboration threads. Messages carry a
+ * monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals past
+ * a cursor so a listener can watch a channel without busy-looping. There was
+ * a MULTIPLAYER half — channel agents + thread participants — and it is gone
+ * with the surfaces it called (channels rollback §1).
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ChannelMethods = void 0;
+const client_members_js_1 = require("./client-members.js");
+const channel = __importStar(require("./channel.js"));
+class ChannelMethods extends client_members_js_1.MemberMethods {
+    listChannels(opts) {
+        return channel.listChannels(this.transport, opts);
+    }
+    getChannel(channelId) {
+        return channel.getChannel(this.transport, channelId);
+    }
+    createChannel(input) {
+        return channel.createChannel(this.transport, input);
+    }
+    listChannelMembers(channelId) {
+        return channel.listChannelMembers(this.transport, channelId);
+    }
+    inviteToChannel(channelId, userId) {
+        return channel.inviteToChannel(this.transport, channelId, userId);
+    }
+    readChannelMessages(channelId, opts) {
+        return channel.readMessages(this.transport, channelId, opts);
+    }
+    postChannelMessage(channelId, input) {
+        return channel.postMessage(this.transport, channelId, input);
+    }
+    awaitChannelMessages(channelId, opts) {
+        return channel.awaitMessages(this.transport, channelId, opts);
+    }
+    listChannelThreads(channelId) {
+        return channel.listChannelThreads(this.transport, channelId);
+    }
+    listChannelSessions(channelId) {
+        return channel.listChannelSessions(this.transport, channelId);
+    }
+    getChannelThread(channelId, threadId) {
+        return channel.getChannelThread(this.transport, channelId, threadId);
+    }
+    createChannelThread(channelId, input) {
+        return channel.createChannelThread(this.transport, channelId, input);
+    }
+    closeChannelThread(channelId, threadId, input) {
+        return channel.closeChannelThread(this.transport, channelId, threadId, input);
+    }
+    /**
+     * DECISION 2 (2026-08-04) — the agent lane's terminal act on a thread. See
+     * `channel.proposeChannelThreadClose`; `closeChannelThread` above is the human
+     * lane and the server refuses it for an agent token.
+     */
+    proposeChannelThreadClose(channelId, threadId, input) {
+        return channel.proposeChannelThreadClose(this.transport, channelId, threadId, input);
+    }
+    setChannelThreadMode(channelId, threadId, input) {
+        return channel.setChannelThreadMode(this.transport, channelId, threadId, input);
+    }
+}
+exports.ChannelMethods = ChannelMethods;

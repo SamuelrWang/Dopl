@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { isMcpConnected } from "@/features/onboarding/server/service";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,6 @@ export const GET = withUserAuth(async (_request, { userId }) => {
     const connected = await isMcpConnected(userId);
     return NextResponse.json({ connected });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/onboarding/mcp-status", err);
   }
 });

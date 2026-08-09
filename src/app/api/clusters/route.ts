@@ -3,10 +3,10 @@ import { z } from "zod";
 import type { Role } from "@/features/workspaces/types";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import { createCluster, listClusters } from "@/features/clusters/server/service";
 import { DESCRIPTION_MAX } from "@/config";
 import { ClusterNameSchema } from "@/features/clusters/schema";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 const ClusterCreateSchema = z.object({
   name: ClusterNameSchema,
@@ -14,14 +14,7 @@ const ClusterCreateSchema = z.object({
 });
 
 function toErrorResponse(err: unknown): NextResponse {
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message } },
-    { status: 500 }
-  );
+  return toHttpErrorResponse("api/clusters", err);
 }
 
 async function handleGet(

@@ -1,18 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, ChevronRight, Workflow } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { SectionBox } from "@/shared/ui/section-box";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import { DEFAULT_TEAM_COLOR } from "../constants";
-import {
-  TeamAccessConflictError,
-  setResourceAccessMode,
-  setTeamGrant,
-} from "../teams-client";
+import { TeamAccessConflictError } from "../teams-client";
+import { useAccessWrites } from "../hooks/use-access-writes";
 import type { ConflictState } from "./conflict-dialog";
+import { resourceMeta } from "./member-bits";
 import { AccessLevelControl, ScopePill } from "./team-bits";
 
 interface Props {
@@ -20,7 +18,6 @@ interface Props {
   resource: AccessMatrixResource;
   teams: TeamView[];
   canManage: boolean;
-  onTeamsChanged: () => void;
   openConflict: (conflict: ConflictState) => void;
 }
 
@@ -34,55 +31,69 @@ export function ResourceDetail({
   resource: r,
   teams,
   canManage,
-  onTeamsChanged,
   openConflict,
 }: Props) {
-  const [busy, setBusy] = useState(false);
+  const { setGrant, setScope, pending: busy } = useAccessWrites(workspaceSlug);
   const [error, setError] = useState<string | null>(null);
 
-  const Icon = r.resourceType === "knowledge_base" ? BookOpen : Workflow;
-  const typeLabel = r.resourceType === "knowledge_base" ? "Knowledge base" : "Workflow";
+  const { label: typeLabel, icon: Icon } = resourceMeta(r.resourceType);
 
   const grantFor = (team: TeamView): AccessLevel | null =>
     team.grants.find(
       (g) => g.resourceType === r.resourceType && g.resourceId === r.resourceId
     )?.level ?? null;
 
-  async function run(fn: (autoGrant: boolean) => Promise<void>) {
-    setBusy(true);
+  /**
+   * Both access writes share one shape: fire without `autoGrant`, and on a 409
+   * offer the ConflictDialog a retry that sets it. The optimistic patch is
+   * rolled back by the layer before the dialog opens, so the retry re-applies
+   * it rather than stacking a second edit on the first.
+   */
+  function run(fire: (autoGrant: boolean) => Promise<unknown>) {
     setError(null);
-    try {
-      await fn(false);
-      onTeamsChanged();
-    } catch (err) {
+    void fire(false).catch((err: unknown) => {
       if (err instanceof TeamAccessConflictError) {
         openConflict({
           details: err.details,
           retry: async () => {
-            await fn(true);
-            onTeamsChanged();
+            await fire(true).catch((retryErr: unknown) =>
+              setError(
+                retryErr instanceof Error
+                  ? retryErr.message
+                  : "Something went wrong"
+              )
+            );
           },
         });
-      } else {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        return;
       }
-    } finally {
-      setBusy(false);
-    }
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    });
   }
 
+  // The segmented control is driven straight off the cached `accessMode`, so
+  // the optimistic patch IS the thumb moving on the click. It used to sit on
+  // the old segment until the round trip finished.
   function changeScope(next: "workspace" | "teams") {
     if (!canManage || next === r.accessMode) return;
-    void run((autoGrant) =>
-      setResourceAccessMode(workspaceSlug, r.resourceType, r.resourceId, next, {
+    run((autoGrant) =>
+      setScope.mutateAsync({
+        resourceType: r.resourceType,
+        resourceId: r.resourceId,
+        accessMode: next,
         autoGrant,
       })
     );
   }
 
   function changeGrant(team: TeamView, level: AccessLevel | null) {
-    void run((autoGrant) =>
-      setTeamGrant(workspaceSlug, team.id, r.resourceType, r.resourceId, level, {
+    run((autoGrant) =>
+      setGrant.mutateAsync({
+        teamId: team.id,
+        resourceType: r.resourceType,
+        resourceId: r.resourceId,
+        memberIds: team.memberIds,
+        level,
         autoGrant,
       })
     );
@@ -107,6 +118,12 @@ export function ResourceDetail({
             ]}
             value={r.accessMode}
             onChange={changeScope}
+            // Inert for the round trip, exactly like the grant control below.
+            // Two scope PUTs interleaved is a rollback bug, not just a double
+            // request: the second `onMutate` snapshots the FIRST one's
+            // optimistic value, so a failure restores the cache to a mode that
+            // was never saved.
+            disabled={busy}
             className="w-[190px]"
           />
         )}

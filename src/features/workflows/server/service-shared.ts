@@ -85,17 +85,9 @@ export interface WorkflowTrashRow {
   deleted_at: string;
 }
 
-/**
- * Trash-list projection for the unified workspace Trash page: one
- * soft-deleted workflow in the shared `{ kind, id, name, deletedAt }` shape
- * (the same shape the chats trash list uses, `kind` discriminating).
- */
-export interface TrashedWorkflow {
-  kind: "workflow";
-  id: string;
-  name: string;
-  deletedAt: string;
-}
+/* `TrashedWorkflow` (the unified Trash page's `{ kind, id, name, deletedAt }`
+ * projection) was removed with `listTrashedWorkflows` — the page that
+ * discriminated on `kind` no longer exists. */
 
 export const SELECT_COLS =
   "id, slug, name, description, cluster_id, access_mode, user_id, layout, created_at, updated_at";

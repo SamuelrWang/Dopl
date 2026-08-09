@@ -3,13 +3,13 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import {
   createWorkflow,
   listWorkflows,
 } from "@/features/workflows/server/service";
 import { DESCRIPTION_MAX } from "@/config";
 import { WorkflowNameSchema } from "@/features/workflows/schema";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 const WorkflowCreateSchema = z.object({
   id: z.string().uuid().optional(),
@@ -19,14 +19,7 @@ const WorkflowCreateSchema = z.object({
 });
 
 function toErrorResponse(err: unknown): NextResponse {
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message } },
-    { status: 500 }
-  );
+  return toHttpErrorResponse("api/workflows", err);
 }
 
 async function handleGet(

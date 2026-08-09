@@ -240,9 +240,9 @@ const LEDGER: FilteredOp[] = [
   {
     tool: "dopl_kb",
     op: "list_bases",
-    filter: "canSeeBase + filterTeamVisibleBases + deleted_at IS NULL",
+    filter: "canSeeBase + filterTeamVisibleBases",
     proof: "client.listKbBases()",
-    discloses: ["can READ", "private", 'op="list_trash"'],
+    discloses: ["can READ", "private", "no grant on"],
   },
   {
     tool: "dopl_kb",
@@ -257,13 +257,6 @@ const LEDGER: FilteredOp[] = [
     filter: "recall-capped RPC + post-ranking visibility drop + default limit",
     proof: "client.searchKb(query",
     discloses: ["you can read", "not an exhaustive scan", "not proof of absence"],
-  },
-  {
-    tool: "dopl_kb",
-    op: "list_trash",
-    filter: "scoped by the same visibility rules as list_bases",
-    proof: "client.listKbTrash(",
-    discloses: ["YOU CAN SEE"],
   },
   {
     tool: "dopl_ontology",

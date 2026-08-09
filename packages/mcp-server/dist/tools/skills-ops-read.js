@@ -63,11 +63,24 @@ async function opList(client, folder) {
     lines.push("", "Call `dopl_skill` op=\"get\" (or op=\"read\") with a slug to load the SKILL.md procedure for the skill that fits the task.");
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opGet(client, slug, detail) {
+async function opGet(client, slug, detail, 
+// The caller's own user id, for the authorship framing only. See
+// {@link UNTRUSTED_SKILL_BODY_HEADER}.
+callerUserId = null) {
     try {
         const { skill, files, references } = await client.getSkill(slug);
-        const body = files.find((f) => f.name === "SKILL.md")?.body ?? files[0]?.body ?? "";
+        const file = files.find((f) => f.name === "SKILL.md") ?? files[0];
+        const body = file?.body ?? "";
+        // The FILE's authorship, falling back to the skill row's — the body is what
+        // is being framed, so it is the body's authors that decide.
+        const foreign = (0, narration_1.isForeignAuthored)(file ?? skill, callerUserId);
         const lines = [];
+        // Framing FIRST, ahead of the heading, so it precedes every peer-typed
+        // string in the result and not merely the body. Suppressed in `summary`
+        // mode below, where no body is rendered to frame.
+        if (foreign && detail !== "summary") {
+            lines.push(skills_shared_1.UNTRUSTED_SKILL_BODY_HEADER, "");
+        }
         lines.push(`# Skill ${(0, narration_1.inlineOr)(skill.name, skills_shared_1.NO_NAME)} \`${skill.slug}\``);
         const scope = skill.visibility === "private"
             ? "private"
@@ -124,10 +137,18 @@ async function opGet(client, slug, detail) {
         return (0, respond_1.err)(`Couldn't load skill \`${slug}\`: ${(0, skills_shared_1.failureDetail)(e)}`);
     }
 }
-async function opRead(client, slug) {
+async function opRead(client, slug, 
+// The caller's own user id, for the authorship framing only.
+callerUserId = null) {
     try {
         const file = await client.readSkillBody(slug);
-        return (0, respond_1.ok)(`# \`${slug}\` / SKILL.md\nVersion: \`${file.updatedAt}\` (pass as expected_version to write)\n\n${file.body}`);
+        // `op="read"` is the BARER of the two body surfaces — no metadata, no
+        // references, just the procedure — which makes it the one that most needs to
+        // say whose procedure it is.
+        const header = (0, narration_1.isForeignAuthored)(file, callerUserId)
+            ? `${skills_shared_1.UNTRUSTED_SKILL_BODY_HEADER}\n\n`
+            : "";
+        return (0, respond_1.ok)(`${header}# \`${slug}\` / SKILL.md\nVersion: \`${file.updatedAt}\` (pass as expected_version to write)\n\n${file.body}`);
     }
     catch (e) {
         return (0, respond_1.err)(`Couldn't read SKILL.md from \`${slug}\`: ${(0, skills_shared_1.failureDetail)(e)}`);

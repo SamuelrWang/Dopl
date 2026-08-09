@@ -198,14 +198,20 @@ beforeEach(() => {
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
     });
 
-    if (path === "/api/workspaces/resolve") {
+    // ONE read for workspace + role + caller id (P0-2) — `resolve` and `me`
+    // are seeded from it, so the page never waits on them in series.
+    if (path === "/api/boot") {
       return json({
+        isOnboarded: true,
+        surveyCompleted: true,
+        userId: "u-1",
         workspace: { id: workspaceId, name: "Acme", slug: "acme", publicId: "ab12cd" },
-        canonical: SEGMENT,
+        segment: SEGMENT,
         needsRedirect: false,
+        role: "admin",
+        myAccess: { defaultLevel: "edit", overrides: [] },
       });
     }
-    if (path === "/api/workspaces/me") return json({ role: "admin", userId: "u-1" });
     if (path === `/api/workspaces/${SEGMENT}/members`) return json({ members: [] });
     if (path === "/api/channels") {
       return json({ channels: [{ ...CHANNEL, workspaceId }] });
@@ -263,11 +269,9 @@ describe("channels page", () => {
       screen.getAllByText("Can your agent take the channels port?")
     ).toHaveLength(2);
 
-    // The RSC's two server calls, now client queries.
-    expect(requestsTo("/api/workspaces/resolve")[0].url).toContain(
-      `segment=${SEGMENT}`
-    );
-    expect(requestsTo("/api/workspaces/me")).toHaveLength(1);
+    // The RSC's two server calls, now ONE client query (P0-2).
+    expect(requestsTo("/api/boot", "POST")[0].body).toEqual({ segment: SEGMENT });
+    expect(requestsTo("/api/workspaces/me")).toHaveLength(0);
 
     // Every live surface has its OWN initial fetch — this is what makes the
     // page correct on first paint with realtime no-op'd (Phase 3 owns the

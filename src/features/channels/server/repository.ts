@@ -122,6 +122,11 @@ export async function findChannelBySlug(
  * stays non-partial on purpose — a soft-deleted DM is REVIVED by name
  * (`findDirectChannelAnyStatus` → `reviveChannel`), which would break if
  * another channel could take its slug while it was hidden.
+ *
+ * SINCE 2026-08-08 (C-16, F-173) THE ONLY HIDDEN ROWS LEFT ARE DMs: a non-DM
+ * delete removes the row, so "delete #design, create #design again" returns the
+ * SAME name rather than `design-2`. Nothing here changed — this was always
+ * "what the index would reject".
  */
 export async function existingSlugs(workspaceId: string): Promise<string[]> {
   const db = supabaseAdmin();
@@ -236,6 +241,15 @@ export async function touchChannel(
   if (error) throw error;
 }
 
+/**
+ * Stamp `deleted_at` — **DM ONLY** since 2026-08-08 (C-16, F-173). Not a trash
+ * and never was: on a DM this is the CLOSE half of close/reopen, either side's
+ * next open revives the same row with its history, and it is the only exit a
+ * non-creator has from an immutable roster. A tombstoned DM is LIVE PRODUCT
+ * STATE (ENGINEERING §7). Every other channel goes through
+ * {@link hardDeleteChannel} — routing a non-DM back here to "be safe" produces
+ * a row unreachable in every direction that still owns its slug forever.
+ */
 export async function softDeleteChannel(
   workspaceId: string,
   channelId: string
@@ -244,6 +258,34 @@ export async function softDeleteChannel(
   const { error } = await db
     .from("channels")
     .update({ deleted_at: new Date().toISOString() })
+    .eq("workspace_id", workspaceId)
+    .eq("id", channelId);
+  if (error) throw error;
+}
+
+/**
+ * Remove the channel row — **NON-DM ONLY** (Samuel's decision, 2026-08-08;
+ * C-16, F-173). The transcript, the membership, the threads and everything else
+ * hanging off it go with it, permanently.
+ *
+ * ONE STATEMENT, AND THAT IS WHY THERE IS NO RPC HERE. All six child FKs into
+ * `channels` are `ON DELETE CASCADE` (members, messages, consent requests,
+ * tasks → participants, agents, sessions), so one DELETE is already atomic and
+ * complete. `cascade_hard_delete_cluster` needed a PL/pgSQL body for the
+ * OPPOSITE reason: ontology's cascade is a lie about its tree (MEMBERSHIP rows,
+ * not child objects), so that delete had to be composed and therefore wrapped.
+ * Do not add an RPC to "follow the pattern" — the pattern is atomicity, and one
+ * statement already has it. The slug comes back with the row:
+ * `channels_workspace_slug_key` is non-partial, so only a survivor owns a name.
+ */
+export async function hardDeleteChannel(
+  workspaceId: string,
+  channelId: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("channels")
+    .delete()
     .eq("workspace_id", workspaceId)
     .eq("id", channelId);
   if (error) throw error;

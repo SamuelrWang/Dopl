@@ -35,20 +35,45 @@ export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
 export interface PostMessageOptions {
   /**
    * Post a LIFECYCLE kind on behalf of the server itself. The ONE caller is the
-   * close route's echo (`service-tasks.closeTask`), which writes the
+   * close route's echo (`service-tasks-lifecycle.closeTask`), which writes the
    * `task_finished` / `task_failed` marker that tells the other member's card
-   * the thread ended. That echo is raised from a request that may well carry an
-   * agent token (an MCP-initiated close on the human lane), so identity alone
-   * cannot tell it apart from the post this guard exists to refuse.
+   * the thread ended.
+   *
+   * ⚠ **ITS ORIGINAL MOTIVATING CASE IS UNREACHABLE, AND STAYED UNREACHABLE
+   * THROUGH C-26 (re-checked 2026-08-08).** This block used to say the close echo
+   * "is raised from a request that may well carry an agent token (an MCP-initiated
+   * close on the human lane), so identity alone cannot tell it apart". That has
+   * been false since DECISION 2 the same week: `closeTask` opens with
+   * `if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError()`, ahead of
+   * every lookup, so the only caller of this flag can never hold an agent ctx and
+   * the guard below would have returned early on `ctx.source !== "agent"` anyway.
+   * **The 2026-08-08 REOPEN echo did NOT restore the lane**, and that was a
+   * deliberate choice rather than an oversight: reopen IS agent-reachable (no
+   * source check, the PATCH route is not `sessionOnly`), but its echo posts
+   * `task_progress` — not one of {@link LIFECYCLE_KINDS} — so it passes the guard
+   * on its own merits and asks for no exemption. If a future server-internal
+   * caller genuinely needs a lifecycle KIND from an agent-ctx request, this is
+   * still the seam for it; until then the flag is a NO-OP in practice and the
+   * value it carries is documentary — it states at the call site that the post is
+   * the server speaking, which is what keeps the rule from being re-derived from
+   * identity.
    */
   internalLifecycle?: boolean;
   /**
    * Stamp this post as a CLOSE PROPOSAL carrying that outcome (DECISION 2). The
-   * one caller is `service-tasks.proposeTaskClose`. Reserved rather than
+   * one caller is `service-tasks-propose.proposeTaskClose`. Reserved rather than
    * caller-settable because the marker is what raises a one-click "close this
    * thread?" prompt in front of a human.
    */
   closeProposal?: "completed" | "failed";
+  /**
+   * Stamp this post as the REOPEN ECHO (C-26). The one caller is
+   * `service-tasks-lifecycle.reopenTask`. Reserved rather than caller-settable
+   * because the marker says a settled exchange is LIVE AGAIN on the other
+   * member's screen, and `channel_tasks` is in no realtime table set — so a
+   * forged one would show a live thread the server still considers closed.
+   */
+  reopened?: boolean;
   /**
    * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
    * flag on this post's stored metadata. The one caller is
@@ -80,10 +105,13 @@ export interface PostMessageOptions {
  *     SUPABASE COOKIES — no agent token, `source: "user"` — and declare
  *     `authorKind:"agent"` in the body. They are untouched.
  *   - The web app posts on cookies too, same answer.
- *   - The CLOSE ECHO is the one real overlap: it is a server-internal
- *     `postMessage` raised inside a request whose ctx may be an agent token, so
- *     it is exempted EXPLICITLY at its own call site rather than by a rule that
- *     would also let a peer's post through.
+ *   - The CLOSE ECHO was named as the one real overlap. IT IS NOT ONE — the
+ *     close refuses an agent ctx outright, so its `internalLifecycle` exemption
+ *     is documentary rather than load-bearing. See {@link PostMessageOptions}.
+ *   - The REOPEN ECHO (C-26) is agent-reachable and deliberately does NOT use the
+ *     exemption: it posts `task_progress`, which is not a lifecycle kind, so an
+ *     agent-triggered reopen writes its marker through the ordinary lane. That is
+ *     the shape to copy — earn the pass, do not ask for one.
  *
  * Placed beside `assertChatIsUnaddressed` and for the same reason: both must
  * precede the idempotency short-circuit, so a refused post is refused on the

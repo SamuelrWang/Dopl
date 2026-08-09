@@ -25,6 +25,22 @@ export const EMPTY_GRAPH: GraphState = { clusters: [], objects: {} };
 export type GraphAction =
   | { type: "SNAPSHOT_SET"; snapshot: OntologySnapshot }
   | { type: "CLUSTER_ADD"; cluster: OntologyCluster }
+  /**
+   * The optimistic-create reconcile: every provisional id minted at submit
+   * (`optimistic-create.ts`) swapped for the id the server answered with,
+   * wherever it is referenced — and the cluster slugs only the server can mint
+   * folded in with it. `map` is provisional id → real id; `slugs` is keyed by
+   * the REAL cluster id.
+   *
+   * A SWAP, not a re-seed: the rows stay exactly as they are on screen. The
+   * server's copies are the ones this client just described to it, so replacing
+   * them would be a round trip's worth of churn for no new information.
+   */
+  | {
+      type: "CREATE_RESOLVE";
+      map: Readonly<Record<string, string>>;
+      slugs?: Readonly<Record<string, string>>;
+    }
   | { type: "CLUSTER_UPDATE"; id: string; patch: { name?: string; purpose?: string } }
   | { type: "CLUSTER_DELETE"; id: string }
   | {
@@ -83,6 +99,65 @@ function patchObject(
 }
 
 /**
+ * Rewrite provisional ids to real ones EVERYWHERE the graph names an id — the
+ * object map's own keys, `id`, `columnIds`, `childIds`, relationship targets,
+ * `ref` attribute values, and the KEYS of each cluster's `layout` map.
+ *
+ * Total on purpose, not just "the parent links of the row that was created":
+ * an id that exists on screen can be picked as a relationship or `ref` target
+ * during the round trip, and a rewrite that missed one would leave a reference
+ * pointing at a row that no longer exists under that name.
+ *
+ * `layout` is the one that reads as an exception and is not: it is
+ * objectId → {x,y}, so its KEYS are ids even though it holds no id-shaped
+ * FIELD, and it is the structure an enumeration written from the row shape
+ * silently skips. A key left behind there is the quiet failure of the same
+ * kind — a dragged position orphaned under a name nothing answers to, the
+ * node dropping back to auto-layout, and `pending:<uuid>` riding along in
+ * `clusters.layout` on the next write.
+ */
+function resolveIds(
+  state: GraphState,
+  map: Readonly<Record<string, string>>,
+  slugs?: Readonly<Record<string, string>>
+): GraphState {
+  if (Object.keys(map).length === 0) return state;
+  const to = (id: string): string => map[id] ?? id;
+  const objects: Record<string, OntologyObject> = {};
+  for (const obj of Object.values(state.objects)) {
+    objects[to(obj.id)] = {
+      ...obj,
+      id: to(obj.id),
+      childIds: obj.childIds.map(to),
+      relationships: obj.relationships.map((r) => ({
+        ...r,
+        targetIds: r.targetIds.map(to),
+      })),
+      attributes: obj.attributes.map((a) =>
+        a.value.kind === "ref"
+          ? { ...a, value: { kind: "ref" as const, value: a.value.value.map(to) } }
+          : a
+      ),
+    };
+  }
+  return {
+    objects,
+    clusters: state.clusters.map((c) => {
+      const id = to(c.id);
+      const layout: OntologyCluster["layout"] = {};
+      for (const [nodeId, point] of Object.entries(c.layout ?? {})) layout[to(nodeId)] = point;
+      return {
+        ...c,
+        id,
+        slug: slugs?.[id] ?? c.slug,
+        columnIds: c.columnIds.map(to),
+        layout,
+      };
+    }),
+  };
+}
+
+/**
  * Every object a cluster owns: its columns plus all nested descendants
  * reached through childIds. Visited-set guards against cycles from
  * objects shared across parents.
@@ -100,6 +175,43 @@ function collectClusterObjectIds(state: GraphState, cluster: OntologyCluster): S
   return removed;
 }
 
+/**
+ * Ids of every object that becomes UNREACHABLE when `objectId` is deleted —
+ * i.e. what `cascade_hard_delete_object` (migration `20260807140000`) deletes
+ * alongside the target, excluding the target itself.
+ *
+ * This mirrors the RPC exactly and is deliberately NOT a plain subtree walk: a
+ * descendant that also hangs under a surviving parent stays alive on the board
+ * that still holds it. Membership is the thing being counted, not depth —
+ * which is also why deleting an object one row at a time orphans its children
+ * rather than removing them (`parent_object_id ON DELETE CASCADE` drops the
+ * MEMBERSHIP row, not the child). Keep the two in step: if the RPC's rule
+ * changes, this count silently starts lying to the user in the confirm dialog.
+ */
+export function orphanedByObjectDelete(state: GraphState, objectId: string): string[] {
+  if (!state.objects[objectId]) return [];
+  const removed = new Set<string>([objectId]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const id of [...removed]) {
+      for (const childId of state.objects[id]?.childIds ?? []) {
+        if (removed.has(childId)) continue;
+        const hasSurvivingParent =
+          state.clusters.some((c) => c.columnIds.includes(childId)) ||
+          Object.values(state.objects).some(
+            (o) => !removed.has(o.id) && o.childIds.includes(childId)
+          );
+        if (!hasSurvivingParent) {
+          removed.add(childId);
+          grew = true;
+        }
+      }
+    }
+  }
+  removed.delete(objectId);
+  return [...removed];
+}
+
 /** Ids of every object a `CLUSTER_DELETE` removes — columns and all descendants. */
 export function clusterObjectIds(state: GraphState, clusterId: string): string[] {
   const cluster = state.clusters.find((c) => c.id === clusterId);
@@ -113,6 +225,8 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
       return { clusters: action.snapshot.clusters, objects: action.snapshot.objects };
     case "CLUSTER_ADD":
       return { ...state, clusters: [...state.clusters, action.cluster] };
+    case "CREATE_RESOLVE":
+      return resolveIds(state, action.map, action.slugs);
     case "CLUSTER_UPDATE":
       return {
         ...state,

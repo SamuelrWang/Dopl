@@ -52,7 +52,7 @@ export function buildConnectPrompt(url: string): string {
  * all rendering; Dopl supplies the tools, the template, and the URLs.
  */
 export function buildBootstrapPrompt(url: string): string {
-  return `You are connected (or about to connect) to my Dopl workspace over MCP. Dopl stores three things my future agents read and write: KNOWLEDGE BASES (durable facts), SKILLS (repeatable procedures), and WORKFLOWS (multi-step pipelines that chain skills + knowledge). Your job right now is to help me build out genuinely useful, durable knowledge — by interviewing me, not by guessing.
+  return `You are connected (or about to connect) to my Dopl workspace over MCP. Dopl stores two things my future agents read and write: KNOWLEDGE BASES (durable facts) and SKILLS (repeatable procedures). Your job right now is to help me build out genuinely useful, durable knowledge — by interviewing me, not by guessing.
 
 CONNECT
 - Server name: ${MCP_SERVER_NAME}. Transport: HTTP (streamable). URL: ${url}.
@@ -70,7 +70,7 @@ PHASE 1 — PROPOSE (once):
 - End with "Pick one, or name your own." Then STOP and wait.
 
 PHASE 2 — INTERVIEW:
-- Open with one line naming the type: "This is a KB / SKILL / WORKFLOW; filling that rubric." (KB = durable facts; SKILL = how I do X; WORKFLOW = a multi-step pipeline.)
+- Open with one line naming the type: "This is a KB / SKILL; filling that rubric." (KB = durable facts; SKILL = how I do X.)
 - Take the matching rubric below and FILL every slot you can from what you know or can look up. Never ask what you could answer yourself or find by opening a file/tool.
 - Then ask ONLY the genuinely empty slots, ≤3 focused questions at a time, highest-value first.
 
@@ -97,8 +97,6 @@ RUBRICS:
 KB (facts): Title · Purpose (1 line) · Facts (durable truths, bulleted) · Why (what breaks if ignored) · Related entries to link.
 
 SKILL (procedure): Name (verb phrase) · When-to-use (trigger) · Inputs · Steps (ordered) · Constraints/voice · Output · Gotchas.
-
-WORKFLOW (pipeline): Name · Trigger · Ordered stages (each → the skill/KB it uses) · Decision points/branches · End state.
 
 Start PHASE 0 now.`;
 }

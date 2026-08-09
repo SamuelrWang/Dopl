@@ -9,7 +9,6 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { createWorkspaceForUser } from "../src/features/workspaces/server/service";
-import { composeWorkflow } from "../src/features/workflows/server/graph";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -54,25 +53,40 @@ async function main() {
     check("workspace created", Boolean(wsId));
 
     console.log("== 2. per-table seed counts ==");
+    // Mirrors seed-workspace.ts: KB → skills → ontology → chat.
+    // Ontology: 1 cluster, 2 column objects + 7 card objects (= 9 objects,
+    // 9 memberships), 3 seed relationships that fan out to 4 rows (one row
+    // per target — `ritual-upkeep` points at two).
     const expected: ReadonlyArray<readonly [string, number]> = [
       ["knowledge_bases", 1],
       ["knowledge_entries", 5],
-      ["skills", 4],
+      ["skills", 3],
       ["ontology_clusters", 1],
       ["ontology_objects", 9],
       ["ontology_memberships", 9],
       ["ontology_relationships", 4],
-      ["workflows", 1],
-      ["workflow_steps", 5],
-      ["workflow_step_edges", 5],
-      ["workflow_knowledge_bases", 1],
-      ["workflow_skills", 3],
       ["chats", 1],
       ["chat_messages", 4],
     ];
     for (const [table, n] of expected) {
       const got = await countRows(table, wsId);
       check(`${table} = ${n}`, got === n, `got ${got}`);
+    }
+
+    // Workflows are RETIRED from seeding (2026-08-07, D5). The tables are
+    // still on disk and `features/workflows/server/{seed,service-seed}.ts`
+    // still compile — these zeros are what catches the seed being rewired.
+    console.log("== 2b. retired surfaces seed nothing ==");
+    const retired = [
+      "workflows",
+      "workflow_steps",
+      "workflow_step_edges",
+      "workflow_knowledge_bases",
+      "workflow_skills",
+    ] as const;
+    for (const table of retired) {
+      const got = await countRows(table, wsId);
+      check(`${table} = 0 (retired)`, got === 0, `got ${got}`);
     }
 
     console.log("== 3. cross-refs resolve to real rows ==");
@@ -88,7 +102,7 @@ async function main() {
     if (entriesErr) throw new Error(`entries fetch: ${entriesErr.message}`);
     const skillIds = new Set((skills ?? []).map((s) => s.id));
     const entryIds = new Set((entries ?? []).map((e) => e.id));
-    check("fetched skill/entry id pools", skillIds.size === 4 && entryIds.size === 5, `${skillIds.size}/${entryIds.size}`);
+    check("fetched skill/entry id pools", skillIds.size === 3 && entryIds.size === 5, `${skillIds.size}/${entryIds.size}`);
 
     const { data: objects } = await admin
       .from("ontology_objects")
@@ -110,33 +124,25 @@ async function main() {
         }
       }
     }
-    check("ontology objects carry skill/knowledge ref attrs", refAttrs >= 6, String(refAttrs));
+    // 9 link attributes in the seed (4 across Surfaces, 5 across Rituals).
+    // `resolveAttributes` DROPS a link attr whose refs didn't resolve, so an
+    // exact count is what catches the cross-ref threading silently breaking.
+    check("ontology objects carry skill/knowledge ref attrs", refAttrs === 9, String(refAttrs));
     check("no dangling ontology refs", danglingRefs === 0, String(danglingRefs));
 
-    const { data: wf } = await admin
-      .from("workflows")
-      .select("id, slug")
-      .eq("workspace_id", wsId)
-      .single();
-    const graph = await composeWorkflow(wsId, wf!.id);
-    check("workflow: 5 steps topo-composed", graph.nodes.length === 5);
-    const conditions = graph.edges.filter((e) => e.condition !== "").length;
-    check("workflow: branch conditions present", conditions >= 2, String(conditions));
-    let danglingStepRefs = 0;
-    for (const step of graph.nodes) {
-      for (const r of step.reads) if (r.entryId && !entryIds.has(r.entryId)) danglingStepRefs++;
-      for (const a of step.actions) if (!skillIds.has(a.skillId)) danglingStepRefs++;
-    }
-    check("workflow reads/actions resolve", danglingStepRefs === 0, String(danglingStepRefs));
-
+    // The only place `seedNewWorkspace` runs twice against a real DB — keep
+    // it reachable. Nothing above may throw on a healthy seed, or this block
+    // (and the whole idempotency guarantee) silently stops being exercised.
     console.log("== 4. idempotency: re-seed is a no-op ==");
     const { seedNewWorkspace } = await import(
       "../src/features/workspaces/server/seed-workspace"
     );
-    await seedNewWorkspace(wsId, userId);
-    const kbAfter = await countRows("knowledge_bases", wsId);
-    const objAfter = await countRows("ontology_objects", wsId);
-    check("re-seed: still 1 KB / 9 objects", kbAfter === 1 && objAfter === 9, `${kbAfter}/${objAfter}`);
+    const reseed = await seedNewWorkspace(wsId, userId);
+    check("re-seed short-circuited on the dopl-guide slug", reseed.seeded === false, JSON.stringify(reseed));
+    for (const [table, n] of expected) {
+      const got = await countRows(table, wsId);
+      check(`re-seed: ${table} still ${n}`, got === n, `got ${got}`);
+    }
   } finally {
     console.log("== cleanup ==");
     if (wsId) await admin.from("workspaces").delete().eq("id", wsId);

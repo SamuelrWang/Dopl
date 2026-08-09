@@ -83,6 +83,7 @@ describe("GET /api/workspaces/resolve", () => {
       workspace: WORKSPACE,
       canonical: CANONICAL,
       needsRedirect: false,
+      role: "owner",
     });
 
     const res = await GET(getReq(`?segment=${CANONICAL}`));
@@ -101,6 +102,7 @@ describe("GET /api/workspaces/resolve", () => {
       workspace: WORKSPACE,
       canonical: CANONICAL,
       needsRedirect: true,
+      role: "owner",
     });
 
     const res = await GET(getReq("?segment=acme"));
@@ -116,6 +118,7 @@ describe("GET /api/workspaces/resolve", () => {
       workspace: WORKSPACE,
       canonical: CANONICAL,
       needsRedirect: false,
+      role: "owner",
     });
 
     await GET(getReq(`?segment=${CANONICAL}`));
@@ -127,6 +130,7 @@ describe("GET /api/workspaces/resolve", () => {
       workspace: WORKSPACE,
       canonical: CANONICAL,
       needsRedirect: false,
+      role: "owner",
     });
 
     await GET(getReq(`?segment=%20${CANONICAL}%20`));
@@ -172,6 +176,7 @@ describe("GET /api/workspaces/resolve", () => {
       workspace: WORKSPACE,
       canonical: CANONICAL,
       needsRedirect: false,
+      role: "owner",
     });
 
     const res = await GET(getReq(`?segment=${CANONICAL}`));

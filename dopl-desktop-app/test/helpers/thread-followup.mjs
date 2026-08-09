@@ -105,6 +105,19 @@ export function harness(over = {}) {
     windowFactoryReady: () => true,
     atWindowCap: () => cfg.capAt != null && sessions.size >= cfg.capAt,
     settleSession: (s) => { calls.evicted.push(s.key); s.settled = true; sessions.delete(s.key); },
+    // C-5 (2026-08-08): the window-budget eviction goes through the REDUCER now, so it posts
+    // the calm status note instead of tearing the window down in silence. The fake mirrors
+    // what the engine really does with an `inactive` event — run the effects, and let the
+    // `settle` effect be the thing that frees the slot — so `calls.evicted` still records it.
+    dispatch: (s, ev) => {
+      const r = sessionReducer(s.state, ev);
+      s.state = r.state;
+      for (const e of r.effects) {
+        calls.effects.push(e);
+        if (e.type === "settle") { calls.evicted.push(s.key); s.settled = true; sessions.delete(s.key); }
+      }
+      return true;
+    },
     hasLiveSession: (a) => { const s = sessions.get(store.slotKey(a)); return !!(s && !s.settled); },
     emit: () => {},
     // The window factory, faked — but the STATE it builds is the shipped shape: the real

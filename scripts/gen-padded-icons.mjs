@@ -1,18 +1,25 @@
 // One-off: regenerate all Dopl logo assets padded onto a black rounded square so
 // the crystal mark no longer runs to the edge. Source of truth is the unpadded
-// crystal at public/favicons/dopl-mark-source.png.
+// crystal at scripts/assets/dopl-mark-source.png.
 //
 //   node scripts/gen-padded-icons.mjs
 //
 // Regenerates the web favicons + favicon.ico, and the desktop iconset/icns.
 // Desktop app must be rebuilt (cd dopl-desktop-app && npm run build) to ship it.
+//
+// P0-4 (2026-08-07): the source MOVED out of `public/favicons/`. Everything under
+// `public/` is served, so a 297KB build input that no page references was shipping
+// to production as a public URL. It is an INPUT to this script, not an asset, and
+// `scripts/assets/` is where inputs live. Deleting it outright was the ticket's
+// suggestion and would have silently broken this script — it is the only thing
+// that references the file, which is exactly why the reference was easy to miss.
 
 import sharp from "sharp";
 import pngToIco from "png-to-ico";
 import { writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 
-const SRC = "public/favicons/dopl-mark-source.png";
+const SRC = "scripts/assets/dopl-mark-source.png";
 const CRYSTAL_SCALE = 0.7; // crystal occupies 70% of the canvas; rest is padding
 const RADIUS_FRAC = 0.22; // iOS-style squircle corner radius
 

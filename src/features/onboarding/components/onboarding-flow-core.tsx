@@ -6,6 +6,7 @@ import { AuthSplitLayout } from "@/shared/layout/auth-split";
 import { useMcpConnectionPoll } from "../hooks/use-mcp-connection-poll";
 import type { OnboardingStep, SurveySubmission } from "../types";
 import { McpConnectStep } from "./mcp-connect-step";
+import { ProvisioningChecklist } from "./provisioning-checklist";
 import { SurveyStep } from "./survey-step";
 import { WorkspaceNameStep } from "./workspace-name-step";
 
@@ -160,10 +161,7 @@ export function OnboardingFlowCore({
           }}
         >
           {finishing ? (
-            <div className="flex flex-col items-start gap-4 py-10">
-              <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#181818]/20 border-t-[#181818]" />
-              <p className="text-[15px] text-[#666]">Setting up your workspace…</p>
-            </div>
+            <ProvisioningChecklist />
           ) : step === "survey" ? (
             <SurveyStep submitting={submitting} onSubmit={handleSurveySubmit} />
           ) : step === "connect" ? (

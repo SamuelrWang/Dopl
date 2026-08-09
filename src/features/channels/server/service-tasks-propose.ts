@@ -6,6 +6,7 @@ import {
   TaskNotFoundError,
 } from "./errors";
 import { mapTaskRow } from "./dto";
+import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
@@ -34,6 +35,41 @@ export interface TaskCloseProposal {
 }
 
 /**
+ * The idempotency key for a close proposal, keyed by
+ * **(thread, outcome, activity anchor)** — C-6, 2026-08-08, F-172.
+ *
+ * It used to be `(thread, outcome)` alone, which made `propose_close` ONE-SHOT
+ * FOREVER: `postMessage`'s `client_msg_id` short-circuit returned the stored
+ * row and wrote nothing, so the second genuine proposal in a long exchange was
+ * silently swallowed and the first, stale prompt reloaded forever. The agent's
+ * only terminal act was permanently consumed by its first use. The client had
+ * always assumed the opposite — `readCloseProposal` takes the LATEST proposal,
+ * and `session-card.tsx` keeps "Keep open" dismissals local and per-message-id
+ * so the next real proposal renders. Nothing on the client needed changing;
+ * the server simply had to be capable of writing that next proposal.
+ *
+ * The anchor is {@link repoMessages.latestThreadActivitySeq} — the newest seq
+ * in the thread that is not itself a proposal — so a retry of the SAME proposal
+ * still collapses (nothing moved) while a proposal raised after more exchange
+ * writes a new row. That function's docblock owns the three cases.
+ *
+ * **THE PREFIX IS ALSO A NAMESPACE, and the stale-thread cron deliberately does
+ * NOT share it.** Until now the cron restated this exact key so the two rows
+ * would collide, which is how a scheduled sweep could land first and replace an
+ * agent's stated reason with "no activity for a while" on the card. The two are
+ * different authors saying different things and now write different keys; the
+ * sweep's RPC additionally refuses to select a thread whose newest message is
+ * already a proposal, so it cannot talk over a live prompt either.
+ */
+export function closeProposalClientMsgId(
+  taskId: string,
+  outcome: ThreadOutcome,
+  anchorSeq: number
+): string {
+  return `close-proposed-${taskId}-${outcome}-${anchorSeq}`;
+}
+
+/**
  * PROPOSE a close — the agent's terminal act, and the only one it has.
  *
  * DECISION (Samuel, 2026-08-04): thread close is PROPOSE-then-CONFIRM. See
@@ -56,9 +92,24 @@ export interface TaskCloseProposal {
  * only meaningful from a party to the exchange, and nothing about it should be
  * reachable by a member who could not close it either.
  *
- * IDEMPOTENT PER (thread, outcome). A responder that proposes twice in one
- * exchange leaves one prompt, not a pile of them: the `client_msg_id` collapses
- * repeats server-side, exactly as `queued-notice.js` does for its milestone.
+ * RE-RAISABLE, AND IDEMPOTENT PER (thread, outcome, activity anchor) — Samuel,
+ * 2026-08-08 (C-6, F-172). A responder that fires the same proposal twice with
+ * nothing in between still leaves ONE prompt; a responder that proposes, is
+ * told "keep open", does another hour of work and proposes again writes a
+ * SECOND prompt — which is what both client surfaces already assumed
+ * (`readCloseProposal` returns the LATEST; `session-card.tsx` dismisses per
+ * message id). {@link closeProposalClientMsgId} holds the reasoning.
+ *
+ * ✅ THE MCP TOOL DESCRIPTIONS WERE UPDATED TO MATCH (2026-08-07, F-172). Both
+ * `channel-description.ts`'s `propose_close` entry and `channel-ops-threads.ts`'s
+ * close refusal used to end "do not propose twice"; each now teaches ONCE PER
+ * STATE OF THE THREAD. That sentence, left alone, would have stopped a
+ * well-behaved agent from ever re-proposing — defeating this change entirely
+ * from the one place no test looks. `dist/` rebuilt.
+ *
+ * The anchor read is one extra query on a path that runs at most once per unit
+ * of work, and it is deliberately taken BEFORE the post rather than derived
+ * from the returned row — the key has to exist before there is anything to key.
  */
 export async function proposeTaskClose(
   ctx: ChannelContext,
@@ -78,6 +129,10 @@ export async function proposeTaskClose(
   }
 
   const reason = summary?.trim();
+  const anchorSeq = await repoMessages.latestThreadActivitySeq(
+    channel.id,
+    task.id
+  );
   let markerSeq: number | null = null;
   try {
     const marker = await postMessage(
@@ -88,7 +143,7 @@ export async function proposeTaskClose(
         kind: "task_progress",
         summary: task.title,
         metadata: { taskId: task.id },
-        clientMsgId: `close-proposed-${task.id}-${outcome}`,
+        clientMsgId: closeProposalClientMsgId(task.id, outcome, anchorSeq),
       },
       // The marker keys are RESERVED — stripped from any caller's metadata and
       // re-stamped only from here, so nothing on the wire can manufacture a

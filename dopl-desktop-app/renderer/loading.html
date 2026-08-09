@@ -4,42 +4,143 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dopl</title>
+  <!--
+    The launch screen. It used to be a centred logo + a spinning ring, which is
+    the one thing every user sees on every launch and the thing Samuel's
+    checklist names first ("no spinning loaders, everything should have
+    skeletons" — docs/LAUNCH-READINESS-ROADMAP.md §5).
+
+    It is now a SHELL SKELETON: the real geometry of the window that replaces
+    it — dark workspace rail, grey sidebar, and the floating white page card —
+    so the swap to the loaded app is a content change, not a layout change.
+    Nothing here moves except the shared skeleton pulse.
+
+    Values are inlined rather than tokenised because this is a standalone
+    file:// document with no Tailwind and no globals.css. They are copied from
+    src/app/globals.css (`--rail` #2c3640, `--bg-base` #f5f7fa, the #f1f2f4
+    shell surface, `--panel-surface` #fbfcfd, `--border-strong` 12% black) and
+    from the shell geometry block there (`--shell-rail-w` 62px,
+    `--shell-sidebar-w` 204px, the 6/4px surface gaps, the `.page-float`
+    14px radius + double shadow). Keep them in sync with that file.
+  -->
   <style>
     :root { color-scheme: light; }
+    * { box-sizing: border-box; }
     html, body {
-      margin: 0; height: 100%;
-      background: #ffffff; color: #0d0d0d;
+      margin: 0; height: 100%; overflow: hidden;
+      background: #2c3640;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       -webkit-user-select: none; user-select: none;
     }
-    .wrap {
-      height: 100%; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; text-align: center;
-      gap: 16px; padding: 24px;
+
+    /* One shared pulse — the `animate-pulse` recipe the app's Skeleton kit
+       uses (src/shared/ui/skeleton.tsx), so the two never read differently. */
+    @keyframes ghost { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .g {
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 4px;
+      animation: ghost 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
-    .mark {
-      width: 44px; height: 44px; border-radius: 11px;
-      filter: drop-shadow(0 6px 14px rgba(0,0,0,.18));
+    .g-rail { background: rgba(255, 255, 255, 0.09); }
+    @media (prefers-reduced-motion: reduce) { .g { animation: none; } }
+
+    .shell { display: flex; height: 100%; }
+
+    /* Workspace rail (far left) */
+    .rail {
+      width: 62px; flex: 0 0 62px;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 13px; padding: 6px 0 16px;
     }
-    h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 6px 0 0; }
-    p { margin: 0; color: #8c8c8c; font-size: 14px; max-width: 360px; line-height: 1.5; }
-    .spinner {
-      margin-top: 6px;
-      width: 22px; height: 22px; border-radius: 50%;
-      border: 2px solid rgba(0,0,0,.12);
-      border-top-color: rgba(0,0,0,.55);
-      animation: spin 0.8s linear infinite;
+    .tile { width: 46px; height: 46px; border-radius: 8px; }
+
+    /* Grey surface holding the sidebar + the page card */
+    .surface {
+      flex: 1; min-width: 0; display: flex;
+      margin: 6px 6px 6px 4px;
+      border-radius: 8px; overflow: hidden;
+      background: #f1f2f4;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+    .sidebar {
+      width: 204px; flex: 0 0 204px;
+      padding: 8px 12px 20px 12px;
+      display: flex; flex-direction: column; gap: 9px;
+    }
+    .brand { height: 34px; border-radius: 10px; margin-bottom: 5px; }
+    .nav { height: 15px; border-radius: 999px; margin: 4px 2px; }
+
+    /* The .page-float card every page paints into */
+    .page {
+      flex: 1; min-width: 0;
+      margin: 7px 8px 9px 8px;
+      background: #fbfcfd;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 28px -8px rgba(0, 0, 0, 0.16);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .pageHead {
+      height: 52px; flex: 0 0 52px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .pageBody { flex: 1; min-height: 0; padding: 24px 24px 0; }
+    .pageInner { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .r14 { border-radius: 14px; }
+    .r6 { border-radius: 6px; }
+    .pill { border-radius: 999px; }
+    .spacer { flex: 1; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <img class="mark" src="assets/icon.png" alt="Dopl" onerror="this.style.display='none'" />
-    <h1>Getting Dopl ready</h1>
-    <p>Loading your workspace. This will just take a moment.</p>
-    <div class="spinner" aria-label="Loading"></div>
+  <!-- Purely decorative: the accessible announcement is the single live
+       region below, not thirty ghost blocks. -->
+  <div class="shell" aria-hidden="true">
+    <div class="rail">
+      <div class="g g-rail tile"></div>
+      <div class="g g-rail tile"></div>
+      <div class="g g-rail tile"></div>
+    </div>
+
+    <div class="surface">
+      <div class="sidebar">
+        <div class="g brand"></div>
+        <div class="g nav" style="width: 78%"></div>
+        <div class="g nav" style="width: 64%"></div>
+        <div class="g nav" style="width: 71%"></div>
+        <div class="g nav" style="width: 58%"></div>
+        <div class="g nav" style="width: 67%"></div>
+        <div class="spacer"></div>
+        <div class="g nav" style="width: 52%"></div>
+      </div>
+
+      <div class="page">
+        <div class="pageHead">
+          <div class="g pill" style="width: 132px; height: 14px"></div>
+          <div class="spacer"></div>
+          <div class="g r6" style="width: 28px; height: 28px"></div>
+          <div class="g r6" style="width: 28px; height: 28px"></div>
+        </div>
+        <div class="pageBody">
+          <div class="pageInner">
+            <div class="g r14" style="height: 76px"></div>
+            <div class="cards">
+              <div class="g r14" style="height: 104px"></div>
+              <div class="g r14" style="height: 104px"></div>
+              <div class="g r14" style="height: 104px"></div>
+            </div>
+            <div class="g r14" style="height: 150px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">
+    Opening Dopl
   </div>
 </body>
 </html>

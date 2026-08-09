@@ -1,5 +1,5 @@
 /**
- * Locked tour copy — 7 step cards + the finish card. Titles match the
+ * Locked tour copy — 5 step cards + the finish card. Titles match the
  * sidebar labels; `section` is the route section each step navigates to
  * (reused with the `sectionPath` helper). Pure data — no React.
  *
@@ -22,16 +22,6 @@ export const TOUR_STEPS: readonly TourStep[] = [
     section: "ontology",
     title: "Ontology",
     body: "The ontology holds the things your agent works with: people, projects, accounts, and tools, stored as structured objects with attributes and connections. Structure is what makes your agent effective. It finds the exact object it needs, sees what's connected, and acts without loading piles of context. Add objects here yourself, or just tell your agent what exists and it will build them for you.",
-  },
-  {
-    section: "canvas",
-    title: "Canvas",
-    body: "Canvas is the same ontology, shown as a graph. Every object is a node and every relationship is a line, so you can see how everything connects, and what's missing or out of date. Drag nodes to arrange them, click one to inspect it.",
-  },
-  {
-    section: "workflows",
-    title: "Workflows",
-    body: "A workflow is a step-by-step process your agent runs the same way every time. Each step is a node, with branches where decisions happen, and steps can pull in your skills and knowledge along the way. Build one here, then tell your agent to run it. It walks the steps in order.",
   },
   {
     section: "knowledge",
@@ -67,5 +57,5 @@ export const TOUR_FINISH: TourFinish = {
   title: "That's the tour!",
   body: "Your agent can read this whole workspace, so ask it anything you want to go deeper on.",
   prompt:
-    "You're connected to my Dopl workspace over MCP. Explore it and tell me what's in the ontology, workflows, knowledge, skills, and chats. Explain how the pieces fit together and how I should use them day to day.",
+    "You're connected to my Dopl workspace over MCP. Explore it and tell me what's in the ontology, knowledge, skills, and chats. Explain how the pieces fit together and how I should use them day to day.",
 };

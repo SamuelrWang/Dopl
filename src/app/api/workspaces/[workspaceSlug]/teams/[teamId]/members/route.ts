@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { TeamMembersAddSchema } from "@/features/teams/schema";
 import { addTeamMembers } from "@/features/teams/server/service";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
@@ -23,11 +23,7 @@ export const POST = withUserAuth(
       await addTeamMembers(workspace.id, userId, params.teamId, userIds);
       return NextResponse.json({ ok: true });
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json({ error: message }, { status: 500 });
+      return toHttpErrorResponse("api/workspaces/[workspaceSlug]/teams/[teamId]/members", err);
     }
   },
   // sessionOnly: adding team members is an admin access-control action, not an

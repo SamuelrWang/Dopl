@@ -8,15 +8,10 @@ import SkillDetailRedirect from "#/pages/skills/detail";
 import ChatsPage from "#/pages/chats";
 import KnowledgePage from "#/pages/knowledge";
 import KnowledgeDetailPage from "#/pages/knowledge/detail";
-import WorkflowsPage from "#/pages/workflows";
-import WorkflowDetailPage from "#/pages/workflows/detail";
 import MembersPage from "#/pages/members";
-import CanvasPage from "#/pages/canvas";
-import Canvas2AliasPage from "#/pages/canvas/canvas2";
 import OntologyPage from "#/pages/ontology";
 import OntologyDetailPage from "#/pages/ontology/detail";
 import SettingsPage from "#/pages/settings";
-import ConfigurationPage from "#/pages/configuration";
 import ChannelsPage from "#/pages/channels";
 import BootPage from "#/pages/boot";
 import OnboardingPage from "#/pages/onboarding";
@@ -35,6 +30,14 @@ import OnboardingPage from "#/pages/onboarding";
  *
  * Rows whose `path` contains a `:param` are detail routes — the layout's nav
  * skips them (it cannot invent an id).
+ *
+ * RETIRED (2026-08-07): `canvas`, `canvas2`, `workflows`, `workflows/:slug` and
+ * `configuration` are gone from this table — the page components still exist
+ * under `#/pages/**` but nothing imports or routes to them
+ * (docs/RETIREMENT-UNWIRING-PLAN.md §3.1). Restoring one means restoring its
+ * row here, its `NavSection` + `NAV` row in
+ * `src/shared/layout/app-shell/app-sidebar-core.tsx`, and the hand copy in
+ * `dopl-desktop-app/main/deep-link-target.js`.
  */
 
 export interface PageRoute {
@@ -48,25 +51,20 @@ export interface PageRoute {
 
 export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "overview", label: "Overview", element: <OverviewPage /> },
-  { path: "canvas", label: "Canvas", element: <CanvasPage /> },
-  { path: "canvas2", label: "Canvas (alias)", element: <Canvas2AliasPage /> },
   { path: "ontology", label: "Ontology", element: <OntologyPage /> },
   { path: "ontology/:clusterSlug", label: "Cluster", element: <OntologyDetailPage /> },
   { path: "knowledge", label: "Knowledge", element: <KnowledgePage /> },
   { path: "knowledge/:kbSlug", label: "Knowledge base", element: <KnowledgeDetailPage /> },
   { path: "skills", label: "Skills", element: <SkillsPage /> },
   { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
-  { path: "workflows", label: "Workflows", element: <WorkflowsPage /> },
-  { path: "workflows/:workflowSlug", label: "Workflow", element: <WorkflowDetailPage /> },
   { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels", element: <ChannelsPage /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
-  { path: "configuration", label: "Configuration", element: <ConfigurationPage /> },
 ];
 
-/** The web app's `/[workspaceSlug]` server redirect target. */
-export const WORKSPACE_HOME_PATH = "canvas";
+/** The workspace index redirect target — every "go home" funnel lands here. */
+export const WORKSPACE_HOME_PATH = "overview";
 
 export const routes: RouteObject[] = [
   {

@@ -11,6 +11,7 @@ exports.opAnchor = opAnchor;
 exports.opResolve = opResolve;
 exports.opGet = opGet;
 const narration_1 = require("./narration");
+const ontology_clipped_1 = require("./ontology-clipped");
 const respond_1 = require("./respond");
 const identity_1 = require("./identity");
 const ontology_render_1 = require("./ontology-render");
@@ -30,10 +31,31 @@ const NO_NAME = "`(unnamed)`";
 const MAP_SCOPE_NOTE = `_Clusters and their columns, with each column's DIRECT members only. Objects nested deeper, and objects belonging to no column, are not shown here; trashed clusters and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
 /** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
 const RESOLVE_CAP = 20;
+/**
+ * THE SUMMARY PROJECTION, NOT THE GRAPH (P0-3), for the two ops above that
+ * render nothing but names.
+ *
+ * `opMap` walks clusters → `columnIds` → one level of `childIds` and prints
+ * names; `opResolve` filters on `name`/`subtitle` and prints names and ids.
+ * Between them they read five fields, all of which `view: "summary"` carries —
+ * and the bare `getOntology()` they used to call fetched every `attributes`,
+ * `methods`, `template` and cluster `layout` in the workspace to supply them.
+ * `op="map"` is the ROUTING call the tool description tells agents to make
+ * first, so it is the ontology read most likely to be made speculatively.
+ *
+ * `opGet` and `opAnchor` deliberately stay on the full graph: both render
+ * through `renderObject`, which reads the JSONB off the target AND scans every
+ * object's `relationships` for the inbound "Referenced by" list.
+ */
 async function opMap(client) {
-    const snapshot = await client.getOntology();
+    const snapshot = await client.getOntology({ view: "summary" });
     if (snapshot.clusters.length === 0) {
-        return (0, respond_1.ok)(`No ontology clusters yet — the graph is empty. Start one with op="create_cluster".`);
+        // "The graph is empty" is an assertion, and a clipped read never
+        // established it — a workspace can come back at the object ceiling with no
+        // cluster rows in hand. Say what happened instead of what it looked like.
+        return (0, respond_1.ok)(snapshot.truncated
+            ? `No ontology clusters came back on this read.\n\n${(0, ontology_clipped_1.clippedNote)("an empty result here is not evidence of an empty graph")}`
+            : `No ontology clusters yet — the graph is empty. Start one with op="create_cluster".`);
     }
     const lines = [];
     for (const c of snapshot.clusters) {
@@ -50,6 +72,13 @@ async function opMap(client) {
             lines.push(`- ${(0, narration_1.inlineOr)(column.name, NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
         }
         lines.push("");
+    }
+    // With the clusters, not in the footer: MAP_SCOPE_NOTE explains which levels
+    // this op CHOOSES not to render, which is a different fact from the read
+    // having stopped short of the workspace, and a reader must not be able to
+    // take the first as covering the second.
+    if (snapshot.truncated) {
+        lines.push((0, ontology_clipped_1.clippedNote)("the clusters and columns above are a prefix and not the set"), "");
     }
     lines.push(`Drill in with op="get" (object id or exact name).`);
     lines.push("", MAP_SCOPE_NOTE);
@@ -83,14 +112,23 @@ async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER) {
     return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`));
 }
 async function opResolve(client, query) {
-    const snapshot = await client.getOntology();
+    const snapshot = await client.getOntology({ view: "summary" });
+    // A clip and the RESOLVE_CAP are two different truncations and are reported
+    // separately below: the cap hid matches we found, the clip hid objects we
+    // never scanned. Conflating them would tell an agent to "narrow the query"
+    // for rows no query on this connection returns.
+    const clipped = snapshot.truncated
+        ? `\n\n${(0, ontology_clipped_1.clippedNote)("this query ran over a prefix of the graph and a match outside it could not appear")}`
+        : "";
     const needle = query.toLowerCase();
     const hits = Object.values(snapshot.objects).filter((o) => o.name.toLowerCase().includes(needle) || o.subtitle.toLowerCase().includes(needle));
     if (hits.length === 0) {
         // Was `op="map" shows everything.` — it does not: op="map" renders two
         // levels and skips objects in no column, which is exactly the set an agent
         // that struck out on resolve is most likely to be hunting for.
-        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).`);
+        // The miss is the reading a clip damages most: "no object contains X" over
+        // a prefix of the graph is a false negative that reads as a fact.
+        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).${clipped}`);
     }
     const containerOf = (id) => {
         // The "kind" is the containing OBJECT'S NAME, member-typed like any other.
@@ -108,7 +146,7 @@ async function opResolve(client, query) {
     const truncated = hits.length > shown.length
         ? `\n\n_Showing ${shown.length} of ${hits.length} matches. Narrow the query for the rest._`
         : "";
-    return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}\n\nRead one with op="get".`);
+    return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}\n\nRead one with op="get".`);
 }
 async function opGet(client, ref) {
     const snapshot = await client.getOntology();

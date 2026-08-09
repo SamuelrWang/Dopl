@@ -18,6 +18,11 @@ export class TeamNotFoundError extends HttpError {
  *
  * `autoGrantResolvable` is true when retrying the same request with
  * `autoGrant: true` (admin only) would create the missing read grants.
+ *
+ * The `workflowId`/`workflowName` payload fields keep their names (the
+ * invariant really is the workflow->KB one and the client reads those
+ * keys), but the MESSAGES stay generic: workflows are retired from the UI
+ * and this 409 renders in front of users who have no such page.
  */
 export class TeamKbAccessConflictError extends HttpError {
   constructor(args: {
@@ -30,8 +35,8 @@ export class TeamKbAccessConflictError extends HttpError {
       409,
       "TEAM_KB_ACCESS_CONFLICT",
       args.autoGrantResolvable
-        ? "Some teams with access to this workflow can't read its knowledge bases"
-        : "This change would leave workflow readers without access to attached knowledge bases",
+        ? "Some teams with access to this resource can't read its knowledge bases"
+        : "This change would leave the resource's readers without access to attached knowledge bases",
       args
     );
   }

@@ -12,7 +12,6 @@ import {
 import { toast } from "@/shared/ui/toast";
 import type { WorkflowStep } from "../types";
 import * as api from "../client/api";
-import { useWorkflowsRealtime } from "../client/realtime";
 import type {
   NodeContentInput,
   WorkflowDetail,
@@ -134,7 +133,11 @@ export function useWorkflows(
     };
   }, [scheduler, workspaceId]);
 
-  // ── Live updates from MCP/CLI agents and other tabs ────────────────
+  // No `useWorkflowsRealtime` call: the subscription is retired and the
+  // rationale for it lives in `../client/realtime.ts`. This hook is
+  // refetch-on-mount only; the coordinator below stays wired to the save path
+  // (`settleAfterSave`), the half that never needed realtime.
+  //
   // A remote change invalidates the list + the open workflow's detail so
   // the graph re-lands the server-owned topo order / attachments. The
   // guard: if the ACTIVE workflow has pending merge-scheduler entries the
@@ -175,9 +178,6 @@ export function useWorkflows(
   const settleAfterSave = useCallback(() => {
     coordinatorRef.current?.settle(activeHasPending());
   }, [activeHasPending]);
-  useWorkflowsRealtime(workspaceId, () =>
-    coordinatorRef.current?.request(activeHasPending())
-  );
 
   const patchDetailNode = useCallback(
     (workflowId: string, nodeId: string, patch: Partial<WorkflowStep>) => {

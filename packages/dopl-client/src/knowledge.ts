@@ -19,7 +19,6 @@ import type {
   KnowledgeEntry,
   KnowledgePathOpResult,
   KnowledgeSearchHit,
-  KnowledgeTrashSnapshot,
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
   KnowledgeWriteFileResult,
@@ -95,17 +94,6 @@ export async function deleteKbBase(
     "DELETE",
     "kb_delete_base"
   );
-}
-
-export async function restoreKbBase(
-  t: DoplTransport,
-  baseId: string
-): Promise<KnowledgeBase> {
-  const data = await t.request<{ base: KnowledgeBase }>(
-    `/api/knowledge/bases/${enc(baseId)}/restore`,
-    { method: "POST", toolName: "kb_restore_base" }
-  );
-  return data.base;
 }
 
 // ─── Path-based file/folder ops ─────────────────────────────────────
@@ -233,43 +221,6 @@ export async function moveKbByPath(
       toolName: "kb_move_by_path",
     }
   );
-}
-
-// ─── Trash ──────────────────────────────────────────────────────────
-
-export async function listKbTrash(
-  t: DoplTransport,
-  baseId?: string
-): Promise<KnowledgeTrashSnapshot> {
-  const qs = baseId ? `?baseId=${enc(baseId)}` : "";
-  return t.request<KnowledgeTrashSnapshot>(
-    `/api/knowledge/trash${qs}`,
-    { toolName: "kb_list_trash" }
-  );
-}
-
-export async function restoreKbFolder(
-  t: DoplTransport,
-  folderId: string
-): Promise<import("./knowledge-types.js").KnowledgeFolder> {
-  const data = await t.request<{
-    folder: import("./knowledge-types.js").KnowledgeFolder;
-  }>(`/api/knowledge/folders/${enc(folderId)}/restore`, {
-    method: "POST",
-    toolName: "kb_restore_folder",
-  });
-  return data.folder;
-}
-
-export async function restoreKbEntry(
-  t: DoplTransport,
-  entryId: string
-): Promise<KnowledgeEntry> {
-  const data = await t.request<{ entry: KnowledgeEntry }>(
-    `/api/knowledge/entries/${enc(entryId)}/restore`,
-    { method: "POST", toolName: "kb_restore_file" }
-  );
-  return data.entry;
 }
 
 // ─── Search (Item 5.D) ──────────────────────────────────────────────

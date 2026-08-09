@@ -6,8 +6,9 @@
  * to `service-tasks-idempotency.test.ts` (both §2 cap).
  *
  * Focus (the load-bearing rules):
- *   - authorization: createTask (member + addressee-member), closeTask
- *     (creator OR target), setTaskMode (creator only);
+ *   - authorization: createTask (member + addressee-member) and setTaskMode
+ *     (creator only). CLOSE and REOPEN authorization moved with their code to
+ *     `service-tasks-lifecycle.test.ts` (C-26 / C-30, 2026-08-08);
  *   - the SELF-TARGET guard: a thread addressed to its own creator has one
  *     party and can never be answered, and the guard sits in FRONT of the
  *     `client_msg_id` short-circuit so a retry cannot be handed the dead thread
@@ -25,12 +26,11 @@ import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as reads from "./service-reads";
-import { createTask, closeTask, setTaskMode } from "./service-tasks";
+import { createTask, setTaskMode } from "./service-tasks";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
   TaskForbiddenError,
-  TaskNotFoundError,
   TaskSelfTargetError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
@@ -300,52 +300,9 @@ describe("createTask — self-target guard", () => {
   });
 });
 
-describe("closeTask — authorization", () => {
-  it("404s an unknown task", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
-    await expect(
-      closeTask(ctx, "general", TASK_ID, "completed")
-    ).rejects.toBeInstanceOf(TaskNotFoundError);
-  });
-
-  it("allows the creator to close", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: TARGET })
-    );
-    vi.mocked(repoTasks.updateTask).mockResolvedValue(
-      taskRow({ status: "closed", outcome: "completed", created_by: USER })
-    );
-
-    await closeTask(ctx, "general", TASK_ID, "completed");
-
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toMatchObject({
-      status: "closed",
-      outcome: "completed",
-    });
-  });
-
-  it("allows the target to close", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: CREATOR, target_user_id: USER })
-    );
-    vi.mocked(repoTasks.updateTask).mockResolvedValue(
-      taskRow({ status: "closed", outcome: "failed" })
-    );
-    await expect(
-      closeTask(ctx, "general", TASK_ID, "failed")
-    ).resolves.toBeDefined();
-  });
-
-  it("forbids a member who is neither creator nor target", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: CREATOR, target_user_id: TARGET })
-    );
-    await expect(
-      closeTask(ctx, "general", TASK_ID, "completed")
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
-  });
-});
+// `closeTask — authorization` MOVED to `service-tasks-lifecycle.test.ts` when
+// close and reopen moved to `service-tasks-lifecycle.ts` (C-26 / C-30). The suite
+// follows its subject rather than staying behind as an import across the split.
 
 describe("setTaskMode — authorization", () => {
   it("allows the creator and posts NO message", async () => {

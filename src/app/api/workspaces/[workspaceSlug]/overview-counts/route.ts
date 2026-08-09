@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { getWorkspaceOverviewCounts } from "@/features/workspaces/server/service";
 import { isMcpConnected } from "@/features/onboarding/server/service";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
@@ -66,14 +66,7 @@ export const GET = withUserAuth(
         { headers: { "Cache-Control": "private, no-store" } }
       );
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message } },
-        { status: 500 }
-      );
+      return toHttpErrorResponse("api/workspaces/[workspaceSlug]/overview-counts", err);
     }
   }
 );

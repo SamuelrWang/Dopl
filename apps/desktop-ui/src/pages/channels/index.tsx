@@ -30,10 +30,13 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  *   page passes `CONSENT_INBOX_POLL_MS` (30 s), so a request raised elsewhere
  *   still lands within 30 s, and a decision made here refetches immediately.
  * - **Message list / channel list / threads** — fetch on mount, then refresh
- *   only on this window's own writes (every mutation awaits its refetch) and
- *   on TanStack focus revalidation. An INBOUND message from a teammate's agent
- *   is stale until one of those fires. This is the one real live-ness loss and
- *   it is Phase 3's to fix, not this port's.
+ *   only on this window's own writes and on TanStack focus revalidation. An
+ *   INBOUND message from a teammate's agent is stale until one of those fires.
+ *   This is the one real live-ness loss and it is Phase 3's to fix, not this
+ *   port's. (Since 2026-08-07 those writes no longer AWAIT a refetch: they are
+ *   `useApiMutation`s that patch the cache optimistically and reconcile from
+ *   the POST's own response — F-159 / roadmap P0-1. Nothing about the
+ *   liveness gap changed; the sentence describing the old shape did.)
  * - **Roster / presence** — same: initial fetch is real, the "N online" strip
  *   and the online rings go stale between refetches (the 90 s freshness window
  *   is client-side arithmetic over `lastSeenAt`, so a stale roster reads as
@@ -53,7 +56,7 @@ export default function ChannelsPage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
-  if (isPending || !access) return <PageLoading label="Loading channels" />;
+  if (isPending || !access) return <PageLoading label="Loading channels" variant="two-pane" />;
 
   return (
     <ChannelsViewCore

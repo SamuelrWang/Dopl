@@ -4,9 +4,15 @@ import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 import type { McpCredential } from "./mcp-credential";
 
 // Per-token request ceiling for OAuth callers at the /api/mcp boundary.
-// Generous by default — agents are bursty — but caps runaway abuse. The
-// loopback /api/* calls skip rate limiting to avoid double-counting, so the
-// ceiling is enforced here. Override via env.
+// Generous by default — agents are bursty — but caps runaway abuse.
+//
+// UNIFIED BUDGET (2026-08-08): the loopback `/api/*` calls this transport makes
+// now ALSO count against the same `mcp:<tokenId>` subject, because `withUserAuth`
+// grew a matching limiter in its OAuth-bearer branch (see the note there). That
+// closes the hole where a token pointed straight at the REST routes bypassed
+// this ceiling entirely. Both doors read this SAME env var, so a token spends
+// one shared 600/min budget across the transport and direct REST rather than two
+// independent ones. Override via env.
 const OAUTH_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
 /**

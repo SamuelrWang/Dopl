@@ -1,8 +1,8 @@
 /**
  * `dopl_search` — one ranked search across the workspace. Knowledge
  * entries use the backend hybrid (embeddings + full-text) search;
- * skills, workflows, and ontology objects match on their name/trigger
- * metadata. Every hit carries the stable handle for the follow-up read.
+ * skills and ontology objects match on their name/trigger metadata.
+ * Every hit carries the stable handle for the follow-up read.
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

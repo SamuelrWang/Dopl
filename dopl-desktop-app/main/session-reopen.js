@@ -25,7 +25,7 @@ const store = require('./session-store');
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
-let deps = { sessions: null, refreshTray: function () {}, recreateParkedShell: null, keptWindow: null };
+let deps = { sessions: null, refreshTray: function () {}, recreateParkedShell: null, keptWindow: null, dispatch: null };
 
 // The engine binds its in-memory `sessions` Map + tray-refresh + the P2 shell builder
 // here at load, plus (§3.3) the ENDED-session window lookup below.
@@ -34,6 +34,9 @@ function bind(d) {
     sessions: (d && d.sessions) || null,
     refreshTray: (d && d.refreshTray) || function () {},
     recreateParkedShell: (d && d.recreateParkedShell) || null,
+    // C-8: the engine's own dispatch, so the quit teardown ENDS sessions through the reducer
+    // rather than growing a second teardown beside `settle`.
+    dispatch: (d && d.dispatch) || null,
     // session-summary.keptWindow: the surviving window of an ABANDONED session, or null.
     // Optional — a mid-wave engine that has not wired it simply falls through to the
     // recreate, which is what this call did before the branch existed.
@@ -126,6 +129,62 @@ function reopenByTask(a) {
   return { ok: false };
 }
 
+// ── C-8: THE SESSIONS A QUIT WOULD ORPHAN, AND HOW THEY ARE ENDED ────────────────
+//
+// THE DEFECT (audit C-8). `before-quit` stopped the listener and nothing else — it never
+// iterated the registry, never aborted a controller, and never flushed the state push.
+// Repo-wide the only `.kill(` is the auth pty. So every live `sdk.query()` left a bundled
+// `claude` child running, still holding this session's PRE-APPROVED `dopl_channel` MCP
+// access, able to go on posting into the channel after the app it belonged to was gone. The
+// crash path already fixes exactly this (session-engine's C3 teardown); the quit path never
+// reached it.
+//
+// THE PREDICATE IS "HOLDS A LIVE CHILD", NOT "IS WORKING". A parked session's query is torn
+// down (that IS what a park does), so it orphans nothing and is left alone — settling it
+// would rewrite its durable phase for no benefit. Everything else that is not settled owns a
+// child, INCLUDING one sitting between turns at activity 'idle': its push iterator is open
+// and the process is alive. Reading the pill state here would have quietly spared exactly
+// those, which are the majority of the orphans.
+function liveChildSessions() {
+  const out = [];
+  if (!deps.sessions) return out;
+  for (const s of deps.sessions.values()) {
+    if (!s || s.settled) continue;
+    if (s.state && s.state.parked === true) continue;
+    out.push(s);
+  }
+  return out;
+}
+
+// What the quit dialog names. One row per session the quit is about to kill, identified the
+// way a human recognises it — the thread's title and the channel it lives in, not a count.
+// `working` is the F-142 pill distinction ("is an agent mid-turn"), carried so the dialog can
+// say which of them is actually doing something right now.
+function listOrphanRisk() {
+  return liveChildSessions().map((s) => ({
+    key: s.key,
+    channelName: (s.context && s.context.channelName) || null,
+    taskTitle: (s.context && s.context.taskTitle) || null,
+    counterpartyName: s.counterpartyName || null,
+    working: !!(s.state && s.state.activity !== 'idle' && s.state.activity !== 'awaiting_peer'),
+  }));
+}
+
+// END every session holding a child, through the reducer. `inactive` is C-5's calm terminal:
+// it aborts the query (which is what kills the child), posts the "went inactive" status note
+// so the waiting peer's card stops pulsing, and settles — the SAME treatment an eviction or a
+// launch timeout gets, rather than a second teardown written for quit. Returns how many were
+// ended. Each dispatch is independently guarded: one throwing session must never be able to
+// stop a quit (fail OPEN on quitting is the rule).
+function endLiveSessions() {
+  if (!deps.dispatch) return 0;
+  let ended = 0;
+  for (const s of liveChildSessions()) {
+    try { deps.dispatch(s, { type: 'inactive' }); ended += 1; } catch (_) { /* never block a quit */ }
+  }
+  return ended;
+}
+
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask };
+module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask, listOrphanRisk, endLiveSessions };

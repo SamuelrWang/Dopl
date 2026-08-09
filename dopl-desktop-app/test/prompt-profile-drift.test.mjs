@@ -3,12 +3,12 @@
 // THE DEFECT. `prompt-framing.firstActions` opened every session turn with
 // "Your FIRST action is ToolSearch("select:mcp__dopl__dopl_channel")" — and `ToolSearch` sits
 // in `tool-profiles.DENIED_BUILTINS` under "capability escalation", which
-// `session-profiles.buildSessionToolConfig` hard-denies on ALL THREE profiles (read_only and
-// dopl_only take DENIED_BUILTINS directly; `full` takes SESSION_HARD_DENY, which is
-// DENIED_BUILTINS minus the live-gated work tools, and ToolSearch is not one of those). So
+// `session-profiles.buildSessionToolConfig` hard-denied on ALL THREE profiles. So
 // `grantDecision` answered 'deny' before any button could appear and the FIRST imperative of
 // every session was a call that comes back "Blocked for this session". No comment anywhere
-// reconciled the two, because nothing read both.
+// reconciled the two, because nothing read both. (F-177, 2026-08-08: `full` gates it now
+// rather than denying it — the join below is unchanged and reads the REAL lists, so it simply
+// tracks the move.)
 //
 // WHY IT IS ITS OWN SUITE. This is the same drift class as the whole 2026-08-04 incident: two
 // parallel declarations of one fact (what a session may do), each internally coherent, neither
@@ -29,6 +29,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -81,17 +82,37 @@ function callsTool(text, name) {
 
 // ── the join ───────────────────────────────────────────────────────────────────
 
-test("ToolSearch is denied on every session profile (the fact the prompt has to respect)", () => {
-  // Stated first and on its own, so a later change that GRANTS ToolSearch fails HERE — where
-  // the reason is written down — rather than silently making the scan below vacuous.
+test("ToolSearch is denied on the RESTRICTED profiles, and merely GATED under full (F-177)", () => {
+  // Stated first and on its own, so a change to either half fails HERE — where the reason is
+  // written down — rather than silently making the scan below vacuous.
+  //
+  // F-177 (2026-08-08) MOVED the `full` half of this. `full` no longer hard-denies ToolSearch;
+  // it gates it like every other released built-in. The rule the prompt has to respect is
+  // UNCHANGED and is the scan below: a turn must never ORDER a call the session cannot make
+  // freely. `gate` is not `deny`, but ordering it as a FIRST ACTION would still stall every
+  // session on a card the operator has to clear before the agent has done anything.
   assert.ok(DENIED_BUILTINS.includes("ToolSearch"), "ToolSearch left the shared blacklist");
-  for (const profile of PROFILES) {
+  for (const profile of ["read_only", "dopl_only"]) {
     const cfg = buildSessionToolConfig(profile);
     assert.ok(
       cfg.disallowedTools.includes("ToolSearch"),
       `${profile}: ToolSearch is no longer hard-denied — re-read prompt-framing.firstActions`
     );
   }
+  assert.ok(!buildSessionToolConfig("full").disallowedTools.includes("ToolSearch"),
+    "full still hard-denies ToolSearch — F-177 was reverted, so re-read sdk-loader's alwaysLoad note");
+});
+
+// F-177 — WHY THE `full` HALF IS SAFE TO RELEASE, pinned where it would otherwise be re-derived.
+// Every MCP tool is deferred behind `ToolSearch` once tool search is on, and tool search is on by
+// default in the bundled runtime. Denying ToolSearch is what USED to keep `mcp__dopl__dopl_channel`
+// eagerly present on every profile — not `doplToolsPolicy`, which is a permission policy. Releasing
+// it under `full` would have deferred the session's own delivery path, i.e. the F3 incident again,
+// so the dopl MCP entry carries `alwaysLoad: true`. If that field goes, the prompt below starts
+// naming a tool the model has only as a deferred stub.
+test("the dopl MCP server is pinned alwaysLoad, so nothing the prompt names is deferred", () => {
+  const loader = readFileSync(fileURLToPath(new URL("../main/sdk-loader.js", import.meta.url)), "utf8");
+  assert.match(loader, /^\s*alwaysLoad: true,$/m, "sdk-loader's dopl entry lost alwaysLoad");
 });
 
 test("no built session turn ORDERS a tool the profile hard-denies", () => {

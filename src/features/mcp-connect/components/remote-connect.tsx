@@ -6,7 +6,8 @@
  * OAuth dance (browser sign-in) on first connect, and server updates roll out
  * automatically (nothing installed locally).
  *
- * Rendered in the settings + overview surfaces and the canvas connection panel.
+ * Rendered in the settings + overview surfaces (the canvas connection panel
+ * that also mounted it retired with the page).
  * Origin is read client-side to match the live deployment.
  */
 

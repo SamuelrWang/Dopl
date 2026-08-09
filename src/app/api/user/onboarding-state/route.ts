@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +29,6 @@ export const GET = withUserAuth(async (_request, { userId }) => {
       surveyCompleted: status.surveyCompleted,
     });
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message } },
-      { status: 500 }
-    );
+    return toHttpErrorResponse("api/user/onboarding-state", err);
   }
 });

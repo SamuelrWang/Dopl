@@ -26,7 +26,7 @@ const sessionModel = require('./session-model'); // the frozen model enum + the 
 const { buildSessionToolConfig } = require('./session-profiles');
 const { resolveClaudeExecutable, buildMcpServers, withSessionStamp, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
 
-let deps = null; // { dispatch, emitQuiet }
+let deps = null; // { dispatch, emitQuiet, scheduleIdle }
 
 function bind(d) {
   deps = d || null;
@@ -106,6 +106,20 @@ async function startQuery(s, sdk) {
   const q = sdk.query({ prompt: s.pushIterator, options: buildSdkOptions(s) });
   s.query = q;
   s.pushIterator.push(io.userMessage(s.firstTurn));
+  // C-4 — ARM THE LAUNCH WATCHDOG. The idle timer used to be armed ONLY by reducer effects
+  // that require `launched`, which only the SDK's `system/init` dispatches — so a child that
+  // booted and never emitted one had no timer of any kind: phase 'launching' forever,
+  // `hasLiveSession` true, every retry `{skipped:'busy'}`, and its slot spent against
+  // MAX_WINDOWS for the life of the process.
+  //
+  // HERE rather than in startSession, and that is the point of the seam: this is the ONE
+  // deferred launch (H1's supersede-before-relaunch), so it covers the cold launch AND
+  // session-auth's post-sign-in relaunch, which re-enters with phase reset to 'launching'
+  // and would otherwise hang exactly the same way. It is the SAME `scheduleIdle` every other
+  // arming site uses — `session-state.idleTimeout` reads the launching phase and answers the
+  // launch bound — so there is no second timer to leak and `launched`'s own scheduleIdle
+  // replaces this one the instant the session really starts.
+  if (deps && deps.scheduleIdle) deps.scheduleIdle(s);
   consume(s, q); // fire-and-forget consumer loop
 }
 

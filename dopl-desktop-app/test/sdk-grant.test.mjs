@@ -6,7 +6,8 @@
 // and can therefore NEVER reach the gate (§A.5 / research §3).
 //
 // SECURITY (adversarial review): grantDecision OP-SCOPES `dopl_channel` (FIX H1 — no
-// blanket pre-approval) and reflects `full`'s HARD-DENY subset (FIX H2/H3). v2.5 D2
+// blanket pre-approval) and reflects `full`'s HARD-DENY set, which since F-177 (2026-08-08) is
+// the UNIVERSAL FLOOR alone — the retired + admin dopl tools, matching the headless lane. v2.5 D2
 // went further: NO dopl_channel op auto-allows any more, own-channel posts included,
 // and the shadow check below proves the tool stays out of allowedTools so that gate can
 // actually fire. The op/grant-key cases live in session-profiles.test.mjs; this file
@@ -25,7 +26,7 @@ const require = createRequire(import.meta.url);
 const SRC = readFileSync(join(HERE, "..", "main", "session-profiles.js"), "utf8");
 
 const tp = require(join(HERE, "..", "main", "tool-profiles.js"));
-const { READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile } = tp;
+const { READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile } = tp;
 
 const from = SRC.indexOf("// ─── BEGIN SESSION-PROFILE TABLE");
 const to = SRC.indexOf("// ─── END SESSION-PROFILE TABLE");
@@ -46,11 +47,11 @@ const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
-  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
+  "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
@@ -127,33 +128,50 @@ test("D2 SHADOW CHECK: dopl_channel is in NO profile's allowedTools, so the gate
   }
 });
 
-// ── FIX H2 / H3: the dangerous subset hard-denies under every profile ────────────
+// ── F-177: `full` releases the built-ins; the restricted profiles keep refusing them ────
 
-test("FIX H3: Task + Agent resolve 'deny' (never 'gate') under EVERY session profile", () => {
-  for (const profile of PROFILES) {
+test("FIX H3 (restricted profiles): Task + Agent resolve 'deny', never 'gate'", () => {
+  // Where the session really IS contained, a subagent that does not inherit the canUseTool
+  // bound is still refused outright. Under `full` the operator already has Bash, so the
+  // refusal protected nothing and removed the delegation feature — see F-177.
+  for (const profile of ["read_only", "dopl_only"]) {
     assert.equal(grantDecision({ profile, toolName: "Task" }), "deny", `${profile}: Task`);
     assert.equal(grantDecision({ profile, toolName: "Agent" }), "deny", `${profile}: Agent`);
   }
 });
 
-test("FIX H2: full hard-denies the persistence/exfil/delegation subset (deny, not gate)", () => {
+test("F-177: full GATES the persistence/exfil/delegation set — and hard-denies only the floor", () => {
+  // The inverted assertion. Each of these used to answer 'deny' here; each answers 'gate' now.
   for (const tool of ["Task", "Agent", "CronCreate", "CronDelete", "SendMessage", "RemoteTrigger", "ScheduleWakeup", "Monitor", "Skill", "ToolSearch"]) {
+    assert.equal(grantDecision({ profile: "full", toolName: tool }), "gate", `full must gate ${tool}`);
+  }
+  // What DOES still hard-deny under `full`: the universal floor, and exactly that.
+  for (const tool of UNIVERSAL_HARD_DENY) {
     assert.equal(grantDecision({ profile: "full", toolName: tool }), "deny", `full must deny ${tool}`);
   }
+  assert.deepEqual(buildSessionToolConfig("full").disallowedTools.slice().sort(),
+    UNIVERSAL_HARD_DENY.slice().sort(), "…and the floor is the WHOLE hard-deny set under full");
+  // The floor is immovable, as it always was: no posture and no task grant opens it.
   for (const tool of DOPL_ADMIN_TOOLS) {
-    assert.equal(grantDecision({ profile: "full", toolName: tool }), "deny", `full must deny ${tool}`);
+    assert.equal(grantDecision({ profile: "full", toolName: tool, toolMode: "bypass", allowForTask: [tool] }),
+      "deny", `full must deny ${tool} even at bypass with a grant`);
   }
 });
 
 // ── Robustness ───────────────────────────────────────────────────────────────
 
-test("grantDecision tolerates missing args and unknown profiles (normalize to full)", () => {
-  assert.equal(grantDecision({ toolName: "Bash" }), "gate", "no profile -> full -> Bash gates");
+// C-11 (2026-08-08): an unknown profile normalizes to READ_ONLY now, not to full — see
+// tool-profiles' normalizeProfile. So the tolerance this test is about is unchanged (nothing
+// throws, every path still reaches a verdict) but the verdict for a WORK tool is the
+// fail-closed one. `deny` here is read_only's hard-deny list doing exactly its job.
+test("grantDecision tolerates missing args and unknown profiles (fail closed to read_only)", () => {
+  assert.equal(grantDecision({ toolName: "Bash" }), "deny", "no profile -> read_only -> Bash is hard-denied");
+  assert.equal(grantDecision({ profile: "full", toolName: "Bash" }), "gate", "an EXPLICIT full still gates it");
   // FIX H1 + D2: dopl_channel gates whatever the input is — no input, and an
   // own-channel post, both land on the operator's dock.
   assert.equal(grantDecision({ profile: "nonsense", toolName: DOPL_CHANNEL_TOOL }), "gate");
   assert.equal(grantDecision({ profile: "nonsense", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "gate");
-  assert.equal(grantDecision(), "gate", "no args -> full -> unknown tool gates");
+  assert.equal(grantDecision(), "gate", "no args -> an unknown tool still gates rather than throwing");
 });
 
 // ── v2.x WORKSPACE PIN: the dopl MCP server entry the session actually runs with ──
@@ -243,9 +261,13 @@ test("WAKE-V1: every spawned session's dopl entry sends X-Dopl-Runtime: desktop-
   for (const ws of [WS_UUID, "", undefined]) {
     assert.equal(buildServers(null, ws).dopl.headers["X-Dopl-Runtime"], "desktop-session", `ws=${ws}`);
   }
-  const restricted = buildServers(["mcp__dopl__dopl_kb"], WS_UUID).dopl;
+  // A restricted profile still HANDS the builder its `doplToolsPolicy`; since the F-177
+  // follow-up (2026-08-08) the builder does not forward it — the per-server `tools` field is
+  // a PERMISSION policy and the short-name array made the CLI drop the whole dopl entry
+  // (test/mcp-server-tools-policy.test.mjs owns that). The stamp is unaffected either way.
+  const restricted = buildServers(["dopl_kb"], WS_UUID).dopl;
   assert.equal(restricted.headers["X-Dopl-Runtime"], "desktop-session");
-  assert.deepEqual(restricted.tools, ["mcp__dopl__dopl_kb"], "the tools allowlist is untouched");
+  assert.ok(!("tools" in restricted), "a per-server tools policy is never sent");
 });
 
 test("FIX Q9: the dopl entry raises the per-call timeout past the 60s client abort", () => {
@@ -276,12 +298,19 @@ test("WAKE-V1: the header value is the literal the server matches, and it grants
   assert.deepEqual(buildServers(null, WS_UUID, ""), {});
 });
 
-test("the pin does not disturb the per-profile dopl tools allowlist (or the bearer)", () => {
+test("the pin does not disturb how the dopl tools policy is handled (or the bearer)", () => {
+  // WAS "…does not disturb the per-profile dopl tools allowlist", pinning
+  // `scoped.dopl.tools === ['dopl_channel']`. That field was never an allowlist: it is the
+  // SDK's per-tool PERMISSION policy (`{name, permission_policy}[]`), and a string array
+  // failed the CLI's per-entry validation, which DROPS THE SERVER rather than the field —
+  // so the two restricted profiles were spawning with no dopl tools at all. The builder no
+  // longer sends it; the bound is the deny lists (test/mcp-server-tools-policy.test.mjs).
+  // What is pinned HERE is only that the workspace pin changes none of that.
   const scoped = buildServers(["dopl_channel"], WS_UUID);
-  assert.deepEqual(scoped.dopl.tools, ["dopl_channel"], "a restricted profile still only sees its scoped tools");
+  assert.ok(!("tools" in scoped.dopl), "a scoped policy is accepted and deliberately not forwarded");
   assert.equal(scoped.dopl.headers.Authorization, "Bearer secret-token");
   const open = buildServers(null, WS_UUID);
-  assert.ok(!("tools" in open.dopl), "null policy still means no per-server bound");
+  assert.ok(!("tools" in open.dopl), "…and a null policy, as always, sets no per-server bound");
   // No token (pre-sign-in) still returns {} — a pin can never manufacture a server entry.
   assert.deepEqual(buildServers(null, WS_UUID, ""), {}, "no bearer -> no server");
 });

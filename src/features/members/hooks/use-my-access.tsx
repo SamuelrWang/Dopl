@@ -10,28 +10,50 @@
  *
  * Use the `MyAccessProvider` + `useMyAccessContext` flow at the
  * application shell so multiple consumers (sidebar nav, KB/skill
- * detail pages, canvas panels) share one cache entry. Focus
- * revalidation comes from the query layer (only when stale — the old
- * hand-rolled listener re-pulled the payload on EVERY window focus).
+ * detail pages) share one cache entry. Focus revalidation comes from
+ * the query layer (only when stale — the old hand-rolled listener
+ * re-pulled the payload on EVERY window focus).
  */
 
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import type { AccessLevel } from "@/features/teams/access-levels";
+import { isRetiredResourceType, type AccessLevel } from "@/features/teams/access-levels";
 
 /** Resource kinds the badge UI may ask about. Teams-mode resolution only
- *  produces knowledge_base/workflow entries; skill falls through to
- *  the role default. */
-type ResourceType = "knowledge_base" | "skill" | "workflow";
+ *  produces knowledge_base entries; skill falls through to the role
+ *  default. */
+type ResourceType = "knowledge_base" | "skill";
+
+interface Override<T extends string> {
+  resourceType: T;
+  resourceId: string;
+  level: AccessLevel;
+}
+
+/** What the endpoint actually sends. `workflow` grants are still valid in
+ *  the DB (retirement D7 kept the rows), so the route keeps emitting them;
+ *  `selectAccess` drops them on arrival so nothing downstream can resolve
+ *  against a retired resource. */
+interface MyAccessWire {
+  defaultLevel: AccessLevel;
+  overrides: Array<Override<ResourceType | "workflow">>;
+}
 
 interface MyAccessPayload {
   defaultLevel: AccessLevel;
-  overrides: Array<{
-    resourceType: ResourceType;
-    resourceId: string;
-    level: AccessLevel;
-  }>;
+  overrides: Array<Override<ResourceType>>;
 }
+
+// Hand-rolled `.filter` rather than `withoutRetiredResources` because this one
+// also NARROWS the element type (dropping `"workflow"` from the union is the
+// point) — the shared helper is type-preserving. The predicate is the shared
+// one, so un-retiring is still a single edit in `teams/access-levels`.
+const selectAccess = (body: MyAccessWire): MyAccessPayload => ({
+  defaultLevel: body.defaultLevel,
+  overrides: (body.overrides ?? []).filter(
+    (o): o is Override<ResourceType> => !isRetiredResourceType(o.resourceType)
+  ),
+});
 
 export interface UseMyAccessResult {
   data: MyAccessPayload | null;
@@ -44,10 +66,11 @@ export interface UseMyAccessResult {
 }
 
 function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
-  const query = useApiQuery<MyAccessPayload>(
+  const query = useApiQuery<MyAccessWire, MyAccessPayload>(
     workspaceSegment
       ? `/api/workspaces/${encodeURIComponent(workspaceSegment)}/my-access`
-      : null
+      : null,
+    { select: selectAccess }
   );
 
   // 403 (not a member) or 404 (workspace not found) — quietly treat as

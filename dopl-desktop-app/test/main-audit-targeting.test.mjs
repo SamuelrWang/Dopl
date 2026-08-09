@@ -101,7 +101,9 @@ test("D1: the human path gates in a GROUP channel and a public one too", () => {
   // The suppression sat ABOVE the addressed rules, so member count / membership never saved it.
   assert.equal(classify(reply("user"), entry({ memberCount: 5 }), ME), "trigger");
   assert.equal(classify(reply("user"), entry({ memberCount: 3, isMember: false }), ME), "trigger");
-  // And an explicit per-channel mute never suppresses an explicit address.
+  // A leftover per-channel notify scope on the entry changes nothing either.
+  // It never suppressed an explicit address, and since F-170 (2026-08-08) the
+  // preference is removed from the product and read nowhere at all.
   assert.equal(classify(reply("user"), entry({ myNotifyScope: "none" }), ME), "trigger");
 });
 

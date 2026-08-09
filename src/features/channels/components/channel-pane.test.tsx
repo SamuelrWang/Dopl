@@ -126,8 +126,8 @@ function render(
       threads={[]}
       threadsLoading={false}
       loading={false}
-      notifyScope="all"
       members={[member({ userId: ME, displayName: "Me" })]}
+      membersStale={false}
       currentUserId={ME}
       consentRequests={consentRequests}
       trustedIds={new Set()}
@@ -138,8 +138,8 @@ function render(
       onCloseThread={noopAsync}
       onReopenThread={noopAsync}
       onInvite={noop}
-      onSetNotifyScope={noop}
       onSetToolProfile={noop}
+      toolProfileBusy={false}
       onToggleTrust={noop}
       onDecideConsent={noop}
       onToggleArchive={noop}

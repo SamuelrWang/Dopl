@@ -190,9 +190,11 @@ function connect(entry: Entry): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let chan = supabase.channel(topic) as any;
 
-  // CRITICAL ORDER: every binding is attached before subscribe(). The
-  // binding set never changes for the lifetime of the channel — additional
-  // components share via `listeners`, never via late `.on()` calls.
+  // CRITICAL ORDER: every binding is attached before subscribe(). The binding set
+  // never changes for the channel's lifetime — components share via `listeners`.
+  // THE FILTER IS THE DELETE GATE TOO: a DELETE's WAL record carries only the table's
+  // REPLICA IDENTITY, so it matches one solely while that carries `workspace_id`
+  // (migration 20260807150000). Back to DEFAULT and hard deletes vanish, silently.
   for (const table of entry.tables) {
     chan = chan.on(
       "postgres_changes",

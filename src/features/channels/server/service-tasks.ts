@@ -1,5 +1,5 @@
 import "server-only";
-import type { ChannelThread, ThreadMode, ThreadOutcome } from "../types";
+import type { ChannelThread, ThreadMode } from "../types";
 import type { TaskCreateInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
@@ -7,7 +7,6 @@ import {
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
-  ThreadCloseIsHumanOnlyError,
 } from "./errors";
 import type { ChannelTaskRow } from "./dto";
 import { mapTaskRow } from "./dto";
@@ -23,10 +22,17 @@ import {
 } from "./service-shared";
 
 /**
- * First-class channel threads (v15): create / close / set mode / reopen. Split
- * out of `service-writes.ts` (§2 cap) — a thread is its own lifecycle with its
- * own authorization rules (creator vs. target), and its transcript rides on
+ * First-class channel threads (v15): CREATE and SET MODE. Split out of
+ * `service-writes.ts` (§2 cap) — a thread is its own lifecycle with its own
+ * authorization rules (creator vs. target), and its transcript rides on
  * `postMessage` from the message lane.
+ *
+ * The other two thirds of that lifecycle have their own modules, each split off
+ * at the same cap and each on a real seam:
+ *   - `service-tasks-lifecycle.ts` — CLOSE and REOPEN, the two writes that move
+ *     `status`, which now share a guard-then-echo shape (C-26 / C-30).
+ *   - `service-tasks-propose.ts`   — PROPOSE a close, the agent's terminal act,
+ *     which mutates nothing (DECISION 2).
  *
  * THE SERVER BOUNDARY: wire/storage name `task` == domain name `thread`. This
  * lane sits on the STORAGE side, so it deliberately keeps the `task` spelling
@@ -281,109 +287,15 @@ export async function createTask(
 }
 
 /**
- * What `closeTask` hands back: the closed thread, plus the seq of the lifecycle
- * echo it posted — the mirror of {@link TaskCreateResult}'s `openingSeq`.
- *
- * WHY THE SEQ RIDES ALONG: a close writes a message into the transcript, so
- * every seq the requester knew is now one short. Live incident: a requester
- * closed a thread, GUESSED the echo's seq, armed `await` one past that guess,
- * and silently skipped the peer's actual deliverable — the reply was already
- * below the cursor, so the hold waited for something that had arrived. The
- * echo's seq is only known here; returning it removes the guess.
- *
- * `null` when no echo landed — the close itself succeeded but the marker post
- * did not (see {@link closeTask}). Never a fabricated number: a caller that
- * gets null must find its cursor another way rather than arm one on a guess,
- * which is the failure this field exists to prevent.
- */
-export interface TaskCloseResult {
-  thread: ChannelThread;
-  echoSeq: number | null;
-}
-
-/**
- * Close a task with an outcome. Permitted for the task's creator OR its target
- * (`created_by` / `target_user_id`) — and, since 2026-08-04, only on the HUMAN
- * lane: an agent-token caller is refused and told to propose instead (see
- * {@link ThreadCloseIsHumanOnlyError}). Posts a lifecycle marker so the other
- * member's thread updates live: completed -> `task_finished` (calm "done");
- * failed -> `task_failed` (a close with outcome=failed IS a genuine failure).
- */
-export async function closeTask(
-  ctx: ChannelContext,
-  ref: string,
-  taskId: string,
-  outcome: ThreadOutcome,
-  summary?: string
-): Promise<TaskCloseResult> {
-  // FIRST, ahead of every lookup: a refusal about WHO is asking needs nothing
-  // else resolved, and refusing before the reads means an agent probing for
-  // thread ids learns nothing from the shape of the error either.
-  if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError();
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("close a task in this channel");
-  }
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  if (task.created_by !== ctx.userId && task.target_user_id !== ctx.userId) {
-    throw new TaskForbiddenError("close this task");
-  }
-
-  // A caller-supplied `summary` (a one-line outcome) is persisted on the task
-  // row AND becomes the lifecycle echo's body; absent (or blank), the echo
-  // keeps its calm default. The kind (task_finished/task_failed) is unchanged.
-  const updated = await repoTasks.updateTask(task.id, {
-    status: "closed",
-    outcome,
-    closed_at: new Date().toISOString(),
-    // A blank/whitespace summary stores as null, not "" (render guards on null).
-    outcome_summary: summary && summary.trim().length > 0 ? summary.trim() : null,
-  });
-
-  // THE CLOSE HAS ALREADY LANDED by the time the echo is written — the row is
-  // closed whether or not the marker posts. Letting the echo's failure throw
-  // would report a close that did not happen, and the caller's retry would
-  // re-close an already-closed thread; the honest report is "closed, no echo",
-  // which `echoSeq: null` says exactly. Every error the close ITSELF can raise
-  // (not a member, not creator/target, unknown task) is untouched above.
-  let echoSeq: number | null = null;
-  try {
-    const echo = await postMessage(
-      ctx,
-      channel.id,
-      {
-        body:
-          (summary && summary.trim()) ||
-          (outcome === "completed" ? "Task completed" : "Task failed"),
-        kind: outcome === "completed" ? "task_finished" : "task_failed",
-        summary: task.title,
-        metadata: { taskId: task.id },
-      },
-      // P0-2 — THE ONE EXEMPTION, and it is stated at the call site rather than
-      // inferred from identity. This echo is the SERVER speaking about a close
-      // that just landed, and it is raised inside whatever request asked for the
-      // close: on the human lane that is a cookie session, but nothing stops a
-      // future internal caller arriving with an agent ctx, and the guard must
-      // not depend on which. `postMessage` accepts this option from server code
-      // only — it is not a field of `ChannelMessageCreateInput` and no route
-      // parses it — so an HTTP caller can never set it.
-      { internalLifecycle: true }
-    );
-    echoSeq = echo.seq;
-  } catch {
-    // Marker lost. The thread is closed; the peer's panel catches up on its
-    // next tasks refetch instead of on a realtime marker.
-  }
-
-  return { thread: mapTaskRow(updated), echoSeq };
-}
-
-/**
  * Change a task's mode. CREATOR ONLY — the mode governs the creator's own
  * machine (interactive vs autonomous continuation). Posts NO message: the
  * change is intentionally realtime-invisible and the badge is eventually
  * consistent on the next tasks refetch.
+ *
+ * THE ONE STATUS-ADJACENT WRITE THAT STAYS SILENT, and deliberately so: a mode is
+ * the creator's own machine's business, not a fact about the shared exchange. The
+ * two writes that ARE facts about it — close and reopen — moved to
+ * `service-tasks-lifecycle.ts` and both echo (C-26).
  */
 export async function setTaskMode(
   ctx: ChannelContext,
@@ -402,39 +314,5 @@ export async function setTaskMode(
   }
 
   const updated = await repoTasks.updateTask(task.id, { mode });
-  return mapTaskRow(updated);
-}
-
-/**
- * Reopen a closed task. WEB-ONLY (no MCP op — agents do not reopen). Permitted
- * for the task's creator OR its target (`created_by` / `target_user_id`),
- * mirroring {@link closeTask}'s authorization. Clears the closed state in a
- * single update — `status` back to `open`, and `outcome` / `closed_at` /
- * `outcome_summary` all nulled — which keeps the `closed ⇔ outcome` CHECK
- * satisfied ((status='closed') = (outcome IS NOT NULL)). Posts NO lifecycle
- * echo: the web overlay flips the card back to `active` on the next tasks
- * refetch, so no `task_*` marker is needed (and none would be coherent).
- */
-export async function reopenTask(
-  ctx: ChannelContext,
-  ref: string,
-  taskId: string
-): Promise<ChannelThread> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("reopen a task in this channel");
-  }
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  if (task.created_by !== ctx.userId && task.target_user_id !== ctx.userId) {
-    throw new TaskForbiddenError("reopen this task");
-  }
-
-  const updated = await repoTasks.updateTask(task.id, {
-    status: "open",
-    outcome: null,
-    closed_at: null,
-    outcome_summary: null,
-  });
   return mapTaskRow(updated);
 }

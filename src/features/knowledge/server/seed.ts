@@ -9,8 +9,8 @@ import type { SeedFixture } from "./seed-fixtures";
  * actually wants to keep.
  *
  * Pure function — no I/O. `service-seed.ts#seedWorkspace` iterates this
- * and records each entry's `key` → inserted uuid so the ontology and
- * workflow seeds can cross-reference specific entries.
+ * and records each entry's `key` → inserted uuid so the ontology seed can
+ * cross-reference specific entries.
  *
  * Two callers:
  *   1. The workspace-seed orchestrator (`features/workspaces/server/seed-workspace.ts`).
@@ -20,13 +20,13 @@ import type { SeedFixture } from "./seed-fixtures";
 /** Slug of the Dopl Guide base — the orchestrator's idempotency key. */
 export const DOPL_GUIDE_SLUG = "dopl-guide";
 
-/** Stable entry keys — used to wire ontology/workflow cross-references. */
+/** Stable entry keys — used to wire ontology cross-references. */
 export const GUIDE_ENTRY_KEYS = {
   whatIsDopl: "what-is-dopl",
   mcpTools: "the-mcp-tools",
   sessionRitual: "the-session-ritual",
   buildingOntology: "building-the-ontology",
-  knowledgeVsSkills: "knowledge-skills-workflows",
+  knowledgeVsSkills: "knowledge-vs-skills",
 } as const;
 
 export function buildSeedKnowledgeBases(): SeedFixture[] {
@@ -49,12 +49,11 @@ export function buildSeedKnowledgeBases(): SeedFixture[] {
 
 A Dopl **workspace** is shared memory that humans and agents both read and write — the human through this web app, the agent through the Dopl MCP server. Anything one side saves, the other sees on its next run. It is not a chat log; it is the durable state your team operates from.
 
-The workspace has five surfaces. Each answers a different question:
+The workspace has four surfaces. Each answers a different question:
 
 | Surface | Answers | You reach it with |
 | --- | --- | --- |
-| **Ontology / Canvas** | "What things exist and how do they connect?" | \`dopl_ontology\` |
-| **Workflows** | "What are the steps to do X?" | \`dopl_workflow\` |
+| **Ontology** | "What things exist and how do they connect?" | \`dopl_ontology\` |
 | **Knowledge** | "What do we know?" (durable reference) | \`dopl_kb\` |
 | **Skills** | "How do we do a recurring task?" | \`dopl_skill\` |
 | **Chats** | "What happened in past sessions?" | \`dopl_chats\` |
@@ -63,7 +62,6 @@ The workspace has five surfaces. Each answers a different question:
 
 - A **fact or reference** you'll reread → Knowledge entry.
 - A **procedure** you'll rerun → Skill.
-- A **multi-step process with branches** → Workflow.
 - A **thing** (a person, project, account) with attributes and links → Ontology object.
 - A **record of a working session** → Chat export.
 
@@ -88,14 +86,11 @@ The Dopl MCP server exposes one tool per surface. Most are multi-op: you pass \`
 | \`dopl_kb\` | Knowledge bases + entries: \`list_bases\`, \`get_tree\`, \`read_file\`, \`write_file\`, \`search\`, \`create_base\` | Reading or filing durable reference |
 | \`dopl_skill\` | Skills: \`list\`, \`get\`, \`read\`, \`create\`, \`update\`, \`write\` | Running or authoring a repeatable procedure |
 | \`dopl_ontology\` | The object graph: \`get\`, \`map\`, \`resolve\`, \`create_object\`, \`set_attribute\`, \`set_relationship\` | Modelling things and their connections |
-| \`dopl_workflow\` | Step graphs: \`list\`, \`get\`, \`step\`, \`set_graph\`, \`add_node\`, \`connect\` | Following or building a multi-step process |
 | \`dopl_chats\` | Session archive: \`list\`, \`get\`, \`export\`, \`append\` | Ending a session, or recalling a past one |
-| \`dopl_cluster\` | Workflow-builder clusters: \`list\`, \`get\`, \`create\`, \`update\` | Grouping related workflows |
 | \`dopl_members\` | Membership, teams, access (read-only): \`whoami\`, \`list\`, \`teams\`, \`my_access\` | Checking who's here and what you can see |
 
 ## Notes that save round-trips
 
-- **\`dopl_workflow\` op=\`step\`** walks a workflow one step at a time — it hands you just that step's reads, actions, and outgoing branch conditions, so you disclose context at the pace you execute rather than loading the whole graph up front.
 - Most tools accept a **slug OR a uuid** wherever they take a resource handle. Slugs come back from \`list\`/\`map\`; either works.
 - Writes record who made them (\`user\` vs \`agent\`), so the history stays honest. Don't be shy about writing — seeded rows are ordinary data and everything is reversible.`,
         },
@@ -111,7 +106,7 @@ Two habits make every session compound instead of evaporate.
 
 ## Open: \`dopl_map\`
 
-The first call of a session is \`dopl_map\`. It returns a compact manifest — the knowledge bases, skills, workflows, ontology clusters, and recent chats — so you act on what the workspace already knows instead of re-deriving it. If the map hints at a relevant skill or workflow, open it before improvising.
+The first call of a session is \`dopl_map\`. It returns a compact manifest — the knowledge bases, skills, ontology clusters, and recent chats — so you act on what the workspace already knows instead of re-deriving it. If the map hints at a relevant skill or entry, open it before improvising.
 
 ## Close: \`dopl_chats\` op=\`export\`
 
@@ -125,7 +120,7 @@ A good export carries three things beyond the transcript:
 
 ## The test
 
-Ask: *if a teammate's agent read only this export, could it pick up where I left off?* If not, the summaries are too thin. A learning that will matter next week doesn't belong only in the export — promote it to a Knowledge entry (see "Knowledge vs Skills vs Workflows").`,
+Ask: *if a teammate's agent read only this export, could it pick up where I left off?* If not, the summaries are too thin. A learning that will matter next week doesn't belong only in the export — promote it to a Knowledge entry (see "Knowledge vs Skills").`,
         },
         {
           key: GUIDE_ENTRY_KEYS.buildingOntology,
@@ -160,23 +155,21 @@ Objects go stale silently. When a project ships or a person changes role, update
         },
         {
           key: GUIDE_ENTRY_KEYS.knowledgeVsSkills,
-          title: "Knowledge vs Skills vs Workflows",
+          title: "Knowledge vs Skills",
           entryType: "doc",
           excerpt:
-            "Where a thing belongs — with three concrete examples each. Facts to Knowledge, procedures to Skills, branching processes to Workflows.",
-          body: `# Knowledge vs Skills vs Workflows
+            "Where a thing belongs — with three concrete examples each. Facts to Knowledge, procedures to Skills, things to the Ontology, sessions to Chats.",
+          body: `# Knowledge vs Skills
 
-These three surfaces overlap in the fuzzy middle. The distinction that keeps them clean:
+These two surfaces overlap in the fuzzy middle. The distinction that keeps them clean:
 
 - **Knowledge** = things that are *true*. Facts, reference, context you reread.
-- **Skills** = things you *do the same way* every time. A single repeatable procedure.
-- **Workflows** = things you do as an *ordered process with decisions*. Multiple steps, branches, hand-offs.
+- **Skills** = things you *do the same way* every time. A repeatable procedure, start to finish.
 
 | Surface | It answers | Shape |
 | --- | --- | --- |
 | Knowledge | "What's true / what do we know?" | Markdown entries in bases |
-| Skills | "How do I do this one task?" | A SKILL.md with steps |
-| Workflows | "What's the whole process?" | A step graph with branch conditions |
+| Skills | "How do I do this task?" | A SKILL.md with steps |
 
 ## Three examples each
 
@@ -190,14 +183,16 @@ These three surfaces overlap in the fuzzy middle. The distinction that keeps the
 2. File a learning as a KB entry (naming, folder, dedupe).
 3. Turn a voice memo into a filed note.
 
-**Workflows**
-1. Weekly workspace upkeep: review chats → file learnings → update objects → export.
-2. New-lead intake: enrich → score → branch on fit → route.
-3. Release: cut branch → run checks → branch on green → ship or roll back.
+## The other two surfaces
+
+Two more surfaces catch what is neither a fact nor a procedure:
+
+- **Ontology** — a *thing* with attributes and links (a person, an account, a project). Objects are index cards; the connections between them are the value. Point an object at the KB entry that documents it rather than inlining prose. See "Building the ontology".
+- **Chats** — the record of a *working session*: what was decided, what got made, what was learned. See "The session ritual".
 
 ## When they combine
 
-A workflow *step* often **reads** a KB entry and **runs** a skill. That's the intended shape: the workflow is the spine, skills are the muscles, knowledge is the memory. Author each where it belongs and wire them together — don't collapse a branching process into one giant skill, and don't bury a reusable procedure inside a single workflow step.`,
+A skill usually **reads** a KB entry, and an ontology object usually **points at** both. That's the intended shape: skills are the muscles, knowledge is the memory, the ontology is the map. Author each where it belongs and wire them together — don't paste reference text into a skill, and don't bury a reusable procedure inside a knowledge entry.`,
         },
       ],
     },

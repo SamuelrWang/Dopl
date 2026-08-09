@@ -10,6 +10,7 @@ import {
 } from "./session-card";
 import { getDesktopSessions } from "@/shared/lib/desktop";
 import type { SessionGroup } from "../lib/group-thread";
+import { pendingMessageId } from "../lib/optimistic-cache";
 import type { ChannelMessage, ChannelThread } from "../types";
 
 const CHANNEL_ID = "11111111-1111-4111-8111-111111111111";
@@ -87,6 +88,40 @@ function agentReply(): ChannelMessage {
     authorAvatarUrl: null,
   };
 }
+
+describe("a provisional card (the optimistic request)", () => {
+  it("marks the card pending while its opening message is unsaved", () => {
+    // The head carries a `pending:` id until the POST answers. The card is the
+    // REAL component with the real content — dimmed and inert, not a skeleton
+    // and not a lie about a thread that does not exist yet.
+    const html = renderToStaticMarkup(
+      <SessionCard
+        session={session({
+          taskId: pendingMessageId("c-1"),
+          head: { ...head(), id: pendingMessageId("c-1") },
+        })}
+        currentUserId={ME}
+      />
+    );
+    // Read off the <article> itself: the status chip's pulse dot carries its
+    // own `opacity-60`, so a whole-document match would pass either way.
+    const article = html.slice(0, html.indexOf(">") + 1);
+    expect(article).toContain('data-pending=""');
+    expect(article).toContain("opacity-60");
+    expect(article).toContain("pointer-events-none");
+    expect(html).toContain("Ship the fix");
+  });
+
+  it("leaves a saved card untouched", () => {
+    const html = renderToStaticMarkup(
+      <SessionCard session={session()} currentUserId={ME} />
+    );
+    const article = html.slice(0, html.indexOf(">") + 1);
+    expect(article).not.toContain("data-pending");
+    expect(article).not.toContain("opacity-60");
+    expect(article).not.toContain("pointer-events-none");
+  });
+});
 
 // Each test that defines `window` cleans it up so the server-render tests see
 // the true "no bridge on the server" state (getDesktopSessions -> null).

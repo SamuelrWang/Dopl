@@ -50,4 +50,16 @@ BEGIN
   END LOOP;
 END $$;
 
-DELETE FROM storage.buckets WHERE id = 'chat-attachments';
+-- The bucket row delete has to opt out of storage.protect_delete, the
+-- very guard named four lines up: it is a BEFORE DELETE ... FOR EACH
+-- STATEMENT trigger, so it fires and aborts even when the DELETE matches
+-- zero rows — which is always, per that note. Left unguarded, this line
+-- makes a from-scratch `supabase db reset` impossible on any current
+-- storage-api image (SQLSTATE 42501). set_config's third argument scopes
+-- the opt-out to this DO block's transaction; the guard is untouched
+-- everywhere else. Behaviour in production is unchanged (still 0 rows).
+DO $$
+BEGIN
+  PERFORM set_config('storage.allow_delete_query', 'true', true);
+  DELETE FROM storage.buckets WHERE id = 'chat-attachments';
+END $$;

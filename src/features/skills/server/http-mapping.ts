@@ -4,7 +4,6 @@ import {
   SkillAgentWriteDisabledError,
   SkillFileNotFoundError,
   SkillNotFoundError,
-  SkillNotTrashedError,
   SkillSlugConflictError,
   SkillStaleVersionError,
   WorkspaceKeyPrivateSkillError,
@@ -20,9 +19,6 @@ export function mapSkillError(err: unknown): HttpError | null {
   }
   if (err instanceof SkillFileNotFoundError) {
     return new HttpError(404, "SKILL_FILE_NOT_FOUND", err.message);
-  }
-  if (err instanceof SkillNotTrashedError) {
-    return new HttpError(400, "SKILL_NOT_TRASHED", err.message);
   }
   if (err instanceof SkillAgentWriteDisabledError) {
     return new HttpError(403, "SKILL_AGENT_WRITE_DISABLED", err.message);

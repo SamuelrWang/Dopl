@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { touchMcpStatus } from "./mcp-session";
+import { touchMcpStatus, checkAndRecordRateLimitSubject } from "./mcp-session";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 import { getBearerJwtUser } from "./bearer-jwt";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
@@ -38,6 +38,16 @@ export interface UserAuthOptions {
 
 /** HTTP methods that are reads for the purposes of the write-scope gate. */
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Per-token request ceiling for OAuth bearers hitting the REST resource server
+ * DIRECTLY. Shares the exact store (`rate_limit_events`), subject
+ * (`mcp:<tokenId>`) and default (600/min) as the `/api/mcp` transport limiter
+ * (`with-mcp-transport-auth.ts`) — read from the SAME env var so the two doors
+ * can never drift to different ceilings. See the long note at the enforcement
+ * point below for why this is a single UNIFIED budget rather than a second one.
+ */
+const OAUTH_REST_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
 /**
  * Wrap a handler call so any thrown error or 5xx response emits a
@@ -157,6 +167,38 @@ export function withUserAuth(
       // token to these /api/* endpoints over loopback.
       const tok = await validateAccessToken(token);
       if (tok) {
+        // OAUTH-BEARER RATE LIMIT (P1 — 2026-08-08). A `dopl_at_*` bearer is
+        // accepted DIRECTLY on every REST route (this branch), so without a
+        // ceiling here the per-token limit the `/api/mcp` transport enforces
+        // (`with-mcp-transport-auth.ts`, keyed `mcp:<tokenId>`) is trivially
+        // bypassed — the same token pointed straight at `/api/knowledge/…` was
+        // unbounded. We reuse that limiter verbatim: same store
+        // (`rate_limit_events` via `checkAndRecordRateLimitSubject`), same
+        // subject, same ceiling. Because the transport's own loopback `/api/*`
+        // calls also pass through this branch, a token now spends ONE unified
+        // 600/min budget across both doors instead of an unbounded second one —
+        // a realistic agent's tool-call rate (a few backend touches per call)
+        // stays far under it, while a scripted flood on either door is capped.
+        // Enforced FIRST so even requests the gates below would 403 still count
+        // against the flood budget. Fail-closed (the RPC returns false on any DB
+        // error). Session (cookie / Supabase-JWT) callers never reach this
+        // branch and are never limited — only bearers are.
+        const withinLimit = await checkAndRecordRateLimitSubject(
+          `mcp:${tok.tokenId}`,
+          OAUTH_REST_RPM,
+          `${request.method} ${request.nextUrl.pathname}`
+        );
+        if (!withinLimit) {
+          return NextResponse.json(
+            new HttpError(
+              429,
+              "RATE_LIMITED",
+              "Rate limit exceeded for this connection. Try again shortly."
+            ).toResponseBody(),
+            { status: 429, headers: { "Retry-After": "60" } }
+          );
+        }
+
         // Every authenticated MCP call acts as a heartbeat for the settings
         // MCP-connection detector (polls /api/user/mcp-status). Debounced ~30s.
         touchMcpStatus(tok.userId);
@@ -250,7 +292,9 @@ export function withUserAuth(
  * (billing is workspace-level now — see features/billing/entitlements.ts),
  * so this no longer paywalls callers. It still:
  *
- *   1. Auth + rate limit (via withUserAuth).
+ *   1. Auth, plus per-token rate limiting of OAuth-bearer callers (both via
+ *      `withUserAuth` — the limiter lives in its OAuth-bearer branch and does
+ *      not touch cookie/session callers).
  *   2. For MCP (OAuth-token) callers: log the call to mcp_events for the
  *      admin transcript/analytics view.
  *   3. Session (UI) calls pass straight through — unmetered, unlogged.

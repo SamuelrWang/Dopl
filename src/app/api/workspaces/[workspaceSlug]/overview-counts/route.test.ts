@@ -145,6 +145,27 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-counts", () => {
     expect(body.error.code).toBe("INTERNAL_ERROR");
   });
 
+  it("does not echo the raw exception text in that 500", async () => {
+    // The tail used to put `err.message` straight into `error.message`. A count
+    // read goes through the service-role client, so what lands in `message` is
+    // whatever Postgres/PostgREST said — relation and RPC names (ENGINEERING §9
+    // "Never return raw error strings"; LAUNCH-READINESS-ROADMAP §4). The code
+    // is what agents parse and is unchanged; the human text is what is
+    // sanitized.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockCounts.mockRejectedValue(
+      new Error('relation "workspace_counts_v2" does not exist')
+    );
+
+    const res = await GET(getReq(), routeCtx());
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("INTERNAL_ERROR");
+    expect(JSON.stringify(body)).not.toContain("workspace_counts_v2");
+    expect(JSON.stringify(body)).not.toContain("does not exist");
+    spy.mockRestore();
+  });
+
   it("400s a missing route segment instead of resolving an empty slug", async () => {
     const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);

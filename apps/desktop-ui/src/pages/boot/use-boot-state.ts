@@ -1,12 +1,87 @@
 import { useCallback, useEffect, useState, useRef } from "react";
+import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
+import type { Role, Workspace } from "@/features/workspaces/types";
+import { apiRequest } from "#/lib/api";
 import { getBridge } from "#/lib/dopl-bridge";
 
 /**
- * The two endpoints the boot decision reads, as constants so the boot page and
- * the onboarding page share one query key (and therefore one request).
+ * `POST /api/boot` — THE launch read (launch-blocker P0-2c).
+ *
+ * It replaced four strictly serial hops, each of which existed only because
+ * the answers lived on four endpoints: `/api/user/onboarding-state` →
+ * `/api/workspaces/ensure-default` → `/api/workspaces/resolve` →
+ * `/api/workspaces/me`, and then the shell's `my-access` on top. Nothing in
+ * that chain was a real dependency — server-side it is one composition — but
+ * the shell gated `<Outlet/>` on the third, so no page began fetching its own
+ * data until all four had landed.
+ *
+ * Two modes, one endpoint:
+ *   - no `segment` — the cold launch at `/`. Provisions if needed (the old
+ *     `ensure-default` semantics, unchanged and idempotent) and answers the
+ *     onboarding gate in the same breath.
+ *   - `segment` — the shell's resolve, fail-closed and membership-scoped, plus
+ *     the role, the caller id and the access matrix the pages used to fetch.
+ *
+ * The four endpoints it replaces are all still live: the web app, `@dopl/client`
+ * and deep links keep using them, and `seedBootAnswer` (use-workspace-route.ts)
+ * writes this one answer into their cache keys so a caller that still asks
+ * gets it for free.
+ */
+export const BOOT_PATH = "/api/boot";
+
+/**
+ * Still the onboarding page's key — boot seeds it from the same answer rather
+ * than fetching it, so a boot → `/onboarding` hop pays for it exactly once.
  */
 export const ONBOARDING_STATE_PATH = "/api/user/onboarding-state";
-export const ENSURE_DEFAULT_PATH = "/api/workspaces/ensure-default";
+
+/** The `my-access` half of the boot answer; the wire shape of
+ *  `GET /api/workspaces/[segment]/my-access` verbatim. */
+export interface BootMyAccess {
+  defaultLevel: AccessLevel;
+  overrides: Array<{
+    resourceType: TeamResourceType;
+    resourceId: string;
+    level: AccessLevel;
+  }>;
+}
+
+export interface BootPayload {
+  isOnboarded: boolean;
+  surveyCompleted: boolean;
+  userId: string;
+  /** Null only when the caller is not onboarded yet (nothing is provisioned). */
+  workspace: Workspace | null;
+  /** Canonical `{slug}-{publicId}`. */
+  segment: string | null;
+  /** Segment mode: the routed segment was stale — the shell rewrites the URL. */
+  needsRedirect: boolean;
+  role: Role | null;
+  myAccess: BootMyAccess | null;
+}
+
+/**
+ * One cache entry per boot target: the launch (`null`) and each routed
+ * segment. Shaped as the `[path, workspaceId, query]` tuple every other read
+ * in this renderer uses (`use-api-query-core`), so the shell's boot query —
+ * which goes through that hook — and the launch query written by hand here
+ * address the same cache with the same rules.
+ */
+export function bootQueryKey(segment: string | null) {
+  return [BOOT_PATH, undefined, segment ? { segment } : undefined] as const;
+}
+
+/** POST because the no-segment mode may provision; idempotent, always 200. */
+export function fetchBoot(
+  segment: string | null,
+  signal?: AbortSignal
+): Promise<BootPayload> {
+  return apiRequest<BootPayload>(BOOT_PATH, {
+    method: "POST",
+    body: segment ? { segment } : {},
+    signal,
+  });
+}
 
 /** Boot's three-way answer to "is anyone signed in?" */
 export type AuthPhase = "pending" | "signed-in" | "signed-out";
@@ -61,7 +136,9 @@ export function useAuthPhase(): { phase: AuthPhase; refresh: () => void } {
       cancelled = true;
       off();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Mount-only on purpose: this subscribes to main's auth pushes for the
+    // life of the page. (The rule no longer flags the empty dep list here, so
+    // there is no disable directive to carry — an unused one is a warning.)
   }, []);
 
   const refresh = useCallback(() => {

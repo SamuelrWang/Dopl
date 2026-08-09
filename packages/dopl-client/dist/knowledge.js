@@ -16,16 +16,12 @@ exports.getKbTree = getKbTree;
 exports.createKbBase = createKbBase;
 exports.updateKbBase = updateKbBase;
 exports.deleteKbBase = deleteKbBase;
-exports.restoreKbBase = restoreKbBase;
 exports.readKbFileByPath = readKbFileByPath;
 exports.writeKbFileByPath = writeKbFileByPath;
 exports.listKbDirByPath = listKbDirByPath;
 exports.createKbFolderByPath = createKbFolderByPath;
 exports.deleteKbByPath = deleteKbByPath;
 exports.moveKbByPath = moveKbByPath;
-exports.listKbTrash = listKbTrash;
-exports.restoreKbFolder = restoreKbFolder;
-exports.restoreKbEntry = restoreKbEntry;
 exports.searchKb = searchKb;
 const errors_js_1 = require("./errors.js");
 const enc = encodeURIComponent;
@@ -57,10 +53,6 @@ async function updateKbBase(t, baseId, patch) {
 }
 async function deleteKbBase(t, baseId) {
     await t.requestNoContent(`/api/knowledge/bases/${enc(baseId)}`, "DELETE", "kb_delete_base");
-}
-async function restoreKbBase(t, baseId) {
-    const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/restore`, { method: "POST", toolName: "kb_restore_base" });
-    return data.base;
 }
 // ─── Path-based file/folder ops ─────────────────────────────────────
 async function readKbFileByPath(t, baseId, path) {
@@ -136,22 +128,6 @@ async function moveKbByPath(t, baseId, fromPath, toPath) {
         body: { fromPath, toPath },
         toolName: "kb_move_by_path",
     });
-}
-// ─── Trash ──────────────────────────────────────────────────────────
-async function listKbTrash(t, baseId) {
-    const qs = baseId ? `?baseId=${enc(baseId)}` : "";
-    return t.request(`/api/knowledge/trash${qs}`, { toolName: "kb_list_trash" });
-}
-async function restoreKbFolder(t, folderId) {
-    const data = await t.request(`/api/knowledge/folders/${enc(folderId)}/restore`, {
-        method: "POST",
-        toolName: "kb_restore_folder",
-    });
-    return data.folder;
-}
-async function restoreKbEntry(t, entryId) {
-    const data = await t.request(`/api/knowledge/entries/${enc(entryId)}/restore`, { method: "POST", toolName: "kb_restore_file" });
-    return data.entry;
 }
 // ─── Search (Item 5.D) ──────────────────────────────────────────────
 async function searchKb(t, query, opts = {}) {

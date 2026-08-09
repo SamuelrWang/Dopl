@@ -189,10 +189,26 @@ test("M3: THE INVARIANT holds in both directions — no tool posture reads, no r
 });
 
 test("M3: the HARD-DENY set is immovable, with both axes wide open", () => {
-  for (const tool of ["Task", "Agent", "Skill", "ToolSearch", "SendMessage", "CronCreate",
-    "mcp__dopl__dopl_kb_admin", "mcp__dopl__dopl_cluster_admin"]) {
+  // F-177 (2026-08-08): the built-ins that used to head this list — Task, Agent, Skill,
+  // ToolSearch, SendMessage, CronCreate — are no longer hard-denied under `full`; they GATE
+  // (asserted just below). What is immovable is the UNIVERSAL FLOOR, so that is what this
+  // drives. `bypass` + `auto_both` is still the point: the widest posture on both axes.
+  for (const tool of ["mcp__dopl__dopl_kb_admin", "mcp__dopl__dopl_skill_admin",
+    "mcp__dopl__dopl_ontology_admin", "mcp__dopl__dopl_chats_admin",
+    "mcp__dopl__dopl_cluster_admin", "mcp__dopl__dopl_workflow", "mcp__dopl__dopl_cluster"]) {
     assert.deepEqual(detail({ toolName: tool, input: { op: "read" }, toolMode: "bypass", messageMode: "auto_both" }),
       { decision: "deny", reason: "hard-denied" }, tool);
+  }
+});
+
+test("F-177: the released built-ins GATE with both axes wide open — they never auto-allow", () => {
+  // The replacement bound. A posture cannot run them: neither AUTO_TOOLS nor BYPASS_TOOLS
+  // carries them, and both are positive allow-lists, so the verdict is `gate` at `bypass` +
+  // `auto_both` exactly as at `manual` + `ask`.
+  for (const tool of ["Task", "Agent", "Skill", "ToolSearch", "SendMessage", "CronCreate"]) {
+    assert.equal(decide({ toolName: tool, input: { op: "read" }, toolMode: "bypass", messageMode: "auto_both" }),
+      "gate", tool);
+    assert.equal(decide({ toolName: tool, input: { op: "read" } }), "gate", `${tool} @ the strictest posture`);
   }
 });
 

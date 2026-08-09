@@ -16,7 +16,6 @@ import {
   ChatFolderNotFoundError,
   ChatFolderScopeError,
   ChatForbiddenError,
-  ChatNotFoundError,
 } from "./errors";
 import { mapChatRow, mapOwner } from "./dto";
 import type { ChatFolderRow, ChatRow } from "./dto";
@@ -138,7 +137,7 @@ export async function exportChat(
  * Idempotent re-export of an existing chat: overwrite only the header
  * fields the caller actually passed (preserve the rest), reconcile the
  * transcript non-destructively (upsert by position, keep appended
- * history), and revive the chat if it had been soft-deleted. `format` is
+ * history), and revive a legacy tombstone if it hit one. `format` is
  * recomputed from the reconciled transcript so a partial re-export can't
  * leave it stale.
  */
@@ -157,7 +156,10 @@ async function reexportChat(
   const chat = await repo.updateChat(existing.id, {
     title: input.title,
     exported_at: new Date().toISOString(),
-    // Re-exporting a session revives it if it had been trashed.
+    // Legacy tombstones only: nothing is soft-deleted any more (deletes are
+    // permanent as of 2026-08-07), but the (workspace, owner, session)
+    // uniqueness index still spans rows tombstoned before the switch, so a
+    // re-export of one of those revives it rather than colliding.
     deleted_at: null,
     ...(input.overview !== undefined ? { overview: input.overview } : {}),
     ...(input.source !== undefined ? { source: input.source } : {}),
@@ -337,51 +339,15 @@ export async function updateChatHeader(
 }
 
 /**
- * Soft-delete (F-11): hide the chat from active reads but keep it
- * restorable from trash — no more irrecoverable physical delete.
+ * PERMANENTLY delete a chat (owner-only, no recovery). Deletion is
+ * immediate and irreversible — there is no trash and no restore
+ * (2026-08-07). `requireOwnChat` is the unchanged gate: an unknown,
+ * cross-workspace or someone-else's chat is refused, and a
+ * workspace-scoped API-key caller is refused too. The physical delete
+ * cascades `chat_messages` via FK and drops team grants via trigger (see
+ * `hardDeleteChat`).
  */
 export async function deleteChat(ctx: ChatContext, chatId: string): Promise<void> {
   const chat = await requireOwnChat(ctx, chatId, "delete it");
-  await repo.softDeleteChat(ctx.workspaceId, chat.id);
-}
-
-/**
- * Restore a soft-deleted chat (owner-only). Resolves the chat FROM TRASH
- * (an active or unknown chat reads as not found), then clears its
- * `deleted_at`.
- */
-export async function restoreChat(ctx: ChatContext, chatId: string): Promise<Chat> {
-  const row = await repo.findDeletedChatById(ctx.workspaceId, chatId);
-  if (!row) throw new ChatNotFoundError(chatId);
-  if (row.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
-    throw new ChatForbiddenError("restore it");
-  }
-  const restored = await repo.restoreChatRow(ctx.workspaceId, row.id);
-  const [count, profiles] = await Promise.all([
-    repo.countMessages(restored.id),
-    profilesById([restored.owner_id]),
-  ]);
-  return mapChatRow(
-    restored,
-    mapOwner(restored.owner_id, profiles.get(restored.owner_id)),
-    count
-  );
-}
-
-/**
- * PERMANENTLY delete a soft-deleted chat (owner-only, no recovery) — the
- * trash "delete forever" action. Mirrors `restoreChat`'s gate: it resolves
- * the chat FROM TRASH (`deleted_at IS NOT NULL`, workspace-scoped) so a LIVE,
- * unknown, or cross-workspace chat reads as not found and is refused, and a
- * workspace-scoped API-key caller is blocked exactly like restore. The
- * physical delete cascades `chat_messages` via FK and drops team grants via
- * trigger (see `hardDeleteChat`).
- */
-export async function purgeChat(ctx: ChatContext, chatId: string): Promise<void> {
-  const row = await repo.findDeletedChatById(ctx.workspaceId, chatId);
-  if (!row) throw new ChatNotFoundError(chatId);
-  if (row.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
-    throw new ChatForbiddenError("permanently delete it");
-  }
-  await repo.hardDeleteChat(ctx.workspaceId, row.id);
+  await repo.hardDeleteChat(ctx.workspaceId, chat.id);
 }

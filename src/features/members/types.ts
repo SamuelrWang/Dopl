@@ -32,6 +32,22 @@ export interface WorkspaceMemberView {
   teams: MemberTeamRef[];
 }
 
+/**
+ * One pending join-link request in the admin approval queue.
+ *
+ * Lives here rather than in `hooks/use-join-requests.ts` (which still
+ * re-exports it) because the optimistic cache module patches this row and must
+ * not import a hook — the hook imports the cache module.
+ */
+export interface JoinRequestView {
+  id: string;
+  userId: string;
+  requestedAt: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 export interface WorkspaceInvitationView {
   id: string;
   workspaceId: string;

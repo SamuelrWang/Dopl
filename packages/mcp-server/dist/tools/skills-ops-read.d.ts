@@ -6,5 +6,5 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opList(client: DoplClient, folder?: string): Promise<ToolResponse>;
-export declare function opGet(client: DoplClient, slug: string, detail?: "summary" | "full"): Promise<ToolResponse>;
-export declare function opRead(client: DoplClient, slug: string): Promise<ToolResponse>;
+export declare function opGet(client: DoplClient, slug: string, detail?: "summary" | "full", callerUserId?: string | null): Promise<ToolResponse>;
+export declare function opRead(client: DoplClient, slug: string, callerUserId?: string | null): Promise<ToolResponse>;

@@ -45,7 +45,7 @@ const VERB_OPEN = 'open';
 const HOME_ROUTE = '/';
 
 /** `WORKSPACE_HOME_PATH` in apps/desktop-ui/src/routes.tsx — the index redirect. */
-const WORKSPACE_HOME_PAGE = 'canvas';
+const WORKSPACE_HOME_PAGE = 'overview';
 
 /**
  * MIRRORS `WORKSPACE_PAGES` in apps/desktop-ui/src/routes.tsx. The value is
@@ -56,20 +56,21 @@ const WORKSPACE_HOME_PAGE = 'canvas';
  * route table is a drift bomb: a page ported into the SPA that nobody adds here
  * is a page no deep link can ever reach, silently. The test reads routes.tsx and
  * fails when the two disagree.
+ *
+ * RETIRED (2026-08-07): `canvas`, `canvas2`, `workflows` and `configuration`
+ * left this table with their SPA routes (docs/RETIREMENT-UNWIRING-PLAN.md §3.1).
+ * An old bookmark naming one is not refused — it is an unknown page inside a
+ * real workspace, so it opens that workspace's home page, which is the point.
  */
 const WORKSPACE_PAGES = {
   overview: false,
-  canvas: false,
-  canvas2: false,
   ontology: true,
   knowledge: true,
   skills: true,
-  workflows: true,
   chats: false,
   channels: false,
   members: false,
   settings: false,
-  configuration: false,
 };
 
 /** SPA routes that live OUTSIDE `/:workspaceSegment` (routes.tsx). */
@@ -107,7 +108,7 @@ const WEB_ONLY_ROOTS = new Set([
  */
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-/** Longer than any real canvas URL; anything past it is not a target. */
+/** Longer than any real app URL; anything past it is not a target. */
 const MAX_TARGET_CHARS = 512;
 
 /** A base that no real target can resolve to, so a same-origin check is exact. */
@@ -167,12 +168,12 @@ function pathSegments(target) {
 }
 
 /**
- * A web canvas path → the SPA route that shows the same thing.
+ * A web app path → the SPA route that shows the same thing.
  *
  * `null` only for a target that is MALFORMED. Everything merely unrecognized
  * resolves as deep as it can and no deeper: an unknown page inside a real
- * workspace opens that workspace's canvas rather than home, because the
- * workspace half of the link is still good information.
+ * workspace opens that workspace's home page rather than the app's, because
+ * the workspace half of the link is still good information.
  */
 function webPathToRoute(target) {
   const segs = pathSegments(target);

@@ -11,17 +11,34 @@
 // mirror through the real classify): every pre-classify route SHORT-CIRCUITS the
 // rest, and classify runs LAST. All three routes no-op when window-mode is OFF,
 // so the classify path stays byte-for-byte legacy behavior.
+//
+// C-3 (2026-08-08) — THIS MODULE ALSO OWNS HOW FAR THE CURSOR MOVES (drainPage below).
+// The page loop used to write the PERSISTED cursor before calling dispatchMessage, so
+// every downstream early return was a permanent silent drop. Pairing "what happened to
+// this message" with "may the cursor step over it" here is the seam: the loop in
+// channel-listener.js keeps the transport and knows nothing about dispatch verdicts.
 
 const targeting = require('./targeting');
 const trigger = require('./trigger');
 const taskNotify = require('./task-notify');
 const sessionDispatch = require('./session-dispatch');
 const versionSkew = require('./version-skew');
+const io = require('./listener-io'); // C-3: the cursor store + sleep (listener-io requires nothing back)
+const { LISTENER } = require('./config');
 const { diag } = require('./diag');
 
 // Route ONE message. Awaited by the loop, so a trigger's consent + spawn still
 // serializes ahead of the next message in the page (unchanged from when this
 // body lived inline).
+//
+// THE RETURN VALUE IS A DEFERRAL REASON, AND FALSY MEANS HANDLED (C-3). Every route
+// below is terminal for the message it claims — it either did the thing or decided
+// deliberately not to — so "handled" is the default and needs no statement. The ONE
+// path that can answer "I could not do this, and the message must not be lost" is
+// `trigger.handleTrigger`, whose two early returns (no Claude runtime at all; no
+// consent row, which is `null` on ANY network error or non-2xx from the consent POST)
+// were the silent drops C-3 names. It returns a short reason string, this returns it
+// verbatim, and drainPage below holds the cursor on it.
 async function dispatchMessage(entry, m, myUserId) {
   // Q10 — read the peer's stamped build FIRST, before any route can claim this
   // message. A reply consumed by a live session window is exactly the message
@@ -110,7 +127,7 @@ async function dispatchMessage(entry, m, myUserId) {
   // The route answers false for everything it does not claim, and then handleTrigger runs
   // byte-for-byte as before.
   if (verdict === 'trigger') {
-    if (!(await sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId))) await trigger.handleTrigger(entry, m);
+    if (!(await sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId))) return trigger.handleTrigger(entry, m);
   } else if (verdict === 'fyi') trigger.sendFyi(entry, m);
   // Feature 4 (requester side): a reply in one of MY interactive tasks —
   // passive notify only. No consent row, no watcher record, no spawn.
@@ -121,4 +138,111 @@ async function dispatchMessage(entry, m, myUserId) {
   // any more (channels rollback §1), so the verdict is unreachable and gone.
 }
 
-module.exports = { dispatchMessage };
+// ─── BEGIN DISPATCH-DEFERRAL (pure; unit-tested via source extraction) ───────
+// C-3's retry policy. Nothing in here reaches a store, a window or the network, so
+// test/listener-cursor-advance.test.mjs slices it and evaluates it verbatim.
+// `LISTENER` is a free var in here (the session-park idiom).
+
+// The wait before re-awaiting a page whose head would not dispatch. The SAME capped
+// exponential ladder the reconnect backoff uses, because it is the same shape of
+// failure (something upstream is not answering) and a second tuning knob for it would
+// be a second thing to get wrong.
+function deferralDelayMs(attempts) {
+  const n = Math.max(1, Number(attempts) || 1);
+  return Math.min(LISTENER.BACKOFF_MAX_MS, LISTENER.BACKOFF_BASE_MS * 2 ** (n - 1));
+}
+
+// THE POISON-MESSAGE ESCAPE. `true` once a single message has held the head of its
+// channel's queue for the whole ladder. The alternative — retry forever — trades a
+// bounded, announced loss for an unbounded, silent stall of every LATER message in
+// that channel, which is strictly worse than the bug being fixed.
+function deferralExhausted(attempts) {
+  return (Number(attempts) || 0) >= LISTENER.DISPATCH_MAX_ATTEMPTS;
+}
+
+// Per-ENTRY, and only ever for ONE seq: drainPage stops at the first message that will
+// not dispatch, so there is exactly one head to count. A different seq resets the count,
+// which is what makes the ladder measure THIS message rather than the channel's history.
+function noteDeferral(entry, seq) {
+  const d = entry.deferral;
+  entry.deferral = d && d.seq === seq ? { seq: seq, attempts: d.attempts + 1 } : { seq: seq, attempts: 1 };
+  return entry.deferral.attempts;
+}
+
+function clearDeferral(entry, seq) {
+  if (entry.deferral && entry.deferral.seq === seq) entry.deferral = null;
+}
+// ─── END DISPATCH-DEFERRAL ──────────────────────────────────────────────────
+
+// C-3 — ONE PAGE OF MESSAGES, AND HOW FAR THE PERSISTED CURSOR MOVES OVER IT.
+//
+// THE DEFECT: `io.setCursor` ran BEFORE `dispatchMessage`, so the electron-store cursor
+// was already past a message that then hit a downstream early return. A 15s wifi drop
+// during the consent POST meant no consent row, nothing in Pending Requests, and a
+// restart that re-awaited from the ADVANCED cursor — the peer's agent long-polls forever.
+//
+// WAS THE OLD ORDER LOAD-BEARING? It is not. The one comment in the tree that leans on it
+// (session-park's FIX F4, "the listener advanced its cursor to that message's seq before
+// dispatching it, so the fetch window always contains it") is stale: session-history's
+// FIX F5 dropped `since` from that read entirely, so the window no longer depends on the
+// cursor at all. And nothing a RE-dispatch could double-do: the two deferring returns are
+// both upstream of `watcher.register`, `handleTrigger` is idempotent per (channel, seq)
+// through the settled/pending checks, and the consent create is de-duped server-side on
+// (operator, channel, kind, seq) — so a POST whose RESPONSE was lost returns the existing
+// row rather than opening a second request.
+//
+// The real risk is the OTHER one: a message that can never dispatch would hold the head of
+// this channel's queue forever. So the shape is advance-on-success + a bounded ladder +
+// a loud poison escape (see DISPATCH-DEFERRAL above), not advance-always.
+//
+// Returns TRUE when the page was left unfinished on purpose; the loop then backs off and
+// re-awaits from the held cursor instead of taking its normal idle.
+async function drainPage(entry, msgs, myUserId) {
+  const channelId = entry.channel.id;
+  for (const m of msgs) {
+    const seq = m.seq || 0;
+    let deferred = null;
+    try {
+      deferred = await dispatchMessage(entry, m, myUserId);
+    } catch (err) {
+      // A THROW IS A DEFERRAL, not a dead channel. It used to escape into channelLoop's
+      // caller, which stopped the loop for up to a 5-minute reconcile — with the cursor
+      // already advanced past the message that threw.
+      deferred = `error:${(err && err.message) || 'unknown'}`;
+    }
+    if (deferred) {
+      const attempts = noteDeferral(entry, seq);
+      if (!deferralExhausted(attempts)) {
+        diag('dispatch deferred', channelId.slice(0, 8), 'seq', seq, deferred,
+          `— holding the cursor, attempt ${attempts}/${LISTENER.DISPATCH_MAX_ATTEMPTS}`);
+        return true;
+      }
+      diag('dispatch DROPPED', channelId.slice(0, 8), 'seq', seq, deferred,
+        `— gave up after ${attempts} attempts; this message will never be answered`);
+    }
+    clearDeferral(entry, seq);
+    if (seq > io.getCursor(channelId)) io.setCursor(channelId, seq);
+  }
+  // A LINE WAS DROPPED HERE, not forgotten: the old body ended with
+  // `if (msgs.length === 0 && maxSeq > since) io.setCursor(id, maxSeq)`, and `maxSeq` is
+  // a reduce over `msgs` seeded with `since` — so on an EMPTY page it equals `since` and
+  // the guard can never be true. It was unreachable, and reproducing it here would have
+  // carried a dead branch into a function whose whole subject is when the cursor moves.
+  return false;
+}
+
+// The pause after a deferral, so a re-await does not hot-loop on the IDLE_GAP.
+function deferBackoff(entry) {
+  return io.sleep(deferralDelayMs(entry.deferral && entry.deferral.attempts));
+}
+
+module.exports = {
+  dispatchMessage,
+  drainPage,
+  deferBackoff,
+  // the pure policy (exported for the test; drainPage is the only production caller)
+  deferralDelayMs,
+  deferralExhausted,
+  noteDeferral,
+  clearDeferral,
+};

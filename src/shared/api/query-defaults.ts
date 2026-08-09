@@ -17,6 +17,13 @@ import type { DefaultOptions } from "@tanstack/react-query";
  *     with no refetch.
  *   - refetchOnWindowFocus only when stale.
  *   - one retry; 4xx are not retried (ApiError carries the status).
+ *
+ * A DEFAULT IS ONLY A DEFAULT IF THE CALLER'S OPTIONS OMIT THE KEY. TanStack
+ * merges by spread, so a key present with value `undefined` deletes the entry
+ * below it — which is how every line above sat inert app-wide for the whole
+ * `useApiQuery` surface until F-163. `use-api-query-core.ts` is the enforcement
+ * point (`definedOnly`); anything else that builds query options from optional
+ * caller input owes the same treatment.
  */
 
 /** 24h — beyond that, skeleton honestly. Also the persisted-cache `maxAge`;

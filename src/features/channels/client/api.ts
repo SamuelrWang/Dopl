@@ -1,18 +1,8 @@
 import { ApiError, apiRequest } from "@/shared/api/api-client";
-import type {
-  AgentToolProfile,
-  AgentTrustRule,
-  Channel,
-  ChannelConsentRequest,
-  ChannelMember,
-  ChannelMessage,
-  ChannelThread,
-  ChannelVisibility,
-  MessageIntent,
-  NotifyScope,
-  ThreadMode,
-  ThreadOutcome,
-} from "../types";
+import type { ApiRequestOpts } from "@/shared/api/api-envelope";
+import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
+import { channelPath, channelsPath } from "./query-keys";
+import type { Channel, ChannelMember, ChannelVisibility } from "../types";
 
 /** Domain error wrapper so components can branch on `code`. */
 export class ChannelApiError extends Error {
@@ -26,12 +16,10 @@ export class ChannelApiError extends Error {
   }
 }
 
-interface RequestOpts {
-  workspaceId?: string;
-  body?: unknown;
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
-  query?: Record<string, string | number | boolean | undefined>;
-}
+type RequestOpts = Pick<
+  ApiRequestOpts,
+  "workspaceId" | "body" | "method" | "query" | "expectedUpdatedAt"
+>;
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   try {
@@ -44,9 +32,21 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   }
 }
 
-function channelPath(channelId: string, tail = ""): string {
-  return `/api/channels/${encodeURIComponent(channelId)}${tail}`;
-}
+/**
+ * The feature's transport, as `useApiMutationWith` consumes it.
+ *
+ * The mutation layer is transport-injected precisely so a feature can hand it
+ * the client it already had: every write driven through this one still throws
+ * {@link ChannelApiError}, so the `err instanceof ChannelApiError` branch that
+ * puts the server's own wording in the toast survives the move off
+ * hand-rolled awaits. A mutation wired straight to `apiRequest` would quietly
+ * degrade every channels error to its fallback string.
+ */
+export const channelRequest: ApiMutationRequestFn = request;
+
+// Paths live in `./query-keys.ts` beside the cache keys built from them, so a
+// write and the read it patches cannot disagree about the URL.
+export { channelPath };
 
 /**
  * Create-channel body: a normal channel (`name`, ...) OR a direct channel
@@ -67,7 +67,7 @@ export async function createChannel(
   body: ChannelCreateBody,
   workspaceId: string
 ): Promise<Channel> {
-  const data = await request<{ channel: Channel }>("/api/channels", {
+  const data = await request<{ channel: Channel }>(channelsPath(), {
     method: "POST",
     body,
     workspaceId,
@@ -105,31 +105,11 @@ export async function deleteChannel(
   });
 }
 
-export interface PostMessageBody {
-  body: string;
-  kind?: ChannelMessage["kind"];
-  authorKind?: ChannelMessage["authorKind"];
-  metadata?: Record<string, unknown>;
-  clientMsgId?: string;
-  /** Address the message to a specific member's agent. */
-  toUserId?: string;
-  /** One-line intent (shown in the receiver's consent prompt). */
-  summary?: string;
-  /** Says this post is chat, so nothing infers a request from a missing field. */
-  intent?: MessageIntent;
-}
-
-export async function postMessage(
-  channelId: string,
-  body: PostMessageBody,
-  workspaceId: string
-): Promise<ChannelMessage> {
-  const data = await request<{ message: ChannelMessage }>(
-    channelPath(channelId, "/messages"),
-    { method: "POST", body, workspaceId }
-  );
-  return data.message;
-}
+// NO `postMessage` WRAPPER, AND NO `PostMessageBody`. `POST /messages` is driven by the SEND
+// MUTATION (`hooks/use-thread-writes.ts`), which owns the request shape because it also owns
+// the cache patch the same draft produces — a wrapper beside it would be a second place the
+// body could be built and a second thing to keep in step with `clientMsgId`. Same reasoning
+// the reads above give for having no wrapper: whoever owns the cache owns the call.
 
 export async function addChannelMember(
   channelId: string,
@@ -155,31 +135,9 @@ export async function removeChannelMember(
   });
 }
 
-/** Set the caller's own notification scope for a channel. */
-export async function updateMyNotifyScope(
-  channelId: string,
-  notifyScope: NotifyScope,
-  workspaceId: string
-): Promise<ChannelMember> {
-  const data = await request<{ member: ChannelMember }>(
-    channelPath(channelId, "/members"),
-    { method: "PATCH", body: { notifyScope }, workspaceId }
-  );
-  return data.member;
-}
-
-/** Set the caller's own responding-agent tool profile for a channel. */
-export async function updateMyToolProfile(
-  channelId: string,
-  agentToolProfile: AgentToolProfile,
-  workspaceId: string
-): Promise<ChannelMember> {
-  const data = await request<{ member: ChannelMember }>(
-    channelPath(channelId, "/members"),
-    { method: "PATCH", body: { agentToolProfile }, workspaceId }
-  );
-  return data.member;
-}
+// NO MEMBER-PREFERENCE WRAPPERS. `PATCH /members` (notify scope, agent tool profile) is driven
+// by `hooks/use-channel-preference-writes.ts`, for the reason above — those two writes are
+// optimistic, so their request and their cache patch are one decision.
 
 // ─── Threads ────────────────────────────────────────────────────────
 //
@@ -193,49 +151,11 @@ export async function updateMyToolProfile(
 // `useApiQuery`, which owns the cache key; the bare wrapper here had no caller and would have
 // been a read the cache never sees. Same reasoning as the agents roster below.
 
-/** Open a thread addressed to a channel member. */
-export async function createChannelThread(
-  channelId: string,
-  body: { title: string; mode?: ThreadMode; body: string; toUserId: string },
-  workspaceId: string
-): Promise<ChannelThread> {
-  const data = await request<{ task: ChannelThread }>(
-    channelPath(channelId, "/tasks"),
-    { method: "POST", body, workspaceId }
-  );
-  return data.task;
-}
-
-/** Close a thread (creator or target) with an outcome + optional close summary. */
-export async function closeChannelThread(
-  channelId: string,
-  threadId: string,
-  body: { outcome: ThreadOutcome; summary?: string },
-  workspaceId: string
-): Promise<ChannelThread> {
-  const data = await request<{ task: ChannelThread }>(
-    channelPath(channelId, `/tasks/${encodeURIComponent(threadId)}`),
-    { method: "PATCH", body: { op: "close", ...body }, workspaceId }
-  );
-  return data.task;
-}
-
-/**
- * Reopen a closed thread (creator or target). Web-only — there is no MCP
- * counterpart (agents never reopen); the server clears the closed state and
- * posts no lifecycle echo, so the card flips back to active on the next refetch.
- */
-export async function reopenChannelThread(
-  channelId: string,
-  threadId: string,
-  workspaceId: string
-): Promise<ChannelThread> {
-  const data = await request<{ task: ChannelThread }>(
-    channelPath(channelId, `/tasks/${encodeURIComponent(threadId)}`),
-    { method: "PATCH", body: { op: "reopen" }, workspaceId }
-  );
-  return data.task;
-}
+// NO `createChannelThread` / `closeChannelThread` / `reopenChannelThread` WRAPPERS either.
+// `POST /tasks` and `PATCH /tasks/[taskId]` are the thread half of `use-thread-writes.ts`:
+// the create carries the `clientMsgId` that makes a resend return the ALREADY-created thread
+// instead of double-spawning the responder's window, and the close/reopen patches the thread
+// row that IS the transcript's status overlay. Neither is expressible as a bare call.
 
 // NO `setChannelThreadMode` WRAPPER. `PATCH {op:"set_mode"}` is an MCP/desktop act — the web
 // thread panel offers close and reopen and nothing else — so the wrapper had no caller. The
@@ -258,45 +178,13 @@ export async function reopenChannelThread(
 // NO `listConsentRequests` WRAPPER — the consent inbox is a `useApiQuery` read like the
 // rosters, so the cache owns the key; only the DECIDE write goes through here.
 
-/** Record the operator's Allow / Deny (or Send / Cancel) decision. */
-export async function decideConsent(
-  id: string,
-  decision: "allow" | "deny",
-  workspaceId: string
-): Promise<ChannelConsentRequest> {
-  const data = await request<{ request: ChannelConsentRequest }>(
-    `/api/channels/consent/${encodeURIComponent(id)}`,
-    { method: "PATCH", body: { decision }, workspaceId }
-  );
-  return data.request;
-}
+// NO `decideConsent` WRAPPER — `PATCH /consent/[id]` is a preference write like the two above,
+// and dropping the row from the inbox cache IS the decided state.
 
 // ─── Trust ──────────────────────────────────────────────────────────
 
 // NO `listTrustRules` WRAPPER — same reason as the consent inbox: the standing rules are a
 // `useApiQuery` read, and only the add / delete writes go through here.
 
-/** Always allow a teammate's agent (add a standing trust rule). */
-export async function addTrustRule(
-  trustedUserId: string,
-  workspaceId: string
-): Promise<AgentTrustRule> {
-  const data = await request<{ rule: AgentTrustRule }>("/api/channels/trust", {
-    method: "POST",
-    body: { trustedUserId },
-    workspaceId,
-  });
-  return data.rule;
-}
-
-/** Revoke a standing trust rule. */
-export async function removeTrustRule(
-  trustedUserId: string,
-  workspaceId: string
-): Promise<void> {
-  await request<void>("/api/channels/trust", {
-    method: "DELETE",
-    body: { trustedUserId },
-    workspaceId,
-  });
-}
+// NO `addTrustRule` / `removeTrustRule` WRAPPERS — same: `hooks/use-channel-preference-writes.ts`
+// adds or removes the rule ROW in the cache, so it builds the request beside the patch.

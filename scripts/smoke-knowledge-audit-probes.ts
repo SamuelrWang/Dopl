@@ -83,7 +83,7 @@ async function main() {
   const {
     buildKnowledgeContext,
     createBase,
-    softDeleteBase,
+    deleteBase,
     writeFileByPath,
     updateBase,
   } = await import("@/features/knowledge/server/service");
@@ -140,16 +140,30 @@ async function main() {
     await writeFileByPath(userCtx, base.id, "foo.md", { body: "2" });
     console.log(`  ✅ case-sensitive paths: 'Foo.md' and 'foo.md' coexist`);
   } finally {
-    await softDeleteBase(userCtx, base.id);
-    console.log(`  cleanup: scratch base soft-deleted`);
+    await deleteBase(userCtx, base.id);
+    console.log(`  cleanup: scratch base hard-deleted`);
   }
 
   // PROBE 6: cron secret env presence
   console.log("\nPROBE 6: CRON_SECRET configured?");
   console.log(`  CRON_SECRET in env: ${process.env.CRON_SECRET ? "yes" : "NO — auth bypass risk"}`);
 
-  // PROBE 7: soft-delete cascade behavior (post-fix in PR-3)
-  console.log("\nPROBE 7: soft-delete cascade + restore");
+  // PROBE 7: hard-delete cascade behavior.
+  // Delete is PERMANENT as of 2026-08-07 (RETIREMENT-UNWIRING-PLAN §2b) — this
+  // used to probe the soft-delete cascade + restore; there is no restore now,
+  // so it probes that the subtree is really GONE. The trap it guards is
+  // `knowledge_entries.folder_id ON DELETE SET NULL`: a folder delete that
+  // doesn't remove its subtree's entries first orphans them at the base root
+  // instead of deleting them.
+  //
+  // THE FIXTURE IS THE PROBE. `hardDeleteFolder` deletes entries by
+  // `folder_id IN collectFolderSubtreeIds(root)` — a NESTED entry is the only
+  // thing that exercises the BFS descent. A fixture with only a direct child
+  // still passes if `collectFolderSubtreeIds` is reduced to `[rootId]`, and
+  // the folder assertions can't cover the gap either: `parent_id` is ON
+  // DELETE CASCADE, so descendant *folders* vanish no matter what. Hence one
+  // entry at each depth, asserted separately.
+  console.log("\nPROBE 7: hard-delete cascade (folder subtree really gone)");
   const cascadeBase = await createBase(userCtx, {
     name: `cascade probe ${new Date().toISOString()}`,
     agentWriteEnabled: false,
@@ -157,8 +171,7 @@ async function main() {
   try {
     const {
       createFolder,
-      softDeleteFolder,
-      restoreFolder,
+      deleteFolder,
       listFolders,
       listEntries,
     } = await import("@/features/knowledge/server/service");
@@ -175,42 +188,62 @@ async function main() {
       parentId: parent.id,
       name: "child",
     });
-    const { entry: leafEntry } = await writeFileByPath(
+    // Depth 1 — a direct child of the folder being deleted.
+    const { entry: directEntry } = await writeFileByPath(
       userCtx,
       cascadeBase.id,
-      "parent/leaf.md",
+      "parent/direct.md",
       { body: "x" }
     );
-
-    // ── Cascade-delete: trash parent → child folder + leaf both trashed.
-    await softDeleteFolder(userCtx, parent.id);
-    const childAfterDelete = await findFolderById(child.id, true);
-    const leafAfterDelete = await findEntryById(leafEntry.id, true);
-    const cascadeOk =
-      childAfterDelete?.deletedAt !== null &&
-      leafAfterDelete?.deletedAt !== null;
-    console.log(
-      `  ✅ child cascaded: deletedAt=${childAfterDelete?.deletedAt?.slice(0, 19)}; leaf cascaded: deletedAt=${leafAfterDelete?.deletedAt?.slice(0, 19)}; ok=${cascadeOk}`
+    // Depth 2 — lands in the `child` folder above (writeFileByPath is
+    // mkdir -p and reuses it). This is the one the BFS descent is for.
+    const { entry: nestedEntry } = await writeFileByPath(
+      userCtx,
+      cascadeBase.id,
+      "parent/child/leaf.md",
+      { body: "x" }
     );
+    if (nestedEntry.folderId !== child.id) {
+      throw new Error(
+        `fixture broken: nested entry landed in folder ${nestedEntry.folderId}, expected ${child.id}`
+      );
+    }
 
-    // Active listings should be empty (parent + descendants all trashed).
+    // ── Cascade-delete: delete parent → child folder + BOTH entries GONE.
+    // `includeDeleted: true` on every lookup is the point: a tombstone would
+    // still resolve, so a null proves the row was physically removed.
+    await deleteFolder(userCtx, parent.id);
+    const childAfterDelete = await findFolderById(child.id, true);
+    const directAfterDelete = await findEntryById(directEntry.id, true);
+    const nestedAfterDelete = await findEntryById(nestedEntry.id, true);
+    const cascadeOk =
+      childAfterDelete === null &&
+      directAfterDelete === null &&
+      nestedAfterDelete === null;
+    console.log(
+      `  ✅ child folder gone: ${childAfterDelete === null}; direct entry gone: ${
+        directAfterDelete === null
+      }; nested entry gone: ${nestedAfterDelete === null}; ok=${cascadeOk}`
+    );
+    if (!cascadeOk) {
+      throw new Error(
+        "folder delete left rows behind — the subtree must be hard-deleted (SET NULL orphan trap)"
+      );
+    }
+
+    // Active listings should be empty (parent + descendants all deleted).
     const activeFolders = await listFolders(userCtx, cascadeBase.id);
     const activeEntries = await listEntries(userCtx, cascadeBase.id);
     console.log(
-      `  ✅ active rows after parent trash: folders=${activeFolders.length}, entries=${activeEntries.length} (expect both 0)`
+      `  ✅ active rows after parent delete: folders=${activeFolders.length}, entries=${activeEntries.length} (expect both 0)`
     );
-
-    // ── Cascade-restore: restore parent → child + leaf restored too.
-    await restoreFolder(userCtx, parent.id);
-    const childAfterRestore = await findFolderById(child.id, false);
-    const leafAfterRestore = await findEntryById(leafEntry.id, false);
-    const restoreOk =
-      childAfterRestore !== null && leafAfterRestore !== null;
-    console.log(
-      `  ✅ child restored: ${!!childAfterRestore}; leaf restored: ${!!leafAfterRestore}; ok=${restoreOk}`
-    );
+    if (activeEntries.length !== 0) {
+      throw new Error(
+        "an entry survived its folder's delete — orphaned to the base root instead of removed"
+      );
+    }
   } finally {
-    await softDeleteBase(userCtx, cascadeBase.id);
+    await deleteBase(userCtx, cascadeBase.id);
   }
 
   // PROBE 8: stale-precondition write (audit fix #9)
@@ -268,7 +301,7 @@ async function main() {
       `  ${survived ? "✅" : "❌"} parallel writer's body survived: ${survived}`
     );
   } finally {
-    await softDeleteBase(userCtx, raceBase.id);
+    await deleteBase(userCtx, raceBase.id);
   }
 }
 

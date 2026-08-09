@@ -34,6 +34,7 @@ import * as repo from "./repository";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   resolveActiveWorkspace,
+  resolveMembershipOrThrow,
   WorkspaceResolutionError,
 } from "./service";
 
@@ -199,6 +200,48 @@ describe("resolveActiveWorkspace — no-header path (active memberships)", () =>
     ]);
     // Never resolves a membership when the target is ambiguous.
     expect(mockRepo.findMembership).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Launch-blocker P0-2a. `resolveMembershipOrThrow` is the hot path of all 82
+ * `withWorkspaceAuth` routes, and its two reads key only on `workspaceId` —
+ * neither is an input to the other. Awaiting them in series added a whole DB
+ * round trip to every authenticated request in the product.
+ */
+describe("resolveMembershipOrThrow — the two reads are PARALLEL", () => {
+  it("dispatches the membership read before the workspace read resolves", async () => {
+    let membershipStarted = false;
+    let workspaceResolved = false;
+    mockRepo.findWorkspaceById.mockImplementation(async () => {
+      await Promise.resolve();
+      workspaceResolved = true;
+      return workspace(UUID_A, "acme");
+    });
+    mockRepo.findMembership.mockImplementation(async () => {
+      membershipStarted = true;
+      // A SERIAL implementation could only reach this line after the
+      // workspace read had already settled.
+      expect(workspaceResolved).toBe(false);
+      return membership(UUID_A, "member");
+    });
+
+    const res = await resolveMembershipOrThrow(UUID_A, USER);
+    expect(membershipStarted).toBe(true);
+    expect(res.membership.role).toBe("member");
+  });
+
+  it("still 404s a missing workspace even though the membership read ran", async () => {
+    mockRepo.findWorkspaceById.mockResolvedValue(null);
+    mockRepo.findMembership.mockResolvedValue(membership(UUID_A));
+
+    const err = (await catchErr(
+      resolveMembershipOrThrow(UUID_A, USER)
+    )) as HttpError;
+    // Existence must not become an oracle: same 404 either way.
+    expect(err).toBeInstanceOf(HttpError);
+    expect(err.status).toBe(404);
+    expect(err.code).toBe("WORKSPACE_NOT_FOUND");
   });
 });
 

@@ -13,7 +13,11 @@ import "server-only";
  *   - `service-writes-members.ts` — channel membership (add / remove / own prefs)
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
  *                            the server stamps (addressing, DM auto-address, task keys)
- *   - `service-tasks.ts`   — first-class task lifecycle (create / close / mode / reopen)
+ *   - `service-tasks.ts`   — first-class task lifecycle (create / set mode)
+ *   - `service-tasks-lifecycle.ts` — the two status transitions (close / reopen),
+ *                            each guarded against a double-apply and each echoed
+ *                            into the transcript (`channel_tasks` is in no
+ *                            realtime table set, so the echo IS the doorbell)
  *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
  *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
@@ -59,12 +63,17 @@ export {
   updateMyMemberSettings,
 } from "./service-writes-members";
 
-export {
-  createTask,
-  closeTask,
-  setTaskMode,
-  reopenTask,
-} from "./service-tasks";
+export { createTask, setTaskMode } from "./service-tasks";
+
+// C-26 / C-30 (2026-08-08): CLOSE and REOPEN are the only two writes that move a
+// thread's `status`, and they now share one shape — guard the transition
+// atomically, echo it into the transcript, degrade to `echoSeq: null` if the echo
+// is lost. Their own module because that shape is the reason they change.
+export { closeTask, reopenTask } from "./service-tasks-lifecycle";
+export type {
+  TaskCloseResult,
+  TaskReopenResult,
+} from "./service-tasks-lifecycle";
 
 // DECISION 2 (2026-08-04): an agent PROPOSES, a human CLOSES. Its own module
 // because the two acts have different authorities over one shared thread.

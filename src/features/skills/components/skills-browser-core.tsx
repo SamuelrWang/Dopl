@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { SearchField } from "@/shared/ui/search-field";
@@ -10,12 +10,9 @@ import type { ResolvedSkill, Skill, SkillStatus } from "@/features/skills/types"
 import { skillScope, SKILL_SCOPE_LABEL, type SkillScope } from "@/features/skills/scope";
 import { fetchSkill } from "@/features/skills/client/api";
 import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
+import { CreateSkillDialog } from "./create-skill-dialog";
 import { SkillView } from "./skill-view";
 import { SkillViewSkeleton } from "./skill-view-skeleton";
-import { SkillsTrashModal } from "./skills-trash-modal";
-
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 type SkillFilter = "all" | SkillScope;
 
@@ -27,7 +24,7 @@ const FILTERS: ReadonlyArray<{ key: SkillFilter; label: string }> = [
 ];
 
 const EMPTY_COPY: Record<SkillFilter, string> = {
-  all: "No skills yet — ask your agent to create one with dopl_skill.",
+  all: "No skills yet — press + to write one, or ask your agent for dopl_skill.",
   private: "No private skills — new skills you create start here.",
   team: "No skills have been shared with your teams yet.",
   workspace: "No skills have been shared with the workspace yet.",
@@ -75,16 +72,57 @@ export function SkillsBrowserCore({
   skills,
   onListChanged,
 }: SkillsBrowserCoreProps) {
-  const [trashOpen, setTrashOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SkillFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(
     skills[0]?.id ?? null
   );
+  // Skills deleted in this session. `onListChanged` re-pulls the list, but
+  // that round-trip is async and the `skills` prop keeps the dead row until
+  // it lands — long enough for the detail pane to fetch a 404 and for the
+  // row to still be clickable. Hiding them here makes the delete take effect
+  // on the same frame; a hard-deleted id can never come back, so the set is
+  // never stale in the other direction.
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  const [createOpen, setCreateOpen] = useState(false);
+  // Skills created (or duplicated) in this session, mirroring `deletedIds` on
+  // the other side. `onListChanged` re-pulls, but the `skills` prop keeps the
+  // OLD list until that lands — long enough for `selected`'s
+  // `?? visible[0]` fallback to land on some unrelated skill and read as the
+  // app jumping on its own the instant you create something.
+  const [createdSkills, setCreatedSkills] = useState<readonly Skill[]>([]);
+
+  const live = useMemo(() => {
+    const merged =
+      createdSkills.length === 0
+        ? skills
+        : [
+            ...createdSkills.filter((c) => !skills.some((s) => s.id === c.id)),
+            ...skills,
+          ];
+    return deletedIds.size === 0
+      ? merged
+      : merged.filter((s) => !deletedIds.has(s.id));
+  }, [skills, createdSkills, deletedIds]);
+
+  /**
+   * A skill arrived (created here, or duplicated from the detail pane): show
+   * it and select it on the SAME frame. Deliberately does not re-pull —
+   * `SkillHeaderActions` already calls `onListChanged` after duplicating, and
+   * the create dialog's caller does it below; folding it in here would fire
+   * two refetches per duplicate.
+   */
+  const handleCreated = useCallback((skill: Skill) => {
+    setCreatedSkills((prev) => [skill, ...prev]);
+    setSelectedId(skill.id);
+    setFilter((f) => (f === "all" || skillScope(skill) === f ? f : "all"));
+  }, []);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return skills.filter((s) => {
+    return live.filter((s) => {
       if (filter !== "all" && skillScope(s) !== filter) return false;
       if (!q) return true;
       return (
@@ -92,7 +130,7 @@ export function SkillsBrowserCore({
         s.description.toLowerCase().includes(q)
       );
     });
-  }, [skills, query, filter]);
+  }, [live, query, filter]);
 
   // Group the visible list by folder; unfiled last. The direction is
   // many small skills, so folders are the primary organizing axis.
@@ -117,10 +155,29 @@ export function SkillsBrowserCore({
   const handleFilterChange = (next: SkillFilter) => {
     setFilter(next);
     const onFilter = (s: Skill) => next === "all" || skillScope(s) === next;
-    if (!skills.some((s) => s.id === selectedId && onFilter(s))) {
-      setSelectedId(skills.find(onFilter)?.id ?? null);
+    if (!live.some((s) => s.id === selectedId && onFilter(s))) {
+      setSelectedId(live.find(onFilter)?.id ?? null);
     }
   };
+
+  /**
+   * A skill was permanently deleted. Move the selection to an ADJACENT row
+   * (next, else previous) computed from the list as it stands right now —
+   * the fallback in `selected` would otherwise silently land on `visible[0]`,
+   * which is a different skill somewhere else in the list and reads as the
+   * app having jumped on its own.
+   */
+  const handleDeleted = useCallback(
+    (deletedId: string) => {
+      const at = visible.findIndex((s) => s.id === deletedId);
+      const neighbour =
+        at === -1 ? null : (visible[at + 1] ?? visible[at - 1] ?? null);
+      setSelectedId(neighbour?.id ?? null);
+      setDeletedIds((prev) => new Set(prev).add(deletedId));
+      onListChanged();
+    },
+    [visible, onListChanged]
+  );
 
   return (
     <div className="page-float flex antialiased">
@@ -130,23 +187,14 @@ export function SkillsBrowserCore({
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
             Skills
           </h1>
-          <span className="text-caption text-text-muted">{skills.length}</span>
+          <span className="text-caption text-text-muted">{live.length}</span>
           <span className="flex-1" />
           <button
             type="button"
-            onClick={() => setTrashOpen(true)}
-            title="View recently deleted skills"
-            aria-label="Trash"
-            className={ICON_BTN}
-          >
-            <Trash2 size={15} />
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Skill authoring lands in the next milestone — ask your agent to create one via dopl_skill"
+            onClick={() => setCreateOpen(true)}
+            title="New skill"
             aria-label="New skill"
-            className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-[7px] text-text-disabled"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
           >
             <Plus size={16} />
           </button>
@@ -198,18 +246,20 @@ export function SkillsBrowserCore({
         workspaceId={workspaceId}
         currentUserId={currentUserId}
         isAdmin={isAdmin}
-        totalSkills={skills.length}
-        onDuplicated={(created) => setSelectedId(created.id)}
+        totalSkills={live.length}
+        onDuplicated={handleCreated}
+        onDeleted={handleDeleted}
         onListChanged={onListChanged}
       />
 
-      <SkillsTrashModal
-        open={trashOpen}
-        onOpenChange={setTrashOpen}
+      <CreateSkillDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
         workspaceId={workspaceId}
-        // The list came from outside this component — pull the restored
-        // skill back in (same pattern as skill-view's duplicate flow).
-        onRestored={onListChanged}
+        onCreated={(skill) => {
+          handleCreated(skill);
+          onListChanged();
+        }}
       />
     </div>
   );
@@ -295,6 +345,7 @@ function DetailPane({
   isAdmin,
   totalSkills,
   onDuplicated,
+  onDeleted,
   onListChanged,
 }: {
   skill: Skill | null;
@@ -304,6 +355,7 @@ function DetailPane({
   isAdmin: boolean;
   totalSkills: number;
   onDuplicated: (skill: Skill) => void;
+  onDeleted: (skillId: string) => void;
   onListChanged: () => void;
 }) {
   const [resolved, setResolved] = useState<ResolvedSkill | null>(null);
@@ -346,7 +398,8 @@ function DetailPane({
         description={
           <>
             Skills are procedural prompts your connected agent discovers over
-            MCP. Ask your agent to create one with{" "}
+            MCP. Press <strong className="font-semibold">+</strong> to write
+            one, or ask your agent to create it with{" "}
             <code className="rounded bg-bg-inset px-1">dopl_skill</code>.
           </>
         }
@@ -383,6 +436,7 @@ function DetailPane({
       isAdmin={isAdmin}
       currentUserId={currentUserId}
       onDuplicated={onDuplicated}
+      onDeleted={onDeleted}
       onListChanged={onListChanged}
     />
   );

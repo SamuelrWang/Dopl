@@ -47,6 +47,14 @@ interface Props {
   placeholder?: string;
   /** Channel roster (with presence) for the addressing picker. */
   members: ChannelMember[];
+  /**
+   * True while `members` still belongs to the PREVIOUS channel
+   * (`useChannelMembers`' `stale` / `isPlaceholderData`). REQUEST mode turns
+   * this roster into the `toUserId` on the wire, so while it is true a request
+   * would address someone who is not in this channel — Send is disabled and
+   * says why, rather than posting and rolling back on a 400.
+   */
+  membersStale?: boolean;
   currentUserId: string;
   /**
    * True in a direct (1:1) channel. A DM has exactly one peer, so there is no
@@ -98,6 +106,7 @@ export function MessageComposer({
   disabled,
   placeholder,
   members,
+  membersStale,
   currentUserId,
   isDirect,
 }: Props) {
@@ -128,11 +137,14 @@ export function MessageComposer({
     isDirect: Boolean(isDirect),
     peerId,
     toUserId,
+    rosterStale: Boolean(membersStale),
   };
 
   // Who a REQUEST would reach. Null in chat mode's rendering too, because a
-  // chat send has no target by construction.
-  const targetId = mode === "request" ? resolveRequestTarget(draft) : null;
+  // chat send has no target by construction — and null while the roster is
+  // stale, because the person it would name is the last channel's peer.
+  const targetId =
+    mode === "request" && !membersStale ? resolveRequestTarget(draft) : null;
   const target = useMemo(
     () => (targetId ? members.find((m) => m.userId === targetId) ?? null : null),
     [targetId, members]
@@ -154,49 +166,66 @@ export function MessageComposer({
   // POINT, so the hint would be noise there. It fires only where an operator
   // still expects a pickup and won't get one — request mode, group channel, no
   // addressee picked. An unloaded roster is length 0, so the hint is absent
-  // rather than wrong while members resolve.
+  // rather than wrong while members resolve; a STALE one is the previous
+  // channel's and would count the wrong people, so it waits too.
   const showUnaddressedHint =
     mode === "request" &&
     !isDirect &&
+    !membersStale &&
     !toUserId &&
     members.length >= GROUP_CHANNEL_MIN_MEMBERS;
 
   /**
-   * Clear a field ONLY if it still holds what was sent.
+   * Put a draft back ONLY if the field is still empty.
    *
-   * A send is an await, and the composer stays typable across it. The old
-   * unconditional `setValue("")` therefore destroyed whatever the operator typed
-   * while the request was in flight — silently, and with no undo, because the
-   * text never existed anywhere else. Comparing against the snapshot means a
-   * settled send clears its own draft and leaves a new one alone.
+   * The mirror of the old `clearIfUnchanged`, and it exists for the same
+   * reason turned inside out. Clearing used to happen AFTER the await, so an
+   * unconditional `setValue("")` destroyed whatever the operator typed while
+   * the request was in flight. Clearing now happens BEFORE it (the message is
+   * already on screen as a pending row, so the draft has somewhere to be), and
+   * the only write that can clobber a fresh draft is the FAILURE restore — so
+   * that is the one guarded now.
    */
-  function clearIfUnchanged(
+  function restoreIfEmpty(
     set: (updater: (current: string) => string) => void,
     sent: string
   ) {
-    set((current) => (current === sent ? "" : current));
+    set((current) => (current === "" ? sent : current));
   }
 
   async function sendMessage() {
     if (!canSend) return;
-    const sentBody = value;
-    const sentSubject = subject;
+    const submitted = draft;
+    const sentTo = toUserId;
     setSending(true);
+    // CLEAR SYNCHRONOUSLY, before the request leaves. This is half of the
+    // optimistic send: the caller has already written a pending row into the
+    // transcript cache, so the text is not lost by being taken out of the
+    // field — it has moved from a draft to a message. Waiting for the round
+    // trip is what made the operator's own words sit in the composer through
+    // two network hops while a 30px button dimmed.
+    setValue("");
+    setSubject("");
+    setToUserId(null);
+    let failed = false;
     try {
       const result = await submitComposerDraft({
-        ...draft,
+        ...submitted,
         onSend,
         onCreateThread,
       });
-      if (result === "blocked") return;
-      clearIfUnchanged(setValue, sentBody);
-      clearIfUnchanged(setSubject, sentSubject);
-      setToUserId(null);
+      failed = result === "blocked";
     } catch {
-      // Keep the text so the user can retry; the caller surfaces the error.
+      // The caller has already toasted the reason and rolled its cache back,
+      // so the draft belongs in the field again for a retry.
+      failed = true;
     } finally {
       setSending(false);
     }
+    if (!failed) return;
+    restoreIfEmpty(setValue, submitted.body);
+    restoreIfEmpty(setSubject, submitted.subject);
+    setToUserId((current) => current ?? sentTo);
   }
 
   const offlineHint = target && !target.agentOnline && (
@@ -217,7 +246,13 @@ export function MessageComposer({
             implicit, so it shows no picker either. */}
         {mode === "request" && (
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            {!isDirect && (
+            {/* The picker waits out a stale roster too, and not only for
+                cosmetics: a name picked from the PREVIOUS channel's list would
+                still be sitting in `toUserId` when the real roster lands and
+                the send gate opens — which is the same 400 arriving a second
+                later. There is nothing to pick from until the roster is this
+                channel's. */}
+            {!isDirect && !membersStale && (
               <AddressPicker
                 members={members}
                 currentUserId={currentUserId}
@@ -282,10 +317,20 @@ export function MessageComposer({
               flipping it mid-send left the line below describing a consequence
               that no longer matched anything. */}
           <ComposerIntentPill mode={mode} onChange={setMode} disabled={sending} />
+          {/* THE BUTTON MORPHS while the write is in flight. `SendButton` has
+              carried a `mode="pause"` face since it was extracted from the
+              desktop session window and no composer ever passed it: the send
+              path's only feedback was this same button at 50% opacity. The
+              draft is already gone from the field and the message is already
+              in the transcript by the time this renders, so the pause face is
+              the honest statement of the one thing still outstanding — the
+              round trip. It stays disabled because nothing in the web app can
+              interrupt a turn yet; the glyph is the signal, not the target. */}
           <SendButton
+            mode={sending ? "pause" : "send"}
             onClick={() => void sendMessage()}
             disabled={!canSend}
-            label="Send message"
+            label={sending ? "Sending" : "Send message"}
           />
         </div>
 

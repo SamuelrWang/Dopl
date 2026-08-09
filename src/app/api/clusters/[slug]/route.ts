@@ -6,6 +6,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { ClusterNameSchema } from "@/features/clusters/schema";
 import type { Role } from "@/features/workspaces/types";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   deleteCluster,
   getCluster,
@@ -41,6 +42,39 @@ const ClusterPatchSchema = z.object({
     .optional(),
 });
 
+/**
+ * `clusters/server/service.ts` signals a miss with a plain
+ * `Error("Cluster not found: <slug>")`. All three tails below used to derive
+ * their 404 from that string AND echo the string back verbatim — the slug leak
+ * ENGINEERING §9 forbids. The 404 mapping is preserved here; the client now
+ * gets a static sentence instead of the raw exception text.
+ *
+ * `HttpError`s (e.g. `parseJson`'s VALIDATION_FAILED) are handed straight back
+ * to the shared tail so they keep their own code and status.
+ *
+ * THE MATCH IS CASE-SENSITIVE ON PURPOSE. It briefly ran `.toLowerCase()`
+ * first, which reads like harmless leniency and is not: this predicate turns
+ * an arbitrary `Error` into a 404, and the only sentence it is meant to catch
+ * is the service's own lowercase `"Cluster not found: <slug>"`. Widening it to
+ * any casing opens the match to wording nobody here controls — a
+ * `PostgrestError` phrased "Relation Not Found", a driver message, a future
+ * library string — each of which would be answered as a clean 404 for a
+ * cluster that exists, hiding a real fault behind a plausible one. Matching
+ * the exact string the one intended producer emits keeps the blast radius at
+ * that producer.
+ */
+function mapClusterError(err: unknown): HttpError | null {
+  if (err instanceof HttpError) return null;
+  if (err instanceof Error && err.message.includes("not found")) {
+    return HttpError.notFound("Cluster not found");
+  }
+  return null;
+}
+
+function toClusterErrorResponse(err: unknown): NextResponse {
+  return toHttpErrorResponse("api/clusters/[slug]", err, mapClusterError);
+}
+
 function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
@@ -59,9 +93,7 @@ async function handleGet(_request: NextRequest, ctx: Ctx) {
     const cluster = await getCluster(slug, scopeOf(ctx));
     return NextResponse.json(cluster);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return toClusterErrorResponse(error);
   }
 }
 
@@ -79,12 +111,7 @@ async function handlePatch(request: NextRequest, ctx: Ctx) {
     );
     return NextResponse.json(cluster);
   } catch (error) {
-    if (error instanceof HttpError) {
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
-    }
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return toClusterErrorResponse(error);
   }
 }
 
@@ -97,9 +124,7 @@ async function handleDelete(_request: NextRequest, ctx: Ctx) {
     await deleteCluster(slug, scopeOf(ctx));
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return toClusterErrorResponse(error);
   }
 }
 

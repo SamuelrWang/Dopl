@@ -2,6 +2,8 @@ import "server-only";
 import { meetsMinRole } from "@/features/workspaces/types";
 import {
   deleteGrantsForResource,
+  deleteGrantsForResources,
+  insertReadGrantsForResources,
   insertReadGrantsIfMissing,
   listGrantsForResources,
   listTeamIdsForUser,
@@ -124,12 +126,20 @@ export async function updateFolderForUser(
       );
     }
     await repo.updateChatsScopeInFolder(row.id, row.visibility, row.access_mode);
+    // SET-AT-A-TIME, not row-at-a-time. This used to loop delete+insert per
+    // filed chat — 2N serial round-trips on one save, unbounded in N, which
+    // put a 200-chat folder past the gateway timeout. The grant set is the
+    // same for every chat in the folder, so it is one `.in()` delete plus one
+    // array upsert (chunked only to keep the request itself bounded).
     const chatIds = await repo.listChatIdsInFolder(row.id);
-    for (const chatId of chatIds) {
-      await deleteGrantsForResource(ctx.workspaceId, "chat", chatId);
-      if (grantTeamIds && grantTeamIds.length > 0) {
-        await insertReadGrantsIfMissing(ctx.workspaceId, "chat", chatId, grantTeamIds);
-      }
+    await deleteGrantsForResources(ctx.workspaceId, "chat", chatIds);
+    if (grantTeamIds && grantTeamIds.length > 0) {
+      await insertReadGrantsForResources(
+        ctx.workspaceId,
+        "chat",
+        chatIds,
+        grantTeamIds
+      );
     }
   }
 

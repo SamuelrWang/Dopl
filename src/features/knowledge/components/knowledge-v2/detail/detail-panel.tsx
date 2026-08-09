@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
   Database,
@@ -9,12 +10,13 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Editor } from "@tiptap/react";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Toolbar } from "@/shared/editor/doc-editor-toolbar";
 import { toast } from "@/shared/ui/toast";
 import { cn } from "@/shared/lib/utils";
+import { DeleteBaseConfirm } from "../../delete-base-confirm";
 import { KnowledgeSearch } from "../../knowledge-search";
 import { KnowledgeApiError, deleteBase } from "../../../client/api";
+import { evictDeletedBase } from "../../../client/hooks";
 import type { KnowledgeBase, KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import type { BaseTree, KbTeamRef, Selection } from "../types";
 import type { KnowledgeRouting } from "../routing";
@@ -107,6 +109,7 @@ export function DetailPanel({
   // EntryView's DocEditor. Drives the header-band formatting toolbar;
   // null while a base is selected or a file body is still loading.
   const [entryEditor, setEntryEditor] = useState<Editor | null>(null);
+  const queryClient = useQueryClient();
 
   // Mirrors the settings form's danger-zone delete (base-settings-form.tsx):
   // same `deleteBase` call, then navigate to the base-less knowledge root so
@@ -118,6 +121,7 @@ export function DetailPanel({
     try {
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
+      evictDeletedBase(queryClient, workspaceId, base.id);
       routing.goToBase(null, "replace");
       routing.refreshServerData();
     } catch (err) {
@@ -264,13 +268,10 @@ export function DetailPanel({
         )}
       </div>
 
-      <ConfirmDialog
+      <DeleteBaseConfirm
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Delete knowledge base?"
-        description={`“${selection.base.name}” and all its folders + entries will move to trash. You can restore it from the trash modal until it's purged.`}
-        confirmLabel="Delete"
-        destructive
+        baseName={selection.base.name}
         onConfirm={handleDeleteBase}
       />
     </div>

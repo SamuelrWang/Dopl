@@ -58,7 +58,6 @@ const REQUIRED: Record<string, string[]> = {
   get: ["object"],
   create_cluster: ["name"],
   update_cluster: ["cluster"],
-  restore_cluster: ["cluster"],
   create_column: ["cluster", "name"],
   create_object: ["parent", "name"],
   update_object: ["object"],
@@ -112,15 +111,6 @@ export async function dispatch(
         purpose: args.purpose,
       });
       return ok(`Updated cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
-    }
-    case "restore_cluster": {
-      // A trashed cluster is absent from the snapshot (reads exclude
-      // soft-deleted), so it can't be resolved here — pass the ref straight
-      // through and let the server find the tombstone by id/slug.
-      const cluster = await client.restoreOntologyCluster(args.cluster as string);
-      return ok(
-        `Restored cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`) and the objects its delete cascaded. Run op="map" to verify.`
-      );
     }
     case "create_column": {
       const snapshot = await client.getOntology();

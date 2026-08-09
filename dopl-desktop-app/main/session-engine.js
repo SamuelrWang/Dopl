@@ -62,7 +62,7 @@ sessionPark.bind({
 });
 // §3 split: session-query owns the option assembly + the consume loop, but needs the engine's
 // dispatch and the replay-aware quiet emit (neither module requires back into the engine).
-sessionQuery.bind({ dispatch, emitQuiet });
+sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arms the launch watchdog through the ONE timer
 // Q6: same injection for the preflight + in-window sign-in. `startQuery` is the SHARED deferred
 // launch (session-query), so an auth hold never assembles a second query and inherits H1's
 // supersede-before-relaunch; `denyPending` fail-closes before it parks.
@@ -74,7 +74,7 @@ sessionHistory.bind({ emit });
 // folder label). It gets `emit` rather than owning it — the RESHOW rule is session policy.
 sessionShell.bind({ dispatch, refreshTray, emit });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
-sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell, keptWindow: sessionSummary.keptWindow });
+sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell, keptWindow: sessionSummary.keptWindow, dispatch }); // C-8: quit ends live sessions through the reducer
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
 sessionSummary.bind({ sessions });
 
@@ -492,9 +492,9 @@ module.exports = {
   noteRequestStatus: sessionPark.noteRequestStatus, // ...and its lifecycle strip advances from wire events only
   openConsentWindow, // consent reflow (item 8) — called by trigger.js
   decideConsent: sessionConsent.decide,
-  closeConsentWindow: sessionConsent.close,
+  closeConsentWindow: sessionConsent.close, releaseConsentWindow: sessionConsent.release, // C-9: hand the window budget back when no spawn adopts the card
   getConsentBySender: sessionConsent.getBySender,
-  listLiveSessions: sessionReopen.listLiveSessions, // reopen (item 10) — tray via index.js
+  listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
   reopenWindow: sessionReopen.reopenWindow,
   reopenByTask: sessionReopen.reopenByTask, // item 2 — MAIN-window bridge (channel-dir-ipc)
 };

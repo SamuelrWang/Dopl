@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   removeMember,
   updateMemberRole,
@@ -38,11 +38,7 @@ export const PATCH = withUserAuth(
       await updateMemberRole(workspace.id, userId, targetUserId, role);
       return NextResponse.json({ ok: true });
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json({ error: message }, { status: 500 });
+      return toHttpErrorResponse("api/workspaces/[workspaceSlug]/members/[userId]", err);
     }
   },
   // sessionOnly: changing a member's role is an admin action, not an agent one.
@@ -68,11 +64,7 @@ export const DELETE = withUserAuth(
       await removeMember(workspace.id, userId, targetUserId);
       return new NextResponse(null, { status: 204 });
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json({ error: message }, { status: 500 });
+      return toHttpErrorResponse("api/workspaces/[workspaceSlug]/members/[userId]", err);
     }
   },
   // sessionOnly: removing a member is an admin action, not an agent one.

@@ -5,9 +5,14 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { inlineOr } from "./narration";
+import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
-import { failureDetail, NO_NAME, SCOPE_NOTE } from "./skills-shared";
+import {
+  failureDetail,
+  NO_NAME,
+  SCOPE_NOTE,
+  UNTRUSTED_SKILL_BODY_HEADER,
+} from "./skills-shared";
 
 export async function opList(
   client: DoplClient,
@@ -74,12 +79,25 @@ export async function opList(
 export async function opGet(
   client: DoplClient,
   slug: string,
-  detail?: "summary" | "full"
+  detail?: "summary" | "full",
+  // The caller's own user id, for the authorship framing only. See
+  // {@link UNTRUSTED_SKILL_BODY_HEADER}.
+  callerUserId: string | null = null
 ): Promise<ToolResponse> {
   try {
     const { skill, files, references } = await client.getSkill(slug);
-    const body = files.find((f) => f.name === "SKILL.md")?.body ?? files[0]?.body ?? "";
+    const file = files.find((f) => f.name === "SKILL.md") ?? files[0];
+    const body = file?.body ?? "";
+    // The FILE's authorship, falling back to the skill row's — the body is what
+    // is being framed, so it is the body's authors that decide.
+    const foreign = isForeignAuthored(file ?? skill, callerUserId);
     const lines: string[] = [];
+    // Framing FIRST, ahead of the heading, so it precedes every peer-typed
+    // string in the result and not merely the body. Suppressed in `summary`
+    // mode below, where no body is rendered to frame.
+    if (foreign && detail !== "summary") {
+      lines.push(UNTRUSTED_SKILL_BODY_HEADER, "");
+    }
     lines.push(`# Skill ${inlineOr(skill.name, NO_NAME)} \`${skill.slug}\``);
     const scope =
       skill.visibility === "private"
@@ -152,11 +170,19 @@ export async function opGet(
 export async function opRead(
   client: DoplClient,
   slug: string,
+  // The caller's own user id, for the authorship framing only.
+  callerUserId: string | null = null,
 ): Promise<ToolResponse> {
   try {
     const file = await client.readSkillBody(slug);
+    // `op="read"` is the BARER of the two body surfaces — no metadata, no
+    // references, just the procedure — which makes it the one that most needs to
+    // say whose procedure it is.
+    const header = isForeignAuthored(file, callerUserId)
+      ? `${UNTRUSTED_SKILL_BODY_HEADER}\n\n`
+      : "";
     return ok(
-      `# \`${slug}\` / SKILL.md\nVersion: \`${file.updatedAt}\` (pass as expected_version to write)\n\n${file.body}`
+      `${header}# \`${slug}\` / SKILL.md\nVersion: \`${file.updatedAt}\` (pass as expected_version to write)\n\n${file.body}`
     );
   } catch (e) {
     return err(`Couldn't read SKILL.md from \`${slug}\`: ${failureDetail(e)}`);

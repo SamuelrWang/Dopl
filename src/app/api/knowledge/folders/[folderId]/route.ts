@@ -5,7 +5,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
-  softDeleteFolder,
+  deleteFolder,
   updateFolder,
 } from "@/features/knowledge/server/service";
 import { KnowledgeFolderUpdateSchema } from "@/features/knowledge/schema";
@@ -35,7 +35,7 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = requireFolderId(auth);
     const ctx = buildKnowledgeContext(auth);
-    await softDeleteFolder(ctx, id);
+    await deleteFolder(ctx, id);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

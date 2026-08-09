@@ -41,7 +41,18 @@ export function toKnowledgeErrorResponse(err: unknown): NextResponse {
   // Domain errors map first; anything unrecognized falls through to the
   // shared HttpError pass-through / generic 500. The raw error is never
   // leaked to the client — it could expose DB internals, file paths, or
-  // PII inside dynamic SQL strings (ENGINEERING §9). The full error gets
-  // logged via the auth wrapper's 5xx system_events trail.
+  // PII inside dynamic SQL strings (ENGINEERING §9).
+  //
+  // WHERE THE CAUSE ACTUALLY GOES, corrected (2026-08-08). This used to claim
+  // "the full error gets logged via the auth wrapper's 5xx system_events
+  // trail". It does not. These tails RETURN their 500 rather than throwing it,
+  // and `runAndLog5xx` only reaches its error-bearing branch on a THROWN
+  // escape — a returned 500 takes the response branch, which writes
+  // `"5xx response: 500"` and a `status_code` and nothing else. So
+  // `system_events` records THAT a 500 happened, never WHY. The only place the
+  // cause exists is the `console.error` in `toHttpErrorResponse`, which is
+  // process stdout: fine in a tailed dev log, gone once the platform's log
+  // retention rolls. Diagnosing one of these from the durable trail alone is
+  // not possible; that is a known gap, not a compensating control.
   return toHttpErrorResponse("knowledge-route", err, mapKnowledgeError);
 }

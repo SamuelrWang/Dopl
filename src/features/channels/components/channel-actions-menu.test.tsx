@@ -57,7 +57,7 @@ function markup(over: Partial<Channel>, canManage: boolean) {
       onToggleVisibility={noop}
       onToggleArchive={noop}
       onRequestDelete={noop}
-      onLeave={noop}
+      onRequestLeave={noop}
     />
   );
 }
@@ -122,7 +122,7 @@ describe("ChannelActionsMenuItems — selecting an item closes the menu", () => 
       onToggleVisibility: noop,
       onToggleArchive: noop,
       onRequestDelete,
-      onLeave: noop,
+      onRequestLeave: noop,
     });
     const item = findMenuItem(items);
     item.props.onSelect();

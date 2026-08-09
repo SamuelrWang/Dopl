@@ -12,6 +12,13 @@ import {
   isThreadClosed,
   isThreadParticipant,
 } from "./service-writes-metadata-thread";
+// The RESERVED MARKER KEYS — the metadata that changes how a card READS, and the
+// one rule they all share — are their own module (§2 split, C-26).
+import {
+  CLOSE_PROPOSAL_KEYS,
+  REOPEN_MARKER_KEY,
+  takeCalmFlags,
+} from "./service-writes-metadata-markers";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -25,10 +32,17 @@ import type { ChannelContext } from "./service-shared";
  * `session_id`, `to_user_notify`, `taskMode`,
  * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `to_agent_ids`,
  * `author_agent_id`, `intent`, `handoff`,
- * and the five calm-terminal flags) are ALWAYS stripped from caller metadata
+ * the six calm-terminal flags, the two close-proposal keys and `threadReopened`)
+ * are ALWAYS stripped from caller metadata
  * and re-added only from server-validated values. `taskId` stays
  * caller-settable — but EVERY thread id, first-class or legacy, now has to
  * BELONG to the poster (see {@link resolvePostMetadata}).
+ *
+ * The MARKER half — the calm flags, the close-proposal keys and the reopen
+ * marker, i.e. every reserved key whose job is to change how a CARD READS —
+ * moved to `service-writes-metadata-markers.ts` at the §2 cap when the reopen
+ * echo landed (C-26). That module states the rule they share once; this one
+ * applies it.
  *
  * THE THREE AGENT KEYS ARE STRIPPED AND NEVER RE-STAMPED (rollback §1,
  * 2026-08-05). `to_agent_id` / `to_agent_ids` / `author_agent_id` have no
@@ -63,32 +77,6 @@ import type { ChannelContext } from "./service-shared";
  * this gate (ENGINEERING §8, "close the legacy-id gate FIRST, then widen"). It
  * is now UNBLOCKED; widening it is the desktop lane's later work.
  */
-
-/**
- * The calm-terminal flags a `task_failed` may carry (`declined`, `dropped`,
- * `interrupted`, `capped`, `ended` — see `lib/group-thread.ts`). They decide
- * whether the other side's card reads as a calm, operator-chosen ending or a
- * red failure, and the message receipt shows Declined / Interrupted off the
- * same bits. Reserved, because a member who could set them on someone else's
- * thread could fabricate that thread's outcome ("This request was declined.")
- * without ever touching the session it describes.
- */
-const CALM_FLAG_KEYS = [
-  "declined",
-  "dropped",
-  "interrupted",
-  "capped",
-  "ended",
-  // P1-7 (2026-08-04) — THE NON-TERMINAL SESSION END. `session_ended` rides on a
-  // `task_progress`, not a `task_failed`, and it is reserved on exactly the same
-  // terms as its five siblings: it changes how the other member's card READS
-  // ("their session stopped", not "the thread failed"), so a member who could
-  // set it on somebody else's thread could narrate that thread's state without
-  // touching the session it describes. It is NOT read by `calmTerminalStatus` —
-  // that function answers only for a `task_failed` — which is the point: a local
-  // session ending is not an outcome for the shared thread at all.
-  "session_ended",
-] as const;
 
 /**
  * The other member of a DIRECT channel, or undefined when it cannot be
@@ -136,23 +124,6 @@ async function resolveInheritableTask(
 }
 
 /**
- * Strip every calm-terminal flag from caller metadata and report which ones
- * were asked for. Only a literal `true` counts — a truthy-but-not-true value
- * (`"yes"`, `1`) is dropped and never re-stamped, so the wire can only ever
- * carry the strict booleans the renderers read (`=== true`).
- */
-function takeCalmFlags(
-  metadata: Record<string, unknown>
-): Array<(typeof CALM_FLAG_KEYS)[number]> {
-  const requested: Array<(typeof CALM_FLAG_KEYS)[number]> = [];
-  for (const key of CALM_FLAG_KEYS) {
-    if (metadata[key] === true) requested.push(key);
-    delete metadata[key];
-  }
-  return requested;
-}
-
-/**
  * What a post's metadata fold produced: the stored `metadata` itself, plus the
  * one NOTICE the fold is in a position to raise and nothing downstream could
  * re-derive without a second query.
@@ -170,20 +141,6 @@ export interface PostMetadataResult {
 }
 
 /**
- * The keys a CLOSE PROPOSAL stamps (DECISION 2, 2026-08-04). Reserved on the
- * same terms as `runtime` / `session_id`: stripped from caller metadata
- * unconditionally and re-stamped ONLY from a server-internal value, because a
- * caller that could set them would be able to raise a "your agent thinks this
- * can be closed — Close?" prompt on a thread it is not a party to, in front of a
- * human whose one click then settles the exchange for both members.
- *
- * Two keys rather than one because the prompt has to prefill the outcome the
- * agent is proposing: `closeProposed` is the marker the surfaces match on, and
- * `closeOutcome` is what the confirm hands straight back to `closeTask`.
- */
-export const CLOSE_PROPOSAL_KEYS = ["closeProposed", "closeOutcome"] as const;
-
-/**
  * The server-internal inputs to the metadata fold — values no HTTP caller can
  * supply, because they are not fields of `ChannelMessageCreateInput` and no
  * route parses them.
@@ -191,10 +148,17 @@ export const CLOSE_PROPOSAL_KEYS = ["closeProposed", "closeOutcome"] as const;
 export interface PostMetadataOptions {
   /**
    * Stamp this post as a CLOSE PROPOSAL carrying that outcome. The one caller is
-   * `service-tasks.proposeTaskClose`, which has already checked that the poster
-   * is the thread's creator or its target.
+   * `service-tasks-propose.proposeTaskClose`, which has already checked that the
+   * poster is the thread's creator or its target.
    */
   closeProposal?: "completed" | "failed";
+  /**
+   * Stamp this post as the REOPEN ECHO (C-26). The one caller is
+   * `service-tasks-lifecycle.reopenTask`, which has already checked that the
+   * poster is the thread's creator or its target and that the row really moved
+   * from `closed` back to `open`. See {@link REOPEN_MARKER_KEY}.
+   */
+  reopened?: boolean;
   /**
    * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
    * flag `true`. The one caller is `service-tasks.createTask` (the thread
@@ -323,6 +287,10 @@ export interface PostMetadataOptions {
  *    own and cost no second read. A flag on a thread that is not the poster's
  *    is dropped with the tag that carried it, so the victim's card keeps
  *    rendering the outcome its OWN session produced.
+ * 7b. **Reopen marker (C-26).** `threadReopened` on the same condition as the
+ *    close proposal and the calm flags: a surviving thread tag. It is what makes
+ *    a reopen VISIBLE to the other member at all — `channel_tasks` is in no
+ *    realtime table set, so the echo carrying this key is the doorbell.
  * 8. **Closed-thread notice (F6).** The resolved thread row's `status` is READ
  *    at last — it was written on close and cleared on reopen and consulted
  *    nowhere on the write path, so a closed thread accepted posts in silence.
@@ -342,6 +310,9 @@ export async function resolvePostMetadata(
   // whether a stamp is coming, exactly like `session_id` below. See
   // {@link CLOSE_PROPOSAL_KEYS}.
   for (const key of CLOSE_PROPOSAL_KEYS) delete metadata[key];
+  // C-26 — the reopen marker, stripped on the same line of reasoning and in the
+  // same place. See {@link REOPEN_MARKER_KEY}.
+  delete metadata[REOPEN_MARKER_KEY];
   delete metadata.to_user_id;
   // `to_user_notify` was RESERVED IN DOCS AND NEVER STRIPPED (F-110 residual
   // (d) / F-111 residual (a), open since 2026-07-31). Its consumer — the
@@ -473,6 +444,16 @@ export async function resolvePostMetadata(
   if (opts.closeProposal && typeof metadata.taskId === "string") {
     metadata.closeProposed = true;
     metadata.closeOutcome = opts.closeProposal;
+  }
+
+  // C-26 — THE REOPEN ECHO'S MARKER, on exactly the close proposal's condition:
+  // only onto a thread tag that survived the gate above. `reopenTask` has already
+  // established creator-or-target AND that the row really moved back to `open`,
+  // so this is the belt — and the belt is what makes "this thread is live again"
+  // unforgeable rather than merely unforged today. Stamped as a literal boolean,
+  // read `=== true` by the client, so a truthy-but-not-true value never counts.
+  if (opts.reopened === true && typeof metadata.taskId === "string") {
+    metadata[REOPEN_MARKER_KEY] = true;
   }
 
   // SPAWN-WITH-HANDOFF (rollback §3.5) — the same discipline: stamped `true`

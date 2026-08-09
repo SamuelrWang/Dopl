@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { resolveJoinRequest } from "@/features/workspaces/server/join-links";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 const ResolveSchema = z.discriminatedUnion("action", [
   z.object({
@@ -42,11 +42,7 @@ export const PATCH = withUserAuth(
       );
       return NextResponse.json({ ok: true });
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json({ error: message }, { status: 500 });
+      return toHttpErrorResponse("api/workspaces/[workspaceSlug]/join-requests/[requestId]", err);
     }
   },
   // sessionOnly: approving/declining a join request is an admin action.

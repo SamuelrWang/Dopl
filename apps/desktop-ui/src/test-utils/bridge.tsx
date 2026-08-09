@@ -53,8 +53,24 @@ export function failure(status: number, code: string, message: string): BridgeRe
   return { status, statusText: message, hasBody: true, body: { error: { code, message } } };
 }
 
-/** `GET /api/workspaces/resolve?segment=` — the shell's and every page's
- *  first read. */
+/** `POST /api/boot` — the shell's and every page's ONE first read (P0-2).
+ *  Carries what `resolve`, `me` and `my-access` used to answer separately. */
+export function bootBody(over: Record<string, unknown> = {}) {
+  return {
+    isOnboarded: true,
+    surveyCompleted: true,
+    userId: USER_ID,
+    workspace: WORKSPACE,
+    segment: SEGMENT,
+    needsRedirect: false,
+    role: "owner",
+    myAccess: { defaultLevel: "edit", overrides: [] },
+    ...over,
+  };
+}
+
+/** `GET /api/workspaces/resolve?segment=` — still live for the web app and the
+ *  chats page; the SPA seeds this from the boot answer instead of fetching. */
 export function resolveBody(over: Record<string, unknown> = {}) {
   return { workspace: WORKSPACE, canonical: SEGMENT, needsRedirect: false, ...over };
 }
@@ -65,16 +81,25 @@ export function meBody(over: Record<string, unknown> = {}) {
 }
 
 /**
- * The two reads every workspace-scoped page opens with. Returns `null` for any
+ * The reads every workspace-scoped page opens with. Returns `null` for any
  * other path so a suite can chain its own table after it:
  *
  *     workspaceRoutes(path) ?? myPageRoutes(path)
+ *
+ * `resolve` and `me` stay in the table even though the shell no longer calls
+ * them: they are seeded from the boot answer, so a suite that renders a page
+ * in isolation (or one of the two components that still read them directly)
+ * must still be answerable.
  */
 export function workspaceRoutes(path: string): Promise<BridgeResponse> | null {
+  if (path === "/api/boot") return Promise.resolve(ok(bootBody()));
   if (path.startsWith("/api/workspaces/resolve")) {
     return Promise.resolve(ok(resolveBody()));
   }
   if (path === "/api/workspaces/me") return Promise.resolve(ok(meBody()));
+  if (path.endsWith("/my-access")) {
+    return Promise.resolve(ok({ defaultLevel: "edit", overrides: [] }));
+  }
   return null;
 }
 

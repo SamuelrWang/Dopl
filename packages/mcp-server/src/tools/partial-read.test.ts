@@ -52,8 +52,6 @@ const healthyMap = (over: Record<string, unknown> = {}) =>
   stub({
     listKbBases: vi.fn(async () => [BASE]),
     listSkills: vi.fn(async () => [SKILL]),
-    listClusters: vi.fn(async () => ({ clusters: [] })),
-    listWorkflows: vi.fn(async () => ({ workflows: [] })),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
     ...over,
   });
@@ -62,7 +60,6 @@ const healthySearch = (over: Record<string, unknown> = {}) =>
   stub({
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => [SKILL]),
-    listWorkflows: vi.fn(async () => ({ workflows: [] })),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
     ...over,
   });
@@ -88,7 +85,7 @@ describe("dopl_map names the domains it could not read", () => {
 
     expect(text).toContain("PARTIAL READ");
     expect(text).toContain("Knowledge bases (`HTTP 500`)");
-    expect(text).toContain("1 of 5 domains could NOT be read");
+    expect(text).toContain("1 of 3 domains could NOT be read");
     // The claim that matters: the reader must not come away believing the
     // workspace has no knowledge bases.
     expect(text).toContain("not absent from the workspace");
@@ -107,7 +104,7 @@ describe("dopl_map names the domains it could not read", () => {
       {},
     );
 
-    expect(text).toContain("2 of 5 domains could NOT be read");
+    expect(text).toContain("2 of 3 domains could NOT be read");
     expect(text).toContain("Knowledge bases (`HTTP 503`)");
     expect(text).toContain("Ontology (`timed out`)");
     expect(text).not.toContain("Skills (`");
@@ -139,13 +136,10 @@ describe("dopl_map names the domains it could not read", () => {
         "## Skills (1) — dopl_skill",
         "- `Ship it` `ship-it` — `When shipping.`",
         "",
-        "## Workflows (0) — dopl_workflow",
-        "_None._",
-        "",
         "## Ontology (0 clusters) — dopl_ontology",
         "_None._",
         "",
-        '_Scope: ACTIVE items visible to you. Draft skills, trashed items, and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
+        '_Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
         "",
         // The STATIC routing line (see `CHANNELS_ROUTING` in map.ts). It is not
         // a domain and it costs no read, which is why it is below the scope
@@ -189,7 +183,7 @@ describe("dopl_search names the groups it could not read", () => {
 
     expect(text).toContain("PARTIAL READ");
     expect(text).toContain("Knowledge entries (`HTTP 500`)");
-    expect(text).toContain("1 of 4 groups could NOT be read");
+    expect(text).toContain("1 of 3 groups could NOT be read");
     expect(text).toContain("not absent from the workspace");
     // The group still renders, and the hits from the healthy groups survive.
     expect(text).toContain("## Knowledge entries");
@@ -214,13 +208,10 @@ describe("dopl_search names the groups it could not read", () => {
         "## Skills",
         "- `Ship it` `ship-it` — `When shipping.`",
         "",
-        "## Workflows",
-        "_No matches._",
-        "",
         "## Ontology objects",
         "_No matches._",
         "",
-        '_Scope: max 8 per group. Only knowledge entries are matched on their BODIES; skills, workflows and ontology objects on names and trigger metadata only, so a term living inside a SKILL.md or a workflow step is not findable here. Drafts are excluded from Skills. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._',
+        '_Scope: max 8 per group. Only knowledge entries are matched on their BODIES; skills and ontology objects on names and trigger metadata only, so a term living inside a SKILL.md is not findable here. Drafts are excluded from Skills. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._',
       ].join("\n"),
     );
     expect(text).not.toContain("PARTIAL READ —");

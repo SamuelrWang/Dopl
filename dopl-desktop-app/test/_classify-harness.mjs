@@ -91,9 +91,11 @@ const U3 = "third-uuid"; // a distinct third party
 //   unaddressed AGENT author:
 //     - fyi (member) / ignore (public non-member) — NEVER an implicit trigger
 //       (LOOP BRAKE: the responder's reply is unaddressed so it can't re-trigger)
-//   unaddressed USER author (unchanged):
-//     - exactly 2 members + member -> trigger, UNLESS myNotifyScope === 'none'
-//       (an explicit mute wins over an IMPLICIT target) -> ignore
+//   unaddressed USER author:
+//     - exactly 2 members + member -> trigger, UNCONDITIONALLY. The per-channel
+//       notify scope that used to mute this (myNotifyScope === 'none') was
+//       removed from the product 2026-08-08 (F-170); nothing suppresses an
+//       implicit two-member trigger any more.
 //     - otherwise            -> fyi (member) / ignore (public non-member)
 function oracle(m, entry, myId) {
   if (!m || m.kind !== "message" || !m.authorUserId) return "ignore";
@@ -116,8 +118,7 @@ function oracle(m, entry, myId) {
   if (m.authorKind === "agent") return isMember ? "fyi" : "ignore";
   const cnt = Number(ch && ch.memberCount);
   const knownTwo = Number.isFinite(cnt) && cnt === 2;
-  const scope = (ch && ch.myNotifyScope) || "all";
-  if (knownTwo && isMember) return scope === "none" ? "ignore" : "trigger";
+  if (knownTwo && isMember) return "trigger";
   return isMember ? "fyi" : "ignore";
 }
 
@@ -143,10 +144,9 @@ function makeMsg({ to, author, authorKind, kind }) {
   };
 }
 
-function makeEntry({ memberCount, isMember, myNotifyScope }) {
+function makeEntry({ memberCount, isMember }) {
   const channel = { id: "chan-abcdef01", name: "General", memberCount };
   if (isMember !== "undefined") channel.isMember = isMember;
-  if (myNotifyScope !== "undefined") channel.myNotifyScope = myNotifyScope;
   return { channel };
 }
 
@@ -156,7 +156,6 @@ const IS_MEMBERS = [true, false, "undefined"];
 const AUTHORS = ["me", "other"];
 const AUTHOR_KINDS = ["user", "agent", "system"];
 const KINDS = ["message", "task_started"];
-const SCOPES = ["all", "addressed", "none", "undefined"];
 
 export {
   extractFn,
@@ -177,5 +176,4 @@ export {
   AUTHORS,
   AUTHOR_KINDS,
   KINDS,
-  SCOPES,
 };

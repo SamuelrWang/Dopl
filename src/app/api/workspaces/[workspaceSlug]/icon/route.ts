@@ -7,6 +7,7 @@ import {
   updateWorkspaceIcon,
 } from "@/features/workspaces/server/service";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   uploadWorkspaceIcon,
   clearWorkspaceIcon,
@@ -18,11 +19,7 @@ interface Ctx {
 }
 
 function errorResponse(err: unknown): NextResponse {
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json({ error: message }, { status: 500 });
+  return toHttpErrorResponse("api/workspaces/[workspaceSlug]/icon", err);
 }
 
 /**

@@ -10,7 +10,7 @@
  *   - `ontology-render.ts`     — shared ref resolvers + object renderer
  *   - `ontology-ops-read.ts`   — map/anchor/resolve/get
  *   - `ontology-ops-write.ts`  — the op dispatch switch + every mutating handler
- * The admin tool (cascade soft-deletes) stays inline here.
+ * The admin tool (the refused cascade deletes) stays inline here.
  */
 import { type CallerIdentity } from "./identity";
 import type { DoplClient } from "@dopl/client";

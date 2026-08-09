@@ -127,8 +127,14 @@ test("the tray sign-in still arms the M4 login-CSRF nonce", () => {
     "the sign-in URL must be derived from SIGN_IN_URL");
   assert.match(fn, /maybeBeginAuth\(target\)/, "the tray entry point must not bypass the gate");
   const gate = fnOf(ACTIONS, "maybeBeginAuth");
-  assert.match(gate, /auth\.beginPendingAuth\(\)/);
+  // F-054: the browser record arms with requireState now, so the returning fragment
+  // must echo this exact nonce — presence + TTL alone no longer admits one.
+  assert.match(gate, /auth\.beginPendingAuth\(\{ requireState: true \}\)/);
   assert.match(gate, /searchParams\.set\('state', nonce\)/);
+  assert.ok(
+    !/searchParams\.has\('state'\)/.test(gate),
+    "the nonce must be sent unconditionally — arming a record whose state we never send is unspendable"
+  );
   // FIX S3: the gate is EXACT-ORIGIN now. It used to arm for any *.usedopl.com /auth/ URL,
   // which handed our login-CSRF nonce (as ?state=) to a host we do not control.
   assert.match(gate, /if \(!isAppOrigin\(urlStr\) \|\| !\/\\\/auth\\\/\/i\.test\(u\.pathname\)\) return urlStr;/,

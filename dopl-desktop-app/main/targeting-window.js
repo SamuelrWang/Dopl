@@ -32,13 +32,28 @@ function openChannelForEntry(entry) {
 
 // ── Tool profile (Feature 6) ─────────────────────────────────────────────────
 // The operator's own responding-agent tool scope for this channel, read from the
-// channel DTO (the parallel track exposes the caller's own value like
-// myNotifyScope). Absent/unknown → 'full' (documented default that preserves
-// v1.1 behavior). session-spawner maps the profile to concrete --allowedTools.
+// channel DTO, which exposes the caller's OWN value under `myAgentToolProfile`.
+// session-spawner maps the profile to concrete --allowedTools.
+//
+// C-11 (2026-08-08) — ONE DEFINITION OF "WHAT DOES AN UNKNOWN PROFILE MEAN", AND IT IS
+// tool-profiles'. This function carried its OWN copy of the enum check and its own
+// fallback, and that fallback was `'full'`: a DTO that had not refreshed, a non-member
+// read, or any out-of-enum column value silently resolved to the WIDEST scope, with
+// nothing logged — while `session-park.knownProfile`, one file over, answered the same
+// question with `read_only` and called it fail-restrictive. Delegating removes the second
+// answer rather than making it agree by hand, and the fail-closed report comes with it.
+//
+// `tool-profiles.js` has no top-level requires, so this costs targeting.js none of the
+// dependency-freedom its four extraction harnesses rely on.
+//
+// The parallel track this used to name — `myNotifyScope` — no longer exists anywhere
+// (F-170, 2026-08-08): the control, the schema field, the DTO and both runtime reads are
+// gone, so pointing at it as the shape to follow would send the next reader looking for a
+// field nothing sets.
+const { normalizeProfile } = require('./tool-profiles');
+
 function resolveToolProfile(channel) {
-  const p =
-    (channel && (channel.myAgentToolProfile || channel.agentToolProfile)) || 'full';
-  return p === 'read_only' || p === 'dopl_only' || p === 'full' ? p : 'full';
+  return normalizeProfile(channel && (channel.myAgentToolProfile || channel.agentToolProfile));
 }
 
 module.exports = { setHandlers, openChannelForEntry, resolveToolProfile };

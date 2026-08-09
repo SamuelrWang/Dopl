@@ -253,6 +253,51 @@ export async function insertEntry(
   return mapEntryRow(data as KnowledgeEntryRow);
 }
 
+/**
+ * Batch form of `InsertEntryArgs`. Two deliberate differences:
+ *   - `position` is REQUIRED. The single-row form falls back to a
+ *     `maxEntryPositionIn` read per insert; doing that inside a batch would
+ *     put back the very round-trips the batch exists to remove, and every
+ *     batch caller (the seed) already knows the order it wants.
+ *   - `id` may be supplied. The caller then knows each row's uuid before
+ *     the insert resolves, so dependent structures (the seed's
+ *     `entryIdByKey` cross-reference map) need no second pass and no
+ *     assumption about `RETURNING` order.
+ */
+export interface InsertEntriesArgs extends Omit<InsertEntryArgs, "position"> {
+  id?: string;
+  position: number;
+}
+
+/** Insert many entries in ONE statement. See `InsertEntriesArgs`. */
+export async function insertEntries(
+  argsList: InsertEntriesArgs[]
+): Promise<KnowledgeEntry[]> {
+  if (argsList.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_entries")
+    .insert(
+      argsList.map((args) => ({
+        ...(args.id ? { id: args.id } : {}),
+        workspace_id: args.workspaceId,
+        knowledge_base_id: args.knowledgeBaseId,
+        folder_id: args.folderId ?? null,
+        title: stripNulls(args.title),
+        excerpt: stripNulls(args.excerpt ?? null),
+        body: stripNulls(args.body ?? ""),
+        entry_type: args.entryType ?? "note",
+        position: args.position,
+        created_by: args.createdBy,
+        last_edited_by: args.createdBy,
+        last_edited_source: args.source,
+      }))
+    )
+    .select(KNOWLEDGE_ENTRY_COLS);
+  if (error || !data) throw error || new Error("Failed to insert knowledge entries");
+  return (data as KnowledgeEntryRow[]).map(mapEntryRow);
+}
+
 export interface UpdateEntryPatch {
   title?: string;
   excerpt?: string | null;
@@ -305,26 +350,20 @@ export async function updateEntryRow(
   return mapEntryRow(data as KnowledgeEntryRow);
 }
 
-export async function markEntryDeleted(
-  id: string,
-  deletedAt: string = new Date().toISOString()
+/**
+ * PERMANENTLY delete a single entry. Deletion is immediate and
+ * irreversible — there is no trash (2026-08-07). Workspace-scoped as
+ * defense-in-depth; embedding chunks cascade via FK.
+ */
+export async function hardDeleteEntry(
+  workspaceId: string,
+  id: string
 ): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db
     .from("knowledge_entries")
-    .update({ deleted_at: deletedAt })
-    .eq("id", id);
-  if (error) throw error;
-}
-
-export async function restoreEntryRow(id: string): Promise<KnowledgeEntry> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("knowledge_entries")
-    .update({ deleted_at: null })
+    .delete()
     .eq("id", id)
-    .select(KNOWLEDGE_ENTRY_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to restore knowledge entry");
-  return mapEntryRow(data as KnowledgeEntryRow);
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
 }

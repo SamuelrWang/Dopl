@@ -403,13 +403,27 @@ describe("reopenDirectChannel — an already-torn LIVE pair self-heals", () => {
 });
 
 /**
- * Q2, part 2 — the exit the UI now offers instead of "Leave channel". Deleting
- * a DM is a soft-delete that either side's next open revives WITH its history,
- * so both participants may do it; a DM's `owner` row only records who happened
- * to open the conversation.
+ * Q2, part 2 + C-16 / F-173 — ONE VERB, TWO DELETES, and the branch is
+ * `is_direct` (Samuel's decision, 2026-08-08).
+ *
+ * A DM stays SOFT, and that is not a trash: `deleted_at` on a direct channel is
+ * the close half of close/reopen, either side's next open revives the same row
+ * WITH its history, and since the roster is immutable it is the only exit the
+ * non-creator has. Both participants may do it; a DM's `owner` row only records
+ * who happened to open the conversation.
+ *
+ * A NON-DM is now a real, cascading, permanent DELETE — which the dialog had
+ * been claiming while the server hid the row forever with no revive path, no
+ * restore route, no purge and its slug reserved for good.
+ *
+ * BOTH DIRECTIONS ARE ASSERTED ON EVERY CASE. Getting the branch backwards
+ * destroys a shared transcript on one member's click in one direction, and
+ * strands a channel forever in the other, so "the right function ran" is only
+ * half the assertion — "the other one did not" is the half that catches a
+ * future refactor collapsing the branch.
  */
-describe("deleteChannel — a DM is deletable by BOTH participants", () => {
-  it("lets the non-owner peer delete the conversation", async () => {
+describe("deleteChannel — a DM soft-closes, a channel is really deleted", () => {
+  it("lets the non-owner peer delete the conversation, REVERSIBLY", async () => {
     const peerCtx: ChannelContext = { ...ctx, userId: PEER };
     vi.mocked(repo.findChannelBySlug).mockResolvedValue(
       channelRow({ id: "dm-1", is_direct: true })
@@ -419,9 +433,26 @@ describe("deleteChannel — a DM is deletable by BOTH participants", () => {
     await deleteChannel(peerCtx, "dm-1");
 
     expect(repo.softDeleteChannel).toHaveBeenCalledWith(WS, "dm-1");
+    // THE LOAD-BEARING NEGATIVE. A hard delete here would let one member
+    // destroy a shared transcript on a unilateral click, and take the other
+    // side's only exit with it.
+    expect(repo.hardDeleteChannel).not.toHaveBeenCalled();
+  });
+
+  it("hard-deletes a NON-direct channel for the owner", async () => {
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow({ id: "c-1" }));
+    vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER, "owner"));
+
+    await deleteChannel(ctx, "c-1");
+
+    expect(repo.hardDeleteChannel).toHaveBeenCalledWith(WS, "c-1");
+    expect(repo.softDeleteChannel).not.toHaveBeenCalled();
   });
 
   it("still refuses a non-owner deleting a NON-direct channel", async () => {
+    // The AUTHORIZATION is untouched by C-16 — only the write at the end
+    // changed, the same shape the rest of the app took in §2b. Nothing became
+    // more permissive alongside becoming permanent.
     vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow({ id: "c-1" }));
     vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER, "member"));
 
@@ -429,5 +460,23 @@ describe("deleteChannel — a DM is deletable by BOTH participants", () => {
       ChannelForbiddenError
     );
     expect(repo.softDeleteChannel).not.toHaveBeenCalled();
+    expect(repo.hardDeleteChannel).not.toHaveBeenCalled();
+  });
+
+  it("a workspace admin can hard-delete a channel they do not belong to", async () => {
+    // `canManageChannel`'s other arm. Worth pinning next to the branch: this is
+    // the one caller who reaches the destructive path with no membership row.
+    // (Public, because `loadVisibleChannel` hides a private channel from a
+    // non-member regardless of workspace role — the visibility fence runs
+    // first, and an admin's reach does not widen it.)
+    const adminCtx: ChannelContext = { ...ctx, role: "admin" };
+    vi.mocked(repo.findChannelBySlug).mockResolvedValue(
+      channelRow({ id: "c-2", visibility: "public" })
+    );
+    vi.mocked(repo.findMembership).mockResolvedValue(null);
+
+    await deleteChannel(adminCtx, "c-2");
+
+    expect(repo.hardDeleteChannel).toHaveBeenCalledWith(WS, "c-2");
   });
 });

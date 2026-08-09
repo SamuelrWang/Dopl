@@ -154,8 +154,9 @@ describe("members page", () => {
     expect(screen.getByText("Grace Hopper")).toBeInTheDocument();
 
     const paths = calls().map((c) => c.path);
-    expect(paths).toContain(`/api/workspaces/resolve?segment=${SEGMENT}`);
-    expect(paths).toContain("/api/workspaces/me");
+    // ONE read for workspace + role + caller id (P0-2), not three.
+    expect(paths).toContain("/api/boot");
+    expect(paths).not.toContain("/api/workspaces/me");
     expect(paths).toContain(ws("/members"));
     expect(paths).toContain(ws("/teams"));
     expect(paths).toContain(ws("/access-matrix"));
@@ -198,7 +199,7 @@ describe("members page", () => {
 
   it("surfaces a failed workspace resolve as the shared page error", async () => {
     apiRequest.mockImplementation((path: string) =>
-      path.startsWith("/api/workspaces/resolve")
+      path === "/api/boot"
         ? Promise.resolve({
             status: 404,
             statusText: "Not Found",

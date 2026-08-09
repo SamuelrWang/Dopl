@@ -85,10 +85,14 @@ export async function requireEffectiveAccess(
     opts
   );
   if (level === null) {
+    // The CODE stays `WORKFLOW_NOT_FOUND` for every non-KB type — callers
+    // and `workflows/server/service-trash.test.ts` branch on it — but the
+    // MESSAGE is generic: it renders to users, this fn also guards
+    // chats/skills, and workflows are retired from the UI.
     throw new HttpError(
       404,
       resourceType === "knowledge_base" ? "KNOWLEDGE_BASE_NOT_FOUND" : "WORKFLOW_NOT_FOUND",
-      resourceType === "knowledge_base" ? "Knowledge base not found" : "Workflow not found"
+      resourceType === "knowledge_base" ? "Knowledge base not found" : "Resource not found"
     );
   }
   if (!meetsLevel(level, requiredLevel)) {
@@ -149,6 +153,42 @@ export async function listEffectiveAccess(
   });
 
   return { defaultLevel: ceiling, isAdmin: false, teamsModeResources };
+}
+
+/**
+ * The wire shape of `GET /api/workspaces/[workspaceSlug]/my-access`, and of
+ * the `myAccess` half of `POST /api/boot`. Stable since the per-member
+ * override era — the SPA seeds one endpoint's cache entry from the other's
+ * answer, so the two MUST NOT drift; that is why the projection lives here
+ * rather than inline in either route.
+ */
+export interface MyAccessPayload {
+  defaultLevel: AccessLevel;
+  overrides: Array<{
+    resourceType: TeamResourceType;
+    resourceId: string;
+    level: AccessLevel;
+  }>;
+}
+
+/**
+ * Project a batch result onto that wire shape.
+ *
+ * `level: null` (a teams-mode resource with no grant) maps to `"read"`, NOT
+ * to omission: the client treats a missing entry as the ROLE DEFAULT ("edit"
+ * for members), which would flip a just-revoked KB panel back to editable.
+ * "read" keeps affordances locked until the lists refetch and drop the
+ * resource entirely.
+ */
+export function toMyAccessPayload(result: EffectiveAccessResult): MyAccessPayload {
+  return {
+    defaultLevel: result.defaultLevel,
+    overrides: result.teamsModeResources.map((r) => ({
+      resourceType: r.resourceType,
+      resourceId: r.resourceId,
+      level: r.level ?? ("read" as const),
+    })),
+  };
 }
 
 /**

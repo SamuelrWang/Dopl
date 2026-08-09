@@ -1,16 +1,14 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import type { TeamView } from "@/features/teams/types";
+import { teamsPath } from "../client/query-keys";
+import type { TeamsCache } from "../lib/optimistic-cache";
 
-const selectTeams = (body: { teams: TeamView[] }) => body.teams ?? [];
+const selectTeams = (body: TeamsCache) => body.teams ?? [];
 
-/** Workspace teams (with member ids + grants). */
+/** Workspace teams (with member ids + grants). Key owned by `client/query-keys`. */
 export function useTeams(workspaceSlug: string) {
-  const query = useApiQuery(
-    `/api/workspaces/${encodeURIComponent(workspaceSlug)}/teams`,
-    { select: selectTeams }
-  );
+  const query = useApiQuery(teamsPath(workspaceSlug), { select: selectTeams });
   return {
     teams: query.data ?? null,
     loading: query.isPending,

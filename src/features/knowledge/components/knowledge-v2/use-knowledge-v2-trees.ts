@@ -12,8 +12,6 @@ import {
   downloadKnowledgeExport,
   moveEntry as apiMoveEntry,
   moveFolder as apiMoveFolder,
-  restoreEntry as apiRestoreEntry,
-  restoreFolder as apiRestoreFolder,
   updateEntry as apiUpdateEntry,
   updateFolder as apiUpdateFolder,
 } from "../../client/api";
@@ -169,21 +167,6 @@ export function useKnowledgeV2Trees({
       toast({
         title: `${item.type === "folder" ? "Folder" : "Entry"} deleted`,
         description: item.label,
-        action: {
-          label: "Undo",
-          onClick: async () => {
-            try {
-              if (item.type === "folder") {
-                await apiRestoreFolder(item.id, workspaceId);
-              } else {
-                await apiRestoreEntry(item.id, workspaceId);
-              }
-              await refreshTree(baseId);
-            } catch (err) {
-              reportError(err, "Couldn't undo");
-            }
-          },
-        },
       });
     } catch (err) {
       reportError(err, "Couldn't delete");

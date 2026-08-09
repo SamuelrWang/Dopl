@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
  * POST /api/workspaces/ensure-default — return the caller's default
@@ -26,13 +26,6 @@ export const POST = withUserAuth(async (_request, { userId }) => {
       segment: workspaceSegment(workspace),
     });
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message } },
-      { status: 500 }
-    );
+    return toHttpErrorResponse("api/workspaces/ensure-default", err);
   }
 });

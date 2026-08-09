@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
-import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
-import { listEffectiveAccess } from "@/features/teams/server/access";
+import { resolveApiWorkspaceAccess } from "@/features/workspaces/server/segment";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
+import {
+  listEffectiveAccess,
+  toMyAccessPayload,
+} from "@/features/teams/server/access";
 
 interface Ctx {
   userId: string;
@@ -37,8 +40,12 @@ export const GET = withUserAuth(
           { status: 400 },
         );
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
-      if (!workspace) {
+      // ROLE THREADED, not re-read (P0-2, §3.3). The segment resolve already
+      // fetched this caller's membership to prove they may see the workspace
+      // at all; passing its `role` into `listEffectiveAccess` skips the
+      // identical `findMembership` that ran a second time per request.
+      const resolved = await resolveApiWorkspaceAccess(workspaceSlug, userId);
+      if (!resolved) {
         return NextResponse.json(
           {
             error: {
@@ -49,7 +56,9 @@ export const GET = withUserAuth(
           { status: 404 },
         );
       }
-      const result = await listEffectiveAccess(workspace.id, userId);
+      const result = await listEffectiveAccess(resolved.workspace.id, userId, {
+        role: resolved.role,
+      });
       if (!result) {
         return NextResponse.json(
           {
@@ -61,36 +70,16 @@ export const GET = withUserAuth(
           { status: 403 },
         );
       }
-      const payload = {
-        defaultLevel: result.defaultLevel,
-        // level null (teams-mode resource with no grant) maps to "read",
-        // NOT omission: the client treats a missing entry as the role
-        // default ("edit" for members), which would flip a just-revoked
-        // KB panel to editable. "read" keeps affordances locked until the
-        // lists refetch and drop the resource entirely.
-        overrides: result.teamsModeResources.map((r) => ({
-          resourceType: r.resourceType,
-          resourceId: r.resourceId,
-          level: r.level ?? ("read" as const),
-        })),
-      };
       // Audit A-010: this is per-user data; never let a CDN cache it
       // by URL alone. Vercel's authenticated-route default is usually
       // safe but explicit beats implicit on a privacy-adjacent payload.
-      return NextResponse.json(payload, {
+      // The projection is shared with `POST /api/boot`, which seeds this
+      // endpoint's client cache entry — they must not drift.
+      return NextResponse.json(toMyAccessPayload(result), {
         headers: { "Cache-Control": "private, no-store" },
       });
     } catch (err) {
-      if (err instanceof HttpError) {
-        return NextResponse.json(err.toResponseBody(), { status: err.status });
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json(
-        {
-          error: { code: "INTERNAL_ERROR", message },
-        },
-        { status: 500 },
-      );
+      return toHttpErrorResponse("api/workspaces/[workspaceSlug]/my-access", err);
     }
   }
 );

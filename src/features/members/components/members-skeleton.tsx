@@ -1,13 +1,19 @@
 /**
- * Skeleton for the members table — placeholder rows that mirror the
- * shape of `MembersTable` (chevron · avatar · name/email · role pill ·
- * joined date · remove). Used in two places:
+ * Skeleton for the members TABLE — placeholder rows mirroring the settings
+ * modal's Members tab (`members-tab.tsx`: chevron · avatar · name/email ·
+ * role pill · joined date · remove), rendered there while the client-side
+ * `useMembers` fetch is in flight.
  *
- *   1. `app/[workspaceSlug]/members/loading.tsx` — Next.js loading
- *      boundary while the page server component awaits auth and
- *      membership lookup.
- *   2. `MembersTable` itself, when the client-side `useMembers` fetch
- *      hasn't returned yet (`loading && members.length === 0`).
+ * Scope note: this is the table's skeleton, not the console's. The
+ * full-page members console (`members-view.tsx`) is a 372px two-pane
+ * master/detail surface, so it loads into `TwoPaneListSkeleton` +
+ * `SkeletonRow` from the shared kit instead — this grid's fixed 140px
+ * columns do not fit that pane.
+ *
+ * The route-level `app/[workspaceSlug]/members/loading.tsx` this used to
+ * name is GONE (no route-level `loading.tsx` survives anywhere in the
+ * repo); `withToolbar` is kept because it is the shape a future full-width
+ * table boundary would want, and costs one branch.
  *
  * Same grid template + sizing as the real rows so the swap to live
  * data doesn't reflow the layout.
@@ -19,9 +25,9 @@ const ROWS = 6;
 const ROW_GRID = "grid grid-cols-[16px_1fr_140px_140px_60px] items-center gap-3 px-4 py-3";
 
 interface Props {
-  /** Whether to render the toolbar row (search + filter + count).
-   *  The route-level loading.tsx renders it; the in-table skeleton
-   *  doesn't, because the toolbar above it is already drawn. */
+  /** Whether to render the toolbar row (search + filter + count). The
+   *  in-table skeleton doesn't, because the toolbar above it is already
+   *  drawn; a full-surface caller would. */
   withToolbar?: boolean;
   className?: string;
 }

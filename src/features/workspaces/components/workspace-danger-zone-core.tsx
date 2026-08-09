@@ -60,8 +60,9 @@ export function WorkspaceDangerZoneCore({
       </div>
       <div className={cn(SECTION_BOX_INSET, "space-y-3 p-4")}>
         <p className="text-caption text-text-secondary">
-          Deletes this workspace, every cluster inside it, all panels, and
-          all chat history. This cannot be undone.
+          Deletes this workspace and everything inside it — clusters,
+          knowledge bases, skills, and chat history. This can&rsquo;t be
+          undone.
         </p>
         {error && <p className="text-caption text-danger">{error}</p>}
         <button
@@ -77,8 +78,8 @@ export function WorkspaceDangerZoneCore({
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this workspace?"
-        description={`You're about to permanently delete ${workspace.name}. Every cluster, panel, and chat inside it will be removed. This action cannot be undone.`}
-        confirmLabel="Delete workspace"
+        description={`This permanently deletes “${workspace.name}” and every cluster, knowledge base, skill, and chat inside it. This can't be undone.`}
+        confirmLabel="Delete permanently"
         destructive
         onConfirm={handleDelete}
       />

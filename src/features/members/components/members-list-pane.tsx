@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { BookOpen, Check, Search, UserPlus, Users, Workflow, X } from "lucide-react";
+import { Search, UserPlus, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { SkeletonRow } from "@/shared/ui/skeleton";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type {
   AssignableRole,
@@ -11,17 +11,15 @@ import type {
   WorkspaceMemberView,
 } from "../types";
 import { ROLE_RANK } from "@/features/workspaces/types";
-import { formatLastActive, formatRelativeTime, type ActivityDot } from "@/shared/lib/format-time";
+import { formatLastActive, type ActivityDot } from "@/shared/lib/format-time";
 import type { JoinRequestView } from "../hooks/use-join-requests";
-import { Avatar, RoleSelect } from "./member-bits";
+import { Avatar, resourceMeta, scopedResourceCount } from "./member-bits";
+import { InvitedGroup, JoinRequestsGroup } from "./members-list-queues";
 import { TeamColorTile } from "./team-bits";
 import type { MembersTabKey, Selection } from "./members-view";
 
 const ICON_BTN =
   "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
-
-const GROUP_LABEL =
-  "flex items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-3.5 py-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary";
 
 const DOT_STYLE: Record<ActivityDot, string> = {
   active: "bg-success",
@@ -31,6 +29,9 @@ const DOT_STYLE: Record<ActivityDot, string> = {
 };
 
 interface Props {
+  /** The active tab's list hasn't answered yet — row ghosts, never an
+   *  empty state (an unanswered query is not an empty workspace). */
+  loading?: boolean;
   tab: MembersTabKey;
   onTabChange: (tab: MembersTabKey) => void;
   query: string;
@@ -52,6 +53,12 @@ interface Props {
     action: "approve" | "decline",
     role: AssignableRole
   ) => void;
+  /**
+   * A queue write is in flight. The optimistic drop already takes the acted-on
+   * row (and its buttons) off screen, so this only stops a SECOND row being
+   * fired at while the first is settling.
+   */
+  queuesBusy?: boolean;
 }
 
 const SEARCH_PLACEHOLDER: Record<MembersTabKey, string> = {
@@ -67,6 +74,7 @@ const SEARCH_PLACEHOLDER: Record<MembersTabKey, string> = {
  * render as label-strip groups above the roster.
  */
 export function MembersListPane({
+  loading = false,
   tab,
   onTabChange,
   query,
@@ -84,6 +92,7 @@ export function MembersListPane({
   onCreateTeam,
   onRevokeInvitation,
   onResolveJoinRequest,
+  queuesBusy = false,
 }: Props) {
   const q = query.trim().toLowerCase();
 
@@ -164,16 +173,23 @@ export function MembersListPane({
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-border-default pb-4">
-        {tab === "members" && (
+        {loading && <ListRowsSkeleton />}
+
+        {!loading && tab === "members" && (
           <>
             {canManage && joinRequests.length > 0 && (
               <JoinRequestsGroup
                 requests={joinRequests}
                 onResolve={onResolveJoinRequest}
+                busy={queuesBusy}
               />
             )}
             {canManage && invitations.length > 0 && (
-              <InvitedGroup invitations={invitations} onRevoke={onRevokeInvitation} />
+              <InvitedGroup
+                invitations={invitations}
+                onRevoke={onRevokeInvitation}
+                busy={queuesBusy}
+              />
             )}
             {visibleMembers.length === 0 ? (
               <EmptyCopy text={q ? "No members match." : "No members yet."} />
@@ -191,7 +207,8 @@ export function MembersListPane({
           </>
         )}
 
-        {tab === "teams" &&
+        {!loading &&
+          tab === "teams" &&
           (visibleTeams.length === 0 ? (
             <EmptyCopy
               text={
@@ -213,10 +230,11 @@ export function MembersListPane({
             ))
           ))}
 
-        {tab === "access" &&
+        {!loading &&
+          tab === "access" &&
           (visibleResources.length === 0 ? (
             <EmptyCopy
-              text={q ? "No resources match." : "No knowledge bases or workflows yet."}
+              text={q ? "No resources match." : "No knowledge bases or skills yet."}
             />
           ) : (
             visibleResources.map((r) => (
@@ -318,6 +336,9 @@ function TeamListRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  // Counted through the shared helper so this caption can't claim more
+  // resources than the Access tab is willing to list (retirement D7).
+  const scoped = scopedResourceCount(team);
   return (
     <RowShell selected={selected} onSelect={onSelect}>
       <TeamColorTile color={team.color} size="sm" />
@@ -331,9 +352,9 @@ function TeamListRow({
           </span>
         </span>
         <span className="block truncate text-caption text-text-secondary">
-          {team.grants.length === 0
+          {scoped === 0
             ? "No scoped resources"
-            : `${team.grants.length} scoped ${team.grants.length === 1 ? "resource" : "resources"}`}
+            : `${scoped} scoped ${scoped === 1 ? "resource" : "resources"}`}
           {team.description ? ` · ${team.description}` : ""}
         </span>
       </span>
@@ -352,7 +373,7 @@ function ResourceListRow({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const Icon = r.resourceType === "knowledge_base" ? BookOpen : Workflow;
+  const { label: typeLabel, icon: Icon } = resourceMeta(r.resourceType);
   return (
     <RowShell selected={selected} onSelect={onSelect}>
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-bg-inset text-text-secondary">
@@ -368,7 +389,7 @@ function ResourceListRow({
           </span>
         </span>
         <span className="block truncate text-caption text-text-secondary">
-          {r.resourceType === "knowledge_base" ? "Knowledge base" : "Workflow"}
+          {typeLabel}
           {r.accessMode === "teams" &&
             ` · ${grantCount} ${grantCount === 1 ? "team grant" : "team grants"}`}
         </span>
@@ -377,114 +398,26 @@ function ResourceListRow({
   );
 }
 
-// ─── Admin queues ───────────────────────────────────────────────────
-
-function JoinRequestsGroup({
-  requests,
-  onResolve,
-}: {
-  requests: JoinRequestView[];
-  onResolve: (id: string, action: "approve" | "decline", role: AssignableRole) => void;
-}) {
-  const [roles, setRoles] = useState<Record<string, AssignableRole>>({});
-  return (
-    <div className="border-b border-border-subtle">
-      <div className={GROUP_LABEL}>
-        Join requests
-        <span className="text-caption font-normal normal-case tracking-normal text-text-muted">
-          {requests.length}
-        </span>
-      </div>
-      {requests.map((r) => (
-        <div key={r.id} className="flex items-center gap-2 px-3.5 py-2">
-          <Avatar
-            person={{
-              userId: r.userId,
-              email: r.email,
-              displayName: r.displayName,
-              avatarUrl: r.avatarUrl,
-            }}
-            size="xs"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-body font-semibold text-text-primary">
-              {r.displayName || r.email || r.userId}
-            </span>
-            <span className="block truncate text-caption text-text-secondary">
-              requested {formatRelativeTime(r.requestedAt)}
-            </span>
-          </span>
-          <RoleSelect
-            value={roles[r.id] ?? "member"}
-            onChange={(role) => setRoles((prev) => ({ ...prev, [r.id]: role }))}
-          />
-          <button
-            type="button"
-            aria-label="Approve"
-            title="Approve"
-            onClick={() => onResolve(r.id, "approve", roles[r.id] ?? "member")}
-            className={ICON_BTN}
-          >
-            <Check size={14} />
-          </button>
-          <button
-            type="button"
-            aria-label="Decline"
-            title="Decline"
-            onClick={() => onResolve(r.id, "decline", roles[r.id] ?? "member")}
-            className={cn(ICON_BTN, "hover:text-danger")}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function InvitedGroup({
-  invitations,
-  onRevoke,
-}: {
-  invitations: WorkspaceInvitationView[];
-  onRevoke: (id: string) => void;
-}) {
-  return (
-    <div className="border-b border-border-subtle">
-      <div className={GROUP_LABEL}>
-        Invited
-        <span className="text-caption font-normal normal-case tracking-normal text-text-muted">
-          {invitations.length}
-        </span>
-      </div>
-      {invitations.map((inv) => (
-        <div key={inv.id} className="flex items-center gap-2 px-3.5 py-2">
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-body font-semibold text-text-primary">
-              {inv.email}
-            </span>
-            <span className="block truncate text-caption text-text-secondary">
-              {inv.invitedRole} · sent {formatRelativeTime(inv.createdAt)}
-            </span>
-          </span>
-          <button
-            type="button"
-            aria-label={`Revoke invitation for ${inv.email}`}
-            title="Revoke invitation"
-            onClick={() => onRevoke(inv.id)}
-            className={cn(ICON_BTN, "hover:text-danger")}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function EmptyCopy({ text }: { text: string }) {
   return (
     <p className="px-4 py-2.5 text-caption leading-relaxed text-text-muted">{text}</p>
+  );
+}
+
+/**
+ * Row ghosts for the active tab while its query is in flight — the same
+ * avatar + two-line shape `MemberListRow` / `TeamListRow` render, from the
+ * shared kit. Replaces the false "No members yet." an unanswered query used
+ * to produce.
+ */
+function ListRowsSkeleton() {
+  return (
+    <div role="status" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading</span>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <SkeletonRow key={i} leading="circle" className="items-center" />
+      ))}
+    </div>
   );
 }
 

@@ -53,7 +53,7 @@ export function buildChatSeed(): ChatExportInput {
       {
         role: "agent",
         summary:
-          "Clarified the split — facts to Knowledge, procedures to Skills, branching processes to Workflows, session records to Chats — and offered to file the learning as a KB entry so it outlives the session.",
+          "Clarified the split — facts to Knowledge, procedures to Skills, things and their connections to the Ontology, session records to Chats — and offered to file the learning as a KB entry so it outlives the session.",
         verbatim: null,
       },
     ],

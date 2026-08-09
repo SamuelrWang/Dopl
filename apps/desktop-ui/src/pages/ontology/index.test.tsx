@@ -1,10 +1,15 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
-import { bridgeCalls, installBridge, renderWithProviders } from "#/test-utils/bridge";
+import {
+  bootBody,
+  bridgeCalls,
+  installBridge,
+  renderWithProviders,
+} from "#/test-utils/bridge";
 import OntologyPage from "./index";
 import OntologyDetailPage from "./detail";
-import { SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
+import { CLUSTER_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
 
 /**
  * Smoke test for the ported ontology pages: the REAL `OntologyView` (tab strip
@@ -55,8 +60,9 @@ describe("ontology page", () => {
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
 
     const paths = calls().map((c) => c.path);
-    expect(paths).toContain(`/api/workspaces/resolve?segment=${SEGMENT}`);
-    expect(paths).toContain("/api/workspaces/me");
+    // ONE read for workspace + role + caller id (P0-2), not three.
+    expect(paths).toContain("/api/boot");
+    expect(paths).not.toContain("/api/workspaces/me");
     expect(paths).toContain("/api/ontology");
     const snapshot = calls().find((c) => c.path === "/api/ontology");
     expect(snapshot?.opts.workspaceId).toBe(WORKSPACE_ID);
@@ -111,14 +117,46 @@ describe("ontology page", () => {
     );
   });
 
+  it("deletes the open cluster from the tab strip, naming its cascade", async () => {
+    const router = renderOntology();
+    await screen.findByDisplayValue("Revenue");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Revenue" }));
+
+    // The count is the whole point of the copy: "cluster" undersells what a
+    // permanent cascade delete takes (the column + its card).
+    expect(
+      await screen.findByText(
+        `This permanently deletes "Revenue" and its 2 objects. This can't be undone.`
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+
+    await waitFor(() =>
+      expect(
+        calls().some(
+          (c) =>
+            c.path === `/api/ontology/clusters/${CLUSTER_ID}` && c.opts.method === "DELETE"
+        )
+      ).toBe(true)
+    );
+    // Selection lands on the ADJACENT tab, address bar included — not on a
+    // silent fall-through to whatever cluster happens to be first.
+    expect(await screen.findByDisplayValue("Delivery")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/${SEGMENT}/ontology/delivery`)
+    );
+  });
+
   it("hides create affordances for a viewer", async () => {
     apiRequest.mockImplementation((path: string, opts?: BridgeRequestOpts) =>
-      path === "/api/workspaces/me"
+      path === "/api/boot"
         ? Promise.resolve({
             status: 200,
             statusText: "OK",
             hasBody: true,
-            body: { role: "viewer", userId: "user-1" },
+            body: bootBody({ role: "viewer" }),
           })
         : ontologyBridge(path, opts)
     );

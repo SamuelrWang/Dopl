@@ -5,14 +5,11 @@ import {
   BookOpen,
   Hash,
   Home,
-  LayoutGrid,
   MessagesSquare,
   Network,
   Settings,
-  SlidersHorizontal,
   Sparkles,
   Users,
-  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -22,16 +19,20 @@ import type { LinkLike } from "@/shared/ui/link-like";
 import type { SettingsSection } from "@/shared/layout/settings-modal";
 import styles from "./app-shell.module.css";
 
+/**
+ * RETIRED (2026-08-07): `canvas`, `workflows` and `configuration` are gone from
+ * this union and from `NAV` — the pages still exist in the repo but nothing
+ * routes to them (docs/RETIREMENT-UNWIRING-PLAN.md §3.1). Re-adding a section
+ * means re-adding its route row in `apps/desktop-ui/src/routes.tsx` AND the
+ * hand copy in `dopl-desktop-app/main/deep-link-target.js`.
+ */
 export type NavSection =
   | "overview"
-  | "canvas"
-  | "workflows"
   | "knowledge"
   | "skills"
   | "chats"
   | "channels"
   | "ontology"
-  | "configuration"
   | "members";
 
 export const NAV: ReadonlyArray<{
@@ -41,13 +42,10 @@ export const NAV: ReadonlyArray<{
 }> = [
   { label: "Overview", icon: Home, section: "overview" },
   { label: "Ontology", icon: Network, section: "ontology" },
-  { label: "Canvas", icon: LayoutGrid, section: "canvas" },
-  { label: "Workflows", icon: Workflow, section: "workflows" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
   { label: "Channels", icon: Hash, section: "channels" },
-  { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
   { label: "Members", icon: Users, section: "members" },
 ];
 
@@ -58,14 +56,14 @@ export function sectionPath(segment: string, section: NavSection): string {
 /**
  * Which nav row a path highlights (null = none). Path shape:
  * `/{wsSegment}/{section}/...` — the bare workspace root (which redirects
- * to /canvas) highlights Canvas; a non-nav route like /settings highlights
- * NOTHING (falling back to Canvas made Settings look like it lived under
- * the Canvas page). Both apps derive it from their own router's path, so
- * the rule lives here.
+ * to /overview, `WORKSPACE_HOME_PATH`) highlights Overview; a non-nav route
+ * like /settings highlights NOTHING (falling back to the home row made
+ * Settings look like it lived under that page). Both apps derive it from
+ * their own router's path, so the rule lives here.
  */
 export function activeSectionFromPath(pathname: string): NavSection | null {
   const segments = pathname.split("/").filter(Boolean);
-  if (segments.length < 2) return "canvas";
+  if (segments.length < 2) return "overview";
   return NAV.some((n) => n.section === segments[1])
     ? (segments[1] as NavSection)
     : null;

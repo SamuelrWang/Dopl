@@ -1,13 +1,26 @@
 /**
- * Client-side fetch helpers for the teams + members APIs. Team mutations
- * throw `TeamAccessConflictError` on 409 TEAM_KB_ACCESS_CONFLICT so
- * callers can offer the "grant read access?" retry with `autoGrant: true`.
+ * The teams API's CLIENT TRANSPORT — the 409 translation, and the one write
+ * that is not a cache patch.
+ *
+ * This used to be nine `await apiRequest(); refetch()` helpers, one per write,
+ * and every one of them was the reason a members-console control produced no
+ * pixel change until two network hops had finished. They now live as mutation
+ * configs (`hooks/use-{member,team,access}-writes.ts`) over the shared layer,
+ * and what stays here is the part that is genuinely transport: turning a 409
+ * `TEAM_KB_ACCESS_CONFLICT` into a typed error the ConflictDialog can retry
+ * from, exported both as a plain helper and as an `ApiMutationRequestFn`.
+ *
+ * `createTeam` stays a plain call on purpose: it is a CREATE with no row to
+ * patch optimistically (the server mints the id, the members and the grants in
+ * one POST) and its dialog closes onto a freshly-invalidated list.
  */
 
 import { ApiError, apiRequest } from "@/shared/api/api-client";
+import type { ApiRequestOpts } from "@/shared/api/api-envelope";
+import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { KbTeamConflict, TeamView } from "@/features/teams/types";
-import type { AssignableRole } from "./types";
+import { teamsPath } from "./client/query-keys";
 
 export interface TeamConflictDetails {
   workflowId: string;
@@ -25,10 +38,12 @@ export class TeamAccessConflictError extends Error {
   }
 }
 
-async function request<T>(
-  url: string,
-  init?: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: unknown }
-): Promise<T> {
+type TeamsRequestOpts = Pick<
+  ApiRequestOpts,
+  "method" | "body" | "workspaceId" | "query" | "expectedUpdatedAt"
+>;
+
+async function request<T>(url: string, init?: TeamsRequestOpts): Promise<T> {
   try {
     return await apiRequest<T>(url, init);
   } catch (err) {
@@ -46,7 +61,21 @@ async function request<T>(
   }
 }
 
-const ws = (slug: string) => `/api/workspaces/${encodeURIComponent(slug)}`;
+/**
+ * The same transport, shaped for `useApiMutationWith` — the feature-injected
+ * client the mutation layer takes, exactly as channels injects `channelRequest`
+ * so every write still throws `ChannelApiError`.
+ *
+ * The injection is what keeps the 409 retry alive through the conversion: an
+ * access write that hits `TEAM_KB_ACCESS_CONFLICT` must reach the caller as a
+ * `TeamAccessConflictError` carrying `details`, or the ConflictDialog's
+ * "grant read access?" retry has nothing to open with. Module-level so the
+ * reference is stable across renders (the hook memoizes on it).
+ */
+export const teamsRequest: ApiMutationRequestFn = <T,>(
+  path: string,
+  opts?: TeamsRequestOpts
+): Promise<T> => request<T>(path, opts);
 
 export interface CreateTeamInput {
   name: string;
@@ -66,111 +95,9 @@ export async function createTeam(
   slug: string,
   input: CreateTeamInput
 ): Promise<TeamView> {
-  const body = await request<{ team: TeamView }>(`${ws(slug)}/teams`, {
+  const body = await request<{ team: TeamView }>(teamsPath(slug), {
     method: "POST",
     body: input,
   });
   return body.team;
-}
-
-export async function updateTeam(
-  slug: string,
-  teamId: string,
-  patch: {
-    name?: string;
-    description?: string | null;
-    color?: string | null;
-    icon?: string | null;
-  }
-): Promise<void> {
-  await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}`, {
-    method: "PATCH",
-    body: patch,
-  });
-}
-
-export async function deleteTeam(slug: string, teamId: string): Promise<void> {
-  await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}`, {
-    method: "DELETE",
-  });
-}
-
-export async function addTeamMembers(
-  slug: string,
-  teamId: string,
-  userIds: string[]
-): Promise<void> {
-  await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}/members`, {
-    method: "POST",
-    body: { userIds },
-  });
-}
-
-export async function removeTeamMember(
-  slug: string,
-  teamId: string,
-  userId: string
-): Promise<void> {
-  await request(
-    `${ws(slug)}/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`,
-    { method: "DELETE" }
-  );
-}
-
-/** `level: null` removes the grant. May throw TeamAccessConflictError. */
-export async function setTeamGrant(
-  slug: string,
-  teamId: string,
-  resourceType: TeamResourceType,
-  resourceId: string,
-  level: AccessLevel | null,
-  opts?: { autoGrant?: boolean }
-): Promise<void> {
-  await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}/access`, {
-    method: "PUT",
-    body: ({
-      resourceType,
-      resourceId,
-      level,
-      autoGrant: opts?.autoGrant,
-    }),
-  });
-}
-
-/** Flip a resource between workspace-wide and teams-scoped access. */
-export async function setResourceAccessMode(
-  slug: string,
-  resourceType: TeamResourceType,
-  resourceId: string,
-  accessMode: "workspace" | "teams",
-  opts?: { autoGrant?: boolean }
-): Promise<void> {
-  await request(`${ws(slug)}/access-matrix`, {
-    method: "PUT",
-    body: ({
-      resourceType,
-      resourceId,
-      accessMode,
-      autoGrant: opts?.autoGrant,
-    }),
-  });
-}
-
-// ── Member mutations (role change + removal) ─────────────────────────
-
-export async function updateMemberRole(
-  slug: string,
-  userId: string,
-  role: AssignableRole
-): Promise<void> {
-  await request(`${ws(slug)}/members/${encodeURIComponent(userId)}`, {
-    method: "PATCH",
-    body: { role },
-  });
-}
-
-export async function removeMember(slug: string, userId: string): Promise<void> {
-  await request(`${ws(slug)}/members/${encodeURIComponent(userId)}`, {
-    method: "DELETE",
-  });
 }

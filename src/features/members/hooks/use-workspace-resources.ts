@@ -1,21 +1,37 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import type { AccessMatrixResource } from "@/features/teams/types";
-
-const selectResources = (body: { resources: AccessMatrixResource[] }) =>
-  body.resources ?? [];
+import { withoutRetiredResources } from "@/features/teams/access-levels";
+import { accessMatrixPath } from "../client/query-keys";
+import type { ResourcesCache } from "../lib/optimistic-cache";
 
 /**
- * Every grantable resource (knowledge bases + workflows, with name +
- * access mode) from the access matrix. Feeds the Access tab columns,
- * the team drawer's grant rows, and the member drawer.
+ * WHERE WORKFLOWS LEAVE THE ACCESS-MATRIX INVENTORY (retirement D7).
+ *
+ * `workflow` stays a valid grantable type in the DB and in the access-matrix
+ * payload — existing grant rows keep working and nothing is migrated. It just
+ * stops rendering, and it stops here rather than in each component because the
+ * console's surfaces read this list for more than display: `members-view`
+ * DERIVES the Access tab's default selection from `resourceList[0]`, so a
+ * workflow left in the array would open in the detail pane with no click.
+ * `create-team-dialog` builds its grant rows from the same array.
+ *
+ * The matrix has a SECOND half this does not reach — each team's `grants`
+ * array, filtered where those are rendered (`members-list-pane`,
+ * `member-detail`). The predicate itself lives in `teams/access-levels`.
+ */
+const selectResources = (body: ResourcesCache) =>
+  withoutRetiredResources(body.resources ?? []);
+
+/**
+ * Every grantable resource the UI still renders (knowledge bases + skills,
+ * with name + access mode) from the access matrix. Feeds the Access tab,
+ * the team detail's grant rows, and the create-team dialog.
  */
 export function useWorkspaceResources(workspaceSlug: string) {
-  const query = useApiQuery(
-    `/api/workspaces/${encodeURIComponent(workspaceSlug)}/access-matrix`,
-    { select: selectResources }
-  );
+  const query = useApiQuery(accessMatrixPath(workspaceSlug), {
+    select: selectResources,
+  });
   return {
     resources: query.data ?? null,
     loading: query.isPending,

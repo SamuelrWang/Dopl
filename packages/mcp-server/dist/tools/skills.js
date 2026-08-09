@@ -11,7 +11,8 @@
  * Consolidated into two `op`-dispatched tools (the canonical pattern from
  * `setups.ts`):
  *   - `dopl_skill`       — reads + non-destructive writes.
- *   - `dopl_skill_admin` — DESTRUCTIVE deletes, split out on purpose.
+ *   - `dopl_skill_admin` — the delete surface, refusing since §2b (app-only
+ *                          deletion); the ops stay listed to teach the refusal.
  *
  * This file is the thin registrar: it owns the two tool descriptions + schemas
  * + op routing and delegates each op to a handler in a sibling module —
@@ -24,11 +25,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSkillTools = registerSkillTools;
 const zod_1 = require("zod");
+const delete_policy_js_1 = require("../delete-policy.js");
+const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const skill_authoring_guide_js_1 = require("../prompts/skill-authoring-guide.js");
 const skills_ops_read_1 = require("./skills-ops-read");
 const skills_ops_write_1 = require("./skills-ops-write");
-const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-FILE: one tight, self-contained procedure (its SKILL.md) plus metadata — NOT a folder of files. Long reference material (specs, tables, examples) belongs in a knowledge base, linked from the body as \`[label](dopl://kb/<slug>)\`; the skill stays short. Prefer MANY SMALL skills — one action each — over monoliths: small skills attach cleanly to ontology objects and workflow actions. Organize them with the \`folder\` label. Set \`op\` to one of:
+const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-FILE: one tight, self-contained procedure (its SKILL.md) plus metadata — NOT a folder of files. Long reference material (specs, tables, examples) belongs in a knowledge base, linked from the body as \`[label](dopl://kb/<slug>)\`; the skill stays short. Prefer MANY SMALL skills — one action each — over monoliths: small skills attach cleanly to ontology objects and trigger more reliably. Organize them with the \`folder\` label. Set \`op\` to one of:
 - "list" — the ACTIVE skills VISIBLE TO YOU in the active workspace, with trigger metadata (name, description, when_to_use, when_not_to_use, status), grouped by folder. Two filters, and both hide rows silently: this op keeps only \`status\`="active" (drafts are absent, including your own), and the server has already dropped skills private to another member or scoped to a team you have no grant on. So this is a view, not the workspace's skill inventory, and two members legitimately get different counts from it; dopl_members(op="access_matrix") is the inventory. Call at every new task boundary. Optional: folder (filter to one folder).
 - "get" — fetch a skill's resolved detail: the SKILL.md body, reference availability for KBs and connectors, and metadata. KB references appear as \`[label](dopl://kb/<slug>)\` — use \`dopl_kb(op='read_file')\` / \`dopl_kb(op='get_tree')\` to load that KB when you actually need it. Requires: slug. Optional: detail ("summary" = metadata + body length only; "full" (default) = includes the body).
 - "read" — read the skill's SKILL.md body plus its Version token (pass that as expected_version to write). Requires: slug.
@@ -38,10 +41,13 @@ const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-
 - "set_visibility" — change a skill's sharing: "public" (workspace-visible) or "private" (owner-only). Owner or workspace-admin only. Team-scoped sharing is web-UI-managed; a team-scoped skill set here to "public" becomes workspace-wide. Requires: slug, visibility.
 - "authoring_guide" — fetch the canonical skill-authoring framework: what makes a high-quality single-file skill, how to write description + when_to_use, the body section order, anti-patterns, and a quality checklist. Call before authoring any new skill (every op="create").
 
-Destructive deletes live in the separate \`dopl_skill_admin\` tool.`;
-const SKILL_ADMIN_DESCRIPTION = `DESTRUCTIVE skill operations — separated from \`dopl_skill\` on purpose. Confirm with the user before calling. Set \`op\` to one of:
-- "delete" — soft-delete an entire skill. The skill becomes invisible (restorable from the web trash). Requires: slug.`;
-function registerSkillTools(register, client) {
+Deleting is not available to you over MCP: \`dopl_skill_admin\` refuses the op it lists and removes nothing. Ask the user to delete in the Dopl app.`;
+const SKILL_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([{ op: "delete", effect: "would have deleted a skill" }], `Reach for instead: \`dopl_skill\` op=write to replace the SKILL.md body, or op=update with status="draft" to take a skill out of the list an agent sees without destroying it. If it genuinely has to go, ask the user to delete it in the Dopl app.`);
+function registerSkillTools(register, client, 
+// Read for exactly one thing: whether a SKILL.md was authored by somebody
+// other than the caller, which decides the untrusted-content framing
+// (`UNTRUSTED_SKILL_BODY_HEADER`).
+caller = identity_1.UNKNOWN_CALLER) {
     register("dopl_skill", SKILL_DESCRIPTION, {
         op: zod_1.z
             .enum([
@@ -70,7 +76,7 @@ function registerSkillTools(register, client) {
         body: zod_1.z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
         expected_version: zod_1.z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
         force: zod_1.z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
-        visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (referenceable in workflows); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
+        visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
         detail: zod_1.z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
     }, async (args) => {
         switch (args.op) {
@@ -80,13 +86,13 @@ function registerSkillTools(register, client) {
                 const miss = (0, respond_1.missingParams)("get", args, ["slug"]);
                 if (miss)
                     return miss;
-                return (0, skills_ops_read_1.opGet)(client, args.slug, args.detail);
+                return (0, skills_ops_read_1.opGet)(client, args.slug, args.detail, caller.userId);
             }
             case "read": {
                 const miss = (0, respond_1.missingParams)("read", args, ["slug"]);
                 if (miss)
                     return miss;
-                return (0, skills_ops_read_1.opRead)(client, args.slug);
+                return (0, skills_ops_read_1.opRead)(client, args.slug, caller.userId);
             }
             case "write": {
                 const miss = (0, respond_1.missingParams)("write", args, ["slug", "body"]);

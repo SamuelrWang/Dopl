@@ -39,8 +39,12 @@ const SHELL_READS = ["BashOutput", "KillShell"];
 test("FIX 1: every gate/deny branch names WHY, with a code from the closed set", () => {
   const cases = [
     // [label, args, expected decision, expected reason]
+    // F-177 (2026-08-08): this case used to drive `Task`, which `full` no longer hard-denies.
+    // The BRANCH is unchanged; only the set it covers shrank to the universal floor.
     ["hard-deny is immovable and says so",
-      { toolName: "Task", input: {}, toolMode: "bypass" }, "deny", "hard-denied"],
+      { toolName: "mcp__dopl__dopl_kb_admin", input: {}, toolMode: "bypass" }, "deny", "hard-denied"],
+    ["F-177: a RELEASED built-in gates instead, and says it is in no mode list",
+      { toolName: "Task", input: {}, toolMode: "bypass" }, "gate", "unclassified-tool"],
     ["a CLASSIFIED tool the posture does not cover (the `auto` miss)",
       { toolName: "Bash", input: { command: "ls" }, toolMode: "auto" }, "gate", "not-covered-by-bypass"],
     ["a name in NO list gates in every mode, which is a different fact",
@@ -368,9 +372,11 @@ test("FIX 3: an ALLOW and a DENY are logged too, or the log answers only half th
   const allowed = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
     "BashOutput", { bash_id: "b1" });
   assert.match(allowed.logged[0], /^session gate: BashOutput allow tool-mode tool=bypass msg=ask /);
+  // F-177: driven on a UNIVERSAL-FLOOR tool now — `Task` gates under `full` rather than denying,
+  // and the line this test is about is the one a HARD-DENY writes.
   const denied = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
-    "Task", { description: "spawn" });
-  assert.match(denied.logged[0], /^session gate: Task deny hard-denied tool=bypass msg=ask /);
+    "mcp__dopl__dopl_kb_admin", { op: "delete_base" });
+  assert.match(denied.logged[0], /^session gate: dopl_kb_admin deny hard-denied tool=bypass msg=ask /);
 });
 
 test("FIX 3: no log function, no throw — the diag is a diagnostic, never a dependency", () => {

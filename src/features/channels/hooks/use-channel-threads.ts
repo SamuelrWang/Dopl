@@ -2,6 +2,7 @@
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { ChannelThread } from "../types";
+import { channelThreadsPath } from "../client/query-keys";
 
 // BOUNDARY: wire/storage name `task` == domain name `thread`. The route path
 // and the response envelope key stay `tasks` (storage names); everything this
@@ -20,6 +21,11 @@ const selectThreads = (body: { tasks: ChannelThread[] }) =>
  * store the transcript overlays onto message groups. Disabled until a channel
  * is selected. Realtime refetch is driven by the parent (`channel_messages` +
  * thread signals) via `refetch`, mirroring `use-channel-members`.
+ *
+ * The path comes from `client/query-keys.ts` — the same builder
+ * `channelKeys.threads()` keys the optimistic thread patches with. It was
+ * retyped by hand here and happened to be byte-identical; a key that differs
+ * by one character is a silent no-op, so the two ends name it once.
  */
 export function useChannelThreads(
   channelId: string | null,
@@ -29,8 +35,20 @@ export function useChannelThreads(
     { tasks: ChannelThread[] },
     ChannelThread[]
   >(
-    channelId ? `/api/channels/${encodeURIComponent(channelId)}/tasks` : null,
-    { workspaceId, select: selectThreads, keepPreviousData: true }
+    channelId ? channelThreadsPath(channelId) : null,
+    {
+      workspaceId,
+      select: selectThreads,
+      keepPreviousData: true,
+      // Paired with `use-channel-messages`' own `staleTime: 0`, and for the
+      // same reason (F-163): realtime refetches only the selected channel, so
+      // a 30s-cached entry for the channel you switch BACK to has nothing
+      // scheduled to correct it. These two reads must also agree with each
+      // other — this is the authoritative status/title overlay the transcript
+      // renders on top of message groups, so a fresh transcript under a
+      // 30s-old overlay shows closed threads as open.
+      staleTime: 0,
+    }
   );
   return {
     threads: query.data ?? [],

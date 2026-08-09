@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
-import { HttpError } from "@/shared/lib/http-error";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   attachKnowledgeBase,
   detachKnowledgeBase,
@@ -25,14 +25,15 @@ function scopeOf(ctx: Ctx) {
   };
 }
 
+/**
+ * Every not-found this route can produce is already a typed `HttpError`
+ * (`WORKFLOW_NOT_FOUND` / `KNOWLEDGE_BASE_NOT_FOUND` in
+ * `workflows/server/attachments.ts`), which the shared tail passes through with
+ * its own 404. The old string-sniff on `message` never fired for them and only
+ * ever echoed the raw exception text back (ENGINEERING §9).
+ */
 function toError(err: unknown): NextResponse {
-  if (err instanceof HttpError)
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message } },
-    { status: message.toLowerCase().includes("not found") ? 404 : 500 }
-  );
+  return toHttpErrorResponse("api/workflows/[id]/knowledge-bases", err);
 }
 
 async function handlePost(request: NextRequest, ctx: Ctx) {

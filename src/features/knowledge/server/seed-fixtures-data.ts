@@ -376,7 +376,7 @@ Realtime is no longer a differentiator we can lean on past Q1. Two competitors a
 
 ## Step counts
 
-| Competitor | Steps | First-canvas time |
+| Competitor | Steps | First-board time |
 | --- | --- | --- |
 | Acme | 4 | ~90s |
 | Vector | 3 | ~60s |
@@ -431,36 +431,36 @@ Vector is the cleanest. Helix is the worst. We sit in the middle.`,
         id: "ps-1",
         title: "PRD — Workspace overhaul",
         excerpt:
-          "Splits the canvas concept into workspace + canvas. Membership-aware sharing.",
+          "Splits the board concept into workspace + board. Membership-aware sharing.",
         body: `## Problem
 
-The "canvas" concept conflates two things: the **shareable team unit** (where members + invitations live) and the **visual page** (where panels are arranged). Users see the same name everywhere and the data model couples them.
+The "board" concept conflates two things: the **shareable team unit** (where members + invitations live) and the **visual page** (where objects are arranged). Users see the same name everywhere and the data model couples them.
 
 ## Users
 
-- Single users — currently fine, but future multi-canvas-per-workspace would require a redesign anyway
+- Single users — currently fine, but future multi-board-per-workspace would require a redesign anyway
 - Teams — the conflation makes it unclear who can see what
-- Admins — billing and member management ride on the canvas table, which is awkward
+- Admins — billing and member management ride on the board table, which is awkward
 
 ## Solution
 
 Split into two tables:
 
 1. **\`workspaces\`** — team / share / billing container
-2. **\`canvases\`** — page/view inside a workspace
+2. **\`boards\`** — page/view inside a workspace
 
 Membership and invitations move to \`workspace_members\` and \`workspace_invitations\`.
 
 ## Non-goals
 
-- Multi-canvas-per-workspace UX (one canvas per workspace for now)
-- Per-canvas permissions (workspace-level only)
+- Multi-board-per-workspace UX (one board per workspace for now)
+- Per-board permissions (workspace-level only)
 - Workspace switching across organizations
 
 ## Open questions
 
 - Where do connector tokens live? (See ADR-021)
-- Does the canvas page slug live in the URL or just internal? **Decision: in URL** — \`/{workspaceSlug}/{canvasSlug}\``,
+- Does the board page slug live in the URL or just internal? **Decision: in URL** — \`/{workspaceSlug}/{boardSlug}\``,
         type: "doc",
         updatedAt: "5d ago",
       },
@@ -486,7 +486,7 @@ Move all cluster-related tables to scope by \`workspace_id\` instead of \`user_i
 ## Alternatives considered
 
 - **Per-user with sharing**: would require a separate \`shared_with\` table per cluster. Rejected — too many small tables.
-- **Per-canvas (the visual one)**: would tie cluster lifecycle to canvas lifecycle. Rejected — clusters often outlive a specific canvas.
+- **Per-board (the visual one)**: would tie cluster lifecycle to board lifecycle. Rejected — clusters often outlive a specific board.
 
 ## Open questions
 
@@ -602,19 +602,19 @@ This is exactly the positioning we've been pushing for two quarters. **The custo
         id: "cf-3",
         title: "Support ticket cluster — onboarding confusion",
         excerpt:
-          "12 tickets in two weeks all asking the same first-canvas question. UI fix needed.",
+          "12 tickets in two weeks all asking the same first-board question. UI fix needed.",
         body: `12 tickets in two weeks. **All variations of the same question**: "I just signed up, where do I start?"
 
 ## Pattern
 
-Users land on /canvas (now /workspaceSlug/main), see an empty canvas, and don't know what to do next. The empty state has no instruction, no sample content, no CTA.
+Users land on the ontology board (\`/{workspaceSlug}/ontology\`), see an empty board, and don't know what to do next. The empty state has no instruction, no sample content, no CTA.
 
 ## Tickets
 
 | ID | User | Day | Phrase used |
 | --- | --- | --- | --- |
 | #1042 | sam@... | 1 | "what is this" |
-| #1051 | leo@... | 2 | "blank canvas" |
+| #1051 | leo@... | 2 | "blank board" |
 | #1063 | mira@... | 3 | "how do I get started" |
 | #1070 | dani@... | 4 | "is something missing" |
 | #1078 | … | … | … |
@@ -622,8 +622,8 @@ Users land on /canvas (now /workspaceSlug/main), see an empty canvas, and don't 
 ## Fix
 
 - Empty-state CTA: "Add your first entry" with a paste-URL or upload-file flow
-- Inline tutorial card on first canvas (dismissible)
-- Welcome video: 30 seconds, no narration, just shows what the canvas does
+- Inline tutorial card on the first board (dismissible)
+- Welcome video: 30 seconds, no narration, just shows what the board does
 
 ## Owner
 

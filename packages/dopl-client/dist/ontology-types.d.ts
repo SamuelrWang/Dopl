@@ -66,6 +66,45 @@ export interface OntologySnapshot {
     clusters: OntologyCluster[];
     objects: Record<string, OntologyObject>;
 }
+/**
+ * `GET /api/ontology?view=summary` — the same graph SHAPE with every JSONB
+ * column left in the database: no `attributes`, no `methods`, no `template`, no
+ * cluster `layout`, and no relationships read at all.
+ *
+ * It exists for map-shaped renders — the ones that print names and containment
+ * and nothing else. `dopl_map` is the reason: the server instructions mandate
+ * it before every agent's first substantive reply, and it was pulling the whole
+ * graph, JSONB and all, to render cluster names and column names.
+ *
+ * A DISTINCT TYPE, not a snapshot with empty arrays. `attributes: []` asserts
+ * that an object has no attributes; omitting the field says this view did not
+ * ask. Anything that needs a JSONB column takes the detail path — `op="get"` /
+ * `getOntologyAnchor` / the object PATCH response — which returns one object in
+ * full. Every field here is also a field of `OntologySnapshot`, so a render
+ * that only reads names accepts either.
+ */
+export interface OntologyObjectSummary {
+    id: string;
+    name: string;
+    subtitle: string;
+    childIds: string[];
+}
+export interface OntologyClusterSummary {
+    id: string;
+    slug: string;
+    name: string;
+    purpose: string;
+    columnIds: string[];
+}
+export interface OntologySummary {
+    clusters: OntologyClusterSummary[];
+    objects: Record<string, OntologyObjectSummary>;
+    /**
+     * True when a server-side row ceiling clipped this view. Absent on older
+     * servers, so treat `undefined` as "not clipped" — never as "unknown".
+     */
+    truncated?: boolean;
+}
 export interface OntologyClusterCreateInput {
     name: string;
     purpose?: string;

@@ -72,3 +72,48 @@ export function inlineOr(
   const safe = raw ? neutralizeInline(raw) : null;
   return safe ?? fallback;
 }
+
+/** Anything with the two authorship columns every authored row carries. */
+export interface AuthoredRow {
+  createdBy?: string | null;
+  lastEditedBy?: string | null;
+}
+
+/**
+ * Is this row's CONTENT written by somebody other than the caller — i.e. does
+ * the body below it need framing?
+ *
+ * THE OTHER HALF OF THIS MODULE'S PROMISE. The header above says bodies are
+ * rendered "as themselves, under framing that says what it is". The framing half
+ * was true of channels and of shared chats and was NOT true of knowledge entries
+ * or SKILL.md: both went out verbatim with no header at all. In a solo workspace
+ * that is fine and F-101 recorded it as deliberate on exactly that reading — "the
+ * workspace's own authored procedure". In a SHARED workspace it is false: member
+ * B authors a KB entry or a SKILL.md, member A's agent reads it, and it lands
+ * unframed inside a Bash-capable session. The signal to tell the two apart was
+ * always on the row.
+ *
+ * FAIL CLOSED, in both of the ways this can be unknown:
+ *  - **no caller id** (auth could not resolve one) — the server cannot tell whose
+ *    content this is, so it says so rather than assuming the safe answer;
+ *  - **no author at all** (both columns null — a legacy or import row) —
+ *    unattributable content is not the caller's by evidence, only by hope.
+ *
+ * BOTH COLUMNS, not just `createdBy`. An entry the caller created and a peer
+ * later EDITED carries the peer's words under the caller's authorship, which is
+ * the same reach through a column that would have said "yours". `last_edited_by`
+ * is written on every update by the acting user — including an agent write, which
+ * records the operator it acted for — so the common path (my own docs, edited by
+ * me or by my own agent) frames nothing and stays quiet.
+ */
+export function isForeignAuthored(
+  row: AuthoredRow,
+  callerUserId: string | null | undefined,
+): boolean {
+  if (!callerUserId) return true;
+  const authors = [row.createdBy, row.lastEditedBy].filter(
+    (id): id is string => typeof id === "string" && id.length > 0,
+  );
+  if (authors.length === 0) return true;
+  return authors.some((id) => id !== callerUserId);
+}

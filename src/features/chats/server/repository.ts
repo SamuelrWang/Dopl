@@ -103,43 +103,6 @@ export async function findChatById(
   return data as ChatRowWithCount | null;
 }
 
-/**
- * Trash lookup for restore: the one place that resolves a SOFT-DELETED
- * chat by id (deleted_at IS NOT NULL). Active reads use `findChatById`.
- */
-export async function findDeletedChatById(
-  workspaceId: string,
-  chatId: string
-): Promise<ChatRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("chats")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("id", chatId)
-    .or("deleted_at.not.is.null")
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-/** The caller's own soft-deleted chats, newest-trashed first. */
-export async function listTrashedChats(
-  workspaceId: string,
-  ownerId: string
-): Promise<ChatRowWithCount[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("chats")
-    .select(CHAT_SELECT)
-    .eq("workspace_id", workspaceId)
-    .eq("owner_id", ownerId)
-    .or("deleted_at.not.is.null")
-    .order("deleted_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as ChatRowWithCount[];
-}
-
 // The idempotency lookup deliberately does NOT filter `deleted_at`: the
 // (workspace_id, owner_id, client_session_id) unique index spans trashed
 // rows, so a re-export must find a soft-deleted match and revive it
@@ -183,51 +146,21 @@ export async function updateChat(
 }
 
 /**
- * Soft-delete: hide the chat from active reads, keep it restorable (F-11).
- * Scoped by `workspace_id` as defense-in-depth on the destructive path — the
- * caller already resolves the chat in-workspace, but the extra predicate makes
- * a cross-workspace mutation structurally impossible (mirrors the workflow
- * soft-delete updates).
+ * PERMANENT delete of ONE chat, workspace-scoped. Deletion is immediate and
+ * irreversible — there is no trash (2026-08-07). `chat_messages` cascade via
+ * FK; the `chat_grants_cleanup` trigger drops team grants. The `workspace_id`
+ * predicate is defense-in-depth on the destructive path — the caller already
+ * resolves the chat in-workspace, but it makes a cross-workspace mutation
+ * structurally impossible.
  */
-export async function softDeleteChat(workspaceId: string, chatId: string): Promise<ChatRow> {
-  return updateChatScoped(workspaceId, chatId, { deleted_at: new Date().toISOString() });
-}
-
-/** Restore a soft-deleted chat by clearing its `deleted_at` (workspace-scoped). */
-export async function restoreChatRow(workspaceId: string, chatId: string): Promise<ChatRow> {
-  return updateChatScoped(workspaceId, chatId, { deleted_at: null });
-}
-
-/** PERMANENT hard-delete of ONE trashed chat (`deleted_at IS NOT NULL`),
- *  workspace-scoped. `chat_messages` cascade via FK; the `chat_grants_cleanup`
- *  trigger drops team grants. */
 export async function hardDeleteChat(workspaceId: string, chatId: string): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db
     .from("chats")
     .delete()
     .eq("workspace_id", workspaceId)
-    .eq("id", chatId)
-    .or("deleted_at.not.is.null");
+    .eq("id", chatId);
   if (error) throw error;
-}
-
-/** `updateChat` variant that also pins `workspace_id` in the WHERE. */
-async function updateChatScoped(
-  workspaceId: string,
-  chatId: string,
-  patch: ChatUpdatePatch
-): Promise<ChatRow> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("chats")
-    .update({ ...patch, updated_at: new Date().toISOString() } as unknown as ChatUpdate)
-    .eq("id", chatId)
-    .eq("workspace_id", workspaceId)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data;
 }
 
 // ─── Messages ───────────────────────────────────────────────────────

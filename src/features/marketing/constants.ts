@@ -97,13 +97,6 @@ export const DECK_PANELS: readonly DeckPanel[] = [
     blurb:
       "What your agents have said and decided. Every conversation archived, searchable, and feeding back into the graph.",
   },
-  {
-    id: "workflows",
-    eyebrow: "05",
-    label: "Workflows",
-    blurb:
-      "Multi-step runs your agents execute end-to-end — grounded in the same ontology, so every step knows the context.",
-  },
 ];
 
 /** Seconds the top slider takes to cross a panel before auto-advancing. */

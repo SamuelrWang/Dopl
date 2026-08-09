@@ -2,20 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "@/shared/ui/toast";
+import { useRefetchGate } from "@/shared/hooks/use-api-mutation";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type { Chat, ChatFolder } from "../types";
 import { chatScope, type ChatScope } from "../scope";
-import {
-  createChatFolder,
-  deleteChat as apiDeleteChat,
-  listChats,
-  listFolders,
-  updateChat as apiUpdateChat,
-  updateChatFolder as apiUpdateChatFolder,
-  ChatApiError,
-} from "../client/api";
+import { useChatFolders, useChats } from "../client/hooks";
+import { chatKeys } from "../client/query-keys";
 import { useChatsRealtime } from "../client/realtime";
+import { useChatWrites } from "../hooks/use-chat-writes";
+import { pendingFolderId, scopeFields } from "../lib/optimistic-cache";
 import { ListPane } from "./list-pane";
 import { DetailPane } from "./detail-pane";
 
@@ -44,20 +39,32 @@ interface Props {
   workspaceSlug: string;
   currentUserId: string;
   role: Role;
+  /** First-paint seed only. The cache is the source of truth the moment the
+   *  page's own `/api/chats` read lands — which, since the page renders this
+   *  view only once it has, is the very first render. */
   initialChats: Chat[];
   initialFolders: ChatFolder[];
-  /** Chats hidden by the free-plan retention window (0 on Pro). Static
-   *  from the server render — drives the list's upgrade strip. */
+  /** Chats hidden by the free-plan retention window (0 on Pro) — drives the
+   *  list's upgrade strip. Server-computed; the cache carries the live value. */
   hiddenCount: number;
 }
 
 /**
  * Chats page root — the agent-exported conversation archive. Two-pane
- * .page-float surface: the scope-filtered list on the left (All /
- * Private / Team / Shared, mirroring the knowledge-base scopes), the
- * selected chat's document on the right. Server-fetched headers live
- * here as the single source of truth; the transcript loads per
- * selection.
+ * .page-float surface: the scope-filtered list on the left (All / Private /
+ * Team / Shared, mirroring the knowledge-base scopes), the selected chat's
+ * document on the right.
+ *
+ * ONE SOURCE OF TRUTH, and it is the query cache. This view used to copy the
+ * page's already-cached list into `useState` and then keep the two apart by
+ * hand: the realtime handler re-fetched through the raw client and `setState`
+ * with the answer (leaving the cache the page reads from stale), and every
+ * write patched the local copy only. A remount inside the cache window —
+ * navigating away and back — rebuilt the whole view from the untouched cache
+ * entry, so a pin, a share or a delete could simply come back. Now the reads
+ * ARE `useApiQuery` on the same keys the page mounted (same entries, no extra
+ * request), the writes patch those entries optimistically, and the props
+ * survive only as the first-paint seed.
  */
 export function ChatsView({
   workspaceId,
@@ -69,9 +76,6 @@ export function ChatsView({
   hiddenCount,
 }: Props) {
   const qc = useQueryClient();
-  const [chats, setChats] = useState(initialChats);
-  const [folders, setFolders] = useState(initialFolders);
-  const [hidden, setHidden] = useState(hiddenCount);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -79,27 +83,34 @@ export function ChatsView({
   );
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-  // Live updates from MCP/CLI agents and other tabs: an exported chat, a
-  // new message, a share/folder change, or a retention shift. Re-fetch the
-  // list + folders through the filtered service (retention stays
-  // server-authoritative) and refetch the open transcript. Chats have no
-  // debounced typing — edits are discrete awaited actions — so a refetch
-  // only re-affirms server truth; no pending-edit guard is needed.
-  useChatsRealtime(workspaceId, () => {
-    void (async () => {
-      try {
-        const [list, nextFolders] = await Promise.all([
-          listChats(workspaceId),
-          listFolders(workspaceId),
-        ]);
-        setChats(list.chats);
-        setHidden(list.hiddenCount);
-        setFolders(nextFolders);
-      } catch {
-        // Transient (reconnect / auth blip) — the next event refetches.
-      }
-    })();
-    void qc.invalidateQueries({ queryKey: ["chat-detail", workspaceId] });
+  const listQuery = useChats(workspaceId);
+  const foldersQuery = useChatFolders(workspaceId);
+  const chats = listQuery.data?.chats ?? initialChats;
+  const hidden = listQuery.data?.hiddenCount ?? hiddenCount;
+  const folders = foldersQuery.data ?? initialFolders;
+
+  // Live updates from MCP/CLI agents and other tabs: an exported chat, a new
+  // message, a share/folder change, or a retention shift. Invalidation is
+  // EXPLICIT and names three caches — the list and the folders (both
+  // server-authoritative: retention and grant fan-out are computed there), and
+  // the ONE transcript currently on screen. It used to name
+  // `["chat-detail", workspaceId]`, a prefix over every transcript the user
+  // had opened all session, so a single agent export re-downloaded all of
+  // them. `useRefetchGate` holds the whole signal open while a local write is
+  // in flight, so a realtime event mid-write cannot refetch over it.
+  const { signal, gate } = useRefetchGate(() => {
+    void qc.invalidateQueries({ queryKey: chatKeys.list().all });
+    void qc.invalidateQueries({ queryKey: chatKeys.folders().all });
+    if (selectedId !== null) {
+      void qc.invalidateQueries({ queryKey: chatKeys.detail(selectedId).all });
+    }
+  });
+  useChatsRealtime(workspaceId, signal);
+
+  const writes = useChatWrites({
+    workspaceId,
+    gate,
+    onDeleteFailed: (chatId) => setSelectedId(chatId),
   });
 
   const counts = useMemo<Record<ChatFilter, number>>(() => {
@@ -192,37 +203,23 @@ export function ChatsView({
     });
   };
 
-  const patchChat = async (
-    id: string,
-    patch: Parameters<typeof apiUpdateChat>[1]
-  ): Promise<Chat | null> => {
-    try {
-      const updated = await apiUpdateChat(id, patch, workspaceId);
-      setChats((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      return updated;
-    } catch (err) {
-      toast({
-        title: err instanceof ChatApiError ? err.message : "Update failed",
-      });
-      return null;
-    }
-  };
+  // EVERY HANDLER BELOW COMMITS AT SUBMIT, not on the response. The cache
+  // patch lands in `onMutate`, so any local follow-up that has to agree with
+  // it — which filter the chat is now on, which row is selected — has to be
+  // decided here too. Deferring one to `onSuccess` would leave the list and
+  // the selection disagreeing for the length of a round trip, which is the
+  // failure the optimistic patch exists to remove.
 
   const handleShareChange = async (
     id: string,
     scope: ChatScope,
     teamIds: string[]
   ): Promise<void> => {
-    const updated = await patchChat(
-      id,
-      scope === "private"
-        ? { visibility: "private" }
-        : scope === "team"
-          ? { visibility: "public", accessMode: "teams", teamIds }
-          : { visibility: "public", accessMode: "workspace" }
-    );
+    const chat = chats.find((c) => c.id === id);
+    writes.share.mutate({ chatId: id, scope, teamIds });
     // Follow the chat onto its new filter so it never vanishes mid-action.
-    if (updated && filter !== "all" && !chatOnFilter(updated, filter, currentUserId)) {
+    const next = chat ? { ...chat, ...scopeFields(scope, teamIds) } : null;
+    if (next && filter !== "all" && !chatOnFilter(next, filter, currentUserId)) {
       setFilter(scope);
     }
   };
@@ -230,79 +227,35 @@ export function ChatsView({
   const handleTogglePin = async (id: string): Promise<void> => {
     const chat = chats.find((c) => c.id === id);
     if (!chat) return;
-    await patchChat(id, { pinned: !chat.pinned });
+    writes.pin.mutate({ chatId: id, pinned: !chat.pinned });
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await apiDeleteChat(id, workspaceId);
-      const remaining = chats.filter((c) => c.id !== id);
-      setChats(remaining);
-      if (selectedId === id) {
-        setSelectedId(
-          remaining.find((c) => chatOnFilter(c, filter, currentUserId))?.id ??
-            null
-        );
-      }
-    } catch (err) {
-      toast({
-        title: err instanceof ChatApiError ? err.message : "Delete failed",
-      });
+  const handleDelete = async (id: string): Promise<void> => {
+    if (selectedId === id) {
+      setSelectedId(
+        chats.find((c) => c.id !== id && chatOnFilter(c, filter, currentUserId))
+          ?.id ?? null
+      );
     }
+    writes.remove.mutate({ chatId: id });
   };
 
+  /** Resolves false on failure so the list pane can put the draft back. */
   const handleCreateFolder = async (name: string): Promise<boolean> => {
     try {
-      const folder = await createChatFolder(name, workspaceId);
-      setFolders((prev) =>
-        [...prev, folder].sort((a, b) => a.name.localeCompare(b.name))
-      );
+      await writes.createFolder.mutateAsync({ tempId: pendingFolderId(), name });
       return true;
-    } catch (err) {
-      toast({
-        title:
-          err instanceof ChatApiError ? err.message : "Couldn't create folder",
-      });
-      return false;
+    } catch {
+      return false; // already toasted + rolled back by the mutation
     }
   };
 
-  // The folder's scope is authoritative — the server re-scopes every
-  // chat in the folder, so mirror that propagation in local state.
   const handleFolderShareChange = async (
     folderId: string,
     scope: ChatScope,
     teamIds: string[]
   ): Promise<void> => {
-    try {
-      const folder = await apiUpdateChatFolder(
-        folderId,
-        scope === "private"
-          ? { visibility: "private" }
-          : scope === "team"
-            ? { visibility: "public", accessMode: "teams", teamIds }
-            : { visibility: "public", accessMode: "workspace" },
-        workspaceId
-      );
-      setFolders((prev) => prev.map((f) => (f.id === folder.id ? folder : f)));
-      setChats((prev) =>
-        prev.map((c) =>
-          c.folderId === folder.id
-            ? {
-                ...c,
-                visibility: folder.visibility,
-                accessMode: folder.accessMode,
-                grantedTeamIds: folder.grantedTeamIds,
-              }
-            : c
-        )
-      );
-    } catch (err) {
-      toast({
-        title:
-          err instanceof ChatApiError ? err.message : "Couldn't update folder",
-      });
-    }
+    writes.folderScope.mutate({ folderId, scope, teamIds });
   };
 
   return (
@@ -337,6 +290,7 @@ export function ChatsView({
         totalChats={chats.length}
         onShareChange={handleShareChange}
         onTogglePin={handleTogglePin}
+        pinPending={writes.pin.pending}
         onDelete={handleDelete}
       />
     </div>

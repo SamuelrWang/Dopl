@@ -9,6 +9,8 @@ import {
   type DoplSessionsBridge,
 } from "@/shared/lib/desktop";
 import { Avatar } from "@/shared/ui/avatar";
+import { pendingRow } from "@/shared/ui/pending";
+import { isPendingId } from "../lib/optimistic-cache";
 import {
   readCloseProposal,
   splitSessionEntries,
@@ -137,11 +139,13 @@ export function SessionCard({
 
   const openerName = session.head.authorName || "Agent";
   const title = session.title ?? session.summary ?? "Thread";
-  // Separate the two body lanes at render time: chat replies keep the nested
+  // Separate the body lanes at render time: chat replies keep the nested
   // attributed-message rendering; `task_progress` milestones render as a
-  // distinct check-marked accomplishment list. `groupThread`'s output is
-  // unchanged — the split is purely presentational.
-  const { milestones, replies } = splitSessionEntries(session.entries);
+  // distinct check-marked accomplishment list; NOTICES are status lines about
+  // the thread itself (the reopen echo) and get the calm one-liner treatment —
+  // never the ✓, which on a just-reopened thread reads as "done". `groupThread`'s
+  // output is unchanged — the split is purely presentational.
+  const { milestones, replies, notices } = splitSessionEntries(session.entries);
   const agentReplies = replies.filter((e) => e.authorKind === "agent");
   const showWorking = session.status === "active" && agentReplies.length === 0;
   // The honest "Working…" line: a calm session-end (interrupted/capped/ended)
@@ -159,12 +163,22 @@ export function SessionCard({
   const terminalNote =
     replies.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
 
+  // PROVISIONAL, and it says so. A request opened optimistically renders this
+  // card from a message the server has not acknowledged yet (its head carries a
+  // `pending:` id), so it is dimmed and inert until the POST answers — the real
+  // content, one frame after the click, without inviting a click on controls
+  // whose thread does not exist yet. `pending.ts` owns the recipe.
+  const provisional = isPendingId(session.head.id);
+
   return (
     <article
       id={`session:${session.taskId}`}
-      className={cn(
-        "overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated",
-        highlighted && "ring-2 ring-border-highlight"
+      {...pendingRow(
+        provisional,
+        cn(
+          "overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated",
+          highlighted && "ring-2 ring-border-highlight"
+        )
       )}
     >
       <header className="flex items-start gap-2 border-b border-border-subtle bg-card-surface-subtle px-3.5 py-2">
@@ -252,6 +266,18 @@ export function SessionCard({
         {terminalNote && (
           <p className="text-caption text-text-secondary">{terminalNote}</p>
         )}
+        {/* F-176 — status lines, not accomplishments; see `splitSessionEntries`. */}
+        {notices.map((notice) => (
+          <div key={notice.id} className="flex items-start gap-1.5">
+            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-text-disabled" />
+            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-caption text-text-secondary">
+              {notice.body}
+            </span>
+            <span className="shrink-0 text-micro text-text-muted">
+              {formatChannelTimestamp(notice.createdAt)}
+            </span>
+          </div>
+        ))}
         {milestones.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-[8px] bg-card-surface-subtle px-3 py-2">
             <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
@@ -461,13 +487,6 @@ export function OpenWindowControls({
     </>
   );
 }
-
-/**
- * The inline close form: an optional one-line summary well plus the two outcome
- * actions. "Mark complete" / "Mark failed" each close the thread with that
- * outcome and the typed summary; Cancel collapses without a write. Buttons
- * disable while a close is in flight so a double-click can't fire two writes.
- */
 
 /** A non-empty string `metadata.summary`, promoted to the entry's headline. */
 function readSummary(metadata: Record<string, unknown>): string | null {

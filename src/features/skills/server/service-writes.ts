@@ -151,24 +151,18 @@ export async function updateSkill(
       visibility: patch.visibility,
       accessMode: wantsTeams ? "teams" : "workspace",
     };
-    // Workflow invariant: attached skills must stay workspace-public
-    // (attachment requires it — see assertSkillAttachable). Narrowing
-    // to private or team scope would silently break every workflow
-    // that references the skill, so it's rejected with the list.
-    const narrows = patch.visibility === "private" || wantsTeams;
-    if (narrows) {
-      const usedBy = await repo.listSkillUsedBy(ctx.workspaceId, skill.id);
-      if (usedBy.workflows.length > 0) {
-        const names = usedBy.workflows.map((w) => `"${w.name}"`).join(", ");
-        throw new HttpError(
-          409,
-          "SKILL_ATTACHED_TO_WORKFLOWS",
-          `This skill is attached to ${usedBy.workflows.length} workflow${
-            usedBy.workflows.length === 1 ? "" : "s"
-          } (${names}) — detach it before narrowing its sharing`
-        );
-      }
-    }
+    // NARROWING IS NO LONGER BLOCKED BY ATTACHMENTS (2026-08-07, retirement).
+    // This used to 409 `SKILL_ATTACHED_TO_WORKFLOWS` when the skill was
+    // referenced by a workflow, to protect the invariant that an attached
+    // skill stays workspace-public (see `assertSkillAttachable`). That
+    // invariant only ever protected workflow EXECUTION, and workflows are
+    // retired: no page renders them, no MCP tool registers for them, so a
+    // user hitting the 409 had no surface on which to detach anything. The
+    // error named a feature they cannot see and offered a remedy they cannot
+    // perform — an unresolvable dead end on a legitimate privacy action.
+    // Short-circuiting is the safe direction: narrowing only ever RESTRICTS
+    // access, the `workflow_skills` rows are untouched, and if workflows ever
+    // come back the check comes back with them.
     if (wantsTeams) {
       grantTeamIds = [...new Set(patch.teamIds ?? [])];
       if (!isAdmin && grantTeamIds.length > 0) {
@@ -287,6 +281,16 @@ async function currentGrantIds(
   return grants.map((g) => g.teamId);
 }
 
+/**
+ * PERMANENTLY delete a skill. Deletion is immediate and irreversible —
+ * there is no trash and no restore (2026-08-07). Gates are unchanged from
+ * the old soft-delete path.
+ *
+ * No history event is recorded: `skill_events` FKs to `skills` with ON
+ * DELETE CASCADE, so this skill's audit trail is gone by the time the
+ * insert would run and the write would violate the FK. The trail dies
+ * with the skill by design (same reasoning the old purge path carried).
+ */
 export async function deleteSkill(
   ctx: SkillContext,
   slug: string
@@ -304,8 +308,7 @@ export async function deleteSkill(
       "This skill is read-only to agents (agent_write_enabled=false) — delete it from the Dopl web UI."
     );
   }
-  await repo.markSkillDeleted(ctx.workspaceId, skill.id);
-  await history.recordEvent({ ctx, skillId: skill.id, type: "skill.trashed" });
+  await repo.hardDeleteSkill(ctx.workspaceId, skill.id);
 }
 
 /**

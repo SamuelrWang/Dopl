@@ -148,15 +148,14 @@ async function channelLoop(entry) {
         io.markSeeded(entry.channel.id);
         entry.seedMode = false;
       }
-    } else {
-      for (const m of msgs) {
-        if ((m.seq || 0) > io.getCursor(entry.channel.id)) io.setCursor(entry.channel.id, m.seq);
-        // One message, one outcome — the routes, classify, and the verdict
-        // outcomes are listener-messages.js. Awaited, so a trigger's consent +
-        // spawn still serializes ahead of the next message in this page.
-        await messages.dispatchMessage(entry, m, myUserId);
-      }
-      if (msgs.length === 0 && maxSeq > since) io.setCursor(entry.channel.id, maxSeq);
+    } else if (await messages.drainPage(entry, msgs, myUserId)) {
+      // C-3: the page stopped at a message whose dispatch did NOT land, and the persisted
+      // cursor is still behind it. Back off and re-await from there rather than taking the
+      // normal idle, which would hot-loop on the same message every IDLE_GAP. drainPage
+      // owns the whole cursor decision — including the bounded ladder and the loud escape
+      // when one message can never be dispatched.
+      await messages.deferBackoff(entry);
+      continue;
     }
     await io.idleAfterAwait(entry, healthy, drained);
   }

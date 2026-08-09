@@ -56,20 +56,21 @@ const { diag } = require('./diag');
 // injected values, testable without a socket, clock or BrowserWindow. Sliced verbatim by
 // test/ui-sync.test.mjs.
 
-// THE CONTENT TABLES — the UNION of every table the SPA's feature hooks watch
-// (src/features/*/client/realtime.ts) minus the listener-owned ones below. That union is
-// the contract: a table a hook watches but this list omits is a page that never updates
-// live, so test/ui-sync.test.mjs re-derives it from those files and checks each name
-// against supabase/migrations for publication AND a `workspace_id` column — following
-// RENAMES (skill_versions was skill_file_versions) and BARE `DROP TABLE`s, not just
-// `ALTER PUBLICATION … DROP`. Not ceremony: `skill_files` sat here until review caught
-// 20260716064733 dropping the table while its 20260502100200 publication ADD stayed —
-// and ONE dead name makes realtime refuse the whole channel, i.e. no live updates at all.
+// THE CONTENT TABLES — the UNION of what the SPA's feature hooks watch
+// (src/features/*/client/realtime.ts) minus the listener-owned ones below. That union is the
+// contract: a table a hook watches but this list omits is a page that never updates live, so
+// test/ui-sync-tables.test.mjs re-derives it from those files and checks each name against
+// supabase/migrations for publication AND a `workspace_id` column — following RENAMES
+// (skill_versions was skill_file_versions) and BARE `DROP TABLE`s, not just `ALTER PUBLICATION
+// … DROP`. Not ceremony: `skill_files` sat here until review caught 20260716064733 dropping the
+// table while its 20260502100200 publication ADD stayed — and ONE dead name makes realtime
+// refuse the whole channel, i.e. no live updates at all.
+// THE 5 `workflow_*` TABLES LEFT 2026-08-07 (RETIREMENT-UNWIRING-PLAN.md Phase 5 / D8): page
+// unrouted, `useWorkflowsRealtime` neutered. PAIRED with migration 20260807100000 — dropping
+// the publication alone leaves a binding that joins, says SUBSCRIBED and delivers nothing.
 const SYNC_TABLES = Object.freeze([
   'knowledge_bases', 'knowledge_folders', 'knowledge_entries',
   'skills', 'skill_versions',
-  'workflows', 'workflow_steps', 'workflow_step_edges',
-  'workflow_knowledge_bases', 'workflow_skills',
   'ontology_clusters', 'ontology_objects', 'ontology_memberships',
   'ontology_relationships',
   'chats', 'chat_messages', 'chat_folders',
@@ -77,9 +78,8 @@ const SYNC_TABLES = Object.freeze([
   'channel_messages', 'agent_presence',
 ]);
 
-// Historically the channels exemption excluded the three listener tables from this feed;
-// the UI needs them (see header), so the set is empty — retained because the coverage
-// contract test unions it with SYNC_TABLES.
+// Historically the channels exemption excluded the three listener tables from this feed; the UI
+// needs them (see header), so the set is empty — kept because the coverage test unions it in.
 const LISTENER_OWNED_TABLES = Object.freeze([]);
 
 // A burst on one (workspace, table) — an agent importing 40 knowledge entries — must cost
@@ -117,9 +117,9 @@ function backoffMs(attempt) {
 }
 
 // The one field ever read out of a payload. Both shapes accepted (realtime-js
-// normalizes `record` to `new`); `old` last so a DELETE still names its workspace
-// when replica identity carries it. null is NOT an error — under the default replica
-// identity a DELETE's old record is the primary key alone.
+// normalizes `record` to `new`); `old` last so an UPDATE still names its workspace.
+// null is NOT an error and no replica identity can fix it: apply_rls redacts a DELETE's
+// old_record to the PRIMARY KEY whenever RLS is on. Deletes reach here bare, always.
 function payloadWorkspaceId(payload) {
   const p = payload || {};
   for (const rec of [p.new, p.record, p.old, p.old_record]) {
@@ -135,8 +135,8 @@ function payloadWorkspaceId(payload) {
 // just left keeps delivering for a beat, and attributing that to the workspace switched
 // TO is a wrong-workspace refetch. TABLE — only a table we deliberately bound, so the
 // channels exemption is refused on the way OUT too. WORKSPACE — a payload naming a
-// DIFFERENT workspace is refused; one naming none is forwarded (the server filter
-// already scoped the binding; dropping those breaks every DELETE).
+// DIFFERENT workspace is refused; one naming none is forwarded (migration 20260807150000
+// is what scopes DELETEs server-side; they still arrive bare, so dropping them breaks all).
 function shouldForward(state, event) {
   const s = state || {};
   const e = event || {};
@@ -181,8 +181,8 @@ function createSyncCoalescer(windowMs, onFlush, timers) {
 // anything". ONE event with an EMPTY table, not one per table — the registry implements
 // exactly that contract (shared-channel-registry.ts: `if (e.table &&
 // !s.tables.has(e.table)) continue`, so an empty table fires EVERY subscriber). The
-// per-table batch instead made each hook refetch once per table it watches: five
-// refetches for the workflows page on every reconnect or wake, a self-inflicted burst on
+// per-table batch instead made each hook refetch once per table it watches: four
+// refetches for the ontology page on every reconnect or wake, a self-inflicted burst on
 // the very DB this phase exists to unload. NOT coalesced — a reconnect must reach the UI
 // now.
 function catchUpBatch(workspaceId) {

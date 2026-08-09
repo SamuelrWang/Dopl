@@ -16,8 +16,6 @@ interface Props {
   workspaceId?: string;
   /** Only admins can read the queue — gate the fetch. */
   enabled: boolean;
-  /** Fired after an approval/decline so the parent can refresh members. */
-  onResolved: () => void;
 }
 
 /**
@@ -26,27 +24,28 @@ interface Props {
  * Approve / Decline. Renders nothing while empty. Data flows through
  * useJoinRequests — the same query cache entry as the members view.
  */
-export function JoinRequestsBanner({
-  workspaceSlug,
-  workspaceId,
-  enabled,
-  onResolved,
-}: Props) {
-  const { requests, resolve: resolveRequest } = useJoinRequests(workspaceSlug, enabled);
+export function JoinRequestsBanner({ workspaceSlug, workspaceId, enabled }: Props) {
+  const {
+    requests,
+    resolve: resolveRequest,
+    resolving,
+  } = useJoinRequests(workspaceSlug, enabled);
   const [roles, setRoles] = useState<Record<string, AssignableRole>>({});
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
+  /**
+   * The row is dropped in `onMutate` and the roster is invalidated by the
+   * mutation, so nothing here has to await a refresh — only the 402 branch is
+   * left, and a failure restores the queue from the layer's snapshot.
+   */
   async function resolve(
     request: JoinRequestView,
     action: "approve" | "decline"
   ) {
-    setBusyId(request.id);
     setError(null);
     try {
       await resolveRequest(request.id, action, roles[request.id] ?? "member");
-      onResolved();
     } catch (err) {
       // Solo plan is single-member — approving is blocked server-side.
       // Offer the in-place Team upgrade instead of a dead-end error line.
@@ -59,8 +58,6 @@ export function JoinRequestsBanner({
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong");
       }
-    } finally {
-      setBusyId(null);
     }
   }
 
@@ -96,12 +93,12 @@ export function JoinRequestsBanner({
             </div>
             <RoleSelect
               value={roles[r.id] ?? "member"}
-              disabled={busyId === r.id}
+              disabled={resolving}
               onChange={(role) => setRoles((prev) => ({ ...prev, [r.id]: role }))}
             />
             <button
               type="button"
-              disabled={busyId === r.id}
+              disabled={resolving}
               onClick={() => void resolve(r, "approve")}
               className="shrink-0 px-2.5 py-1 rounded-md text-caption font-medium bg-bg-inset border border-border-strong text-text-primary hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer"
             >
@@ -109,7 +106,7 @@ export function JoinRequestsBanner({
             </button>
             <button
               type="button"
-              disabled={busyId === r.id}
+              disabled={resolving}
               onClick={() => void resolve(r, "decline")}
               className="shrink-0 text-label uppercase tracking-wider text-text-muted hover:text-danger transition-colors disabled:opacity-40 cursor-pointer"
             >

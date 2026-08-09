@@ -10,7 +10,8 @@
  * Consolidated into two `op`-dispatched tools (the canonical pattern from
  * `setups.ts`):
  *   - `dopl_skill`       — reads + non-destructive writes.
- *   - `dopl_skill_admin` — DESTRUCTIVE deletes, split out on purpose.
+ *   - `dopl_skill_admin` — the delete surface, refusing since §2b (app-only
+ *                          deletion); the ops stay listed to teach the refusal.
  *
  * This file is the thin registrar: it owns the two tool descriptions + schemas
  * + op routing and delegates each op to a handler in a sibling module —
@@ -21,5 +22,6 @@
  * `workflow.ts` use; the `skills-` prefix is what the parity split-scan groups on.
  */
 import type { DoplClient } from "@dopl/client";
+import { type CallerIdentity } from "./identity";
 import { type RegisterTool } from "./respond";
-export declare function registerSkillTools(register: RegisterTool, client: DoplClient): void;
+export declare function registerSkillTools(register: RegisterTool, client: DoplClient, caller?: CallerIdentity): void;

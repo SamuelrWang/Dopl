@@ -48,12 +48,26 @@ function isAppOrigin(urlStr) {
 // then refuses any dopl:// session that wasn't initiated here. Non-auth URLs are
 // returned unchanged. NOT weakened by the tray entry point — beginSignIn() below
 // routes through this same function.
+//
+// F-054 (2026-08-08) — requireState, because the web leg does echo it. The
+// record used to arm WITHOUT it, so a dopl:// fragment carrying no state at all
+// still passed the gate on presence + TTL: any local process could fire one
+// inside the ten-minute window and have its session adopted. The whole round
+// trip now carries our nonce (/auth/desktop-start → /auth/callback →
+// /auth/desktop-handoff → the dopl:// fragment), so the record can demand an
+// exact match and a state-less fragment is refused.
+//
+// The nonce is set UNCONDITIONALLY, overwriting any `state` already on the URL.
+// It used to be written only when the param was absent, which under requireState
+// would arm a record whose nonce we never sent — an unspendable record and a
+// sign-in that dies silently. The state we arm and the state we send are one
+// value by construction.
 function maybeBeginAuth(urlStr) {
   try {
     const u = new URL(urlStr);
     if (!isAppOrigin(urlStr) || !/\/auth\//i.test(u.pathname)) return urlStr;
-    const nonce = auth.beginPendingAuth();
-    if (!u.searchParams.has('state')) u.searchParams.set('state', nonce);
+    const nonce = auth.beginPendingAuth({ requireState: true });
+    u.searchParams.set('state', nonce);
     return u.toString();
   } catch (_) {
     return urlStr;

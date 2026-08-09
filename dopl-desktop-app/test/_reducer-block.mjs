@@ -54,9 +54,9 @@ export function loadReducer() {
     `${BLOCK}
      return { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
               gatePhase, endedEmit, endLifecycle, endEffects, modesEmit, parkEffects,
-              postureWasReset, POSTURE_RESET_NOTE,
+              postureWasReset, POSTURE_RESET_NOTE, INACTIVE_NOTE,
               wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode,
-              nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS,
+              nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS, LAUNCHING_MS,
               DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD };`
   )();
 }

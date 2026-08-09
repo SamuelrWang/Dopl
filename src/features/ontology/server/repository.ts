@@ -6,6 +6,7 @@ import {
   ONTOLOGY_CLUSTER_COLS,
   ONTOLOGY_MEMBERSHIP_COLS,
   ONTOLOGY_OBJECT_COLS,
+  ONTOLOGY_READ_LIMITS,
   ONTOLOGY_RELATIONSHIP_COLS,
   type OntologyClusterRow,
   type OntologyMembershipRow,
@@ -28,7 +29,7 @@ import {
  * dropping it at the DB write boundary is safe and covers every caller
  * (MCP agent + web UI). (F-7 ontology portion.)
  */
-function stripNullBytes<T>(value: T): T {
+export function stripNullBytes<T>(value: T): T {
   if (typeof value === "string") {
     return value.replace(/\u0000/g, "") as T;
   }
@@ -51,7 +52,8 @@ export async function listClusters(workspaceId: string): Promise<OntologyCluster
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
     .order("position")
-    .order("created_at");
+    .order("created_at")
+    .limit(ONTOLOGY_READ_LIMITS.clusters);
   if (error) throw error;
   return (data ?? []) as OntologyClusterRow[];
 }
@@ -168,114 +170,37 @@ export async function updateCluster(
 }
 
 /**
- * Cascade soft-delete a cluster and every object it owns (its columns plus all
- * nested descendants) in ONE atomic RPC — the cluster and its objects are
- * stamped with a single shared `now()` (the restore key) in one transaction, so
- * a partial failure can't trash the objects while leaving the cluster live.
- * Mirrors the knowledge-base `cascade_soft_delete_base` RPC. Returns the number
- * of objects newly soft-deleted (the set `cascadeRestoreCluster` will revive).
+ * Cascade HARD-delete a cluster and every object it owns (its columns plus
+ * all nested descendants) in ONE atomic RPC. Deletion is permanent and
+ * immediate — there is no trash (2026-08-07). One transaction, so a partial
+ * failure can never delete the objects while leaving the cluster behind
+ * (the failure mode `cascade_soft_delete_cluster` was written to close).
+ * Memberships and relationships cascade via FK.
+ *
+ * Returns the number of objects deleted, or null when no LIVE cluster matched
+ * the id (the service turns that into a 404).
  */
-export async function cascadeSoftDeleteCluster(
+export async function cascadeHardDeleteCluster(
   workspaceId: string,
   clusterId: string
-): Promise<number> {
-  const db = supabaseAdmin();
-  const { data, error } = await db.rpc("cascade_soft_delete_cluster", {
-    p_workspace_id: workspaceId,
-    p_cluster_id: clusterId,
-  });
-  if (error) throw error;
-  return (data as number | null) ?? 0;
-}
-
-/**
- * Cascade restore a trashed cluster (by id or slug) and exactly the objects its
- * delete cascaded — those whose `deleted_at` still matches the cluster's stamp —
- * in ONE atomic RPC. Re-slugs the cluster when a live cluster reused its slug.
- * Mirrors `cascade_restore_base`. Returns the restored cluster row, or null when
- * no trashed cluster matched the ref (the service turns that into a 404).
- */
-export async function cascadeRestoreCluster(
-  workspaceId: string,
-  clusterRef: string
-): Promise<OntologyClusterRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db.rpc("cascade_restore_cluster", {
-    p_workspace_id: workspaceId,
-    p_cluster_ref: clusterRef,
-  });
-  if (error) throw error;
-  const rows = (data ?? []) as OntologyClusterRow[];
-  return rows[0] ?? null;
-}
-
-/** A trashed cluster row paired with a count of the objects its cascade trashed. */
-export interface TrashedClusterRow {
-  cluster: OntologyClusterRow;
-  objectCount: number;
-}
-
-/**
- * List the workspace's trashed clusters (`deleted_at IS NOT NULL`), newest
- * first, each paired with the count of objects its cascade soft-delete trashed.
- * These are exactly the rows the live map excludes — the trash view.
- *
- * Cheap count: a cascade soft-delete stamps the cluster and every object it
- * owns with ONE shared `now()` (one per delete), so tallying trashed objects by
- * `deleted_at` maps each back to its cluster without walking memberships.
- * Objects trashed independently carry their own stamp and fall in no cluster
- * bucket. Two queries total — no per-cluster N+1.
- */
-export async function listTrashedClusters(
-  workspaceId: string
-): Promise<TrashedClusterRow[]> {
-  const db = supabaseAdmin();
-  const { data: clusters, error } = await db
-    .from("ontology_clusters")
-    .select(ONTOLOGY_CLUSTER_COLS)
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null)
-    .order("deleted_at", { ascending: false });
-  if (error) throw error;
-  const clusterRows = (clusters ?? []) as OntologyClusterRow[];
-  if (clusterRows.length === 0) return [];
-
-  const { data: objects, error: objectError } = await db
-    .from("ontology_objects")
-    .select("deleted_at")
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null);
-  if (objectError) throw objectError;
-
-  const countByStamp = new Map<string, number>();
-  for (const row of (objects ?? []) as Array<{ deleted_at: string | null }>) {
-    if (!row.deleted_at) continue;
-    countByStamp.set(row.deleted_at, (countByStamp.get(row.deleted_at) ?? 0) + 1);
-  }
-
-  return clusterRows.map((cluster) => ({
-    cluster,
-    objectCount: cluster.deleted_at ? countByStamp.get(cluster.deleted_at) ?? 0 : 0,
-  }));
-}
-
-/**
- * Permanently purge a TRASHED cluster (by id or slug) and exactly the objects
- * its cascade soft-delete trashed — those whose `deleted_at` still matches the
- * cluster's stamp — in ONE atomic RPC (hard DELETE; memberships/relationships
- * cascade via FK). Mirrors `cascadeSoftDeleteCluster`. Returns the number of
- * objects deleted, or null when no trashed cluster matched the ref (the service
- * turns that into a 404).
- */
-export async function cascadePurgeCluster(
-  workspaceId: string,
-  clusterRef: string
 ): Promise<number | null> {
   const db = supabaseAdmin();
-  const { data, error } = await db.rpc("cascade_purge_cluster", {
-    p_workspace_id: workspaceId,
-    p_cluster_ref: clusterRef,
-  });
+  // RPC added by migration 20260807120000_ontology_cluster_hard_delete_rpc.sql;
+  // not yet in the generated Database types (regenerated after the migration
+  // applies). THAT MIGRATION IS DEPLOY-BLOCKING: this is the only code path
+  // `deleteCluster` has, so shipping the app without it makes every cluster
+  // delete fail at runtime with "function does not exist". The `as never`
+  // casts are the house convention for a not-yet-generated RPC (see
+  // `chats/server/repository.ts` → `chat_create_with_messages`); they are also
+  // the reason the missing function does not fail the build, so the migration
+  // has to be tracked by a human, not by tsc.
+  const { data, error } = await db.rpc(
+    "cascade_hard_delete_cluster" as never,
+    {
+      p_workspace_id: workspaceId,
+      p_cluster_id: clusterId,
+    } as never
+  );
   if (error) throw error;
   return (data as number | null) ?? null;
 }
@@ -286,7 +211,8 @@ export async function listObjects(workspaceId: string): Promise<OntologyObjectRo
     .from("ontology_objects")
     .select(ONTOLOGY_OBJECT_COLS)
     .eq("workspace_id", workspaceId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .limit(ONTOLOGY_READ_LIMITS.objects);
   if (error) throw error;
   return (data ?? []) as OntologyObjectRow[];
 }
@@ -369,13 +295,35 @@ export async function updateObject(
   return data as OntologyObjectRow | null;
 }
 
-export async function markObjectDeleted(workspaceId: string, id: string): Promise<void> {
+/**
+ * PERMANENTLY delete one object AND everything left unreachable by its
+ * removal, in ONE atomic RPC. Immediate and irreversible (2026-08-07).
+ *
+ * A plain single-row DELETE here was a data-integrity bug: the FKs that cascade
+ * off an object are on `ontology_memberships`, not on the child objects, so
+ * deleting a column or a card removed the LINKS to its subtree and left those
+ * objects alive with no parent. Nothing can reach a membership-less object —
+ * the board, the graph and the picker all walk down from `cluster.columnIds` —
+ * yet `workspace-billing` still counts it against the workspace object cap,
+ * forever. Soft-delete never had this problem: the memberships survived and
+ * restore re-linked the tree.
+ *
+ * The RPC deletes the target, then sweeps descendants that the target was the
+ * LAST way into; a card that also hangs under another parent survives there.
+ * Relationships cascade via FK either way. Its descendant count is discarded
+ * here — the delete is the contract — but it is what a "this also deletes N
+ * cards" confirm dialog would read.
+ */
+export async function hardDeleteObject(workspaceId: string, id: string): Promise<void> {
   const db = supabaseAdmin();
-  const { error } = await db
-    .from("ontology_objects")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("workspace_id", workspaceId)
-    .eq("id", id);
+  // RPC added by migration 20260807140000_cascade_hard_delete_folder_and_object.sql;
+  // not yet in the generated Database types (regenerated after the migration
+  // applies). DEPLOY-BLOCKING with that migration — this is `deleteObject`'s
+  // only path, so shipping without it fails every object delete at runtime.
+  const { error } = await db.rpc(
+    "cascade_hard_delete_object" as never,
+    { p_workspace_id: workspaceId, p_object_id: id } as never
+  );
   if (error) throw error;
 }
 
@@ -386,7 +334,8 @@ export async function listMemberships(workspaceId: string): Promise<OntologyMemb
     .select(ONTOLOGY_MEMBERSHIP_COLS)
     .eq("workspace_id", workspaceId)
     .order("position")
-    .order("created_at");
+    .order("created_at")
+    .limit(ONTOLOGY_READ_LIMITS.memberships);
   if (error) throw error;
   return (data ?? []) as OntologyMembershipRow[];
 }
@@ -441,7 +390,8 @@ export async function listRelationships(
     .select(ONTOLOGY_RELATIONSHIP_COLS)
     .eq("workspace_id", workspaceId)
     .order("position")
-    .order("created_at");
+    .order("created_at")
+    .limit(ONTOLOGY_READ_LIMITS.relationships);
   if (error) throw error;
   return (data ?? []) as OntologyRelationshipRow[];
 }

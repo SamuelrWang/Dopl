@@ -16,8 +16,6 @@ import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
 import {
   assertAgentCanDelete,
-  assertAncestorsActive,
-  assertBaseVisible,
   assertBaseWritable,
   assertSameWorkspace,
   canSeeBase,
@@ -198,7 +196,11 @@ export async function moveEntry(
   });
 }
 
-export async function softDeleteEntry(
+/**
+ * PERMANENTLY delete an entry. No trash, no restore (2026-08-07). Gates
+ * unchanged from the old soft-delete path.
+ */
+export async function deleteEntry(
   ctx: KnowledgeContext,
   id: string
 ): Promise<void> {
@@ -209,20 +211,5 @@ export async function softDeleteEntry(
   // route too (an agent API key can hit this directly, not just via MCP).
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
-  await repo.markEntryDeleted(id);
-}
-
-export async function restoreEntry(
-  ctx: KnowledgeContext,
-  id: string
-): Promise<KnowledgeEntry> {
-  const entry = await repo.findEntryById(id, true);
-  if (!entry) throw new EntryNotFoundError(id);
-  assertSameWorkspace(entry.workspaceId, ctx.workspaceId, `entry ${id}`);
-  const base = await repo.findBaseById(entry.knowledgeBaseId, true);
-  if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
-  await assertBaseVisible(ctx, base);
-  await assertBaseWritable(ctx, base);
-  await assertAncestorsActive(entry.folderId);
-  return repo.restoreEntryRow(id);
+  await repo.hardDeleteEntry(ctx.workspaceId, id);
 }

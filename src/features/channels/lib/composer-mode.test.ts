@@ -201,6 +201,123 @@ describe("the send gate is buildComposerPayload's own `ok`", () => {
   });
 });
 
+/**
+ * M4. `useChannelMembers` is `keepPreviousData`, so for the frame or two after
+ * a channel switch `members` is the PREVIOUS channel's roster — and request
+ * mode is the one thing that turns a roster into a `toUserId` on the wire. A
+ * DM is the sharp case: switch to a DM with Bob, flip to Request and send
+ * before the roster lands, and `peerId` resolves to the last channel's peer.
+ * The server answers 400 `ChannelAddresseeNotMemberError` and the optimistic
+ * row is already painted. So the gate lives HERE, where the draft becomes a
+ * payload, rather than in a component that cannot be clicked in this suite.
+ */
+describe("buildComposerPayload — a REQUEST refuses a stale roster (M4)", () => {
+  it("blocks a DM request whose peer came from the previous channel's roster", () => {
+    expect(
+      buildComposerPayload(
+        draft({
+          mode: "request",
+          isDirect: true,
+          peerId: PEER,
+          subject: "Ship it",
+          rosterStale: true,
+        })
+      )
+    ).toEqual({ ok: false, reason: "stale-roster" });
+  });
+
+  it("blocks a picked addressee too — a name picked off the old list is the same wrong id", () => {
+    expect(
+      buildComposerPayload(
+        draft({
+          mode: "request",
+          toUserId: PEER,
+          subject: "Ship it",
+          rosterStale: true,
+        })
+      )
+    ).toEqual({ ok: false, reason: "stale-roster" });
+  });
+
+  it("is checked BEFORE the target resolves, so the block does not depend on which field is missing", () => {
+    expect(
+      buildComposerPayload(draft({ mode: "request", rosterStale: true }))
+    ).toEqual({ ok: false, reason: "stale-roster" });
+  });
+
+  it("does NOT gate chat: a chat send reads no roster, so a switch never blocks talking", () => {
+    const built = buildComposerPayload(draft({ rosterStale: true }));
+    expect(built).toEqual({
+      ok: true,
+      payload: { kind: "chat", body: "hello", intent: "chat" },
+    });
+  });
+
+  it("clears itself the moment the roster is this channel's", () => {
+    const settled = draft({
+      mode: "request",
+      isDirect: true,
+      peerId: PEER,
+      subject: "Ship it",
+      rosterStale: false,
+    });
+    expect(buildComposerPayload(settled).ok).toBe(true);
+  });
+
+  it("an empty body still reports the empty body — the gate is not a catch-all", () => {
+    expect(
+      buildComposerPayload(
+        draft({ mode: "request", body: "   ", rosterStale: true })
+      )
+    ).toEqual({ ok: false, reason: "empty-body" });
+  });
+
+  it("REFUSES rather than sends, through the submit path too", async () => {
+    const onSend = vi.fn(async () => {});
+    const onCreateThread = vi.fn(async () => ({}));
+    const result = await submitComposerDraft({
+      ...draft({
+        mode: "request",
+        isDirect: true,
+        peerId: PEER,
+        subject: "Ship it",
+        rosterStale: true,
+      }),
+      onSend,
+      onCreateThread,
+    });
+    expect(result).toBe("blocked");
+    expect(onCreateThread).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("composerModeHelp — the stale-roster line (M4)", () => {
+  /**
+   * The user-visible half of M4: Send is disabled AND the line says why. A
+   * silent no-op button is the failure mode this replaces, and the line may
+   * not name the addressee it would otherwise have resolved — that name is the
+   * previous channel's peer.
+   */
+  it("says the roster is loading, and names nobody, while it is stale", () => {
+    expect(
+      composerModeHelp("request", "Ada", { blocked: "stale-roster" })
+    ).toBe("Loading who's in this channel…");
+  });
+
+  it("says it ahead of every other reason, including a missing subject", () => {
+    expect(composerModeHelp("request", null, { blocked: "stale-roster" })).toBe(
+      "Loading who's in this channel…"
+    );
+  });
+
+  it("leaves chat's line alone — chat is never gated on the roster", () => {
+    expect(composerModeHelp("chat", null, { blocked: "stale-roster" })).toBe(
+      "Message the channel. No agent is started."
+    );
+  });
+});
+
 describe("composerModeHelp — the consequence, in one line", () => {
   it("says chat starts nothing", () => {
     expect(composerModeHelp("chat", "Ada")).toBe(

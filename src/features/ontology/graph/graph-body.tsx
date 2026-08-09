@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   EdgeLayer,
   routeEdges,
@@ -13,6 +13,7 @@ import {
 } from "@/shared/graph";
 import * as api from "../client/api";
 import type { GraphState } from "../graph-state";
+import { isPendingOntologyId } from "../optimistic-create";
 import type { OntologyCluster } from "../types";
 import { deriveScene } from "./derive";
 import { ONTOLOGY_EDGE_STYLES, OntologyEdgeMarkers } from "./edge-styles";
@@ -33,6 +34,11 @@ interface Props {
    *  and the unmount flush lands any pending drag on the right cluster. */
   cluster: OntologyCluster;
   canEdit: boolean;
+  /** Optimistically created rows whose POST has not answered — same contract
+   *  the kanban lane already honours: their id is provisional, so their node
+   *  draws dimmed + inert and neither a drag nor an add-card may address it
+   *  (`src/shared/ui/pending.ts`). */
+  pendingIds: ReadonlySet<string>;
   /** Currently-selected object (already validated to still exist). */
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -42,6 +48,32 @@ interface Props {
   /** Surfaces the reset-to-auto-layout control up to the header (null =
    *  nothing to reset). Stable identity expected. */
   onLayoutResetChange: (reset: (() => void) | null) => void;
+}
+
+/**
+ * The layout write for ONE cluster — or nothing at all while that cluster's id
+ * is still provisional. `pending:<uuid>` names no row: the PATCH is rejected on
+ * the uuid check and surfaces as a "Couldn't save layout" toast plus a snapshot
+ * invalidation, for a drag on a board that is otherwise working fine. Dropping
+ * the write loses nothing that was ever saveable — the body is keyed by
+ * `cluster.id` upstream, so CREATE_RESOLVE remounts it against the real cluster.
+ *
+ * Module-level rather than inline in the component because the gate is a
+ * decision about an ID, not about React, and is worth testing as one.
+ */
+export function makeLayoutPersist(
+  workspaceId: string,
+  clusterId: string,
+  onError: (err: unknown) => void
+): (layout: GraphLayout) => Promise<void> {
+  return async (layoutMap) => {
+    if (isPendingOntologyId(clusterId)) return;
+    try {
+      await api.updateCluster(workspaceId, clusterId, { layout: layoutMap });
+    } catch (err) {
+      onError(err);
+    }
+  };
 }
 
 /**
@@ -59,6 +91,7 @@ export function OntologyGraphBody({
   graph,
   cluster,
   canEdit,
+  pendingIds,
   selectedId,
   onSelect,
   onAddObject,
@@ -70,17 +103,12 @@ export function OntologyGraphBody({
   const scene = useMemo(() => deriveScene(graph, cluster.id), [graph, cluster.id]);
   const autoLayout = useMemo(() => layoutScene(scene, heights), [scene, heights]);
 
-  // Persists to THIS cluster's `layout` column. Failures surface to the caller
-  // (toast + refetch) rather than being swallowed — mirrors workflows' saveLayout.
-  // `onLayoutError` is a stable callback from the parent.
-  const persistLayout = useCallback(
-    async (layoutMap: GraphLayout) => {
-      try {
-        await api.updateCluster(workspaceId, cluster.id, { layout: layoutMap });
-      } catch (err) {
-        onLayoutError(err);
-      }
-    },
+  // Persists to THIS cluster's `layout` column, and no-ops while the cluster is
+  // still provisional. Failures surface to the caller (toast + refetch) rather
+  // than being swallowed — mirrors workflows' saveLayout. `onLayoutError` is a
+  // stable callback from the parent.
+  const persistLayout = useMemo(
+    () => makeLayoutPersist(workspaceId, cluster.id, onLayoutError),
     [workspaceId, cluster.id, onLayoutError]
   );
 
@@ -165,23 +193,33 @@ export function OntologyGraphBody({
           styles={ONTOLOGY_EDGE_STYLES}
           markers={<OntologyEdgeMarkers />}
         />
-        {scene.nodes.map((node) => (
-          <GraphNode
-            key={node.id}
-            node={node}
-            position={positions[node.id] ?? { x: 0, y: 0, width: 0 }}
-            graph={graph}
-            canEdit={canEdit}
-            selected={node.id === selectedId}
-            dimmed={selectedId !== null && node.id !== selectedId && !neighborIds.has(node.id)}
-            onSelect={onSelect}
-            onAddCard={(columnId) => onAddObject({ parentObjectId: columnId })}
-            registerRef={registerRef}
-            onPointerDown={canEdit ? onNodePointerDown : undefined}
-            dragOffset={drag?.nodeId === node.id ? { dx: drag.dx, dy: drag.dy } : null}
-            isDragging={isDragging}
-          />
-        ))}
+        {scene.nodes.map((node) => {
+          // A provisional node is not a drag target and not an add-card parent:
+          // `moveNode` would persist `pending:<uuid>` into `clusters.layout` as a
+          // permanent orphan key, and `createObject({parentObjectId})` would be
+          // rejected and roll the card back. Withholding `onPointerDown` is the
+          // contract; `pending` carries the same refusal into the node's own
+          // add-card button and its dimmed/inert surface.
+          const pending = pendingIds.has(node.id);
+          return (
+            <GraphNode
+              key={node.id}
+              node={node}
+              position={positions[node.id] ?? { x: 0, y: 0, width: 0 }}
+              graph={graph}
+              canEdit={canEdit}
+              pending={pending}
+              selected={node.id === selectedId}
+              dimmed={selectedId !== null && node.id !== selectedId && !neighborIds.has(node.id)}
+              onSelect={onSelect}
+              onAddCard={(columnId) => onAddObject({ parentObjectId: columnId })}
+              registerRef={registerRef}
+              onPointerDown={canEdit && !pending ? onNodePointerDown : undefined}
+              dragOffset={drag?.nodeId === node.id ? { dx: drag.dx, dy: drag.dy } : null}
+              isDragging={isDragging}
+            />
+          );
+        })}
       </div>
       {scene.nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

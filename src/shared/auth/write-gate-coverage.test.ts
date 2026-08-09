@@ -137,6 +137,13 @@ describe("H-3 write-gate coverage", () => {
         "workspaces/[workspaceSlug]/teams/[teamId]/access/route.ts",
         "workspaces/[workspaceSlug]/teams/[teamId]/members/[userId]/route.ts",
         "workspaces/[workspaceSlug]/teams/[teamId]/members/route.ts",
+        // DELETE drops the team, cascading its members and every resource grant
+        // it carried. Added 2026-08-07: it was the one access-control write
+        // without the gate, so a write-scoped bearer that could not remove a
+        // single member could still delete the team wholesale. Deletes are
+        // permanent now, and an agent token has no dialog to gate it — the same
+        // invariant the MCP delete block holds on its own surface.
+        "workspaces/[workspaceSlug]/teams/[teamId]/route.ts",
       ].sort()
     );
   });

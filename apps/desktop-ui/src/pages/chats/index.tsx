@@ -80,7 +80,7 @@ export default function ChatsPage() {
   const me = identity.data;
   const list = chats.data;
   const folderList = folders.data;
-  if (!workspace || !me || !list || !folderList) return <PageLoading />;
+  if (!workspace || !me || !list || !folderList) return <PageLoading label="Loading chats" variant="two-pane" />;
 
   return (
     <ChatsView

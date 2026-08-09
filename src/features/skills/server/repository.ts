@@ -136,38 +136,61 @@ export interface InsertSkillArgs {
   source: SkillWriteSource;
 }
 
+/** The row shape for one skill insert — shared by the single and batch forms
+ *  so the column defaults can never drift between them. */
+function skillInsertRow(args: InsertSkillArgs) {
+  return {
+    workspace_id: args.workspaceId,
+    slug: args.slug,
+    public_id: generatePublicId(),
+    name: args.name,
+    description: args.description,
+    when_to_use: args.whenToUse,
+    when_not_to_use: args.whenNotToUse ?? null,
+    connectors: args.connectors ?? [],
+    status: args.status ?? "active",
+    // Default writable-by-agents, matching knowledge_bases + createSkill's
+    // `?? true`. Callers that want a resource read-only to agents (the seed)
+    // pass `false` EXPLICITLY so the intent is legible and can't be flipped
+    // by a default change (audit F-10b consistency).
+    agent_write_enabled: args.agentWriteEnabled ?? true,
+    visibility: args.visibility ?? "public",
+    folder: args.folder ?? null,
+    body: args.body ?? "",
+    body_edited_by: args.createdBy,
+    body_edited_source: args.source,
+    created_by: args.createdBy,
+    last_edited_by: args.createdBy,
+    last_edited_source: args.source,
+  };
+}
+
 export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("skills")
-    .insert({
-      workspace_id: args.workspaceId,
-      slug: args.slug,
-      public_id: generatePublicId(),
-      name: args.name,
-      description: args.description,
-      when_to_use: args.whenToUse,
-      when_not_to_use: args.whenNotToUse ?? null,
-      connectors: args.connectors ?? [],
-      status: args.status ?? "active",
-      // Default writable-by-agents, matching knowledge_bases + createSkill's
-      // `?? true`. Callers that want a resource read-only to agents (the seed)
-      // pass `false` EXPLICITLY so the intent is legible and can't be flipped
-      // by a default change (audit F-10b consistency).
-      agent_write_enabled: args.agentWriteEnabled ?? true,
-      visibility: args.visibility ?? "public",
-      folder: args.folder ?? null,
-      body: args.body ?? "",
-      body_edited_by: args.createdBy,
-      body_edited_source: args.source,
-      created_by: args.createdBy,
-      last_edited_by: args.createdBy,
-      last_edited_source: args.source,
-    })
+    .insert(skillInsertRow(args))
     .select(SKILL_COLS)
     .single();
   if (error || !data) throw error || new Error("Failed to insert skill");
   return mapSkillRow(data as SkillRow);
+}
+
+/**
+ * Insert many skills in ONE statement. For the new-workspace seed, which
+ * inserted its starter skills one awaited round-trip at a time on the
+ * post-signup redirect path. Rows come back in insert order (`RETURNING`),
+ * but callers should key off `slug` rather than index.
+ */
+export async function insertSkills(argsList: InsertSkillArgs[]): Promise<Skill[]> {
+  if (argsList.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("skills")
+    .insert(argsList.map(skillInsertRow))
+    .select(SKILL_COLS);
+  if (error || !data) throw error || new Error("Failed to insert skills");
+  return (data as SkillRow[]).map((row) => mapSkillRow(row));
 }
 
 export interface UpdateSkillPatch {
@@ -244,27 +267,13 @@ export async function updateSkillRow(
   return mapSkillRow(data as SkillRow);
 }
 
-export async function markSkillDeleted(
-  workspaceId: string,
-  id: string,
-  deletedAt: string = new Date().toISOString()
-): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("skills")
-    .update({ deleted_at: deletedAt })
-    .eq("id", id)
-    .eq("workspace_id", workspaceId);
-  if (error) throw error;
-}
-
 /**
- * Permanently hard-delete a single trashed skill. Workspace-scoped and
- * gated on `deleted_at IS NOT NULL` so a live skill can never be purged.
+ * PERMANENTLY delete a skill. Deletion is immediate and irreversible —
+ * there is no trash (2026-08-07). Workspace-scoped as defense-in-depth.
  * The SKILL.md body lives in columns on this row (F-029); skill_versions,
  * skill_events, and workflow_skills cascade via `ON DELETE CASCADE`.
  */
-export async function purgeSkillRow(
+export async function hardDeleteSkill(
   workspaceId: string,
   id: string
 ): Promise<void> {
@@ -273,22 +282,8 @@ export async function purgeSkillRow(
     .from("skills")
     .delete()
     .eq("id", id)
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null);
+    .eq("workspace_id", workspaceId);
   if (error) throw error;
-}
-
-export async function restoreSkillRow(workspaceId: string, id: string): Promise<Skill> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("skills")
-    .update({ deleted_at: null })
-    .eq("id", id)
-    .eq("workspace_id", workspaceId)
-    .select(SKILL_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to restore skill");
-  return mapSkillRow(data as SkillRow);
 }
 
 // ─── Skill body (the single SKILL.md, now columns on the skill row) ──
@@ -359,34 +354,6 @@ export async function updateSkillBody(
     throw new Error("Failed to update skill body");
   }
   return mapSkillBodyRow(data as unknown as SkillBodyRow);
-}
-
-// ─── Trash ──────────────────────────────────────────────────────────
-
-export interface DeletedSkillRows {
-  skills: Skill[];
-}
-
-/**
- * Returns every soft-deleted skill in the workspace, newest-first.
- * Service exposes this as the trash view.
- */
-export async function listDeletedForWorkspace(
-  workspaceId: string
-): Promise<DeletedSkillRows> {
-  const db = supabaseAdmin();
-
-  const skillsRes = await db
-    .from("skills")
-    .select(SKILL_COLS)
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null)
-    .order("deleted_at", { ascending: false });
-  if (skillsRes.error) throw skillsRes.error;
-
-  return {
-    skills: ((skillsRes.data ?? []) as SkillRow[]).map((r) => mapSkillRow(r)),
-  };
 }
 
 // ─── Knowledge bases (cross-feature avoiding) ───────────────────────

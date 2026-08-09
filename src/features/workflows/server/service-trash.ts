@@ -5,23 +5,21 @@ import { isUuid } from "@/shared/lib/id/uuid";
 import { HttpError } from "@/shared/lib/http-error";
 import { requireEffectiveAccess } from "@/features/teams/server/access";
 import { slugifyWorkflowName } from "../slug";
-import { countSteps, hardDeleteWorkflow } from "./repository";
+import { countSteps } from "./repository";
 import {
   SELECT_COLS,
   attachmentSummary,
   filterTeamVisibleWorkflows,
-  type TrashedWorkflow,
   type WorkflowRow,
   type WorkflowScope,
   type WorkflowTrashRow,
 } from "./service-shared";
 
 /**
- * Soft-delete lifecycle for workflows: trash (soft-delete), restore, the
- * feature-local trash list, the unified trash-list projection, and the
- * permanent purge. Split out of `service.ts` (which stayed over the 500-line
- * cap once F-11 soft-delete landed); CRUD reads/writes remain there and
- * re-export these so the `service.ts` import path is unchanged.
+ * Soft-delete lifecycle for workflows: trash (soft-delete), restore, and the
+ * feature-local trash list. Split out of `service.ts` (which stayed over the
+ * 500-line cap once F-11 soft-delete landed); CRUD reads/writes remain there
+ * and re-export these so the `service.ts` import path is unchanged.
  */
 
 export async function deleteWorkflow(
@@ -186,65 +184,16 @@ export async function listTrash(
   }));
 }
 
-/**
- * Trash-list projection for the unified workspace Trash page: every
- * soft-deleted workflow the caller may see, in the shared
- * `{ kind, id, name, deletedAt }` shape. Team-scoped exactly like `listTrash`
- * (which it delegates to).
+/*
+ * REMOVED 2026-08-07 (retirement §2b): `listTrashedWorkflows` and
+ * `purgeWorkflow`.
+ *
+ * Both existed only to serve the unified workspace Trash page. That page and
+ * its aggregator (`src/features/trash/server/service.ts`) are gone, no
+ * `/api/workflows/**` purge route ever existed, and every sibling feature's
+ * trash module went with its own. These two were the leftovers — exported,
+ * re-exported from `service.ts`, and called by nothing.
+ *
+ * `deleteWorkflow`, `restoreWorkflow` and `listTrash` above STAY: D3 keeps
+ * their routes live (`/api/workflows/trash`).
  */
-export async function listTrashedWorkflows(
-  scope: WorkflowScope
-): Promise<TrashedWorkflow[]> {
-  const rows = await listTrash(scope);
-  return rows.map((r): TrashedWorkflow => ({
-    kind: "workflow",
-    id: r.id,
-    name: r.name,
-    deletedAt: r.deleted_at,
-  }));
-}
-
-/**
- * PERMANENTLY delete ONE soft-deleted workflow (no recovery) — the trash
- * "delete forever" action. Refuses anything that isn't already trashed: the
- * lookup only resolves a row with `deleted_at IS NOT NULL` in the caller's
- * workspace, so a LIVE workflow or one in another workspace resolves to no
- * row and 404s (never a live-row purge, never a cross-workspace reach).
- * Edit-gated exactly like `deleteWorkflow`. The physical delete cascades
- * steps/edges/junctions via FK and drops team grants via trigger (see
- * `hardDeleteWorkflow`).
- */
-export async function purgeWorkflow(
-  idOrSlug: string,
-  scope: WorkflowScope
-): Promise<void> {
-  const db = supabaseAdmin();
-  const byId = isUuid(idOrSlug);
-
-  const { data: wf, error: lookupError } = await db
-    .from("workflows")
-    .select("id")
-    .eq(byId ? "id" : "slug", idOrSlug)
-    .eq("workspace_id", scope.workspaceId)
-    .not("deleted_at", "is", null)
-    .maybeSingle();
-  if (lookupError) throw lookupError;
-  if (!wf?.id) {
-    throw new HttpError(
-      404,
-      "WORKFLOW_NOT_FOUND",
-      `No soft-deleted workflow matches: ${idOrSlug}`
-    );
-  }
-
-  await requireEffectiveAccess(
-    scope.userId,
-    scope.workspaceId,
-    "workflow",
-    wf.id,
-    "edit",
-    { role: scope.role }
-  );
-
-  await hardDeleteWorkflow(db, scope.workspaceId, wf.id);
-}

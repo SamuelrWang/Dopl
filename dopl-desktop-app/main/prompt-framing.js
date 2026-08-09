@@ -189,19 +189,24 @@ function deliveryCall(ctx) {
 // `ToolSearch` exists; it was then copied into THIS module, which builds turns for CONTAINED
 // SESSION windows only (`buildFencedTurn`, and nothing else calls
 // `firstActions`). `ToolSearch` sits in `tool-profiles.DENIED_BUILTINS` under "capability
-// escalation", and `session-profiles.buildSessionToolConfig` hard-denies it on ALL THREE
-// profiles — read_only and dopl_only via `DENIED_BUILTINS` directly, and `full` via
-// `SESSION_HARD_DENY` (DENIED_BUILTINS minus the live-gated work tools, which ToolSearch is
-// not one of). So `grantDecision` answers 'deny' before any button appears, and the FIRST
+// escalation", and `session-profiles.buildSessionToolConfig` hard-denied it on ALL THREE
+// profiles. So `grantDecision` answered 'deny' before any button appeared, and the FIRST
 // imperative of every session turn was a call that comes back "Blocked for this session".
+// (F-177, 2026-08-08: `full` no longer hard-denies it — it GATES there like every other
+// released built-in. read_only and dopl_only still deny it outright, and the rule below is
+// unchanged for all three: a turn must never ORDER a call this profile cannot make freely.)
 //
 // WHICH SIDE WAS WRONG: the prompt. Granting the escalation tool back to buy one lookup is the
 // wrong trade — a deny list cannot scope `ToolSearch` to a single argument, so permitting it
 // permits loading ANY deferred schema, which is exactly the L0-positive-bound doctrine
-// tool-profiles.js is built on. And the lookup is not needed here: a session's dopl surface is
-// bounded by `doplToolsPolicy`, which NAMES `dopl_channel` on every restricted profile (it is
-// the delivery path — the one dopl tool read_only gets at all), so the tool is offered to the
-// model rather than deferred behind a search.
+// tool-profiles.js is built on. And the lookup is not needed, because nothing is deferred.
+// CORRECTED 2026-08-08 (F-177): the original reason given here was that `doplToolsPolicy`
+// NAMES `dopl_channel`, so it is "offered rather than deferred". That is false — the per-server
+// `tools` policy is a PERMISSION policy ({name, permission_policy}) and exempts nothing from
+// deferral; the bundled runtime defers EVERY MCP tool once tool search is on. The real reasons
+// the tool is eagerly present are (a) a profile that denies `ToolSearch` turns tool search off
+// wholesale, and (b) since F-177 the dopl MCP entry carries `alwaysLoad: true` (sdk-loader.js),
+// which is what keeps this true for `full`, where ToolSearch is no longer denied.
 //
 // WHAT SURVIVES is the half of F3 that was actually load-bearing: never report the tool
 // missing. That failure was an agent posting "CONFIRMED: I do not have the

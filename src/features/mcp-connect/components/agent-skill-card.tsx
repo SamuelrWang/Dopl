@@ -5,9 +5,9 @@
  *
  * Offers the ready-made SKILL.md (built by skill-template.ts) as a
  * one-click copy plus the exact install path. Local skills load at
- * session boot, so the agent knows the Dopl tools and the workflow
- * hierarchy semantics before its first tool call — instead of learning
- * them mid-conversation from server instructions alone.
+ * session boot, so the agent knows the Dopl tools and when to reach for
+ * each before its first tool call — instead of learning them
+ * mid-conversation from server instructions alone.
  */
 
 import { useEffect, useState } from "react";
@@ -44,8 +44,8 @@ export function AgentSkillCard() {
             </h3>
             <p className="mt-0.5 text-small leading-relaxed text-text-tertiary">
               A ready-made skill file your agent loads at session start — it
-              learns the Dopl tools, when to use them, and how to follow
-              workflow stages before its first tool call.
+              learns the Dopl tools, when to use them, and how to ground itself
+              in your workspace before its first tool call.
             </p>
           </div>
         </div>

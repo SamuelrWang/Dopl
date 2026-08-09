@@ -11,125 +11,31 @@
  *      after an op rename (a latent read-only-token write hole). → guarded
  *      by the WRITE_OPS ⊆ enum + write-op-completeness tests below.
  *
- * Mechanism: every domain tool is captured by calling its registrar with a
- * recording `register` and a stub client (registration is all we need — the
- * client never runs). WRITE_OPS + READ_ONLY_BLOCKED_TOOLS are parsed out of
- * server.ts source text so the tests check the REAL gating tables, not a
- * copy that could itself drift.
+ * Mechanism lives in `parity-harness.ts`: every domain tool is captured by
+ * calling its registrar with a recording `register` and a stub client, and
+ * WRITE_OPS + READ_ONLY_BLOCKED_TOOLS are parsed out of server.ts source text
+ * so the tests check the REAL gating tables, not a copy that could itself
+ * drift. The retirement (HIDDEN_TOOLS) and app-only-deletion (§2b) suites read
+ * the same harness from `delete-block.test.ts` — they moved there when this
+ * file crossed the §2 500-line cap.
  */
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, it, expect } from "vitest";
 // The auto-discovering "which files make up one tool" scan. It lived here and
 // moved to its own module when `channel-deadlines.test.ts` needed the same
 // discovery (it had hardcoded its file list, which a §2 split would have
 // silently truncated). ONE definition, two suites.
 import { toolGroupSource } from "./tool-group-files.js";
-import { z, type ZodRawShape } from "zod";
-import type { DoplClient } from "@dopl/client";
-
-import type { RegisterTool } from "./respond.js";
-import { registerClusterTools } from "./cluster.js";
-import { registerWorkflowTools } from "./workflow.js";
-import { registerKnowledgeTools } from "./knowledge.js";
-import { registerSkillTools } from "./skills.js";
-import { registerChatTools } from "./chats.js";
-import { registerMembersTool } from "./members.js";
-import { registerMapTool } from "./map.js";
-import { registerSearchTool } from "./search.js";
-import { registerOntologyTool } from "./ontology.js";
-import { registerChannelTool } from "./channel.js";
-
-// ── Capture every registered domain tool ─────────────────────────────
-
-interface CapturedTool {
-  name: string;
-  description: string;
-  schema: ZodRawShape;
-  /** Basename of the source file that registered it (for source reads). */
-  sourceFile: string;
-}
-
-const REGISTRARS: Array<{
-  file: string;
-  register: (r: RegisterTool, c: DoplClient) => void;
-}> = [
-  { file: "cluster.ts", register: registerClusterTools },
-  { file: "workflow.ts", register: registerWorkflowTools },
-  { file: "knowledge.ts", register: registerKnowledgeTools },
-  { file: "skills.ts", register: registerSkillTools },
-  { file: "chats.ts", register: registerChatTools },
-  { file: "members.ts", register: registerMembersTool },
-  { file: "map.ts", register: registerMapTool },
-  { file: "search.ts", register: registerSearchTool },
-  { file: "ontology.ts", register: registerOntologyTool },
-  { file: "channel.ts", register: registerChannelTool },
-];
-
-function captureTools(): CapturedTool[] {
-  const tools: CapturedTool[] = [];
-  const stubClient = {} as DoplClient;
-  for (const { file, register } of REGISTRARS) {
-    const cap: RegisterTool = (name, description, schema) => {
-      tools.push({ name, description, schema, sourceFile: file });
-    };
-    register(cap, stubClient);
-  }
-  return tools;
-}
-
-const TOOLS = captureTools();
-const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
-
-// Vitest runs with cwd = the package root (this package's vitest.config.ts),
-// so source files are addressed relative to it. This avoids both
-// `import.meta` (disallowed in the package's CommonJS tsc target) and
-// `__dirname` (not guaranteed under the ESM-transformed test).
-//
-// The param-drift scans below MUST read a tool's WHOLE file set, not just its
-// registrar, or a handler that reads an undeclared arg (the get_tree
-// `entry_limit` bug class) inside a split-out module slips past the guard.
-// `toolGroupSource` is that scan — see `tool-group-files.ts`.
-const SRC_DIR = path.resolve(process.cwd(), "src");
-
-function opEnum(t: CapturedTool): string[] | null {
-  const op = t.schema.op;
-  if (op instanceof z.ZodEnum) return op.options as string[];
-  return null;
-}
-
-function isAdmin(name: string): boolean {
-  return name.endsWith("_admin");
-}
-
-// ── Parse the REAL gating tables out of server.ts ────────────────────
-
-function parseWriteOps(src: string): Record<string, Set<string>> {
-  const start = src.indexOf("const WRITE_OPS");
-  if (start < 0) throw new Error("WRITE_OPS not found in server.ts");
-  const block = src.slice(start, src.indexOf("};", start));
-  const out: Record<string, Set<string>> = {};
-  const entryRe = /(\w+):\s*new Set\(\[([^\]]*)\]\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = entryRe.exec(block)) !== null) {
-    const ops = [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
-    out[m[1]] = new Set(ops);
-  }
-  return out;
-}
-
-function parseReadOnlyBlockedTools(src: string): Set<string> {
-  const marker = "READ_ONLY_BLOCKED_TOOLS = new Set([";
-  const start = src.indexOf(marker);
-  if (start < 0) throw new Error("READ_ONLY_BLOCKED_TOOLS not found in server.ts");
-  const block = src.slice(start, src.indexOf("]);", start));
-  return new Set([...block.matchAll(/"([^"]+)"/g)].map((x) => x[1]));
-}
-
-const SERVER_SOURCE = readFileSync(path.join(SRC_DIR, "server.ts"), "utf8");
-const WRITE_OPS = parseWriteOps(SERVER_SOURCE);
-const READ_ONLY_BLOCKED_TOOLS = parseReadOnlyBlockedTools(SERVER_SOURCE);
+import {
+  DELETE_BLOCKED_OPS,
+  HIDDEN_TOOLS,
+  READ_ONLY_BLOCKED_TOOLS,
+  TOOLS,
+  TOOL_BY_NAME,
+  WRITE_OPS,
+  isAdmin,
+  opEnum,
+} from "./parity-harness.js";
 
 // ── Curated READ-OPS allowlist (THE SECURITY REVIEW) ─────────────────
 // Per tool, the ops that ONLY read (no client write call in the handler).
@@ -141,9 +47,9 @@ const READ_ONLY_BLOCKED_TOOLS = parseReadOnlyBlockedTools(SERVER_SOURCE);
 const READ_OPS: Record<string, string[]> = {
   dopl_cluster: ["list", "get"],
   dopl_workflow: ["list", "get", "step", "list_trash"],
-  dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "list_trash", "search"],
+  dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "search"],
   dopl_skill: ["list", "get", "read", "authoring_guide"],
-  dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
+  dopl_chats: ["list", "get", "folders", "guide"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
   dopl_ontology: ["map", "anchor", "resolve", "get"],
   // `members` is a roster READ: `opMembers` calls only `listChannelMembers`
@@ -220,7 +126,15 @@ describe("tool capture", () => {
     expect(Object.keys(WRITE_OPS).length).toBeGreaterThan(0);
     expect(READ_ONLY_BLOCKED_TOOLS.size).toBeGreaterThan(0);
   });
+
+  it("parsed non-empty HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
+    // A parse that silently returned {} would turn every assertion below into
+    // a vacuous pass, which is the failure mode this whole file exists to avoid.
+    expect(HIDDEN_TOOLS.size).toBeGreaterThan(0);
+    expect(Object.keys(DELETE_BLOCKED_OPS).length).toBeGreaterThan(0);
+  });
 });
+
 
 // ── 1a. WRITE_OPS ⊆ op enum (kills the stale-op class) ───────────────
 

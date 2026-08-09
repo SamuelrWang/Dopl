@@ -2,6 +2,7 @@
 
 import { Plus, Settings2 } from "lucide-react";
 import type { Dispatch } from "react";
+import { pendingRow } from "@/shared/ui/pending";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyCluster, OntologyObject } from "../types";
@@ -12,6 +13,10 @@ interface Props {
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   selectedId: string | null;
+  /** Optimistically created rows whose POST has not answered — drawn dimmed
+   *  and inert, since their id is provisional and nothing may be written at
+   *  it yet (`src/shared/ui/pending.ts`). */
+  pendingIds: ReadonlySet<string>;
   /** Viewers can read the board but can't add cards — hide the affordance. */
   canEdit: boolean;
   onSelect: (id: string) => void;
@@ -30,6 +35,7 @@ export function KanbanBoard({
   graph,
   dispatch,
   selectedId,
+  pendingIds,
   canEdit,
   onSelect,
   onCreateObject,
@@ -47,6 +53,7 @@ export function KanbanBoard({
           graph={graph}
           dispatch={dispatch}
           selectedId={selectedId}
+          pendingIds={pendingIds}
           canEdit={canEdit}
           onSelect={onSelect}
           onCreateObject={onCreateObject}
@@ -61,6 +68,7 @@ function Column({
   graph,
   dispatch,
   selectedId,
+  pendingIds,
   canEdit,
   onSelect,
   onCreateObject,
@@ -69,12 +77,20 @@ function Column({
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   selectedId: string | null;
+  pendingIds: ReadonlySet<string>;
   canEdit: boolean;
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
 }) {
   return (
-    <div className="bento flex w-72 shrink-0 flex-col overflow-hidden">
+    // A pending column takes its whole lane inert with it — header inputs,
+    // settings and "Add new" all address an id the server has not minted yet.
+    <div
+      {...pendingRow(
+        pendingIds.has(col.id),
+        "bento flex w-72 shrink-0 flex-col overflow-hidden"
+      )}
+    >
       <div className="shrink-0">
         <div className="flex items-center gap-2 px-3 pt-2.5">
           <input
@@ -120,6 +136,7 @@ function Column({
             objectId={id}
             graph={graph}
             selected={selectedId === id}
+            pending={pendingIds.has(id)}
             onSelect={onSelect}
           />
         ))}

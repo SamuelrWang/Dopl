@@ -1,6 +1,6 @@
 /**
  * `dopl_skill` WRITE op handlers (write / create / update / set_visibility) plus
- * `dopl_skill_admin`'s soft-delete. Every one of them can come back 403
+ * `dopl_skill_admin`'s delete. Every one of them can come back 403
  * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
  * `failureDetail` in `skills-shared.ts` rather than in either half. Routed from
  * the registrar in `skills.ts`.

@@ -1,18 +1,20 @@
 /**
  * Content-shape tests for the seed corpus. These are pure (no DB): they
  * assert the cross-references authored across features actually line up —
- * every ontology attribute and every workflow ref points at a knowledge
- * entry key or skill slug that the knowledge/skills seeds really produce,
- * and the graphs are internally well-formed (endpoints resolve, there's a
- * real branch). A drift here would surface as dangling refs in a real
- * seeded workspace.
+ * every ontology attribute points at a knowledge entry key or skill slug
+ * that the knowledge/skills seeds really produce, and the graph is
+ * internally well-formed (every relationship endpoint resolves). A drift
+ * here would surface as dangling refs in a real seeded workspace.
  */
 
 import { describe, it, expect } from "vitest";
-import { GUIDE_ENTRY_KEYS } from "@/features/knowledge/server/seed";
-import { SEED_SKILL_SLUGS } from "@/features/skills/server/seed";
+import {
+  GUIDE_ENTRY_KEYS,
+  buildSeedKnowledgeBases,
+} from "@/features/knowledge/server/seed";
+import { SEED_SKILL_SLUGS, buildSeedSkills } from "@/features/skills/server/seed";
 import { buildOntologySeed } from "@/features/ontology/server/seed";
-import { buildWorkflowSeed } from "@/features/workflows/server/seed";
+import { buildChatSeed } from "@/features/chats/server/seed";
 
 const ENTRY_KEYS = new Set<string>(Object.values(GUIDE_ENTRY_KEYS));
 const SKILL_SLUGS = new Set<string>(Object.values(SEED_SKILL_SLUGS));
@@ -70,46 +72,107 @@ describe("ontology seed — cross-reference integrity", () => {
   });
 });
 
-describe("workflow seed — ref + graph integrity", () => {
-  const seed = buildWorkflowSeed();
-  const refs = new Set(seed.steps.map((s) => s.ref));
+/**
+ * Workflows are retired (see docs/RETIREMENT-UNWIRING-PLAN.md, D5). The
+ * seed corpus must not reintroduce them: no seeded skill, guide entry, or
+ * ontology attribute may teach a surface a new workspace no longer has.
+ */
+describe("seed corpus — workflows stay retired", () => {
+  it("seeds no skill that teaches workflows", () => {
+    const skills = buildSeedSkills();
+    expect(skills.map((s) => s.slug)).not.toContain("walk-a-workflow");
+    for (const skill of skills) {
+      const text = [
+        skill.name,
+        skill.description,
+        skill.whenToUse,
+        skill.whenNotToUse,
+        skill.body,
+      ].join("\n");
+      expect(text.toLowerCase()).not.toContain("workflow");
+    }
+  });
 
-  it("every step read references a real guide entry key", () => {
-    for (const step of seed.steps) {
-      for (const key of step.readEntryKeys) {
-        expect(ENTRY_KEYS.has(key)).toBe(true);
+  it("seeds no guide entry that teaches workflows", () => {
+    for (const base of buildSeedKnowledgeBases()) {
+      for (const entry of base.rootEntries) {
+        const text = [entry.title, entry.excerpt, entry.body].join("\n");
+        expect(text.toLowerCase()).not.toContain("workflow");
       }
     }
   });
 
-  it("every step action references a real seeded skill slug", () => {
-    for (const step of seed.steps) {
-      for (const slug of step.actionSkillSlugs) {
-        expect(SKILL_SLUGS.has(slug)).toBe(true);
+  it("seeds no ontology object that teaches workflows", () => {
+    const seed = buildOntologySeed();
+    for (const column of seed.columns) {
+      for (const object of column.children) {
+        const text = [
+          object.name,
+          object.subtitle ?? "",
+          ...object.attributes.map((a) =>
+            a.kind === "text" ? `${a.label} ${a.value}` : a.label
+          ),
+        ].join("\n");
+        expect(text.toLowerCase()).not.toContain("workflow");
       }
     }
   });
 
-  it("every edge endpoint is a declared step ref", () => {
-    for (const edge of seed.edges) {
-      expect(refs.has(edge.from)).toBe(true);
-      expect(refs.has(edge.to)).toBe(true);
-    }
+  it("seeds no sample chat message that teaches workflows", () => {
+    const chat = buildChatSeed();
+    const text = [
+      chat.title,
+      chat.overview ?? "",
+      ...(chat.learnings ?? []),
+      ...(chat.deliverables ?? []).map((d) => d.label),
+      ...chat.messages.map((m) => m.summary),
+    ].join("\n");
+    expect(text.toLowerCase()).not.toContain("workflow");
+  });
+});
+
+/**
+ * The exact starter corpus a NEW workspace receives. Pinned so a future
+ * edit has to be deliberate — this list is what a fresh owner sees on
+ * first login, and what the bootstrap prompt assumes exists.
+ */
+describe("seed corpus — what a new workspace gets", () => {
+  it("one knowledge base with five guide entries", () => {
+    const bases = buildSeedKnowledgeBases();
+    expect(bases.map((b) => b.slug)).toEqual(["dopl-guide"]);
+    expect(bases[0].rootEntries.map((e) => e.key)).toEqual([
+      "what-is-dopl",
+      "the-mcp-tools",
+      "the-session-ritual",
+      "building-the-ontology",
+      "knowledge-vs-skills",
+    ]);
   });
 
-  it("has a real branch: one step with 2+ distinct-condition out-edges", () => {
-    const outByStep = new Map<string, Set<string>>();
-    for (const edge of seed.edges) {
-      const set = outByStep.get(edge.from) ?? new Set<string>();
-      set.add(edge.condition ?? "");
-      outByStep.set(edge.from, set);
-    }
-    const branchy = [...outByStep.values()].some((conds) => conds.size >= 2);
-    expect(branchy).toBe(true);
+  it("three skills", () => {
+    expect(buildSeedSkills().map((s) => s.slug)).toEqual([
+      "archive-a-session-to-chats",
+      "file-knowledge-well",
+      "author-the-ontology",
+    ]);
   });
 
-  it("references at least one seeded skill across its steps", () => {
-    const used = seed.steps.flatMap((s) => s.actionSkillSlugs);
-    expect(used.length).toBeGreaterThan(0);
+  it("one ontology cluster: two columns, seven objects", () => {
+    const seed = buildOntologySeed();
+    expect(seed.clusterSlug).toBe("dopl-playbook");
+    expect(seed.columns.map((c) => c.key)).toEqual(["surfaces", "rituals"]);
+    expect(seed.columns.flatMap((c) => c.children.map((o) => o.key))).toEqual([
+      "surface-knowledge",
+      "surface-skills",
+      "surface-ontology",
+      "surface-chats",
+      "ritual-start",
+      "ritual-end",
+      "ritual-upkeep",
+    ]);
+  });
+
+  it("one sample chat", () => {
+    expect(buildChatSeed().clientSessionId).toBe("dopl-seed-getting-started");
   });
 });

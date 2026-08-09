@@ -204,33 +204,39 @@ export async function updateFolderRow(
 }
 
 /**
- * Soft-delete a folder AND every active descendant (folders + entries)
- * via the recursive-CTE cascade RPC. Atomic. See markBaseDeleted for
- * the same-timestamp + restore semantics.
+ * PERMANENTLY delete a folder, every descendant folder, and every entry
+ * in that subtree, in ONE atomic RPC. Deletion is immediate and
+ * irreversible — there is no trash (2026-08-07).
+ *
+ * WHY AN RPC. This was N SELECTs to walk the tree plus TWO independent
+ * DELETEs. Nothing bound those two writes, so an entries-delete that
+ * committed followed by a folder-delete that failed left the folder alive
+ * and empty with its notes permanently gone — and with trash removed there
+ * is nothing to recover them from. That is verbatim the failure the
+ * ontology cluster RPC was written to close ("One function body = both
+ * DELETEs commit or neither", 20260807120000). The same argument applies
+ * here, so the same shape does: one transaction, one round trip.
+ *
+ * THE ORDER SURVIVES INTO THE FUNCTION BODY. `knowledge_entries.folder_id`
+ * is `ON DELETE SET NULL`, so deleting the folder first would ORPHAN its
+ * entries into the base root instead of removing them; the RPC deletes the
+ * subtree's entries FIRST, then the root folder — whose descendant
+ * *folders* cascade out via the self-referential `parent_id ... ON DELETE
+ * CASCADE` FK. The recursive CTE inside replaces the breadth-first walk
+ * that used to live here.
  */
-export async function markFolderDeleted(
-  id: string,
-  deletedAt: string = new Date().toISOString()
+export async function hardDeleteFolder(
+  workspaceId: string,
+  id: string
 ): Promise<void> {
   const db = supabaseAdmin();
-  const { error } = await db.rpc("cascade_soft_delete_folder", {
-    p_folder_id: id,
-    p_deleted_at: deletedAt,
-  });
+  // RPC added by migration 20260807140000_cascade_hard_delete_folder_and_object.sql;
+  // not yet in the generated Database types (regenerated after the migration
+  // applies). DEPLOY-BLOCKING with that migration — this is the only folder
+  // delete path, so shipping without it fails every folder delete at runtime.
+  const { error } = await db.rpc(
+    "cascade_hard_delete_folder" as never,
+    { p_workspace_id: workspaceId, p_folder_id: id } as never
+  );
   if (error) throw error;
-}
-
-/**
- * Restore a folder + every descendant whose `deleted_at` matches.
- * Independently-trashed descendants stay in trash.
- */
-export async function restoreFolderRow(id: string): Promise<KnowledgeFolder> {
-  const db = supabaseAdmin();
-  const { error } = await db.rpc("cascade_restore_folder", {
-    p_folder_id: id,
-  });
-  if (error) throw error;
-  const restored = await findFolderById(id, false);
-  if (!restored) throw new Error("Failed to restore knowledge folder");
-  return restored;
 }

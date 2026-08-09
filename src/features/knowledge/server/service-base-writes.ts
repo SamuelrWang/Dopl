@@ -18,7 +18,6 @@ import type {
 } from "../schema";
 import {
   AgentWriteDisabledError,
-  KnowledgeBaseNotFoundError,
   KnowledgeBaseSlugConflictError,
   KnowledgeStaleVersionError,
   ScopeChangeForbiddenError,
@@ -28,9 +27,7 @@ import {
 import * as repo from "./repository";
 import {
   assertAgentCanDelete,
-  assertBaseVisible,
   assertBaseWritable,
-  assertSameWorkspace,
   deriveSlug,
   errorCode,
   listSlugs,
@@ -39,7 +36,8 @@ import { getBaseById } from "./service-bases";
 
 /**
  * Knowledge base writes — create / update (incl. sharing-scope
- * transitions) / soft-delete / restore.
+ * transitions) / delete. Delete is PERMANENT (2026-08-07): there is no
+ * trash and no restore.
  */
 
 const SLUG_RETRY_MAX = 3;
@@ -151,7 +149,7 @@ export async function createBase(
         );
       }
     } catch (err) {
-      await repo.markBaseDeleted(base.id).catch(() => {});
+      await repo.hardDeleteBase(ctx.workspaceId, base.id).catch(() => {});
       throw err;
     }
   }
@@ -348,7 +346,21 @@ export async function updateBase(
   }
 }
 
-export async function softDeleteBase(
+/**
+ * PERMANENTLY delete a base and every folder/entry inside it. There is no
+ * trash and no restore — the delete lands immediately (2026-08-07). The
+ * gates are unchanged from the old soft-delete path: the caller must be
+ * able to SEE the base (`getBaseById`), an agent may not delete a base
+ * flagged `agent_write_enabled=false` (F-10), and the caller needs `edit`.
+ *
+ * Team grants are NOT cleared here on purpose: `team_resource_access` has a
+ * polymorphic `resource_id` with no FK, so the cleanup is an AFTER DELETE
+ * trigger on `knowledge_bases` (`knowledge_base_grants_cleanup`, migration
+ * 20260807130000) — the same shape workflows, chats, chat folders and skills
+ * already use. The trigger also covers the delete paths this function isn't
+ * (workspace cascade, admin SQL), which a DELETE statement here would miss.
+ */
+export async function deleteBase(
   ctx: KnowledgeContext,
   id: string
 ): Promise<void> {
@@ -358,19 +370,5 @@ export async function softDeleteBase(
   // honors `agent_write_enabled` the same way content writes do.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
-  await repo.markBaseDeleted(id);
-}
-
-export async function restoreBase(
-  ctx: KnowledgeContext,
-  id: string
-): Promise<KnowledgeBase> {
-  const base = await repo.findBaseById(id, true);
-  if (!base) throw new KnowledgeBaseNotFoundError(id);
-  assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
-  // Forged-id guard: a base the caller can't SEE must 404 before the
-  // writable check, exactly like the read paths (M-10 + team scoping).
-  await assertBaseVisible(ctx, base);
-  await assertBaseWritable(ctx, base);
-  return repo.restoreBaseRow(id);
+  await repo.hardDeleteBase(ctx.workspaceId, id);
 }

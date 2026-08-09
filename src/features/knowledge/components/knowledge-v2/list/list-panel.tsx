@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ListFilter, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
@@ -65,14 +65,18 @@ export function ListPanel({
   return (
     <div className={styles.listPane}>
       <div className={styles.listHead}>
-        <button type="button" className={styles.listTitle}>
+        {/* A heading, not a button. This was a `.listTitle` <button> with a
+            ▾ chevron and no `onClick` — an affordance for a menu that does
+            not exist. Matched to the sibling list panes (skills, members,
+            chats): title + count, both on the shared tokens. The dead
+            "Filter" icon button that sat beside it is gone for the same
+            reason — the scope filter it implied is the SegmentedControl
+            three rows below, which works. */}
+        <h1 className="text-title font-semibold tracking-tight text-text-primary">
           Knowledge
-          <ChevronDown size={16} />
-        </button>
+        </h1>
+        <span className="text-caption text-text-muted">{bases.length}</span>
         <div className={styles.headSpacer} />
-        <button type="button" className={styles.iconBtn} aria-label="Filter">
-          <ListFilter size={17} />
-        </button>
         <button
           type="button"
           className={styles.iconBtn}

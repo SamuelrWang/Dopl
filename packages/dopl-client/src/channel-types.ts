@@ -30,13 +30,6 @@ export type ThreadStatus = "open" | "closed";
 /** How a closed thread ended. */
 export type ThreadOutcome = "completed" | "failed";
 
-/**
- * Per-member notification scope for a channel (how loudly it notifies the
- * member's listener): `all` = addressed prompts + silent FYIs; `addressed` =
- * only addressed-to-me prompts; `none` = fully muted.
- */
-export type NotifyScope = "all" | "addressed" | "none";
-
 export type ChannelAuthorKind = "user" | "agent" | "system";
 
 /**
@@ -77,8 +70,6 @@ export interface Channel {
   memberCount?: number;
   /** Present on list/get — ISO datetime of the latest message, or null. */
   lastMessageAt?: string | null;
-  /** The caller's own notification scope, null when they are not a member. */
-  myNotifyScope?: NotifyScope | null;
 }
 
 export interface ChannelMessage {
@@ -126,8 +117,6 @@ export interface ChannelMember {
   userId: string;
   role: ChannelMemberRole;
   lastReadAt: string | null;
-  /** This member's own per-channel notification scope. */
-  notifyScope?: NotifyScope;
   addedBy: string | null;
   joinedAt: string;
   displayName?: string | null;

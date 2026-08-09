@@ -85,9 +85,12 @@ test("the listener runs the three routes, in order, BEFORE classify", () => {
   const guard = at("const chat = targeting.isChatIntent(m);");
   assert.ok(feed < guard, "the guard must sit AFTER feedLiveSession");
   assert.ok(guard < open, "…and BEFORE the two routes that start a session");
-  // …and the loop still AWAITS that dispatch, so a trigger's consent + spawn keeps
-  // serializing ahead of the next message in the page (it used to be inline).
-  assert.match(LOOP, /await messages\.dispatchMessage\(entry, m, myUserId\);/);
+  // …and the page drain still AWAITS that dispatch, so a trigger's consent + spawn keeps
+  // serializing ahead of the next message in the page (it used to be inline; C-3 moved the
+  // per-page loop out of channel-listener.js and into drainPage, beside the dispatch it
+  // gates the cursor on — the transport loop now only asks "was the page finished?").
+  assert.match(LISTENER, /deferred = await dispatchMessage\(entry, m, myUserId\);/);
+  assert.match(LOOP, /await messages\.drainPage\(entry, msgs, myUserId\)/);
   // Q10's skew read happens BEFORE any route can claim the message — a reply consumed
   // by a live window is exactly the one whose sender's version explains a gap.
   assert.ok(at("versionSkew.observe(entry, m, myUserId);") < feed, "skew is observed first");

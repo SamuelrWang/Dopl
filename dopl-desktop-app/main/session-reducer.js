@@ -436,7 +436,7 @@ function sessionReducer(state, event) {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
         authHeld: true, toolMode: 'manual', messageMode: 'ask', inboundForTask: false,
         allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
-      effects: parkEffects(state),
+      effects: parkEffects(state, { lifecycle: true }), // C-5: and the peer is told, once
     };
   }
 
@@ -448,6 +448,10 @@ function sessionReducer(state, event) {
     // a double sign-in click releases once.
     if (state.authHeld !== true) return { state: state, effects: [] };
     return { state: clone(state, { authHeld: false }), effects: [] };
+  }
+
+  if (type === 'inactive') { // C-4 launch watchdog + C-5 eviction — session-effects.INACTIVE_NOTE
+    return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'inactive') };
   }
 
   if (type === 'cost_cap') {

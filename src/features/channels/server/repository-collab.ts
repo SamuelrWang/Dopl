@@ -181,6 +181,35 @@ export async function updateConsentDecision(
   return (data as ConsentRequestRow | null) ?? null;
 }
 
+/**
+ * Retire ONE `auto_allowed` row whose standing trust rule no longer holds
+ * (C-19). Compare-and-swap on `status = 'auto_allowed'` for exactly the reason
+ * `updateConsentDecision` CASes on `pending`: this surface is multi-writer, so
+ * a revocation sweep must never clobber a status some other writer already
+ * moved. A no-op returns null and the caller re-reads rather than trusting its
+ * own stale copy.
+ *
+ * `decided_by` / `decided_at` are LEFT ALONE — "a trust rule allowed this row,
+ * at this time" stays true and is the audit trail. `expires_at` is null on an
+ * auto-allow (which is *why* the row never elapsed on its own), so stamping it
+ * here records the moment the authority died: the row reads "trust allowed it,
+ * then the rule was gone before anything consumed it."
+ */
+export async function expireRevokedAutoAllow(
+  id: string
+): Promise<ConsentRequestRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_consent_requests")
+    .update({ status: "expired", expires_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "auto_allowed")
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ConsentRequestRow | null) ?? null;
+}
+
 /** Author of the message at (channel, seq) — inbound requester derivation. */
 export async function findMessageAuthorBySeq(
   channelId: string,

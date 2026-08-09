@@ -25,11 +25,18 @@ export function SegmentedControl<K extends string>({
   options,
   value,
   onChange,
+  disabled,
   className,
 }: {
   options: ReadonlyArray<SegmentedOption<K>>;
   value: K;
   onChange: (next: K) => void;
+  /**
+   * Inert while a write this control fires is in flight — a second click
+   * during the round trip is a second mutation racing the first, and the
+   * loser's rollback restores the winner's optimistic value.
+   */
+  disabled?: boolean;
   /** Layout-only additions (margins, width) — recipes stay in the kit. */
   className?: string;
 }) {
@@ -62,12 +69,14 @@ export function SegmentedControl<K extends string>({
           type="button"
           role="tab"
           aria-selected={value === key}
+          disabled={disabled}
           onClick={() => value !== key && onChange(key)}
           className={cn(
-            "relative z-[1] flex h-[27px] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] text-caption font-medium transition-colors",
+            "relative z-[1] flex h-[27px] flex-1 items-center justify-center gap-1.5 rounded-[7px] text-caption font-medium transition-colors",
             value === key
               ? "text-text-primary"
-              : "text-text-secondary hover:text-text-primary"
+              : "text-text-secondary hover:text-text-primary",
+            disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
           )}
         >
           {label}

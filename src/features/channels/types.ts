@@ -97,11 +97,20 @@ export type ChannelAgent = {
 export type ChannelRole = "owner" | "member";
 
 /**
- * Per-member notification scope for a channel (how loudly it notifies the
- * member's desktop listener). `all` = addressed consent prompts + silent FYI
- * notifications; `addressed` = only addressed-to-me prompts; `none` = fully
- * muted (still listed and readable). An addressed consent prompt always
- * shows regardless — `none` only silences FYI + non-addressed noise.
+ * ⛔ REMOVED FROM THE PRODUCT 2026-08-08 (F-170). DO NOT BUILD ON THIS TYPE,
+ * and do not restore the control it used to describe.
+ *
+ * There is no notify-scope UI, no `notifyScope` on `ChannelMemberSelfUpdate`,
+ * and no read of it in `classify` — a member cannot set this value by any
+ * route. It survives here ONLY because `server/{dto,service-reads,
+ * service-writes-members,repository}.ts` still map the column and would not
+ * compile without it; those files and `channel_members.notify_scope` are
+ * F-170's open half. Delete this type in the same change that removes them.
+ *
+ * Why it went, so nobody re-adds it from the enum alone: `'addressed'` was
+ * compared nowhere and behaved exactly like `'all'`, and `'none'` ("Muted")
+ * silenced only the implicit two-member trigger — an explicitly addressed
+ * message still spawned a session, which is most of what a channel carries.
  */
 export type NotifyScope = "all" | "addressed" | "none";
 
@@ -255,7 +264,7 @@ export type Channel = {
   lastReadAt: string | null;
   /** True when there is a message newer than the caller's `lastReadAt`. */
   unread: boolean;
-  /** The caller's own notification scope, null when they are not a member. */
+  /** ⛔ Dead since F-170 — nothing sets or reads it. See `NotifyScope`. */
   myNotifyScope: NotifyScope | null;
   /** The caller's own agent tool profile, null when they are not a member. */
   myAgentToolProfile: AgentToolProfile | null;
@@ -300,8 +309,9 @@ export type ChannelMember = {
   userId: string;
   role: ChannelRole;
   lastReadAt: string | null;
-  /** Per-channel notification scope. Private preference: present only on the
-   *  caller's own row; null for other members. */
+  /** ⛔ Dead since F-170 — nothing sets or reads it. Still scrubbed to null
+   *  for non-self rows by `mapMemberRow`, which is now that scrub's only
+   *  remaining subject besides `agentToolProfile`. See `NotifyScope`. */
   notifyScope: NotifyScope | null;
   /** The member's responding-agent tool profile. Private preference: present
    *  only on the caller's own row; null for other members. */

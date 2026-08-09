@@ -155,18 +155,43 @@ test("SEAM: route (6) runs AFTER classify, inside the 'trigger' branch, and guar
   const classify = at("const verdict = targeting.classify(m, entry, myUserId);");
   const reopen = at("sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId)");
   assert.ok(classify < reopen, "it is the ONE post-classify route — classify still runs first");
-  // The exact seam: the fresh consent runs only when the reopen declined the message.
-  assert.match(
-    LISTENER,
-    /if \(!\(await sessionDispatch\.maybeReopenAddressedThread\(entry, m, myUserId\)\)\) await trigger\.handleTrigger\(entry, m\);/,
-    "a claimed message must not ALSO raise consent"
-  );
   // And the other verdicts are dispatched exactly as before — the route cannot reach them.
   // There was a fourth, 'agent-escalation', and it is gone with the named agents whose
   // `author_agent_id` stamp was its whole trigger (channels rollback §1).
   assert.match(LISTENER, /else if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m\);/);
   assert.match(LISTENER, /else if \(verdict === 'task-reply'\) taskNotify\.notifyTaskReply\(entry, m\);/);
   assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
+});
+
+// THE EXACT SEAM — "the fresh consent runs ONLY when the reopen declined the message" —
+// ASSERTED BEHAVIOURALLY (2026-08-08, F-108).
+//
+// It used to be a regex over the shipped source text:
+//   /if \(!\(await sessionDispatch\.maybeReopenAddressedThread\(…\)\)\) await trigger\.handleTrigger\(…\);/
+// That pinned today's SHAPE rather than the behaviour, and it broke on a refactor that
+// changed nothing it was protecting: C-3 made `handleTrigger` ANSWER whether the listener's
+// cursor may advance past this message, so the call site became `return trigger.handleTrigger(
+// entry, m)` and the assertion went red over a passing product. F-108 is the standing finding
+// about this class of desktop test; this is one instance paid off.
+//
+// The harness already runs the REAL dispatchMessage over the REAL routes and the REAL
+// classify, so the invariant can simply be exercised in both directions — which is a stronger
+// pin than the regex was, because it would also catch a route that returned true and raised
+// consent anyway (a shape the regex could not see).
+test("SEAM: a CLAIMED follow-up raises no consent; a DECLINED one raises exactly one", async () => {
+  // Claimed: this machine has the settled pair session's durable record, so route (6) reopens
+  // that window and holds the message at its in-window gate.
+  const claimed = withRecord(record());
+  await claimed.dispatch(dm(), followUp(LEGACY));
+  assert.equal(claimed.calls.startSession.length, 1, "the exchange's own window is reopened");
+  assert.deepEqual(claimed.calls.trigger, [], "a claimed message must not ALSO raise consent");
+
+  // Declined: no record for the tag, so the route answers false and the ordinary consent path
+  // runs byte-for-byte as before.
+  const declined = harness();
+  await declined.dispatch(dm(), followUp(LEGACY));
+  assert.deepEqual(declined.calls.startSession, [], "nothing to reopen");
+  assert.deepEqual(declined.calls.trigger, [443], "…so the follow-up gets a fresh consent card");
 });
 
 test("SEAM: the reopen spends no consent-entry arm — it is a recreate, not an adoption", () => {

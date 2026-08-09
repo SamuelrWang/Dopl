@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { RouterProvider, createHashRouter } from "react-router";
-import { createQueryClient } from "#/lib/query-client";
+import {
+  createPersistOptions,
+  createQueryClient,
+  createQueryPersister,
+} from "#/lib/query-client";
 import { routes } from "#/routes";
 import { getBridge } from "#/lib/dopl-bridge";
 // The web app's toast surface — reused feature components (ChatsView,
@@ -21,6 +25,10 @@ import { ToastHost } from "@/shared/ui/toast";
 export function App() {
   const [queryClient] = useState(createQueryClient);
   const [router] = useState(() => createHashRouter(routes));
+  // The cache's disk half (`#/lib/query-client`). A cold launch hydrates the
+  // last dehydrated snapshot and paints it while every restored query
+  // refetches behind it, instead of rendering the empty state and waiting.
+  const [persister] = useState(createQueryPersister);
 
   // THE auth subscriber. It lives here, above the router, because main's
   // auth pushes have to reach the user on ANY route — and every other
@@ -55,6 +63,11 @@ export function App() {
         return;
       }
       queryClient.clear();
+      // …and the DISK copy with it. Clearing only the in-memory cache would
+      // leave the previous account's answers on disk for the next launch to
+      // hydrate — the same leak the web provider closes on SIGNED_OUT
+      // (2026-08-03 fleet audit, high).
+      void persister.removeClient();
       void router.navigate("/", { replace: true });
     });
     // Seed the baseline with the session we launched into, so that refresh
@@ -75,7 +88,7 @@ export function App() {
       );
     }
     return off;
-  }, [queryClient, router]);
+  }, [queryClient, persister, router]);
 
   // Main-initiated navigation: a clicked channel notification / the tray's
   // "Pending" item (journey-audit GAP-16). Main sends a router PATH; in the
@@ -91,9 +104,12 @@ export function App() {
   }, [router]);
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={createPersistOptions(persister)}
+    >
       <RouterProvider router={router} />
       <ToastHost />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

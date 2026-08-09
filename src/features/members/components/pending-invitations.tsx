@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Mail } from "lucide-react";
 import type { TeamView } from "@/features/teams/types";
 import type { WorkspaceInvitationView } from "../types";
-import { apiRequest } from "@/shared/api/api-client";
+import { useInvitationWrites } from "../hooks/use-invitation-writes";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { TeamChip } from "./team-bits";
 
@@ -12,7 +13,6 @@ interface Props {
   workspaceSlug: string;
   invitations: WorkspaceInvitationView[];
   teams: TeamView[];
-  onRevoked?: () => void;
 }
 
 /**
@@ -24,28 +24,29 @@ export function PendingInvitations({
   workspaceSlug,
   invitations,
   teams,
-  onRevoked,
 }: Props) {
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const { revoke } = useInvitationWrites(workspaceSlug);
   const [error, setError] = useState<string | null>(null);
+  // The invitation a confirm is open for. Revoking is a hard delete of the
+  // row — every destructive action in the app asks first.
+  const [revokeTarget, setRevokeTarget] = useState<WorkspaceInvitationView | null>(
+    null
+  );
   const teamById = new Map(teams.map((t) => [t.id, t]));
 
-  async function revoke(invitation: WorkspaceInvitationView) {
-    setBusyId(invitation.id);
+  /**
+   * The row leaves the list in `onMutate` and the dialog closes on the click,
+   * so the confirm does not have to await anything to be believed. A failure
+   * restores the row from the layer's snapshot; the banner still names the
+   * server's reason, because ConfirmDialog swallows a throw and only keeps
+   * itself open.
+   */
+  async function revokeInvitation(invitation: WorkspaceInvitationView) {
     setError(null);
-    try {
-      await apiRequest<void>(
-        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(
-          invitation.id
-        )}`,
-        { method: "DELETE" }
-      );
-      onRevoked?.();
-    } catch (err) {
+    setRevokeTarget(null);
+    await revoke.mutateAsync({ invitationId: invitation.id }).catch((err: unknown) => {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setBusyId(null);
-    }
+    });
   }
 
   if (invitations.length === 0) return null;
@@ -74,8 +75,8 @@ export function PendingInvitations({
             </div>
             <button
               type="button"
-              onClick={() => revoke(inv)}
-              disabled={busyId === inv.id}
+              onClick={() => setRevokeTarget(inv)}
+              disabled={revoke.pending}
               className="shrink-0 text-label uppercase tracking-wider text-text-muted hover:text-danger transition-colors disabled:opacity-40 cursor-pointer"
             >
               Revoke
@@ -83,6 +84,24 @@ export function PendingInvitations({
           </li>
         ))}
       </ul>
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Revoke invitation?"
+        description={
+          revokeTarget
+            ? `This permanently revokes the invitation to ${revokeTarget.email}. Their invite link stops working, and this can't be undone.`
+            : ""
+        }
+        confirmLabel="Revoke permanently"
+        destructive
+        onConfirm={async () => {
+          if (revokeTarget) await revokeInvitation(revokeTarget);
+        }}
+      />
     </section>
   );
 }

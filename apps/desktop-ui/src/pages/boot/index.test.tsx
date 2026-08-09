@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeOpResult, BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, installBridge } from "#/test-utils/bridge";
+import { AppShellLayout } from "#/components/app-shell";
 import BootPage from "./index";
 
 /**
@@ -47,21 +48,39 @@ function unauthorized(): BridgeResponse {
   };
 }
 
+const WORKSPACE = {
+  id: "11111111-2222-3333-4444-555555555555",
+  slug: "acme",
+  publicId: "ab12cd",
+};
+
+/**
+ * ONE endpoint (P0-2). `onboarding-state` + `ensure-default` were two serial
+ * hops here, and `resolve` + `me` two more after the navigation; `/api/boot`
+ * answers all four. An un-onboarded caller still gets NO workspace — the
+ * provisioning gate moved server-side, it did not disappear.
+ */
 function bridgeFor(isOnboarded: boolean) {
   return (path: string): Promise<BridgeResponse> => {
-    if (path === "/api/user/onboarding-state") {
-      return Promise.resolve(ok({ isOnboarded }));
-    }
-    if (path === "/api/workspaces/ensure-default") {
+    if (path === "/api/boot") {
       return Promise.resolve(
-        ok({ workspace: { id: "w1", slug: "acme", publicId: "ab12cd" }, segment: SEGMENT })
+        ok({
+          isOnboarded,
+          surveyCompleted: true,
+          userId: "user-1",
+          workspace: isOnboarded ? WORKSPACE : null,
+          segment: isOnboarded ? SEGMENT : null,
+          needsRedirect: false,
+          role: isOnboarded ? "owner" : null,
+          myAccess: isOnboarded ? { defaultLevel: "edit", overrides: [] } : null,
+        })
       );
     }
     return Promise.reject(new Error(`unexpected request: ${path}`));
   };
 }
 
-function renderBoot() {
+function renderBoot(queryClient = createQueryClient()) {
   const router = createMemoryRouter(
     [
       { path: "/", element: <BootPage /> },
@@ -71,7 +90,7 @@ function renderBoot() {
     { initialEntries: ["/"] }
   );
   return render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>
   );
@@ -79,6 +98,9 @@ function renderBoot() {
 
 describe("boot page", () => {
   beforeEach(() => {
+    // `vi.hoisted` mocks sit outside vitest's restore sweep, so the call log
+    // would accumulate across tests and make every count wrong.
+    apiRequest.mockReset();
     getAuthState.mockResolvedValue({ signedIn: true, userId: "user-1" });
     apiRequest.mockImplementation((path: string) => bridgeFor(true)(path));
     installBridge({
@@ -123,12 +145,13 @@ describe("boot page", () => {
 
     expect(await screen.findByText("ONBOARDING ROUTE")).toBeInTheDocument();
     const paths = apiRequest.mock.calls.map((c) => (c as unknown[])[0]);
-    expect(paths).toContain("/api/user/onboarding-state");
-    // The workspace is not provisioned until onboarding completes.
+    expect(paths).toContain("/api/boot");
+    // The workspace is not provisioned until onboarding completes — the boot
+    // answer carries a null workspace, and the SPA asks for nothing else.
     expect(paths).not.toContain("/api/workspaces/ensure-default");
   });
 
-  it("signed in and onboarded → ensure-default, then the workspace route (G2)", async () => {
+  it("signed in and onboarded → one boot read, then the workspace route (G2)", async () => {
     renderBoot();
 
     expect(await screen.findByText("WORKSPACE ROUTE")).toBeInTheDocument();
@@ -136,11 +159,114 @@ describe("boot page", () => {
       expect(
         apiRequest.mock.calls.some(
           (c) =>
-            (c as unknown[])[0] === "/api/workspaces/ensure-default" &&
+            (c as unknown[])[0] === "/api/boot" &&
             ((c as unknown[])[1] as { method?: string } | undefined)?.method === "POST"
         )
       ).toBe(true)
     );
+    // THE COLLAPSE, pinned: one request in front of the workspace route, not
+    // the four (`onboarding-state`, `ensure-default`, `resolve`, `me`) it
+    // replaced. Anything else here is a regression of launch-blocker P0-2.
+    expect(
+      apiRequest.mock.calls.map((c) => (c as unknown[])[0])
+    ).toEqual(["/api/boot"]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  // THE PERSISTED-CACHE HAZARD. The query cache is written to IndexedDB now
+  // (`lib/query-client.ts`), so a relaunch restores this route's own entry and
+  // renders it before any request lands. Everywhere else that is a free first
+  // paint; here it is a ROUTING decision, and a restored segment can be a
+  // corpse — the workspace was deleted, or a different account signed in.
+  // Boot must route on the answer THIS mount fetched, never on the disk's.
+  it("never routes on a restored answer — it waits for this mount's own", async () => {
+    const queryClient = createQueryClient();
+    // What a relaunch hydrates: a settled success for a workspace that has
+    // since been deleted.
+    queryClient.setQueryData(["/api/boot", undefined, undefined], {
+      isOnboarded: true,
+      surveyCompleted: true,
+      userId: "user-1",
+      workspace: { ...WORKSPACE, publicId: "dead99" },
+      segment: "gone-dead99",
+      needsRedirect: false,
+      role: "owner",
+      myAccess: { defaultLevel: "edit", overrides: [] },
+    });
+
+    let release: (() => void) | undefined;
+    apiRequest.mockImplementation(
+      (path: string) =>
+        new Promise<BridgeResponse>((resolve) => {
+          release = () => resolve(bridgeFor(true)(path) as unknown as BridgeResponse);
+        })
+    );
+
+    renderBoot(queryClient);
+
+    // The restored segment is on screen for exactly no time: the cover holds.
+    expect(await screen.findByText("Starting Dopl")).toBeInTheDocument();
+    expect(screen.queryByText("WORKSPACE ROUTE")).toBeNull();
+
+    apiRequest.mockImplementation((path: string) => bridgeFor(true)(path));
+    release?.();
+
+    // …and the route that lands is the LIVE one, not the corpse.
+    expect(await screen.findByText("WORKSPACE ROUTE")).toBeInTheDocument();
+  });
+
+  // THE WHOLE CHAIN, end to end: launch → real shell → routed page. This is
+  // the assertion the launch-blocker is actually about — the four endpoints
+  // below were four SERIAL round trips, and the shell gated `<Outlet/>` on
+  // the third, so no page could start its own fetch until all of them landed.
+  it("mounts the real shell and its page having read the API exactly once", async () => {
+    const router = createMemoryRouter(
+      [
+        { path: "/", element: <BootPage /> },
+        {
+          path: "/:workspaceSegment",
+          element: <AppShellLayout />,
+          children: [{ index: true, element: <p>PAGE BODY</p> }],
+        },
+      ],
+      { initialEntries: ["/"] }
+    );
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/boot") return bridgeFor(true)(path);
+      // The shell's chrome + notice layer. These are PARALLEL reads off the
+      // mounted shell, not links in the boot chain.
+      if (path === "/api/workspaces") {
+        return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
+      }
+      if (path === "/api/me/join-requests") return Promise.resolve(ok({ notices: [] }));
+      if (path === "/api/onboarding/mcp-status") {
+        return Promise.resolve(ok({ connected: true }));
+      }
+      if (path === "/api/channels/consent") return Promise.resolve(ok({ requests: [] }));
+      return Promise.reject(new Error(`unexpected request: ${path}`));
+    });
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText("PAGE BODY")).toBeInTheDocument();
+
+    const paths = apiRequest.mock.calls.map((c) => (c as unknown[])[0] as string);
+    expect(paths.filter((p) => p === "/api/boot")).toHaveLength(1);
+    for (const gone of [
+      "/api/user/onboarding-state",
+      "/api/workspaces/ensure-default",
+      "/api/workspaces/me",
+    ]) {
+      expect(paths).not.toContain(gone);
+    }
+    expect(paths.some((p) => p.startsWith("/api/workspaces/resolve"))).toBe(false);
+    // `my-access` is deliberately NOT asserted absent: the shell's access
+    // matrix is seeded (so it never blocks) but its own query may still
+    // revalidate in the background — beside the page, never in front of it.
     expect(fetch).not.toHaveBeenCalled();
   });
 

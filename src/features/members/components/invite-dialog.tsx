@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { getAppOrigin } from "@/shared/lib/app-origin";
 // Deep import, not the `settings-modal` barrel: the barrel also re-exports
@@ -16,6 +15,8 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import type { TeamView } from "@/features/teams/types";
+import { invitationsPath, joinLinkPath } from "../client/query-keys";
+import { useInvitationWrites } from "../hooks/use-invitation-writes";
 import type { AssignableRole } from "../types";
 
 interface Props {
@@ -36,7 +37,7 @@ const ROLES: Array<{ value: AssignableRole; label: string; hint: string }> = [
     label: "Admin",
     hint: "Can change workspace settings and invite new members to the workspace",
   },
-  { value: "member", label: "Member", hint: "Can use everything: KBs, skills, and canvas" },
+  { value: "member", label: "Member", hint: "Can use everything: KBs, skills, and ontology" },
   { value: "viewer", label: "Viewer", hint: "Read-only access to the workspace" },
 ];
 
@@ -52,37 +53,32 @@ function ShareLinkSection({
   workspaceSlug: string;
   open: boolean;
 }) {
-  const [busy, setBusy] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
-  const queryClient = useQueryClient();
+  const { resetLink } = useInvitationWrites(workspaceSlug);
+  const busy = resetLink.pending;
 
-  const linkPath = `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`;
   // Fetches only while the dialog is open; errors keep the loading state
   // (same as the old hand-rolled effect). staleTime 0: every open must
   // revalidate — another admin may have rotated the link, and a cached
   // token would be a dead invite.
-  const linkQuery = useApiQuery<{ token: string }>(linkPath, {
+  const linkQuery = useApiQuery<{ token: string }>(joinLinkPath(workspaceSlug), {
     enabled: open,
     staleTime: 0,
   });
   const token = linkQuery.data?.token ?? null;
 
+  /**
+   * THE OLD LINK IS NOT SHOWN THROUGH THE RESET. Only the server can mint the
+   * new token, so there is nothing to patch optimistically — and inventing a
+   * placeholder would put a dead invite URL on screen for an admin to copy.
+   * What was actually wrong was displaying the OUTGOING link, still copyable,
+   * while the rotation that kills it is in flight. So the field goes to its
+   * generating state on the click and the POST's own answer fills it back in.
+   */
   const url =
-    token && typeof window !== "undefined"
+    !busy && token && typeof window !== "undefined"
       ? `${getAppOrigin()}/join/${token}`
       : null;
-
-  async function reset() {
-    setBusy(true);
-    try {
-      const body = await apiRequest<{ token: string }>(linkPath, { method: "POST" });
-      queryClient.setQueryData([linkPath, undefined, undefined], body);
-    } catch {
-      /* keep the current link on failure */
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3">
@@ -92,7 +88,7 @@ function ShareLinkSection({
         </label>
         <button
           type="button"
-          onClick={() => void reset()}
+          onClick={() => resetLink.mutate()}
           disabled={busy || !token}
           title="Reset link — previously shared copies stop working"
           className="flex items-center gap-1 text-label uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
@@ -106,7 +102,7 @@ function ShareLinkSection({
           <Link2 size={13} className="shrink-0 text-text-muted" />
           <input
             readOnly
-            value={url ?? "Generating link…"}
+            value={url ?? (busy ? "Generating a new link…" : "Generating link…")}
             onFocus={(e) => e.target.select()}
             className="flex-1 min-w-0 bg-transparent text-small text-text-secondary outline-none truncate"
           />
@@ -213,7 +209,7 @@ export function InviteDialog({
         emails.map(async (email) => {
           try {
             await apiRequest<unknown>(
-              `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`,
+              invitationsPath(workspaceSlug),
               {
                 method: "POST",
                 body: {

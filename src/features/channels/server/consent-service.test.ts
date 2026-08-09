@@ -12,6 +12,10 @@
  *     compare-and-swap so a late Allow can't clobber a human's Deny.
  *   - a trigger de-dupes at ANY status, both kinds: a DENIED trigger must
  *     never be re-raised, and an outbound retry must not stack review rows.
+ *
+ * The CONSUMPTION half of the trust rule — a stored `auto_allowed` row losing
+ * its authority when the rule is revoked or the teammate leaves (C-19) — is
+ * its own lane, split to `consent-service-trust-revocation.test.ts` (§2 cap).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -108,6 +112,11 @@ function trustRow() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // `clearAllMocks` clears calls but NOT a queued `mockResolvedValueOnce`, and
+  // the CAS case below queues two reads on this one. An unconsumed queue entry
+  // would leak into the next test, so reset the queue explicitly (back to the
+  // automock default: undefined → ConsentNotFoundError).
+  vi.mocked(collab.findConsentById).mockReset();
   vi.mocked(repo.findChannelById).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER));
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);

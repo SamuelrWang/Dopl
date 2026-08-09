@@ -327,13 +327,23 @@ function atCapAfterEvict() {
 }
 
 // FIX #7 — free ONE window slot by settling the least-recently-created PARKED shell the
-// operator never interacted with. A settled parked record keeps its phase ('parked' via
-// the persist effect) and its sdkSessionId, so the evicted task stays fully reopenable —
-// this drops a dormant window, never a conversation. NEVER takes a shell that is live, is
-// holding an inbound card, or that the operator has touched (session-ipc stamps
-// operatorTouched on every renderer-driven handler). Returns false when nothing qualifies.
+// operator never interacted with. The evicted task stays fully reopenable — its durable
+// record survives and `settle` retains the sdkSessionId for every outcome but
+// completed/failed — so this drops a dormant window, never a conversation. NEVER takes a
+// shell that is live, is holding an inbound card, or that the operator has touched
+// (session-ipc stamps operatorTouched on every renderer-driven handler). Returns false when
+// nothing qualifies.
+//
+// C-5 (2026-08-08) — IT GOES THROUGH THE REDUCER NOW, and that is the whole fix. It used to
+// call `deps.settleSession(victim, 'interrupted')`, which is the engine's `settle()` —
+// teardown ONLY. `settle` runs no reducer and emits no lifecycle, so an eviction was one of
+// the three terminals that posted NOTHING: the requester on the other machine went on
+// watching a card that said "Working…" for a session this Mac had already reclaimed. The
+// `inactive` event runs the ordinary `endEffects` set — abort, the calm `task_progress`
+// status note, the `ended` emit, then that same `settle` — so eviction now ends a session the
+// way every other terminal path does, through one path rather than beside it.
 function evictIdleShell() {
-  if (!deps || !deps.sessions || !deps.settleSession) return false;
+  if (!deps || !deps.sessions || !deps.dispatch) return false;
   let victim = null;
   for (const s of deps.sessions.values()) {
     if (!s || s.settled || !s.state) continue;
@@ -347,7 +357,7 @@ function evictIdleShell() {
   }
   if (!victim) return false;
   diag('session-park: evicting an untouched parked shell for the window budget');
-  try { deps.settleSession(victim, 'interrupted'); } catch (err) {
+  try { deps.dispatch(victim, { type: 'inactive' }); } catch (err) {
     diag('session-park: evict failed', err && err.message);
     return false;
   }

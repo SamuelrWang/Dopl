@@ -7,6 +7,12 @@ import "server-only";
  * visibility, and keeps folder-filed chats' sharing in sync with their
  * folder.
  *
+ * DELETES ARE PERMANENT (2026-08-07). `deleteChat` removes the row
+ * immediately — there is no trash, restore or purge. `deleted_at` and the
+ * read-path `deleted_at IS NULL` filters stay so rows tombstoned before
+ * the switch remain hidden until the one-time cleanup migration
+ * (`20260807110000_purge_soft_deleted_rows.sql`) sweeps them.
+ *
  * This module is a barrel: the implementation lives in per-domain
  * siblings so each file has one clear purpose. Cross-cutting gates and
  * helpers used by more than one domain live in `service-shared.ts`.
@@ -19,16 +25,13 @@ import "server-only";
 export { buildChatContext } from "./service-shared";
 export type { ChatContext, AuthLike } from "./service-shared";
 
-export { listChats, getChat, listTrash, listTrashedChats } from "./service-reads";
-export type { ChatTrashItem } from "./service-reads";
+export { listChats, getChat } from "./service-reads";
 
 export {
   exportChat,
   appendMessages,
   updateChatHeader,
   deleteChat,
-  restoreChat,
-  purgeChat,
 } from "./service-writes";
 
 export {

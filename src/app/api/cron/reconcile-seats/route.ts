@@ -4,6 +4,7 @@ import { isStripeConfigured } from "@/features/billing/server/stripe";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { listReconcilableTeamWorkspaceIds } from "@/features/billing/server/workspace-billing";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
  * GET /api/cron/reconcile-seats
@@ -19,15 +20,56 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
  * skips when the seat count already matches (no proration churn), and only
  * ever touches live Team subs — so a run with no drift is a pure no-op.
  *
- * Per-workspace isolation: `Promise.allSettled` means one workspace's Stripe
- * error never aborts the sweep; failures are collected and surfaced in a
- * single system event, and the route still returns 200 so the scheduler
- * doesn't retry-storm the whole batch over one bad sub.
+ * Per-workspace isolation: one workspace's Stripe error never aborts the
+ * sweep; failures are collected and surfaced in a single system event, and
+ * the route still returns 200 so the scheduler doesn't retry-storm the whole
+ * batch over one bad sub.
  *
  * Auth: CRON_SECRET bearer via requireCronSecret (fail-closed 503 when unset,
  * 401 without the secret), same as the other /api/cron/* routes.
  */
 export const dynamic = "force-dynamic";
+
+/**
+ * How many workspaces are reconciled at once.
+ *
+ * This was an uncapped `Promise.allSettled` over EVERY live Team workspace,
+ * and each element is 2 DB reads + 2 Stripe calls + a write. At any real
+ * customer count that opens every one of them in the same tick: Stripe
+ * answers 429 (its limit is per-second, and a rate-limited response looks
+ * exactly like a failed true-up here — the sweep would report mass failure
+ * with no cause), and the connection pooler saturates on the DB half before
+ * that. Small on purpose: this is a nightly sweep with no deadline, so
+ * throughput is worth nothing and staying under everyone's limits is worth
+ * a lot.
+ */
+const RECONCILE_CONCURRENCY = 5;
+
+/**
+ * `Promise.allSettled` with a bounded worker pool. Results stay index-aligned
+ * with `items` so callers can name the failures.
+ */
+async function settleWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) {
+      try {
+        results[i] = { status: "fulfilled", value: await run(items[i]) };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker)
+  );
+  return results;
+}
 
 export async function GET(request: NextRequest) {
   const denied = requireCronSecret(request);
@@ -52,11 +94,15 @@ export async function GET(request: NextRequest) {
       fingerprintKeys: ["cron", "reconcile-seats", "enumerate-fail"],
       userId: null,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    // The cause is in the system event above; the response body carries the
+    // shared sanitized envelope rather than the raw exception (ENGINEERING §9).
+    return toHttpErrorResponse("api/cron/reconcile-seats", err);
   }
 
-  const results = await Promise.allSettled(
-    workspaceIds.map((id) => syncSeatQuantity(id))
+  const results = await settleWithConcurrency(
+    workspaceIds,
+    RECONCILE_CONCURRENCY,
+    (id) => syncSeatQuantity(id)
   );
 
   const failures: { workspaceId: string; error: string }[] = [];

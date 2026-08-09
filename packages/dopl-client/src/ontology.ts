@@ -12,6 +12,7 @@ import type {
   OntologyObjectCreateInput,
   OntologyObjectPatch,
   OntologySnapshot,
+  OntologySummary,
 } from "./ontology-types.js";
 
 const enc = encodeURIComponent;
@@ -19,6 +20,20 @@ const enc = encodeURIComponent;
 export async function getOntology(t: DoplTransport): Promise<OntologySnapshot> {
   return t.request<OntologySnapshot>("/api/ontology", {
     toolName: "ontology_snapshot",
+  });
+}
+
+/**
+ * The cheap projection of the same endpoint — names and containment, no JSONB.
+ * See {@link OntologySummary} for what it drops and why. Distinct `toolName` so
+ * the two reads are separable in the `mcp_tool_calls` telemetry that the
+ * payload work is judged on.
+ */
+export async function getOntologySummary(
+  t: DoplTransport
+): Promise<OntologySummary> {
+  return t.request<OntologySummary>("/api/ontology?view=summary", {
+    toolName: "ontology_summary",
   });
 }
 
@@ -66,20 +81,6 @@ export async function deleteOntologyCluster(
     "DELETE",
     "ontology_delete_cluster"
   );
-}
-
-export async function restoreOntologyCluster(
-  t: DoplTransport,
-  clusterRef: string
-): Promise<OntologyCluster> {
-  // Restores a soft-deleted cluster + the objects it cascade-deleted.
-  // `clusterRef` is a slug or id of a TRASHED cluster (not in the live
-  // snapshot), so it is passed straight through to the route.
-  const data = await t.request<{ cluster: OntologyCluster }>(
-    `/api/ontology/clusters/${enc(clusterRef)}/restore`,
-    { toolName: "ontology_restore_cluster", method: "POST", body: {} }
-  );
-  return data.cluster;
 }
 
 export async function createOntologyObject(

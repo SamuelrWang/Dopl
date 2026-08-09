@@ -287,21 +287,59 @@ function takeForAdopt(key) {
   return { win: e.win };
 }
 
+// Drop an entry from the registry and take its window down after the linger. The ONE
+// teardown, shared by the terminal close below and by `release` — a second copy is how the
+// budget leak in C-9 stayed invisible: `decide()` marked the entry decided and every reader
+// went on counting it.
+function drop(e) {
+  e.decided = true;
+  if (e.detach) e.detach();
+  registry.delete(e.key);
+  const win = e.win;
+  setTimeout(() => { try { if (win && !win.isDestroyed()) win.destroy(); } catch (_) { /* best effort */ } }, CLOSE_LINGER_MS);
+}
+
 // Terminal close (item 8 steps 5/6 — inboundDenied / inboundExpired): tell the
 // renderer, then destroy the window after a short linger so the note is visible.
 // No-op if the window was already adopted or parked (key not found).
 function close(watcherKey, decision) {
   const e = getByWatcherKey(watcherKey);
   if (!e) return;
-  e.decided = true;
-  if (e.detach) e.detach();
-  registry.delete(e.key);
   const resolved = decision === 'expired' ? 'expired' : 'denied';
   try {
     if (e.win && !e.win.isDestroyed()) e.win.webContents.send('session:event', { type: 'consent_resolved', decision: resolved });
   } catch (_) { /* window gone */ }
-  const win = e.win;
-  setTimeout(() => { try { if (win && !win.isDestroyed()) win.destroy(); } catch (_) { /* best effort */ } }, CLOSE_LINGER_MS);
+  drop(e);
+}
+
+// C-9 (2026-08-08) — RELEASE AN ACCEPTED ENTRY THAT NO SPAWN WILL EVER ADOPT.
+//
+// THE LEAK. `decide()` sets `decided` and leaves the entry in the registry, deliberately:
+// the window is about to be reused, and `startSession`'s `takeForAdopt` is what removes it.
+// But adoption happens ONLY on the branch where a live session really starts. Every other
+// exit from `trigger.inboundApproved` left the entry behind forever — `{skipped:'busy'}`,
+// `'auth-hold'`, `'cap'`, `'no-sdk'`, `'disabled'`, and the refetch's `gone`. `count()` feeds
+// `atWindowCap` (sessions + open consent windows vs MAX_WINDOWS), so each leak permanently
+// spent one of six slots; and `evictIdleShell` walks only the SESSION registry, so a leaked
+// entry could not be reclaimed by the one mechanism that exists for exactly that. Six
+// accepted requests that did not become sessions and the desktop opens nothing, ever again.
+//
+// THE FIX IS THE RELEASE, NOT A SWEEPER. A timer or an LRU over decided entries would be
+// guessing at when the adopt is not coming; the caller KNOWS — it is holding the skip reason.
+// So every terminal in trigger.js says so here, and `takeForAdopt` stays the one path that
+// keeps the window alive.
+//
+// NO `consent_resolved` IS SENT. The card already painted "Accepted" when the operator
+// clicked, and this is not a second decision: the request is being answered somewhere else
+// (headlessly), or answered with a courtesy reply, or it is gone. Sending 'denied' here — the
+// only other value `close` can express — would tell the operator their Accept was refused.
+// Idempotent and safe on a key with no entry, so callers need no guard of their own.
+function release(watcherKey, reason) {
+  const e = getByWatcherKey(watcherKey);
+  if (!e) return false;
+  diag('session-consent: releasing an accepted entry no spawn adopted —', reason || 'unknown');
+  drop(e);
+  return true;
 }
 
 module.exports = {
@@ -313,6 +351,7 @@ module.exports = {
   open,
   decide,
   close,
+  release, // C-9: the window budget is given back on every terminal that is not an adopt
   armModes, // FIX 1: the pre-consent posture selects write here
   takeStartModes, // ...and startSession consumes it, once, on adopt
   armModel, // 2026-08-02: the pre-consent MODEL select, same entry, same single-use rule

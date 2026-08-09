@@ -117,9 +117,11 @@ function buildSecretPathDenyRules() {
 }
 
 // The in-memory mcpServers object (research §4 — replaces the --mcp-config file).
-// `doplToolsPolicy` (a non-null array) becomes the per-server `tools` allowlist so a
-// restricted profile only sees its scoped dopl tools. With no token (pre-sign-in)
-// returns {} so the session still runs, exactly as the missing-file case used to.
+// `doplToolsPolicy` is ACCEPTED AND DELIBERATELY NOT FORWARDED — the per-server `tools`
+// field is a PERMISSION policy, not an allowlist, and handing it short tool names DELETED
+// this whole server entry. The verified evidence is in the block at the end of this
+// function. With no token (pre-sign-in) returns {} so the session still runs, exactly as
+// the missing-file case used to.
 //
 // C2 (HIGH-3): the url is ALWAYS the compiled-in MCP_URL. The old `dopl.url || MCP_URL`
 // trusted a value read back off disk, so any local process that rewrote that file could
@@ -161,6 +163,31 @@ function buildMcpServers(doplToolsPolicy, workspaceId) {
     // not-yet-deployed server or a buffering proxy, and costs nothing once headers
     // stream. The VALUE is derived in mcp-config.js — never restate it here.
     timeout: clientTimeoutMs(),
+    // F-177 — THE DOPL TOOLS ARE NEVER DEFERRED BEHIND `ToolSearch`. Verified against the
+    // bundled runtime (claude 2.1.220 / @anthropic-ai/claude-agent-sdk 0.3.220), not inferred:
+    //   · tool search defaults ON — with no `ENABLE_TOOL_SEARCH` in the env the mode resolves
+    //     to `tst`, and `buildScrubbedEnv` strips only the permission knobs, so it is on;
+    //   · `isDeferredTool` returns TRUE for EVERY MCP tool (`if (isMcp) return true`) unless the
+    //     server or the tool carries `alwaysLoad`. The per-server `tools` policy does NOT exempt
+    //     anything — it is a PERMISSION policy ({name, permission_policy}), not a load policy,
+    //     which is what prompt-framing's FIX F3b comment assumed it was;
+    //   · deferral is skipped wholesale only when `ToolSearch` is missing from the offered set
+    //     ("Tool search disabled: ToolSearchTool is not available (may have been disallowed via
+    //     disallowedTools)"). That is the ONLY reason `dopl_channel` was eagerly present before
+    //     F-177: every profile hard-denied ToolSearch, so nothing could be deferred.
+    // F-177 hands `full` its ToolSearch back, which would have flipped deferral ON for exactly
+    // the profile the product ships by default — and `dopl_channel` is the session's DELIVERY
+    // PATH. It would have arrived as a bare name needing a ToolSearch call that (a) the prompt
+    // forbids by name (prompt-framing FIX F3b) and (b) gates in every Axis-A mode, `bypass`
+    // included. That is the F3 incident verbatim: an agent reporting "I do not have the
+    // mcp__dopl__dopl_channel tool". `alwaysLoad` makes ToolSearch's presence IRRELEVANT here.
+    // It also fixes the quieter half: MCP startup is non-blocking by default, so the turn-1
+    // prompt could be built before this server connected at all; `alwaysLoad` blocks the launch
+    // until it does, capped by the CLI at its 5s connect timeout — a bound this app already
+    // prices in many times over (MCP_CLIENT_TIMEOUT_MS 290s, LAUNCHING_MS 5min).
+    // NO-OP FOR THE RESTRICTED PROFILES by construction: read_only and dopl_only still deny
+    // ToolSearch, so deferral was already off for them and their tool set is byte-unchanged.
+    alwaysLoad: true,
     headers: {
       Authorization: `Bearer ${token}`,
       // WAKE-V1 RUNTIME DISAMBIGUATION. Every MCP call a DESKTOP-SPAWNED session makes
@@ -183,7 +210,47 @@ function buildMcpServers(doplToolsPolicy, workspaceId) {
   };
   const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
   if (pin) server.headers['X-Workspace-Id'] = pin;
-  if (Array.isArray(doplToolsPolicy)) server.tools = doplToolsPolicy;
+  // THE PER-SERVER `tools` POLICY IS NOT AN ALLOWLIST — AND PASSING ONE DELETED THIS SERVER.
+  // (F-177 follow-up, 2026-08-08. Verified against the bundled runtime, not inferred.)
+  //
+  // WHAT STOOD HERE: `if (Array.isArray(doplToolsPolicy)) server.tools = doplToolsPolicy;` —
+  // the SHORT dopl names out of `session-profiles.buildSessionToolConfig` (`['dopl_channel']`
+  // for read_only), intended as a second bound so a restricted profile's server only OFFERED
+  // its scoped tools.
+  //
+  // WHAT THE FIELD ACTUALLY IS. In @anthropic-ai/claude-agent-sdk 0.3.220 (Claude Code
+  // 2.1.220 — the version this app ships) every remote server config declares
+  // `tools?: McpServerToolPolicy[]`, and `McpServerToolPolicy` is
+  // `{ name: string; permission_policy?: 'always_allow'|'always_ask'|'always_deny';
+  // org_max_permission?: 'allow'|'ask'|'blocked' }` (sdk.d.ts — `McpHttpServerConfig`,
+  // `McpServerToolPolicy`). It is a PERMISSION policy carried on `mcp_set_servers` for
+  // REMOTE servers. There is no shape of it that means "offer only these", which is also
+  // why it exempts nothing from `ToolSearch` deferral (the F3b note above, and
+  // prompt-framing's).
+  //
+  // AND IT WAS NOT INERT, IT WAS DESTRUCTIVE. The CLI validates `--mcp-config` PER ENTRY
+  // with zod (`tools: E.array(E.object({name, permission_policy})).optional()` on the http
+  // variant) and a failed `safeParse` does not strip the offending field — it DROPS THE
+  // WHOLE SERVER and continues: `Skipped — invalid MCP server config for "dopl": tools.0: …`.
+  // Observed end-to-end against the bundled binary (`--print --output-format stream-json
+  // --verbose`, reading the init message's `mcp_servers`):
+  //     tools: ['dopl_channel']         ->  "mcp_servers": []            <- the entry is GONE
+  //     tools: [{ name: 'dopl_channel' }] ->  "mcp_servers": [{"name":"dopl",…}]
+  //     tools omitted                    ->  "mcp_servers": [{"name":"dopl",…}]
+  // So every `read_only` / `dopl_only` SDK session launched with NO dopl server at all — no
+  // `dopl_channel`, i.e. no delivery path, and the `alwaysLoad` guarantee above moot for the
+  // two profiles that carried a policy. `full` passes null and was never affected.
+  //
+  // WHY REMOVED RATHER THAN CONVERTED. The semantics this line wanted (a visibility
+  // allowlist) cannot be expressed by a permission policy, and inventing one on a PERMISSION
+  // surface is the worse error. Nothing is lost, because the SAME bound is already carried by
+  // SDK `disallowedTools`, whose complement over the server's real surface IS the old
+  // allowlist: read_only denies DOPL_SAFE_TOOLS + the admins + the retired tools, leaving
+  // `dopl_channel`; dopl_only denies the admins + the retired tools, leaving the safe tools +
+  // the channel. Everything that survives that still stops at `canUseTool`, which fails
+  // closed. `doplToolsPolicy` stays in the SIGNATURE so session-query's call shape and the
+  // profile table are untouched — it is deliberately unread.
+  // Pinned by test/mcp-server-tools-policy.test.mjs (including the deny-list join).
   return { dopl: server };
 }
 

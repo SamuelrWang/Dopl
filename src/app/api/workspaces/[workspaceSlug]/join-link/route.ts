@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   getOrCreateJoinLink,
   rotateJoinLink,
@@ -48,9 +48,5 @@ export const POST = withUserAuth(
 );
 
 function toErrorResponse(err: unknown): NextResponse {
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json({ error: message }, { status: 500 });
+  return toHttpErrorResponse("api/workspaces/[workspaceSlug]/join-link", err);
 }

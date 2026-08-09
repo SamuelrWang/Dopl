@@ -49,6 +49,10 @@ function harness() {
     sessions,
     atWindowCap: () => sessions.size >= MAX,
     settleSession: (s) => { calls.settled.push(s.key); s.settled = true; sessions.delete(s.key); },
+    // C-5 (2026-08-08): eviction runs through the REDUCER now (`inactive`), so it posts the
+    // calm status note instead of tearing the window down in silence. The fake mirrors the one
+    // consequence the budget depends on — the settle effect frees the slot.
+    dispatch: (s, ev) => { if (ev && ev.type === "inactive") { calls.settled.push(s.key); s.settled = true; sessions.delete(s.key); } },
     getSdk: async () => ({ query: () => ({}) }),
     startSession: async () => null,
     hasLiveSession: () => false,

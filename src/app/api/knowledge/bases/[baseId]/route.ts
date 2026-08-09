@@ -6,7 +6,7 @@ import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
   getBaseById,
-  softDeleteBase,
+  deleteBase,
   updateBase,
 } from "@/features/knowledge/server/service";
 import { KnowledgeBaseUpdateSchema } from "@/features/knowledge/schema";
@@ -44,7 +44,7 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = requireBaseId(auth);
     const ctx = buildKnowledgeContext(auth);
-    await softDeleteBase(ctx, id);
+    await deleteBase(ctx, id);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

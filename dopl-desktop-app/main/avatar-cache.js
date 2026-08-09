@@ -39,7 +39,7 @@ function isHttpsUrl(url) {
 // stays testable; it blocks IP-LITERAL and obvious internal hostnames. A public
 // hostname that DNS-rebinds to an internal IP is out of scope here (avatar_url
 // is not user-settable, redirect:'error' blocks the 302 bypass, and the fetch is
-// an image-only, no-exfil GET) — tracked as residual in F-09x.
+// an image-only, no-exfil GET) — tracked as residual in F-166.
 function ipv4Private(host) {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (!m) return false;

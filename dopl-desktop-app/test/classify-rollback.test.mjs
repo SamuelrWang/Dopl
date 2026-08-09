@@ -48,10 +48,9 @@ const { classify } = new Function(
 const ME = "me-uuid";
 const U2 = "author-uuid";
 
-function makeEntry({ memberCount, isMember, myNotifyScope }) {
+function makeEntry({ memberCount, isMember }) {
   const channel = { id: "chan-abcdef01", name: "General", memberCount };
   if (isMember !== undefined) channel.isMember = isMember;
-  if (myNotifyScope !== undefined) channel.myNotifyScope = myNotifyScope;
   return { channel };
 }
 
@@ -78,10 +77,12 @@ test("(rollback) the implicit 2-member trigger no longer consults a team-agent c
   assert.equal(classify(plain, base, ME), "trigger");
   assert.equal(classify(plain, { ...base, teamAgents: 3, rosterKnown: true }, ME), "trigger",
     "a stale count must not suppress the implicit trigger");
-  // …and the mute the operator really did ask for still wins.
+  // The per-channel mute that used to be the ONE exception to this is gone too
+  // (F-170, 2026-08-08): notify scope was removed from the product, so nothing
+  // — not a stale team count, not a stored preference — suppresses this verdict.
   assert.equal(
     classify(plain, { ...base, teamAgents: 3, channel: { ...base.channel, myNotifyScope: "none" } }, ME),
-    "ignore"
+    "trigger"
   );
 });
 

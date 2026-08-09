@@ -142,6 +142,30 @@ describe("the close proposal prompt", () => {
     expect(found?.outcome).toBe("completed");
   });
 
+  it("a re-proposal is a NEW message id, so a local dismissal cannot suppress it", () => {
+    // C-6 / F-172, the client half — and until 2026-08-08 it was a promise about
+    // a message the SERVER COULD NOT WRITE. `propose_close` keyed its
+    // idempotency on `(thread, outcome)` alone, so the second genuine proposal
+    // in an exchange was swallowed by `postMessage`'s short-circuit and this
+    // reader had nothing newer to find. The key is now scoped by an activity
+    // anchor (`service-tasks-propose.closeProposalClientMsgId`).
+    //
+    // `session-card.tsx` holds "Keep open" as `proposalDismissed !==
+    // proposal.message.id`, deliberately local and deliberately keyed by ID: the
+    // thread staying open IS the persisted state, so a persisted suppression
+    // would make the next real proposal invisible. That is only true while a
+    // re-proposal ARRIVES AS A DISTINCT MESSAGE, which is what this pins.
+    const dismissed = proposalMsg();
+    const raisedAgain = proposalMsg();
+
+    const live = readCloseProposal({
+      entries: [dismissed, msg({ body: "actually, one more thing" }), raisedAgain],
+    });
+
+    expect(live?.message.id).not.toBe(dismissed.id);
+    expect(live?.message.id).toBe(raisedAgain.id);
+  });
+
   it("an unreadable outcome falls back to `completed`, never to nothing", () => {
     // The prompt must render even if a future writer sends a shape this build
     // does not know: losing the prefill is a nuisance, losing the prompt is the

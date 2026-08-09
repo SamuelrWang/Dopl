@@ -275,15 +275,44 @@ export async function updateChannel(
 }
 
 /**
- * Soft-delete: hide from active reads, keep the row (`deleted_at`).
+ * TWO DELETES BEHIND ONE VERB, and the branch is `is_direct` (Samuel's
+ * decision, 2026-08-08 — C-16, F-173). Getting the branch backwards destroys
+ * data in one direction and strands it forever in the other, so it is stated
+ * here rather than inferred at the repository.
  *
- * A DM is the one case where BOTH members may do this. It has no real manage
- * hierarchy — one side holds the `owner` row only because they happened to
- * open the conversation — and on a DM the delete is the reversible op: either
- * side's next open revives the same row WITH its history
- * (`reopenDirectChannel`). Since a DM's membership is immutable (leaving is
- * refused, see `removeMember`), this is also the only exit the non-creator
- * has. Every other channel still requires owner / workspace-admin.
+ * **A DM: SOFT, and that is not a trash.** `channels.deleted_at` on a direct
+ * channel is the CLOSE half of close/reopen — either side's next open revives
+ * the same row with its full history (`reviveChannel` / `reopenDirectChannel`).
+ * Both members may do it: a DM has no real manage hierarchy (one side holds the
+ * `owner` row only because they happened to open the conversation), and since a
+ * DM's roster is immutable (`removeMember` refuses to tear the pair) this is the
+ * ONLY exit the non-creator has. Hard-deleting a DM would let one member destroy
+ * a shared transcript on a unilateral click, which is exactly what the
+ * reversible design exists to prevent. ENGINEERING §7 and migration
+ * `20260807110000`'s header both say so; do not "finish the job" here.
+ *
+ * **Anything else: HARD, cascading, gone.** Owner / workspace-admin only, as
+ * before — the authorization is untouched, only the write at the end changed,
+ * the same shape the rest of the app took in §2b. Before this, a non-DM delete
+ * stamped `deleted_at` and produced a row that was unreachable in every
+ * direction at once: no revive path (`reviveChannel`'s only caller is the DM
+ * reopen), no restore route, no trash, deliberately excluded from the purge
+ * sweep — and still holding its slug against a non-partial unique index, so
+ * recreating the channel by its own name 409'd against something nobody could
+ * see. "Permanently deletes" in the dialog was the only honest half of it.
+ * Now the row is really gone, its messages / members / threads cascade with it
+ * (`hardDeleteChannel` documents the FK chain), and the slug is reusable.
+ *
+ * NO SEPARATE REALTIME DOORBELL IS NEEDED, and this is the one non-obvious
+ * consequence. `channels` stays at `REPLICA IDENTITY DEFAULT`, so its own DELETE
+ * frame carries only the primary key and the subscribers' `workspace_id=eq.…`
+ * filter drops it. It does not matter: the cascade fires real DELETEs on
+ * `channel_members`, which DOES carry `workspace_id` in its replica identity
+ * (`20260807150000`) and rides the SAME refetch signal in both subscribers
+ * (`CHANNEL_TABLES`, `SYNC_TABLES`). One doorbell, already paid for. Putting an
+ * identity on `channels` instead would widen the WAL record of `touchChannel`,
+ * which runs on EVERY message post — the hottest update in the feature — to fix
+ * a frame that already arrives.
  */
 export async function deleteChannel(
   ctx: ChannelContext,
@@ -296,7 +325,11 @@ export async function deleteChannel(
   if (!allowed) {
     throw new ChannelForbiddenError("delete this channel");
   }
-  await repo.softDeleteChannel(ctx.workspaceId, channel.id);
+  if (channel.is_direct) {
+    await repo.softDeleteChannel(ctx.workspaceId, channel.id);
+    return;
+  }
+  await repo.hardDeleteChannel(ctx.workspaceId, channel.id);
 }
 
 // ─── Messages ───────────────────────────────────────────────────────
@@ -361,7 +394,11 @@ export async function postMessage(
     ctx,
     channel,
     input,
-    { closeProposal: opts.closeProposal, handoff: opts.handoff }
+    {
+      closeProposal: opts.closeProposal,
+      reopened: opts.reopened,
+      handoff: opts.handoff,
+    }
   );
 
   // `system` is server-reserved and rejected by the route schema, so a posted

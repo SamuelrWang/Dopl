@@ -4,6 +4,18 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [Unreleased]
 
+### Removed — BREAKING: trash / restore surface
+
+Dopl's soft delete is gone (delete is permanent and app-only), so the routes
+behind these were deleted and every method here 404'd.
+
+- Removed `DoplClient` methods: `restoreKbBase`, `listKbTrash`,
+  `restoreKbFolder`, `restoreKbEntry`, `restoreChat`, `listChatsTrash`,
+  `restoreOntologyCluster`.
+- Removed types: `KnowledgeTrashSnapshot`, `TrashedChat`.
+- The workflow trash methods (`listWorkflowTrash`, `restoreWorkflow`) are
+  untouched — their routes still exist; the tools that call them are hidden.
+
 ## [0.13.0] — 2026-06-04
 
 ### Removed — BREAKING: cluster "brain" feature

@@ -8,8 +8,6 @@ import {
   KnowledgeBaseMismatchError,
   KnowledgeBaseNotFoundError,
   KnowledgeBaseSlugConflictError,
-  KnowledgeNotTrashedError,
-  KnowledgeParentTrashedError,
   KnowledgePathConflictError,
   KnowledgeStaleVersionError,
   PathTraversalError,
@@ -50,12 +48,6 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   }
   if (err instanceof KnowledgePathConflictError) {
     return new HttpError(409, "KNOWLEDGE_PATH_CONFLICT", err.message);
-  }
-  if (err instanceof KnowledgeParentTrashedError) {
-    return new HttpError(409, "KNOWLEDGE_PARENT_TRASHED", err.message);
-  }
-  if (err instanceof KnowledgeNotTrashedError) {
-    return new HttpError(400, "KNOWLEDGE_NOT_TRASHED", err.message);
   }
   if (err instanceof KnowledgeStaleVersionError) {
     return new HttpError(412, "KNOWLEDGE_STALE_VERSION", err.message, {

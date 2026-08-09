@@ -185,7 +185,7 @@ describe("dopl_kb listings carry their own scope", () => {
     // The pre-existing paging notice only fired when there WAS a next page, so
     // the complete case was the silent one.
     expect(text).toContain("Folders complete");
-    expect(text).toContain("Trashed folders and entries are excluded");
+    expect(text).toContain("entries complete for this base");
   });
 
   it("op=search says a short result list is not an answer", async () => {
@@ -204,16 +204,6 @@ describe("dopl_kb listings carry their own scope", () => {
     expect(text).toContain("not proof of absence");
   });
 
-  it("op=list_trash stops claiming the trash is empty", async () => {
-    const text = await callTool(
-      registerKnowledgeTools,
-      stub({ listKbTrash: vi.fn(async () => ({ bases: [], folders: [], entries: [] })) }),
-      "dopl_kb",
-      { op: "list_trash" },
-    );
-    expect(text).not.toContain("Trash is empty.");
-    expect(text).toContain("Nothing in trash that you can see");
-  });
 });
 
 // ─── dopl_workflow — the list and the entry-index truncation ─────────

@@ -16,7 +16,7 @@ vi.mock("./retention", () => ({ resolveChatsWindow: vi.fn() }));
 import * as repo from "./repository";
 import type { ChatRowWithCount } from "./repository";
 import { resolveChatsWindow } from "./retention";
-import { appendMessages, purgeChat } from "./service-writes";
+import { appendMessages, deleteChat } from "./service-writes";
 import { ChatForbiddenError, ChatNotFoundError } from "./errors";
 import type { ChatContext } from "./service-shared";
 
@@ -121,52 +121,60 @@ describe("appendMessages — retention echo", () => {
   });
 });
 
-describe("purgeChat — invariants", () => {
+describe("deleteChat — permanent delete invariants", () => {
+  // Delete is PERMANENT as of 2026-08-07 (RETIREMENT-UNWIRING-PLAN §2b): there
+  // is no trash, no restore, no purge. `deleteChat` resolves a LIVE chat via
+  // `requireOwnChat` and hard-deletes it in one step. These pin the gate (which
+  // is unchanged) and the fact that the write is a real DELETE.
   beforeEach(() => {
     vi.mocked(repo.hardDeleteChat).mockResolvedValue(undefined);
   });
 
-  it("refuses when the chat is not in trash (live/absent → not found, no delete)", async () => {
-    // findDeletedChatById resolves ONLY `deleted_at IS NOT NULL` rows and is
-    // workspace-scoped, so a live row, an unknown id, or a cross-workspace id
-    // all come back null — this one lookup covers the live-row + cross-ws
-    // refusals at once.
-    vi.mocked(repo.findDeletedChatById).mockResolvedValue(null);
+  it("refuses an unknown or cross-workspace chat (not found, no delete)", async () => {
+    // findChatById is workspace-scoped, so an unknown id and a cross-workspace
+    // id both come back null — one lookup covers both refusals.
+    vi.mocked(repo.findChatById).mockResolvedValue(null);
 
-    await expect(purgeChat(ctx, "chat-1")).rejects.toBeInstanceOf(
+    await expect(deleteChat(ctx, "chat-1")).rejects.toBeInstanceOf(
       ChatNotFoundError
     );
     expect(repo.hardDeleteChat).not.toHaveBeenCalled();
   });
 
   it("refuses a non-owner", async () => {
-    // The row is in trash (findDeletedChatById returns it) but owned by
-    // someone else — owner-only, like restore.
-    vi.mocked(repo.findDeletedChatById).mockResolvedValue(
-      chatRow({ owner_id: "someone-else" })
+    vi.mocked(repo.findChatById).mockResolvedValue(
+      chatRow({ owner_id: "someone-else", visibility: "public" })
     );
 
-    await expect(purgeChat(ctx, "chat-1")).rejects.toBeInstanceOf(
+    await expect(deleteChat(ctx, "chat-1")).rejects.toBeInstanceOf(
       ChatForbiddenError
     );
     expect(repo.hardDeleteChat).not.toHaveBeenCalled();
   });
 
   it("refuses a workspace-scoped API-key caller even when they own it", async () => {
+    // The chat is PUBLIC/workspace so `canSeeChat` lets the key past the
+    // visibility gate — the refusal has to come from the ownership branch's
+    // `ctx.apiKeyWorkspaceId` clause, which is what this pins. (A private chat
+    // 404s one step earlier, which would test the visibility gate instead.)
     const apiKeyCtx: ChatContext = { ...ctx, apiKeyWorkspaceId: WS };
-    vi.mocked(repo.findDeletedChatById).mockResolvedValue(chatRow());
+    vi.mocked(repo.findChatById).mockResolvedValue(
+      chatRow({ visibility: "public" })
+    );
 
-    await expect(purgeChat(apiKeyCtx, "chat-1")).rejects.toBeInstanceOf(
+    await expect(deleteChat(apiKeyCtx, "chat-1")).rejects.toBeInstanceOf(
       ChatForbiddenError
     );
     expect(repo.hardDeleteChat).not.toHaveBeenCalled();
   });
 
-  it("hard-deletes a trashed chat owned by the caller", async () => {
-    vi.mocked(repo.findDeletedChatById).mockResolvedValue(chatRow());
+  it("HARD-deletes the caller's own chat — no tombstone write", async () => {
+    vi.mocked(repo.findChatById).mockResolvedValue(chatRow());
 
-    await purgeChat(ctx, "chat-1");
+    await deleteChat(ctx, "chat-1");
 
     expect(repo.hardDeleteChat).toHaveBeenCalledWith(WS, "chat-1");
+    // The soft-delete path is gone: nothing may stamp `deleted_at` any more.
+    expect(repo).not.toHaveProperty("softDeleteChat");
   });
 });

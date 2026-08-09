@@ -16,10 +16,11 @@ export async function seedWorkspace(
   const existing = await repo.listSkillsForWorkspace(ctx.workspaceId);
   if (existing.length > 0) return { skillsCreated: 0, skillIdBySlug: {} };
 
-  let skillsCreated = 0;
-  const skillIdBySlug: Record<string, { id: string; name: string }> = {};
-  for (const fixture of buildSeedSkills()) {
-    const skill = await repo.insertSkill({
+  // ONE insert, not one per fixture. This runs inside the post-signup
+  // redirect (auth/callback → seedNewWorkspace), where every serial
+  // round-trip is latency the user watches.
+  const skills = await repo.insertSkills(
+    buildSeedSkills().map((fixture) => ({
       workspaceId: ctx.workspaceId,
       slug: fixture.slug,
       name: fixture.name,
@@ -32,7 +33,7 @@ export async function seedWorkspace(
       // Seeded fixtures are starter content — public so every member
       // can see and run them. Owner-explicit `createSkill` defaults
       // to private; only the seed path overrides.
-      visibility: "public",
+      visibility: "public" as const,
       // Starter skills are onboarding scaffold: read-only to AGENTS (the
       // human owner can still edit them in the web UI), mirroring the seeded
       // "Dopl Guide" knowledge base. Set explicitly so it doesn't depend on
@@ -40,10 +41,13 @@ export async function seedWorkspace(
       agentWriteEnabled: false,
       body: fixture.body,
       createdBy: ctx.userId,
-      source: "user",
-    });
-    skillIdBySlug[fixture.slug] = { id: skill.id, name: skill.name };
-    skillsCreated += 1;
+      source: "user" as const,
+    }))
+  );
+
+  const skillIdBySlug: Record<string, { id: string; name: string }> = {};
+  for (const skill of skills) {
+    skillIdBySlug[skill.slug] = { id: skill.id, name: skill.name };
   }
-  return { skillsCreated, skillIdBySlug };
+  return { skillsCreated: skills.length, skillIdBySlug };
 }

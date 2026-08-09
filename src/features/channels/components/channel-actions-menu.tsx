@@ -17,7 +17,17 @@ interface MenuActions {
   onToggleArchive: () => void;
   /** Opens the thread's delete confirmation (this menu never deletes directly). */
   onRequestDelete: () => void;
-  onLeave: () => void;
+  /**
+   * Opens the thread's LEAVE confirmation — this menu never leaves directly
+   * either. It was `onLeave` and went straight to `removeChannelMember`, a real
+   * SQL DELETE, on one click with no dialog. On a PRIVATE channel that is
+   * unrecoverable by the user: `listChannels` returns public channels plus the
+   * ones you belong to, and `addMember`'s self-join branch requires
+   * `visibility === "public"`, so a misclick loses the room and its history
+   * until another member re-invites you. Both destructive items now report
+   * intent upward and the pane owns the dialog.
+   */
+  onRequestLeave: () => void;
 }
 
 /**
@@ -73,7 +83,7 @@ export function ChannelActionsMenuItems({
   onToggleVisibility,
   onToggleArchive,
   onRequestDelete,
-  onLeave,
+  onRequestLeave,
 }: {
   channel: Channel;
   canManage: boolean;
@@ -114,10 +124,20 @@ export function ChannelActionsMenuItems({
       {/*
         The non-owner's exit. A DM must NEVER offer "Leave channel" (Q2):
         leaving deletes one of the pair's two membership rows, which the server
-        now refuses outright because it destroys the conversation permanently.
-        The DM exit is the same reversible "Delete conversation" the other side
-        gets — it hides the thread for both and either side's next open brings
-        it back with its history — so both participants see it.
+        refuses outright because THAT is what destroys the conversation
+        permanently. The DM exit is the same REVERSIBLE "Delete conversation"
+        the other side gets — it hides the thread for both and either side's
+        next open brings it back with its history — so both participants see it.
+
+        DO NOT re-word THIS branch as permanent. Since 2026-08-08 (C-16, F-173)
+        `deleteChannel` BRANCHES on `is_direct`, and only the DM half is soft:
+        a direct channel is stamped `channels.deleted_at` and `reviveChannel` /
+        `reopenDirectChannel` restore the SAME row with its full history, so a
+        tombstoned DM is LIVE PRODUCT STATE (migration 20260807110000 excludes
+        the table for exactly that reason). Every OTHER channel now HARD-deletes
+        and cascades — which is why the owner's "Delete channel" item above
+        opens a dialog that says permanent, and this one must not. See
+        ENGINEERING.md §7, "channels.deleted_at ... IS A DM-ONLY MECHANIC".
       */}
       {channel.isMember &&
         !canManage &&
@@ -130,7 +150,7 @@ export function ChannelActionsMenuItems({
             Delete conversation
           </MenuItem>
         ) : (
-          <MenuItem icon={<LogOut size={14} />} onSelect={select(onLeave)}>
+          <MenuItem icon={<LogOut size={14} />} onSelect={select(onRequestLeave)}>
             Leave channel
           </MenuItem>
         ))}

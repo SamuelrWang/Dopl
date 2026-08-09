@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { pendingRow } from "@/shared/ui/pending";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphState } from "../graph-state";
 import type { AttributeValue } from "../types";
@@ -12,6 +13,9 @@ interface Props {
   objectId: string;
   graph: GraphState;
   selected: boolean;
+  /** Optimistically created, POST not answered: the card is the real content,
+   *  dimmed and inert — its id is provisional and cannot be selected into. */
+  pending?: boolean;
   onSelect: (id: string) => void;
 }
 
@@ -21,7 +25,13 @@ interface Props {
  * Hovering shows the cursor-following quick view (suppressed while the
  * dropdown is open).
  */
-export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
+export function KanbanCard({
+  objectId,
+  graph,
+  selected,
+  pending = false,
+  onSelect,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
   const { nameOf } = useWorkspaceResources();
@@ -33,11 +43,14 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
       onMouseEnter={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setHoverPos(null)}
-      className={cn(
-        "overflow-hidden rounded-xl border bg-bg-elevated transition-shadow",
-        selected
-          ? "border-border-highlight shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)]"
-          : "border-border-default shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]"
+      {...pendingRow(
+        pending,
+        cn(
+          "overflow-hidden rounded-xl border bg-bg-elevated transition-shadow",
+          selected
+            ? "border-border-highlight shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)]"
+            : "border-border-default shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]"
+        )
       )}
     >
       <button

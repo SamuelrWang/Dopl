@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
-import { HttpError } from "@/shared/lib/http-error";
 import { listTrash } from "@/features/workflows/server/service";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 function toErrorResponse(err: unknown): NextResponse {
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message } },
-    { status: 500 }
-  );
+  return toHttpErrorResponse("api/workflows/trash", err);
 }
 
 async function handleGet(

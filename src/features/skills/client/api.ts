@@ -159,29 +159,6 @@ export async function writeSkillBody(
   return { file: data.file, skillUpdatedAt: data.skillUpdatedAt };
 }
 
-// ─── Trash ──────────────────────────────────────────────────────────
-
-export interface SkillsTrash {
-  skills: Skill[];
-}
-
-export async function fetchSkillsTrash(
-  workspaceId?: string
-): Promise<SkillsTrash> {
-  return request<SkillsTrash>("/api/skills/trash", { workspaceId });
-}
-
-export async function restoreSkill(
-  skillId: string,
-  workspaceId?: string
-): Promise<Skill> {
-  const data = await request<{ skill: Skill }>(
-    `/api/skills/restore/${enc(skillId)}`,
-    { method: "POST", workspaceId }
-  );
-  return data.skill;
-}
-
 // ─── History (versions + audit timeline) ────────────────────────────
 
 export interface SkillHistoryPayload {
@@ -219,6 +196,23 @@ export async function restoreSkillVersion(
     { method: "POST", workspaceId }
   );
   return data.file;
+}
+
+// ─── Delete ─────────────────────────────────────────────────────────
+
+/**
+ * PERMANENT delete — the soft-delete removal (§2b) turned the server route
+ * into a hard delete, so there is no trash and no restore behind this. Every
+ * call site must be gated by a `ConfirmDialog` first.
+ */
+export async function deleteSkill(
+  slug: string,
+  workspaceId?: string
+): Promise<void> {
+  await request<void>(`/api/skills/${enc(slug)}`, {
+    method: "DELETE",
+    workspaceId,
+  });
 }
 
 // ─── Duplicate ──────────────────────────────────────────────────────

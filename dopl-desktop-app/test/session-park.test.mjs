@@ -65,7 +65,18 @@ function harness(over = {}) {
     getSdk: async () => { if (cfg.gateSdk) await cfg.gateSdk; return fakeSdk; },
     buildSdkOptions: (s) => { calls.buildSdkOptions.push(s); return { resume: s.resumeSdkId, canUseTool: "GATE", settingSources: [] }; },
     consume: (s, q) => calls.consume.push({ s, q }),
-    dispatch: (s, ev) => calls.dispatch.push({ s, ev }),
+    // C-5: the window-budget eviction dispatches `inactive` rather than calling settle()
+    // directly, so the calm lifecycle post happens through the reducer like every other
+    // terminal. The fake mirrors the ONE consequence eviction depends on — the session leaves
+    // the registry — and records the event so a test can prove WHICH terminal was used.
+    dispatch: (s, ev) => {
+      calls.dispatch.push({ s, ev });
+      if (ev && ev.type === "inactive") {
+        calls.settled.push({ key: s.key, outcome: "ended" });
+        s.settled = true;
+        sessions.delete(s.key);
+      }
+    },
     // Real startSession sets the Map entry SYNCHRONOUSLY (before its own first await); the
     // fake mirrors that so a re-check (FIX #7) sees a session created during a getSdk await.
     startSession: async (spec) => { calls.startSession.push(spec); const sess = { key: spec.key, settled: false, ...spec }; sessions.set(spec.key, sess); return sess; },
@@ -260,7 +271,7 @@ test("FIX #7: at the cap, the OLDEST untouched parked shell is settled to free a
   h.sessions.set("old:a", shell({ key: "old:a", startedAt: 10 }));
   h.sessions.set("new:b", shell({ key: "new:b", startedAt: 99 }));
   assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
-  assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "interrupted" }], "LRU by creation");
+  assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "ended" }], "LRU by creation");
   assert.equal(h.calls.startSession.length, 1, "and the reopen goes through");
 });
 
@@ -288,24 +299,43 @@ test("FIX #7: eviction that does not clear the cap still refuses (never over-bud
   // Q6b: a cap refusal now NAMES itself, so the web card can say "close a window" instead of
   // "this thread has no session on this machine" (which would be a lie).
   assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false, reason: "busy" });
-  assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "interrupted" }], "one was freed");
+  assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "ended" }], "one was freed");
   assert.equal(h.calls.startSession.length, 0, "but the cap still holds, so no window opens");
 });
 
-test("FIX #7: evictIdleShell settles 'interrupted', which KEEPS the record + sdk id reopenable", () => {
+// C-5 (2026-08-08) — EVICTION GOES THROUGH THE REDUCER, so it POSTS.
+//
+// It used to call the engine's `settle()` directly, which is teardown only: no reducer, no
+// lifecycle effect, nothing on the wire. So the requester on the OTHER machine went on
+// watching a card that said "Working…" for a session this Mac had already reclaimed —
+// one of the three silent terminals the audit's C-5 names. `inactive` runs the ordinary
+// `endEffects` set (abort → calm `task_progress` note → `ended` emit → the same settle).
+test("C-5: evictIdleShell ENDS the shell through the reducer, not through a bare settle", () => {
   const h = harness();
   const victim = shell({ key: "old:a" });
   h.sessions.set("old:a", victim);
   assert.equal(h.evictIdleShell(), true);
-  assert.equal(h.calls.settled[0].outcome, "interrupted", "never completed/failed (that clears the sdk id)");
+  assert.deepEqual(h.calls.dispatch.map((d) => d.ev), [{ type: "inactive" }],
+    "the ONE terminal event — never a second teardown path beside the reducer's");
   assert.equal(victim.settled, true);
   assert.equal(h.evictIdleShell(), false, "and a settled shell is not evictable twice");
 });
 
-test("FIX #7: no eviction is attempted when the engine wired no settle (mid-wave safety)", () => {
+test("C-5: the evicted outcome is still one that KEEPS the record + sdk id reopenable", () => {
+  // `session-engine.settle` clears the resume map only for 'completed' / 'failed'. The
+  // `inactive` terminal settles 'ended', so the evicted task reopens with its history intact
+  // — this drops a dormant window, never a conversation.
   const h = harness();
   h.sessions.set("old:a", shell({ key: "old:a" }));
-  delete h.deps.settleSession;
+  h.evictIdleShell();
+  assert.equal(h.calls.settled[0].outcome, "ended");
+  assert.ok(!["completed", "failed"].includes(h.calls.settled[0].outcome));
+});
+
+test("FIX #7: no eviction is attempted when the engine wired no dispatch (mid-wave safety)", () => {
+  const h = harness();
+  h.sessions.set("old:a", shell({ key: "old:a" }));
+  delete h.deps.dispatch;
   assert.equal(h.evictIdleShell(), false, "fail restrictive rather than half-settling a session");
 });
 

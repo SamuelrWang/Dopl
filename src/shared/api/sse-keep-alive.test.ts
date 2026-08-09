@@ -129,12 +129,28 @@ describe("withSseKeepAlive", () => {
     await sleep(20);
   });
 
-  it("marks the response no-buffer / no-transform and keeps the status", () => {
+  it("marks the response no-buffer / no-cache and keeps the status", () => {
     const wrapped = withSseKeepAlive(sseResponse("", { status: 200 }), 5);
     expect(wrapped.status).toBe(200);
     expect(wrapped.headers.get("content-type")).toBe("text/event-stream");
     expect(wrapped.headers.get("x-accel-buffering")).toBe("no");
-    expect(wrapped.headers.get("cache-control")).toContain("no-transform");
+    expect(wrapped.headers.get("cache-control")).toBe("no-cache");
+  });
+
+  it("does NOT send no-transform — it would forbid compressing every MCP result", () => {
+    // This assertion used to be its inverse. `no-transform` (RFC 9111
+    // §5.2.2.6) forbids an intermediary from applying a content coding, and
+    // this is the response carrying every JSON-RPC tool result, including the
+    // ontology reads and the `dopl_map` manifest the server instructions
+    // mandate before an agent's first reply. Shipping it told the CDN not to
+    // compress the largest agent-facing payloads in the product (P0-3).
+    //
+    // The anti-BUFFERING guarantee this wrapper actually needs is
+    // `X-Accel-Buffering: no`, asserted above and untouched. Compression does
+    // not buffer SSE (codings flush per write) and the decoded frames are
+    // byte-identical, so nothing the keep-alive protects depends on it.
+    const wrapped = withSseKeepAlive(sseResponse("", { status: 200 }), 5);
+    expect(wrapped.headers.get("cache-control")).not.toContain("no-transform");
   });
 
   it("holds the cadence under the common proxy idle timeouts", () => {

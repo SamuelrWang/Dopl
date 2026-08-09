@@ -36,6 +36,8 @@ const EXPORTED = [
   "reportRow", "setDigest", "trackOrigin", "ownedBy", "groupByWorkspace",
   "reportedWorkspaces", "rememberWorkspace", "retryable", "send", "cycle", "schedule",
   "start", "kick", "stop",
+  // C-2: the client-side refusal to put an ad-hoc (thread-less) session on the wire.
+  "serverReportable", "reportable",
 ];
 
 /** A fresh copy of the module, with a fake transport, a fake log and a fake store. */
@@ -70,10 +72,24 @@ export function load(opts = {}) {
   };
 }
 
+// THE FIXTURE IS A REAL WIRE VALUE NOW (C-2, 2026-08-08). It used to read
+// `chan-1` / `task-1`, and BOTH halves of that are rejected by the endpoint this module
+// posts to: `SESSION_KEY_RE` is hex-and-dashes only (`t`, `s`, `k` are not hex) and
+// `threadId` is `z.string().uuid()`. So every assertion in these suites was green about a
+// payload the server would 400 — the audit's "asserted as correct by a test on one side of
+// a boundary the other side violates". These are uuids, so the suites now prove the CONTRACT
+// and `ADHOC_TASK_ID` is the shape that must be filtered rather than the shape we pretend is
+// normal. `ADHOC_TASK_ID` is exactly what `trigger.taskIdFor` mints for an unthreaded inbound.
+export const CHAN_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+export const TASK_A = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
+export const CHAN_B = "cccccccc-3333-4333-8333-cccccccccccc";
+export const TASK_B = "dddddddd-4444-4444-8444-dddddddddddd";
+export const ADHOC_TASK_ID = `task-${CHAN_A}-42`;
+
 /** One report entry, as `session-summary.reportList()` builds them. */
 export function entry(over = {}) {
-  const channelId = over.channelId || "chan-1";
-  const taskId = over.taskId === undefined ? "task-1" : over.taskId;
+  const channelId = over.channelId || CHAN_A;
+  const taskId = over.taskId === undefined ? TASK_A : over.taskId;
   return {
     sessionId: "sess-1",
     key: `${channelId}:${taskId}`,
@@ -86,6 +102,11 @@ export function entry(over = {}) {
     threadTitle: "Ship the thing",
     ...over,
   };
+}
+
+/** The unthreaded inbound — the ordinary DM — as the engine really keys it. */
+export function adHocEntry(over = {}) {
+  return entry({ taskId: ADHOC_TASK_ID, name: "onyx", ...over });
 }
 
 /** A summary module stand-in: the writer only ever uses `subscribe` + `reportList`. */

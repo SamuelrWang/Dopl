@@ -29,8 +29,8 @@ export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepPro
         Name Your Workspace
       </h2>
       <p className="mt-2.5 text-[14px] leading-relaxed text-[#9a9a9a]">
-        Your knowledge bases, skills, and workflows all live here. You can
-        rename it any time.
+        Your knowledge bases and skills all live here. You can rename it any
+        time.
       </p>
 
       <div className="mt-7 space-y-5">

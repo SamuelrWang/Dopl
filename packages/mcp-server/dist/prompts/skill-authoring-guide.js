@@ -26,7 +26,7 @@ A skill is a SINGLE-FILE procedural prompt: one tight SKILL.md the agent discove
 
 - **A skill is ONE file.** There are no supplementary files. Everything the agent needs to *act* lives in SKILL.md.
 - **Reference material goes in knowledge bases, not the skill.** Long specs, lookup tables, schemas, transcripts, big examples — put them in a KB and link from the body as \`[label](dopl://kb/<slug>)\`. The agent loads the KB with \`dopl_kb(op='read_file')\` only when it needs it. The skill stays short and procedural.
-- **Prefer MANY SMALL skills over monoliths.** One skill = one action (draft the email, triage the ticket, write the ADR). Small skills attach cleanly to ontology objects and workflow actions and trigger more reliably. If a skill is trying to do three things, split it into three.
+- **Prefer MANY SMALL skills over monoliths.** One skill = one action (draft the email, triage the ticket, write the ADR). Small skills attach cleanly to ontology objects and trigger more reliably. If a skill is trying to do three things, split it into three.
 - **Organize with folders.** Set \`folder\` on create/update (a plain-text label) to group related small skills, e.g. "Outreach", "Research".
 
 ## Required SKILL.md structure

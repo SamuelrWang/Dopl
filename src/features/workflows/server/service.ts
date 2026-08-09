@@ -361,7 +361,6 @@ export type {
   WorkflowUpdateRequest,
   WorkflowScope,
   WorkflowTrashRow,
-  TrashedWorkflow,
 } from "./service-shared";
 
 export {
@@ -374,6 +373,4 @@ export {
   deleteWorkflow,
   restoreWorkflow,
   listTrash,
-  listTrashedWorkflows,
-  purgeWorkflow,
 } from "./service-trash";

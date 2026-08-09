@@ -66,6 +66,22 @@ function ok(body: unknown): BridgeResponse {
 
 /** Routes every path the shell + modal read; anything else fails loudly. */
 function defaultBridge(path: string): Promise<BridgeResponse> {
+  // The shell's single boot read (P0-2). `me` stays in the table below: the
+  // modal still reads it directly, off the entry boot seeded.
+  if (path === "/api/boot") {
+    return Promise.resolve(
+      ok({
+        isOnboarded: true,
+        surveyCompleted: true,
+        userId: "user-1",
+        workspace: WORKSPACE,
+        segment: SEGMENT,
+        needsRedirect: false,
+        role: "owner",
+        myAccess: { defaultLevel: "edit", overrides: [] },
+      })
+    );
+  }
   if (path.startsWith("/api/workspaces/resolve")) {
     return Promise.resolve(
       ok({ workspace: WORKSPACE, canonical: SEGMENT, needsRedirect: false })

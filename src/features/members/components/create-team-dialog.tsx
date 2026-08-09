@@ -8,7 +8,7 @@ import { Check } from "lucide-react";
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { cn } from "@/shared/lib/utils";
 import type { AccessMatrixResource } from "@/features/teams/types";
-import type { AccessLevel } from "@/features/teams/access-levels";
+import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { WorkspaceMemberView } from "../types";
 import { DEFAULT_TEAM_COLOR } from "../constants";
 import { TeamAccessConflictError, createTeam } from "../teams-client";
@@ -29,7 +29,9 @@ interface Props {
 
 /**
  * Create-team flow: name, color swatch, member multi-pick, and initial
- * per-resource access levels (knowledge bases + workflows).
+ * per-resource access levels. `resources` arrives already filtered by
+ * `use-workspace-resources` (retired types never reach this dialog), so
+ * the grant rows render whatever grantable resources survive.
  */
 export function CreateTeamDialog({
   workspaceSlug,
@@ -93,8 +95,10 @@ export function CreateTeamDialog({
         color,
         memberIds: [...selected],
         grants: [...grants.entries()].map(([key, level]) => {
+          // Key is `${resourceType}|${resourceId}` from the row above, so the
+          // cast just re-splits what this component encoded.
           const [resourceType, resourceId] = key.split("|") as [
-            "knowledge_base" | "workflow",
+            TeamResourceType,
             string,
           ];
           return { resourceType, resourceId, level };

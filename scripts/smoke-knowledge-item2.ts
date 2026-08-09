@@ -5,7 +5,8 @@
  *   2. `mapKnowledgeError` returns the right HttpError code for each
  *      domain-error class, and `null` for unknown errors.
  *   3. End-to-end CRUD round-trip via the service: create → update
- *      (clearing description with null) → soft-delete → restore.
+ *      (clearing description with null) → hard-delete (permanent since
+ *      2026-08-07; there is no restore).
  *   4. Cross-base mismatch returns the expected error class.
  *
  * Routes themselves are thin wrappers; if the service paths are sound
@@ -41,9 +42,11 @@ async function main() {
     listBases,
     createBase,
     updateBase,
-    softDeleteBase,
-    restoreBase,
+    deleteBase,
   } = await import("@/features/knowledge/server/service");
+  const { findBaseById } = await import(
+    "@/features/knowledge/server/repository"
+  );
   const { mapKnowledgeError } = await import(
     "@/features/knowledge/server/http-mapping"
   );
@@ -116,22 +119,18 @@ async function main() {
   }
   console.log(`✅ updateBase: description cleared via null patch`);
 
-  await softDeleteBase(ctx, scratch.id);
+  // Delete is PERMANENT (2026-08-07) — the row is gone, not tombstoned, and
+  // there is no restore to probe. This doubles as the scratch-base cleanup.
+  await deleteBase(ctx, scratch.id);
   const afterDelete = await listBases(ctx);
   if (afterDelete.some((b) => b.id === scratch.id)) {
-    throw new Error("scratch base still appears in active list after soft-delete");
+    throw new Error("scratch base still appears in active list after delete");
   }
-  console.log(`✅ softDeleteBase: removed from active list`);
-
-  const restored = await restoreBase(ctx, scratch.id);
-  if (restored.deletedAt !== null) {
-    throw new Error("restoreBase did not clear deleted_at");
+  const gone = await findBaseById(scratch.id, true);
+  if (gone !== null) {
+    throw new Error("deleteBase left a row behind — delete must be permanent");
   }
-  console.log(`✅ restoreBase: deletedAt cleared`);
-
-  // Cleanup — soft-delete the scratch base so we don't leave noise.
-  await softDeleteBase(ctx, scratch.id);
-  console.log(`✅ cleanup: scratch base soft-deleted`);
+  console.log(`✅ deleteBase: row hard-deleted (no tombstone)`);
 
   console.log(`\nAll Item 2 smoke checks passed.`);
 }

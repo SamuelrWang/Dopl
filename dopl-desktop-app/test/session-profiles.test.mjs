@@ -12,11 +12,13 @@
 //   D2 — and it NEVER auto-allows there any more: even an own-channel op=post gates,
 //        so no message leaves the machine without a click. The task grant a post can
 //        earn is the narrow POST_GRANT key, which cannot open a DM.
-//   H2 — under `full` the dangerous subset (Task/Agent/Cron*/SendMessage/… + dopl
-//        admins) is HARD-DENIED, not merely gated; only the visible+reversible work
-//        tools (Bash/Write/Edit/NotebookEdit/…) stay live-gated.
-//   H3 — Task/Agent are hard-denied under EVERY profile (subagents don't inherit the
-//        canUseTool bound).
+//   H2 + H3 — REVERSED FOR `full` (2026-08-08, F-177). `full`'s hard-deny is now the
+//        UNIVERSAL FLOOR and nothing else: the dopl admins + the retired dopl tools. The
+//        delegation / outbound / persistence / escalation built-ins (Task, Agent, Artifact,
+//        SendMessage, Cron*, Skill, ToolSearch, …) are LIVE-GATED there, exactly like Bash —
+//        which was live-gated under `full` all along, and which is why denying the others was
+//        never a boundary. read_only and dopl_only still hard-deny all of them, Task/Agent
+//        included, so H3 survives everywhere a session is actually contained.
 //   F2 — EVERY dopl_channel grant is op-scoped and the bare tool name allows nothing:
 //        a click taken on op=read can no longer authorize op=post or op=open for the task.
 
@@ -39,8 +41,13 @@ const {
   DOPL_SAFE_TOOLS,
   DENIED_BUILTINS,
   DOPL_ADMIN_TOOLS,
+  // Retired server tools (2026-08-07) — still hard-denied, so the block reads them.
+  RETIRED_DOPL_TOOLS,
   DOPL_CHANNEL_TOOL,
   DOPL_SERVER_PREFIX,
+  // F-177: the SDK lane's `full` hard-deny IS this constant now — injected, not restated, so
+  // the block is pinned to the SAME floor the headless lane applies.
+  UNIVERSAL_HARD_DENY,
   normalizeProfile,
 } = require(join(HERE, "..", "main", "tool-profiles.js"));
 
@@ -72,21 +79,27 @@ const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
-  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
+  "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName);
 
 const CHANNEL_SHORT = "dopl_channel";
-// The work tools kept live-gated under `full` (everything else in DENIED_BUILTINS is
-// hard-denied, plus the dopl admins). Mirrors SESSION_GATED_WORK_TOOLS in the block.
-// FIX 2 (2026-08-02): BashOutput / KillShell joined this set. They are the READ HALF of an
-// already-gated Bash, and hard-denying them made background Bash unusable under `full`.
+// The work tools that were live-gated under `full` even when the rest of DENIED_BUILTINS was
+// hard-denied there. F-177 released the rest, so this list no longer PARTITIONS anything — it
+// is kept because these are the tools whose gated-ness is oldest and most load-bearing, and
+// several tests below still drive them by name.
 const GATED_WORK = ["Bash", "BashOutput", "KillShell", "Write", "Edit", "MultiEdit", "NotebookEdit"];
-const HARD_DENY = DENIED_BUILTINS.filter((t) => !GATED_WORK.includes(t)).concat(DOPL_ADMIN_TOOLS);
+// F-177 — the whole of `full`'s hard-deny, and the SAME constant the headless lane applies.
+// Written as the injected value rather than re-derived: a test that recomputes the partition
+// would pass against either behaviour, which is exactly how the two lanes drifted apart.
+const HARD_DENY = UNIVERSAL_HARD_DENY.slice();
+// What `full` used to hard-deny on top of that floor, and now live-gates instead. Derived by
+// subtraction from the REAL shared blacklist so a new DENIED_BUILTINS entry joins it for free.
+const RELEASED_UNDER_FULL = DENIED_BUILTINS.filter((t) => !GATED_WORK.includes(t));
 const post = (channel) => ({ op: "post", channel });
 
 // ── shortDoplName ────────────────────────────────────────────────────────────
@@ -115,7 +128,7 @@ test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/ad
   const cfg = buildSessionToolConfig("read_only");
   assert.deepEqual(cfg.builtinTools, READ_BUILTINS);
   assert.deepEqual(cfg.preApproved, READ_BUILTINS); // FIX H1: no dopl_channel here
-  for (const t of DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, DOPL_SAFE_TOOLS)) {
+  for (const t of DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS)) {
     assert.ok(cfg.disallowedTools.includes(t), `read_only must deny ${t}`);
   }
   assert.deepEqual(cfg.doplToolsPolicy, [CHANNEL_SHORT]);
@@ -124,11 +137,12 @@ test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/ad
 // ── dopl_only ────────────────────────────────────────────────────────────────
 
 // FIX F2 (v2.9 review): the WORKSPACE-WRITE dopl tools. "Non-admin" is not "read-only" —
-// dopl_kb alone registers write_file / create_base / create_folder / move_file, and the other
-// five carry the same create+update shape. A write lands OFF this machine in rows every
+// dopl_kb alone registers write_file / create_base / create_folder / move_file, and the
+// others carry the same create+update shape. A write lands OFF this machine in rows every
 // workspace member can read, which is the same class of move as an outbound post.
+// Four since the 2026-08-07 retirement (dopl_workflow / dopl_cluster are unregistered).
 const DOPL_WRITE = ["mcp__dopl__dopl_kb", "mcp__dopl__dopl_skill", "mcp__dopl__dopl_ontology",
-  "mcp__dopl__dopl_workflow", "mcp__dopl__dopl_chats", "mcp__dopl__dopl_cluster"];
+  "mcp__dopl__dopl_chats"];
 const DOPL_READ = DOPL_SAFE_TOOLS.filter((t) => !DOPL_WRITE.includes(t));
 
 test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins denied", () => {
@@ -141,7 +155,7 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
     assert.ok(!cfg.preApproved.includes(t), `dopl_only must NOT shadow ${t}`);
     assert.ok(!cfg.disallowedTools.includes(t), `${t} must REACH the gate, not be denied`);
   }
-  for (const t of DENIED_BUILTINS.concat(DOPL_ADMIN_TOOLS)) {
+  for (const t of DENIED_BUILTINS.concat(DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS)) {
     assert.ok(cfg.disallowedTools.includes(t), `dopl_only must deny ${t}`);
   }
   for (const t of WEB_TOOLS) assert.ok(!cfg.disallowedTools.includes(t), `dopl_only must not deny ${t}`);
@@ -152,25 +166,57 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
   }
 });
 
-// ── full (FIX H2: dangerous subset HARD-DENIED, only work tools live-gated) ─────
+// ── full (F-177: the hard-deny is the UNIVERSAL FLOOR; everything else live-gates) ─────
 
-test("FIX H2: full pre-approves only local reads; the dangerous subset is HARD-DENIED, work tools stay gated", () => {
+test("F-177: full pre-approves only local reads and hard-denies ONLY the universal floor", () => {
   const cfg = buildSessionToolConfig("full");
   assert.deepEqual(cfg.builtinTools, [], "no positive bound: work tools offered then gated per call");
   assert.deepEqual(cfg.preApproved, READ_BUILTINS, "FIX H1: no dopl_channel pre-approved");
   assert.equal(cfg.doplToolsPolicy, null, "no per-server scoping under full");
-  // The delegation/persistence/exfil/escalation subset + dopl admins are hard-denied.
-  for (const t of HARD_DENY) assert.ok(cfg.disallowedTools.includes(t), `full must HARD-DENY ${t}`);
-  // The visible + reversible work tools (and WebFetch) stay live-gated, NOT denied.
+  // THE NEW INVARIANT, asserted as an EQUALITY rather than a containment: a containment check
+  // ("the floor is denied") passed under the old, broader set too, which is how a lane could
+  // hard-deny 25 extra built-ins with nothing failing.
+  assert.deepEqual(cfg.disallowedTools.slice().sort(), HARD_DENY.slice().sort(),
+    "full denies the retired + admin dopl tools and NOTHING else");
+});
+
+test("F-177: the delegation / outbound / persistence / escalation built-ins live-gate under full", () => {
+  const cfg = buildSessionToolConfig("full");
+  // The named set is what Samuel's decision released — every one of them is now merely gated.
+  for (const t of RELEASED_UNDER_FULL) {
+    assert.ok(!cfg.disallowedTools.includes(t), `${t} must no longer be hard-denied under full`);
+    assert.ok(!cfg.preApproved.includes(t), `${t} must NOT be pre-approved — it stops on a button`);
+    assert.equal(grantDecision({ profile: "full", toolName: t }), "gate", `${t} gates under full`);
+  }
+  // …and the release is REAL, not vacuous: these specific names were hard-denied before F-177.
+  for (const t of ["Task", "Agent", "Artifact", "SendMessage", "CronCreate", "Skill", "ToolSearch"]) {
+    assert.ok(RELEASED_UNDER_FULL.includes(t), `${t} left DENIED_BUILTINS — re-read F-177`);
+  }
+  // The work tools (and WebFetch) are where they always were: gated, never shadowed.
   for (const t of GATED_WORK.concat(["WebFetch"])) {
     assert.ok(!cfg.disallowedTools.includes(t), `${t} must stay live-gated under full (not hard-denied)`);
     assert.ok(!cfg.preApproved.includes(t), `${t} must NOT be pre-approved (or the button never shows)`);
   }
 });
 
-test("unknown profiles normalize to full", () => {
-  assert.deepEqual(buildSessionToolConfig("nonsense"), buildSessionToolConfig("full"));
-  assert.deepEqual(buildSessionToolConfig(undefined), buildSessionToolConfig("full"));
+test("F-177: the two lanes give the SAME answer for `full` — same names, same constant", () => {
+  // The whole point of the change. session-profiles' SESSION_HARD_DENY is literally
+  // tool-profiles' UNIVERSAL_HARD_DENY, and the headless lane's buildDeniedTools('full')
+  // returns it too, so neither lane can move without the other.
+  const headless = require(join(HERE, "..", "main", "tool-profiles.js")).buildDeniedTools("full");
+  assert.deepEqual(buildSessionToolConfig("full").disallowedTools.slice().sort(),
+    headless.slice().sort(), "SDK `full` and headless `full` must deny exactly the same set");
+});
+
+// C-11 (2026-08-08): unknown profiles used to normalize to FULL. `myAgentToolProfile` is null
+// for a non-member read, an unrefreshed DTO and any out-of-enum column value, so a profile
+// that could not be resolved silently became the widest one — while `session-park.knownProfile`
+// answered the same question with read_only one file over. The SDK lane inherits the fix for
+// free, because it reads the SAME `normalizeProfile`.
+test("unknown profiles normalize to read_only (fail closed), not to full", () => {
+  assert.deepEqual(buildSessionToolConfig("nonsense"), buildSessionToolConfig("read_only"));
+  assert.deepEqual(buildSessionToolConfig(undefined), buildSessionToolConfig("read_only"));
+  assert.notDeepEqual(buildSessionToolConfig(undefined), buildSessionToolConfig("full"));
 });
 
 // ── the shadow invariant across every profile ────────────────────────────────
@@ -318,16 +364,31 @@ test("grantDecision: a hard-denied tool -> 'deny', even when allowed-for-task (d
   assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", input: { command: "ls" }, allowForTask: [key], toolMode: "bypass" }), "deny");
 });
 
-// ── FIX H2 / H3: the dangerous subset hard-denies (never gates) ──────────────────
+// ── F-177: the released set gates under full and STILL denies under the restricted two ──
 
-test("FIX H2: Task/Agent/CronCreate/SendMessage are 'deny' (NOT 'gate') under full", () => {
+test("F-177: Task/Agent/CronCreate/SendMessage are 'gate' (NOT 'deny') under full", () => {
+  // The inversion of the old FIX H2 assertion. `full` means full: these exist and they stop on
+  // an operator button, which is what `manual`/`auto`/`bypass` is for.
   for (const t of ["Task", "Agent", "CronCreate", "SendMessage"]) {
-    assert.equal(grantDecision({ profile: "full", toolName: t }), "deny", `${t} must hard-deny under full`);
+    assert.equal(grantDecision({ profile: "full", toolName: t }), "gate", `${t} must gate under full`);
   }
 });
 
-test("FIX H3: Task + Agent are 'deny' under EVERY session profile (subagents don't inherit the bound)", () => {
-  for (const p of ["read_only", "dopl_only", "full"]) {
+test("F-177: a released tool gates in EVERY Axis-A mode, `bypass` included (nothing is auto)", () => {
+  // The bound that replaces the hard-deny: AUTO_TOOLS and BYPASS_TOOLS are POSITIVE allow-lists
+  // (FIX F3), and no released name is on either, so no posture can run one silently.
+  for (const t of ["Task", "Agent", "SendMessage", "Artifact", "CronCreate", "Skill", "ToolSearch"]) {
+    for (const toolMode of ["manual", "accept_edits", "auto", "bypass"]) {
+      assert.equal(grantDecision({ profile: "full", toolName: t, toolMode }), "gate", `${t} @ ${toolMode}`);
+    }
+  }
+});
+
+test("FIX H3 survives where containment is the point: Task + Agent still 'deny' under the restricted profiles", () => {
+  // A subagent is a fresh session that does not inherit this session's canUseTool bound, which
+  // is why read_only / dopl_only keep refusing it outright. Under `full` the operator has the
+  // shell anyway, so the refusal bought nothing and cost the delegation feature.
+  for (const p of ["read_only", "dopl_only"]) {
     assert.equal(grantDecision({ profile: p, toolName: "Task" }), "deny", `${p}: Task must deny`);
     assert.equal(grantDecision({ profile: p, toolName: "Agent" }), "deny", `${p}: Agent must deny`);
   }

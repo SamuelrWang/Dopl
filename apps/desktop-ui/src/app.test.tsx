@@ -30,6 +30,21 @@ vi.mock("#/routes", () => ({
   ],
 }));
 
+/** The persisted cache's disk half, so the auth handler's wipe is observable.
+ *  Everything else in the module is the real thing. */
+const removeClient = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("#/lib/query-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#/lib/query-client")>();
+  return {
+    ...actual,
+    createQueryPersister: () => ({
+      persistClient: async () => {},
+      restoreClient: async () => undefined,
+      removeClient,
+    }),
+  };
+});
+
 const apiRequest = vi.hoisted(() => vi.fn());
 const getAuthState = vi.hoisted(() => vi.fn());
 
@@ -73,6 +88,7 @@ describe("App — main's auth and navigation pushes", () => {
   beforeEach(() => {
     authListeners = [];
     navListeners = [];
+    removeClient.mockClear();
     getAuthState.mockResolvedValue(SIGNED_IN);
     installBridge({ apiRequest, getAuthState, onAuthState, onNavigate });
   });
@@ -119,6 +135,18 @@ describe("App — main's auth and navigation pushes", () => {
     pushAuth({ signedIn: true, userId: "user-2" });
     await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("BOOT ROUTE")).toBeInTheDocument();
+  });
+
+  it("wipes the PERSISTED cache too, not just the in-memory one", async () => {
+    await renderApp();
+    expect(removeClient).not.toHaveBeenCalled();
+
+    // Clearing only the live cache would leave the previous account's answers
+    // on disk for the next launch to hydrate — the fleet-audit leak, moved
+    // from memory to IndexedDB.
+    pushAuth({ signedIn: true, userId: "user-2" });
+
+    await waitFor(() => expect(removeClient).toHaveBeenCalled());
   });
 
   it("routes a notification click to the pushed path (GAP-16)", async () => {

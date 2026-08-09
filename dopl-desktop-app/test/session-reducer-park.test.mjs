@@ -17,7 +17,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
 const { initialSessionState, sessionReducer, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
         DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, ABANDONED_MS,
-        AWAITING_PEER_IDLE_MS } = loadReducer();
+        AWAITING_PEER_IDLE_MS, INACTIVE_NOTE } = loadReducer();
 
 const running = (opts) =>
   sessionReducer(initialSessionState(opts), { type: "launched", payload: { type: "init" } }).state;
@@ -67,8 +67,26 @@ test("M2: abandon_timeout ENDS a parked session — terminal, so no peer can eve
   assert.equal(r.state.phase, "ended", "ending is the honest state for a session nobody came back to");
   assert.ok(r.effects.some((e) => e.type === "settle" && e.outcome === "ended"));
   assert.ok(r.effects.some((e) => e.type === "abortQuery"));
-  // It posts NO lifecycle: an unwatched machine must not write to the shared thread on a timer.
-  assert.ok(!r.effects.some((e) => e.type === "lifecycle"), "no channel write from an abandonment");
+  // C-5 (2026-08-08, Samuel's call) — IT NOW POSTS, AND THE OLD ASSERTION HERE WAS THE BUG.
+  //
+  // This line used to read "It posts NO lifecycle: an unwatched machine must not write to the
+  // shared thread on a timer." That argument is about who is at the KEYBOARD, and the cost
+  // falls on somebody else entirely: the abandonment is the COMMON path (request →
+  // task_started → 15min idle → silent park → 12h → silent end), so the requester on the OTHER
+  // machine was left watching a card pulse "Working…" indefinitely, for the ending that
+  // happens most often. Nobody being present to decide it is the reason the peer cannot find
+  // out any other way, not a reason to stay quiet.
+  //
+  // What it writes is a STATUS NOTE, not an outcome: `task_progress` + the reserved
+  // `session_ended` marker, which `group-thread.ts` treats as an ENTRY and never as an
+  // `endEvent`, so it can reach `calmEndStatus` and nothing else. The shared thread's outcome
+  // is untouched and the exchange stays open and resumable.
+  const lc = r.effects.find((e) => e.type === "lifecycle");
+  assert.ok(lc, "the person still waiting is told the session went inactive");
+  assert.equal(lc.kind, "task_progress", "NEVER a terminal kind — this is not the thread failing");
+  assert.deepEqual(lc.extra, { session_ended: true });
+  assert.equal(lc.body, INACTIVE_NOTE);
+  assert.ok(!/—/.test(lc.body) && !/error|fail/i.test(lc.body), "a status note, not a fault");
   // ...and the end really is terminal — every later event is inert, wake triggers included.
   for (const evt of [{ type: "steer", text: "hello" }, { type: "inbound_arrived", message: "hi", authorName: "B" }]) {
     assert.deepEqual(sessionReducer(r.state, evt).effects, [], `${evt.type} cannot revive an ended session`);

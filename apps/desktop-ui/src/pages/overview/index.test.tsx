@@ -39,6 +39,22 @@ function ok(body: unknown) {
 
 function mockApi() {
   sendRequest.mockImplementation(({ path }: { path: string }) => {
+    // The page's workspace read is `POST /api/boot` now (P0-2) — the same
+    // answer as resolve, plus the role/caller-id that used to cost a `me` hop.
+    if (path === "/api/boot") {
+      return Promise.resolve(
+        ok({
+          isOnboarded: true,
+          surveyCompleted: true,
+          userId: "user-1",
+          workspace: WORKSPACE,
+          segment: "acme-ab12cd",
+          needsRedirect: false,
+          role: "owner",
+          myAccess: { defaultLevel: "edit", overrides: [] },
+        })
+      );
+    }
     if (path.startsWith("/api/workspaces/resolve")) {
       return Promise.resolve(
         ok({ workspace: WORKSPACE, canonical: "acme-ab12cd", needsRedirect: false })
@@ -94,11 +110,30 @@ describe("overview page", () => {
     expect(screen.getByText("/acme")).toBeInTheDocument();
     expect(await screen.findByText("Agent connected")).toBeInTheDocument();
 
-    // The four stat cards are the overview-counts payload, each deep-linking
-    // into its section on the SPA router.
+    // ── THE STAT ROW, PINNED AS A SET ──────────────────────────────────
+    // Assert the WHOLE row, never one card: the count went 4 → 3 with the
+    // retirement and nothing failed, because only Skills was ever checked
+    // and the "2 people in this workspace" line below is MembersWidgetCore
+    // copy, not a card. Deleting "Knowledge bases" or "Members" must fail
+    // HERE. The row doubles as navigation, so each href is a real route —
+    // note `workflows: 3` is still in the payload above (the counts route is
+    // untouched by the retirement); a fourth card would link to "Not found"
+    // (docs/RETIREMENT-UNWIRING-PLAN.md §3.1) and trips the length check.
     const skills = screen.getByRole("link", { name: /Skills 11 agent playbooks/ });
-    expect(skills).toHaveAttribute("href", "/acme-ab12cd/skills");
-    expect(within(skills).getByText("11")).toBeInTheDocument();
+    const statRow = skills.parentElement as HTMLElement;
+    const cards = within(statRow).getAllByRole("link");
+    expect(cards).toHaveLength(3);
+    expect(cards.map((card) => card.getAttribute("href"))).toEqual([
+      "/acme-ab12cd/knowledge",
+      "/acme-ab12cd/skills",
+      "/acme-ab12cd/members",
+    ]);
+    // Counts come straight off overview-counts, in card order.
+    expect(cards.map((card) => within(card).getByText(/^\d+$/).textContent)).toEqual([
+      "7",
+      "11",
+      "2",
+    ]);
 
     expect(await screen.findByText("2 people in this workspace")).toBeInTheDocument();
   });
@@ -108,14 +143,20 @@ describe("overview page", () => {
     await screen.findByRole("heading", { name: "Acme" });
 
     const paths = sendRequest.mock.calls.map(([req]) => req.path);
-    expect(paths).toContain("/api/workspaces/resolve?segment=acme-ab12cd");
+    expect(paths).toContain("/api/boot");
+    // The segment travels in the boot BODY, not the query string.
+    expect(sendRequest.mock.calls.map(([req]) => req.body)).toContainEqual({
+      segment: "acme-ab12cd",
+    });
+    // Deleted hop: the boot answer carries the caller's role and id.
+    expect(paths).not.toContain("/api/workspaces/me");
     expect(paths).toContain("/api/workspaces/acme-ab12cd/overview-counts");
     expect(paths).toContain("/api/workspaces/acme-ab12cd/members");
   });
 
   it("surfaces a failed workspace resolve as the shared page error", async () => {
     sendRequest.mockImplementation(({ path }: { path: string }) =>
-      path.startsWith("/api/workspaces/resolve")
+      path === "/api/boot"
         ? Promise.resolve({
             status: 404,
             statusText: "Not Found",

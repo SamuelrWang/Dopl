@@ -172,43 +172,6 @@ export class KnowledgePathConflictError extends Error {
 }
 
 /**
- * Thrown when restoring a folder/entry whose parent folder is still in
- * the trash — restoring it alone would leave it alive but unreachable
- * (absent from both the tree and the trash). Maps to 409; the caller
- * should restore the named ancestor first (a folder restore cascades to
- * its contents).
- */
-export class KnowledgeParentTrashedError extends Error {
-  readonly code = "KNOWLEDGE_PARENT_TRASHED";
-  readonly ancestorName: string;
-  readonly ancestorId: string;
-  constructor(ancestorName: string, ancestorId: string) {
-    super(
-      `Can't restore: an ancestor folder ("${ancestorName}", id ${ancestorId}) is still in the trash. Restore that folder first — restoring a folder brings its contents back with it.`
-    );
-    this.name = "KnowledgeParentTrashedError";
-    this.ancestorName = ancestorName;
-    this.ancestorId = ancestorId;
-  }
-}
-
-/**
- * Thrown when a permanent-delete (purge) targets a row that is not in the
- * trash (`deleted_at IS NULL`). Purge only ever hard-deletes soft-deleted
- * rows — a live row must be soft-deleted first. Maps to 400 so the caller
- * can't confuse "already gone" with "still live".
- */
-export class KnowledgeNotTrashedError extends Error {
-  readonly code = "KNOWLEDGE_NOT_TRASHED";
-  constructor(kind: string, identifier: string) {
-    super(
-      `Cannot permanently delete ${kind} ${identifier} — it is not in the trash. Move it to the trash first.`
-    );
-    this.name = "KnowledgeNotTrashedError";
-  }
-}
-
-/**
  * Thrown when a PATCH carries an `expectedUpdatedAt` precondition that
  * doesn't match the row's current `updated_at`. Maps to 412 — the
  * client should refetch and retry. Item 5.A.3 added this to prevent

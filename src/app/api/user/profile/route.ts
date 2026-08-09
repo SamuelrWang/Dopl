@@ -5,6 +5,7 @@ import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { SAFE_LABEL_RE, safeLabelMessage } from "@/shared/lib/safe-label";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /** The only columns this route ever reads back. */
 const PROFILE_COLUMNS =
@@ -92,11 +93,7 @@ function toErrorResponse(err: unknown): NextResponse {
     }
     return NextResponse.json(body, { status: err.status });
   }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message } },
-    { status: 500 }
-  );
+  return toHttpErrorResponse("api/user/profile", err);
 }
 
 /**

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { AccessModeSetSchema } from "@/features/teams/schema";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   getAccessMatrix,
   setResourceAccessMode,
@@ -65,9 +65,5 @@ export const PUT = withUserAuth(
 );
 
 function toErrorResponse(err: unknown): NextResponse {
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  const message = err instanceof Error ? err.message : "Unknown error";
-  return NextResponse.json({ error: message }, { status: 500 });
+  return toHttpErrorResponse("api/workspaces/[workspaceSlug]/access-matrix", err);
 }

@@ -7,7 +7,7 @@
  *     must never be able to post an anonymized system-styled message).
  *   - `summary` is length-capped (it rides into a receiver's consent prompt —
  *     an uncapped value is a spoofing surface).
- *   - `toUserId` must be a UUID; `notifyScope` is a closed enum.
+ *   - `toUserId` must be a UUID; `agentToolProfile` is a closed enum.
  * A cap / enum change here is a contract change and must be deliberate.
  */
 
@@ -262,24 +262,26 @@ describe("ChannelMessageCreateSchema", () => {
 });
 
 describe("ChannelMemberSelfUpdateSchema", () => {
-  it("accepts a notifyScope-only, agentToolProfile-only, or combined patch", () => {
-    expect(ChannelMemberSelfUpdateSchema.safeParse({ notifyScope: "none" }).success).toBe(true);
+  it("accepts an agentToolProfile patch", () => {
     expect(
       ChannelMemberSelfUpdateSchema.safeParse({ agentToolProfile: "read_only" }).success
     ).toBe(true);
-    expect(
-      ChannelMemberSelfUpdateSchema.safeParse({
-        notifyScope: "all",
-        agentToolProfile: "dopl_only",
-      }).success
-    ).toBe(true);
   });
 
-  it("notifyScope: all|addressed|none only", () => {
-    for (const notifyScope of ["all", "addressed", "none"]) {
-      expect(ChannelMemberSelfUpdateSchema.safeParse({ notifyScope }).success).toBe(true);
-    }
-    expect(ChannelMemberSelfUpdateSchema.safeParse({ notifyScope: "loud" }).success).toBe(false);
+  // F-170 (2026-08-08) — notify scope was removed from the product. It used to
+  // ride this same patch, so a stale client is the case that matters, and zod
+  // STRIPS unknown keys rather than rejecting them: a notifyScope-only body is
+  // an empty patch and the `.refine` rejects it, while a combined body parses
+  // and the field is DROPPED. Both halves are pinned so the drop can never be
+  // mistaken for a write that landed.
+  it("drops notifyScope — the preference is gone (F-170)", () => {
+    expect(ChannelMemberSelfUpdateSchema.safeParse({ notifyScope: "none" }).success).toBe(false);
+    const combined = ChannelMemberSelfUpdateSchema.safeParse({
+      notifyScope: "all",
+      agentToolProfile: "dopl_only",
+    });
+    expect(combined.success).toBe(true);
+    expect(combined.success && combined.data).toEqual({ agentToolProfile: "dopl_only" });
   });
 
   it("agentToolProfile: full|dopl_only|read_only only", () => {

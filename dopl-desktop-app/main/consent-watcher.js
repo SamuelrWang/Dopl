@@ -27,9 +27,11 @@
 // trigger.js (the resolvers are injected via start()), so there is no import
 // cycle: trigger.js → consent-watcher.js, channel-listener.js → both.
 
-const Store = require('electron-store');
 const auth = require('./auth');
 const consent = require('./consent');
+// §2 SPLIT (2026-08-08, C-7): the electron-store half — the two persisted maps, the durable
+// projection and the settled-key TTL — lives in consent-store.js. This file is the poll loop.
+const persist = require('./consent-store');
 const {
   MAX_POLLS_PER_WINDOW,
   POLL_WINDOW_MS,
@@ -40,10 +42,6 @@ const {
   createScheduler,
 } = require('./consent-cadence');
 const { diag } = require('./diag');
-
-const store = new Store();
-const WATCHED_KEY = 'channelWatched'; // { [requestKey]: record }
-const SETTLED_KEY = 'channelSettled'; // { [requestKey]: { outcome, at } }
 
 // SCAN CADENCE (Q12 — request-volume diet, 2026-07-31). This used to be a flat
 // `setInterval(tick, 2000)`: 1,800 wakeups/hour forever, each one decrypting the
@@ -60,12 +58,13 @@ const SETTLED_KEY = 'channelSettled'; // { [requestKey]: { outcome, at } }
 // All of that lives in `./consent-cadence.js` — pure, no electron, and therefore
 // directly `require`-able by test/consent-cadence.test.mjs.
 //
-// Settled keys are pruned after this so the record never grows without bound; far
-// longer than any request lives, so it cannot cause a re-spawn in practice.
-const SETTLED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-// A record parked this long with no decision is dropped locally (treated as
-// expired). 24h dwarfs the old 30-min ceiling, so a request answered hours later
-// still resolves; see the server-expiry coordination note in the build report.
+// A record parked this long with no decision expires locally. 24h dwarfs the old
+// 30-min ceiling, so a request answered hours later still resolves. It EQUALS the
+// server's own CONSENT_TTL_MS and `createdAt` is stamped after the insert returns,
+// so in practice this clock always notices first — which is why processRecord runs
+// the SAME resolver the server's `expired` status would (C-7) rather than settling
+// on its own. Raising it above the server's value would only change which of two
+// identical paths runs; routing is what makes them identical.
 const MAX_WATCH_MS = 24 * 60 * 60 * 1000;
 
 // ─── BEGIN WATCHER-PURE (pure; unit-tested via source extraction) ────────────
@@ -165,18 +164,12 @@ function markActivity() {
   if (scheduler) scheduler.bump();
 }
 
-// ── Persistence ──────────────────────────────────────────────────────────────
-function durable(rec) {
-  const { lastPolledAt, ...rest } = rec; // lastPolledAt is in-memory only
-  return rest;
-}
+// ── Persistence (the store layer is consent-store.js) ────────────────────────
 function persistRecords() {
-  const out = {};
-  for (const [k, rec] of records) out[k] = durable(rec);
-  store.set(WATCHED_KEY, out);
+  persist.saveWatched(records);
 }
 function persistSettled() {
-  store.set(SETTLED_KEY, settled);
+  persist.saveSettled(settled);
 }
 
 function emitCount() {
@@ -311,8 +304,34 @@ async function processRecord(key) {
   // Local expiry for a long-parked request (server may keep it pending forever).
   // Checked BEFORE the rate cap: it costs no request, and a capped watcher must
   // still be able to retire dead records.
+  //
+  // C-7 (2026-08-08) — IT GOES THROUGH THE SAME RESOLVER THE SERVER'S EXPIRY DOES.
+  //
+  // It used to `settleRequest(key, 'expired')` and RETURN, which drops the record and runs
+  // nothing else. That looked like a rare fallback and is in fact the ONLY expiry path that
+  // ever runs: MAX_WATCH_MS equals the server's own CONSENT_TTL_MS, and `rec.createdAt` is
+  // stamped AFTER the insert returns, so the local clock is always the earlier of the two and
+  // this branch wins every race. `inboundExpired` therefore never ran — and two things live
+  // inside it. `closeConsentWindow` never ran, so a pre-consent window left open for 24h
+  // stayed open FOREVER with a live Accept over a row the server had already expired; and
+  // `clearPermissionPreset` never ran, so the posture the operator armed for a request they
+  // then ignored stayed armed for the NEXT launch in that channel.
+  //
+  // Routing rather than re-implementing is the point: one definition of what an expiry does,
+  // whichever clock notices it first. The resolvers settle the record themselves, so the belt
+  // below only fires if one is missing or threw — a record must never survive its own expiry.
   if (now - rec.createdAt > MAX_WATCH_MS) {
-    settleRequest(key, 'expired');
+    diag('watcher: LOCAL expiry (24h, no decision) —', key, 'phase', rec.phase);
+    inFlight.add(key);
+    try {
+      if (rec.phase === 'await-outbound') await safeResolve('outboundCancelled', rec);
+      else await safeResolve('inboundExpired', rec);
+    } catch (err) {
+      diag('watcher: local-expiry resolver error', err && err.message);
+    } finally {
+      inFlight.delete(key);
+    }
+    if (records.has(key)) settleRequest(key, 'expired');
     return;
   }
 
@@ -373,19 +392,10 @@ function tick() {
 }
 
 // ── Startup resume ───────────────────────────────────────────────────────────
-function pruneSettled() {
-  const cutoff = Date.now() - SETTLED_TTL_MS;
-  let changed = false;
-  for (const [k, v] of Object.entries(settled)) {
-    if (!v || (v.at || 0) < cutoff) { delete settled[k]; changed = true; }
-  }
-  if (changed) persistSettled();
-}
-
 function resume() {
-  settled = store.get(SETTLED_KEY) || {};
-  pruneSettled();
-  const saved = store.get(WATCHED_KEY) || {};
+  settled = persist.loadSettled();
+  if (persist.pruneSettled(settled, Date.now())) persistSettled();
+  const saved = persist.loadWatched();
   records.clear();
   for (const [key, rec] of Object.entries(saved)) {
     if (!rec || !rec.rowId) continue;

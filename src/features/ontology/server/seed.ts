@@ -100,13 +100,13 @@ export function buildOntologySeed(): OntologySeed {
             ],
           },
           {
-            key: "surface-workflows",
-            name: "Workflows",
-            subtitle: "Branching processes",
+            key: "surface-ontology",
+            name: "Ontology",
+            subtitle: "The object graph",
             attributes: [
-              { label: "Purpose", kind: "text", value: "Ordered, branch-conditioned multi-step processes." },
-              { label: "MCP tool", kind: "text", value: "dopl_workflow" },
-              { label: "Example skill", kind: "skill", skillSlugs: [SEED_SKILL_SLUGS.walkWorkflow] },
+              { label: "Purpose", kind: "text", value: "The things your work is about, and how they connect." },
+              { label: "MCP tool", kind: "text", value: "dopl_ontology" },
+              { label: "Example skill", kind: "skill", skillSlugs: [SEED_SKILL_SLUGS.authorOntology] },
             ],
           },
           {
@@ -133,7 +133,7 @@ export function buildOntologySeed(): OntologySeed {
             subtitle: "Orient before acting",
             attributes: [
               { label: "Cadence", kind: "text", value: "Every session" },
-              { label: "Do", kind: "text", value: "Call dopl_map first, then open any matching skill or workflow." },
+              { label: "Do", kind: "text", value: "Call dopl_map first, then open any matching skill or entry." },
               { label: "Reference", kind: "knowledge", entryKeys: [GUIDE_ENTRY_KEYS.sessionRitual] },
             ],
           },
@@ -163,7 +163,7 @@ export function buildOntologySeed(): OntologySeed {
     relationships: [
       { fromKey: "ritual-start", label: "reads", toKeys: ["surface-knowledge"] },
       { fromKey: "ritual-end", label: "archives to", toKeys: ["surface-chats"] },
-      { fromKey: "ritual-upkeep", label: "maintains", toKeys: ["surface-workflows", "surface-skills"] },
+      { fromKey: "ritual-upkeep", label: "maintains", toKeys: ["surface-ontology", "surface-skills"] },
     ],
   };
 }

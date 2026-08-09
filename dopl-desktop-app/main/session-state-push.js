@@ -109,6 +109,7 @@ let unsubscribe = null;
 let lastUserId = null;
 let running = false; // one cycle at a time — the pushes inside one are serial
 let queued = null; // the newest entries that arrived while a cycle was in flight
+let draining = null; // C-8: the in-flight cycle, so the quit path can await one final push
 
 // sessionKey -> the userId that was current when this module first saw that key. Pruned to
 // the live set on every cycle, so it is bounded by the window budget like everything else.
@@ -172,6 +173,61 @@ function trackOrigin(entries, userId) {
 function ownedBy(entries, userId) {
   if (!userId) return [];
   return entries.filter((e) => origin.get(String((e && e.key) || '')) === userId);
+}
+
+// ── C-2: THE AD-HOC SESSION NEVER GOES ON THE WIRE ──────────────────────────────────────
+//
+// THE DEFECT (audit C-2). An UNTHREADED inbound — the ordinary DM, which is where this
+// product lives — has no first-class thread, so `targeting.firstClassTaskId` answers '' and
+// `trigger.taskIdFor` mints `task-<channelId>-<seq>`. That flows into the session key and
+// onto the wire, where the server's `SESSION_KEY_RE` (hex, dashes, one colon) and
+// `threadId: z.string().uuid()` both refuse it. Zod validates the ARRAY, so ONE such entry
+// 400s the whole `sessions` payload; `retryable(400)` is false, so the digest is never
+// recorded and every later push for that workspace fails identically. The visible symptom
+// is `read_sessions` answering `[]` for the machine — INCLUDING its perfectly valid
+// UUID-threaded sessions — and stale rows never being cleared.
+//
+// SAMUEL'S DECISION: filter client-side, do NOT widen the server schema. `read_sessions`
+// answers "what is this member's agent doing on THIS thread"; an ad-hoc session has no
+// thread for the answer to be about, so a row for it would be a row nobody can ask for.
+// Widening the key charset would also give up the reconcile's delete-by-key safety
+// (`SESSION_KEY_RE` exists so "does this key need escaping" is unaskable).
+//
+// THE RULE IS THE SERVER'S CONTRACT, RESTATED — a uuid channel and either a uuid thread or
+// none. It is deliberately not a `!key.startsWith('task-')` sniff: the reason to drop a row
+// is that the server would refuse it, so the predicate says exactly that.
+const WIRE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function serverReportable(e) {
+  const x = e || {};
+  if (!WIRE_UUID_RE.test(String(x.channelId || ''))) return false;
+  const taskId = String(x.taskId || '');
+  return taskId === '' || WIRE_UUID_RE.test(taskId);
+}
+
+// One line per dropped session, NOT per push: a filtered entry survives every state change
+// of a session that may run for hours, and a per-change log is the quieter cousin of the
+// `ui-sync` storm this file's retry bound already exists to avoid. Pruned to the live set on
+// every cycle, exactly like `origin`, so it is bounded by the window budget.
+const loggedAdHoc = new Set();
+
+function reportable(entries) {
+  const kept = [];
+  const live = new Set();
+  for (const e of entries) {
+    const key = String((e && e.key) || '');
+    live.add(key);
+    if (serverReportable(e)) { kept.push(e); continue; }
+    if (loggedAdHoc.has(key)) continue;
+    loggedAdHoc.add(key);
+    diag('session-state push: SKIPPING ad-hoc session', key,
+      '— no first-class thread, so read_sessions has nothing to be about;',
+      'the rest of this workspace\'s set is reported normally');
+  }
+  for (const key of [...loggedAdHoc]) {
+    if (!live.has(key)) loggedAdHoc.delete(key);
+  }
+  return kept;
 }
 
 /** workspaceId -> the rows to report there. An entry with no workspace has nowhere to go
@@ -290,7 +346,11 @@ async function cycle(entries) {
     loggedFailures.clear();
     lastUserId = userId;
   }
-  const groups = groupByWorkspace(ownedBy(entries, userId));
+  // C-2: the ad-hoc rows are dropped HERE, before the grouping — so the digest, the
+  // empty-set delete and the bounded retry all operate on exactly the set that goes on the
+  // wire. Filtering later (inside `send`) would have left the digest recording a payload
+  // that was never sent, which is the same "recorded but not stored" defect in reverse.
+  const groups = groupByWorkspace(reportable(ownedBy(entries, userId)));
   for (const ws of reportedWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
@@ -313,7 +373,7 @@ function schedule(entries) {
   queued = Array.isArray(entries) ? entries : [];
   if (running) return;
   running = true;
-  void drain();
+  draining = drain();
 }
 
 async function drain() {
@@ -363,6 +423,25 @@ function kick() {
   schedule(deps.summary.reportList());
 }
 
+/**
+ * C-8 — `kick()`, AWAITABLE, for the quit path and nothing else.
+ *
+ * A quit that ends every live session leaves this machine's rows saying `working` for a
+ * process that no longer exists, and nothing else clears them until the same account signs in
+ * on this Mac again — the row-staleness the audit already flags twice. So the quit teardown
+ * pushes the (now empty) set and waits for it.
+ *
+ * IT IS THE CALLER THAT BOUNDS THE WAIT, not this function. `send` already carries a 15s HTTP
+ * timeout and one retry, which is the right budget for a running app and a completely wrong
+ * one for a quit; racing it against a short deadline is the quit guard's decision to make and
+ * is stated there. This just makes the in-flight cycle observable — `drain()`'s own try/catch
+ * means the promise settles whatever the network did, so awaiting it can never reject.
+ */
+function flush() {
+  kick();
+  return draining || Promise.resolve();
+}
+
 function stop() {
   if (unsubscribe) { try { unsubscribe(); } catch (_err) { /* already gone */ } }
   unsubscribe = null;
@@ -376,6 +455,7 @@ module.exports = {
   // the live half
   start,
   kick,
+  flush, // C-8: an awaitable kick, for the quit teardown
   stop,
   // the pure core (exported for the shell + the tests)
   MAX_ATTEMPTS,

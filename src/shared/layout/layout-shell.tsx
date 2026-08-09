@@ -6,8 +6,13 @@ import { FlushGrid } from "@/shared/design";
 
 // Top-level routes that are NOT a workspace slug. Anything else is a
 // workspace route, where the new-design AppShell (app) group layout owns
-// all chrome and this legacy shell renders nothing. `canvas` here is the
-// top-level /canvas legacy redirect, not the workspace Canvas tab.
+// all chrome and this legacy shell renders nothing.
+//
+// `canvas` used to be listed here for the top-level `/canvas` legacy redirect.
+// That page is gone and the proxy answers the URL before routing does
+// (`RETIRED_TOP_LEVEL` in `shared/lib/url/website-retirement.ts` 302s it to
+// `/get-started`), so the entry could only ever have described a request that
+// never arrives.
 const NON_WORKSPACE_ROOTS = new Set([
   "admin",
   "auth",
@@ -16,7 +21,6 @@ const NON_WORKSPACE_ROOTS = new Set([
   // `isAppShellRoute` reads "billing" as a workspace slug and dresses the page
   // as app chrome. Same reason `get-started` is listed below.
   "billing",
-  "canvas",
   "design",
   // The post-auth download page. It draws its own full-viewport surface (like
   // login), but it must be listed here or `isAppShellRoute` reads it as a

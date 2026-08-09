@@ -69,13 +69,21 @@ function taskIdFor(rec) {
 }
 
 // ── FYI (Feature C) — silent notify for a foreign non-trigger message ─────────
-// myNotifyScope comes from the Channel DTO; absent → 'all'. Never spawns/prompts.
+// Never spawns, never prompts: a silent OS banner and nothing else.
+//
+// 2026-08-08 (F-170) — THE NOTIFY-SCOPE READ IS GONE FROM HERE TOO. This function held the
+// SECOND runtime read of `myNotifyScope` (the audit's C-18 found only `targeting.js`'s), and
+// it was the last live consumer of the field once notify scope was removed product-wide —
+// the control, the client wiring, the schema field, the DTO and the classify read all went,
+// and the column drop is written. A read of a value nothing can set is worse than dead code:
+// it degrades to whatever the absent-value fallback happens to be, and a future DTO that
+// reintroduces the key under different semantics would silently re-mute this path.
+//
+// SO THE FALLBACK IS THE BEHAVIOUR: `|| 'all'` was the documented default for an absent
+// scope, and 'all' meant "send it", which is exactly what every other reader now relies on.
+// Do NOT reinstate any part of the feature — two of its three options did not do what their
+// labels said, which is why it was removed rather than fixed in place.
 function sendFyi(entry, m) {
-  const scope = (entry.channel && entry.channel.myNotifyScope) || 'all';
-  if (scope !== 'all') {
-    diag('fyi muted', entry.channel.id.slice(0, 8), 'seq', m.seq, 'scope', scope);
-    return;
-  }
   const requester = io.displayNameFor(m.authorUserId);
   const toUserId = targeting.metaStr(m, 'to_user_id');
   const targetName = toUserId ? io.displayNameFor(toUserId) : null;
@@ -97,6 +105,15 @@ function sendFyi(entry, m) {
 // ── Trigger entry point (non-blocking) ───────────────────────────────────────
 // Create the inbound consent row, register it, notify, and return. Everything
 // after the operator answers happens in the resolvers, driven by the watcher.
+//
+// C-3 (2026-08-08) — IT ANSWERS WHETHER THE LISTENER'S CURSOR MAY MOVE PAST THIS
+// MESSAGE. Undefined means handled (a request now exists, or one already did, or the
+// operator settled it earlier). A short REASON STRING means "I could not open a request
+// for this and nothing else will" — the two failures below — and listener-messages
+// .drainPage then holds the persisted cursor on this seq and re-awaits, so a 15-second
+// network blip during the consent POST no longer loses the peer's request permanently.
+// Both returns are UPSTREAM of watcher.register, and the consent create is de-duped
+// server-side on (operator, channel, kind, seq), so retrying is free of side effects.
 async function handleTrigger(entry, m) {
   // H1: gate on whether a session can be RUN AT ALL; nothing here can run one ->
   // don't prompt, don't post (the startup notice already fired). FIX 2026-08-04,
@@ -105,7 +122,11 @@ async function handleTrigger(entry, m) {
   // consent row, the notification and the window. claude-runtime.js has the story.
   if (!(await spawner.sessionSpawnAvailable())) {
     diag('trigger skipped: no claude runtime at all (bundled or external)');
-    return;
+    // C-3: DEFERRED, not dropped. The bundled-executable probe reads the asar-unpacked
+    // bundle and can fail transiently (a first-access unpack race, a volume that has not
+    // mounted yet); a machine that genuinely has no runtime simply exhausts the ladder and
+    // the escape says so, instead of the request vanishing with no record anywhere.
+    return 'no-claude-runtime';
   }
 
   const key = watcher.requestKey(entry.channel.id, m.seq);
@@ -139,7 +160,11 @@ async function handleTrigger(entry, m) {
   // v1.1 there is no dialog fallback; the web list is the durable home now.)
   if (!created) {
     diag('consent: no row — fail closed, not spawning');
-    return;
+    // C-3 — THE SINGLE HIGHEST-LEVERAGE LINE IN THE AUDIT. `createConsentRequest` returns
+    // null on ANY network error, any non-2xx and a 404, so this branch used to mean "the
+    // peer's request is gone, and nobody on either machine will ever know". Failing closed
+    // (no spawn without a row) is right; forgetting the message is not.
+    return 'no-consent-row';
   }
 
   watcher.register({
@@ -237,10 +262,25 @@ async function refetchMessage(rec) {
 // `allowed`) or whether the server's standing trust decided it with no card in front of
 // anyone (`auto_allowed`). This is THE seam where a stored permission arm may be
 // consumed, and only the human branch may consume it — see below.
+// C-9 — THE ONE PLACE THIS FILE GIVES THE WINDOW BUDGET BACK.
+//
+// An accepted pre-consent entry stays in the registry ON PURPOSE, so `startSession`'s
+// `takeForAdopt` can reuse its window. Adoption happens on exactly ONE branch below; every
+// other exit used to leave the entry there forever, and `atWindowCap` counts it. Six of those
+// and the desktop can open no session at all — and `evictIdleShell` walks only the SESSION
+// registry, so nothing could reclaim them. Named rather than inlined so the reason a release
+// belongs at a call site is the same sentence every time: nothing is going to adopt this card.
+//
+// `fetched.retry` deliberately does NOT release: that request is still await-inbound and the
+// next poll may yet spawn into this very window.
+function releaseConsentWindow(rec, reason) {
+  try { sessionEngine.releaseConsentWindow(rec.key, reason); } catch (_) { /* best effort */ }
+}
+
 async function inboundApproved(rec, meta) {
   const fetched = await refetchMessage(rec);
   if (fetched.retry) return; // transient — stays await-inbound, retried next poll
-  if (fetched.gone) { watcher.settle(rec.key, 'gone'); return; }
+  if (fetched.gone) { releaseConsentWindow(rec, 'gone'); watcher.settle(rec.key, 'gone'); return; }
   const m = fetched.m;
   const entry = entryFromRecord(rec);
   // Persist the transient spawn phase BEFORE any side effect: a crash here leaves a
@@ -271,6 +311,9 @@ async function inboundApproved(rec, meta) {
   if (settings.getWindowMode() && (await launchResponderSession(entry, m, rec, { taskId, startModes }))) {
     return; // a live session (or a busy→resend) now owns this request
   }
+  // C-9: the fallback answers this request headlessly, so no window session will ever adopt
+  // the card the operator accepted. (A no-op when window mode is off — no card was opened.)
+  releaseConsentWindow(rec, 'headless-fallback');
   await runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName: rec.requesterName });
 }
 
@@ -329,12 +372,14 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     // H1: a held session owns this slot and is running nothing. Headless would fail on the
     // same missing credential, so answer honestly and settle rather than falling through.
     diag('responder session: skipped=auth-hold — the slot is held on the sign-in action');
+    releaseConsentWindow(rec, 'auth-hold'); // C-9: settled here, so nothing will adopt the card
     await postCourtesy(entry, m, AUTH_HELD_REPLY); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'auth-hold');
     return true; // handled — do NOT also run headless
   }
   if (res && res.skipped === 'busy') {
     diag('responder session: skipped=busy');
+    releaseConsentWindow(rec, 'busy'); // C-9: the peer is asked to resend; this card is over
     // RESEND is an untagged bubble by design, so the requester watching THIS thread sees
     // nothing there. One milestone inside the thread says queued rather than ignored.
     await queued.announce(entry, m, rec.taskId || taskId, 'session');

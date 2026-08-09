@@ -63,6 +63,9 @@ test("F-139: canonicalization rewrites ONLY the known Dopl vocabulary", () => {
 // `mcp__dopl__…` form, so on a connector-named server the Dopl read/write tools were covered by
 // no mode either, and — the serious direction — the HARD-DENY set was walked past.
 test("F-139: the HARD-DENY set cannot be escaped by ANY server prefix", () => {
+  // The four live admin companions PLUS the two the 2026-08-07 retirement unregistered:
+  // a retired tool keeps its hard-deny (RETIRED_DOPL_TOOLS in tool-profiles.js), so this
+  // list is unchanged and that is the point — unregistering must not loosen the gate.
   const ADMINS = ["dopl_kb_admin", "dopl_cluster_admin", "dopl_skill_admin",
     "dopl_ontology_admin", "dopl_chats_admin", "dopl_workflow_admin"];
   const PREFIXES = ["mcp__dopl__", "mcp__claude_ai_Dopl__",

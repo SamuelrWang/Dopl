@@ -1,5 +1,11 @@
 # Canvas → Workflow Builder — implementation plan
 
+> **⛔ RETIRED 2026-08-07. THE FEATURE THIS PLAN BUILT IS HIDDEN FROM USERS AND FROM AGENTS.**
+>
+> Canvas, Workflows and Configuration were retired from every user-facing and agent-facing surface on 2026-08-07 — unrouted, off the sidebar, out of the tour and the seeds, and `dopl_workflow` / `dopl_workflow_admin` / `dopl_cluster` / `dopl_cluster_admin` no longer register (they are absent from `tools/list`). **Hide, don't delete:** the code named below still exists and still compiles, but nothing reaches it.
+>
+> See [RETIREMENT-UNWIRING-PLAN.md](RETIREMENT-UNWIRING-PLAN.md) for what was unwired and [ENGINEERING.md](ENGINEERING.md) §7 "Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE" for the statement of record. **This file is kept for history only** — do not treat anything below as a live contract.
+
 > STATUS (2026-06-10): Implemented through Phase 4 (chrome conversion,
 > cluster-info panels + spacious outlines, node blocks with dock zones,
 > edges, dock=attach sync, MCP workflow exposure). The `canvas_edges`

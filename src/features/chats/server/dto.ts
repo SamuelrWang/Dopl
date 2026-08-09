@@ -10,7 +10,6 @@ import type {
   Deliverable,
   ExportFormat,
   MessageRole,
-  TrashedChat,
 } from "../types";
 
 export type ChatRow = Database["public"]["Tables"]["chats"]["Row"];
@@ -80,20 +79,6 @@ export function mapChatRow(
     deliverables: mapDeliverables(row.deliverables),
     learnings: mapLearnings(row.learnings),
   };
-}
-
-/**
- * Trashed-chat DTO for the trash listing. `deleted_at` is added by
- * migration 20260718000002 and not yet in the generated `ChatRow` type
- * (regenerated after the migration applies), so it is read through a cast.
- */
-export function mapTrashedChatRow(
-  row: ChatRow,
-  owner: ChatOwner,
-  messageCount: number
-): TrashedChat {
-  const deletedAt = (row as { deleted_at?: string | null }).deleted_at ?? "";
-  return { ...mapChatRow(row, owner, messageCount), deletedAt };
 }
 
 export function mapMessageRow(row: ChatMessageRow): ChatMessage {

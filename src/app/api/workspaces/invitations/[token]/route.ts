@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInvitationByToken } from "@/features/workspaces/server/invitations";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
  * GET /api/workspaces/invitations/[token] — fetch the public-facing
@@ -35,7 +36,6 @@ export const GET = async (
       invitation: invitationWithoutToken,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces/invitations/[token]", err);
   }
 };

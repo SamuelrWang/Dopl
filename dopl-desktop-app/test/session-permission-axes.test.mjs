@@ -99,7 +99,9 @@ const TOOL_TRUTH = {
   mcp__dopl__dopl_kb: ["gate", "gate", "gate", "allow"],
   mcp__dopl__dopl_search: ["gate", "gate", "allow", "allow"], // a read-only dopl lookup
   Read: /*         */["preapproved", "preapproved", "preapproved", "preapproved"], // shadowed
-  Task: /*         */["deny", "deny", "deny", "deny"], // SESSION_HARD_DENY, immovable
+  // F-177 INVERTED this row (it was four denies): `full` released Task from SESSION_HARD_DENY,
+  // and no released name is on AUTO_TOOLS/BYPASS_TOOLS, so it gates in every mode incl. bypass.
+  Task: /*         */["gate", "gate", "gate", "gate"],
 };
 
 test("AXIS A truth table: every tool class x every tool mode", () => {
@@ -111,7 +113,7 @@ test("AXIS A truth table: every tool class x every tool mode", () => {
 });
 
 test("AXIS A: hard-deny is immovable in EVERY mode, task grant or not (contract A/§H-2)", () => {
-  for (const tool of ["Task", "Agent", "CronCreate", "SendMessage", "mcp__dopl__dopl_kb_admin"]) {
+  for (const tool of ["mcp__dopl__dopl_kb_admin", "mcp__dopl__dopl_chats_admin", "mcp__dopl__dopl_cluster_admin"]) {
     for (const toolMode of TOOL_MODES) {
       assert.equal(decide({ toolName: tool, toolMode }), "deny", `${tool} @ ${toolMode}`);
       assert.equal(decide({ toolName: tool, toolMode, allowForTask: [grantKeyFor(tool, {}, CH)] }), "deny", `${tool} @ ${toolMode} + a task grant`);
@@ -340,9 +342,9 @@ test("M2: a park preserves both axes, inboundForTask AND every standing grant", 
   assert.equal(grantDecision({ ...woken, toolName: "Bash", input: { command: "ls -la" } }), "allow");
   assert.equal(grantDecision({ ...woken, toolName: DOPL_CHANNEL_TOOL, input: OWN_POST }), "allow");
   assert.equal(io.postWillGate({ ...s, state: r.state }, OWN_POST), false);
-  // THE BOUNDARY THAT DID NOT MOVE: the hard-deny set is immovable across a park, in every mode.
-  for (const tool of ["Task", "Agent", "CronCreate", "SendMessage", "mcp__dopl__dopl_kb_admin"]) {
-    assert.equal(grantDecision({ ...woken, toolName: tool, input: {} }), "deny", `${tool} after a park`);
+  // THE BOUNDARY THAT DID NOT MOVE: hard-deny survives a park, and (F-177) so does gated-ness.
+  for (const [t, want] of [["mcp__dopl__dopl_kb_admin", "deny"], ["mcp__dopl__dopl_cluster_admin", "deny"], ["Task", "gate"], ["SendMessage", "gate"]]) {
+    assert.equal(grantDecision({ ...woken, toolName: t, input: {} }), want, `${t} after a park`);
   }
 });
 

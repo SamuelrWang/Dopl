@@ -14,139 +14,53 @@
  *
  * Pure + deterministic so it can be unit-tested in isolation. Input is the
  * transcript in `seq` order (the repository returns messages ascending).
- */
-
-import type { ChannelMessage, ChannelMessageKind, ThreadMode } from "../types";
-
-/**
- * A session's lifecycle state, derived from its task lifecycle events.
  *
- * Beyond the plain outcomes (`active`/`done`/`failed`) there is a family of
- * CALM TERMINAL states — outcomes the operator deliberately chose, which the
- * desktop posts as a `task_failed` carrying a boolean metadata flag (no schema
- * change) and which must read as ordinary endings, never a scary red error:
- * - `declined`    — the operator denied a consent request (`metadata.declined`).
- * - `dropped`     — the operator cancelled the outbound send (`metadata.dropped`).
- * - `interrupted` — the app died mid-spawn (`metadata.interrupted`).
- * - `capped`      — a turn/cost cap was reached (`metadata.capped`); the task
- *                   stays open, reopen the window to continue.
- * - `ended`       — the operator ended the session on the desktop
- *                   (`metadata.ended`); the task stays open.
- * A bare `task_failed` with none of these flags is a genuine `failed`.
+ * MODULE LAYOUT (§2 split, 2026-08-08 — this file was 819 lines). The seams are
+ * "reasons to change", not arithmetic:
+ * - `group-thread-types.ts`   — the render model every channels surface consumes.
+ * - `group-thread-markers.ts` — the reserved metadata markers, read strictly.
+ * - `group-thread-render.ts`  — the card's read side (lanes, bodies, proposals).
+ * - `group-thread-draft.ts`   — the accumulator + what a finished one means.
+ * - THIS FILE                 — the grouping state machine, kept whole per §2's
+ *   reducer carve-out: the message walk, the fallback window, the pair-join and
+ *   the finalize pass are one set of interlocking transitions, and splitting
+ *   them by branch would scatter the invariants that make them correct.
+ *
+ * Every public name is RE-EXPORTED below, so no caller's import changed.
  */
-export type SessionStatus =
-  | "active"
-  | "done"
-  | "failed"
-  | "declined"
-  | "dropped"
-  | "interrupted"
-  | "capped"
-  | "ended";
 
-/**
- * The calm terminal states — operator-chosen endings that share the muted
- * (never alarm-red) chip treatment. `failed` is intentionally NOT here.
- */
-const CALM_TERMINAL_STATUSES: ReadonlySet<SessionStatus> = new Set([
-  "declined",
-  "dropped",
-  "interrupted",
-  "capped",
-  "ended",
-]);
+import type { ChannelMessage, ChannelMessageKind } from "../types";
+import type { SessionGroup, ThreadItem, ThreadOverlay } from "./group-thread-types";
+import { calmSessionEndStatus, isSessionEndedMarker } from "./group-thread-markers";
+import { substantiveEndBody } from "./group-thread-render";
+import { computeStatus, computeSummary, type Draft } from "./group-thread-draft";
 
-/**
- * The calm SESSION-END states — a running session that stopped without a reply
- * (app died, cap hit, operator ended it). A strict SUBSET of the calm terminals:
- * `declined`/`dropped` are request-level decisions (work never ran), excluded so
- * only these three replace a lying "Working…" line on an open-task card.
- */
-const CALM_SESSION_END_STATUSES: ReadonlySet<SessionStatus> = new Set([
-  "interrupted",
-  "capped",
-  "ended",
-]);
-
-/** True for the operator-chosen calm terminal outcomes (declined/dropped/interrupted). */
-export function isCalmTerminalStatus(status: SessionStatus): boolean {
-  return CALM_TERMINAL_STATUSES.has(status);
-}
-
-/**
- * The authoritative overlay for a first-class THREAD (the `channel_tasks` row —
- * storage keeps the `task` spelling), keyed by the wire `metadata.taskId`. When
- * a group's `taskId` resolves to one of these, its `status` and `title` win over
- * the message-derived values — a mid-flight thread with delivered replies still
- * reads "active" until the row is closed, which the lifecycle-only heuristic
- * could never know. Old `task-{channel}-{seq}` sessions have no row and keep the
- * derived render.
- */
-export interface ThreadOverlay {
-  status: SessionStatus;
-  title: string | null;
-  mode: ThreadMode | null;
-  /**
-   * The task's human-readable close summary (`channel_tasks.outcome_summary`),
-   * or null. Optional so a legacy overlay literal (and any pre-v1.7 caller)
-   * stays valid; `groupThread` normalizes an absent value to null.
-   */
-  outcomeSummary?: string | null;
-}
-
-/** One grouped agent session, ready to render as a card. */
-export interface SessionGroup {
-  /**
-   * The shared `metadata.taskId` that binds the session together. BOUNDARY: this
-   * is the WIRE value verbatim, so it deliberately keeps the `task` spelling per
-   * the v3.0 vocabulary contract (storage stays `channel_tasks` /
-   * `metadata.task*`); in domain terms it is the thread id. It renames only when
-   * storage migrates (F-081).
-   */
-  taskId: string;
-  status: SessionStatus;
-  /**
-   * The first-class task title (overlay), authoritative when present; null for
-   * a legacy session with no `channel_tasks` row (the card falls back to
-   * {@link SessionGroup.summary}).
-   */
-  title: string | null;
-  /** The first-class task mode (overlay), or null for a legacy session. */
-  mode: ThreadMode | null;
-  /**
-   * Identity + time source for the header: the agent-authored message that
-   * opened the session (the `task_started`, or the first event we saw).
-   */
-  head: ChannelMessage;
-  /**
-   * Body content in seq order: the agent reply message(s) and any
-   * `task_progress` lines. Excludes the `task_started/finished/failed`
-   * lifecycle markers (those become the header chip).
-   */
-  entries: ChannelMessage[];
-  /** One-line header summary (see {@link computeSummary} precedence). */
-  summary: string | null;
-  /**
-   * The first-class task's human-readable close summary (overlay), shown in the
-   * card footer near the status chip; null for a legacy session with no
-   * `channel_tasks` row, or a task closed without a summary.
-   */
-  outcomeSummary: string | null;
-  /**
-   * The calm session-end status (interrupted / capped / ended) when the session
-   * stopped WITHOUT a restart (`task_started`) after its terminal marker; null
-   * otherwise. Lets the card show the honest end note in place of "Working…"
-   * even when an open-task overlay pins {@link SessionGroup.status} to "active".
-   */
-  calmEndStatus: SessionStatus | null;
-  /** Earliest event time in the session, for the header relative time. */
-  createdAt: string;
-}
-
-/** An ordered transcript item: a standalone message, or a grouped session. */
-export type ThreadItem =
-  | { type: "message"; key: string; message: ChannelMessage }
-  | { type: "session"; key: string; session: SessionGroup };
+// The module's public surface, unchanged by the split. Callers import from
+// `./group-thread` exactly as before; the sibling modules are an internal
+// layout detail, and a re-export here is cheaper than touching nine importers.
+export type {
+  CloseProposal,
+  SessionGroup,
+  SessionStatus,
+  ThreadItem,
+  ThreadOverlay,
+} from "./group-thread-types";
+export {
+  calmSessionEndStatus,
+  calmTerminalStatus,
+  isCalmTerminalStatus,
+  isSessionEndedMarker,
+  isThreadReopenedMarker,
+  SESSION_ENDED_KEY,
+  THREAD_REOPENED_KEY,
+} from "./group-thread-markers";
+export {
+  readCloseProposal,
+  splitSessionEntries,
+  substantiveEndBody,
+  truncateSummary,
+  type SessionLanes,
+} from "./group-thread-render";
 
 const TASK_KINDS: ReadonlySet<ChannelMessageKind> = new Set([
   "task_started",
@@ -157,11 +71,6 @@ const TASK_KINDS: ReadonlySet<ChannelMessageKind> = new Set([
 
 function readTaskId(metadata: Record<string, unknown>): string | null {
   const value = metadata.taskId;
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function readSummary(metadata: Record<string, unknown>): string | null {
-  const value = metadata.summary;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -185,312 +94,6 @@ export function parseLegacyTaskSeq(taskId: string, channelId: string): number | 
   const rest = taskId.slice(prefix.length);
   if (!/^\d+$/.test(rest)) return null;
   return Number(rest);
-}
-
-/**
- * Map a terminal marker to the calm terminal status it announces, or null when
- * it is a genuine failure. The desktop encodes an operator-chosen ending as a
- * `task_failed` carrying a boolean metadata flag (no schema change): `declined`
- * (consent denied), `dropped` (outbound send cancelled), `interrupted` (app died
- * mid-spawn), `capped` (a turn/cost cap was reached), or `ended` (the operator
- * ended the session on the desktop). Each flag is read STRICTLY (`=== true`) so
- * an attacker-influenceable truthy value (e.g. the string "yes") can never
- * disguise a real failure as a calm outcome. A `task_failed` with none of the
- * flags returns null and stays a genuine `failed`.
- */
-export function calmTerminalStatus(message: ChannelMessage): SessionStatus | null {
-  if (message.kind !== "task_failed") return null;
-  const { metadata } = message;
-  if (metadata.declined === true) return "declined";
-  if (metadata.dropped === true) return "dropped";
-  if (metadata.interrupted === true) return "interrupted";
-  if (metadata.capped === true) return "capped";
-  if (metadata.ended === true) return "ended";
-  return null;
-}
-
-/**
- * The calm SESSION-END status a terminal marker announces (interrupted/capped/
- * ended), or null — a strict subset of {@link calmTerminalStatus} that excludes
- * the request-level `declined`/`dropped`. Drives the honest "Working…"
- * replacement so a session that stopped mid-work stops claiming it is working.
- */
-export function calmSessionEndStatus(message: ChannelMessage): SessionStatus | null {
-  const status = calmTerminalStatus(message);
-  return status !== null && CALM_SESSION_END_STATUSES.has(status) ? status : null;
-}
-
-/**
- * P1-7 (Samuel's decision 3, 2026-08-04) — A LOCAL SESSION ENDING IS NOT AN
- * OUTCOME FOR THE SHARED THREAD.
- *
- * `session-effects.endLifecycle('operator')` used to map "the operator closed
- * this window" onto `task_failed` + `{ ended: true }`. The flag kept the CHIP
- * calm, but the KIND is terminal: `groupThread` folds a `task_failed` into
- * `draft.endEvent`, `computeStatus` reads a terminal marker as the exchange's
- * outcome, and the peer's card therefore reported that the THREAD had ended when
- * what ended was one machine's window. The thread had not failed and had not
- * finished; it was still open, still routing, and the other member could still be
- * working it.
- *
- * THE SIGNAL IS NON-TERMINAL BY CONSTRUCTION, not by flag: it rides on
- * `task_progress`, which `groupThread` treats as an ENTRY and never as an
- * `endEvent`, so there is no path by which it can become the exchange's outcome.
- * The flag then only decides how the card WORDS it.
- *
- * NO MIGRATION, and that was the deciding constraint. `channel_messages.kind`
- * carries a CHECK constraint (`'message','task_started','task_progress',
- * 'task_finished','task_failed','system'` — verified against the live database),
- * so a first-class `session_ended` KIND is a schema change, deployed ahead of
- * every desktop that would write it, for what is a render hint. A reserved
- * metadata marker on an existing kind buys the same distinction with none of
- * that — the same trade the five calm flags already made, and it is reserved on
- * the same terms (`service-writes-metadata.CALM_FLAG_KEYS`): stripped from caller
- * metadata unconditionally and re-stamped only onto a thread tag the poster is
- * entitled to, so nobody can narrate somebody else's thread as stopped.
- */
-export const SESSION_ENDED_KEY = "session_ended";
-
-/**
- * DECISION 2 (2026-08-04) — the CLOSE PROPOSAL a card renders as a confirmable
- * prompt. Reserved and server-stamped (`service-writes-metadata.CLOSE_PROPOSAL_KEYS`),
- * so a marker on the wire is a proposal somebody was entitled to make, never a
- * claim a peer wrote into their own metadata.
- *
- * The OUTCOME rides with it because the confirm prefills from it: the agent is
- * proposing "completed" or "failed", and the human should be agreeing or
- * disagreeing with a specific thing rather than re-deciding from scratch.
- */
-export interface CloseProposal {
-  /** The proposing message — its body is the reason, its author is who asked. */
-  message: ChannelMessage;
-  outcome: "completed" | "failed";
-}
-
-/**
- * The LATEST close proposal in a session, or null. Latest rather than first: a
- * long exchange can be proposed on, continue, and be proposed on again, and the
- * live prompt is the most recent one.
- */
-export function readCloseProposal(session: {
-  entries: ChannelMessage[];
-}): CloseProposal | null {
-  for (let i = session.entries.length - 1; i >= 0; i -= 1) {
-    const message = session.entries[i];
-    if (message.metadata.closeProposed !== true) continue;
-    const outcome = message.metadata.closeOutcome;
-    return {
-      message,
-      outcome: outcome === "failed" ? "failed" : "completed",
-    };
-  }
-  return null;
-}
-
-/** True for the non-terminal "this member's session stopped" marker. */
-export function isSessionEndedMarker(message: ChannelMessage): boolean {
-  return (
-    message.kind === "task_progress" &&
-    message.metadata[SESSION_ENDED_KEY] === true
-  );
-}
-
-/** Collapse whitespace and cap length with an ellipsis (header previews). */
-export function truncateSummary(text: string, max = 120): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (clean.length <= max) return clean;
-  return `${clean.slice(0, max - 1).trimEnd()}…`;
-}
-
-/**
- * The bodies the RUNTIME and the close route generate for a terminal marker.
- *
- * Every one of them is boilerplate a card already says better with its status
- * chip ("Finished this request." under a Done chip is noise). Anything NOT in
- * this set is somebody's own words, and {@link substantiveEndBody} is what makes
- * the difference renderable.
- *
- * Enumerated rather than guessed at by length, because the guess fails in both
- * directions: "Task failed" is short and generated, and a one-line human close
- * summary is short and real. The sources are `channel-post.postTaskEvent`'s
- * `bodies` map, `session-window.onEnded`'s derived bodies, `session-effects`'
- * `endLifecycle`, and `service-tasks.closeTask`'s default echo — the four places
- * that write a terminal marker at all.
- */
-const GENERATED_TERMINAL_BODIES: ReadonlySet<string> = new Set([
-  "Finished this request.",
-  "Could not complete this request.",
-  "Request interrupted",
-  "Request declined",
-  "Limit reached",
-  "Session ended",
-  "Turn limit reached",
-  "Cost limit reached",
-  "Task completed",
-  "Task failed",
-]);
-
-/**
- * A terminal marker's body when it carries CONTENT, else null.
- *
- * P0-4 (2026-08-04) — THE STRUCTURAL HALF OF THE VANISHING ANSWER. A
- * `task_finished` / `task_failed` sets `draft.endEvent` and is never pushed to
- * `draft.entries`, so its body has no render path AT ALL: an agent that posted
- * its whole answer as `task_finished` had that answer stored, delivered, and
- * shown nowhere. `service-writes` now refuses that post from an agent, which
- * stops NEW ones — but rows like it already exist in the transcript, the desktop
- * runtime legitimately posts a `bodyOverride` on some ends, and a human's close
- * summary rides out as the echo's body. All three are content, and content the
- * renderer drops is the bug class this whole round is about.
- *
- * So the rule is about the BODY, not about who wrote it: if a terminal marker
- * says something the generators do not, show it.
- */
-export function substantiveEndBody(message: ChannelMessage): string | null {
-  // A CALM-FLAGGED marker is STATUS, never content, whatever its body says. The
-  // desktop writes those flags for an outcome the operator chose (declined,
-  // dropped, interrupted, capped, ended) and the card already renders each as a
-  // one-line calm note off the flag — so its body ("Reply not sent", "Request
-  // interrupted", whatever a later build words it as) is a second copy of the
-  // chip, and promoting it to the reply lane would put a status line where a
-  // deliverable goes. Checked FIRST and by FLAG rather than by string, so the
-  // rule holds for wordings nobody has written yet.
-  if (calmTerminalStatus(message) !== null) return null;
-  const body = message.body.trim();
-  if (!body || GENERATED_TERMINAL_BODIES.has(body)) return null;
-  return body;
-}
-
-/**
- * Split a session's body entries into the two render lanes the card shows
- * separately: `task_progress` milestones (the live accomplishment log) and
- * `message` chat replies. Both preserve the input seq order. This is a pure
- * RENDER-layer split — `groupThread` deliberately keeps `task_progress` inside
- * {@link SessionGroup.entries} (its output is byte-for-byte unchanged), and the
- * card separates the two lanes only at render time.
- *
- * P0-4: a TERMINAL marker that reached `entries` (it got there only by carrying
- * a substantive body — see {@link substantiveEndBody}) joins the REPLIES lane.
- * It has to land in one of the two or the belt does nothing: this function is
- * what the card actually renders from, and an entry in neither lane is invisible
- * exactly the way `endEvent` was. Replies rather than milestones because that is
- * what it is — somebody's words, not a checklist tick.
- */
-export function splitSessionEntries(entries: ChannelMessage[]): {
-  milestones: ChannelMessage[];
-  replies: ChannelMessage[];
-} {
-  const milestones: ChannelMessage[] = [];
-  const replies: ChannelMessage[] = [];
-  for (const entry of entries) {
-    if (entry.kind === "task_progress") milestones.push(entry);
-    else if (entry.kind === "message") replies.push(entry);
-    else if (entry.kind === "task_finished" || entry.kind === "task_failed") {
-      replies.push(entry);
-    }
-  }
-  return { milestones, replies };
-}
-
-/** Mutable accumulator; finalized into a {@link SessionGroup} at the end. */
-interface Draft {
-  taskId: string;
-  head: ChannelMessage;
-  entries: ChannelMessage[];
-  startedEvent: ChannelMessage | null;
-  endEvent: ChannelMessage | null;
-  createdAt: string;
-  /**
-   * The responder — the `task_started` author (the operator whose agent runs
-   * the task). Anchors the {requester, responder} pair for the pair-join.
-   */
-  responder: string | null;
-  /**
-   * The requester — the human who opened the exchange: the author of the legacy
-   * seq-N message addressed to the responder. Set when the `task_started` fires
-   * (from the seq-N opener), or during the seq-N backfill. Drives the pair-join.
-   */
-  requester: string | null;
-  /** The `N` in a legacy `task-{channelId}-{N}` id, for the seq-N backfill. */
-  legacySeq: number | null;
-  /**
-   * P1-7 — the latest NON-TERMINAL session-end marker (`task_progress` +
-   * `session_ended`). Deliberately NOT `endEvent`: it must never become the
-   * exchange's outcome. It only feeds {@link SessionGroup.calmEndStatus}, so the
-   * card can stop saying "Working…" for a session that stopped without claiming
-   * the shared thread ended.
-   */
-  sessionEndedEvent: ChannelMessage | null;
-}
-
-function computeStatus(draft: Draft): SessionStatus {
-  // Precedence, most authoritative first:
-  // 1. An explicit terminal marker always wins. A `task_failed` is a genuine
-  //    failure UNLESS it carries an operator-chosen calm-terminal flag
-  //    (declined/dropped/interrupted), in which case it takes that calm state.
-  if (draft.endEvent) {
-    if (draft.endEvent.kind === "task_failed") {
-      return calmTerminalStatus(draft.endEvent) ?? "failed";
-    }
-    return "done";
-  }
-  // 2. A delivered AGENT reply implies the work completed, even with no
-  //    `task_finished` — a terminal-mode session self-posts its reply and then
-  //    falls silent, and a dropped finish still leaves a real answer on screen.
-  //    Either way the session is Done, not a perpetual "Active" pulse. Only an
-  //    agent reply counts: a session can now also carry the requester's own
-  //    (human) messages (seq-N backfill / pair-join), which must not, on their
-  //    own, mark an unanswered started task as Done.
-  if (draft.entries.some((e) => e.kind === "message" && e.authorKind === "agent"))
-    return "done";
-  // 3. Started, but nothing delivered yet — genuinely in flight.
-  if (draft.startedEvent) return "active";
-  // 4. No markers and no reply (only stray progress lines): nothing is live.
-  return "done";
-}
-
-function computeSummary(draft: Draft): string | null {
-  // 1. An explicit `metadata.summary`, read OUTCOME-FIRST.
-  //
-  // P0-4: this used to scan `[startedEvent, endEvent, ...entries]`, so the
-  // START's summary won — and a `task_started`'s summary is the requester's
-  // ORIGINAL ASK, stamped by the server when the thread opened. The header
-  // therefore described the question for the whole life of the card, including
-  // after it was answered, which is how "a well-behaved agent that writes a good
-  // summary hides its own answer" became literally true. The header should say
-  // how the exchange stands, so the end and the entries are read first and the
-  // opening ask is the last resort.
-  //
-  // AND THE END SPEAKS BEFORE ANY OTHER EVENT'S SUMMARY, by its summary and then
-  // by its body. This is the half the diagnosis named exactly: a summary-first
-  // scan means "a well-behaved agent that writes a good summary hides its own
-  // answer harder than a sloppy one", because the ANSWER lives in a body while
-  // the ASK lives in a summary one event earlier. On a first-class thread the
-  // requester's own opening request is itself an ENTRY (it carries the thread
-  // tag) with the ask as its summary, so simply reordering the event list is not
-  // enough — the end's own words have to outrank an earlier event's summary.
-  const end = draft.endEvent;
-  if (end) {
-    const endSummary = readSummary(end.metadata);
-    if (endSummary) return truncateSummary(endSummary);
-    const endBody = substantiveEndBody(end);
-    if (endBody) return truncateSummary(endBody);
-  }
-  // 2. Then any explicit `metadata.summary`, entries NEWEST-FIRST (the most
-  //    recent statement of intent), and the opening ask only as a last resort.
-  for (const event of [...[...draft.entries].reverse(), draft.startedEvent]) {
-    if (!event) continue;
-    const summary = readSummary(event.metadata);
-    if (summary) return truncateSummary(summary);
-  }
-  // 3. The last agent reply's text, truncated.
-  const replies = draft.entries.filter((e) => e.kind === "message");
-  const lastReply = replies[replies.length - 1];
-  if (lastReply && lastReply.body.trim()) return truncateSummary(lastReply.body);
-  // 4. Fall back to the task event's human-readable body.
-  const taskEvent = draft.startedEvent ?? draft.endEvent;
-  if (taskEvent && taskEvent.body.trim()) return truncateSummary(taskEvent.body);
-  return null;
 }
 
 /**
@@ -740,6 +343,12 @@ export function groupThread(
         // P1-7: a session-end marker is an ordinary entry AND the source of the
         // card's honest end note. It is recorded here rather than in `endEvent`
         // precisely so it can never become the exchange's outcome.
+        //
+        // F-176: the REOPEN echo also rides `task_progress` for that same
+        // guarantee, and needs nothing from the state machine — it is an
+        // ordinary entry here, and only the LANE SPLIT tells it apart (a
+        // resumption is a status line, not a milestone). Deliberately NOT wired
+        // into `sessionEndedEvent`: a reopen is the opposite signal.
         if (isSessionEndedMarker(message)) draft.sessionEndedEvent = message;
         break;
       default:

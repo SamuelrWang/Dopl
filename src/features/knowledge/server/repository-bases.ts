@@ -130,25 +130,49 @@ export interface InsertBaseArgs {
   createdBy: string | null;
 }
 
+/** The row shape for one base insert — shared by the single and batch forms
+ *  so the column defaults can never drift between them. */
+function baseInsertRow(args: InsertBaseArgs) {
+  return {
+    workspace_id: args.workspaceId,
+    name: stripNulls(args.name),
+    slug: args.slug,
+    public_id: generatePublicId(),
+    description: stripNulls(args.description ?? null),
+    agent_write_enabled: args.agentWriteEnabled ?? false,
+    visibility: args.visibility ?? "public",
+    access_mode: args.accessMode ?? "workspace",
+    created_by: args.createdBy,
+  };
+}
+
 export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
-    .insert({
-      workspace_id: args.workspaceId,
-      name: stripNulls(args.name),
-      slug: args.slug,
-      public_id: generatePublicId(),
-      description: stripNulls(args.description ?? null),
-      agent_write_enabled: args.agentWriteEnabled ?? false,
-      visibility: args.visibility ?? "public",
-      access_mode: args.accessMode ?? "workspace",
-      created_by: args.createdBy,
-    })
+    .insert(baseInsertRow(args))
     .select(KNOWLEDGE_BASE_COLS)
     .single();
   if (error || !data) throw error || new Error("Failed to insert knowledge base");
   return mapBaseRow(data as KnowledgeBaseRow);
+}
+
+/**
+ * Insert many bases in ONE statement, for the new-workspace seed. Callers
+ * key the result by `slug` (unique per workspace) rather than by index, so
+ * nothing depends on the order rows come back in.
+ */
+export async function insertBases(
+  argsList: InsertBaseArgs[]
+): Promise<KnowledgeBase[]> {
+  if (argsList.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_bases")
+    .insert(argsList.map(baseInsertRow))
+    .select(KNOWLEDGE_BASE_COLS);
+  if (error || !data) throw error || new Error("Failed to insert knowledge bases");
+  return (data as KnowledgeBaseRow[]).map(mapBaseRow);
 }
 
 export interface UpdateBasePatch {
@@ -204,35 +228,25 @@ export async function updateBaseRow(
 }
 
 /**
- * Soft-delete a base AND every active folder/entry inside it. The
- * cascade is atomic — one PL/pgSQL function call. Already-trashed rows
- * keep their original timestamp so an independent prior trash event
- * survives a later ancestor restore.
+ * PERMANENTLY delete a base and everything inside it. Deletion is
+ * immediate and irreversible — there is no trash (2026-08-07).
+ *
+ * Workspace-scoped as defense-in-depth on the destructive path. The
+ * base's folders/entries (and embeddings/cluster links) cascade out via
+ * their `knowledge_base_id ... ON DELETE CASCADE` FKs, so one statement
+ * clears the whole subtree.
  */
-export async function markBaseDeleted(
-  id: string,
-  deletedAt: string = new Date().toISOString()
+export async function hardDeleteBase(
+  workspaceId: string,
+  id: string
 ): Promise<void> {
   const db = supabaseAdmin();
-  const { error } = await db.rpc("cascade_soft_delete_base", {
-    p_base_id: id,
-    p_deleted_at: deletedAt,
-  });
+  const { error } = await db
+    .from("knowledge_bases")
+    .delete()
+    .eq("id", id)
+    .eq("workspace_id", workspaceId);
   if (error) throw error;
-}
-
-/**
- * Restore a base + every descendant whose `deleted_at` matches the base's
- * (i.e. was cascaded by the same trash event). Independently-trashed
- * descendants keep their own timestamp and stay in trash.
- */
-export async function restoreBaseRow(id: string): Promise<KnowledgeBase> {
-  const db = supabaseAdmin();
-  const { error } = await db.rpc("cascade_restore_base", { p_base_id: id });
-  if (error) throw error;
-  const restored = await findBaseById(id, false);
-  if (!restored) throw new Error("Failed to restore knowledge base");
-  return restored;
 }
 
 /** Display names for base owners (list-pane attribution). */

@@ -163,7 +163,7 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -231,32 +231,25 @@ export async function proxy(request: NextRequest) {
   // lowercase form is the one search engines and history remember.
   //
   // Skip: API routes (path may include case-sensitive UUIDs / tokens
-  // / signatures); /_next; OG/twitter image routes; /invite/<token>
-  // (signed token); /auth/callback (may carry case-sensitive code).
+  // / signatures); /_next; /invite/<token> (signed token); /auth/callback
+  // (may carry case-sensitive code).
+  //
+  // TWO MORE SKIPS ARE GONE (P0-4, 2026-08-07): `/opengraph-image` and
+  // `/twitter-image`, with the passthrough branch that sat directly below. They
+  // served convention-based route FILES; none exist in `src/app/` any more —
+  // `/community` went first, the `[workspaceSlug]` tree in Stage D. The card this
+  // app really serves is the static file the root layout names, matcher-excluded
+  // by extension, so it never reaches this function.
   if (
     /[A-Z]/.test(pathname) &&
     !pathname.startsWith("/api/") &&
     !pathname.startsWith("/_next/") &&
     !pathname.startsWith("/invite/") &&
-    !pathname.startsWith("/auth/") &&
-    !pathname.endsWith("/opengraph-image") &&
-    !pathname.endsWith("/twitter-image")
+    !pathname.startsWith("/auth/")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = pathname.toLowerCase();
     return redirectPreservingSession(url, supabaseResponse, 308);
-  }
-
-  // Allow OG / Twitter image routes through for social crawlers that
-  // have no session. Convention-based route files like
-  // /community/[slug]/opengraph-image resolve to paths ending in
-  // /opengraph-image or /twitter-image. Redirecting these to /login
-  // breaks social card previews.
-  if (
-    pathname.endsWith("/opengraph-image") ||
-    pathname.endsWith("/twitter-image")
-  ) {
-    return supabaseResponse;
   }
 
   // Read PER REQUEST, so the flip is an env change and never a deploy. Twice
@@ -487,9 +480,21 @@ export async function proxy(request: NextRequest) {
  *
  * SELF_AUTH_ROUTES STAYS in the proxy body as defence in depth: if this matcher is ever
  * widened again, those routes must still short-circuit rather than pay for the claims read.
+ *
+ * ── P0-4 (2026-08-07): FOUR ALTERNATIVES ADDED. FULL ARGUMENT IN ENGINEERING.md §9.4 ──
+ * `pricing|privacy|terms` were pure waste — already `PUBLIC_ROUTES`, so the claims read
+ * changed nothing — and the `Set-Cookie` they might carry is what made any shared-cache
+ * directive inert, so this landed BEFORE `next.config.ts`'s `Cache-Control` rules;
+ * unanchored is safe because `PUBLIC_ROUTES` matches with `startsWith`, so no gated route's
+ * pathname begins with those bytes. `favicons/` + `ico|webmanifest|txt|xml|woff2?` closed a
+ * BUG: the old list named `favicon.ico` at the path ROOT and carried no `.ico`, so the
+ * `/favicons/favicon.ico` `layout.tsx` emits was 307'd to `/login` on every signed-out
+ * landing visit (`robots.txt`/`sitemap.xml` unserveable too) — `.*\.ico$` now subsumes that
+ * root-only alternative. `/` STAYS MATCHED: its only work here is the signed-in bounce at
+ * `:268`, which cannot move client-side without baking `isWebsiteRetired()` into HTML.
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicons/|pricing|privacy|terms|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml|woff2?)$).*)",
   ],
 };

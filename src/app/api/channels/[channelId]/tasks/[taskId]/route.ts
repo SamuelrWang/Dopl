@@ -37,7 +37,9 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 // PATCH a task: close it (creator or target), set its mode (creator only), or
-// reopen a closed one (creator or target — web-only, no MCP op). NOT
+// reopen a closed one (creator or target — no MCP op, but the route itself is
+// reachable on an agent token and Samuel's 2026-08-08 decision is that it stays
+// that way; `reopenTask`'s echo is built to be correct on that lane). NOT
 // sessionOnly — task ops are agent actions invoked over the MCP device token;
 // the service enforces the per-op authorization.
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -83,10 +85,18 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
         return NextResponse.json({
           task: await setTaskMode(ctx, channelId, taskId, input.mode),
         });
-      case "reopen":
-        return NextResponse.json({
-          task: await reopenTask(ctx, channelId, taskId),
-        });
+      // C-26 (2026-08-08) — reopen ECHOES now, so it answers in close's shape.
+      // `channel_tasks` is in neither realtime table set, so a silent reopen left
+      // the OTHER member's card, chip and sidebar dot reading "closed" until an
+      // unrelated message happened to land; the echo rides the `channel_messages`
+      // doorbell both clients already subscribe to. `echoSeq` is additive and
+      // means exactly what it means on close — null when the reopen landed but
+      // the marker did not, or when the thread was already open and this call
+      // wrote nothing.
+      case "reopen": {
+        const { thread, echoSeq } = await reopenTask(ctx, channelId, taskId);
+        return NextResponse.json({ task: thread, echoSeq });
+      }
     }
   } catch (err) {
     return toChannelErrorResponse(err);

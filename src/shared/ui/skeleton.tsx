@@ -97,28 +97,76 @@ export function SkeletonRow({
 }
 
 /**
+ * Message-transcript ghost — the alternating bubble column shared by the
+ * chats archive (`chats/components/message-list.tsx`) and the channels
+ * thread. Agent turns sit flat on the elevated surface, the user's indent
+ * right on the subtle card surface, exactly as the loaded list does, so the
+ * swap to real messages doesn't reflow the column.
+ */
+export function TranscriptSkeleton({
+  bubbles = 4,
+  className,
+}: {
+  bubbles?: number;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-2.5", className)}>
+      {Array.from({ length: bubbles }).map((_, i) => {
+        const fromUser = i % 2 === 1;
+        return (
+          <div
+            key={i}
+            className={cn(
+              "rounded-[10px] border px-3.5 py-2.5",
+              fromUser
+                ? "ml-12 border-border-default bg-card-surface-subtle"
+                : "border-border-subtle bg-bg-elevated"
+            )}
+          >
+            <SkeletonLine w={68} h={8} className="mb-2" />
+            <SkeletonText lines={fromUser ? 1 : 2} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Two-pane list + detail loading skeleton inside the shared `.page-float`
- * shell — the shape knowledge / chats / skills / members all load into.
- * A list pane (header + search + segmented control + row ghosts) beside a
- * detail pane (top bar + centered document ghost), so arriving at a
- * two-pane page never flashes flat panels or empty space before the
- * elevated surface paints. Server-fetched pages render it from their
- * route-level `loading.tsx`.
+ * shell — the shape knowledge / chats / skills / members / channels all
+ * load into. A list pane (header + search + segmented control + row
+ * ghosts) beside a detail pane, so arriving at a two-pane page never
+ * flashes flat panels or empty space before the elevated surface paints.
+ *
+ * `detail` swaps the right pane for a shape that matches the real one —
+ * channels passes a `TranscriptSkeleton`; the default is the document
+ * ghost that knowledge / chats / skills load into. `label` is the
+ * screen-reader announcement (the visual is `aria-hidden` shimmer, so this
+ * is the ONLY thing a reader gets).
  */
 export function TwoPaneListSkeleton({
   listWidth = 372,
   rows = 7,
+  leading = "none",
+  label = "Loading",
+  detail,
 }: {
   listWidth?: number;
   rows?: number;
+  leading?: "circle" | "square" | "none";
+  label?: string;
+  detail?: React.ReactNode;
 }) {
   return (
     <div
       className="page-float flex antialiased"
+      role="status"
       aria-busy="true"
       aria-live="polite"
     >
-      <span className="sr-only">Loading</span>
+      <span className="sr-only">{label}</span>
 
       <div
         className="flex shrink-0 flex-col border-r border-border-default"
@@ -133,25 +181,25 @@ export function TwoPaneListSkeleton({
           {Array.from({ length: rows }).map((_, i) => (
             <SkeletonRow
               key={i}
-              leading="none"
+              leading={leading}
               className="border-b border-border-subtle"
             />
           ))}
         </div>
       </div>
 
-      <DetailDocSkeleton />
+      {detail ?? <DetailDocSkeleton />}
     </div>
   );
 }
 
 /**
- * Right-pane document ghost — top bar + a centered title, prose lines, and
- * a framed meta-card ghost. Mirrors the loaded detail pane's shape (the
- * knowledge/chats document, the skills editor) rather than the transient
- * empty state.
+ * Detail-pane chrome + a slot — the 52px top bar every right pane carries
+ * (crumb + one trailing action) over whatever body shape the caller wants.
+ * Exported so a feature skeleton can keep the shared chrome and vary only
+ * the body.
  */
-function DetailDocSkeleton() {
+export function DetailPaneSkeleton({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
@@ -159,6 +207,20 @@ function DetailDocSkeleton() {
         <span className="flex-1" />
         <Skeleton className="h-7 w-7 rounded-md" />
       </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Right-pane document ghost — top bar + a centered title, prose lines, and
+ * a framed meta-card ghost. Mirrors the loaded detail pane's shape (the
+ * knowledge/chats document, the skills editor, the members console's
+ * member/team/resource document) rather than the transient empty state.
+ */
+export function DetailDocSkeleton() {
+  return (
+    <DetailPaneSkeleton>
       <div className="flex-1 overflow-hidden px-14 pt-9">
         <div className="mx-auto max-w-[760px] space-y-6">
           <SkeletonBar h={26} w="52%" className="rounded-md" />
@@ -169,6 +231,54 @@ function DetailDocSkeleton() {
             </div>
             <div className="space-y-4 px-5 py-5">
               <SkeletonLine w="40%" h={12} />
+              <SkeletonText lines={2} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </DetailPaneSkeleton>
+  );
+}
+
+/**
+ * Generic single-surface page ghost — the `.page-float` frame, the 52px
+ * header strip every page carries, and a neutral body of card ghosts.
+ * The shape a page loads into when it is NOT a two-pane list (overview,
+ * settings, ontology, canvas) and the shape the desktop shell holds
+ * through its whole boot chain, so five sequential pending states read as
+ * ONE steady surface instead of five text flickers.
+ */
+export function PageShellSkeleton({ label = "Loading" }: { label?: string }) {
+  return (
+    <div
+      className="page-float flex flex-col antialiased"
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <span className="sr-only">{label}</span>
+
+      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
+        <SkeletonLine w={132} h={14} />
+        <span className="flex-1" />
+        <Skeleton className="h-7 w-7 rounded-md" />
+        <Skeleton className="h-7 w-7 rounded-md" />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden px-6 pt-6">
+        <div className="mx-auto max-w-[960px] space-y-4">
+          <Skeleton className="h-[76px] w-full rounded-[14px]" />
+          <div className="grid grid-cols-3 gap-4">
+            <Skeleton className="h-[104px] rounded-[14px]" />
+            <Skeleton className="h-[104px] rounded-[14px]" />
+            <Skeleton className="h-[104px] rounded-[14px]" />
+          </div>
+          <div className="overflow-hidden rounded-[14px] border border-border-strong">
+            <div className="flex items-center gap-2 border-b border-border-default bg-card-surface-subtle px-4 py-2.5">
+              <SkeletonLine w={92} h={9} />
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <SkeletonLine w="46%" h={12} />
               <SkeletonText lines={2} />
             </div>
           </div>

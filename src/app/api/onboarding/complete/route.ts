@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { HttpError } from "@/shared/lib/http-error";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 import { CompleteOnboardingSchema } from "@/features/onboarding/schema";
 import { completeOnboarding } from "@/features/onboarding/server/service";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
  * POST /api/onboarding/complete — name the default workspace after the
@@ -23,10 +23,6 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
     const redirectTo = safeRedirect(input.redirectTo, result.redirectPath);
     return NextResponse.json({ redirectTo });
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/onboarding/complete", err);
   }
 });

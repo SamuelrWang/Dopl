@@ -6,20 +6,19 @@ import { findBaseBySlug } from "@/features/knowledge/server/repository";
 import { seedWorkspace as seedKnowledge } from "@/features/knowledge/server/service-seed";
 import { seedWorkspace as seedSkills } from "@/features/skills/server/service-seed";
 import { seedWorkspace as seedOntology } from "@/features/ontology/server/service-seed";
-import { seedWorkspace as seedWorkflow } from "@/features/workflows/server/service-seed";
 import { seedWorkspace as seedChat } from "@/features/chats/server/service-seed";
 
 /**
  * New-workspace seeding orchestrator. When a workspace is first created,
  * this populates it with the "how to use Dopl" starter corpus across
- * every surface: a Knowledge guide, four Skills, an Ontology playbook, a
- * Workflow, and one sample Chat — all cross-referenced by real ids.
+ * every surface: a Knowledge guide, three Skills, an Ontology playbook,
+ * and one sample Chat — all cross-referenced by real ids.
  *
  * Contract:
  *   - Single entry point: `seedNewWorkspace(workspaceId, userId)`.
  *   - Idempotent: returns early if the Dopl Guide KB already exists.
- *   - Dependency-ordered: knowledge + skills first (their ids feed the
- *     ontology, workflow, and cross-refs), then ontology → workflow → chat.
+ *   - Dependency-ordered: knowledge + skills first (their entry keys and
+ *     skill slugs feed the ontology cross-refs), then ontology → chat.
  *   - Best-effort: each surface is wrapped so one failure logs and the
  *     rest still seed. This function never throws — workspace creation
  *     must never be blocked by a seed hiccup.
@@ -35,7 +34,6 @@ export interface SeedNewWorkspaceResult {
   skills: number;
   objects: number;
   relationships: number;
-  workflowSteps: number;
   chats: number;
 }
 
@@ -45,7 +43,6 @@ const EMPTY_RESULT: SeedNewWorkspaceResult = {
   skills: 0,
   objects: 0,
   relationships: 0,
-  workflowSteps: 0,
   chats: 0,
 };
 
@@ -73,7 +70,6 @@ export async function seedNewWorkspace(
 
   // 1. Knowledge — the cross-reference anchor. Entry ids feed everything.
   let entryIdByKey: Record<string, string> = {};
-  let kbBaseId: string | null = null;
   try {
     const ctx: KnowledgeContext = {
       workspaceId,
@@ -85,7 +81,6 @@ export async function seedNewWorkspace(
     const res = await seedKnowledge(ctx);
     result.knowledgeBases = res.basesCreated;
     if (res.guide) {
-      kbBaseId = res.guide.baseId;
       entryIdByKey = Object.fromEntries(
         Object.entries(res.guide.entryIdByKey).map(([k, v]) => [k, v.id])
       );
@@ -94,7 +89,7 @@ export async function seedNewWorkspace(
     logSeedFailure("knowledge", err);
   }
 
-  // 2. Skills — ids feed the ontology + workflow.
+  // 2. Skills — ids feed the ontology cross-references.
   let skillIdBySlug: Record<string, string> = {};
   try {
     const ctx: SkillContext = {
@@ -125,22 +120,7 @@ export async function seedNewWorkspace(
     logSeedFailure("ontology", err);
   }
 
-  // 4. Workflow — needs the KB base id + entry ids + skill ids. Skipped
-  //    if knowledge seeding didn't produce a guide base to read from.
-  if (kbBaseId) {
-    try {
-      const res = await seedWorkflow(workspaceId, userId, {
-        kbBaseId,
-        entryIdByKey,
-        skillIdBySlug,
-      });
-      result.workflowSteps = res.stepCount;
-    } catch (err) {
-      logSeedFailure("workflow", err);
-    }
-  }
-
-  // 5. Chat — self-contained sample export.
+  // 4. Chat — self-contained sample export.
   try {
     await seedChat(workspaceId, userId);
     result.chats = 1;

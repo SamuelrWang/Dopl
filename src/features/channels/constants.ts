@@ -99,6 +99,25 @@ export const AGENT_TOOL_PROFILE_LABELS: Record<AgentToolProfile, string> = {
   read_only: "Read only",
 };
 
+/**
+ * What the UI shows when a channel row carries NO tool profile — and it must be
+ * whatever the desktop would actually RUN, because this label is a claim about
+ * containment, not a placeholder.
+ *
+ * `dopl-desktop-app/main/tool-profiles.js` `normalizeProfile` resolves a missing
+ * or unrecognized profile to `read_only` and reports the degradation (C-11,
+ * 2026-08-08); `targeting-window.resolveToolProfile` delegates to it, so there is
+ * exactly ONE answer on that side. This constant is the web's half of that single
+ * answer. It was `"full"` in two places, which is the same fail-OPEN the desktop
+ * just removed — and worse here, because a label reading "Full access" over a
+ * session the desktop is about to run `read_only` is a lie in the direction that
+ * makes the operator relax.
+ *
+ * A member's `channel_members.agent_tool_profile` is `NOT NULL DEFAULT 'full'`, so
+ * null means "this DTO does not know", never "no profile was chosen".
+ */
+export const UNRESOLVED_TOOL_PROFILE: AgentToolProfile = "read_only";
+
 /** Pending consent requests expire this long after creation. Requests are now a
  *  durable "parked" item the operator answers whenever (Round B pending-requests
  *  model), so this must be long enough that a legitimately-parked request is not

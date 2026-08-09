@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { cn } from "@/shared/lib/utils";
+import { pendingRow } from "@/shared/ui/pending";
 import { useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { CapNotice } from "./cap-notice";
+import { DeleteClusterDialog } from "./delete-cluster-dialog";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
 import { OntologyBoardSkeleton } from "./ontology-skeleton";
@@ -56,13 +58,36 @@ export function OntologyView({
   replaceUrl = replaceHistoryUrl,
 }: Props) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const { graph, status, dispatch, createCluster, createObject } = useOntology(
-    workspaceId,
-    () => setUpgradeOpen(true)
-  );
+  // Declared above the store: the store's delete callback refreshes it.
   const ent = useWorkspaceEntitlements(workspaceId);
+  const { isCapped, refresh } = ent;
+  // The cap is a server-side count, so it can only move once the delete has
+  // landed — and deleting is the only way back under it.
+  const refreshCap = useCallback(() => {
+    if (isCapped) void refresh();
+  }, [isCapped, refresh]);
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // A create puts its rows on screen under PROVISIONAL ids and swaps them for
+  // the server's when the POST answers. Selection is this component's state, so
+  // it has to move with them — otherwise the board and the panel blank out at
+  // the moment the create succeeds, which reads as the create having failed.
+  const handleIdsResolved = useCallback((map: Readonly<Record<string, string>>) => {
+    setClusterId((id) => (id ? (map[id] ?? id) : id));
+    setSelectedId((id) => (id ? (map[id] ?? id) : id));
+  }, []);
+  const { graph, status, dispatch, createCluster, createObject, pendingIds } = useOntology(
+    workspaceId,
+    {
+      onOverCap: () => setUpgradeOpen(true),
+      onDeleted: refreshCap,
+      // The cap is a server-side count either way: it can only move once the
+      // create has actually landed, not when its optimistic row appeared.
+      onCreated: refreshCap,
+      onIdsResolved: handleIdsResolved,
+    }
+  );
+  const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
 
   const cluster =
     graph.clusters.find((c) => c.id === clusterId) ??
@@ -70,14 +95,46 @@ export function OntologyView({
     graph.clusters[0] ??
     null;
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
+  const clusterPending = cluster ? pendingIds.has(cluster.id) : false;
 
   const selectCluster = (id: string) => {
     setClusterId(id);
     setSelectedId(null);
-    const slug = graph.clusters.find((c) => c.id === id)?.slug;
-    if (slug) {
-      replaceUrl(`/${workspaceSegment}/ontology/${slug}`);
+    setConfirmDeleteCluster(false);
+  };
+
+  // The address bar follows the SELECTED cluster's slug, in an effect rather
+  // than inside `selectCluster`, because an optimistically created cluster is
+  // selected BEFORE it has a slug — the server mints that (uniqueness is a
+  // table-wide question) and it arrives with `CREATE_RESOLVE`. Keyed on the
+  // slug alone: slugs are stable across renames, so a rename does not churn
+  // history, and a cluster the user has not explicitly selected (deep link,
+  // first-cluster fallback) leaves the URL exactly as it found it.
+  const activeSlug = cluster && cluster.id === clusterId ? cluster.slug : null;
+  useEffect(() => {
+    if (activeSlug) replaceUrl(`/${workspaceSegment}/ontology/${activeSlug}`);
+  }, [activeSlug, workspaceSegment, replaceUrl]);
+
+  // Permanent, cascading delete of the open cluster — the tab strip is where
+  // clusters live, so it is where they end. Selection moves to the ADJACENT
+  // tab (next, else previous), never to index 0: the `?? clusters[0]` display
+  // fallback would land on an unrelated board and read as the app having
+  // jumped on its own (skills-browser-core's handleDeleted pattern).
+  const handleDeleteCluster = () => {
+    if (!cluster) return;
+    const at = graph.clusters.findIndex((c) => c.id === cluster.id);
+    const neighbour = graph.clusters[at + 1] ?? graph.clusters[at - 1] ?? null;
+    dispatch({ type: "CLUSTER_DELETE", id: cluster.id });
+    setConfirmDeleteCluster(false);
+    if (neighbour) {
+      selectCluster(neighbour.id);
+      return;
     }
+    // Last cluster: nothing left to address. Drop the dead slug from the URL
+    // so a reload doesn't deep-link at a cluster that no longer exists.
+    setClusterId(null);
+    setSelectedId(null);
+    replaceUrl(`/${workspaceSegment}/ontology`);
   };
 
   // A new cluster creates two objects (a column + its first card), so it
@@ -85,7 +142,7 @@ export function OntologyView({
   // create can't pass at 999/1000 then trip the server cap mid-sequence,
   // leaving an orphaned partial cluster behind a raw error toast. Over the
   // cap (or without room for both), open the upgrade prompt instead.
-  const handleCreateCluster = async () => {
+  const handleCreateCluster = () => {
     if (
       ent.overCap ||
       (ent.isCapped &&
@@ -95,23 +152,23 @@ export function OntologyView({
       setUpgradeOpen(true);
       return;
     }
-    const created = await createCluster();
-    if (created) selectCluster(created.id);
-    if (ent.isCapped) ent.refresh();
+    // Synchronous: the tab, its column and its first card are in the reducer
+    // before this returns, so the board switches to them in the same frame as
+    // the click. The three POSTs settle behind the pending rows, and the cap
+    // meter refreshes from `onCreated` when they land.
+    selectCluster(createCluster().id);
   };
 
   // Cards inherit the column's template fields, relationships, and
-  // actions server-side.
-  const handleCreateObject = async (
+  // actions — server-side, and mirrored locally for the pending row.
+  const handleCreateObject = (
     target: { clusterId: string } | { parentObjectId: string }
   ) => {
     if (ent.overCap) {
       setUpgradeOpen(true);
       return;
     }
-    const object = await createObject(target);
-    if (object) setSelectedId(object.id);
-    if (ent.isCapped) ent.refresh();
+    setSelectedId(createObject(target).id);
   };
 
   if (status === "loading") {
@@ -164,11 +221,14 @@ export function OntologyView({
                 key={c.id}
                 type="button"
                 onClick={() => selectCluster(c.id)}
-                className={cn(
-                  "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
-                  c.id === cluster.id
-                    ? "raised-tab text-text-primary"
-                    : "text-text-secondary hover:text-text-primary"
+                {...pendingRow(
+                  pendingIds.has(c.id),
+                  cn(
+                    "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
+                    c.id === cluster.id
+                      ? "raised-tab text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
+                  )
                 )}
               >
                 {c.name}
@@ -186,7 +246,9 @@ export function OntologyView({
               </button>
             )}
           </div>
-          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          {/* Inert until the cluster is real: an edit typed into a provisional
+              row would debounce a PATCH at an id the server has never seen. */}
+          <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-baseline gap-2")}>
             <input
               type="text"
               value={cluster.name}
@@ -215,8 +277,25 @@ export function OntologyView({
           {canEdit && (
             <button
               type="button"
+              aria-label={`Delete ${cluster.name || "cluster"}`}
+              title="Delete cluster"
+              onClick={() => setConfirmDeleteCluster(true)}
+              {...pendingRow(
+                clusterPending,
+                "btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
+              )}
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
+          {canEdit && (
+            <button
+              type="button"
               onClick={() => handleCreateObject({ clusterId: cluster.id })}
-              className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+              {...pendingRow(
+                clusterPending,
+                "btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+              )}
             >
               <Plus size={12} /> Column
             </button>
@@ -238,6 +317,7 @@ export function OntologyView({
             graph={graph}
             dispatch={dispatch}
             selectedId={selectedId}
+            pendingIds={pendingIds}
             canEdit={canEdit}
             onSelect={setSelectedId}
             onCreateObject={(columnId) => handleCreateObject({ parentObjectId: columnId })}
@@ -247,6 +327,7 @@ export function OntologyView({
               objectId={selectedId}
               graph={graph}
               dispatch={dispatch}
+              pending={pendingIds.has(selectedId)}
               canEdit={canEdit}
               onSelectObject={setSelectedId}
               onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
@@ -266,6 +347,14 @@ export function OntologyView({
             ? `This workspace hit the Starter limit of ${ent.objectCap.toLocaleString()} ontology objects. Nothing was deleted — upgrade to keep adding.`
             : undefined
         }
+      />
+
+      <DeleteClusterDialog
+        open={confirmDeleteCluster}
+        onOpenChange={setConfirmDeleteCluster}
+        graph={graph}
+        cluster={cluster}
+        onConfirm={handleDeleteCluster}
       />
     </OntologyResourcesProvider>
   );

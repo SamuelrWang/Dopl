@@ -1,10 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/cron/purge-trash",
-      "schedule": "0 4 * * *"
-    },
-    {
       "path": "/api/cron/oauth-cleanup",
       "schedule": "30 5 * * *"
     },

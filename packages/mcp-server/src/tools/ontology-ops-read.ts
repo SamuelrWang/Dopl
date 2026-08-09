@@ -7,6 +7,7 @@
 
 import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
+import { clippedNote } from "./ontology-clipped";
 import { ok, type ToolResponse } from "./respond";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import {
@@ -34,11 +35,34 @@ const MAP_SCOPE_NOTE = `_Clusters and their columns, with each column's DIRECT m
 /** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
 const RESOLVE_CAP = 20;
 
+/**
+ * THE SUMMARY PROJECTION, NOT THE GRAPH (P0-3), for the two ops above that
+ * render nothing but names.
+ *
+ * `opMap` walks clusters → `columnIds` → one level of `childIds` and prints
+ * names; `opResolve` filters on `name`/`subtitle` and prints names and ids.
+ * Between them they read five fields, all of which `view: "summary"` carries —
+ * and the bare `getOntology()` they used to call fetched every `attributes`,
+ * `methods`, `template` and cluster `layout` in the workspace to supply them.
+ * `op="map"` is the ROUTING call the tool description tells agents to make
+ * first, so it is the ontology read most likely to be made speculatively.
+ *
+ * `opGet` and `opAnchor` deliberately stay on the full graph: both render
+ * through `renderObject`, which reads the JSONB off the target AND scans every
+ * object's `relationships` for the inbound "Referenced by" list.
+ */
 export async function opMap(client: DoplClient): Promise<ToolResponse> {
-  const snapshot = await client.getOntology();
+  const snapshot = await client.getOntology({ view: "summary" });
   if (snapshot.clusters.length === 0) {
+    // "The graph is empty" is an assertion, and a clipped read never
+    // established it — a workspace can come back at the object ceiling with no
+    // cluster rows in hand. Say what happened instead of what it looked like.
     return ok(
-      `No ontology clusters yet — the graph is empty. Start one with op="create_cluster".`
+      snapshot.truncated
+        ? `No ontology clusters came back on this read.\n\n${clippedNote(
+            "an empty result here is not evidence of an empty graph"
+          )}`
+        : `No ontology clusters yet — the graph is empty. Start one with op="create_cluster".`
     );
   }
   const lines: string[] = [];
@@ -55,6 +79,16 @@ export async function opMap(client: DoplClient): Promise<ToolResponse> {
       lines.push(`- ${inlineOr(column.name, NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
     }
     lines.push("");
+  }
+  // With the clusters, not in the footer: MAP_SCOPE_NOTE explains which levels
+  // this op CHOOSES not to render, which is a different fact from the read
+  // having stopped short of the workspace, and a reader must not be able to
+  // take the first as covering the second.
+  if (snapshot.truncated) {
+    lines.push(
+      clippedNote("the clusters and columns above are a prefix and not the set"),
+      "",
+    );
   }
   lines.push(`Drill in with op="get" (object id or exact name).`);
   lines.push("", MAP_SCOPE_NOTE);
@@ -101,7 +135,16 @@ export async function opAnchor(
 }
 
 export async function opResolve(client: DoplClient, query: string): Promise<ToolResponse> {
-  const snapshot = await client.getOntology();
+  const snapshot = await client.getOntology({ view: "summary" });
+  // A clip and the RESOLVE_CAP are two different truncations and are reported
+  // separately below: the cap hid matches we found, the clip hid objects we
+  // never scanned. Conflating them would tell an agent to "narrow the query"
+  // for rows no query on this connection returns.
+  const clipped = snapshot.truncated
+    ? `\n\n${clippedNote(
+        "this query ran over a prefix of the graph and a match outside it could not appear"
+      )}`
+    : "";
   const needle = query.toLowerCase();
   const hits = Object.values(snapshot.objects).filter(
     (o) =>
@@ -111,8 +154,10 @@ export async function opResolve(client: DoplClient, query: string): Promise<Tool
     // Was `op="map" shows everything.` — it does not: op="map" renders two
     // levels and skips objects in no column, which is exactly the set an agent
     // that struck out on resolve is most likely to be hunting for.
+    // The miss is the reading a clip damages most: "no object contains X" over
+    // a prefix of the graph is a false negative that reads as a fact.
     return ok(
-      `No object's name or subtitle contains ${inlineOr(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).`,
+      `No object's name or subtitle contains ${inlineOr(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).${clipped}`,
     );
   }
   const containerOf = (id: string) => {
@@ -135,7 +180,7 @@ export async function opResolve(client: DoplClient, query: string): Promise<Tool
       ? `\n\n_Showing ${shown.length} of ${hits.length} matches. Narrow the query for the rest._`
       : "";
   return ok(
-    `Matches for ${inlineOr(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}\n\nRead one with op="get".`,
+    `Matches for ${inlineOr(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}\n\nRead one with op="get".`,
   );
 }
 

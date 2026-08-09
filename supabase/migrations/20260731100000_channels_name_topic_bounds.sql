@@ -61,6 +61,18 @@
 --     matches U+200B / U+2028 / U+FEFF and NOT ordinary Latin-1 names
 --     ('Café — Zürich' does not match).
 
+-- `channels_name_check` is the name Postgres ALREADY auto-assigned to the
+-- inline `CHECK (char_length(name) BETWEEN 1 AND 120)` that
+-- 20260725120000_channels.sql declared on the column. Without these two
+-- drops the ADD below raises 42710 ("constraint already exists") on any
+-- database built from the migration set — which is why this file has never
+-- applied to production: prod still carries the loose inline predicate, not
+-- the charset-bounded one written here. The drops are the file's own
+-- ROLLBACK statements, reused as a precondition; the new CHECK is strictly
+-- narrower than the one they remove, so no row that passed before fails now.
+ALTER TABLE public.channels DROP CONSTRAINT IF EXISTS channels_name_check;
+ALTER TABLE public.channels DROP CONSTRAINT IF EXISTS channels_topic_check;
+
 ALTER TABLE public.channels
   ADD CONSTRAINT channels_name_check
   CHECK (

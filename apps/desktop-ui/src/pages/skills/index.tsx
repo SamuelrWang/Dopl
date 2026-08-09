@@ -20,13 +20,13 @@ const SKILLS_PATH = "/api/skills";
  *
  * The browser itself is the SHARED component: `SkillsBrowserCore` is the
  * Next-free core of `src/features/skills/components/skills-browser.tsx`, and
- * the whole editor beneath it (`SkillView`, history rail, share control, trash
- * modal) is reused by import, unmodified.
+ * the whole editor beneath it (`SkillView`, history rail, share control) is
+ * reused by import, unmodified.
  *
  * The web page's freshness came from four `router.refresh()` calls; here they
  * become one `invalidateQueries(["/api/skills"])`, which is strictly better —
- * a restore, rename, refolder or duplicate re-pulls the list instead of
- * re-rendering a server component.
+ * a rename, refolder or duplicate re-pulls the list instead of re-rendering a
+ * server component.
  */
 export default function SkillsPage() {
   const queryClient = useQueryClient();
@@ -55,7 +55,7 @@ export default function SkillsPage() {
     return <PageError error={skills.error} onRetry={skills.refetch} />;
   }
   if (accessPending || !access || skills.isPending || !skills.data) {
-    return <PageLoading label="Loading skills" />;
+    return <PageLoading label="Loading skills" variant="two-pane" />;
   }
 
   return (

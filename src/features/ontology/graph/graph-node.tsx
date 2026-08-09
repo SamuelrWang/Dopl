@@ -3,6 +3,7 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { Columns3, Plus, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { pendingRow } from "@/shared/ui/pending";
 import { CHIP } from "../components/ontology-bits";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphState } from "../graph-state";
@@ -15,6 +16,12 @@ interface Props {
   graph: GraphState;
   /** Viewers (member-below) see no add-card affordance on column nodes. */
   canEdit?: boolean;
+  /** Optimistically created, not yet acknowledged: the card draws dimmed and
+   *  inert and its add-card button is disabled — the id is provisional, so
+   *  nothing may be written at it (`src/shared/ui/pending.ts`). `disabled` as
+   *  well as `pointer-events-none`, because the card is focusable and a
+   *  keyboard Enter reaches the button straight through the class. */
+  pending?: boolean;
   selected: boolean;
   dimmed: boolean;
   onSelect: (id: string) => void;
@@ -44,6 +51,7 @@ export function GraphNode({
   position,
   graph,
   canEdit = true,
+  pending = false,
   selected,
   dimmed,
   onSelect,
@@ -72,18 +80,24 @@ export function GraphNode({
           onSelect(node.id);
         }
       }}
-      className={cn(
-        CARD_SHELL,
-        selected ? "graph-node-selected" : "graph-node",
-        "focus:outline-none",
-        onPointerDown ? "cursor-grab" : "cursor-pointer",
-        lifted && "graph-node-lift"
+      {...pendingRow(
+        pending,
+        cn(
+          CARD_SHELL,
+          selected ? "graph-node-selected" : "graph-node",
+          "focus:outline-none",
+          onPointerDown ? "cursor-grab" : "cursor-pointer",
+          lifted && "graph-node-lift"
+        )
       )}
       style={{
         left: position.x,
         top: position.y,
         width: position.width,
-        opacity: dimmed ? 0.45 : 1,
+        // Pending owns its own opacity through PENDING_ROW's class; an inline
+        // value here would out-specify it and the card would stop reading as
+        // provisional. Dim is a selection effect and only applies to real rows.
+        opacity: pending ? undefined : dimmed ? 0.45 : 1,
         transform: lifted ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px)` : undefined,
         zIndex: lifted ? 10 : undefined,
       }}
@@ -92,6 +106,7 @@ export function GraphNode({
         <ColumnBody
           object={node.object}
           canEdit={canEdit}
+          pending={pending}
           onAddCard={() => onAddCard(node.id)}
         />
       ) : (
@@ -104,10 +119,12 @@ export function GraphNode({
 function ColumnBody({
   object,
   canEdit,
+  pending,
   onAddCard,
 }: {
   object: OntologyObject;
   canEdit: boolean;
+  pending: boolean;
   onAddCard: () => void;
 }) {
   return (
@@ -122,6 +139,9 @@ function ColumnBody({
         {canEdit && (
           <button
             type="button"
+            // The column's id is provisional: a card created under it would POST
+            // `parentObjectId: "pending:<uuid>"`, be rejected, and roll back.
+            disabled={pending}
             aria-label={`Add object to ${object.name || "column"}`}
             title="Add object"
             onPointerDown={(e) => e.stopPropagation()}

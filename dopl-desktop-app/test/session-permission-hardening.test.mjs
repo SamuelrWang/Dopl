@@ -85,8 +85,9 @@ test("M2: an abandoned session ENDS rather than being silently downgraded", () =
 
 // ── F2: `auto` must not silently write to the SHARED workspace ────────────────────
 // EXPLOIT: `auto` says "auto approving commands, asking for shell and web". It also
-// auto-approved dopl_kb / dopl_skill / dopl_ontology / dopl_workflow / dopl_chats /
-// dopl_cluster, every one of which registers write ops (dopl_kb alone has write_file /
+// auto-approved dopl_kb / dopl_skill / dopl_ontology / dopl_chats (and, before the
+// 2026-08-07 retirement, dopl_workflow / dopl_cluster), every one of which registers
+// write ops (dopl_kb alone has write_file /
 // create_base / create_folder / move_file). That is an off-machine write into rows every
 // workspace member can read — the same class of move as an outbound post, with no card and no
 // mention in the copy. Under `dopl_only` it was worse: they sat in preApproved (== the SDK's
@@ -96,7 +97,7 @@ const DOPL_WRITE = profiles.DOPL_WRITE_TOOLS;
 const DOPL_READ = profiles.DOPL_READ_TOOLS;
 
 test("F2: the write/read split is a real partition of the non-admin dopl tools", () => {
-  assert.ok(DOPL_WRITE.length >= 6, "the six write-capable tools are named");
+  assert.ok(DOPL_WRITE.length >= 4, "the write-capable tools are named");
   for (const t of DOPL_WRITE) assert.ok(tp.DOPL_SAFE_TOOLS.includes(t), `${t} must be a real safe tool`);
   assert.deepEqual(DOPL_READ.concat(DOPL_WRITE).sort(), tp.DOPL_SAFE_TOOLS.slice().sort(),
     "read + write = every non-admin dopl tool, so neither list can silently drop one");

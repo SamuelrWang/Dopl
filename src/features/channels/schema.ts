@@ -289,21 +289,23 @@ export const TaskUpdateSchema = z.discriminatedUnion("op", [
 ]);
 export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
 
-/** Per-member notification scope for a channel (self-service preference). */
-const NotifyScopeSchema = z.enum(["all", "addressed", "none"]);
-
 /** Per-member responding-agent tool scope (self-service preference). */
 const AgentToolProfileSchema = z.enum(["full", "dopl_only", "read_only"]);
 
 /**
- * PATCH /members body: a member updating their OWN per-channel preferences —
- * notify scope and/or agent tool profile. At least one field is required (an
- * empty patch is a no-op the route rejects). Both are self-only: the service
- * always targets the caller's row.
+ * PATCH /members body: a member updating their OWN per-channel preference —
+ * the agent tool profile. At least one field is required (an empty patch is a
+ * no-op the route rejects). Self-only: the service always targets the caller's
+ * row.
+ *
+ * `notifyScope` rode this same patch until 2026-08-08, when notify scope was
+ * removed from the product (F-170). It is now an unknown key, which zod STRIPS:
+ * a stale client sending `{notifyScope}` alone hits the empty-patch refusal,
+ * and one sending it alongside a tool profile has it silently dropped. That is
+ * the intended answer — there is nothing left to store it in.
  */
 export const ChannelMemberSelfUpdateSchema = z
   .object({
-    notifyScope: NotifyScopeSchema.optional(),
     agentToolProfile: AgentToolProfileSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });

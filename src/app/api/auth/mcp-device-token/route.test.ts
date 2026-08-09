@@ -27,7 +27,14 @@ const state = vi.hoisted(() => ({
   sessionUser: null as { id: string } | null,
 }));
 
-vi.mock("@/shared/auth/mcp-session", () => ({ touchMcpStatus: vi.fn() }));
+vi.mock("@/shared/auth/mcp-session", () => ({
+  touchMcpStatus: vi.fn(),
+  // `withUserAuth`'s OAuth-bearer branch rate-limits before the sessionOnly
+  // gate; these device-token bearer cases send a live `dopl_at_*` token, so the
+  // limiter is consulted. Admit every request — the gate under test is the
+  // caller-type (sessionOnly) refusal, not the ceiling.
+  checkAndRecordRateLimitSubject: vi.fn(async () => true),
+}));
 vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
 vi.mock("@supabase/ssr", () => ({

@@ -45,7 +45,8 @@
 // the gate is built from.
 
 const {
-  DOPL_CHANNEL_TOOL, DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, DOPL_SERVER_PREFIX,
+  DOPL_CHANNEL_TOOL, DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS,
+  DOPL_SERVER_PREFIX,
 } = require('./tool-profiles');
 
 function mcpShortName(full) {
@@ -68,8 +69,16 @@ function mcpShortName(full) {
 // the honest clients. Every tighter bound considered fails the case that caused this: an
 // allow-list of known server names re-breaks on the next client, and requiring the server
 // segment to look Dopl-ish re-breaks the UUID form already observed in the field.
+//
+// RETIRED NAMES BELONG IN THIS VOCABULARY TOO (2026-08-07). `dopl_workflow` /
+// `dopl_cluster` and their admins are no longer registered by the server, but they are
+// still on the deny lists (RETIRED_DOPL_TOOLS), and a deny list is only reached through
+// this normalizer — that is the entire F-139 finding. Leave them out and a retired admin
+// arriving under a connector or UUID server segment stays unclassified, which resolves to
+// `gate`: a button for the exact tool the table says can never be opened.
 const DOPL_TOOL_PREFIX = DOPL_SERVER_PREFIX + '__';
-const DOPL_SHORT_NAMES = [DOPL_CHANNEL_TOOL].concat(DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS)
+const DOPL_SHORT_NAMES = [DOPL_CHANNEL_TOOL]
+  .concat(DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS)
   .map(function (t) { return mcpShortName(t); });
 
 function canonicalDoplName(toolName) {

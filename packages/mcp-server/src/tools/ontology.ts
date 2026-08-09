@@ -10,17 +10,14 @@
  *   - `ontology-render.ts`     — shared ref resolvers + object renderer
  *   - `ontology-ops-read.ts`   — map/anchor/resolve/get
  *   - `ontology-ops-write.ts`  — the op dispatch switch + every mutating handler
- * The admin tool (cascade soft-deletes) stays inline here.
+ * The admin tool (the refused cascade deletes) stays inline here.
  */
 
 import { z } from "zod";
+import { deleteAdminDescription } from "../delete-policy.js";
 import { inlineOr } from "./narration";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
-import type {
-  DoplClient,
-  OntologyCluster,
-  OntologySnapshot,
-} from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import { missingParams, ok, type RegisterTool, type ToolResponse } from "./respond";
 import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
 import { dispatch } from "./ontology-ops-write";
@@ -36,7 +33,6 @@ READ — set \`op\` to:
 WRITE — set \`op\` to:
 - "create_cluster" — new ontology board. Requires: name. Optional: purpose (agents read it to route — write a good one).
 - "update_cluster" — rename / repurpose. Requires: cluster. Optional: name, purpose.
-- "restore_cluster" — recover a cluster that dopl_ontology_admin(op="delete_cluster") cascade-soft-deleted, bringing its objects back too (only the ones that delete cascaded — anything trashed separately stays trashed). Requires: cluster (the trashed cluster's id — reads don't list trashed clusters, so use the id from the delete confirmation). If a live cluster reused the slug, the restored one gets a fresh slug.
 - "create_column" — new column (container object) in a cluster; its name says what its objects ARE (e.g. "Sales Rep"). Requires: cluster, name.
 - "create_object" — new object inside a column (or nested in any object). Inherits from the parent: its template as empty fields, and a copy of its relationships and actions. Requires: parent, name.
 - "update_object" — rename / redescribe. Requires: object. Optional: name, subtitle.
@@ -52,9 +48,13 @@ WRITE — set \`op\` to:
 
 Object-mutating ops (update_object, set/remove_attribute, set/remove_template_field, set/remove_action, set/remove_relationship) accept an optional \`expected_version\` (the Version from a prior op="get"). When supplied, the write is rejected if the object changed since — re-get, reconcile, and retry. Destructive deletes live in dopl_ontology_admin.`;
 
-const ONTOLOGY_ADMIN_DESCRIPTION = `DESTRUCTIVE ontology operations — soft-deletes (hidden from reads, but recoverable, not permanent). CONFIRM with the user before calling. Set \`op\` to one of:
-- "delete_object" — soft-delete an object (a column's cards survive but are orphaned until re-parented). Requires: object.
-- "delete_cluster" — CASCADE soft-delete: trashes the cluster AND every object it owns (its columns + all nested cards) under one timestamp, so the whole board disappears from map/resolve/get. Nothing is hard-deleted — it stays RECOVERABLE with \`dopl_ontology(op="restore_cluster")\`, which brings the cluster and exactly those cascaded objects back. Requires: cluster.`;
+const ONTOLOGY_ADMIN_DESCRIPTION = deleteAdminDescription(
+  [
+    { op: "delete_object", effect: "would have deleted one object" },
+    { op: "delete_cluster", effect: "would have deleted a cluster and, in cascade, every object it owns" },
+  ],
+  `Reach for instead: \`dopl_ontology\` op="update_object" to rewrite an object, op="remove_attribute" / op="remove_relationship" to strip fields FROM one (those edit an object; they do not delete it). If a board or a card genuinely has to go, ask the user to delete it in the Dopl app.`,
+);
 
 export function registerOntologyTool(
   register: RegisterTool,
@@ -74,7 +74,6 @@ export function registerOntologyTool(
           "get",
           "create_cluster",
           "update_cluster",
-          "restore_cluster",
           "create_column",
           "create_object",
           "update_object",
@@ -145,7 +144,13 @@ export function registerOntologyTool(
       cluster: z.string().optional().describe("delete_cluster: slug, id, or exact name."),
     },
     async (args): Promise<ToolResponse> => {
-      const snapshot = await client.getOntology();
+      // THE SUMMARY PROJECTION, NOT THE GRAPH (P0-3). This handler resolves a
+      // ref by id/slug/name and counts a cascade over `columnIds`/`childIds` —
+      // containment only, no JSONB. (§2b means it is also unreachable: the
+      // refusal fires in server.ts's registration wrapper before any client
+      // call, so the saving here is theoretical and the point is that the
+      // resolvers stay honest about what they read.)
+      const snapshot = await client.getOntology({ view: "summary" });
       if (args.op === "delete_object") {
         const miss = missingParams("delete_object", args, ["object"]);
         if (miss) return miss;
@@ -161,9 +166,15 @@ export function registerOntologyTool(
       const resolved = resolveClusterRef(snapshot, args.cluster as string);
       if ("fail" in resolved) return resolved.fail;
       const count = countClusterObjects(snapshot, resolved.hit);
+      // A clipped read under-counts the cascade: the rows past the ceiling are
+      // still deleted, they were just never in hand to count. A number stated
+      // flat would be the one thing worse than no number.
+      const floor = snapshot.truncated
+        ? ` The ontology read was CLIPPED by a server row ceiling, so that count is a floor, not the cascade.`
+        : "";
       await client.deleteOntologyCluster(resolved.hit.id);
       return ok(
-        `Cascade soft-deleted cluster ${inlineOr(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and its ${count} object${count === 1 ? "" : "s"}. Recoverable — restore with dopl_ontology(op="restore_cluster", cluster="${resolved.hit.id}").`
+        `Deleted cluster ${inlineOr(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and, in cascade, its ${count} object${count === 1 ? "" : "s"}.${floor} Permanent — there is nothing to restore it from.`
       );
     }
   );
@@ -171,10 +182,17 @@ export function registerOntologyTool(
 
 /**
  * Size of a cluster's cascade set: its columns plus every nested descendant
- * (the objects delete_cluster soft-deletes with it). Visited-set guards
+ * (the objects delete_cluster would take with it). Visited-set guards
  * against cycles from objects shared across parents.
+ *
+ * Typed to the containment fields it actually walks, so it accepts either
+ * projection: the full snapshot and the `view: "summary"` one both carry
+ * `columnIds` and `childIds`, and nothing here reads anything else.
  */
-function countClusterObjects(snapshot: OntologySnapshot, cluster: OntologyCluster): number {
+function countClusterObjects(
+  snapshot: { objects: Record<string, { childIds: string[] }> },
+  cluster: { columnIds: string[] }
+): number {
   const collected = new Set<string>();
   const stack = [...cluster.columnIds];
   while (stack.length > 0) {

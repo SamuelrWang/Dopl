@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { workspaceReadPath } from "@/shared/layout/settings-modal/sections/workspace-section-core";
 import { RESOLVE_PATH } from "#/components/app-shell";
-import { ENSURE_DEFAULT_PATH } from "#/pages/boot/use-boot-state";
+import { BOOT_PATH } from "#/pages/boot/use-boot-state";
 
 /**
  * Re-read everything that carries a workspace's name, slug or existence, after
@@ -32,8 +32,11 @@ export function invalidateWorkspaceReads(
   void queryClient.invalidateQueries({ queryKey: [workspaceReadPath(segment)] });
   void queryClient.invalidateQueries({ queryKey: [RESOLVE_PATH] });
   void queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
-  // Removal, not invalidation: BootPage re-provisions on every mount
+  // Removal, not invalidation: BootPage re-resolves on every mount
   // (`staleTime: 0`, `refetchOnMount: "always"`), so dropping the entry costs
-  // nothing and guarantees a deleted segment is never replayed.
-  void queryClient.removeQueries({ queryKey: [ENSURE_DEFAULT_PATH] });
+  // nothing and guarantees a deleted segment is never replayed. Removing the
+  // whole `/api/boot` prefix also drops the SHELL's entry for the old
+  // segment, which a rename has just made stale — it is the same key family
+  // now that boot answers the segment resolve too.
+  void queryClient.removeQueries({ queryKey: [BOOT_PATH] });
 }

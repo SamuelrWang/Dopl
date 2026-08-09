@@ -82,12 +82,6 @@ export interface KnowledgeDirListing {
   entries: KnowledgeEntry[];
 }
 
-export interface KnowledgeTrashSnapshot {
-  bases: KnowledgeBase[];
-  folders: KnowledgeFolder[];
-  entries: KnowledgeEntry[];
-}
-
 export interface KnowledgeBaseCreateInput {
   name: string;
   description?: string;

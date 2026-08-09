@@ -41,18 +41,31 @@ function ok(body: unknown): BridgeResponse {
 }
 
 function mockApi() {
-  sendRequest.mockImplementation(({ path }: { path: string }) => {
-    if (path.startsWith("/api/workspaces/resolve")) {
-      const stale = path.endsWith("segment=acme");
-      return Promise.resolve(
-        ok({ workspace: WORKSPACE, canonical: "acme-ab12cd", needsRedirect: stale })
-      );
+  sendRequest.mockImplementation(
+    ({ path, body }: { path: string; body?: unknown }) => {
+      // ONE read for the shell (P0-2): the segment resolve, the caller's role
+      // and id, and the access matrix, in a single answer.
+      if (path === "/api/boot") {
+        const segment = (body as { segment?: string } | undefined)?.segment;
+        return Promise.resolve(
+          ok({
+            isOnboarded: true,
+            surveyCompleted: true,
+            userId: "user-1",
+            workspace: WORKSPACE,
+            segment: "acme-ab12cd",
+            needsRedirect: segment === "acme",
+            role: "owner",
+            myAccess: { defaultLevel: "edit", overrides: [] },
+          })
+        );
+      }
+      if (path === "/api/workspaces") {
+        return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
+      }
+      return Promise.resolve(ok({}));
     }
-    if (path === "/api/workspaces") {
-      return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
-    }
-    return Promise.resolve(ok({}));
-  });
+  );
 }
 
 /** Web-side reads. Overridden per test for the notice/banner cases. */

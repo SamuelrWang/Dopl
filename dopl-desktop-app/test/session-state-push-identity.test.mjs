@@ -18,7 +18,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, entry, armed, drained, bodies } from "./_session-state-push-harness.mjs";
+import { load, entry, armed, drained, bodies, CHAN_B, TASK_B } from "./_session-state-push-harness.mjs";
 
 // ── 4. IDENTITY — THE GUARD AGAINST A CROSS-ACCOUNT LEAK ─────────────────────────────
 
@@ -52,7 +52,7 @@ test("IDENTITY: B's OWN sessions are reported normally, alongside A's quarantine
   summary.emit([entry()]);
   await drained();
   who.id = "user-b";
-  const bs = entry({ channelId: "chan-b", taskId: "task-b", name: "onyx" });
+  const bs = entry({ channelId: CHAN_B, taskId: TASK_B, name: "onyx" });
   summary.emit([entry(), bs]);
   await drained();
   const last = bodies(m)[m.posts.length - 1];

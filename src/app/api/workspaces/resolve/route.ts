@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { HttpError } from "@/shared/lib/http-error";
 import { resolveWorkspaceSegmentForUser } from "@/features/workspaces/server/segment";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -58,13 +58,6 @@ export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
       { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message } },
-      { status: 500 }
-    );
+    return toHttpErrorResponse("api/workspaces/resolve", err);
   }
 });

@@ -37,7 +37,7 @@ import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
-import { closeTask } from "./service-tasks";
+import { closeTask } from "./service-tasks-lifecycle";
 import { proposeTaskClose } from "./service-tasks-propose";
 import {
   ChannelLifecycleKindForbiddenError,
@@ -157,10 +157,18 @@ beforeEach(() => {
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
+  // The re-proposal anchor (C-6). 0 = "nothing has been said in this thread",
+  // which is the shape every pre-existing assertion below was written against.
+  vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(0);
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
   vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
     taskRow({ ...patch })
+  );
+  // C-30 — close now goes through the CONDITIONAL update (`WHERE status = ?`),
+  // so first-write-wins is decided by the statement rather than by a read.
+  vi.mocked(repoTasks.updateTaskIfStatus).mockImplementation(
+    async (_id, _status, patch) => taskRow({ ...patch })
   );
 });
 
@@ -293,7 +301,7 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
     await expect(
       closeTask(agentCtx, "general", TASK_ID, "completed", "all done")
     ).rejects.toBeInstanceOf(ThreadCloseIsHumanOnlyError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+    expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
@@ -310,7 +318,7 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   it("a HUMAN closes exactly as before", async () => {
     const { thread } = await closeTask(desktopCtx, "general", TASK_ID, "completed", "Shipped");
     expect(thread.status).toBe("closed");
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1].status).toBe("closed");
+    expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][2].status).toBe("closed");
   });
 
   it("an agent's PROPOSAL posts a marked, NON-TERMINAL note and touches no row", async () => {
@@ -320,6 +328,7 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
     // proposal must not change routing, status, or anything the peer sees about
     // the thread's state.
     expect(repoTasks.updateTask).not.toHaveBeenCalled();
+    expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
     expect(res.thread.status).toBe("open");
 
     const row = inserted();
@@ -343,11 +352,89 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
     expect(inserted()?.metadata).toMatchObject({ closeOutcome: "failed" });
   });
 
-  it("repeat proposals collapse: the idempotency key is (thread, outcome)", async () => {
-    // One prompt, not a pile of them. The key is derived, so the server dedupes
-    // a second proposal from a restarted session as well as from a chatty one.
+  /**
+   * C-6 / F-172 — PROPOSE_CLOSE IS RE-RAISABLE (Samuel, 2026-08-08).
+   *
+   * It used to be one-shot FOREVER: the key was `(thread, outcome)` and nothing
+   * else, so the second genuine proposal in a long exchange hit `postMessage`'s
+   * `client_msg_id` short-circuit and was silently swallowed — the agent's only
+   * terminal act permanently consumed by its first use, the stale prompt
+   * reloading forever. The client was already built the other way round
+   * (`readCloseProposal` takes the LATEST, `session-card.tsx` dismisses per
+   * message id), so this is the server catching up to a promise two surfaces
+   * had already made.
+   *
+   * The key is now (thread, outcome, ACTIVITY ANCHOR), and the anchor excludes
+   * proposals — which is what keeps a retry deduping while a real re-proposal
+   * writes. Both directions are asserted, because a fix that only satisfies one
+   * of them is the bug or the spam.
+   */
+  it("keys the proposal on (thread, outcome, activity anchor)", async () => {
+    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
     await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-    expect(inserted()?.client_msg_id).toBe(`close-proposed-${TASK_ID}-completed`);
+    expect(inserted()?.client_msg_id).toBe(
+      `close-proposed-${TASK_ID}-completed-17`
+    );
+    expect(repoMessages.latestThreadActivitySeq).toHaveBeenCalledWith(
+      "chan-1",
+      TASK_ID
+    );
+  });
+
+  it("a RETRY with nothing said in between still collapses to one prompt", async () => {
+    // The anchor excludes proposals, so posting one does not move it. A restarted
+    // session, a lost response, or a chatty agent re-proposing all recompute the
+    // SAME key and hit the idempotency short-circuit.
+    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
+    const first = inserted()?.client_msg_id;
+
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
+
+    expect(inserted()?.client_msg_id).toBe(first);
+  });
+
+  it("a proposal raised AFTER more exchange writes a NEW prompt", async () => {
+    // The case that was impossible before: propose → human keeps it open → work
+    // continues → propose again. The thread moved, so the anchor moved, so the
+    // key is new and the card's "most recent proposal" is the live one.
+    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
+    const first = inserted()?.client_msg_id;
+
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(31);
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
+
+    expect(inserted()?.client_msg_id).not.toBe(first);
+    expect(inserted()?.client_msg_id).toBe(
+      `close-proposed-${TASK_ID}-completed-31`
+    );
+  });
+
+  it("the outcome still separates two proposals at the same anchor", async () => {
+    // (thread, outcome, anchor): "this failed" and "this is done" are different
+    // claims and must not dedupe into each other.
+    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(9);
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
+    const completed = inserted()?.client_msg_id;
+
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "failed");
+
+    expect(inserted()?.client_msg_id).not.toBe(completed);
+  });
+
+  it("does NOT share a key namespace with the stale-thread cron", async () => {
+    // The cron used to restate this exact key so the two rows would collide,
+    // which is how a scheduled sweep landing first could REPLACE an agent's
+    // stated reason with "no activity for a while" on a card that renders the
+    // most recent proposal. Different authors, different claims, different keys.
+    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
+    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
+    expect(inserted()?.client_msg_id).not.toBe(`stale-swept-${TASK_ID}-17`);
+    expect(inserted()?.client_msg_id?.startsWith("close-proposed-")).toBe(true);
   });
 
   it("a member who could not CLOSE the thread cannot PROPOSE on it either", async () => {

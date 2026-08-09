@@ -338,8 +338,8 @@ async function opGetThread(client, ref, threadId, selfUserId = null) {
  * member, and had no op that would tell it which members existed.
  *
  * Read-only, and it renders exactly what the roster route returns — the private
- * per-member preferences (notify scope, agent tool profile) are already scrubbed
- * server-side for everyone but the caller, and none of them are rendered here.
+ * per-member preference (the agent tool profile) is already scrubbed
+ * server-side for everyone but the caller, and it is not rendered here.
  */
 async function opMembers(client, ref, selfUserId = null) {
     let members;

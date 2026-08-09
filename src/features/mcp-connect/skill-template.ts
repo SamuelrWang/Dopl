@@ -10,11 +10,18 @@
  * packages/mcp-server/src/server.ts (buildInstructions): the skill is
  * the local, always-loaded summary; the server instructions are the
  * canonical over-the-wire version.
+ *
+ * THAT ALIGNMENT IS LOAD-BEARING, not tidiness. This file is COPIED ONTO THE
+ * USER'S DISK and then never updated — a stale sentence here outlives every
+ * server deploy and is read BEFORE the server's own instructions arrive. So it
+ * must not name a tool the server no longer registers (an agent that reads
+ * "call dopl_workflow" and finds no such tool concludes the connection is
+ * broken), and it must not promise a capability the server refuses.
  */
 export function buildDoplSkillMd(mcpUrl: string): string {
   return `---
 name: dopl
-description: Drive Dopl — the user's workspace of knowledge bases, skills, and agent-followable workflows — over its MCP server. Use when the user mentions Dopl, their workspace or canvas, asks you to follow or edit a workflow, read or save durable notes/knowledge, use a workspace skill, or asks "what's on my canvas / in my workspace".
+description: Drive Dopl — the user's workspace of knowledge bases, skills, and ontology — over its MCP server. Use when the user mentions Dopl or their workspace, asks you to read or save durable notes/knowledge, use a workspace skill, look something up across their workspace, or reach another member or their agent.
 ---
 
 # Dopl — the user's agent workspace
@@ -24,8 +31,11 @@ read and write over MCP (server: ${mcpUrl}):
 
 - **Knowledge bases** — durable notes/docs the user curates for you.
 - **Skills** — procedural prompt playbooks the user authored.
-- **Workflows** — agent-followable step graphs (steps connected by
-  branch-conditioned edges), grouped into clusters.
+- **Ontology** — the graph of clusters, columns and objects the
+  workspace is organized around; skills and knowledge hang off it.
+
+It also carries **channels** (reaching other members and their agents),
+the **chat archive**, and the **member/team roster**.
 
 If the \`dopl_*\` tools are missing, tell the user to connect the Dopl
 MCP server first (Dopl → Overview → Connect your agent).
@@ -33,47 +43,50 @@ MCP server first (Dopl → Overview → Connect your agent).
 ## Session start
 
 Before your first substantive reply, call \`dopl_map\` (one cheap call:
-every knowledge base, skill, workflow, and cluster) to ground yourself
-in the real workspace state. Re-query when the user asks about their
-workspace — they may have changed things in the web UI.
+the active, caller-visible knowledge bases, skills and ontology
+clusters) to ground yourself in the real workspace state. It is a
+routing VIEW, not an inventory — drafts and team-scoped items you have
+no grant on are absent, so never report its counts as
+workspace totals. Re-query when the user asks about their workspace;
+they may have changed things in the Dopl app.
 The workspace beats local files as source of truth; flag drift.
 
 ## Which tool when
 
-- List workflows → \`dopl_workflow(op:'list')\`; read one (ordered
-  steps + its knowledge/skills) → \`dopl_workflow(op:'get', slug)\`;
-  read ONE step as you reach it → \`dopl_workflow(op:'step', slug, step)\`.
-- Author workflows → \`dopl_workflow(op:'create'|'update'|'set_graph'|
-  'add_node'|'update_node'|'remove_node'|'connect'|'disconnect')\`;
-  delete → \`dopl_workflow_admin(op:'delete_workflow')\`.
-- Clusters are containers grouping workflows → \`dopl_cluster(op:'list'|'get'|'create'|'update')\`.
-- Browse/read/write knowledge → \`dopl_kb\` (read entries with
-  \`op:'read_file'\`); destructive ops → \`dopl_kb_admin\`.
-- List/read/author the user's skills → \`dopl_skill\` (+ \`dopl_skill_admin\`).
-- See everything at a glance → \`dopl_map\`.
+- Browse/read/write knowledge → \`dopl_kb\`: read an entry with
+  \`op:'read_file'\` (it returns a Version token), write with
+  \`op:'write_file'\` passing that token as \`expected_version\`.
+- List/read/author the user's skills → \`dopl_skill\`; load one with
+  \`op:'get'\` and follow its SKILL.md. Author with
+  \`op:'authoring_guide'\` first, then \`op:'create'\` + \`op:'write'\`.
+- Read or edit the workspace ontology → \`dopl_ontology\`
+  (\`op:'map'|'resolve'|'get'\` to read; its create/update ops to edit).
+- See everything at a glance → \`dopl_map\`. Don't know where something
+  lives → \`dopl_search(query)\` across knowledge entries, skills and
+  ontology objects.
+- Who's here / who can access what → \`dopl_members\` (read-only:
+  roles, teams and grants are changed in the Dopl app).
+- Ask, tell, or request something of another MEMBER or their agent →
+  \`dopl_channel(op:'list')\` to find the channel or DM, then read that
+  tool's own description before posting — the addressing and approval
+  rules live there.
 - Archive this conversation → \`dopl_chats(op:'export')\` (read
   \`op:'guide'\` first); recall past sessions → \`dopl_chats(op:'list'|'get')\`.
 - Workspace targeting → \`list_workspaces\` (or \`current_workspace\`) to
   discover slugs, then a \`workspace=<slug>\` arg on each call. With 2+
   workspaces there's no default — pass \`workspace=\` every time.
 
-## Following a workflow (the important part)
+## You cannot delete anything
 
-\`dopl_workflow(op:'get')\` returns steps with explicit hierarchy:
-
-- Steps are topologically ordered and tagged **stage K of N**. Stages
-  run IN SEQUENCE.
-- Steps in the SAME stage are parallel branches — no dependency between
-  them; do them in any order (or concurrently) before the next stage.
-- Each step lists \`Depends on:\` (all must be complete first) and
-  \`Leads to:\` (what it unlocks, with any branch condition — "when X").
-- Per step, honor: **Read** (load that knowledge first), **Action**
-  (apply that skill), **User input** (ask/expect this), **Agent
-  output** (produce this), **Next** (the author's advance condition).
-
-Execute steps in stage order. Never skip a "Depends on" you haven't
-satisfied. When a step references knowledge or a skill, actually load
-it (\`dopl_kb op:'read_file'\`, \`dopl_skill op:'get'\`) — don't guess.
+There is no delete path over MCP. Every delete-shaped op on the
+\`*_admin\` tools is refused with a fixed message, whatever your role —
+deletion happens in the Dopl app, where it carries a confirmation step.
+Don't plan around deleting, don't promise it, and don't retry a refusal
+with different arguments. Editing, moving and rewriting are all still
+yours (\`dopl_kb op:'write_file'\` / \`op:'move_file'\`,
+\`dopl_skill op:'write'\`, the ontology update ops), and a rewrite is
+usually what "clean this up" actually wants. If something truly has to
+go, say so and ask the user to delete it in the app.
 
 ## Conventions
 

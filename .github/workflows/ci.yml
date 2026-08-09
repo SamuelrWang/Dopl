@@ -52,7 +52,9 @@ jobs:
       # THE FOUR SUITES THAT WERE NEVER RUN BY CI (F-146). Each is its own step so
       # a failure names the tree it is in instead of one opaque red X. Expected
       # counts at the time of writing, as a sanity anchor for whoever reads a
-      # surprising number here: root 2133, mcp-server 483, SPA 143, desktop 2313.
+      # surprising number here: root 2133, mcp-server 483, SPA 136, desktop 2383.
+      # (The SPA is net -7 since the 2026-08-07 retirement: the canvas,
+      # configuration and workflows page suites went with their routes.)
       - name: Test root suite
         run: npm test
 
@@ -96,7 +98,7 @@ jobs:
         run: npm run lint
 
   typecheck-lint:
-    name: typecheck + lint (root)
+    name: typecheck + lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,11 +111,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The SPA's build script is `tsc --noEmit && vite build`, and `apps/*/src`
-      # is covered by the root tsconfig, so the root typecheck is the whole TS
-      # surface bar the packages, which their own builds cover above.
-      - name: Typecheck
+      # Root `tsconfig.json` EXCLUDES `apps` (and `packages`) — verify with
+      # `npx tsc --listFilesOnly` before believing otherwise. This step is
+      # therefore `src/` + `scripts/` + the Next tree only.
+      - name: Typecheck (root)
         run: npm run typecheck
+
+      # The SPA needs its OWN typecheck: it is outside the root program, and
+      # `npm test -w @dopl/desktop-ui` (vitest) does not typecheck. Its
+      # `tsc --noEmit` also pulls in everything the pages import through the
+      # `@/*` → `../../src/*` alias, which is the only compile-time cover the
+      # unrouted retirement leftovers (`pages/{canvas,canvas2,configuration,
+      # workflows,workflows/detail}`) have left — they have no routes and no
+      # tests, so nothing else would notice them breaking against `src/`.
+      # `npm run build:ui` runs this same `tsc --noEmit` before `vite build`
+      # and is in NO CI job; run the typecheck directly rather than the build
+      # so a bundler failure and a type error stay distinguishable.
+      - name: Typecheck @dopl/desktop-ui (the bundled SPA)
+        run: npm run typecheck -w @dopl/desktop-ui
 
       # 0 errors is the bar. Two warnings are known and tracked; `--max-warnings`
       # is deliberately NOT set, so a new warning does not fail the build while a

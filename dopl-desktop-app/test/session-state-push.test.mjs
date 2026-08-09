@@ -28,8 +28,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import {
-  SRC, BLOCK_START, load, entry, fakeSummary, armed, drained, bodies,
+  SRC, BLOCK_START, load, entry, adHocEntry, fakeSummary, armed, drained, bodies,
+  CHAN_A, TASK_A, CHAN_B, TASK_B, ADHOC_TASK_ID,
 } from "./_session-state-push-harness.mjs";
 
 // THE ONE TRANSPORT. `api.js` carries the F-132 401 repair that `listener-io.js` shipped
@@ -47,9 +51,9 @@ test("TRANSPORT: the writer rides api.js, and does not grow a third fetch copy",
 test("ROW: the payload is the schema's shape, field for field", () => {
   const m = load();
   assert.deepEqual(m.reportRow(entry()), {
-    sessionKey: "chan-1:task-1",
-    channelId: "chan-1",
-    threadId: "task-1",
+    sessionKey: `${CHAN_A}:${TASK_A}`,
+    channelId: CHAN_A,
+    threadId: TASK_A,
     name: "flint",
     state: "working",
     channelName: "General",
@@ -57,10 +61,30 @@ test("ROW: the payload is the schema's shape, field for field", () => {
   });
 });
 
+// C-2 — THE FIXTURE IS THE TEST. The row above used to read `chan-1:task-1`, which the
+// server's `SESSION_KEY_RE` and `threadId: z.string().uuid()` both reject, so this suite
+// was green about a payload that 400s. Pinned against the shipped regexes so a drift in
+// either direction fails HERE rather than in production.
+test("ROW: the fixture satisfies the server's own two rules for a session row", () => {
+  const SCHEMA = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "..", "src", "features", "channels", "schema-sessions.ts"),
+    "utf8"
+  );
+  const keyRe = SCHEMA.match(/const SESSION_KEY_RE = (\/.*\/);/);
+  assert.ok(keyRe, "SESSION_KEY_RE not found in the server schema");
+  const re = new RegExp(keyRe[1].slice(1, -1));
+  const m = load();
+  assert.ok(re.test(m.reportRow(entry()).sessionKey), "the fixture key is a key the server accepts");
+  assert.ok(re.test(m.reportRow(entry({ taskId: "" })).sessionKey), "…and so is the thread-less one");
+  assert.equal(re.test(m.reportRow(adHocEntry()).sessionKey), false,
+    "…while the ad-hoc key really is refused, which is what makes the filter load-bearing");
+  assert.match(SCHEMA, /threadId: z\.string\(\)\.uuid\(\)/, "the thread column takes a uuid or nothing");
+});
+
 test("ROW: a thread-less responder's '' becomes the NULL the column stores", () => {
   const m = load();
   const row = m.reportRow(entry({ taskId: "" }));
-  assert.equal(row.sessionKey, "chan-1:", "the KEY still carries the empty half");
+  assert.equal(row.sessionKey, `${CHAN_A}:`, "the KEY still carries the empty half");
   assert.equal(row.threadId, null);
 });
 
@@ -108,7 +132,7 @@ test("PUSH: an IDENTICAL projection does not post again — the whole point of t
 });
 
 test("PUSH: a real state change posts again, and only the changed workspace", async () => {
-  const other = entry({ channelId: "chan-2", taskId: "task-2", workspaceId: "ws-2" });
+  const other = entry({ channelId: CHAN_B, taskId: TASK_B, workspaceId: "ws-2" });
   const { m, summary } = armed();
   summary.emit([entry(), other]);
   await drained();
@@ -197,6 +221,96 @@ test("LIFECYCLE: a run that starts with a PREVIOUS run's rows clears them", asyn
   assert.equal(m.posts[0].options.workspaceId, "ws-9");
   assert.deepEqual(bodies(m)[0], []);
   assert.deepEqual(m.disk[m.REPORTED_WORKSPACES_KEY], {});
+});
+
+// ── 4. C-2: THE AD-HOC SESSION IS FILTERED, AND THE REST OF THE SET SURVIVES ─────────
+//
+// THE DEFECT: an unthreaded inbound — the ordinary DM — keys as `task-<channel>-<seq>`,
+// which the endpoint refuses. Zod validates the ARRAY, so ONE of those 400s the WHOLE
+// `sessions` payload; `retryable(400)` is false and the digest is not recorded, so every
+// later push fails identically and `read_sessions` answers `[]` for the machine — including
+// its perfectly valid uuid-threaded sessions — while stale rows are never cleared.
+
+test("C-2: the predicate is the server's contract restated, not a name sniff", () => {
+  const m = load();
+  assert.equal(m.serverReportable(entry()), true);
+  assert.equal(m.serverReportable(entry({ taskId: "" })), true, "a thread-less responder is legal");
+  assert.equal(m.serverReportable(adHocEntry()), false, "…an ad-hoc THREAD ID is not");
+  assert.equal(m.serverReportable(entry({ channelId: "chan-1" })), false, "a non-uuid channel is refused too");
+  assert.equal(m.serverReportable(entry({ taskId: "not-a-uuid" })), false);
+  assert.equal(m.serverReportable(null), false, "and nothing at all fails closed");
+});
+
+test("C-2: ONE ad-hoc session no longer poisons the whole workspace's push", async () => {
+  const { m, summary } = armed();
+  summary.emit([entry(), adHocEntry()]);
+  await drained();
+  assert.equal(m.posts.length, 1, "the push happens");
+  assert.deepEqual(bodies(m)[0].map((r) => r.threadId), [TASK_A],
+    "the valid uuid-threaded session is reported; the ad-hoc one is not on the wire");
+  assert.equal(bodies(m)[0].length, 1);
+});
+
+test("C-2: the filtering is VISIBLE — one line per dropped session, not silence", async () => {
+  const { m, summary } = armed();
+  summary.emit([entry(), adHocEntry()]);
+  await drained();
+  const said = m.logged.filter((l) => l.includes("SKIPPING ad-hoc session"));
+  assert.equal(said.length, 1);
+  assert.ok(said[0].includes(ADHOC_TASK_ID), said[0]);
+  assert.ok(said[0].includes("read_sessions"), "it names the consequence, like every other failure line");
+});
+
+test("C-2: …and it is said ONCE, not on every state change of a long session", async () => {
+  const { m, summary } = armed();
+  for (const state of ["working", "idle", "working", "ended"]) {
+    summary.emit([entry({ state }), adHocEntry({ state })]);
+    await drained();
+  }
+  assert.equal(m.logged.filter((l) => l.includes("SKIPPING ad-hoc session")).length, 1);
+});
+
+test("C-2: the digest still gates, and still moves, over the FILTERED set", async () => {
+  const { m, summary } = armed();
+  summary.emit([entry(), adHocEntry()]);
+  await drained();
+  assert.equal(m.posts.length, 1);
+  // The ad-hoc session's own state moving is invisible on the wire, so it must not cost a
+  // write — the digest is over what is really sent.
+  summary.emit([entry(), adHocEntry({ state: "idle" })]);
+  await drained();
+  assert.equal(m.posts.length, 1, "a change to a filtered row is not a change to the set");
+  // …and a change to a REPORTED row still posts.
+  summary.emit([entry({ state: "idle" }), adHocEntry({ state: "idle" })]);
+  await drained();
+  assert.equal(m.posts.length, 2);
+  assert.equal(bodies(m)[1][0].state, "idle");
+});
+
+test("C-2: a workspace whose ONLY sessions are ad-hoc posts the empty set, then stops", async () => {
+  const { m, summary } = armed();
+  summary.emit([entry()]);
+  await drained();
+  assert.deepEqual(m.disk[m.REPORTED_WORKSPACES_KEY], { "user-a": ["ws-1"] });
+  summary.emit([adHocEntry()]); // the uuid-threaded session ends; only the DM is left
+  await drained();
+  assert.deepEqual(bodies(m)[1], [], "the previous row is deleted rather than left claiming `working`");
+  assert.deepEqual(m.disk[m.REPORTED_WORKSPACES_KEY], {});
+  summary.emit([adHocEntry({ state: "idle" })]);
+  await drained();
+  assert.equal(m.posts.length, 2, "and it does not re-post the same empty set forever");
+});
+
+test("C-2: the SKIPPED-log ledger is released with the pill, like the origin stamps", async () => {
+  const { m, summary } = armed();
+  summary.emit([adHocEntry()]);
+  await drained();
+  summary.emit([]); // the ad-hoc session ends
+  await drained();
+  summary.emit([adHocEntry()]); // a NEW one on the same key
+  await drained();
+  assert.equal(m.logged.filter((l) => l.includes("SKIPPING ad-hoc session")).length, 2,
+    "a fresh session says so again — the ledger cannot grow with every DM ever answered");
 });
 
 test("LIFECYCLE: `kick()` runs a cycle off the current projection", async () => {

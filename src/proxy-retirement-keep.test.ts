@@ -111,7 +111,7 @@ const KEEP = [
   "/api/billing/webhook",
   "/api/mcp",
   "/api/oauth/token",
-  "/api/cron/purge-trash",
+  "/api/cron/oauth-cleanup",
   "/api/channels/c_1/messages",
   "/api/workspaces/invitations/tok_x",
   "/.well-known/oauth-authorization-server",
@@ -176,11 +176,17 @@ describe("the KEEP list is untouched with the flag ON", () => {
     expect(res.headers.get("location")).toBe(`${ORIGIN}/${SEGMENT}/canvas`);
   });
 
-  it("social crawlers still get OG images off a retired path", async () => {
-    // The OG passthrough sits above the retirement branch on purpose: a card
-    // preview has no session and must not be redirected.
-    const res = await proxy(req(`/${SEGMENT}/canvas/opengraph-image`));
-    expect(res.status).toBe(200);
+  it("social crawlers still reach the OG card, structurally now", async () => {
+    // THIS USED TO ASSERT A BRANCH THAT NO LONGER EXISTS. The proxy carried a
+    // passthrough for paths ending `/opengraph-image` — written for convention-based
+    // route FILES under `/community/[slug]/`, none of which survived Stage D — and
+    // P0-4 removed it. The guarantee it was protecting is unchanged and now stronger:
+    // the card a crawler actually fetches is the STATIC file the root layout names,
+    // and the matcher excludes it by extension, so the middleware does not run and no
+    // code path exists that could redirect a session-less crawler.
+    const { config } = await import("./proxy");
+    const re = new RegExp(`^${config.matcher[0]}$`);
+    expect(re.test("/img/site_thumbnail.jpg")).toBe(false);
   });
 
   it("static assets never reach the middleware at all", async () => {
@@ -189,8 +195,12 @@ describe("the KEEP list is untouched with the flag ON", () => {
     for (const asset of [
       "/_next/static/chunks/main.js",
       "/favicon.ico",
+      // P0-4: the one `layout.tsx` actually emits. `.ico` in a SUBDIRECTORY was
+      // not excluded, so this was 307'd to /login on every signed-out landing view.
+      "/favicons/favicon.ico",
+      "/favicons/site.webmanifest",
       "/logo.svg",
-      "/img/site_thumbnail.png",
+      "/img/site_thumbnail.jpg",
     ]) {
       expect(re.test(asset), asset).toBe(false);
     }

@@ -14,6 +14,8 @@ import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { pendingRow } from "@/shared/ui/pending";
+import { TranscriptSkeleton } from "@/shared/ui/skeleton";
 import { toast } from "@/shared/ui/toast";
 import type { Chat, ChatDetail, ChatFolder } from "../types";
 import type { ChatScope } from "../scope";
@@ -37,6 +39,8 @@ interface Props {
   totalChats: number;
   onShareChange: (id: string, scope: ChatScope, teamIds: string[]) => Promise<void>;
   onTogglePin: (id: string) => Promise<void>;
+  /** A pin toggle is in flight — the star already shows its new state. */
+  pinPending: boolean;
   onDelete: (id: string) => Promise<void>;
 }
 
@@ -55,6 +59,7 @@ export function DetailPane({
   totalChats,
   onShareChange,
   onTogglePin,
+  pinPending,
   onDelete,
 }: Props) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -115,10 +120,18 @@ export function DetailPane({
         />
 
         {isMine && (
+          // The star flips on the click (the write patches the cache this
+          // reads) and goes inert for the round trip. That inertness is the
+          // whole double-PATCH fix: without it, a second click on a
+          // still-in-flight toggle sends a second, contradicting PATCH and the
+          // row's final state is decided by whichever response lands last.
           <button
             type="button"
             onClick={() => void onTogglePin(chat.id)}
-            className={cn(ICON_BTN, chat.pinned && "text-text-primary")}
+            {...pendingRow(
+              pinPending,
+              cn(ICON_BTN, chat.pinned && "text-text-primary")
+            )}
             aria-label={chat.pinned ? "Unpin" : "Pin"}
           >
             <Star size={15} className={cn(chat.pinned && "fill-current")} />
@@ -187,7 +200,15 @@ export function DetailPane({
           ) : detail ? (
             <MessageList messages={detail.messages} />
           ) : (
-            <p className="text-caption text-text-muted">Loading transcript…</p>
+            // The transcript's own shape, not a line of copy. Bubble count
+            // tracks the message count already printed above it, capped so a
+            // 200-message chat doesn't ghost a screenful.
+            <div role="status" aria-busy="true" aria-live="polite">
+              <span className="sr-only">Loading transcript</span>
+              <TranscriptSkeleton
+                bubbles={Math.min(Math.max(chat.messageCount, 2), 5)}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -196,8 +217,8 @@ export function DetailPane({
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
         title="Delete this chat?"
-        description="The chat and its transcript are deleted permanently — there is no trash for the archive."
-        confirmLabel="Delete"
+        description="This permanently deletes the chat and its transcript. This can't be undone."
+        confirmLabel="Delete permanently"
         destructive
         onConfirm={() => onDelete(chat.id)}
       />

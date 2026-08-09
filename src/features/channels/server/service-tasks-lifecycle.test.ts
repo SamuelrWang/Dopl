@@ -1,9 +1,9 @@
 /**
- * Unit tests for the thread lifecycle ECHO — the `task_finished` / `task_failed`
- * marker `closeTask` posts, the SEQ that marker rides back out on, and
- * `reopenTask`'s deliberate silence. Split out of `service-writes.test.ts`
- * (§2 cap): the echo is the thread lane's contract with the transcript, not
- * part of `postMessage`'s metadata folds.
+ * Unit tests for the CLOSE half of `service-tasks-lifecycle.ts` — authorization,
+ * the `task_finished` / `task_failed` echo, the SEQ that marker rides back out
+ * on, the already-closed guard (C-30) and the echo's idempotency key. The REOPEN
+ * half is `service-tasks-reopen.test.ts` (§2 cap; the two halves are also two
+ * distinct contracts).
  *
  * The repositories are mocked; `service-shared` runs for real.
  */
@@ -17,13 +17,16 @@ vi.mock("./repository-tasks");
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import { closeTask, reopenTask } from "./service-tasks";
+import { closeEchoClientMsgId, closeTask } from "./service-tasks-lifecycle";
 import { TaskForbiddenError, TaskNotFoundError } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelMemberRow, ChannelMessageRow, ChannelRow, ChannelTaskRow } from "./dto";
 
 const WS = "ws-1";
 const USER = "user-1";
+const CREATOR = "user-9";
+const TARGET = "user-8";
+const CLOSE_TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 const ctx: ChannelContext = {
   workspaceId: WS,
@@ -64,6 +67,26 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
+/** A task USER (the caller) is allowed to close (creator), open + untargeted. */
+function closableTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+  return {
+    id: CLOSE_TASK_ID,
+    channel_id: "chan-1",
+    workspace_id: WS,
+    title: "Ship it",
+    status: "open",
+    outcome: null,
+    mode: "interactive",
+    created_by: USER,
+    target_user_id: null,
+    created_at: "2026-07-20T00:00:00Z",
+    updated_at: "2026-07-20T00:00:00Z",
+    closed_at: null,
+    outcome_summary: null,
+    ...overrides,
+  };
+}
+
 /** Echo the insert back as a stored row so `hydrateOne` can map it. */
 function insertedRow(
   row: Parameters<typeof repoMessages.insertMessage>[0]
@@ -83,6 +106,16 @@ function insertedRow(
   };
 }
 
+/** The lifecycle echo `postMessage` wrote (the only insertMessage call). */
+function echoInsert() {
+  return vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
+}
+
+/** The patch the conditional close applied. */
+function closePatch() {
+  return vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][2];
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
@@ -93,49 +126,56 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
+  // Resolves for BOTH the closeTask authz lookup and postMessage's re-stamp.
+  vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
+  vi.mocked(repoTasks.updateTaskIfStatus).mockImplementation(
+    async (_id, _status, patch) => closableTask({ ...patch, status: "closed" })
+  );
+});
+
+describe("closeTask — authorization", () => {
+  it("404s an unknown task", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+    await expect(
+      closeTask(ctx, "general", CLOSE_TASK_ID, "completed")
+    ).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it("allows the creator to close", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closableTask({ created_by: USER, target_user_id: TARGET })
+    );
+
+    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
+
+    expect(closePatch()).toMatchObject({ status: "closed", outcome: "completed" });
+  });
+
+  it("allows the target to close", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closableTask({ created_by: CREATOR, target_user_id: USER })
+    );
+    await expect(
+      closeTask(ctx, "general", CLOSE_TASK_ID, "failed")
+    ).resolves.toBeDefined();
+  });
+
+  it("forbids a member who is neither creator nor target", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closableTask({ created_by: CREATOR, target_user_id: TARGET })
+    );
+    await expect(
+      closeTask(ctx, "general", CLOSE_TASK_ID, "completed")
+    ).rejects.toBeInstanceOf(TaskForbiddenError);
+    expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
+  });
 });
 
 describe("closeTask — outcome summary (v1.7)", () => {
-  const CLOSE_TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
-
-  /** A task USER (the caller) is allowed to close (creator), open + untargeted. */
-  function closableTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-    return {
-      id: CLOSE_TASK_ID,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      title: "Ship it",
-      status: "open",
-      outcome: null,
-      mode: "interactive",
-      created_by: USER,
-      target_user_id: null,
-      created_at: "2026-07-20T00:00:00Z",
-      updated_at: "2026-07-20T00:00:00Z",
-      closed_at: null,
-      outcome_summary: null,
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    // Resolves for BOTH the closeTask authz lookup and postMessage's re-stamp.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
-    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
-      closableTask({ ...patch, status: "closed" })
-    );
-  });
-
-  /** The lifecycle echo `postMessage` wrote (the only insertMessage call). */
-  function echoInsert() {
-    return vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
-  }
-
   it("persists outcome_summary and echoes the summary as the close body", async () => {
     await closeTask(ctx, "general", CLOSE_TASK_ID, "completed", "Shipped v2 to prod");
 
-    const patch = vi.mocked(repoTasks.updateTask).mock.calls[0][1];
-    expect(patch.outcome_summary).toBe("Shipped v2 to prod");
+    expect(closePatch().outcome_summary).toBe("Shipped v2 to prod");
 
     const echo = echoInsert();
     expect(echo.kind).toBe("task_finished");
@@ -145,8 +185,7 @@ describe("closeTask — outcome summary (v1.7)", () => {
   it("without a summary persists null and keeps the calm default body", async () => {
     await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
 
-    const patch = vi.mocked(repoTasks.updateTask).mock.calls[0][1];
-    expect(patch.outcome_summary).toBeNull();
+    expect(closePatch().outcome_summary).toBeNull();
     expect(echoInsert().body).toBe("Task completed");
   });
 
@@ -167,34 +206,6 @@ describe("closeTask — outcome summary (v1.7)", () => {
  * the seq is only knowable here, so it rides back out.
  */
 describe("closeTask — lifecycle echo seq", () => {
-  const CLOSE_TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
-
-  function closableTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-    return {
-      id: CLOSE_TASK_ID,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      title: "Ship it",
-      status: "open",
-      outcome: null,
-      mode: "interactive",
-      created_by: USER,
-      target_user_id: null,
-      created_at: "2026-07-20T00:00:00Z",
-      updated_at: "2026-07-20T00:00:00Z",
-      closed_at: null,
-      outcome_summary: null,
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
-    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
-      closableTask({ ...patch, status: "closed" })
-    );
-  });
-
   it("returns the echo's seq alongside the closed thread", async () => {
     vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
       ...insertedRow(row),
@@ -232,7 +243,7 @@ describe("closeTask — lifecycle echo seq", () => {
     expect(echoSeq).toBeNull();
     expect(thread.status).toBe("closed");
     // The close itself still landed on the row, summary and all.
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toMatchObject({
+    expect(closePatch()).toMatchObject({
       status: "closed",
       outcome: "failed",
       outcome_summary: "Gave up",
@@ -249,94 +260,112 @@ describe("closeTask — lifecycle echo seq", () => {
     await expect(
       closeTask(ctx, "general", CLOSE_TASK_ID, "completed")
     ).rejects.toBeInstanceOf(TaskForbiddenError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+    expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 });
 
-describe("reopenTask — authz + no-echo (v1.9, web-only)", () => {
-  const REOPEN_TASK_ID = "770e8400-e29b-41d4-a716-446655440222";
-  const OTHER = "990e8400-e29b-41d4-a716-446655440999";
+/**
+ * C-30 — THE ALREADY-CLOSED GUARD, both halves of it.
+ *
+ * The update is conditional (`WHERE status = 'open'`), so the transition itself
+ * picks the winner and a second close writes nothing; and the echo carries a
+ * `client_msg_id` keyed on the close it describes, so even two racers that both
+ * reached `postMessage` would leave ONE entry in the transcript.
+ */
+describe("closeTask — a second close is a no-op success (C-30)", () => {
+  it("keys the echo on (thread, closed_at) and NOT on the outcome", async () => {
+    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
 
-  /** A CLOSED task with a stored outcome + summary, ready to be reopened. */
-  function closedTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-    return {
-      id: REOPEN_TASK_ID,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      title: "Ship it",
-      status: "closed",
-      outcome: "completed",
-      mode: "interactive",
-      created_by: USER,
-      target_user_id: null,
-      created_at: "2026-07-20T00:00:00Z",
-      updated_at: "2026-07-20T00:00:00Z",
-      closed_at: "2026-07-21T00:00:00Z",
-      outcome_summary: "Shipped v2",
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    // Echo the patch back as the reopened (open) row so mapTaskRow can map it.
-    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
-      closedTask({ ...patch } as Partial<ChannelTaskRow>)
+    const closedAt = closePatch().closed_at as string;
+    expect(closedAt).toEqual(expect.any(String));
+    expect(echoInsert().client_msg_id).toBe(
+      closeEchoClientMsgId(CLOSE_TASK_ID, closedAt)
     );
+    // THE OUTCOME IS ABSENT ON PURPOSE: the case being deduplicated is the one
+    // where the two closers DISAGREE, so a key that varied with the outcome
+    // would let both echoes through — the bug restated, not fixed.
+    expect(echoInsert().client_msg_id).not.toContain("completed");
   });
 
-  it("404s an unknown task (nothing updated)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
-    await expect(
-      reopenTask(ctx, "general", REOPEN_TASK_ID)
-    ).rejects.toBeInstanceOf(TaskNotFoundError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
-  });
+  it("reports the STORED outcome instead of overwriting it, and writes nothing", async () => {
+    // The conditional update matched no row: somebody closed it first.
+    vi.mocked(repoTasks.updateTaskIfStatus).mockResolvedValue(null);
+    vi.mocked(repoTasks.findTaskByChannelAndId)
+      // 1. the authz read still sees the row as open
+      .mockResolvedValueOnce(closableTask())
+      // 2. the re-read after the lost race sees the winner's close
+      .mockResolvedValue(
+        closableTask({
+          status: "closed",
+          outcome: "completed",
+          closed_at: "2026-08-08T10:00:00Z",
+          outcome_summary: "They shipped it",
+        })
+      );
 
-  it("forbids a member who is neither creator nor target", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: OTHER, target_user_id: OTHER })
+    const { thread, echoSeq } = await closeTask(
+      ctx,
+      "general",
+      CLOSE_TASK_ID,
+      // This caller wanted `failed`. The stored `completed` stands.
+      "failed",
+      "I think it broke"
     );
-    await expect(
-      reopenTask(ctx, "general", REOPEN_TASK_ID)
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
-  });
 
-  it("creator reopen clears the closed state in one CHECK-satisfying update", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: USER })
-    );
-
-    const task = await reopenTask(ctx, "general", REOPEN_TASK_ID);
-
-    // status back to open with outcome / closed_at / outcome_summary nulled —
-    // keeps (status='closed') = (outcome IS NOT NULL) satisfied.
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toEqual({
-      status: "open",
-      outcome: null,
-      closed_at: null,
-      outcome_summary: null,
-    });
-    expect(task.status).toBe("open");
-    expect(task.outcome).toBeNull();
-  });
-
-  it("the target may also reopen", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: OTHER, target_user_id: USER })
-    );
-    await expect(
-      reopenTask(ctx, "general", REOPEN_TASK_ID)
-    ).resolves.toBeDefined();
-    expect(repoTasks.updateTask).toHaveBeenCalledTimes(1);
-  });
-
-  it("posts NO lifecycle echo (the card flips back on refetch, not a marker)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      closedTask({ created_by: USER })
-    );
-    await reopenTask(ctx, "general", REOPEN_TASK_ID);
+    expect(thread.status).toBe("closed");
+    expect(thread.outcome).toBe("completed");
+    expect(thread.outcomeSummary).toBe("They shipped it");
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+    // No echo was found for the winner's key in this fixture, so no cursor is
+    // fabricated. Never a guess — that is the whole `echoSeq` contract.
+    expect(echoSeq).toBeNull();
+  });
+
+  it("hands a retry back the ORIGINAL echo's seq, looked up by the same key", async () => {
+    vi.mocked(repoTasks.updateTaskIfStatus).mockResolvedValue(null);
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closableTask({
+        status: "closed",
+        outcome: "completed",
+        closed_at: "2026-08-08T10:00:00Z",
+      })
+    );
+    vi.mocked(repoMessages.findMessageByClientId).mockImplementation(
+      async (_channelId, clientMsgId) =>
+        clientMsgId ===
+        closeEchoClientMsgId(CLOSE_TASK_ID, "2026-08-08T10:00:00Z")
+          ? ({ seq: 91 } as ChannelMessageRow)
+          : null
+    );
+
+    const { echoSeq } = await closeTask(
+      ctx,
+      "general",
+      CLOSE_TASK_ID,
+      "completed"
+    );
+
+    expect(echoSeq).toBe(91);
+  });
+
+  it("404s when the thread vanished between the update and the re-read", async () => {
+    vi.mocked(repoTasks.updateTaskIfStatus).mockResolvedValue(null);
+    vi.mocked(repoTasks.findTaskByChannelAndId)
+      .mockResolvedValueOnce(closableTask())
+      .mockResolvedValue(null);
+
+    await expect(
+      closeTask(ctx, "general", CLOSE_TASK_ID, "completed")
+    ).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it("guards the transition in the STATEMENT, not in a preceding read", async () => {
+    // The whole point of C-30's fix: `WHERE status = 'open'` is what makes
+    // first-write-wins true under concurrency. A read-then-write guard would
+    // pass this assertion's sibling (the read) and still lose the race.
+    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
+    expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][1]).toBe("open");
+    expect(repoTasks.updateTask).not.toHaveBeenCalled();
   });
 });

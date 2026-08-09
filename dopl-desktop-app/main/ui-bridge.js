@@ -182,6 +182,21 @@ function getAuthState() {
   return authTokens.getAuthState();
 }
 
+// WARM THE CREDENTIAL AT LAUNCH, NOT ON THE FIRST REQUEST (launch-blocker P0-2).
+// performApiRequest awaits getBearerToken(), and that read ROTATES IN LINE while the
+// stored token sits inside auth-tokens' near-expiry window — where a cold start lands
+// whenever the app was closed past ~80% of a token's life (~48 min). Paid there it is a
+// serial hop in front of the SPA's very first API call, with nothing else in flight to
+// hide it; paid here it overlaps window creation, and that first call either finds a
+// fresh token or joins auth.js's single-flight refresh already running.
+// FIRE AND FORGET — it warms a cache and gates nothing: signed out costs no network
+// call at all, and a failed rotation is auth-tokens' bounded-retry business.
+function primeAuth() {
+  getBearerToken().catch((err) =>
+    diag('ui-bridge: auth prime failed —', (err && err.message) || String(err))
+  );
+}
+
 async function sendApiRequest(href, opts, token) {
   const method = opts.method || 'GET';
   const headers = {
@@ -279,6 +294,10 @@ function ensureMcpConfig(reason) {
 function register(opts = {}) {
   const getWindow =
     typeof opts.getMainWindow === 'function' ? opts.getMainWindow : () => null;
+
+  // Registration happens in whenReady, BEFORE createShellWindow — so this is the
+  // earliest point at which the launch can start paying for a token rotation.
+  primeAuth();
 
   // Refusals REJECT rather than returning a synthetic HTTP status: a refused
   // call is a caller bug (or an attack), never a server answer, and must not be

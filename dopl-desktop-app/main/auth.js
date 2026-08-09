@@ -48,27 +48,54 @@ const PENDING_AUTH_MAX = 4; // concurrent sign-in attempts worth remembering
 // clock, and whatever `state` a fragment echoed, WHICH record (if any)
 // authorizes adoption.
 //
-// TWO RECORD KINDS, because the two flows have different guarantees:
-//   requireState — the fragment is built IN-PROCESS (auth-password.js's
-//     password adoption), so it echoes our nonce and an EXACT match is
-//     enforceable. A fragment injected by another process carries no state and
-//     can therefore never consume one of these.
-//   presence-only — the BROWSER handoff (OAuth / magic link). The web pages
-//     still drop our ?state (see FOLLOW-UP DEBT below), so these are gated on
-//     "we started a sign-in recently" plus the TTL, exactly as before.
+// TWO RECORD KINDS in the code; only ONE is still armed by any live path.
+//   requireState — the flow controls the whole round trip, so the returning
+//     fragment echoes our nonce and an EXACT match is enforceable. ALL THREE
+//     sign-in flows arm this way (every `beginPendingAuth` caller in main/
+//     passes `requireState: true`):
+//       · the BROWSER handoff (OAuth), armed in auth-actions.maybeBeginAuth.
+//         Our ?state rides the entire web leg: /auth/desktop-start forwards it
+//         into the Supabase redirectTo, /auth/callback threads it on to
+//         /auth/desktop-handoff, and that page puts it in the dopl:// fragment.
+//       · the in-process password adoption (auth-password.js), whose fragment
+//         main builds itself and which never crosses a process or the OS.
+//       · the MAGIC LINK (auth-password.js:156, closed 2026-08-08). The nonce
+//         rides out on GoTrue's `redirect_to=/auth/desktop-handoff?state=<n>`,
+//         so the emailed link returns through the same state-bearing capture as
+//         the OAuth leg. It used to be the one presence-only flow; it is not.
+//     A 128-bit nonce is UNGUESSABLE, which is the property this rests on — an
+//     injected dopl:// link cannot invent one. It is NOT unreadable, and the
+//     difference matters for the browser leg: that nonce transits the system
+//     browser as a query param, so it exists in the address bar, in history,
+//     and in the access log of every server on the web leg. Anything able to
+//     read those is inside the trust boundary already, but the TTL (and
+//     single use) is what bounds that exposure, not secrecy of the value.
+//   presence-only — a record with no `requireState`. NOTHING WRITES ONE ANY
+//     MORE. `pickPendingAuth`'s no-echo branch exists only for records left in
+//     a pre-upgrade store by a build that armed the magic link the old way;
+//     they age out on the TTL and the branch then becomes dead. Do not arm a
+//     new flow this way — see the fail-closed note below for why.
+//
+// FAIL CLOSED IN BOTH DIRECTIONS (F-054, 2026-08-08). A fragment that echoes a
+// state may spend ONLY the record carrying that exact nonce — a mismatch
+// matches nothing and does NOT fall back to presence+TTL admission. A fragment
+// with no state may spend only a record that does not require one. Before this,
+// the browser record was armed WITHOUT requireState, so a state-less fragment
+// still round-tripped on presence alone: the web half echoed a value the
+// desktop merely read, and echoing a value nothing insists on is not CSRF
+// protection.
+//
+// RESIDUAL: CLOSED (2026-08-08). This read "the magic-link record is the last
+// presence-only kind", and the fix it described — threading a state through
+// GoTrue's `redirect_to` — has since landed in auth-password.js. Every flow is
+// now state-bound; the only presence-only records that can exist are ones an
+// older build already wrote to a user's store.
 //
 // A LIST, not one record: the store held a single slot, so a password sign-in
 // silently voided an in-flight browser handoff (and an emailed magic link went
 // permanently dead). Records are single-use and expired ones are pruned on
 // every read/write, so the set stays small on its own; PENDING_AUTH_MAX is the
 // belt-and-braces bound.
-//
-// FOLLOW-UP DEBT: the strongest form is a full state round-trip — the web
-// sign-in flow echoing our `state` nonce back in the dopl:// fragment.
-// /auth/desktop-start drops ?state and /auth/desktop-handoff builds the deep
-// link from the tokens alone, so the browser leg cannot be tightened from here.
-// Once it echoes, the browser records arm with requireState too and the
-// presence-only kind disappears.
 function livePendingAuth(list, now, ttlMs) {
   return (Array.isArray(list) ? list : []).filter(
     (p) =>
@@ -79,6 +106,9 @@ function livePendingAuth(list, now, ttlMs) {
 
 function pickPendingAuth(live, state_) {
   if (state_ != null && state_ !== '') {
+    // An echo binds the fragment to ONE record. No match is a rejection, not a
+    // reason to look for a laxer record: a wrong state must never be treated as
+    // no state at all, or an attacker would strip it to reach the branch below.
     return live.find((p) => p.nonce === state_) || null;
   }
   // No echo: only a record that does not REQUIRE one may be consumed, newest first.
@@ -139,9 +169,13 @@ function captureFromFragment(fragment) {
     if (!access_token || !refresh_token) return false;
 
     // M4: reject sessions we didn't initiate (no pending flag / expired / bad state).
+    // The reason names WHICH way the gate failed but never the state value itself.
     if (!consumePendingAuth(params.get('state'))) {
-      console.warn('[auth] rejected deep-link session: no matching pending sign-in');
-      diag('auth: rejected deep-link session (no matching pending sign-in)');
+      const why = params.get('state')
+        ? 'the echoed state matches no armed sign-in'
+        : 'no state echoed, and no state-free sign-in is armed';
+      console.warn('[auth] rejected deep-link session —', why);
+      diag('auth: rejected deep-link session —', why);
       return false;
     }
 

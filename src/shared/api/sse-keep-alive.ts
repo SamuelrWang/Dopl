@@ -105,7 +105,23 @@ export function withSseKeepAlive(
   // Vercel does not buffer `text/event-stream`, but a self-hosted nginx does
   // unless told otherwise, and neither header changes the bytes we emit.
   headers.set("X-Accel-Buffering", "no");
-  headers.set("Cache-Control", "no-cache, no-transform");
+  // `no-cache` ONLY. This used to read `no-cache, no-transform`, and
+  // `no-transform` is not a synonym or an intensifier — RFC 9111 §5.2.2.6 makes
+  // it a directive forbidding every intermediary from altering the payload,
+  // which includes applying a content coding. On this route that is precisely
+  // backwards: `/api/mcp` is the transport for every MCP tool result, its
+  // bodies are JSON-RPC text, and it is the path `dopl_map` and the ontology
+  // reads travel. We were affirmatively instructing the CDN not to compress
+  // the largest agent-facing payloads the product serves (P0-3).
+  //
+  // Nothing here needed it. The header was added alongside `X-Accel-Buffering`
+  // as anti-buffering hygiene, but buffering and transformation are different
+  // properties: `X-Accel-Buffering: no` is what stops a proxy from holding
+  // frames, and it is untouched. Compression does not buffer an SSE stream —
+  // gzip/br flush per write, so the keep-alive comment still leaves on its
+  // 15s tick — and the decoded frames are byte-identical either way, so the
+  // `eventsource-parser` contract this whole wrapper protects is unaffected.
+  headers.set("Cache-Control", "no-cache");
 
   return new Response(stream, {
     status: response.status,

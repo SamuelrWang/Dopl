@@ -59,13 +59,20 @@ import { useWorkspaceRoute } from "./use-workspace-route";
  *
  * What the server layout did before rendering, this does client-side: resolve
  * the URL segment to a workspace and rewrite the URL when it is stale
- * (§1.5) — `GET /api/workspaces/resolve`, one cached request shared with every
- * page via `useWorkspaceRoute`.
+ * (§1.5) — `POST /api/boot`, one cached request shared with every page via
+ * `useWorkspaceRoute`.
+ *
+ * That single request is why the `isPending` gate below is affordable. It
+ * blocks `<Outlet/>`, i.e. every page, so anything serial in front of it is
+ * serial in front of the whole app (launch-blocker P0-2). It used to be the
+ * THIRD of five: bridge auth → onboarding-state → ensure-default → resolve →
+ * me → page data. Boot answers hops 2–4 at once and seeds the rest into the
+ * cache, so on a launch this query is already warm and the gate never paints.
  */
 export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { workspace, segment, isPending, error, refetch, needsRedirect } =
+  const { workspace, segment, role, isPending, error, refetch, needsRedirect } =
     useWorkspaceRoute();
 
   // Consent badge: shares the channels page's exact cache key — zero extra
@@ -122,11 +129,12 @@ export function AppShellLayout() {
     setSettingsOpen(true);
   };
 
-  // The rail's copy of this workspace carries the caller's role — the seed the
-  // modal gates on until `/api/workspaces/me` answers (the web shell seeds it
-  // from the server-resolved membership instead).
+  // The role the modal gates on. It comes off the BOOT answer now — the same
+  // server-resolved membership the web shell reads, arriving with the
+  // workspace instead of one hop behind it. The rail's copy of the workspace
+  // is the fallback for an answer that carries no role (older server).
   const railRole =
-    workspaces.find((w) => w.publicId === workspace.publicId)?.role ?? "viewer";
+    role ?? workspaces.find((w) => w.publicId === workspace.publicId)?.role ?? "viewer";
 
   return (
     <div className={styles.root}>

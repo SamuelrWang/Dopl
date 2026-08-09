@@ -8,7 +8,7 @@ import {
 } from "@/shared/realtime/refetch-coordinator";
 import { toast } from "@/shared/ui/toast";
 import * as api from "../client/api";
-import { planClusterCreateRollback } from "../create-cluster-rollback";
+import { planDeleteRollback } from "../delete-rollback";
 import { useOntologyRealtime } from "../client/realtime";
 import {
   clusterObjectIds,
@@ -18,6 +18,10 @@ import {
   type GraphAction,
   type GraphState,
 } from "../graph-state";
+import {
+  useOntologyCreates,
+  type OntologyCreateCallbacks,
+} from "./use-ontology-creates";
 import type { OntologyCluster, OntologyObject } from "../types";
 
 const OBJECT_SYNC_DELAY_MS = 800;
@@ -29,39 +33,51 @@ export const ontologySnapshotKey = (workspaceId: string) =>
 
 export type OntologyStatus = "loading" | "ready" | "error";
 
+export interface UseOntologyOptions extends OntologyCreateCallbacks {
+  /** An object or cluster was permanently deleted ON THE SERVER. The object
+   *  cap is a server-side count, and since deletes went permanent this is the
+   *  only way back under a cap — so the caller refreshes entitlements here or
+   *  its cap meter (and the create short-circuit reading `overCap`) stays
+   *  stuck at the pre-delete number until a reload. */
+  onDeleted?: () => void;
+}
+
 /**
  * The ontology store with persistence: loads the workspace snapshot,
  * applies actions optimistically, and mirrors them to the API —
- * object edits debounced per object (full-state PATCH, idempotent),
- * deletes immediately, creates server-first so ids are real.
- *
- * `onOverCap` fires when a create is denied by the free object cap
- * (server returns `over_free_cap`): the caller opens the upgrade modal
- * instead of surfacing a generic save-error toast.
+ * object edits debounced per object (full-state PATCH, idempotent), deletes
+ * immediately, and creates optimistically too since 2026-08-08 (the row is
+ * dispatched with a provisional id before the POST leaves, and
+ * `CREATE_RESOLVE` swaps in the server's id when it answers —
+ * `optimistic-create.ts`). A delete the server refuses is rolled back into the
+ * reducer (see `delete-rollback.ts`); so is a create.
  */
 export function useOntology(
   workspaceId: string,
-  onOverCap?: () => void
+  options: UseOntologyOptions = {}
 ): {
   graph: GraphState;
   status: OntologyStatus;
   dispatch: (action: GraphAction) => void;
-  createCluster: () => Promise<OntologyCluster | null>;
+  /** Both return the row that is ALREADY on screen — no await to a pixel. */
+  createCluster: () => OntologyCluster;
   createObject: (
     target: { clusterId: string } | { parentObjectId: string }
-  ) => Promise<OntologyObject | null>;
+  ) => OntologyObject;
+  /** Ids whose row is on screen but unacknowledged: render them pending. */
+  pendingIds: ReadonlySet<string>;
 } {
   const [graph, rawDispatch] = useReducer(graphReducer, EMPTY_GRAPH);
   const graphRef = useRef(graph);
   useEffect(() => {
     graphRef.current = graph;
   }, [graph]);
-  // Ref so create callbacks stay stable across renders even when the
-  // caller passes an inline handler.
-  const onOverCapRef = useRef(onOverCap);
+  // Ref so the create/delete callbacks stay stable across renders even when
+  // the caller passes an inline handler (or a fresh options literal).
+  const optionsRef = useRef(options);
   useEffect(() => {
-    onOverCapRef.current = onOverCap;
-  }, [onOverCap]);
+    optionsRef.current = options;
+  });
   const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   // Debounced PATCHes that have fired and are awaiting their server round
   // trip. Combined with `timersRef.size`, this is the "writes in flight"
@@ -194,11 +210,23 @@ export function useOntology(
     };
   }, [workspaceId]);
 
+  // One write in flight, from the realtime coordinator's point of view. Every
+  // mirrored write — debounced PATCH, and now the create sequences — brackets
+  // itself with these, so a remote snapshot can never re-seed the reducer on
+  // top of a row whose POST has not answered yet.
+  const beginWrite = useCallback(() => {
+    inFlightRef.current += 1;
+  }, []);
+  const endWrite = useCallback(() => {
+    inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+    coordinatorRef.current?.settle(hasPendingWrites());
+  }, [hasPendingWrites]);
+
   const syncObject = useCallback(
     (objectId: string) => {
       const object = graphRef.current.objects[objectId];
       if (!object) return;
-      inFlightRef.current += 1;
+      beginWrite();
       api
         .updateObject(workspaceId, objectId, {
           name: object.name || "Untitled",
@@ -209,12 +237,9 @@ export function useOntology(
           template: object.template,
         })
         .catch((err) => reportSaveError("object", err))
-        .finally(() => {
-          inFlightRef.current = Math.max(0, inFlightRef.current - 1);
-          coordinatorRef.current?.settle(hasPendingWrites());
-        });
+        .finally(endWrite);
     },
-    [workspaceId, hasPendingWrites]
+    [workspaceId, beginWrite, endWrite]
   );
 
   const scheduleObjectSync = useCallback(
@@ -245,27 +270,37 @@ export function useOntology(
           timers.delete(key);
           const cluster = graphRef.current.clusters.find((c) => c.id === clusterId);
           if (!cluster) return;
-          inFlightRef.current += 1;
+          beginWrite();
           api
             .updateCluster(workspaceId, clusterId, {
               name: cluster.name || "Untitled",
               purpose: cluster.purpose,
             })
             .catch((err) => reportSaveError("cluster", err))
-            .finally(() => {
-              inFlightRef.current = Math.max(0, inFlightRef.current - 1);
-              coordinatorRef.current?.settle(hasPendingWrites());
-            });
+            .finally(endWrite);
         }, OBJECT_SYNC_DELAY_MS)
       );
     },
-    [workspaceId, hasPendingWrites]
+    [workspaceId, beginWrite, endWrite]
   );
+
+  // Undo an optimistic delete the server refused, merging the removed slice
+  // back into whatever the board looks like NOW. Without this the row stays
+  // live server-side while the board shows it gone — and the `dirtyRef` this
+  // same dispatch set means no refetch can re-seed the reducer for the rest
+  // of the session, so the divergence hides until the next mount.
+  const rollbackDelete = useCallback((before: GraphState, action: GraphAction) => {
+    const snapshot = planDeleteRollback(before, graphRef.current, action);
+    if (snapshot) rawDispatch({ type: "SNAPSHOT_SET", snapshot });
+  }, []);
 
   const dispatch = useCallback(
     (action: GraphAction) => {
+      // Captured BEFORE the reducer runs: the rollback source, and the state
+      // the cluster cascade's pending-timer keys are read from.
+      const before = graphRef.current;
       const removedClusterObjectIds =
-        action.type === "CLUSTER_DELETE" ? clusterObjectIds(graphRef.current, action.id) : [];
+        action.type === "CLUSTER_DELETE" ? clusterObjectIds(before, action.id) : [];
       dirtyRef.current = true;
       rawDispatch(action);
       const objectId = objectIdToSync(action);
@@ -275,7 +310,16 @@ export function useOntology(
         const timer = timersRef.current.get(action.id);
         if (timer) clearTimeout(timer);
         timersRef.current.delete(action.id);
-        api.deleteObject(workspaceId, action.id).catch((err) => reportSaveError("delete", err));
+        // Two-arg `then`, not `.then().catch()`: a throw out of the caller's
+        // onDeleted must never be mistaken for a refused DELETE and roll back
+        // a delete that actually landed.
+        void api.deleteObject(workspaceId, action.id).then(
+          () => optionsRef.current.onDeleted?.(),
+          (err: unknown) => {
+            rollbackDelete(before, action);
+            reportSaveError("delete", err);
+          }
+        );
       }
       if (action.type === "CLUSTER_DELETE") {
         const timers = timersRef.current;
@@ -284,72 +328,37 @@ export function useOntology(
           if (timer) clearTimeout(timer);
           timers.delete(key);
         }
-        api
-          .deleteCluster(workspaceId, action.id)
-          .catch((err) => reportSaveError("delete cluster", err));
+        void api.deleteCluster(workspaceId, action.id).then(
+          () => optionsRef.current.onDeleted?.(),
+          (err: unknown) => {
+            rollbackDelete(before, action);
+            reportSaveError("delete cluster", err);
+          }
+        );
       }
     },
-    [workspaceId, scheduleObjectSync, scheduleClusterSync]
+    [workspaceId, scheduleObjectSync, scheduleClusterSync, rollbackDelete]
   );
 
-  const createCluster = useCallback(async (): Promise<OntologyCluster | null> => {
-    // Tracks whether the cluster POST landed — the guard for rollback: a later
-    // seed POST that fails leaves an orphan cluster to undo (F-031).
-    let createdClusterId: string | null = null;
-    try {
-      dirtyRef.current = true;
-      const cluster = await api.createCluster(workspaceId, { name: "New cluster" });
-      createdClusterId = cluster.id;
-      rawDispatch({ type: "CLUSTER_ADD", cluster });
-      const column = await api.createObject(workspaceId, {
-        clusterId: cluster.id,
-        name: "Untitled column",
-      });
-      rawDispatch({ type: "OBJECT_ADD", object: column, clusterId: cluster.id });
-      const card = await api.createObject(workspaceId, {
-        parentObjectId: column.id,
-        name: "New object",
-      });
-      rawDispatch({ type: "OBJECT_ADD", object: card, parentObjectId: column.id });
-      return cluster;
-    } catch (err) {
-      // Undo a half-created cluster before surfacing the error: drop the
-      // orphan from local state and best-effort delete it server-side so no
-      // ghost unseeded tab or orphan row survives the partial failure.
-      const plan = planClusterCreateRollback(createdClusterId);
-      if (plan.rollback) {
-        rawDispatch({ type: "CLUSTER_DELETE", id: plan.clusterId });
-        void api.deleteCluster(workspaceId, plan.clusterId).catch(() => undefined);
-      }
-      if (api.isOverFreeCapError(err)) onOverCapRef.current?.();
-      else reportSaveError("create cluster", err);
-      return null;
-    }
-  }, [workspaceId]);
-
-  const createObject = useCallback(
-    async (
-      target: { clusterId: string } | { parentObjectId: string }
-    ): Promise<OntologyObject | null> => {
-      const isColumn = "clusterId" in target;
-      try {
-        dirtyRef.current = true;
-        const object = await api.createObject(workspaceId, {
-          ...target,
-          name: isColumn ? "Untitled column" : "New object",
-        });
-        rawDispatch({ type: "OBJECT_ADD", object, ...target });
-        return object;
-      } catch (err) {
-        if (api.isOverFreeCapError(err)) onOverCapRef.current?.();
-        else reportSaveError("create object", err);
-        return null;
-      }
-    },
-    [workspaceId]
+  const markDirty = useCallback(() => {
+    dirtyRef.current = true;
+  }, []);
+  const getObject = useCallback(
+    (id: string): OntologyObject | undefined => graphRef.current.objects[id],
+    []
   );
+  const { createCluster, createObject, pendingIds } = useOntologyCreates({
+    workspaceId,
+    dispatch: rawDispatch,
+    markDirty,
+    beginWrite,
+    endWrite,
+    getObject,
+    callbacks: optionsRef,
+    reportError: reportSaveError,
+  });
 
-  return { graph, status, dispatch, createCluster, createObject };
+  return { graph, status, dispatch, createCluster, createObject, pendingIds };
 }
 
 function reportSaveError(what: string, err: unknown): void {

@@ -16,7 +16,7 @@
  * deciding where to look reads three things first: the server instructions, the
  * `dopl_map` result the instructions tell it to fetch, and (for anything about
  * people) `dopl_members`. All three described a workspace of knowledge bases,
- * skills, workflows and clusters. This suite pins the sentence into each one.
+ * skills and ontology clusters. This suite pins the sentence into each one.
  *
  * WHAT THESE ARE AND ARE NOT. Every assertion here is a string match on ROUTING
  * prose. None of them touches an op, a gate, or a permission: the additions say
@@ -106,8 +106,6 @@ const MAP_CLIENT = () =>
   stub({
     listKbBases: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
-    listClusters: vi.fn(async () => ({ clusters: [] })),
-    listWorkflows: vi.fn(async () => ({ workflows: [] })),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
   });
 
@@ -137,12 +135,11 @@ describe("dopl_map names the destination it cannot list", () => {
     );
   });
 
-  it("still renders its five domains, unchanged", async () => {
+  it("still renders its three domains, unchanged", async () => {
     const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
     for (const heading of [
       "## Knowledge bases (0)",
       "## Skills (0)",
-      "## Workflows (0)",
       "## Ontology (0 clusters)",
     ]) {
       expect(text).toContain(heading);

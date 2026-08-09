@@ -257,10 +257,10 @@ export async function createFolderByPath(
 }
 
 /**
- * Soft-delete the folder or entry at `path`. Throws when path is root,
- * doesn't exist, or `ctx.source === "agent"` with the base's
- * `agent_write_enabled` toggle off (F-10). This is the path the MCP
- * `dopl_kb_admin` delete_folder / delete_file ops flow through.
+ * PERMANENTLY delete the folder (and its subtree) or entry at `path`.
+ * Throws when path is root, doesn't exist, or `ctx.source === "agent"`
+ * with the base's `agent_write_enabled` toggle off (F-10). There is no
+ * trash — the delete is immediate and irreversible (2026-08-07).
  */
 export async function deleteByPath(
   ctx: KnowledgeContext,
@@ -279,10 +279,10 @@ export async function deleteByPath(
     throw new PathTraversalError(path, resolved.missingSegment);
   }
   if (resolved.kind === "folder") {
-    await repo.markFolderDeleted(resolved.folder.id);
+    await repo.hardDeleteFolder(ctx.workspaceId, resolved.folder.id);
     return { kind: "folder", id: resolved.folder.id };
   }
-  await repo.markEntryDeleted(resolved.entry.id);
+  await repo.hardDeleteEntry(ctx.workspaceId, resolved.entry.id);
   return { kind: "entry", id: resolved.entry.id };
 }
 

@@ -17,7 +17,6 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelThread,
-  NotifyScope,
 } from "../types";
 import {
   channelDisplayName,
@@ -31,7 +30,6 @@ import { ChannelActionsMenu } from "./channel-actions-menu";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
-import { NotifyScopeButton } from "./notify-scope-button";
 import { RoomsSidebar } from "./rooms-sidebar";
 import { SessionPillsBar } from "./session-pills-bar";
 import { ThreadsButton } from "./threads-button";
@@ -48,8 +46,11 @@ interface Props {
    *  flicker (a UUID thread without its overlay yet holds at neutral "active"). */
   threadsLoading: boolean;
   loading: boolean;
-  notifyScope: NotifyScope;
   members: ChannelMember[];
+  /** True while `members` is still the PREVIOUS channel's (`keepPreviousData`).
+   *  Only the composer needs it — a request resolves its addressee from this
+   *  roster, so it must not send one built from another channel's. */
+  membersStale: boolean;
   currentUserId: string;
   /** Pending consent requests (inbound + outbound) for THIS channel. */
   consentRequests: ChannelConsentRequest[];
@@ -74,8 +75,10 @@ interface Props {
   /** Reopen a closed thread — the thread panel's control; session cards never reopen. */
   onReopenThread: (threadId: string) => Promise<void>;
   onInvite: () => void;
-  onSetNotifyScope: (scope: NotifyScope) => void;
   onSetToolProfile: (profile: AgentToolProfile) => void;
+  /** True while the tool-profile write is in flight — the Tools panel goes
+   *  inert, exactly as the permission arm's two panels already do. */
+  toolProfileBusy: boolean;
   onToggleTrust: (userId: string, trusted: boolean) => void;
   onDecideConsent: (id: string, decision: "allow" | "deny") => void;
   onToggleArchive: () => void;
@@ -88,8 +91,8 @@ interface Props {
 /**
  * Channel detail pane (ChannelPane): a crumb bar (name, visibility, topic, and
  * the presence strip — EVERY member in a stable order, ringed when their agent
- * is online, so a channel never renders as a pair) with the notification /
- * settings / invite / manage actions, a scrolling transcript that auto-sticks
+ * is online, so a channel never renders as a pair) with the settings / invite /
+ * manage actions, a scrolling transcript that auto-sticks
  * to the bottom, and the pinned composer (or a read-only / join affordance when
  * the caller isn't a member).
  *
@@ -104,8 +107,8 @@ export function ChannelPane({
   threads,
   threadsLoading,
   loading,
-  notifyScope,
   members,
+  membersStale,
   currentUserId,
   consentRequests,
   trustedIds,
@@ -116,8 +119,8 @@ export function ChannelPane({
   onCloseThread,
   onReopenThread,
   onInvite,
-  onSetNotifyScope,
   onSetToolProfile,
+  toolProfileBusy,
   onToggleTrust,
   onDecideConsent,
   onToggleArchive,
@@ -129,6 +132,7 @@ export function ChannelPane({
   const [roomsOpen, setRoomsOpen] = useState(false);
   const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManage = channel.role === "owner";
@@ -313,19 +317,13 @@ export function ChannelPane({
         )}
 
         {channel.isMember && (
-          <NotifyScopeButton
-            notifyScope={notifyScope}
-            onSetNotifyScope={onSetNotifyScope}
-          />
-        )}
-
-        {channel.isMember && (
           <ChannelSettingsPopover
             channel={channel}
             otherMembers={otherMembers}
             trustedIds={trustedIds}
             trustBusyIds={trustBusyIds}
             onSetToolProfile={onSetToolProfile}
+            toolProfileBusy={toolProfileBusy}
             onToggleTrust={onToggleTrust}
           />
         )}
@@ -352,7 +350,7 @@ export function ChannelPane({
           onToggleVisibility={onToggleVisibility}
           onToggleArchive={onToggleArchive}
           onRequestDelete={() => setConfirmDelete(true)}
-          onLeave={onLeave}
+          onRequestLeave={() => setConfirmLeave(true)}
         />
       </div>
 
@@ -418,6 +416,7 @@ export function ChannelPane({
               onSend={onSend}
               onCreateThread={onCreateThread}
               members={members}
+              membersStale={membersStale}
               currentUserId={currentUserId}
               isDirect={channel.isDirect}
               disabled={channel.archivedAt !== null}
@@ -466,11 +465,28 @@ export function ChannelPane({
         description={
           channel.isDirect
             ? `Your direct message with ${peerName} will be hidden. Opening it again later brings the history back.`
-            : `"${displayName}" and its messages will be removed. This can't be undone from here.`
+            : `"${displayName}", its messages and all its threads will be permanently deleted for everyone in the workspace. This can't be undone.`
         }
-        confirmLabel="Delete"
+        confirmLabel={channel.isDirect ? "Delete" : "Delete permanently"}
         destructive
         onConfirm={onDelete}
+      />
+
+      {/* Leaving is a real membership DELETE, and on a PRIVATE channel the user
+          cannot undo it (they see only public channels plus their own, and
+          self-join is public-only). The copy states that asymmetry. */}
+      <ConfirmDialog
+        open={confirmLeave}
+        onOpenChange={setConfirmLeave}
+        title={`Leave "${displayName}"?`}
+        description={
+          channel.visibility === "private"
+            ? `You'll lose access to "${displayName}" and its history. It's private, so you can't rejoin on your own — another member would have to invite you back.`
+            : `You'll stop following "${displayName}" and its messages. It's a public channel, so you can rejoin whenever you like.`
+        }
+        confirmLabel="Leave"
+        destructive={channel.visibility === "private"}
+        onConfirm={onLeave}
       />
     </div>
   );

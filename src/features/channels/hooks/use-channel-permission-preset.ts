@@ -3,14 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Per-channel PERMISSION PRESET over the desktop bridge
+ * Per-channel PERMISSION ARM over the desktop bridge
  * (`window.dopl.channels.get/setPermissionPreset`).
  *
  * The operator used to be able to set a session's two permission axes only after
- * the session window opened — i.e. after the agent had already spawned. This
- * preset is picked on the inbound consent card BEFORE Allow and stored on the
- * DESKTOP, per channel, so the launched session starts on exactly the posture
- * that was approved.
+ * the session window opened — i.e. after the agent had already spawned. This pair
+ * is picked BEFORE Allow and stored on the DESKTOP, per channel, so the launched
+ * session starts on exactly the posture that was approved.
+ *
+ * IT IS AN ARM, NOT A SETTING — say it that way in every surface that shows it.
+ * `main/channel-prefs.js` (H2, 2026-07-31) makes the stored pair SINGLE USE
+ * (`consumePermissionPreset` returns and deletes in one call), EXPIRING
+ * ({@link PERMISSION_ARM_TTL_MS}), and consumable by ONE caller — the
+ * consent-APPROVED launch path, and only when a human actually clicked Allow. It
+ * used to be a durable channel-wide preference, and that is precisely the defect
+ * H2 fixed: one card's `bypass`/`auto_both` silently re-armed every later session
+ * on the channel. So a UI may NEVER present this pair as a standing preference
+ * that persists across sessions — it applies to the next request the operator
+ * allows, then it is gone.
  *
  * It mirrors {@link useChannelFolder} deliberately: the bridge is feature-detected
  * AFTER mount (window-only) so SSR and the first client render agree
@@ -46,6 +56,37 @@ export const DEFAULT_PERMISSION_PRESET: PermissionPreset = {
   tools: "manual",
   messages: "ask",
 };
+
+/**
+ * How long an arm stays consumable — `ARM_TTL_MS` in `main/channel-prefs.js`,
+ * restated here ONLY because the UI has to say it out loud ("expires after 30
+ * minutes"). The desktop is the authority; nothing on the web enforces it.
+ * `channel-settings-popover.test.tsx` pins this against the desktop source so the
+ * copy cannot drift away from the clock it describes.
+ */
+export const PERMISSION_ARM_TTL_MS = 30 * 60_000;
+
+/**
+ * Every mounted reader of one channel's arm, keyed by channel id.
+ *
+ * There is more than one surface showing this pair at a time — the request card
+ * and the channel settings popover, and there can be two request cards — and each
+ * used to hold a PRIVATE snapshot taken at its own mount, then write
+ * `{...snapshot, ...patch}`. So the second surface to write reverted the axis the
+ * first one had just changed, while the first went on displaying the value it no
+ * longer had. That is the one thing this control may never do: the card's whole
+ * contract is that Allow launches what the card SHOWS.
+ *
+ * A write therefore (a) merges onto what is STORED, not onto a mount snapshot,
+ * and (b) broadcasts the result here, so every mounted reader of that channel
+ * adopts the same pair in the same frame.
+ */
+const armReaders = new Map<string, Set<(next: PermissionPreset) => void>>();
+
+function broadcastArm(channelId: string, next: PermissionPreset) {
+  const readers = armReaders.get(channelId);
+  if (readers) for (const adopt of readers) adopt(next);
+}
 
 /**
  * The narrow permission-preset bridge exposed by the desktop preload. Present
@@ -97,7 +138,7 @@ export function getDesktopPermissionPresets(): DoplPermissionPresetBridge | null
 export interface ChannelPermissionPresetState {
   /** The bridge, or null in a plain browser / an older desktop build. */
   bridge: DoplPermissionPresetBridge | null;
-  /** The posture the next session would launch with (defaults when unset). */
+  /** The pair the NEXT allowed request would launch with (defaults when unset). */
   preset: PermissionPreset;
   /** True while a write is in flight. */
   busy: boolean;
@@ -120,7 +161,9 @@ export function useChannelPermissionPreset(
   }, []);
 
   // Load the stored pair on mount and whenever the channel changes. Nothing
-  // stored (or anything unrecognized) shows the restrictive defaults.
+  // stored (or anything unrecognized) shows the restrictive defaults — and an arm
+  // that EXPIRED reads as nothing stored, so the control correcting itself back to
+  // manual/ask is the truth, not a glitch.
   useEffect(() => {
     if (!bridge) return;
     let alive = true;
@@ -137,6 +180,20 @@ export function useChannelPermissionPreset(
     };
   }, [bridge, channelId]);
 
+  // Join the channel's reader set so a write from ANOTHER surface lands here too
+  // (see `armReaders`). `setPreset` is a stable setState function, so this
+  // subscribes once per channel rather than on every render.
+  useEffect(() => {
+    if (!bridge) return;
+    const readers = armReaders.get(channelId) ?? new Set<(n: PermissionPreset) => void>();
+    armReaders.set(channelId, readers);
+    readers.add(setPreset);
+    return () => {
+      readers.delete(setPreset);
+      if (readers.size === 0) armReaders.delete(channelId);
+    };
+  }, [bridge, channelId]);
+
   // Optimistic: the control shows the new posture immediately, and REVERTS if the
   // desktop refused it. Never leave the card claiming a posture that was not
   // stored — the whole point is that Allow launches what the card shows.
@@ -144,17 +201,33 @@ export function useChannelPermissionPreset(
     async (patch: Partial<PermissionPreset>) => {
       if (!bridge || busy) return;
       const previous = preset;
-      const next: PermissionPreset = { ...preset, ...patch };
-      if (next.tools === previous.tools && next.messages === previous.messages) {
+      const optimistic: PermissionPreset = { ...preset, ...patch };
+      if (
+        optimistic.tools === previous.tools &&
+        optimistic.messages === previous.messages
+      ) {
         return;
       }
-      setPreset(next);
+      setPreset(optimistic);
+      broadcastArm(channelId, optimistic);
       setBusy(true);
       try {
+        // Merge the patch onto what is STORED RIGHT NOW, not onto this
+        // component's mount snapshot: another surface may have moved the OTHER
+        // axis since, and writing a whole pair from a stale snapshot is what
+        // silently reverted it.
+        const stored = await bridge
+          .getPermissionPreset(channelId)
+          .then(normalizePermissionPreset)
+          .catch(() => null);
+        const next: PermissionPreset = { ...(stored ?? previous), ...patch };
         const res = await bridge.setPermissionPreset(channelId, next);
-        if (!res || res.ok !== true) setPreset(previous);
+        const settled = !res || res.ok !== true ? previous : next;
+        setPreset(settled);
+        broadcastArm(channelId, settled);
       } catch {
         setPreset(previous);
+        broadcastArm(channelId, previous);
       } finally {
         setBusy(false);
       }

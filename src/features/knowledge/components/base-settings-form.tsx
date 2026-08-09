@@ -3,19 +3,19 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   KnowledgeApiError,
   deleteBase,
   updateBase,
   updateFolder,
 } from "../client/api";
-import { seedKnowledgeBase } from "../client/hooks";
+import { evictDeletedBase, seedKnowledgeBase } from "../client/hooks";
 import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
 import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import { AgentWriteToggle } from "./agent-write-toggle";
+import { DeleteBaseConfirm } from "./delete-base-confirm";
 import { KbSharingSection } from "./kb-sharing-section";
 
 interface Props {
@@ -37,7 +37,7 @@ interface Props {
  *   2. Sharing — private / teams / workspace scope + team grants.
  *   3. Agent access — the agent-write toggle.
  *   4. Advanced — slug edit (folded behind a disclosure).
- *   5. Danger zone — soft-delete the KB.
+ *   5. Danger zone — permanently delete the KB (confirmed).
  */
 export function BaseSettingsForm({
   workspaceId,
@@ -111,6 +111,7 @@ export function BaseSettingsForm({
     try {
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
+      evictDeletedBase(queryClient, workspaceId, base.id);
       // Return to the knowledge list; the user can pick another base there.
       routing.goToBase(null, "replace");
       routing.refreshServerData();
@@ -242,8 +243,8 @@ export function BaseSettingsForm({
             Delete this knowledge base
           </p>
           <p className="mt-1 text-caption text-text-secondary leading-relaxed">
-            Soft-deletes the base and all its folders + entries. You
-            can restore from the trash modal until it&rsquo;s purged.
+            Permanently deletes the base and all its folders and
+            entries. This can&rsquo;t be undone.
           </p>
           <button
             type="button"
@@ -256,13 +257,10 @@ export function BaseSettingsForm({
         </div>
       </Section>
 
-      <ConfirmDialog
+      <DeleteBaseConfirm
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Delete knowledge base?"
-        description={`“${base.name}” and all its folders + entries will move to trash. You can restore it from the trash modal until it's purged.`}
-        confirmLabel="Delete"
-        destructive
+        baseName={base.name}
         onConfirm={handleDelete}
       />
     </div>

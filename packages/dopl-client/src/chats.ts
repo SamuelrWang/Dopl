@@ -16,7 +16,6 @@ import type {
   ChatList,
   ChatMessageInput,
   ChatUpdateInput,
-  TrashedChat,
 } from "./chat-types.js";
 
 const enc = encodeURIComponent;
@@ -43,13 +42,6 @@ export async function listChatFolders(t: DoplTransport): Promise<ChatFolder[]> {
     toolName: "chat_folders",
   });
   return data.folders;
-}
-
-export async function listChatsTrash(t: DoplTransport): Promise<TrashedChat[]> {
-  const data = await t.request<{ chats: TrashedChat[] }>("/api/chats/trash", {
-    toolName: "chat_list_trash",
-  });
-  return data.chats;
 }
 
 // ─── Write ──────────────────────────────────────────────────────────
@@ -97,17 +89,6 @@ export async function updateChat(
 
 export async function deleteChat(t: DoplTransport, chatId: string): Promise<void> {
   await t.requestNoContent(`/api/chats/${enc(chatId)}`, "DELETE", "chat_delete");
-}
-
-export async function restoreChat(
-  t: DoplTransport,
-  chatId: string
-): Promise<Chat> {
-  const data = await t.request<{ chat: Chat }>(
-    `/api/chats/${enc(chatId)}/restore`,
-    { method: "POST", toolName: "chat_restore" }
-  );
-  return data.chat;
 }
 
 export async function createChatFolder(

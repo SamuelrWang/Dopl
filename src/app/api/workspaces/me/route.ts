@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   resolveActiveWorkspace,
   WorkspaceResolutionError,
 } from "@/features/workspaces/server/service";
-import { HttpError } from "@/shared/lib/http-error";
 
 /**
  * GET /api/workspaces/me — return the workspace the caller is currently
@@ -30,10 +30,6 @@ export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
     if (err instanceof WorkspaceResolutionError) {
       return NextResponse.json(err.toResponseBody(), { status: err.status });
     }
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces/me", err);
   }
 });

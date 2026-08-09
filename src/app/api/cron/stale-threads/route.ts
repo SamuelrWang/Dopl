@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
+import * as repoMessages from "@/features/channels/server/repository-messages";
+import * as repoTasks from "@/features/channels/server/repository-tasks";
+import { pgErrorCode } from "@/features/channels/server/repository";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
  * GET /api/cron/stale-threads
@@ -25,27 +28,71 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
  * thread card renders as a one-click confirm. The human decides, as they do for
  * an agent's proposal; the only difference is who noticed.
  *
- * ONE PROMPT PER THREAD, FOREVER. The `client_msg_id` is derived from the thread
- * id and collides with the agent's own proposal key, so a daily sweep over a
- * thread somebody is ignoring adds nothing after the first day — and a thread
- * whose agent already proposed gets no second prompt. Both are the same row.
+ * ════════════════════════════════════════════════════════════════════════════
+ * THE 2026-08-08 FIX BATCH (C-1 + C-17, F-171). Three defects lived in this one
+ * route, and all three were invisible because the job has never run.
+ * ════════════════════════════════════════════════════════════════════════════
  *
- * AUTHORED BY THE SYSTEM, never by a member. `author_kind:'system'` with a null
- * author is the honest attribution: no person said this, and forging one of the
- * two parties would put words in the mouth of somebody who may disagree with the
- * proposal. It writes through `supabaseAdmin` rather than `postMessage` for the
- * same reason — the service layer's whole contract is built around an acting
- * user, and this sweep has none. (The route's own schema rejects `system` from
- * any HTTP caller, which is why that lane is not reachable by anything else.)
+ * 1. IT MEASURED THE WRONG CLOCK. It filtered on `channel_tasks.updated_at` and
+ *    this docblock claimed that meant last activity. It did not: the only writer
+ *    to that column is `repository-tasks.updateTask`, reached solely from close /
+ *    set_mode / reopen, and `postMessage` bumps `channels.updated_at` and never
+ *    the task row. So a thread with hourly traffic looked 30 days idle — the
+ *    sweep fired HARDEST on the busiest threads — while `set_thread_mode` reset
+ *    the clock with zero activity. It now reads `repoTasks.listStaleOpenThreads`,
+ *    which derives the clock from `channel_messages` (migration `20260807160000`
+ *    holds the trigger-vs-touch-vs-subquery reasoning; the short version is that
+ *    a daily reader must not be paid for by every message insert forever).
+ *
+ * 2. IT WROTE AN AUTHOR NO AGENT COULD SEE. `author_user_id: null` plus every
+ *    MCP await's `.neq("author_user_id", …)` — and SQL `NULL <> x` is NULL, not
+ *    true — meant the close proposal rendered on the web card and was invisible
+ *    to any agent holding an await, the exact surface `dopl_channel` teaches
+ *    every agent to keep armed. THE NULL AUTHOR STAYS; the FILTER was fixed
+ *    (`repository-messages.excludeAuthorFilter`). Forging an identity here would
+ *    put a close proposal in the mouth of one of the two parties — who may
+ *    disagree with it — and would then be invisible to precisely that party's
+ *    agent, which is the wrong member to hide it from. `author_kind:'system'`
+ *    with no author is the honest attribution: no person said this.
+ *
+ * 3. IT BYPASSED THE SERIALIZED INSERT. A raw `db.from("channel_messages")
+ *    .insert(...)` skipped `channel_message_insert`, whose per-channel advisory
+ *    xact lock is taken before `nextval` precisely so a reader's cursor cannot
+ *    advance past a not-yet-visible lower seq and miss it permanently. A sweep
+ *    posting concurrently with a live agent is exactly that race. It now goes
+ *    through `repoMessages.insertMessage` like every other writer in the system.
+ *
+ * ONE PROMPT PER IDLE PERIOD, and it no longer STEALS the agent's. This route
+ * used to restate `proposeTaskClose`'s own `client_msg_id` so the two rows would
+ * collide — which is how a scheduled sweep landing first could replace an
+ * agent's stated reason with "no activity for a while" on the card that renders
+ * the most recent proposal (C-6). The keys are now disjoint namespaces, and the
+ * real guard is upstream: `channel_tasks_stale` does not select a thread whose
+ * newest message is already a close proposal, so the sweep cannot talk over a
+ * live prompt, and its own proposal takes the thread out of tomorrow's
+ * candidate set. The `client_msg_id` below is belt and braces behind that.
+ *
+ * It writes through the repositories rather than `postMessage` because the
+ * service layer's whole contract is built around an acting user and this sweep
+ * has none. (The messages route's schema rejects `system` from any HTTP caller,
+ * which is why that lane is not reachable by anything else.)
  *
  * Auth: CRON_SECRET bearer via requireCronSecret (fail-closed 503 when unset,
  * 401 without the secret), same as the other /api/cron/* routes.
  *
- * OPERATIONAL NOTE FOR WHOEVER DEPLOYS THIS: `CRON_SECRET` is currently UNSET in
- * Vercel, so every /api/cron/* route — this one included — answers 503 and the
- * scheduler runs nothing at all. That is the fail-closed behaviour working as
- * designed, not a bug in this job, but it does mean this sweep is inert until the
- * variable is set. Same for purge-trash, oauth-cleanup and reconcile-seats.
+ * ⚠ OPERATIONAL NOTE FOR WHOEVER DEPLOYS THIS — READ BEFORE SETTING THE SECRET.
+ * `CRON_SECRET` is UNSET in Vercel, so every /api/cron/* route answers 503 and
+ * the scheduler runs nothing at all. That is the fail-closed behaviour working
+ * as designed, and it is also why none of the three defects above was ever
+ * observed. THE COROLLARY: setting the variable turns this job on for the FIRST
+ * TIME, against a backlog of everything that has been idle for 14+ days since
+ * the feature shipped — and now with a clock that finally identifies those
+ * correctly. The first run is therefore the largest one this job will ever have,
+ * and each prompt it posts is a real message in a real shared transcript that
+ * both members see and cannot un-see. `MAX_PER_RUN` caps it at 50 per run, and
+ * `channel_tasks_stale` is a pure read, so the safe sequence is: run the
+ * migration's verification SELECT first, read the candidate list, THEN set the
+ * secret. Do not set it and read the log afterwards.
  */
 
 /**
@@ -56,7 +103,8 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
  * one runs a few days, and the ones that matter get activity. Two weeks of total
  * silence is well past any live exchange and still short enough that the prompt
  * arrives while somebody remembers the thread. It is measured from the LAST
- * ACTIVITY, not from creation, so a long-running exchange is never swept.
+ * ACTIVITY — really so, since 2026-08-08 — not from creation, so a long-running
+ * exchange is never swept.
  */
 const STALE_AFTER_DAYS = 14;
 
@@ -65,13 +113,21 @@ const MAX_PER_RUN = 50;
 
 export const dynamic = "force-dynamic";
 
-/** The proposal key `proposeTaskClose` uses, restated so the two rows collide. */
-function proposalClientMsgId(taskId: string): string {
-  return `close-proposed-${taskId}-completed`;
+/**
+ * The sweep's OWN key namespace. Deliberately not `proposeTaskClose`'s — see the
+ * "no longer steals" paragraph above. Scoped by the same activity anchor the
+ * agent's key uses, so a thread that resumes and later goes quiet again can be
+ * prompted on again, while a re-run inside one idle period cannot double-post.
+ */
+function sweepClientMsgId(taskId: string, anchorSeq: number): string {
+  return `stale-swept-${taskId}-${anchorSeq}`;
 }
 
 const BODY =
   "This thread has had no activity for a while. Close it if it is done, or say something to keep it open.";
+
+/** Postgres unique_violation — the expected, healthy re-run outcome. */
+const UNIQUE_VIOLATION = "23505";
 
 export async function GET(request: NextRequest) {
   const denied = requireCronSecret(request);
@@ -80,48 +136,40 @@ export async function GET(request: NextRequest) {
   const before = new Date(
     Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
-  const db = supabaseAdmin();
 
   let prompted = 0;
   let skipped = 0;
   try {
-    const stale = await db
-      .from("channel_tasks")
-      .select("id, channel_id, workspace_id, title, updated_at")
-      .eq("status", "open")
-      .lt("updated_at", before)
-      .order("updated_at", { ascending: true })
-      .limit(MAX_PER_RUN);
-    if (stale.error) throw stale.error;
+    const stale = await repoTasks.listStaleOpenThreads(before, MAX_PER_RUN);
 
-    for (const task of stale.data ?? []) {
-      const clientMsgId = proposalClientMsgId(task.id);
-      // The INSERT is the idempotency check: `channel_messages_client_msg_key`
-      // is unique per (channel, client_msg_id), so a repeat run — or a thread
-      // whose agent already proposed — collides and is skipped. Cheaper and more
-      // honest than a pre-read, which would race itself.
-      const res = await db.from("channel_messages").insert({
-        channel_id: task.channel_id,
-        workspace_id: task.workspace_id,
-        author_user_id: null,
-        author_kind: "system",
-        kind: "task_progress",
-        body: BODY,
-        metadata: {
-          taskId: task.id,
-          closeProposed: true,
-          closeOutcome: "completed",
-          summary: task.title,
-          // Distinguishes this from an agent's proposal for anyone reading the
-          // row later. Nothing gates on it.
-          staleSweep: true,
-        },
-        client_msg_id: clientMsgId,
-      });
-      if (res.error) {
-        // 23505 is the expected, healthy outcome for an already-prompted thread.
-        if (res.error.code === "23505") skipped += 1;
-        else throw res.error;
+    for (const task of stale) {
+      try {
+        await repoMessages.insertMessage({
+          channel_id: task.channel_id,
+          workspace_id: task.workspace_id,
+          author_user_id: null,
+          author_kind: "system",
+          kind: "task_progress",
+          body: BODY,
+          metadata: {
+            taskId: task.id,
+            closeProposed: true,
+            closeOutcome: "completed",
+            summary: task.title,
+            // Distinguishes this from an agent's proposal for anyone reading the
+            // row later. Nothing gates on it.
+            staleSweep: true,
+          },
+          client_msg_id: sweepClientMsgId(task.id, task.anchor_seq),
+        });
+      } catch (err) {
+        // The INSERT is the second idempotency check (the RPC propagates the
+        // unique violation on `channel_messages_client_msg_key` unhandled). The
+        // FIRST is the candidate query itself, which drops any thread already
+        // carrying a live proposal — so reaching here at all means two runs
+        // raced inside one idle period.
+        if (pgErrorCode(err) !== UNIQUE_VIOLATION) throw err;
+        skipped += 1;
         continue;
       }
       prompted += 1;
@@ -137,7 +185,9 @@ export async function GET(request: NextRequest) {
       metadata: { before, prompted, skipped },
       userId: null,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    // The cause is in the system event above; the response body carries the
+    // shared sanitized envelope rather than the raw exception (ENGINEERING §9).
+    return toHttpErrorResponse("api/cron/stale-threads", err);
   }
 
   void logSystemEvent({

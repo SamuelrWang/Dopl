@@ -32,6 +32,19 @@ export interface ResolvedMembership {
   membership: WorkspaceMembership;
 }
 
+/**
+ * A workspace the caller can reach, PAIRED WITH the membership facts the
+ * lookup already had to read to prove reachability — `role` and the caller's
+ * own id. Returned by the two membership-aware lookups below so a caller
+ * never has to re-ask `GET /api/workspaces/me` for something the resolve
+ * already knew (P0-2b).
+ */
+export interface MemberWorkspace {
+  workspace: Workspace;
+  role: Role;
+  userId: string;
+}
+
 /** One entry in a `WORKSPACE_REQUIRED` body so the caller can pick a target. */
 export interface WorkspaceChoice {
   name: string;
@@ -96,9 +109,18 @@ export async function resolveMembershipOrThrow(
   workspaceId: string,
   userId: string
 ): Promise<ResolvedMembership> {
-  const workspace = await findWorkspaceById(workspaceId);
+  // PARALLEL, not sequential (P0-2a). Both reads key only on `workspaceId`
+  // (plus `userId`), so neither is an input to the other — awaiting them in
+  // series added a whole DB round trip to every one of the 82 routes behind
+  // `withWorkspaceAuth`. The 404 ordering is preserved exactly: a missing
+  // workspace still answers before the membership is judged, so existence is
+  // never an oracle and a non-member of a real workspace is indistinguishable
+  // from a member of a nonexistent one.
+  const [workspace, membership] = await Promise.all([
+    findWorkspaceById(workspaceId),
+    findMembership(workspaceId, userId),
+  ]);
   if (!workspace) throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
-  const membership = await findMembership(workspaceId, userId);
   if (!membership || membership.status !== "active") {
     throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
   }
@@ -352,11 +374,15 @@ export function requireMinRole(role: Role, min: Role): void {
  * regardless of ownership. Used by `/workspace/[slug]` and the settings
  * page so invited members reach the workspace via its public URL.
  */
-export function findWorkspaceForMember(
+export async function findWorkspaceForMember(
   userId: string,
   slug: string
-): Promise<Workspace | null> {
-  return findMemberWorkspaceBySlug(userId, slug);
+): Promise<MemberWorkspace | null> {
+  const workspace = await findMemberWorkspaceBySlug(userId, slug);
+  if (!workspace) return null;
+  const membership = await findMembership(workspace.id, userId);
+  if (!membership || membership.status !== "active") return null;
+  return { workspace, role: membership.role, userId };
 }
 
 /**
@@ -364,14 +390,20 @@ export function findWorkspaceForMember(
  * if the caller is an active member. Used by the route resolver to
  * surface 404 (not 403) for workspaces the user can't access — the
  * existence of a workspace at a given publicId is not an oracle.
+ *
+ * RETURNS THE MEMBERSHIP FACTS, not just the workspace (P0-2b). The
+ * membership row is read here anyway; discarding `role` was the entire
+ * reason `GET /api/workspaces/me` existed as a separate hop behind
+ * `/api/workspaces/resolve` — every segment-resolving caller already
+ * paid for the answer and then asked for it again.
  */
 export async function findWorkspaceForMemberByPublicId(
   userId: string,
   publicId: string
-): Promise<Workspace | null> {
+): Promise<MemberWorkspace | null> {
   const workspace = await findWorkspaceByPublicId(publicId);
   if (!workspace) return null;
   const membership = await findMembership(workspace.id, userId);
   if (!membership || membership.status !== "active") return null;
-  return workspace;
+  return { workspace, role: membership.role, userId };
 }

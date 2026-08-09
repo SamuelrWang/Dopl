@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { UsersRound } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { DetailDocSkeleton, TwoPaneListSkeleton } from "@/shared/ui/skeleton";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { AssignableRole, MemberRole } from "../types";
@@ -18,7 +19,8 @@ import { ResourceDetail } from "./resource-detail";
 import { CreateTeamDialog } from "./create-team-dialog";
 import { InviteDialog } from "./invite-dialog";
 import { ConflictDialog, type ConflictState } from "./conflict-dialog";
-import { ApiError, apiRequest } from "@/shared/api/api-client";
+import { ApiError } from "@/shared/api/api-client";
+import { useInvitationWrites } from "../hooks/use-invitation-writes";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 
 export type MembersTabKey = "members" | "teams" | "access";
@@ -70,15 +72,28 @@ export function MembersView({
     workspaceSlug,
     canManage
   );
-  const { teams, refresh: refreshTeams } = useTeams(workspaceSlug);
-  const { resources, refresh: refreshResources } = useWorkspaceResources(workspaceSlug);
+  const { revoke } = useInvitationWrites(workspaceSlug);
+  const { teams, loading: teamsLoading, refresh: refreshTeams } = useTeams(workspaceSlug);
+  const {
+    resources,
+    loading: resourcesLoading,
+    refresh: refreshResources,
+  } = useWorkspaceResources(workspaceSlug);
   const joinRequests = useJoinRequests(workspaceSlug, canManage);
 
   const memberList = useMemo(() => members ?? [], [members]);
   const teamList = useMemo(() => teams ?? [], [teams]);
   const resourceList = useMemo(() => resources ?? [], [resources]);
 
-  const onTeamsChanged = useCallback(() => {
+  /**
+   * The ONE remaining broadcast refresh, and it has one caller: creating a team
+   * is the only write on this console that still cannot patch its own caches
+   * (the server mints the id, the memberships and the grants in a single POST).
+   * Every other write is a mutation config that patches the exact cache it
+   * changed — which is why the detail panes no longer take an `onTeamsChanged`
+   * prop at all.
+   */
+  const onTeamCreated = useCallback(() => {
     refreshTeams();
     refreshMembers();
     refreshResources();
@@ -137,16 +152,11 @@ export function MembersView({
     setSelection(null);
   };
 
-  const handleRevokeInvitation = async (id: string) => {
-    try {
-      await apiRequest<void>(
-        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(id)}`,
-        { method: "DELETE" }
-      );
-      refreshInvitations();
-    } catch (err) {
-      toast({ title: err instanceof Error ? err.message : "Couldn't revoke invitation" });
-    }
+  // The ✕ on an invited row. It used to await a DELETE and then refetch, so
+  // nothing on screen moved for two network hops; the row leaves in `onMutate`
+  // now and comes back only if the DELETE fails.
+  const handleRevokeInvitation = (id: string) => {
+    revoke.mutate({ invitationId: id });
   };
 
   const handleResolveJoinRequest = (
@@ -154,11 +164,10 @@ export function MembersView({
     action: "approve" | "decline",
     role: AssignableRole
   ) => {
+    // The row is dropped optimistically and the roster is invalidated by the
+    // mutation, so the only thing left here is the 402 branch.
     joinRequests
       .resolve(id, action, role)
-      .then(() => {
-        if (action === "approve") refreshMembers();
-      })
       .catch((err: unknown) => {
         // Solo plan is single-member — approving is blocked server-side.
         // Offer the in-place Team upgrade instead of a dead-end toast.
@@ -176,9 +185,24 @@ export function MembersView({
       });
   };
 
+  // Cold arrival: the roster has not answered yet. Rendering the real panes
+  // with `members = []` used to claim "No members yet." in a workspace that
+  // always has at least the viewer — a false empty state, not a loading one.
+  // The shared two-pane skeleton is the same geometry this console loads into.
+  if (loading && members === null) {
+    return <TwoPaneListSkeleton label="Loading members" rows={6} leading="circle" />;
+  }
+
+  // Per-tab: teams / access are separate queries, so a tab can still be
+  // pending after the roster lands. Same rule — never a false empty.
+  const tabLoading =
+    (tab === "teams" && teamsLoading && teams === null) ||
+    (tab === "access" && resourcesLoading && resources === null);
+
   return (
     <div className="page-float flex antialiased">
       <MembersListPane
+        loading={tabLoading}
         tab={tab}
         onTabChange={handleTabChange}
         query={query}
@@ -194,11 +218,14 @@ export function MembersView({
         currentUserId={currentUserId}
         onInvite={() => setInviteOpen(true)}
         onCreateTeam={() => setCreateTeamOpen(true)}
-        onRevokeInvitation={(id) => void handleRevokeInvitation(id)}
+        onRevokeInvitation={handleRevokeInvitation}
         onResolveJoinRequest={handleResolveJoinRequest}
+        queuesBusy={revoke.pending || joinRequests.resolving}
       />
 
-      {selectedMember ? (
+      {tabLoading ? (
+        <DetailDocSkeleton />
+      ) : selectedMember ? (
         <MemberDetail
           key={selectedMember.userId}
           workspaceSlug={workspaceSlug}
@@ -206,13 +233,7 @@ export function MembersView({
           teams={teamList}
           myRole={myRole}
           currentUserId={currentUserId}
-          onMemberChanged={refreshMembers}
-          onTeamsChanged={onTeamsChanged}
-          onRemoved={() => {
-            setSelection(null);
-            refreshMembers();
-            onTeamsChanged();
-          }}
+          onRemoved={() => setSelection(null)}
         />
       ) : selectedTeam ? (
         <TeamDetail
@@ -222,11 +243,7 @@ export function MembersView({
           members={memberList}
           resources={resourceList}
           canManage={canManage}
-          onTeamsChanged={onTeamsChanged}
-          onDeleted={() => {
-            setSelection(null);
-            onTeamsChanged();
-          }}
+          onDeleted={() => setSelection(null)}
           openConflict={setConflict}
         />
       ) : selectedResource ? (
@@ -236,14 +253,10 @@ export function MembersView({
           resource={selectedResource}
           teams={teamList}
           canManage={canManage}
-          onTeamsChanged={onTeamsChanged}
           openConflict={setConflict}
         />
       ) : (
-        <EmptyState
-          icon={UsersRound}
-          title={loading ? "Loading members…" : "Nothing to show yet."}
-        />
+        <EmptyState icon={UsersRound} title="Nothing to show yet." />
       )}
 
       <CreateTeamDialog
@@ -254,7 +267,7 @@ export function MembersView({
         resources={resourceList}
         currentUserId={currentUserId}
         onCreated={() => {
-          onTeamsChanged();
+          onTeamCreated();
           setTab("teams");
           setSelection(null);
         }}

@@ -28,7 +28,6 @@ import {
   AUTHORS,
   AUTHOR_KINDS,
   KINDS,
-  SCOPES,
 } from "./_classify-harness.mjs";
 
 
@@ -39,19 +38,18 @@ test("classify truth table — full combination sweep matches the spec oracle", 
       for (const isMember of IS_MEMBERS)
         for (const author of AUTHORS)
           for (const authorKind of AUTHOR_KINDS)
-            for (const kind of KINDS)
-              for (const myNotifyScope of SCOPES) {
-                const m = makeMsg({ to, author, authorKind, kind });
-                const entry = makeEntry({ memberCount, isMember, myNotifyScope });
-                const got = classify(m, entry, ME);
-                const want = oracle(m, entry, ME);
-                assert.equal(
-                  got,
-                  want,
-                  `to=${to} members=${memberCount} isMember=${isMember} author=${author} authorKind=${authorKind} kind=${kind} scope=${myNotifyScope} -> got ${got}, want ${want}`
-                );
-                n++;
-              }
+            for (const kind of KINDS) {
+              const m = makeMsg({ to, author, authorKind, kind });
+              const entry = makeEntry({ memberCount, isMember });
+              const got = classify(m, entry, ME);
+              const want = oracle(m, entry, ME);
+              assert.equal(
+                got,
+                want,
+                `to=${to} members=${memberCount} isMember=${isMember} author=${author} authorKind=${authorKind} kind=${kind} -> got ${got}, want ${want}`
+              );
+              n++;
+            }
   assert.equal(
     n,
     TO.length *
@@ -59,8 +57,7 @@ test("classify truth table — full combination sweep matches the spec oracle", 
       IS_MEMBERS.length *
       AUTHORS.length *
       AUTHOR_KINDS.length *
-      KINDS.length *
-      SCOPES.length
+      KINDS.length
   );
 });
 
@@ -83,14 +80,9 @@ test("my own message -> ignore (never self-trigger)", () => {
   assert.equal(classify(mine, makeEntry({ memberCount: 2, isMember: true }), ME), "ignore");
 });
 
-test("addressed to me -> trigger, regardless of member count, membership, or mute", () => {
+test("addressed to me -> trigger, regardless of member count or membership", () => {
   assert.equal(classify(to(ME), makeEntry({ memberCount: 3, isMember: true }), ME), "trigger");
   assert.equal(classify(to(ME), makeEntry({ memberCount: 3, isMember: false }), ME), "trigger");
-  // An explicit address is never suppressed by a per-channel mute.
-  assert.equal(
-    classify(to(ME), makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "none" }), ME),
-    "trigger"
-  );
 });
 
 test("self-addressed noise (to === author) -> ignore", () => {
@@ -106,24 +98,28 @@ test("unaddressed + exactly 2 members + member -> trigger (implicit 1:1)", () =>
   assert.equal(classify(plain, makeEntry({ memberCount: 2, isMember: true }), ME), "trigger");
 });
 
-test("unaddressed + 2 members + member + myNotifyScope 'none' -> ignore (implicit mute)", () => {
-  assert.equal(
-    classify(plain, makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "none" }), ME),
-    "ignore"
-  );
-  // 'addressed' does NOT mute the implicit trigger (only 'none' does).
-  assert.equal(
-    classify(plain, makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "addressed" }), ME),
-    "trigger"
-  );
+// F-170 (2026-08-08) — NOTHING SUPPRESSES THE IMPLICIT TRIGGER ANY MORE.
+// Two assertions used to live here: that `myNotifyScope: 'none'` turned the
+// implicit two-member trigger into 'ignore', and that `'addressed'` did not.
+// They encoded the C-18 bug rather than a requirement — "Muted" never silenced
+// an explicitly addressed request, and `'addressed'` was compared nowhere — so
+// they went with the preference. This test replaces them by PINNING THE
+// ABSENCE: a stale channel entry carrying the old field must not change the
+// verdict, so a future change cannot quietly re-introduce the suppression by
+// re-reading a value the DTO may still be sending.
+test("(F-170) a leftover myNotifyScope on the entry cannot suppress the implicit trigger", () => {
+  const base = makeEntry({ memberCount: 2, isMember: true });
+  for (const stale of ["none", "addressed", "all"]) {
+    assert.equal(
+      classify(plain, { ...base, channel: { ...base.channel, myNotifyScope: stale } }, ME),
+      "trigger",
+      `a stored notify scope of '${stale}' must be ignored`
+    );
+  }
 });
 
-test("unaddressed + 3+ members -> fyi (classify never mutes fyi; sendFyi() does)", () => {
+test("unaddressed + 3+ members -> fyi", () => {
   assert.equal(classify(plain, makeEntry({ memberCount: 3, isMember: true }), ME), "fyi");
-  assert.equal(
-    classify(plain, makeEntry({ memberCount: 3, isMember: true, myNotifyScope: "none" }), ME),
-    "fyi"
-  );
 });
 
 test("unaddressed + unknown/invalid memberCount -> fyi (degrades to multi-member)", () => {
@@ -148,11 +144,6 @@ test("(a) agent addressed to me -> trigger (THE BUG: exercises the real MCP path
   assert.equal(classify(agentTo(ME), makeEntry({ memberCount: 2, isMember: true }), ME), "trigger");
   // Count/membership don't matter for an explicit address, same as a user.
   assert.equal(classify(agentTo(ME), makeEntry({ memberCount: 3, isMember: false }), ME), "trigger");
-  // An explicit address is never suppressed by a per-channel mute.
-  assert.equal(
-    classify(agentTo(ME), makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "none" }), ME),
-    "trigger"
-  );
 });
 
 test("(b) agent addressed to a third party -> fyi (member) / ignore (non-member)", () => {
@@ -168,11 +159,6 @@ test("(c) agent UNADDRESSED + exactly 2 members -> fyi, NOT trigger (LOOP BRAKE)
   // A USER here would trigger the implicit 1:1; an agent must not, or the
   // responder's own unaddressed reply would ping-pong back into a new trigger.
   assert.equal(classify(agentPlain, makeEntry({ memberCount: 2, isMember: true }), ME), "fyi");
-  // Unconditional: scope 'all' does not lift the brake either.
-  assert.equal(
-    classify(agentPlain, makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "all" }), ME),
-    "fyi"
-  );
   // Public non-member still ignores.
   assert.equal(classify(agentPlain, makeEntry({ memberCount: 2, isMember: false }), ME), "ignore");
 });

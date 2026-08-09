@@ -15,8 +15,8 @@
 //   H1 + v2.5 D2 — `dopl_channel` is pre-approved on NO profile and auto-allows on NO op, an
 //     own-channel post included, so no message leaves this machine without a click (or AXIS B).
 //   F2 — every dopl_channel grant is OP-SCOPED with no bare-tool-name fallback.
-//   H2 + H3 — under `full` the delegation / persistence / exfil subset is HARD-DENIED rather
-//     than live-gated, and Task/Agent are hard-denied under EVERY profile.
+//   H2 + H3 — REVERSED FOR `full` (2026-08-08, see SESSION_HARD_DENY): the delegation /
+//     outbound / persistence / escalation built-ins LIVE-GATE there. Restricted profiles unchanged.
 //
 // v2.9 — TWO AXES. One "Auto-approve" switch used to control two unrelated things, because
 // an outbound message is technically a tool call (`dopl_channel op=post`) and rides the same
@@ -48,7 +48,9 @@ const { makeGrantKeyFor, POST_GRANT, postFieldsOk } = require('./session-grant-k
 // F-139: the client-agnostic tool-name normalizer the whole table matches through.
 const { mcpShortName, canonicalDoplName } = require('./mcp-tool-names');
 const {
-  READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS,
+  READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, UNIVERSAL_HARD_DENY,
+  // Retired (2026-08-07): denied everywhere, so unregistering cannot loosen a hard-deny.
+  RETIRED_DOPL_TOOLS,
   // F-139: DOPL_SERVER_PREFIX is deliberately NOT read here any more. It names ONE server —
   // ours — and this table must not compare a client-supplied tool name against it. It is
   // consumed in mcp-tool-names.js, as the canonical form to normalize ONTO.
@@ -71,43 +73,43 @@ function shortDoplName(full) {
 // as `mcp__claude_ai_Dopl__…` or `mcp__<uuid>__…` missed EVERY list at once — Axis B, the
 // pre-approvals, both Axis-A modes and the hard-deny set. Injected by the extraction tests.
 
-// FIX H2 / H3 — the SESSION HARD-DENY set for the `full` profile. A live session gives the
-// operator a visible window + per-call Allow/Deny buttons, so the VISIBLE + REVERSIBLE work
-// tools (Bash / Write / Edit / MultiEdit / NotebookEdit, plus WebFetch and the non-admin dopl
-// tools, none of which are denied under full) can be LIVE-GATED. But the delegation /
-// persistence / exfil / escalation tools must NOT be live-gated: a single "Allow for this
-// task" on one of them OUTLIVES the watched window — Task/Agent spawn a FRESH session that
-// does NOT inherit this session's canUseTool bound (tool-profiles.js warns the same; hence H3
-// denies them under every profile), Cron*/ScheduleWakeup/Monitor persist and re-run
-// unattended, SendMessage/RemoteTrigger/Artifact/… exfiltrate off-machine without the visible
-// dopl_channel post. So `full` HARD-DENIES them. Derived from tool-profiles' DENIED_BUILTINS
-// (the full blacklist) MINUS the work tools we keep live-gated, PLUS the six dopl_*_admin
-// tools — reusing the shared constants so the two never drift.
-// 2026-08-02 FIX 2 — BashOutput / KillShell are the READ HALF of an already-gated Bash: they
-// poll and stop a background shell this session already had to earn a button for. Hard-denying
-// them (they sit in DENIED_BUILTINS with Bash, and hard-deny is checked FIRST) made background
-// Bash unusable under `full` and read as one more way bypass was broken. They live-gate with
-// Bash now, and they are added HERE only — the restricted profiles keep denying them via
-// DENIED_BUILTINS, so read_only, which offers no Bash at all, gains no shell surface.
-const SESSION_GATED_WORK_TOOLS = ['Bash', 'BashOutput', 'KillShell',
-  'Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
-const SESSION_HARD_DENY = DENIED_BUILTINS
-  .filter(function (t) { return SESSION_GATED_WORK_TOOLS.indexOf(t) === -1; })
-  .concat(DOPL_ADMIN_TOOLS);
+// `full`'s HARD-DENY IS THE UNIVERSAL FLOOR AND NOTHING ELSE (2026-08-08, Samuel's call — it
+// REVERSES FIX H2/H3 for this profile and closes the "deliberate residual gap" F-175 recorded).
+//
+// WHAT IT WAS: DENIED_BUILTINS minus SESSION_GATED_WORK_TOOLS (Bash/BashOutput/KillShell + the
+// edit tools — the FIX 2 carve-out), plus the dopl admins. So `full` ALSO hard-denied
+// Task/Agent/Task*, Artifact, SendMessage/SendUserMessage, PushNotification, RemoteTrigger,
+// ReportFindings, DesignSync, Cron*/ScheduleWakeup/Monitor, Enter/ExitWorktree, Workflow, Skill
+// and ToolSearch — while the HEADLESS lane's `full` applied UNIVERSAL_HARD_DENY and stopped. One
+// profile name, two lanes, two answers, and the SDK one contradicted what `full` promises. The
+// carve-out constant is gone with the subtraction it existed to express.
+//
+// WHY THE OLD ARGUMENT DOES NOT HOLD. It ran: these tools OUTLIVE the watched window, so they
+// must not be merely live-gated. But `Bash` is live-gated under `full` and always has been, and
+// anyone holding Bash holds `curl`, `launchd` and a child that outlives the window. A table that
+// hands over the shell and then refuses `SendMessage` is not drawing a boundary, it is keeping a
+// list. `full` means full; the SUPERVISION is the operator's PERMISSION PRESET (Axis A: manual /
+// accept_edits / auto / bypass), not this constant.
+//
+// WHY THIS IS A WIDENING, NOT A LOSS OF CONTROL. Every name released here is in NEITHER
+// AUTO_TOOLS NOR BYPASS_TOOLS, and both are POSITIVE allow-lists (FIX F3), so all of them GATE in
+// EVERY mode, `bypass` included, and none is pre-approved, so none is shadowed past canUseTool.
+// They may EXIST; they still stop on a button. read_only and dopl_only are UNTOUCHED (they take
+// the whole of DENIED_BUILTINS), so no restricted profile gains a single tool.
+const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();
 
 // FIX F2 (v2.9 review) — DOPL_SAFE_TOOLS is "non-admin", which is NOT the same as
-// "read-only". These six each WRITE to the shared workspace: dopl_kb alone registers
-// write_file / create_base / create_folder / move_file (packages/mcp-server knowledge.ts),
-// and dopl_skill / dopl_ontology / dopl_workflow / dopl_chats / dopl_cluster carry the same
-// create+update shape. A write here lands OFF this machine, in rows every workspace member
-// can then read, so it is an exfiltration path in the same class as an outbound post — it
-// must never be silent. They are split out so (a) `auto` GATES them and only `bypass`
-// covers them, and (b) `dopl_only` stops SHADOWING them via allowedTools. The read half is
-// derived by subtraction so the two can never drift from tool-profiles' list.
-const DOPL_WRITE_TOOLS = [
-  'mcp__dopl__dopl_kb', 'mcp__dopl__dopl_skill', 'mcp__dopl__dopl_ontology',
-  'mcp__dopl__dopl_workflow', 'mcp__dopl__dopl_chats', 'mcp__dopl__dopl_cluster',
-];
+// "read-only". These each WRITE to the shared workspace: dopl_kb alone registers write_file /
+// create_base / create_folder / move_file (packages/mcp-server knowledge.ts), and dopl_skill /
+// dopl_ontology / dopl_chats carry the same create+update shape. A write here lands OFF this
+// machine, in rows every workspace member can then read, so it is an exfiltration path in the
+// same class as an outbound post — it must never be silent. They are split out so (a) `auto`
+// GATES them and only `bypass` covers them, and (b) `dopl_only` stops SHADOWING them via
+// allowedTools. The read half is derived by subtraction, and this list must stay a SUBSET of
+// DOPL_SAFE_TOOLS — session-permission-hardening.test.mjs's partition test catches it if not.
+// (dopl_workflow / dopl_cluster left in the 2026-08-07 retirement, with their server tools.)
+const DOPL_WRITE_TOOLS = ['mcp__dopl__dopl_kb', 'mcp__dopl__dopl_skill',
+  'mcp__dopl__dopl_ontology', 'mcp__dopl__dopl_chats'];
 const DOPL_READ_TOOLS = DOPL_SAFE_TOOLS
   .filter(function (t) { return DOPL_WRITE_TOOLS.indexOf(t) === -1; });
 
@@ -132,7 +134,7 @@ function buildSessionToolConfig(profile) {
     return {
       builtinTools: READ_BUILTINS.slice(),
       preApproved: READ_BUILTINS.slice(),
-      disallowedTools: DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, DOPL_SAFE_TOOLS),
+      disallowedTools: DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS),
       doplToolsPolicy: [channelShort],
     };
   }
@@ -148,15 +150,14 @@ function buildSessionToolConfig(profile) {
     return {
       builtinTools: READ_BUILTINS.concat(WEB_TOOLS),
       preApproved: READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ_TOOLS),
-      disallowedTools: DENIED_BUILTINS.concat(DOPL_ADMIN_TOOLS),
+      disallowedTools: DENIED_BUILTINS.concat(DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS),
       doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
     };
   }
 
-  // full: pre-approve only local reads; the dangerous subset is HARD-DENIED
-  // (SESSION_HARD_DENY), and only the visible + reversible work tools (Bash / Write /
-  // Edit / NotebookEdit / MultiEdit / WebFetch / non-admin dopl reads) plus the
-  // op-scoped dopl_channel reach canUseTool and await an operator button.
+  // full: pre-approve only local reads; hard-deny ONLY the universal floor (SESSION_HARD_DENY,
+  // which IS tool-profiles.UNIVERSAL_HARD_DENY). Everything else — the work tools, delegation,
+  // outbound, persistence, escalation, and the op-scoped dopl_channel — reaches canUseTool.
   return {
     builtinTools: [],
     preApproved: READ_BUILTINS.slice(),

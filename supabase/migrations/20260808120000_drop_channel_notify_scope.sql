@@ -1,0 +1,43 @@
+-- Drop `channel_members.notify_scope` — the notify-scope preference is removed
+-- from the product (F-170, 2026-08-08; audit item C-18).
+--
+-- ⚠️ WRITTEN, NOT APPLIED. This file is deliberately un-run: the six migrations
+-- of 2026-08-07 went up the night before (F-156) and the migration chain has
+-- been repaired twice in two days (F-167, F-169), so a DROP COLUMN is a thing
+-- to schedule, not to slip in. Apply it when the code below is confirmed gone.
+--
+-- WHY DROP RATHER THAN LEAVE IT DEAD. Three reasons, in order of weight:
+--
+--  1. Leaving it is NOT free at runtime, which is the assumption worth
+--     correcting. `main/trigger.js:73-78` (`sendFyi`) returns early whenever
+--     the scope is anything but 'all'. With the bell popover gone, every row
+--     already stored as 'none' or 'addressed' has its silent FYI notifications
+--     suppressed FOREVER, with no surface left to change it back. Dropping the
+--     column collapses every reader onto its 'all' default and is the only way
+--     to un-stick those members without shipping new UI.
+--  2. `channel_members` is in the realtime publication, so `notify_scope`
+--     streams to every channel member over CDC no matter what the DTO scrubs
+--     (audit C-11). Deleting the data deletes the exposure; a scrub never did.
+--  3. A CHECK constraint that spells out ('all','addressed','none') is a
+--     blueprint. The next agent that finds it will rebuild the feature from it,
+--     and those three options are precisely the bug: 'addressed' was compared
+--     NOWHERE, and 'none' ("Muted") never silenced an explicitly addressed
+--     request — which is most of what a channel carries.
+--
+-- If a per-channel "be quiet here" preference is wanted back, design it fresh.
+-- Do not resurrect this column: its semantics are the thing that was wrong.
+--
+-- ORDER OF OPERATIONS. Every read goes through `select("*")`, so a dropped
+-- column simply arrives `undefined` and the existing `?? "all"` / `?? null`
+-- fallbacks absorb it — this is safe to apply ahead of the code. The one WRITE
+-- (`repository.updateMemberPrefs`'s `notify_scope` branch) is already
+-- unreachable: `ChannelMemberSelfUpdateSchema` no longer accepts the field.
+-- Still, apply it AFTER these land, so nothing references a column that is not
+-- there: `server/dto.ts`, `server/service-reads.ts`,
+-- `server/service-writes-members.ts`, `server/repository.ts`,
+-- `features/channels/types.ts` (`NotifyScope`, `Channel.myNotifyScope`,
+-- `ChannelMember.notifyScope`), and `main/trigger.js`'s `sendFyi` read.
+-- Regenerate `src/shared/supabase/types.ts` in the same change.
+
+ALTER TABLE public.channel_members
+  DROP COLUMN IF EXISTS notify_scope;

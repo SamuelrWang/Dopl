@@ -50,7 +50,6 @@ export type {
   KnowledgeFolder,
   KnowledgePathOpResult,
   KnowledgeSearchHit,
-  KnowledgeTrashSnapshot,
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
   KnowledgeWriteSource,
@@ -83,7 +82,6 @@ export type {
   ChatSource,
   ChatUpdateInput,
   ChatVisibility,
-  TrashedChat,
 } from "./chat-types.js";
 export type {
   AccessMatrix,
@@ -130,11 +128,14 @@ export type {
   OntologyCluster,
   OntologyClusterCreateInput,
   OntologyClusterPatch,
+  OntologyClusterSummary,
   OntologyMethod,
   OntologyObject,
   OntologyObjectCreateInput,
   OntologyObjectPatch,
+  OntologyObjectSummary,
   OntologyRelationship,
   OntologySnapshot,
+  OntologySummary,
   OntologyTemplateField,
 } from "./ontology-types.js";

@@ -90,7 +90,17 @@ export async function createTrustRule(
   return (await hydrate([row]))[0];
 }
 
-/** Remove a trust rule (idempotent no-op when it doesn't exist). */
+/**
+ * Remove a trust rule (idempotent no-op when it doesn't exist).
+ *
+ * Deleting the rule is the WHOLE revocation — there is deliberately no sweep
+ * of the `auto_allowed` consent rows it already produced (C-19). Those rows
+ * are re-verified against this table at consumption by
+ * `consent-service.revalidateAutoAllow`, which fails closed on a missing rule
+ * AND on a requester who has left the workspace. A sweep here would catch only
+ * the first of those two, and could not tell an in-flight row from one whose
+ * work already ran — it would rewrite the audit trail those rows exist to be.
+ */
 export async function deleteTrustRule(
   ctx: ChannelContext,
   trustedUserId: string

@@ -1,9 +1,14 @@
 "use strict";
 /**
  * `dopl_kb_admin` DESTRUCTIVE op handlers: delete_base, delete_folder,
- * delete_file. Every op is a soft-delete (restorable from trash). The
+ * delete_file. Deletion is permanent — there is no trash to restore from. The
  * agent-write-denied (403) mapping keeps read-only bases from throwing raw.
  * Routed from the registrar in knowledge.ts.
+ *
+ * UNREACHABLE since §2b: `server.ts` refuses every op on this tool before
+ * dispatch (`delete-policy.ts`). Kept so the capability returns by removing the
+ * gate rather than by rewriting handlers — which is also why their narration
+ * has to stay honest about what a delete would actually do.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opDeleteBase = opDeleteBase;
@@ -29,7 +34,7 @@ async function opDeleteBase(client, ref) {
             return denied;
         throw e;
     }
-    return (0, respond_1.ok)(`Deleted ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). Restore with \`dopl_kb(op='restore_base')\`.`);
+    return (0, respond_1.ok)(`Deleted ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`) and everything in it. Permanent — there is nothing to restore it from.`);
 }
 async function opDeleteFolder(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -69,5 +74,5 @@ async function opDeleteFile(client, ref, path) {
         return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(path, NO_PATH)} resolved to a ${result.kind}, not an entry. ` +
             `Use \`dopl_kb_admin(op='delete_folder')\` for folders.`);
     }
-    return (0, respond_1.ok)(`Entry deleted at ${(0, narration_1.inlineOr)(path, NO_PATH)}. Restore via \`dopl_kb(op='list_trash')\` + \`dopl_kb(op='restore_file')\`.`);
+    return (0, respond_1.ok)(`Entry deleted at ${(0, narration_1.inlineOr)(path, NO_PATH)}. Permanent — there is nothing to restore it from.`);
 }

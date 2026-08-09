@@ -14,6 +14,7 @@
   "exclude": [
     "src/**/*.test.ts",
     "src/tools/narration-fixtures.ts",
+    "src/tools/parity-harness.ts",
     "src/tools/tool-group-files.ts"
   ]
 }

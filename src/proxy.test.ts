@@ -84,7 +84,11 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { proxy, config } from "./proxy";
+// THE MATCHER ITSELF IS `proxy-matcher.test.ts` (split out under P0-4, 2026-08-07).
+// This file proves what the function DOES once it runs; that one proves which requests
+// make it run at all. Both matter and neither implies the other — a route can be
+// answered correctly here and never reach this code in production.
+import { proxy } from "./proxy";
 
 const ORIGIN = "https://app.usedopl.com";
 
@@ -120,11 +124,11 @@ beforeEach(() => {
 describe("hot path makes zero network calls", () => {
   const paths = [
     "/canvas", // authed page
-    "/pricing", // public page
+    "/pricing", // public page — see the matcher note in section 6
     "/api/workspaces/me", // api route
     "/login",
     "/",
-    "/community/x/opengraph-image",
+    "/get-started", // KEEP page, signed-in only
   ];
 
   it.each(paths)("valid token on %s: no getUser, no fetch", async (path) => {
@@ -251,13 +255,43 @@ describe("pages", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it.each(["/community/x/opengraph-image", "/community/x/twitter-image"])(
-    "%s passes through for social crawlers (no session)",
+  // THE BEHAVIOUR HALF OF THE P0-4 MATCHER ARGUMENT (2026-08-07). `pricing|privacy|terms`
+  // were added to the matcher's negative lookahead as UNANCHORED prefixes, so they also
+  // exclude `/pricing/enterprise`, `/termsfoo` and friends. That is safe by construction
+  // rather than by luck — `PUBLIC_ROUTES` matches with `pathname.startsWith`, so those
+  // paths were ALREADY getting an unconditional passthrough — and this is the proof of
+  // the premise rather than the assertion of it. If a real gated route is ever added
+  // under one of those prefixes, this fails before the matcher can silently exempt it.
+  it.each(["/pricing/enterprise", "/termsfoo", "/privacy-policy"])(
+    "%s is an unconditional passthrough in BOTH session states",
     async (path) => {
-      const res = await proxy(req(path));
-      expect(res.status).toBe(200);
+      expect((await proxy(req(path))).status).toBe(200);
+      expect((await proxy(req(path))).headers.get("location")).toBeNull();
+      signedIn();
+      expect((await proxy(req(path))).status).toBe(200);
+      expect((await proxy(req(path))).headers.get("location")).toBeNull();
     }
   );
+
+  // THE OG PASSTHROUGH IS GONE (P0-4, 2026-08-07) and this asserts the replacement
+  // rather than deleting the coverage. The branch existed for convention-based
+  // `opengraph-image.tsx` / `twitter-image.tsx` route files under `/community/[slug]/`;
+  // `/community` was deleted, then the whole `[workspaceSlug]` tree in Stage D, and no
+  // such file has existed in `src/app/` since. What a crawler actually fetches is the
+  // STATIC card the root layout names, and the guarantee it needs — reachable with no
+  // session — is now structural instead of branch-shaped: the matcher excludes it by
+  // extension, so the middleware never runs and there is no code path that could bounce
+  // it. Proven in section 6 against the real exported matcher.
+  it("a signed-out request to a would-be OG route is no longer special-cased", async () => {
+    // Nothing serves this path any more, so the honest answer is the ordinary
+    // signed-out one. Kept as a test so the dead branch cannot be reintroduced
+    // by someone reading a stale comment.
+    const res = await proxy(req("/community/x/opengraph-image"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      `${ORIGIN}/login?redirectTo=%2Fcommunity%2Fx%2Fopengraph-image`
+    );
+  });
 });
 
 describe("api routes", () => {
@@ -349,11 +383,21 @@ describe("mixed-case canonicalization (audit fix S-8)", () => {
     "/_next/Static/chunk.js",
     "/invite/SignedTokenABC",
     "/auth/callback?code=AbC",
-    "/Community/x/opengraph-image",
-    "/Community/x/twitter-image",
   ])("does NOT rewrite case-sensitive path %s", async (path) => {
     const res = await proxy(req(path));
     expect(res.status).not.toBe(308);
+  });
+
+  // The `/opengraph-image` and `/twitter-image` skips were removed with the branch
+  // they guarded (P0-4) — there are no such route files left to protect from
+  // canonicalization, so a mixed-case path ending that way is now just a mixed-case
+  // path. It 308s like any other and then 404s, which is what it did before too.
+  it("a mixed-case would-be OG path canonicalizes like anything else now", async () => {
+    const res = await proxy(req("/Community/x/opengraph-image"));
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe(
+      `${ORIGIN}/community/x/opengraph-image`
+    );
   });
 });
 
@@ -381,59 +425,4 @@ describe("a thrown verification error is fail-closed, never a 500", () => {
     expect((await proxy(req("/"))).status).toBe(200);
     expect((await proxy(req("/auth/callback?code=x"))).status).toBe(200);
   });
-});
-
-// ── 6. The matcher still excludes static assets ──────────────────────────────
-
-describe("config.matcher", () => {
-  // The matcher body is a raw regex inside a capture group, so it compiles
-  // directly — this asserts the real exported value, not a copy of it.
-  const re = new RegExp(`^${config.matcher[0]}$`);
-
-  it.each([
-    "/_next/static/chunks/main.js",
-    "/_next/image",
-    "/favicon.ico",
-    "/logo.svg",
-    "/hero.png",
-    "/shot.jpeg",
-    "/anim.gif",
-    "/pic.webp",
-  ])("static asset %s never reaches the proxy", (path) => {
-    expect(re.test(path)).toBe(false);
-  });
-
-  // STAGE E (2026-08-06): the SELF-AUTHENTICATING routes no longer reach the middleware at
-  // all. They already short-circuited at the top of the proxy, so this changes no verdict —
-  // it stops the work from being scheduled. `/api/mcp` is the one that matters: it STREAMS,
-  // and its correctness rests on headers reaching the client inside a 60s budget.
-  it.each([
-    "/api/mcp",
-    "/api/oauth/authorize",
-    "/api/version",
-    "/api/cron/thread-sweep",
-    "/api/billing/webhook",
-    "/.well-known/oauth-authorization-server",
-  ])("self-authenticating route %s never reaches the proxy", (path) => {
-    expect(re.test(path)).toBe(false);
-  });
-
-  // …and the rest of /api/** still does. Dropping ALL of it is the plan's end state and is
-  // deliberately NOT done: the middleware is what refreshes the Supabase session cookie, and
-  // cookie-authed API calls would silently lose that. See the comment on `config` in proxy.ts.
-  it.each([
-    "/api/workspaces/me",
-    "/api/channels",
-    "/api/channels/sessions",
-    "/api/auth/mcp-device-token",
-  ])("cookie-authed API route %s still reaches the proxy", (path) => {
-    expect(re.test(path)).toBe(true);
-  });
-
-  it.each(["/canvas", "/api/workspaces/me", "/login", "/"])(
-    "%s does reach the proxy",
-    (path) => {
-      expect(re.test(path)).toBe(true);
-    }
-  );
 });

@@ -121,10 +121,12 @@ export function KnowledgeV2({
         title={`Delete ${c.deleteTarget?.item.type === "folder" ? "folder" : "entry"}?`}
         description={
           c.deleteTarget
-            ? `“${c.deleteTarget.item.label}” will move to Trash. You can restore it until the trash is purged.`
+            ? c.deleteTarget.item.type === "folder"
+              ? `This permanently deletes “${c.deleteTarget.item.label}” and everything inside it. This can't be undone.`
+              : `This permanently deletes “${c.deleteTarget.item.label}”. This can't be undone.`
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel="Delete permanently"
         destructive
         onConfirm={async () => {
           await c.performDelete();

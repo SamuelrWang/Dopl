@@ -26,7 +26,7 @@ interface Props {
   resetKey?: string;
   /** Called with markdown whenever the user edits. Parent debounces. */
   onChange?: (markdown: string) => void;
-  /** Read-only mode — disables editing entirely (e.g. trash view). */
+  /** Read-only mode — disables editing entirely (e.g. a viewer's KB). */
   readOnly?: boolean;
   /** Horizontal inset (Tailwind classes) for the fixed toolbar pill, so it
    *  centers over the host panel. Defaults to the v1 KB-detail layout. */

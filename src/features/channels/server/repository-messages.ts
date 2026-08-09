@@ -18,6 +18,8 @@ interface MessageReadOpts {
    * Drop this author's rows. Only the await hold passes it (so a caller's own
    * posts cannot end its own wait); every other read leaves it unset and the
    * query is the one that always ran.
+   *
+   * NULL-SAFE SINCE C-17 (2026-08-08, F-171) — see {@link excludeAuthorFilter}.
    */
   excludeAuthor?: string;
   /**
@@ -32,6 +34,38 @@ interface MessageReadOpts {
    * would have avoided the paging blew its own output ceiling.
    */
   threadId?: string;
+}
+
+/**
+ * THE AUTHOR-EXCLUSION PREDICATE, spelled once — `author_user_id IS NULL OR
+ * author_user_id <> $1` (C-17, 2026-08-08, F-171).
+ *
+ * The plain `.neq("author_user_id", x)` this replaces silently dropped every
+ * SYSTEM-AUTHORED row, because SQL `NULL <> x` is NULL, not true. ENGINEERING
+ * §8's AUTHOR EXCLUSION note recorded that as an accepted consequence on the
+ * grounds that "no writer produces them today" — and then the stale-thread
+ * cron became exactly such a writer. Its 14-day close proposal rendered on the
+ * web card and was INVISIBLE to any agent holding an await, which is the one
+ * surface `dopl_channel` teaches every agent to keep armed.
+ *
+ * FIXED HERE RATHER THAN AT THE WRITER, and that is the load-bearing choice.
+ * `excludeAuthor` means "ignore MY OWN posts, so my own traffic cannot end my
+ * own wait" (a caller's own `task_progress` popped its own hold, twice, live).
+ * A message with no author is by construction not the caller's own, so
+ * dropping it was never the rule being expressed — it was the rule's SQL
+ * leaking. Forging an author on the sweep instead would have been wrong twice
+ * over: there is no honest candidate (stamping either party puts a close
+ * proposal in the mouth of somebody who may disagree with it), and whichever
+ * party was stamped would be the one member whose agent still could not see it.
+ * A predicate fixed once here also covers every future system writer, which a
+ * per-writer convention cannot.
+ *
+ * `excludeAuthor` is a uuid at every entry (`AwaitQuerySchema` z.string().uuid(),
+ * and `opAwait`'s `selfUserId`), so it is safe to interpolate into PostgREST's
+ * `or` grammar; nothing else may call this with unvalidated text.
+ */
+function excludeAuthorFilter(userId: string): string {
+  return `author_user_id.is.null,author_user_id.neq.${userId}`;
 }
 
 /**
@@ -59,7 +93,7 @@ export async function listMessages(
     .eq("channel_id", channelId);
   if (opts.since !== undefined) query = query.gt("seq", opts.since);
   if (opts.excludeAuthor !== undefined) {
-    query = query.neq("author_user_id", opts.excludeAuthor);
+    query = query.or(excludeAuthorFilter(opts.excludeAuthor));
   }
   // PostgREST's jsonb accessor: `metadata->>taskId` compares the key as TEXT,
   // so the stored value is matched verbatim (uuid or legacy string alike).
@@ -107,13 +141,66 @@ export async function hasMessagesAfter(
     .eq("channel_id", channelId);
   if (since !== undefined) query = query.gt("seq", since);
   // Must mirror `listMessages`: a probe that hits on a row the row read then
-  // filters out spins the hold (fetch, empty, continue) once per tick.
+  // filters out spins the hold (fetch, empty, continue) once per tick. It also
+  // has to mirror the NULL-safety — a probe that MISSES a system row the read
+  // would have returned is the C-17 invisibility bug in its other half.
   if (excludeAuthor !== undefined) {
-    query = query.neq("author_user_id", excludeAuthor);
+    query = query.or(excludeAuthorFilter(excludeAuthor));
   }
   const { data, error } = await query.limit(1);
   if (error) throw error;
   return (data ?? []).length > 0;
+}
+
+/**
+ * The newest `seq` in a thread that is NOT itself a close proposal, or 0 when
+ * the thread has no such message (C-6, 2026-08-08, F-172).
+ *
+ * THIS NUMBER IS THE RE-PROPOSAL WINDOW. `proposeTaskClose`'s idempotency key
+ * used to be `(thread, outcome)` and nothing else, so an agent's SECOND genuine
+ * proposal — after the human said "keep open", after another hour of work — hit
+ * `postMessage`'s `client_msg_id` short-circuit and was silently swallowed. The
+ * agent's only terminal act was permanently consumed by its first use, and the
+ * stale first prompt came back on every reload, forever. Meanwhile the client
+ * was built on the opposite assumption: `readCloseProposal` returns the LATEST
+ * proposal and `session-card.tsx` keeps its dismissal local precisely so "the
+ * next real proposal" stays visible. Both were correct about a message the
+ * server would never write.
+ *
+ * WHY THE ANCHOR EXCLUDES PROPOSALS, which is the entire trick. Keying on the
+ * thread's plain newest seq would make every retry write a new row: a proposal
+ * IS a message, so the moment one lands the anchor moves and the retry no
+ * longer collides. Excluding proposals pins the anchor to the last piece of
+ * REAL exchange, so:
+ *   • retry of the same proposal (the response was lost, the session restarted,
+ *     the agent is chatty) — nothing else has happened, same anchor, same key,
+ *     dedupes exactly as before;
+ *   • genuine re-proposal — the thread moved on, new anchor, new key, a new row
+ *     the card renders as the live prompt;
+ *   • "keep open" with nothing said after it — same anchor, dedupes. Correct:
+ *     nothing about the thread changed, so it is the same proposal, and the
+ *     original prompt is still standing in the UI.
+ *
+ * The `metadata->>` filters are NULL-safe by construction (`closeProposed` is
+ * absent on ordinary messages, and `->>' '` yields NULL there), which is the
+ * same trap `excludeAuthorFilter` documents one screen up.
+ */
+export async function latestThreadActivitySeq(
+  channelId: string,
+  threadId: string
+): Promise<number> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("seq")
+    .eq("channel_id", channelId)
+    .eq("metadata->>taskId", threadId)
+    .or("metadata->>closeProposed.is.null,metadata->>closeProposed.neq.true")
+    .order("seq", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{ seq: number }>;
+  return rows.length > 0 ? Number(rows[0].seq) : 0;
 }
 
 export async function findMessageByClientId(

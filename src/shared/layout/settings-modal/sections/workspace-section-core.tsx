@@ -30,7 +30,7 @@ interface BodyProps {
   imageUploader?: (workspace: Workspace) => React.ReactNode;
   /** Surface-specific sections, rendered after the MCP block and before the
    *  owner-only danger zone. The desktop `/settings` PAGE hangs its connected
-   *  apps and trash sections here; the modal has none. */
+   *  apps section here; the modal has none. */
   extras?: React.ReactNode;
 }
 

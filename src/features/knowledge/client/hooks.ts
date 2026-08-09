@@ -212,3 +212,31 @@ export function useKnowledgeEntry(
     { initialData: options?.initialData, initialKey }
   );
 }
+
+/**
+ * Drop every cached read of a base that no longer exists.
+ *
+ * Deletes are permanent (ENGINEERING §7, 2026-08-07) and `useKnowledgeQuery`
+ * prefers `data` over `error` on purpose — so an invalidated entry still
+ * RENDERS the deleted base's content rather than surfacing its 404, and the
+ * cache is IndexedDB-persisted with a 24h `gcTime`, so it survives relaunch.
+ * Invalidating the base LIST is therefore not enough: the tree and every entry
+ * body under it have to leave the cache outright.
+ *
+ * Entry ids come from the cached tree because that is the only place the
+ * base→entry mapping exists client-side; a base whose tree was never opened
+ * has no entry bodies cached either, so nothing is missed.
+ */
+export function evictDeletedBase(
+  queryClient: QueryClient,
+  workspaceId: string | undefined,
+  baseId: string
+): void {
+  const ws = workspaceId ?? "default";
+  const treeKey = ["knowledge", `tree:${ws}:${baseId}`];
+  const tree = queryClient.getQueryData<{ entries: KnowledgeEntry[] }>(treeKey);
+  for (const entry of tree?.entries ?? []) {
+    queryClient.removeQueries({ queryKey: ["knowledge", `entry:${ws}:${entry.id}`], exact: true });
+  }
+  queryClient.removeQueries({ queryKey: treeKey, exact: true });
+}

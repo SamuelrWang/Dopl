@@ -27,7 +27,7 @@ export default function MembersPage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
-  if (isPending || !access) return <PageLoading label="Loading members" />;
+  if (isPending || !access) return <PageLoading label="Loading members" variant="two-pane" />;
 
   return (
     <MembersView

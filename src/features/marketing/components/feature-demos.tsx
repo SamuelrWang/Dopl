@@ -14,9 +14,10 @@ export interface FeatureDemoProps {
 }
 
 /**
- * Panel id -> animated miniature. Panels without an entry (workflows —
- * its page has shipped, but the demo miniature is still TODO) render text
- * only.
+ * Panel id -> animated miniature. A panel without an entry renders text
+ * only; today every panel in `DECK_PANELS` has one, so the lookup's
+ * undefined branch is a safety net for the next panel added, not a
+ * live case.
  */
 export const FEATURE_DEMOS: Record<string, ComponentType<FeatureDemoProps>> = {
   ontology: OntologyDemo,

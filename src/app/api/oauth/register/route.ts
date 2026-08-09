@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { registerClient } from "@/shared/auth/mcp-oauth";
+import { enforceOAuthIpRateLimit } from "@/shared/auth/oauth-rate-limit";
 
 export const dynamic = "force-dynamic";
+
+// Per-IP registration ceiling. A legitimate MCP client registers ONCE per
+// onboarding (a handful of retries at most); 20/min/IP sits far above that
+// while stopping a script from minting thousands of `oauth_clients` rows a
+// minute. Behind a shared NAT this still admits ~20 distinct client onboardings
+// per minute per egress IP. Override via env.
+const REGISTER_RPM = Number(process.env.OAUTH_REGISTER_RATE_LIMIT_RPM) || 20;
 
 /**
  * RFC 7591 Dynamic Client Registration. MCP clients (Claude Desktop/.ai,
@@ -30,6 +38,17 @@ function isAllowedRedirect(uri: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  // Cap unauthenticated registration per source IP before doing any work — this
+  // is the bound on the table-growth primitive (an orphan-client reaper in the
+  // oauth-cleanup cron is the second half). RFC 7591 stays open: the limit is
+  // generous enough that real client onboarding is unaffected.
+  const limited = await enforceOAuthIpRateLimit(request, {
+    bucket: "oauth-register-ip",
+    rpm: REGISTER_RPM,
+    endpoint: "POST /api/oauth/register",
+  });
+  if (limited) return limited;
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

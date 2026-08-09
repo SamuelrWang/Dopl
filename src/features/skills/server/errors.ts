@@ -32,21 +32,6 @@ export class SkillAgentWriteDisabledError extends Error {
   }
 }
 
-/**
- * Thrown when a permanent-delete (purge) targets a skill that is not in
- * the trash (`deleted_at IS NULL`). Purge only hard-deletes soft-deleted
- * skills — a live skill must be trashed first. Maps to 400.
- */
-export class SkillNotTrashedError extends Error {
-  readonly code = "SKILL_NOT_TRASHED";
-  constructor(identifier: string) {
-    super(
-      `Cannot permanently delete skill ${identifier} — it is not in the trash. Move it to the trash first.`
-    );
-    this.name = "SkillNotTrashedError";
-  }
-}
-
 export class SkillFileNotFoundError extends Error {
   readonly code = "SKILL_FILE_NOT_FOUND";
   constructor(skillSlug: string, fileName: string) {

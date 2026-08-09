@@ -19,13 +19,18 @@ import "server-only";
  * helpers used by more than one domain live in `service-shared.ts`.
  *   - `service-shared.ts`   — context, visibility gates, write gate, helpers
  *   - `service-bases.ts`    — base reads (`getBaseById` is the shared gate)
- *   - `service-base-writes.ts` — base create/update/delete/restore
+ *   - `service-base-writes.ts` — base create/update/delete
  *   - `service-folders.ts`  — folder reads + writes + `getBaseTree`
  *   - `service-entries.ts`  — entry reads + writes + `resolveEntryRefs`
  *   - `service-paths.ts`    — path-addressed reads + writes
- *   - `service-trash.ts`    — visibility-filtered trash listing
- *   - `service-purge.ts`    — permanent-delete of a single trashed row
  *   - `service-seed.ts`     — workspace fixture seeding
+ *
+ * DELETES ARE PERMANENT (2026-08-07). Soft-delete, trash listing, restore
+ * and purge are gone — `delete*` removes the rows immediately. The
+ * `deleted_at` columns and the read-path `deleted_at IS NULL` filters stay
+ * so rows tombstoned before the switch remain hidden until the one-time
+ * cleanup migration (`20260807110000_purge_soft_deleted_rows.sql`) sweeps
+ * them.
  */
 
 export { buildKnowledgeContext, assertBaseWritable } from "./service-shared";
@@ -41,8 +46,7 @@ export {
 export {
   createBase,
   updateBase,
-  softDeleteBase,
-  restoreBase,
+  deleteBase,
 } from "./service-base-writes";
 
 export {
@@ -51,8 +55,7 @@ export {
   createFolder,
   updateFolder,
   moveFolder,
-  softDeleteFolder,
-  restoreFolder,
+  deleteFolder,
 } from "./service-folders";
 
 export {
@@ -62,8 +65,7 @@ export {
   createEntry,
   updateEntry,
   moveEntry,
-  softDeleteEntry,
-  restoreEntry,
+  deleteEntry,
 } from "./service-entries";
 export type { ListEntriesOpts, KnowledgeEntryRef } from "./service-entries";
 
@@ -76,10 +78,5 @@ export {
   listDirByPath,
 } from "./service-paths";
 export type { WriteFileByPathInput } from "./service-paths";
-
-export { listTrash, listTrashedForWorkspace } from "./service-trash";
-export type { TrashedKnowledgeItem } from "./service-trash";
-
-export { purgeBase, purgeFolder, purgeEntry } from "./service-purge";
 
 export { seedWorkspace } from "./service-seed";

@@ -79,20 +79,39 @@ const requests: Array<{ path: string; method: string }> = [];
 let created: typeof NEW_BASE | null = null;
 /** Set once the slug PATCH lands, so the list refetch reflects it. */
 let renamedB: typeof BASE_B | null = null;
+/** Set once the DELETE lands — hard delete, so the row never comes back. */
+let deletedB = false;
 
 function ok(body: unknown) {
   return { status: 200, statusText: "OK", hasBody: true, body };
 }
 
+const WORKSPACE = {
+  id: WORKSPACE_ID,
+  slug: "acme",
+  publicId: "ab12cd34ef56",
+  name: "Acme",
+};
+
 function route(path: string) {
+  // ONE read for workspace + role + caller id (P0-2). `resolve` and `me` are
+  // still live endpoints, but the page no longer waits on them in series —
+  // the boot answer is seeded into their cache entries.
+  if (path === "/api/boot") {
+    return ok({
+      isOnboarded: true,
+      surveyCompleted: true,
+      userId: USER_ID,
+      workspace: WORKSPACE,
+      segment: "acme-ab12cd34ef56",
+      needsRedirect: false,
+      role: "admin",
+      myAccess: { defaultLevel: "edit", overrides: [] },
+    });
+  }
   if (path.startsWith("/api/workspaces/resolve")) {
     return ok({
-      workspace: {
-        id: WORKSPACE_ID,
-        slug: "acme",
-        publicId: "ab12cd34ef56",
-        name: "Acme",
-      },
+      workspace: WORKSPACE,
       canonical: "acme-ab12cd34ef56",
       needsRedirect: false,
     });
@@ -100,7 +119,11 @@ function route(path: string) {
   if (path === "/api/workspaces/me") return ok({ role: "admin", userId: USER_ID });
   if (path === "/api/knowledge/bases") {
     return ok({
-      bases: [BASE_A, renamedB ?? BASE_B, ...(created ? [created] : [])],
+      bases: [
+        BASE_A,
+        ...(deletedB ? [] : [renamedB ?? BASE_B]),
+        ...(created ? [created] : []),
+      ],
       ownerNames: { "user-2": "Dana Reed" },
     });
   }
@@ -128,6 +151,13 @@ function route(path: string) {
     });
   }
   if (path === "/api/knowledge/bases/base-b/tree") {
+    // A hard-deleted base's tree is GONE, not merely absent from the list.
+    // Serving it forever would let a stale cache — or an eviction-triggered
+    // refetch — repopulate content the delete was supposed to destroy, and
+    // the test would pass on a fiction. See `evictDeletedBase`.
+    if (deletedB) {
+      return { status: 404, statusText: "Not Found", hasBody: true, body: { error: "Not found" } };
+    }
     return ok({ base: BASE_B, folders: [], entries: [ENTRY_1, ENTRY_2] });
   }
   if (path === "/api/knowledge/bases/base-a/tree") {
@@ -149,6 +179,15 @@ const apiRequest = vi.fn((path: string, opts?: { method?: string }) => {
       statusText: "OK",
       hasBody: true,
       body: { base: renamedB },
+    });
+  }
+  if (path === "/api/knowledge/bases/base-b" && opts?.method === "DELETE") {
+    deletedB = true;
+    return Promise.resolve({
+      status: 204,
+      statusText: "No Content",
+      hasBody: false,
+      body: null,
     });
   }
   if (path === "/api/knowledge/bases" && opts?.method === "POST") {
@@ -195,6 +234,7 @@ describe("knowledge index + KB detail", () => {
     requests.length = 0;
     created = null;
     renamedB = null;
+    deletedB = false;
     // The controller persists the last-opened base per workspace; without
     // this, one test's selection auto-selects a different base in the next.
     localStorage.clear();
@@ -407,6 +447,39 @@ describe("knowledge index + KB detail", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Knowledge base not found"
+    );
+  });
+
+  it("falls back to the knowledge root when the deep-linked base is DELETED", async () => {
+    // The deep link is frozen at mount and this component never remounts, so
+    // it outlives its own target. Deletes are permanent now, which makes this
+    // the ordinary way a resolved deep link loses its base — and treating it
+    // like the unknown-segment 404 above turns the whole page into an error
+    // card that only a reload clears.
+    const router = renderAt(`/${SEGMENT}/knowledge/${BASE_B_SEG}`);
+    await screen.findByDisplayValue("Cold outreach");
+
+    fireEvent.click(screen.getByLabelText("Delete knowledge base"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete permanently" })
+    );
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/${SEGMENT}/knowledge`);
+    });
+    expect(
+      await screen.findByRole("button", { name: /Product specs/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    // waitFor, not a bare expect: the deep-linked ENTRY selection clears on a
+    // later tick than the route change (list refetch → selection recompute →
+    // breadcrumb unmount), so a synchronous assertion here passes only on a
+    // fast machine and fails under full-suite load. The breadcrumb is the
+    // last thing to go, which is exactly why it is the thing worth pinning.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Sales playbook/ })
+      ).not.toBeInTheDocument()
     );
   });
 });

@@ -1,8 +1,37 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vitest/config";
 
 const src = fileURLToPath(new URL("./src", import.meta.url));
+
+/**
+ * The renderer's BUILD IDENTITY, inlined as `__DOPL_RENDERER_BUILD__`.
+ *
+ * It exists for one consumer: the persisted query cache's buster
+ * (`src/lib/query-client.ts`). A dehydrated snapshot survives on disk across
+ * launches, so it also survives an app UPDATE — and the entry it restores was
+ * written by the previous bundle's understanding of every response shape. The
+ * web app keys its buster to the Vercel deployment id; the packaged renderer
+ * has no deployment, so the Electron app's version is the equivalent event:
+ * shipping a new version is exactly when the bundle can have changed.
+ *
+ * Read from `dopl-desktop-app/package.json` (the version electron-builder
+ * stamps into the app) rather than this workspace's own, which is frozen at
+ * 0.1.0. Dev/test fall back to a constant — a dev restart is not a release.
+ */
+function rendererBuildId(): string {
+  try {
+    const pkg = readFileSync(
+      new URL("../../dopl-desktop-app/package.json", import.meta.url),
+      "utf8"
+    );
+    const version = (JSON.parse(pkg) as { version?: string }).version;
+    return version ? `v${version}` : "dev";
+  } catch {
+    return "dev";
+  }
+}
 
 /**
  * Supabase storage — the ONLY remote origin any packaged page is allowed to
@@ -84,6 +113,9 @@ function doplCsp(): Plugin {
 
 export default defineConfig({
   plugins: [react(), doplCsp()],
+  define: {
+    __DOPL_RENDERER_BUILD__: JSON.stringify(rendererBuildId()),
+  },
   // Relative asset URLs — the packaged renderer is loaded with `loadFile`, so
   // every absolute "/assets/..." would resolve to the filesystem root.
   base: "./",

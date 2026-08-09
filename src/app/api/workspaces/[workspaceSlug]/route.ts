@@ -9,6 +9,7 @@ import {
   resolveMembershipOrThrow,
 } from "@/features/workspaces/server/service";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
@@ -38,11 +39,7 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
     const { membership } = await resolveMembershipOrThrow(workspace.id, userId);
     return NextResponse.json({ workspace, role: membership.role });
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces/[workspaceSlug]", err);
   }
 });
 
@@ -67,8 +64,7 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
     if (err instanceof HttpError) {
       return NextResponse.json(validationResponseBody(err), { status: err.status });
     }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces/[workspaceSlug]", err);
   }
 });
 
@@ -89,11 +85,7 @@ export const DELETE = withUserAuth(async (_request: NextRequest, { userId, param
     await deleteWorkspaceForUser(workspace.id, userId);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    if (err instanceof HttpError) {
-      return NextResponse.json(err.toResponseBody(), { status: err.status });
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return toHttpErrorResponse("api/workspaces/[workspaceSlug]", err);
   }
 // sessionOnly: destroying a workspace (cascades KBs/skills/clusters/members)
 // must never be driven by a background MCP agent — interactive session only.

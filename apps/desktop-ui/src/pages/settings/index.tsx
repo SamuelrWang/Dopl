@@ -7,7 +7,6 @@ import {
   workspaceReadPath,
 } from "@/shared/layout/settings-modal/sections/workspace-section-core";
 import { ConnectedAppsSection } from "@/features/mcp-connect/components/connected-apps-section";
-import { WorkspaceTrashSection } from "@/features/trash/components/workspace-trash-section";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
 import { useWorkspaceRoute } from "#/components/app-shell";
@@ -27,8 +26,8 @@ import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
  * The sections are NOT composed here: `WorkspaceSectionBody` is the one
  * composition the modal's General pane renders too, so a change to the
  * workspace-settings surface lands on both. This page differs only in chrome (a
- * page header instead of the modal's section card) and in the two extra
- * sections it hangs off the body's `extras` slot.
+ * page header instead of the modal's section card) and in the extra section it
+ * hangs off the body's `extras` slot.
  */
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -87,15 +86,7 @@ export default function SettingsPage() {
               // convergence.
               navigate(next ? `/${workspaceSegment(next)}` : "/", { replace: true });
             }}
-            extras={
-              <>
-                <ConnectedAppsSection />
-                <WorkspaceTrashSection
-                  workspaceSlug={workspace.slug}
-                  workspaceId={workspace.id}
-                />
-              </>
-            }
+            extras={<ConnectedAppsSection />}
           />
         </div>
       </div>

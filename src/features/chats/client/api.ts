@@ -1,12 +1,8 @@
 import { ApiError, apiRequest } from "@/shared/api/api-client";
-import type {
-  Chat,
-  ChatAccessMode,
-  ChatDetail,
-  ChatFolder,
-  ChatVisibility,
-} from "../types";
+import type { ApiRequestOpts } from "@/shared/api/api-envelope";
+import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
 
+/** Domain error wrapper so components can branch on `code`. */
 export class ChatApiError extends Error {
   constructor(
     public readonly status: number,
@@ -18,11 +14,10 @@ export class ChatApiError extends Error {
   }
 }
 
-interface RequestOpts {
-  workspaceId?: string;
-  body?: unknown;
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
-}
+type RequestOpts = Pick<
+  ApiRequestOpts,
+  "workspaceId" | "body" | "method" | "query" | "expectedUpdatedAt"
+>;
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   try {
@@ -35,92 +30,22 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   }
 }
 
-export async function listChats(
-  workspaceId: string
-): Promise<{ chats: Chat[]; hiddenCount: number }> {
-  return request<{ chats: Chat[]; hiddenCount: number }>("/api/chats", {
-    workspaceId,
-  });
-}
-
-export async function listFolders(workspaceId: string): Promise<ChatFolder[]> {
-  const data = await request<{ folders: ChatFolder[] }>("/api/chats/folders", {
-    workspaceId,
-  });
-  return data.folders;
-}
-
-export async function fetchChat(
-  chatId: string,
-  workspaceId: string
-): Promise<ChatDetail> {
-  const data = await request<{ chat: ChatDetail }>(
-    `/api/chats/${encodeURIComponent(chatId)}`,
-    { workspaceId }
-  );
-  return data.chat;
-}
-
-export interface ChatHeaderPatch {
-  visibility?: ChatVisibility;
-  accessMode?: ChatAccessMode;
-  /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
-  teamIds?: string[];
-  pinned?: boolean;
-  folderId?: string | null;
-}
-
-export async function updateChat(
-  chatId: string,
-  patch: ChatHeaderPatch,
-  workspaceId: string
-): Promise<Chat> {
-  const data = await request<{ chat: Chat }>(
-    `/api/chats/${encodeURIComponent(chatId)}`,
-    { method: "PATCH", body: patch, workspaceId }
-  );
-  return data.chat;
-}
-
-export async function deleteChat(
-  chatId: string,
-  workspaceId: string
-): Promise<void> {
-  await request<void>(`/api/chats/${encodeURIComponent(chatId)}`, {
-    method: "DELETE",
-    workspaceId,
-  });
-}
-
-export async function createChatFolder(
-  name: string,
-  workspaceId: string
-): Promise<ChatFolder> {
-  const data = await request<{ folder: ChatFolder }>("/api/chats/folders", {
-    method: "POST",
-    body: { name },
-    workspaceId,
-  });
-  return data.folder;
-}
-
-export interface ChatFolderPatch {
-  name?: string;
-  visibility?: ChatVisibility;
-  accessMode?: ChatAccessMode;
-  /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
-  teamIds?: string[];
-}
-
-/** Scope changes propagate to every chat filed in the folder. */
-export async function updateChatFolder(
-  folderId: string,
-  patch: ChatFolderPatch,
-  workspaceId: string
-): Promise<ChatFolder> {
-  const data = await request<{ folder: ChatFolder }>(
-    `/api/chats/folders/${encodeURIComponent(folderId)}`,
-    { method: "PATCH", body: patch, workspaceId }
-  );
-  return data.folder;
-}
+/**
+ * The feature's transport, as `useApiMutationWith` consumes it.
+ *
+ * The mutation layer is transport-injected precisely so a feature can hand it
+ * the client it already had: every chat write driven through this one still
+ * throws {@link ChatApiError}, so the `err instanceof ChatApiError` branch
+ * that puts the server's own wording in the toast (the duplicate-folder 409,
+ * the retention 402, the not-owner 403) survives the move off hand-rolled
+ * awaits. A mutation wired straight to `apiRequest` would quietly degrade
+ * every chats error to its fallback string.
+ *
+ * READS do NOT go through here. They are `useApiQuery` over `apiRequest`, and
+ * their only consumer treats the error as a boolean ("show the retry line"),
+ * so wrapping them would buy nothing and fork the transport.
+ *
+ * Paths live in `./query-keys.ts` beside the cache keys built from them, so a
+ * write and the read it patches cannot disagree about the URL.
+ */
+export const chatRequest: ApiMutationRequestFn = request;

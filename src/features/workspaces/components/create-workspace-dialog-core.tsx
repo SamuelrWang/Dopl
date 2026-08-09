@@ -84,9 +84,8 @@ export function CreateWorkspaceDialogCore({
       <div className={modalStyles.narrowBody}>
         <h2 className={modalStyles.narrowTitle}>New workspace</h2>
         <p className="mb-6 text-lead leading-relaxed text-text-secondary">
-          Each workspace is separate — its own knowledge bases, skills,
-          workflows, and members. Switch between workspaces any time from the
-          rail on the left.
+          Each workspace is separate — its own knowledge bases, skills, and
+          members. Switch between workspaces any time from the rail on the left.
         </p>
 
         <div className="flex flex-col gap-5">

@@ -12,7 +12,6 @@ import {
   AgentWriteDisabledError,
   KnowledgeBaseMismatchError,
   KnowledgeBaseNotFoundError,
-  KnowledgeParentTrashedError,
 } from "./errors";
 import * as repo from "./repository";
 
@@ -20,7 +19,7 @@ import * as repo from "./repository";
  * Shared internals for the knowledge service. Cross-cutting gates and
  * helpers used by more than one of the per-domain service modules
  * (`service-bases`, `service-base-writes`, `service-folders`,
- * `service-entries`, `service-paths`, `service-trash`, `service-seed`).
+ * `service-entries`, `service-paths`, `service-seed`).
  *
  * The repository (`./repository.ts`) does raw I/O and bypasses RLS via
  * the service-role client — so every method that reaches a row MUST
@@ -175,24 +174,6 @@ export function assertAgentCanDelete(
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────────
-
-/**
- * Refuse a restore when an ancestor folder is still trashed. Restoring a
- * child alone leaves it alive but unreachable (absent from both the tree
- * and the trash); the caller must restore the ancestor first (which
- * cascades to its contents). `folderId` is the parent to walk from —
- * null (a root-level item) has no ancestors to check.
- */
-export async function assertAncestorsActive(
-  folderId: string | null
-): Promise<void> {
-  if (!folderId) return;
-  const chain = await repo.listFolderAncestors(folderId);
-  const trashed = chain.find((f) => f.deletedAt !== null);
-  if (trashed) {
-    throw new KnowledgeParentTrashedError(trashed.name, trashed.id);
-  }
-}
 
 export async function listSlugs(workspaceId: string): Promise<string[]> {
   return repo.listBaseSlugsForWorkspace(workspaceId);

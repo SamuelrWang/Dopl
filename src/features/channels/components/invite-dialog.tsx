@@ -8,6 +8,7 @@ import { Check, Info, UserMinus } from "lucide-react";
 // bundled by the desktop SPA, where a `next/*` module anywhere in the graph
 // fails the build (apps/desktop-ui/CONVENTIONS.md § Sharing code).
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { SearchField } from "@/shared/ui/search-field";
 import { Avatar } from "@/shared/ui/avatar";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
@@ -94,6 +95,16 @@ export function InviteDialog({
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  /**
+   * The member the ⊖ button is asking about. `remove()` is a real membership
+   * DELETE and this row used to fire it on a single click with no dialog —
+   * including on the CURRENT USER's own row, which is removable by design
+   * (`removeMember`'s `isSelf` branch skips the manage check). On a private
+   * channel that is unrecoverable by the person who clicked it: `listChannels`
+   * shows public channels plus your own, and `addMember` only lets you self-join
+   * a PUBLIC one. Confirm first, in both directions.
+   */
+  const [pendingRemove, setPendingRemove] = useState<ChannelMember | null>(null);
 
   const membersPath = `/api/channels/${encodeURIComponent(channelId)}/members`;
   const wsMembersPath = `/api/workspaces/${encodeURIComponent(workspaceSlug)}/members`;
@@ -250,8 +261,12 @@ export function InviteDialog({
                     <button
                       type="button"
                       disabled={busyId === m.userId}
-                      onClick={() => void remove(m.userId)}
-                      aria-label="Remove member"
+                      onClick={() => setPendingRemove(m)}
+                      aria-label={
+                        m.userId === currentUserId
+                          ? "Leave channel"
+                          : "Remove member"
+                      }
                       title={m.userId === currentUserId ? "Leave" : "Remove"}
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:text-danger disabled:opacity-60"
                     >
@@ -273,6 +288,43 @@ export function InviteDialog({
           Done
         </button>
       </div>
+
+      {/* SELF-REMOVAL STAYS ON THIS ROW rather than routing to the pane's
+          "Leave channel" dialog: that would mean closing this modal to open
+          another one, and this list is where the user is already looking. It
+          borrows that dialog's VERB and VOICE instead, so the two surfaces
+          never disagree about what leaving costs. Copy hedges on visibility
+          because this dialog is given a channel id, not a `visibility` — the
+          "if it's private" clause is true either way, where naming the wrong
+          one would not be. (ConfirmDialog nests inside a ModalShell by
+          precedent — see the settings modal's danger zone.) */}
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(o) => !o && setPendingRemove(null)}
+        title={
+          pendingRemove?.userId === currentUserId
+            ? "Leave this channel?"
+            : "Remove from channel?"
+        }
+        description={
+          pendingRemove?.userId === currentUserId
+            ? "You'll lose access to this channel and its messages. If it's private you can't rejoin on your own — another member would have to invite you back."
+            : `${pendingRemove?.displayName || pendingRemove?.email || "This member"} will lose access to this channel and its messages. If it's private they can't rejoin on their own — someone would have to invite them back.`
+        }
+        confirmLabel={
+          pendingRemove?.userId === currentUserId ? "Leave" : "Remove"
+        }
+        destructive
+        // Deliberately does NOT clear `pendingRemove` first: ConfirmDialog
+        // holds its own busy state for the duration of this promise and closes
+        // itself on resolve, so clearing early would swap the spinner for a
+        // vanished dialog. `remove()` toasts its own errors and never throws,
+        // so the dialog always closes exactly once.
+        onConfirm={async () => {
+          if (pendingRemove) await remove(pendingRemove.userId);
+          setPendingRemove(null);
+        }}
+      />
     </ModalShell>
   );
 }

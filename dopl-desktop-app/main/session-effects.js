@@ -53,10 +53,43 @@ function endedEmit(state, outcome, reason, summary) {
 //
 // THE CAPS STAY TERMINAL, deliberately. A turn/cost cap is this machine refusing to continue, not a
 // window being tidied away, and the peer is owed that as an outcome.
+//
+// C-5 (2026-08-08, Samuel's call) — THE THREE TERMINALS THAT SAID NOTHING NOW SAY THIS.
+//
+// The audit's C-5: `endLifecycle('abandoned')` returned null, so the 12h abandonment posted
+// NOTHING — and the abandonment is the COMMON path (request -> task_started -> 15min idle ->
+// silent park -> 12h -> silent end). The same hole existed for the Q6 auth-preflight hold
+// (`launch()` answers with a sessionId, so trigger.js takes the success branch and no query
+// is ever run) and for the window-budget EVICTION (`settle()` bypasses the reducer). Every
+// OTHER terminal posted. So the requester's card pulsed "Working…" indefinitely on exactly
+// the endings nobody chose.
+//
+// THE MESSAGE THE WAITING PERSON GETS is a STATUS NOTE, not an error: none of these three is
+// anybody's fault, and none of them is an outcome for the SHARED thread. So they ride the
+// same non-terminal `task_progress` + reserved `session_ended` marker the operator End uses
+// (P1-7 above) — `group-thread.ts` treats that as an ENTRY and never as an `endEvent`, so it
+// can only ever reach `calmEndStatus` on the card that is pulsing. It stops the card
+// claiming work is in progress and it cannot rewrite the exchange's outcome.
+//
+// ONE WORDING FOR ALL THREE, deliberately. "Went inactive" is the whole of what the peer can
+// honestly be told: which of the three it was is a fact about the OTHER machine (nobody came
+// back; there is no Claude Code credential on it; a window budget was reclaimed), and two of
+// those three would be reporting the operator's circumstances to a counterparty. No blame,
+// no cause, no em dash.
+//
+// A REAL TERMINAL ARRIVING LATER CANNOT DOUBLE-POST: `session-window.onEnded` drops a repeat
+// of the same (thread, cycle) session_ended marker, and the deterministic clientMsgId means
+// the server dedupes it a second time.
+const INACTIVE_NOTE = 'This session went inactive.';
+
 function endLifecycle(reason) {
   if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
   if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
   if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
+  // C-5: the 12h abandonment, the launch watchdog (C-4) and the LRU eviction.
+  if (reason === 'abandoned' || reason === 'inactive') {
+    return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: INACTIVE_NOTE };
+  }
   return null;
 }
 
@@ -113,6 +146,17 @@ function postureWasReset(state) {
 //                         No modes echo and no note, because nothing was taken away; the
 //                         renderer's selects move ONLY on a `modes` event, so they go on showing
 //                         what the operator set, which is now the truth.
+//   `lifecycle: true`     C-5 — POST THE STATUS NOTE. Only the AUTH HOLD passes it, because the
+//                         hold is the one park the peer can never learn about any other way:
+//                         a preflight hold answers `launch()` with a live-looking sessionId,
+//                         so trigger.js takes its success branch and NOTHING is posted — no
+//                         task_started, no reply, no end — while the requester's card pulses.
+//                         The idle park deliberately does NOT pass it: an idle park is a
+//                         fifteen-minute pause the operator is expected back from, and its
+//                         abandonment bound already posts if they are not (endLifecycle).
+//                         It is IDEMPOTENT for free: the reducer's auth_hold branch returns
+//                         no effects at all once `authHeld` is set, so a converging second
+//                         hold cannot post twice.
 //   `armAbandon: true`    RE-ARMS the timer instead of clearing it. session-engine's scheduleIdle
 //                         reads `parked` off the state the reducer just stored, so what that arms
 //                         is the hours-scale ABANDONMENT bound firing `abandon_timeout`, never
@@ -129,6 +173,7 @@ function parkEffects(state, opts) {
     o.armAbandon === true ? { type: 'scheduleIdle' } : { type: 'clearIdle' },
     { type: 'persist', phase: 'parked' },
   ];
+  if (o.lifecycle === true) effects.push(endLifecycle('inactive')); // C-5: the peer is told, once
   if (resetPosture) {
     // FIX #3 (v2.9): a park that DISARMS both axes says so. The old toggle reset was silent and
     // the checkbox went on reading "on" over a session that would ask again.
@@ -162,4 +207,5 @@ module.exports = {
   parkEffects,
   postureWasReset, // FIX 3: did this park actually take a posture away?
   POSTURE_RESET_NOTE,
+  INACTIVE_NOTE, // C-5: the one wording all three silent terminals now use
 };
