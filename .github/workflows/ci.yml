@@ -26,7 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # Node 20 dropped 2026-08-09: the desktop's `node --test 'test/**/*.mjs'`
+        # glob needs >=22, and GitHub is deprecating node 20 runner images.
+        node: [22]
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -52,7 +54,8 @@ jobs:
       # THE FOUR SUITES THAT WERE NEVER RUN BY CI (F-146). Each is its own step so
       # a failure names the tree it is in instead of one opaque red X. Expected
       # counts at the time of writing, as a sanity anchor for whoever reads a
-      # surprising number here: root 2133, mcp-server 483, SPA 136, desktop 2383.
+      # surprising number here (remeasured 2026-08-09 post-launch-wave):
+      # root 2664, mcp-server 555, SPA 177, desktop 2521, dopl-client 75.
       # (The SPA is net -7 since the 2026-08-07 retirement: the canvas,
       # configuration and workflows page suites went with their routes.)
       - name: Test root suite
@@ -73,7 +76,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # Node 20 dropped 2026-08-09: `node --test` glob expansion needs >=22.
+        node: [22]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -148,9 +152,11 @@ jobs:
           set -eu
           # Files explicitly exempted in ENGINEERING.md §2 (Known files >500 lines).
           # When a new file lands here, add it to that table too.
+          # 2026-08-09: server.ts and client.ts were split under the cap and
+          # left this list. The placeholder keeps `grep -vF` safe — an empty
+          # ALLOW would filter every line and let any overage pass silently.
           ALLOW=$(printf '%s\n' \
-            'packages/mcp-server/src/server.ts' \
-            'packages/dopl-client/src/client.ts')
+            '__no_exemptions__')
 
           BAD=$(find packages -type f \( -name '*.ts' -o -name '*.tsx' \) \
             ! -path '*/dist/*' ! -path '*/node_modules/*' \

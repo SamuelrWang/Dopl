@@ -27,6 +27,8 @@ export interface KnowledgeBase {
   description: string | null;
   agentWriteEnabled: boolean;
   visibility: KnowledgeVisibility;
+  /** 'workspace' = every member (role default level); 'teams' = granted teams only. */
+  accessMode: "workspace" | "teams";
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
