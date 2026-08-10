@@ -46,7 +46,7 @@ export const MIN_VERSION_ENV = "DOPL_DESKTOP_MIN_VERSION";
  * `DEFAULT_DECLARED_LATEST`, so bumping one without the other fails the build
  * instead of arming the anti-brick clamp against our own floor.
  */
-export const DEFAULT_MIN_VERSION = "1.8.5";
+export const DEFAULT_MIN_VERSION = "1.10.0";
 
 /** Env spellings that mean "no floor, on purpose" rather than a typo. */
 const FLOOR_OFF = new Set(["", "none", "0", "off"]);
