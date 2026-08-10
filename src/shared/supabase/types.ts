@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       agent_presence: {
@@ -79,6 +104,8 @@ export type Database = {
         Row: {
           channel_id: string
           created_at: string
+          engaged_at: string | null
+          engaged_by: string | null
           id: string
           name: string
           owner_user_id: string
@@ -89,6 +116,8 @@ export type Database = {
         Insert: {
           channel_id: string
           created_at?: string
+          engaged_at?: string | null
+          engaged_by?: string | null
           id?: string
           name: string
           owner_user_id: string
@@ -99,6 +128,8 @@ export type Database = {
         Update: {
           channel_id?: string
           created_at?: string
+          engaged_at?: string | null
+          engaged_by?: string | null
           id?: string
           name?: string
           owner_user_id?: string
@@ -199,7 +230,6 @@ export type Database = {
           channel_id: string
           joined_at: string
           last_read_at: string | null
-          notify_scope: string
           role: string
           user_id: string
           workspace_id: string
@@ -210,7 +240,6 @@ export type Database = {
           channel_id: string
           joined_at?: string
           last_read_at?: string | null
-          notify_scope?: string
           role?: string
           user_id: string
           workspace_id: string
@@ -221,7 +250,6 @@ export type Database = {
           channel_id?: string
           joined_at?: string
           last_read_at?: string | null
-          notify_scope?: string
           role?: string
           user_id?: string
           workspace_id?: string
@@ -293,6 +321,73 @@ export type Database = {
           },
           {
             foreignKeyName: "channel_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_sessions: {
+        Row: {
+          channel_id: string
+          channel_name: string | null
+          created_at: string
+          id: string
+          name: string
+          session_key: string
+          state: string
+          task_id: string | null
+          thread_title: string | null
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          channel_name?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          session_key: string
+          state: string
+          task_id?: string | null
+          thread_title?: string | null
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          channel_name?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          session_key?: string
+          state?: string
+          task_id?: string | null
+          thread_title?: string | null
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_sessions_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_sessions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_sessions_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2474,6 +2569,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cascade_hard_delete_cluster: {
+        Args: { p_cluster_id: string; p_workspace_id: string }
+        Returns: number
+      }
+      cascade_hard_delete_folder: {
+        Args: { p_folder_id: string; p_workspace_id: string }
+        Returns: number
+      }
+      cascade_hard_delete_object: {
+        Args: { p_object_id: string; p_workspace_id: string }
+        Returns: number
+      }
       cascade_purge_cluster: {
         Args: { p_cluster_ref: string; p_workspace_id: string }
         Returns: number
@@ -2548,6 +2655,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      channel_tasks_stale: {
+        Args: { p_before: string; p_limit: number }
+        Returns: {
+          anchor_seq: number
+          channel_id: string
+          id: string
+          last_activity_at: string
+          title: string
+          workspace_id: string
+        }[]
+      }
       channels_last_message: {
         Args: { p_channel_ids: string[] }
         Returns: {
@@ -2608,6 +2726,26 @@ export type Database = {
         Returns: boolean
       }
       cleanup_system_events: { Args: never; Returns: number }
+      ensure_default_workspace: {
+        Args: {
+          p_name: string
+          p_owner_id: string
+          p_public_id: string
+          p_slug: string
+        }
+        Returns: {
+          created: boolean
+          created_at: string
+          description: string
+          icon_url: string
+          id: string
+          name: string
+          owner_id: string
+          public_id: string
+          slug: string
+          updated_at: string
+        }[]
+      }
       increment_fork_count: { Args: { pc_id: string }; Returns: undefined }
       increment_ingestion_count: {
         Args: { user_id_input: string }
@@ -2787,6 +2925,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
