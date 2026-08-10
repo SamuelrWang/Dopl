@@ -83,8 +83,14 @@ const identity_1 = require("./identity");
  * hottest path in the tool. Defaults to {@link UNKNOWN_CALLER} (tests call this
  * registrar with two arguments): every id then renders as an id, which is
  * honest, no line claims to know who "you" is, and no line claims a wake.
+ *
+ * `isAdmin` — the caller's workspace-admin flag from the boot status ping
+ * (factory.ts). Used ONLY by `op="members"` to decide whether member email may
+ * be rendered (F-100). Defaults false, i.e. fail-closed: a test registrar or a
+ * failed ping never leaks email. Email otherwise appears only on the caller's
+ * own row.
  */
-function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLER) {
+function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLER, isAdmin = false) {
     const selfUserId = caller.userId;
     const runtime = caller.runtime;
     register("dopl_channel", channel_description_1.CHANNEL_DESCRIPTION, channel_schema_1.CHANNEL_INPUT_SHAPE, async (args) => {
@@ -180,7 +186,9 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 const miss = (0, respond_1.missingParams)("members", args, ["channel"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_read_1.opMembers)(client, args.channel, selfUserId);
+                // F-100: pass the caller's workspace-admin flag so the roster only
+                // renders member email to an admin or the caller's own row.
+                return (0, channel_ops_read_1.opMembers)(client, args.channel, selfUserId, isAdmin);
             }
             case "list_threads": {
                 const miss = (0, respond_1.missingParams)("list_threads", args, ["channel"]);

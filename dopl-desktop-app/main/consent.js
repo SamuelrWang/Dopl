@@ -129,23 +129,99 @@ async function createConsentRequest(workspaceId, payload) {
 // 'web' | 'desktop' and rejects the server-only 'trust'.
 //
 // A 409 means the OTHER surface (the web list) decided first — the server CASes on
-// status='pending'. That is a lost race, not a failure: the decision stands, it
-// just isn't ours. Returning false is correct and there is nothing to retry; the
-// watcher's poll will read whatever status won.
+// status='pending' and maps ConsentAlreadyDecidedError to 409/CONSENT_ALREADY_DECIDED
+// (server/http-mapping.ts:80, the ONLY 409 this route emits). That is a lost race, not
+// a failure: the decision stands, it just isn't ours, and the watcher's poll will read
+// whatever status won.
+//
+// FIX F-067 — THE OUTCOME IS THREE-VALUED, NOT A BOOLEAN. This used to collapse every
+// non-ok answer to `false` and every caller dropped it on the floor, so an Allow that
+// died on the network (offline, 5xx, expired token, a CAS race the row LOST for some
+// other reason) looked exactly like an Allow that landed: the notification had already
+// dismissed, the row stayed `pending`, and NOTHING told the operator. A boolean cannot
+// carry the one distinction that matters, because the benign case and the broken case
+// are both "not ok":
+//   'ok'      — the server recorded OUR decision
+//   'settled' — 409: someone/something already decided it. Benign, NOT an error.
+//   'failed'  — it did not land, and the operator has to hear about it (submitDecision)
+// A 404 (the row was hard-deleted under us) is deliberately 'failed', not 'settled':
+// the request will never run, and silence is the exact bug this finding is about.
+const DECISION_OK = 'ok';
+const DECISION_SETTLED = 'settled';
+const DECISION_FAILED = 'failed';
+
 async function patchDecision(workspaceId, rowId, decision) {
-  if (!rowId) return false;
+  if (!rowId) return DECISION_FAILED;
+  let res;
   try {
-    const res = await apiFetch(`${CONSENT_PATH}/${rowId}`, {
+    res = await apiFetch(`${CONSENT_PATH}/${rowId}`, {
       method: 'PATCH',
       workspaceId,
       body: { decision, decidedBy: 'desktop' },
       timeoutMs: HTTP_TIMEOUT_MS,
       noStore: true,
     });
-    return res.ok;
   } catch (_) {
-    return false;
+    return DECISION_FAILED;
   }
+  if (res.ok) return DECISION_OK;
+  if (res.status === 409) return DECISION_SETTLED;
+  return DECISION_FAILED;
+}
+
+// FIX F-067 — THE ONE ENTRY POINT EVERY DECISION SURFACE USES.
+//
+// The notification that carried the Allow/Send button is GONE by the time the PATCH
+// answers (macOS removes it on action), and the pre-consent window has closed on its
+// own decision, so there is no live surface left to show an inline error on. A second
+// notification is the closest existing idiom in the app — channel-post.notifyLocal's
+// `Dopl: <what failed> in "<channel>"` + a recovery sentence, the same shape
+// trigger.js uses for an approved reply that never posted. Built here rather than
+// required from channel-post so this module keeps its single electron import.
+//
+// QUIET ON SUCCESS, AND QUIET ON 409. Re-notifying a lost race would tell the operator
+// something broke when the truth is that their own web click (or the other surface)
+// already answered it. Only DECISION_FAILED speaks.
+function decisionFailedCopy(channelName, decision) {
+  const what = decision === 'deny' ? 'Deny' : 'Allow';
+  const where = channelName ? ` in "${channelName}"` : '';
+  return {
+    title: `Dopl: decision not recorded${where}`,
+    body: `Your ${what} did not reach the server. The request is still waiting: open Pending Requests to decide it again.`,
+  };
+}
+
+function notifyDecisionFailed({ channelName, decision, onOpen }) {
+  const { title, body } = decisionFailedCopy(channelName, decision);
+  if (!Notification.isSupported()) return null;
+  let notif;
+  try {
+    notif = new Notification({ title, body, silent: false });
+  } catch (_) {
+    return null; // notifications are best-effort
+  }
+  notif.on('click', () => { try { if (onOpen) onOpen(); } catch (_) { /* window gone */ } });
+  try {
+    notif.show();
+    requestAttention();
+  } catch (_) { /* best-effort */ }
+  return notif;
+}
+
+// Fire-and-forget safe: it NEVER rejects, so the notification-action callbacks can
+// call it without an await or a .catch and still cannot produce an unhandled rejection.
+async function submitDecision(workspaceId, rowId, decision, opts = {}) {
+  let outcome;
+  try {
+    outcome = await patchDecision(workspaceId, rowId, decision);
+  } catch (_) {
+    outcome = DECISION_FAILED;
+  }
+  if (outcome === DECISION_FAILED) {
+    diag('consent: decision PATCH did not land — notifying the operator', decision);
+    notifyDecisionFailed({ channelName: opts.channelName, decision, onOpen: opts.onOpen });
+  }
+  return outcome;
 }
 
 // One poll of a single row's status. Returns the raw status string
@@ -239,6 +315,14 @@ module.exports = {
   truncate,
   createConsentRequest,
   patchDecision,
+  // F-067: the decision entry point every surface should call — patchDecision is
+  // exported only for the tests and for a caller that wants the raw outcome.
+  submitDecision,
+  notifyDecisionFailed,
+  decisionFailedCopy,
+  DECISION_OK,
+  DECISION_SETTLED,
+  DECISION_FAILED,
   pollStatus,
   notifyInbound,
   notifyOutbound,

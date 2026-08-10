@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChannelTranscript } from "./channel-transcript";
+import { pendingMessageId } from "../lib/optimistic-cache";
 import type { ChannelAgent, ChannelMessage } from "../types";
 
 const CHANNEL_ID = "33333333-3333-4333-8333-333333333333";
@@ -184,6 +185,52 @@ describe("ChannelTranscript full-width rows (not chat bubbles)", () => {
     expect(markup).not.toContain("max-w-[66%]");
     expect(markup).not.toContain("self-end");
     expect(markup).not.toContain("self-start");
+  });
+});
+
+/** The bubble's own opening tag — attributes on the `<article>` and nothing
+ *  inside it, so a nested `opacity-*` utility cannot fake a pass. */
+function bubbleTag(markup: string): string {
+  const at = markup.indexOf("<article");
+  expect(at).toBeGreaterThan(-1);
+  return markup.slice(at, markup.indexOf(">", at) + 1);
+}
+
+/**
+ * PENDING. An optimistic send paints the bubble one frame after the click, and
+ * rendered identically to a sent one it is a small lie — the user cannot tell a
+ * message in flight from one the server has stored, and a failed send simply
+ * vanishes. The pending id `buildPendingMessage` mints is the marker; the
+ * `pending.ts` recipe is the treatment. `SessionCard` has had this since the
+ * optimistic layer landed and the plain bubble did not.
+ */
+describe("ChannelTranscript pending bubble", () => {
+  it("dims an unacknowledged message and makes it inert", () => {
+    const markup = render([
+      mine({ id: pendingMessageId("c-1"), clientMsgId: "c-1" }),
+    ]);
+    const article = bubbleTag(markup);
+    expect(article).toContain('data-pending=""');
+    expect(article).toContain("opacity-60");
+    expect(article).toContain("pointer-events-none");
+    // The REAL content, dimmed — not a skeleton, and not a lost message.
+    expect(markup).toContain("MY-TEXT");
+  });
+
+  it("leaves a settled message untouched", () => {
+    const article = bubbleTag(render([mine()]));
+    expect(article).not.toContain("data-pending");
+    expect(article).not.toContain("opacity-60");
+    expect(article).not.toContain("pointer-events-none");
+  });
+
+  it("keeps the alignment and width the bubble already had", () => {
+    // The recipe COMPOSES over the row's own classes; it never restyles it.
+    const [bubble] = bubbleClasses(
+      render([mine({ id: pendingMessageId("c-2"), clientMsgId: "c-2" })])
+    );
+    expect(bubble).toContain("self-end");
+    expect(bubble).toContain("max-w-[66%]");
   });
 });
 

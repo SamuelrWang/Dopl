@@ -215,6 +215,14 @@ describe("ChannelMessageCreateSchema", () => {
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", metadata: [1, 2] }).success).toBe(false);
   });
 
+  it("F-060: metadata is rejected once its serialized size exceeds the cap", () => {
+    // `JSON.stringify({ blob })` is `{"blob":"<value>"}` = 11 + value length: a
+    // value landing the total exactly on the 16384-byte cap parses, one more not.
+    const meta = (n: number) => ({ body: "x", metadata: { blob: "a".repeat(n) } });
+    expect(ChannelMessageCreateSchema.safeParse(meta(16384 - 11)).success).toBe(true);
+    expect(ChannelMessageCreateSchema.safeParse(meta(16384 - 11 + 1)).success).toBe(false);
+  });
+
   /**
    * `intent` is OPTIONAL and stays optional: the schema must not manufacture a
    * default, because "the caller said request" and "the caller said nothing"

@@ -77,19 +77,32 @@ export async function expireStalePending(operatorUserId: string): Promise<void> 
 }
 
 interface ConsentListOpts {
+  /**
+   * REQUIRED, and the reason it is not optional: a consent row is written with
+   * `operator_user_id: <the operator>` and nothing else that identifies WHOSE
+   * workspace raised it, so an operator-only filter returns their pending rows
+   * from EVERY workspace they belong to. This read runs under `supabaseAdmin()`
+   * (service role), so RLS is not a backstop — and RLS would scope to the
+   * operator anyway, which is not the same bound. The sidebar's pending badge
+   * is built from this list, and it counted another workspace's requests until
+   * 2026-08-10. `listTrustRules` below has always filtered on both columns;
+   * this is that shape, restored.
+   */
+  workspaceId: string;
   channelId?: string;
   statuses?: string[];
 }
 
 export async function listConsentRequests(
   operatorUserId: string,
-  opts: ConsentListOpts = {}
+  opts: ConsentListOpts
 ): Promise<ConsentRequestRow[]> {
   const db = supabaseAdmin();
   let query = db
     .from("channel_consent_requests")
     .select("*")
-    .eq("operator_user_id", operatorUserId);
+    .eq("operator_user_id", operatorUserId)
+    .eq("workspace_id", opts.workspaceId);
   if (opts.channelId) query = query.eq("channel_id", opts.channelId);
   if (opts.statuses && opts.statuses.length > 0) {
     query = query.in("status", opts.statuses);

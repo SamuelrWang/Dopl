@@ -97,6 +97,36 @@ export function patchCache<TCache>(
   return { key, update: (cache) => update(cache as TCache | undefined) };
 }
 
+/**
+ * THE COLD-CACHE FALLBACK (ENGINEERING §7, rule 1's one exception). Keeps only
+ * the keys whose cache entry STILL holds no data.
+ *
+ * `optimistic` and `reconcile` both decline on an entry with no data — there is
+ * no list to patch a row into — so during a cold start or the IndexedDB restore
+ * window a write lands SERVER-SIDE and never reaches the screen, invisibly,
+ * because the surface renders from its SSR/initial-props fallback. A write
+ * whose reconcile is its only path to the screen therefore names its keys
+ * through this filter.
+ *
+ * It runs in `onSettled`, i.e. AFTER `reconcile`, so "still no data" IS the
+ * decline rather than a guess about it. A warm cache re-downloads nothing
+ * (which is what keeps this inside rule 1); a cold one gets exactly the one
+ * refetch that makes the write visible. A key with no entry at all is kept and
+ * is a no-op: `invalidateQueries` only marks queries that exist, and one
+ * mounted later fetches fresh anyway.
+ *
+ * Named for what it RETURNS — the subset of `keys` that is cold — because the
+ * result is spread into an `invalidate` list, not branched on.
+ */
+export function coldKeys(client: QueryClient, keys: QueryKey[]): QueryKey[] {
+  return keys.filter(
+    (key) =>
+      !client
+        .getQueriesData({ queryKey: key })
+        .some(([, data]) => data !== undefined)
+  );
+}
+
 type PatchList = CachePatch | CachePatch[] | null | undefined;
 
 function toPatches(value: PatchList): CachePatch[] {

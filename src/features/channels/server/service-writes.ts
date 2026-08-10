@@ -375,7 +375,23 @@ export async function postMessage(
 
   // Addressing (v1.1): a `toUserId` must name an actual channel member —
   // otherwise the message would target a listener that will never see it.
-  if (input.toUserId && !(await repo.findMembership(channel.id, input.toUserId))) {
+  //
+  // C-20: channel membership is NOT enough. Nothing sweeps `channel_members`
+  // when someone leaves the workspace, so a departed teammate stays a channel
+  // member here — the post lands, `openingSeq`/`await` arms, and nothing ever
+  // answers. Assert ACTIVE workspace membership too, the same predicate (and for
+  // the same reason) trust checks at consumption — see
+  // `trust-service.isTrustedRequester`: "a rule outlives the teammate leaving".
+  // Fail closed with the existing undeliverability error rather than accept an
+  // address that can never be answered. The channel check runs first, so the
+  // second round-trip is only paid once a `toUserId` is a channel member.
+  if (
+    input.toUserId &&
+    !(
+      (await repo.findMembership(channel.id, input.toUserId)) &&
+      (await repo.isActiveWorkspaceMember(ctx.workspaceId, input.toUserId))
+    )
+  ) {
     throw new ChannelAddresseeNotMemberError(input.toUserId);
   }
 

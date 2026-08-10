@@ -106,6 +106,8 @@ beforeEach(() => {
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
+  // C-20: addressing also asserts active workspace membership; default true.
+  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
     id: "msg-1",
     seq: 1,

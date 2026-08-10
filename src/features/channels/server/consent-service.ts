@@ -248,6 +248,10 @@ export async function listConsentRequests(
 ): Promise<ChannelConsentRequest[]> {
   await collab.expireStalePending(ctx.userId);
   const rows = await collab.listConsentRequests(ctx.userId, {
+    // Operator-scoped is NOT workspace-scoped. See the repository's docblock:
+    // without this the inbox (and the sidebar badge built from it) shows the
+    // operator's pending requests from every workspace they belong to.
+    workspaceId: ctx.workspaceId,
     channelId: opts.channelId,
     statuses: STATUS_FILTERS[opts.status ?? "pending"],
   });

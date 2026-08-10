@@ -223,7 +223,14 @@ async function handleTrigger(entry, m) {
       // read_only/dopl_only; "limited headless, use Run-in-Terminal" for full).
       capabilityHint: profileHint(toolProfile),
       onAllow: () => {
-        consent.patchDecision(entry.workspaceId, created.rowId, 'allow');
+        // F-067: submitDecision, not patchDecision — a PATCH that does not land
+        // re-notifies the operator with the recovery path. Still fire-and-forget
+        // (it never rejects); the poke below is unconditional because the watcher
+        // reads the row's REAL status either way.
+        consent.submitDecision(entry.workspaceId, created.rowId, 'allow', {
+          channelName: entry.channel.name,
+          onOpen: () => targeting.openChannelForEntry(entry),
+        });
         watcher.poke(key);
       },
       onOpen: () => targeting.openChannelForEntry(entry),

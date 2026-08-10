@@ -1,7 +1,8 @@
 "use client";
 
-import { useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  coldKeys,
   patchCache,
   useApiMutationWith,
   type MutationGate,
@@ -49,7 +50,15 @@ import type { ChatScope } from "../scope";
  *
  *  - `share` / `pin` — nothing on a warm cache. The PATCH answers with the
  *    whole updated `Chat`; the list row IS that answer, and ordering does not
- *    change. `ifCold` is the only exception (see below).
+ *    change. The COLD CACHE is the only exception: `optimistic` and `reconcile`
+ *    both DECLINE on an entry with no data — there is no list to patch a row
+ *    into, no folder array to insert one — so during a cold start or the
+ *    IndexedDB restore window the write lands SERVER-SIDE and never reaches the
+ *    screen, invisibly (`chats-view` falls back to `initialChats`, so the
+ *    surface renders fully, showing the pre-write truth). Every write below
+ *    therefore names its keys through `coldKeys` (`@/shared/hooks/
+ *    use-api-mutation`, shared with the channels send since F-178), which drops
+ *    the keys that are already warm.
  *  - `remove` — the LIST only, and only for `hiddenCount`: the free-plan
  *    retention window is a server computation over the rows that survive, so
  *    deleting one can reveal an older chat this client cannot name. The
@@ -114,32 +123,6 @@ export function useChatWrites({
   const listKey = chatKeys.list().all;
   const foldersKey = chatKeys.folders().all;
 
-  /**
-   * THE COLD-CACHE FALLBACK, and it is rule 1 held as tightly as it can be.
-   *
-   * `optimistic` and `reconcile` both DECLINE on an entry with no data — there
-   * is no list to patch a row into, no folder array to insert one — which is
-   * right, and it means that during a cold start or the IndexedDB restore
-   * window a write lands SERVER-SIDE and never reaches the screen. Nothing
-   * looks broken while it happens: `chats-view` falls back to `initialChats`,
-   * so the surface renders fully, showing the pre-write truth.
-   *
-   * So each write names its own keys here and this filter drops the ones that
-   * do not need it. It runs in `onSettled`, i.e. AFTER `reconcile` — "still no
-   * data" is therefore the decline itself, not a guess about it. A warm cache
-   * re-downloads nothing (the point of rule 1); a cold one gets exactly the one
-   * refetch that makes the write visible. A key with no entry at all is kept
-   * and is a no-op: `invalidateQueries` only marks queries that exist, and one
-   * mounted later fetches fresh anyway.
-   */
-  const ifCold = (...keys: QueryKey[]): QueryKey[] =>
-    keys.filter(
-      (key) =>
-        !qc
-          .getQueriesData({ queryKey: key })
-          .some(([, data]) => data !== undefined)
-    );
-
   const share = useApiMutationWith<ChatScopeDraft, { chat: Chat }>(
     chatRequest,
     {
@@ -169,7 +152,8 @@ export function useChatWrites({
           mergeChatDetail(cache, data.chat)
         ),
       ],
-      invalidate: (draft) => ifCold(listKey, chatKeys.detail(draft.chatId).all),
+      invalidate: (draft) =>
+        coldKeys(qc, [listKey, chatKeys.detail(draft.chatId).all]),
       settleWith: gate,
       onError: (err) => failed(err, "Update failed"),
     }
@@ -207,7 +191,8 @@ export function useChatWrites({
         mergeChatDetail(cache, data.chat)
       ),
     ],
-    invalidate: (draft) => ifCold(listKey, chatKeys.detail(draft.chatId).all),
+    invalidate: (draft) =>
+      coldKeys(qc, [listKey, chatKeys.detail(draft.chatId).all]),
     settleWith: gate,
     onError: (err) => failed(err, "Update failed"),
   });
@@ -270,7 +255,7 @@ export function useChatWrites({
       patchCache<ChatFoldersCache>(foldersKey, (cache) =>
         upsertFolderRow(cache, data.folder, draft.tempId)
       ),
-    invalidate: () => ifCold(foldersKey),
+    invalidate: () => coldKeys(qc, [foldersKey]),
     settleWith: gate,
     onError: (err) => failed(err, "Couldn't create folder"),
   });
@@ -304,7 +289,7 @@ export function useChatWrites({
         ),
       // The list unconditionally (the fan-out above); the folders cache only
       // when its own reconcile had nowhere to land — same cold window.
-      invalidate: () => [listKey, ...ifCold(foldersKey)],
+      invalidate: () => [listKey, ...coldKeys(qc, [foldersKey])],
       settleWith: gate,
       onError: (err) => failed(err, "Couldn't update folder"),
     }

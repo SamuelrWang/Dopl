@@ -405,11 +405,17 @@ export async function opGetThread(
  * Read-only, and it renders exactly what the roster route returns — the private
  * per-member preference (the agent tool profile) is already scrubbed
  * server-side for everyone but the caller, and it is not rendered here.
+ *
+ * F-100: `callerIsAdmin` gates member EMAIL. A public channel is enumerable by
+ * an agent that was never invited, so email is rendered (via `formatMemberLine`)
+ * only for a workspace admin or the caller's own row; every other member shows
+ * name + id + presence with no email.
  */
 export async function opMembers(
   client: DoplClient,
   ref: string,
   selfUserId: string | null = null,
+  callerIsAdmin = false,
 ): Promise<ToolResponse> {
   let members: ChannelMember[];
   try {
@@ -425,7 +431,8 @@ export async function opMembers(
     `## ${ref} — ${members.length} member${members.length === 1 ? "" : "s"}\n`,
     `${UNTRUSTED_ROSTER_HEADER}\n`,
   ];
-  for (const m of members) lines.push(formatMemberLine(m, selfUserId));
+  for (const m of members)
+    lines.push(formatMemberLine(m, selfUserId, callerIsAdmin));
   if (selfUserId === null) {
     // Never guess which row is the caller: the boot handshake is the only
     // source of that id here, and when it failed the honest answer is to say so.

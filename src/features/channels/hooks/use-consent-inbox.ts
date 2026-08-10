@@ -13,10 +13,18 @@ const NO_REQUESTS: ChannelConsentRequest[] = [];
 
 /**
  * The caller's pending consent inbox (both inbound + outbound), refetched live
- * on any consent event. RLS scopes the stream to the operator's own rows, and
- * the service returns only `pending` rows (a decision on another surface
- * removes it here on the next refetch). Pass a `channelId` to scope the server
- * query, or omit it (sidebar badge) for the whole workspace.
+ * on any consent event. The SERVICE scopes the read to `(operator, workspace)`
+ * and returns only `pending` rows (a decision on another surface removes it
+ * here on the next refetch). Pass a `channelId` to scope the server query, or
+ * omit it (sidebar badge) for the whole workspace.
+ *
+ * ⚠ This used to say "RLS scopes the stream to the operator's own rows", which
+ * was wrong twice and is why the badge counted other workspaces' requests until
+ * 2026-08-10: the list read runs under the service-role client so RLS does not
+ * apply at all, and operator-scoping was never workspace-scoping. The bound
+ * lives in `repository-collab.listConsentRequests`, which now requires a
+ * `workspaceId`. Do not restate a filter's location from memory — the one in
+ * this comment did not exist.
  *
  * `refetchIntervalMs` adds a polling fallback for the known gap where
  * `channel_consent_requests` INSERTs are not delivered by Supabase Realtime, so

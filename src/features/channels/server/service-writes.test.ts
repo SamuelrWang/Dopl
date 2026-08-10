@@ -92,13 +92,24 @@ function insertedRow(row: Parameters<typeof repoMessages.insertMessage>[0]): Cha
   };
 }
 
-/** Membership resolver: `USER` is a member; `ADDRESSEE` membership is per-test. */
+/**
+ * Membership resolver: `USER` is a member; `ADDRESSEE` membership is per-test.
+ * C-20: addressing now also asserts ACTIVE WORKSPACE membership, so the two
+ * predicates are wired together here — a normal addressee is both a channel
+ * member and an active workspace member. The departed-member case (channel
+ * member but NOT active workspace member) overrides `isActiveWorkspaceMember`
+ * in its own test.
+ */
 function wireMembership(addresseeIsMember: boolean) {
   vi.mocked(repo.findMembership).mockImplementation(async (_channelId, userId) => {
     if (userId === USER) return memberRow(USER, "owner");
     if (userId === ADDRESSEE && addresseeIsMember) return memberRow(ADDRESSEE);
     return null;
   });
+  vi.mocked(repo.isActiveWorkspaceMember).mockImplementation(
+    async (_workspaceId, userId) =>
+      userId === USER || (userId === ADDRESSEE && addresseeIsMember)
+  );
 }
 
 beforeEach(() => {
@@ -329,6 +340,19 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
 describe("postMessage — addressing + author derivation", () => {
   it("rejects a top-level toUserId that is not a channel member (400)", async () => {
     wireMembership(false);
+    await expect(
+      postMessage(ctx, "general", { body: "hi", toUserId: ADDRESSEE })
+    ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("C-20: refuses a toUserId who is a channel member but a DEPARTED workspace member", async () => {
+    // The C-20 case: nothing sweeps `channel_members` on workspace-leave, so the
+    // addressee is still a channel member (findMembership → row) but no longer an
+    // active workspace member. The post must fail closed rather than arm an await
+    // nothing will ever answer.
+    wireMembership(true); // still a channel member
+    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false); // left the workspace
     await expect(
       postMessage(ctx, "general", { body: "hi", toUserId: ADDRESSEE })
     ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);

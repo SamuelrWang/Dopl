@@ -396,12 +396,25 @@ export function formatThreadDetail(
  * `displayName` (and the `email` fallback) are member-typed and bounded by no
  * charset rule of ours, so both go through the neutralizer — same rule as
  * {@link formatAuthor}, which renders the same column.
+ *
+ * F-100 — EMAIL IS ENTITLEMENT-SCOPED. An agent can list every PUBLIC channel in
+ * the workspace (`repository.ts` ORs `visibility.eq.public`) and `op="members"`
+ * each one, so the roster must not hand an agent a member's email unless the
+ * caller is entitled to it: a workspace admin, or the member is the caller's own
+ * row. Otherwise the email fallback is dropped and a name-less member renders by
+ * id alone (which this line already prints) — never by email. Name + id +
+ * presence is all an agent needs to address someone; the email is the PII that
+ * made this the largest data-exposure surface in the audit.
  */
 export function formatMemberLine(
   m: ChannelMember,
   selfUserId: string | null,
+  callerIsAdmin = false,
 ): string {
-  const label = inlineOr(m.displayName || m.email, "(unnamed member)");
-  const you = selfUserId !== null && m.userId === selfUserId ? " · you" : "";
+  const isSelf = selfUserId !== null && m.userId === selfUserId;
+  const emailAllowed = callerIsAdmin || isSelf;
+  const nameOrEmail = emailAllowed ? m.displayName || m.email : m.displayName;
+  const label = inlineOr(nameOrEmail, "(unnamed member)");
+  const you = isSelf ? " · you" : "";
   return `- ${label} (\`${m.userId}\`) · ${m.role}${you}`;
 }

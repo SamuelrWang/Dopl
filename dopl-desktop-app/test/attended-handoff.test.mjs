@@ -397,7 +397,9 @@ test("the IPC handler resolves the card from the WINDOW and decides nothing on i
   assert.match(handler, /engine\.getConsentBySender && engine\.getConsentBySender\(e && e\.sender\)/);
   assert.match(handler, /if \(!c\) return \{ ok: false, reason: 'no-card' \};/, "no card, no handoff");
   assert.match(handler, /return attended\.open\(c\);/, "and the card itself is what is handed over");
-  for (const forbidden of [/decideConsent/, /patchDecision/, /watcher/, /dispatch/, /launch/, /spawn/, /postTaskEvent/, /settle/]) {
+  // `submitDecision` joins the list with F-067: it is the new name for "PATCH the row",
+  // so a guard that only names patchDecision would stop catching what it was written for.
+  for (const forbidden of [/decideConsent/, /patchDecision/, /submitDecision/, /watcher/, /dispatch/, /launch/, /spawn/, /postTaskEvent/, /settle/]) {
     assert.doesNotMatch(handler, forbidden, `the attended handler reaches ${forbidden}`);
   }
 });

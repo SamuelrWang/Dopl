@@ -32,19 +32,6 @@ interface Props {
   invitations: WorkspaceInvitationView[];
   teams: TeamView[];
   loading: boolean;
-  /**
-   * DEAD, and kept only so the settings-modal caller in `shared/layout` keeps
-   * type-checking without an edit from this feature. Both writes below patch
-   * the roster/teams caches the caller reads from, so a post-write refetch is
-   * exactly the round trip the mutation layer exists to remove. Drop these two
-   * props and the `shared/layout/settings-modal/sections/members-section.tsx`
-   * arguments together.
-   *
-   * @deprecated no-op
-   */
-  onChanged?: () => void;
-  /** @deprecated no-op — see `onChanged`. */
-  onInvitationsChanged?: () => void;
   /** Row-click detail hook — omit to render rows non-clickable (the
    *  settings modal has no detail surface; the full page does). */
   onSelectMember?: (userId: string) => void;

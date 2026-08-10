@@ -221,7 +221,9 @@ export function createServer(
   // This line passed `options.userId` alone while `registerMembersTool` two
   // lines up already took `caller`, so the one tool that needed the runtime
   // was the one tool that never saw it.
-  registerChannelTool(registerTool, client, caller); // dopl_channel — cross-user collaboration channels
+  // `isAdmin` (boot status ping) rides through so `op="members"` can scope
+  // member email to admins + self (F-100); defaults false ⇒ fail-closed.
+  registerChannelTool(registerTool, client, caller, options.isAdmin ?? false); // dopl_channel — cross-user collaboration channels
 
   return server;
 }

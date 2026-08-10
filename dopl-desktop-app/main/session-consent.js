@@ -189,12 +189,17 @@ function bind(e) {
   };
 }
 
+// F-067: the in-window Accept/Deny goes through submitDecision, so a PATCH that never
+// lands re-notifies instead of leaving a closed window over a still-pending row. NO
+// channelName is passed: the entry deliberately carries no display strings (F-118 /
+// B-1 above — the names are peer-typed), and the copy degrades to the channel-less
+// variant rather than reintroducing them here.
 function runEffect(e, eff) {
   if (eff.type === 'approve') {
-    consent.patchDecision(e.workspaceId, e.rowId, 'allow');
+    consent.submitDecision(e.workspaceId, e.rowId, 'allow');
     watcher.poke(e.watcherKey);
   } else if (eff.type === 'decline') {
-    consent.patchDecision(e.workspaceId, e.rowId, 'deny');
+    consent.submitDecision(e.workspaceId, e.rowId, 'deny');
     watcher.poke(e.watcherKey);
   } else if (eff.type === 'emit') {
     sendToEntry(e, eff.payload);

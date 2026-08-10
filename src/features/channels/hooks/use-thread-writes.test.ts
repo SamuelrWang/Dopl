@@ -23,8 +23,9 @@
  * `invalidateQueries` defaults to `refetchType: "active"` and the transcript
  * query is active, so naming the messages key UNCONDITIONALLY would re-download
  * the 200-message page on every send — the exact cost this write exists to
- * remove. `coldKeys` (§7 rule 1's one exception, `ifCold` in
- * `use-chat-writes.ts`) is what makes it cold-only.
+ * remove. `coldKeys` (§7 rule 1's one exception, now in
+ * `@/shared/hooks/use-api-mutation` and shared with the chats writes) is what
+ * makes it cold-only.
  *
  * The assertions check that the entry EXISTS before checking what it says —
  * never `entry?.state.isInvalidated).toBeFalsy()`, which passes just as

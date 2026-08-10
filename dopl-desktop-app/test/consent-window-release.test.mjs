@@ -68,7 +68,8 @@ function registry() {
                                  takeForAdopt, getByWatcherKey, registry };`
   )(
     { sessionKey: (c, t) => `${c}:${t}` },
-    { patchDecision: (ws, rowId, d) => decided.push([rowId, d]) },
+    // F-067: runEffect calls submitDecision (patchDecision + a re-notify on failure).
+    { submitDecision: (ws, rowId, d) => decided.push([rowId, d]) },
     { poke: () => {} },
     { resolvedDirLabel: () => "~/Downloads" },
     { createReplay: (wc, send) => ({ deliver: send, onReload() {}, onLoad() {} }) },

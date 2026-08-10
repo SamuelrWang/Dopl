@@ -31,12 +31,16 @@ export function MembersSection({
 }: Props) {
   const canManage = meetsMinRole(role, "admin");
   const [inviteOpen, setInviteOpen] = useState(false);
-  const { members, loading, refresh: refreshMembers } = useMembers(workspaceSegment);
+  // No post-write refresh for the roster or the teams: `MembersTab`'s writes
+  // are on the mutation layer and patch the very caches these reads render
+  // from, so the refetch they used to trigger is the round trip that layer
+  // exists to remove. `InviteDialog` is not converted yet and keeps its own.
+  const { members, loading } = useMembers(workspaceSegment);
   const { invitations, refresh: refreshInvitations } = useInvitations(
     workspaceSegment,
     canManage,
   );
-  const { teams, refresh: refreshTeams } = useTeams(workspaceSegment);
+  const { teams } = useTeams(workspaceSegment);
 
   const memberList = members ?? [];
   const teamList = teams ?? [];
@@ -65,11 +69,6 @@ export function MembersSection({
         invitations={invitations ?? []}
         teams={teamList}
         loading={loading}
-        onChanged={() => {
-          refreshMembers();
-          refreshTeams();
-        }}
-        onInvitationsChanged={refreshInvitations}
       />
 
       <InviteDialog

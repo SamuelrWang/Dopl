@@ -195,8 +195,10 @@ async function convergeOnThread(
 
 /**
  * Create a first-class task in a channel. The caller must be a channel member
- * and `toUserId` (the responder the task is addressed to) must be an active
- * member of THAT channel. The requester's initial request (`body`) is posted
+ * and `toUserId` (the responder the task is addressed to) must be a member of
+ * THAT channel AND an active workspace member (C-20 — a departed teammate stays
+ * in `channel_members` but can never answer). The requester's initial request
+ * (`body`) is posted
  * as the task's first message, tagged `metadata.taskId` so it groups into the
  * task card and the server stamps the reserved task keys onto it.
  *
@@ -216,7 +218,20 @@ export async function createTask(
   if (!membership) {
     throw new ChannelForbiddenError("create a task in this channel");
   }
-  if (!(await repo.findMembership(channel.id, input.toUserId))) {
+  // C-20: a thread target must be a channel member AND an ACTIVE workspace
+  // member. `channel_members` is never swept on workspace-leave, so a departed
+  // teammate stays addressable here — `create_thread` would succeed, the opening
+  // message would post, `openingSeq` would return, the requester would arm the
+  // `await`, and nothing would ever answer. Same predicate trust checks at
+  // consumption (`trust-service.isTrustedRequester`). Fail closed with the
+  // existing undeliverability error. Channel check first, so the workspace
+  // round-trip is only paid for an actual channel member.
+  if (
+    !(
+      (await repo.findMembership(channel.id, input.toUserId)) &&
+      (await repo.isActiveWorkspaceMember(ctx.workspaceId, input.toUserId))
+    )
+  ) {
     throw new ChannelAddresseeNotMemberError(input.toUserId);
   }
   // A thread addressed to its own creator is DEAD ON ARRIVAL: only the creator

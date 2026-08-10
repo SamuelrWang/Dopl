@@ -95,11 +95,18 @@ import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
  * hottest path in the tool. Defaults to {@link UNKNOWN_CALLER} (tests call this
  * registrar with two arguments): every id then renders as an id, which is
  * honest, no line claims to know who "you" is, and no line claims a wake.
+ *
+ * `isAdmin` — the caller's workspace-admin flag from the boot status ping
+ * (factory.ts). Used ONLY by `op="members"` to decide whether member email may
+ * be rendered (F-100). Defaults false, i.e. fail-closed: a test registrar or a
+ * failed ping never leaks email. Email otherwise appears only on the caller's
+ * own row.
  */
 export function registerChannelTool(
   register: RegisterTool,
   client: DoplClient,
   caller: CallerIdentity = UNKNOWN_CALLER,
+  isAdmin = false,
 ): void {
   const selfUserId = caller.userId;
   const runtime = caller.runtime;
@@ -205,7 +212,9 @@ export function registerChannelTool(
         case "members": {
           const miss = missingParams("members", args, ["channel"]);
           if (miss) return miss;
-          return opMembers(client, args.channel as string, selfUserId);
+          // F-100: pass the caller's workspace-admin flag so the roster only
+          // renders member email to an admin or the caller's own row.
+          return opMembers(client, args.channel as string, selfUserId, isAdmin);
         }
         case "list_threads": {
           const miss = missingParams("list_threads", args, ["channel"]);

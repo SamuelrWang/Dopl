@@ -1,7 +1,8 @@
 "use client";
 
-import { useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
+  coldKeys,
   patchCache,
   useApiMutationWith,
   type MutationGate,
@@ -110,25 +111,6 @@ function failed(err: unknown, fallback: string) {
 
 const messagesKey = (channelId: string) => channelKeys.messages(channelId).all;
 const threadsKey = (channelId: string) => channelKeys.threads(channelId).all;
-
-/**
- * THE COLD-CACHE FALLBACK (ENGINEERING §7, rule 1's one exception; the same
- * filter `use-chat-writes.ts` calls `ifCold`). Keeps only the keys that STILL
- * hold no data. It runs in `onSettled`, i.e. AFTER `reconcile`, so "still
- * empty" is the decline itself rather than a guess about it: a warm entry
- * re-downloads nothing, a cold one gets exactly the one refetch that makes the
- * write visible. A key with no query at all is kept and is a no-op —
- * `invalidateQueries` only marks queries that exist, and one mounted later
- * fetches fresh anyway.
- */
-function coldKeys(client: QueryClient, keys: QueryKey[]): QueryKey[] {
-  return keys.filter(
-    (key) =>
-      !client
-        .getQueriesData({ queryKey: key })
-        .some(([, data]) => data !== undefined)
-  );
-}
 
 /**
  * The three configs are exported APART from the hook, exactly as the lifecycle

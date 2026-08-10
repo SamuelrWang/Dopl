@@ -116,5 +116,10 @@ export declare function opGetThread(client: DoplClient, ref: string, threadId: s
  * Read-only, and it renders exactly what the roster route returns — the private
  * per-member preference (the agent tool profile) is already scrubbed
  * server-side for everyone but the caller, and it is not rendered here.
+ *
+ * F-100: `callerIsAdmin` gates member EMAIL. A public channel is enumerable by
+ * an agent that was never invited, so email is rendered (via `formatMemberLine`)
+ * only for a workspace admin or the caller's own row; every other member shows
+ * name + id + presence with no email.
  */
-export declare function opMembers(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opMembers(client: DoplClient, ref: string, selfUserId?: string | null, callerIsAdmin?: boolean): Promise<ToolResponse>;

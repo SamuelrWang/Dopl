@@ -129,7 +129,11 @@ async function openOutboundReview(entry, m, rec, { taskId, startedAt, text }) {
       channelName: entry.channel.name,
       proposedReply: reply,
       onSend: () => {
-        consent.patchDecision(rec.workspaceId, created.rowId, 'allow');
+        // F-067: a Send whose PATCH dies re-notifies instead of vanishing.
+        consent.submitDecision(rec.workspaceId, created.rowId, 'allow', {
+          channelName: entry.channel.name,
+          onOpen: () => targeting.openChannelForEntry(entry),
+        });
         watcher.poke(rec.key);
       },
       onOpen: () => targeting.openChannelForEntry(entry),

@@ -124,6 +124,17 @@ export const UNRESOLVED_TOOL_PROFILE: AgentToolProfile = "read_only";
  *  swept out from under the desktop watcher (which parks up to 24h). */
 export const CONSENT_TTL_MS = 24 * 60 * 60_000;
 
+/**
+ * F-060 (size-cap half): serialized byte cap on a post's free-form `metadata`
+ * blob — the one caller-supplied post field that had NO bound (`body`/`summary`
+ * are length-capped). Enforced in `ChannelMessageCreateSchema` as
+ * `JSON.stringify(metadata).length`, the wire size the insert pays under the
+ * per-channel advisory lock. The RATE-LIMIT half of F-060 (a per-`(user,
+ * channel)` token bucket surfaced as 429) is deliberately still OPEN — it needs
+ * tuning judgement and is deferred.
+ */
+export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
+
 /** Default page size for a message read when `limit` is omitted. */
 export const DEFAULT_MESSAGE_LIMIT = 100;
 

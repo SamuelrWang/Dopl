@@ -272,6 +272,27 @@ describe("listConsentRequests — status filter (M-4)", () => {
     await listConsentRequests(ctx, { status: "all" });
     expect(vi.mocked(collab.listConsentRequests).mock.calls[0][1]?.statuses).toBeUndefined();
   });
+
+  // The inbox is the source of the sidebar's pending badge. A consent row
+  // carries `operator_user_id` and nothing else that says whose workspace
+  // raised it, and the read runs under the service-role client (no RLS), so
+  // an operator-only filter shows the operator every workspace's requests at
+  // once. The workspace bound has to travel with the query.
+  it("scopes the read to the ACTIVE workspace, not just the operator", async () => {
+    await listConsentRequests(ctx);
+    expect(vi.mocked(collab.listConsentRequests).mock.calls[0][0]).toBe(USER);
+    expect(vi.mocked(collab.listConsentRequests).mock.calls[0][1]).toMatchObject({
+      workspaceId: WS,
+    });
+  });
+
+  it("carries the workspace on every status filter, not only the default", async () => {
+    for (const status of ["pending", "decided", "all"] as const) {
+      vi.mocked(collab.listConsentRequests).mockClear();
+      await listConsentRequests(ctx, { status });
+      expect(vi.mocked(collab.listConsentRequests).mock.calls[0][1]?.workspaceId).toBe(WS);
+    }
+  });
 });
 
 describe("getConsentRequest / decideConsentRequest — operator-only", () => {

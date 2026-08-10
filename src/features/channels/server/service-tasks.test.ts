@@ -109,6 +109,10 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
     uid === USER ? memberRow(USER, "owner") : null
   );
+  // C-20: createTask now also asserts the addressee is an ACTIVE workspace
+  // member. Default it true so a channel member is addressable; the departed-
+  // member test flips it to false.
+  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
@@ -145,6 +149,21 @@ describe("createTask — authorization", () => {
 
   it("rejects an addressee who is not a channel member", async () => {
     // USER is a member; PEER is not (default findMembership).
+    await expect(
+      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
+    ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+  });
+
+  it("C-20: rejects a target who is a channel member but a DEPARTED workspace member", async () => {
+    // The C-20 case: `channel_members` is never swept on workspace-leave, so the
+    // target still resolves as a channel member — but is no longer active in the
+    // workspace and can never answer. create_thread must fail closed instead of
+    // posting an opening message and arming an await nothing will answer.
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
+    );
+    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false);
     await expect(
       createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
     ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);

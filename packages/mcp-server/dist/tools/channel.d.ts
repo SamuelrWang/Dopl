@@ -71,5 +71,11 @@ import { type CallerIdentity } from "./identity";
  * hottest path in the tool. Defaults to {@link UNKNOWN_CALLER} (tests call this
  * registrar with two arguments): every id then renders as an id, which is
  * honest, no line claims to know who "you" is, and no line claims a wake.
+ *
+ * `isAdmin` — the caller's workspace-admin flag from the boot status ping
+ * (factory.ts). Used ONLY by `op="members"` to decide whether member email may
+ * be rendered (F-100). Defaults false, i.e. fail-closed: a test registrar or a
+ * failed ping never leaks email. Email otherwise appears only on the caller's
+ * own row.
  */
-export declare function registerChannelTool(register: RegisterTool, client: DoplClient, caller?: CallerIdentity): void;
+export declare function registerChannelTool(register: RegisterTool, client: DoplClient, caller?: CallerIdentity, isAdmin?: boolean): void;

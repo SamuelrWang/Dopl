@@ -4,6 +4,7 @@ import {
   DEFAULT_MESSAGE_LIMIT,
   MAX_AWAIT_TIMEOUT_MS,
   MAX_MESSAGE_LIMIT,
+  MAX_METADATA_SERIALIZED_BYTES,
 } from "./constants";
 import type { MessageIntent } from "./types";
 
@@ -200,7 +201,14 @@ export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
   kind: PostableMessageKindSchema.optional(),
   authorKind: PostableAuthorKindSchema.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  // F-060 (size-cap half): bound the free-form blob by serialized size — see
+  // MAX_METADATA_SERIALIZED_BYTES. The rate-limit half is still open.
+  metadata: z
+    .record(z.string(), z.unknown())
+    .refine((m) => JSON.stringify(m).length <= MAX_METADATA_SERIALIZED_BYTES, {
+      error: `metadata is too large (max ${MAX_METADATA_SERIALIZED_BYTES} bytes serialized)`,
+    })
+    .optional(),
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
   summary: z.string().trim().min(1).max(200).optional(),

@@ -6,9 +6,11 @@ import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { isUuid } from "@/shared/lib/id/uuid";
+import { pendingRow } from "@/shared/ui/pending";
 import type { ChannelAgent, ChannelMessage, ChannelThread } from "../types";
 import { groupThread, type ThreadOverlay } from "../lib/group-thread";
 import { agentAttributionFor } from "../lib/agent-display";
+import { isPendingId } from "../lib/optimistic-cache";
 import {
   deriveMessageReceipt,
   RECEIPT_LABEL,
@@ -174,6 +176,14 @@ function MessageBubble({
   currentUserId: string;
   agents?: ChannelAgent[];
 }) {
+  // PROVISIONAL, and it says so — the same treatment `SessionCard` already
+  // gives an optimistically-opened request. The send patches the transcript one
+  // frame after the click with a row carrying a `pending:` id (built by
+  // `buildPendingMessage`, resolved to the saved row by `reconcileMessage`), so
+  // that id IS the pending marker and no second flag rides the row. Until the
+  // POST answers the bubble is dimmed and inert: the real text, immediately,
+  // without claiming to be sent. `pending.ts` owns the recipe.
+  const provisional = isPendingId(message.id);
   const isHuman = message.authorKind === "user";
   // Chat-style side: only MY OWN human message goes right. Everything else goes
   // left, including an AGENT row carrying my user id (my agent speaks for itself,
@@ -212,12 +222,15 @@ function MessageBubble({
 
   return (
     <article
-      className={cn(
-        "max-w-[66%] rounded-[10px] border px-3.5 py-2.5",
-        isOwn ? "self-end" : "self-start",
-        isHuman
-          ? "border-border-default bg-card-surface-subtle"
-          : "border-border-subtle bg-bg-elevated"
+      {...pendingRow(
+        provisional,
+        cn(
+          "max-w-[66%] rounded-[10px] border px-3.5 py-2.5",
+          isOwn ? "self-end" : "self-start",
+          isHuman
+            ? "border-border-default bg-card-surface-subtle"
+            : "border-border-subtle bg-bg-elevated"
+        )
       )}
     >
       <div
