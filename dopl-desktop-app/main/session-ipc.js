@@ -180,7 +180,7 @@ function register(internals) {
   // NOTHING (there is no argument to forge): attended-handoff reads the card's own ids and
   // display names off the registry entry.
   //
-  // IT RESOLVES NOTHING ON THE SERVER. No decideConsent, no patchDecision, no watcher poke,
+  // IT RESOLVES NOTHING ON THE SERVER. No decideConsent, no submitDecision, no watcher poke,
   // no dispatch, no spawn. The consent row stays PENDING, so Accept is still answerable
   // underneath and still behaves exactly as it does today; the renderer marks the card
   // handled-attended locally on the {ok} this returns.

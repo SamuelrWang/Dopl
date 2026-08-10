@@ -3,7 +3,7 @@
 // SECURITY (item 8 / §H-1): a pre-consent window runs NO SDK query, NO mcpServers,
 // NO canUseTool, NO tool of any kind. It renders the request text (textContent, in
 // the renderer) + Accept/Deny and holds the SAME durable consent row open. Accept
-// only flips that row (consent.patchDecision 'allow') and pokes the watcher; the
+// only flips that row (consent.submitDecision 'allow') and pokes the watcher; the
 // live session is started ELSEWHERE — the engine ADOPTS this window in
 // launchResponderSession and calls startQuery there. `consentTransition` NEVER
 // returns a start-query effect (asserted structurally in test/session-consent.test.mjs).
