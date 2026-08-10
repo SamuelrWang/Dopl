@@ -14,7 +14,11 @@
 
 import type { ChannelMessage } from "../types";
 import type { CloseProposal } from "./group-thread-types";
-import { calmTerminalStatus, isThreadReopenedMarker } from "./group-thread-markers";
+import {
+  calmTerminalStatus,
+  isSessionEndedMarker,
+  isThreadReopenedMarker,
+} from "./group-thread-markers";
 
 /** Collapse whitespace and cap length with an ellipsis (header previews). */
 export function truncateSummary(text: string, max = 120): string {
@@ -109,9 +113,10 @@ export interface SessionLanes {
   /** Chat replies (plus a terminal marker that carried real content). */
   replies: ChannelMessage[];
   /**
-   * STATUS lines about the thread itself, not about the work: today, the
-   * server-stamped reopen echo. Rendered as a calm one-liner — never a ✓, never
-   * a deliverable. See {@link splitSessionEntries}.
+   * STATUS lines about the thread itself, not about the work: the
+   * server-stamped reopen echo and the `session_ended` marker (F-183).
+   * Rendered as a calm one-liner — never a ✓, never a deliverable. See
+   * {@link splitSessionEntries}.
    */
   notices: ChannelMessage[];
 }
@@ -151,8 +156,14 @@ export function splitSessionEntries(entries: ChannelMessage[]): SessionLanes {
   const notices: ChannelMessage[] = [];
   for (const entry of entries) {
     if (entry.kind === "task_progress") {
-      if (isThreadReopenedMarker(entry)) notices.push(entry);
-      else milestones.push(entry);
+      // F-183: BOTH reserved markers are status, not accomplishments. The
+      // `session_ended` marker additionally drives `calmEndStatus` — that is
+      // CURRENT STATE (cleared by a later restart), while this lane entry is
+      // chronological HISTORY; they are different jobs, so the marker moves
+      // lanes here and the state note stays.
+      if (isThreadReopenedMarker(entry) || isSessionEndedMarker(entry)) {
+        notices.push(entry);
+      } else milestones.push(entry);
     } else if (entry.kind === "message") replies.push(entry);
     else if (entry.kind === "task_finished" || entry.kind === "task_failed") {
       replies.push(entry);

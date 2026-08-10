@@ -1241,7 +1241,7 @@ The root of the menu renders each control's CURRENT VALUE and that value's plain
 
 ---
 
-## F-183 — A `session_ended` marker renders TWICE: a green ✓ milestone and the card's calm end note — needs a product decision
+## F-183 — A `session_ended` marker renders TWICE: a green ✓ milestone and the card's calm end note — RESOLVED 2026-08-09
 
 - Location: `src/features/channels/lib/group-thread.ts:341-353` (`task_progress` is pushed to `draft.entries` AND, when the marker matches, recorded as `draft.sessionEndedEvent`), `:417`; `lib/group-thread-render.ts:149-161` (`splitSessionEntries` routes every `task_progress` to `milestones` unless it is the REOPEN marker)
 - Found during: verifying F-176's notices-lane fix
@@ -1249,7 +1249,8 @@ The root of the menu renders each control's CURRENT VALUE and that value's plain
 - Description: F-176 gave the REOPEN echo its own `notices` lane precisely because a status marker is not an accomplishment. **`session_ended` is the other reserved marker on `task_progress` and it did not get the same treatment.** It lands in `entries` like any milestone, so `splitSessionEntries` check-marks it under "Milestones"; it is *also* recorded as `sessionEndedEvent`, which is what draws the card's honest calm end note. The operator sees the same event twice, once with a ✓ meaning "done" over a session that was cut off.
 - **This is F-176's bug with the numbers filed off** — same file, same lane split, same reserved-marker family, one arm added and its sibling not. Worth stating plainly: a fix that enumerates the case it was reported for, on a mechanism that is obviously a family, leaves the rest of the family broken.
 - **One-line fix sketched, deliberately not applied:** add `isSessionEndedMarker(entry)` to the notices arm in `splitSessionEntries` (`|| isSessionEndedMarker(entry)` beside `isThreadReopenedMarker`). That removes the ✓ and leaves the calm note.
-- ⚠ **The decision it needs is a PRODUCT one, not a code one.** Three answers, and the code cannot pick: (a) notices lane — one calm status line, plus the card's end note, i.e. still two renderings but neither claiming completion; (b) notices lane AND drop `sessionEndedEvent`'s note, so it renders exactly once; (c) suppress from the lanes entirely and keep only the card's end note. **(b) is the only one that actually stops the double-render**, which is why the sketch above is not simply "the fix".
+- ⚠ The decision it needed was a PRODUCT one: (a) notices lane + keep the end note; (b) notices lane + drop the note; (c) suppress from lanes, note only.
+- ✅ **RESOLVED 2026-08-09 — (a), and the reason (b) was wrong is worth keeping.** (b)'s framing treated the two renders as duplicates; they are not. The lane entry is chronological HISTORY (each end sits in seq order between milestones, exactly like the reopen echo — and C-5's silent terminals post this marker, so a long thread can carry several). `calmEndStatus` is CURRENT STATE — cleared when a later `task_started` shows a restart (`group-thread.ts`'s `restarted` guard). Dropping the note would have re-opened the C-5 hole ("card claims work in progress after the session died") whenever the notice scrolled; dropping the history would hide mid-thread ends. So: `splitSessionEntries` routes `isSessionEndedMarker` to `notices` beside the reopen marker (`group-thread-render.ts`), the ✓ is gone, and the state note stays. Two tests in `group-thread-render.test.ts` — the key spelled as a LITERAL (the F-176 fixture lesson) and a groupThread-level case pinning lane + `calmEndStatus === "ended"` together. Mutation run: removing the arm fails both.
 - Status: open (needs Samuel's decision)
 
 ---

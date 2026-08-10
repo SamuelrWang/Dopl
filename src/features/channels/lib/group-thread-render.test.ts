@@ -71,6 +71,44 @@ describe("splitSessionEntries", () => {
     expect(notices).toHaveLength(0);
   });
 
+  it("routes a session_ended marker to notices, never milestones (F-183)", () => {
+    // The key is spelled as a LITERAL on purpose — a fixture built from the
+    // constant under test would survive a rename that desynced it from the
+    // server's reserved key (the F-176 lesson, pinned the same way there).
+    const lanes = splitSessionEntries([
+      msg({ kind: "task_progress", authorKind: "agent", body: "Found the bug" }),
+      msg({
+        kind: "task_progress",
+        authorKind: "user",
+        body: "Session ended",
+        metadata: { session_ended: true },
+      }),
+    ]);
+    expect(lanes.milestones.map((m) => m.body)).toEqual(["Found the bug"]);
+    expect(lanes.notices.map((n) => n.body)).toEqual(["Session ended"]);
+  });
+
+  it("keeps a session_ended notice OUT of the lane but IN the card's end state — the two jobs F-183 separates", () => {
+    const t = "task-c1-701";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "user", metadata: { taskId: t } }),
+      msg({
+        kind: "task_progress",
+        authorKind: "user",
+        body: "Session ended",
+        metadata: { taskId: t, session_ended: true },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    const lanes = splitSessionEntries(s.session.entries);
+    expect(lanes.milestones).toEqual([]);
+    expect(lanes.notices).toHaveLength(1);
+    // calmEndStatus is CURRENT STATE and stays — routing the history entry to
+    // notices must not silence the card's honest "the session stopped" note.
+    expect(s.session.calmEndStatus).toBe("ended");
+  });
+
   it("leaves the notices lane empty for a session with no status markers", () => {
     // The lane exists for reserved server-stamped markers only (F-176: the
     // reopen echo — see `group-thread-reopen.test.ts`). An ordinary transcript
