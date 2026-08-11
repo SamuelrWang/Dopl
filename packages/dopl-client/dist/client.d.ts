@@ -22,8 +22,8 @@
  * a new link, added per the rules in `client-base.ts`. The whole point of the
  * split is that this file stops being where methods accumulate.
  */
-import { SkillMethods } from "./client-skills.js";
+import { BillingMethods } from "./client-billing.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
-export declare class DoplClient extends SkillMethods {
+export declare class DoplClient extends BillingMethods {
 }

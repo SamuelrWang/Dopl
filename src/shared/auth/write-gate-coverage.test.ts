@@ -90,12 +90,25 @@ describe("H-3 write-gate coverage", () => {
     }
   });
 
-  it("the `writeScopeExempt` set is EXACTLY the MCP liveness ping", () => {
+  /**
+   * TWO routes, and both are MCP PLUMBING rather than content writes — that is
+   * the property this pin protects. A `writeScopeExempt` on a route that
+   * writes user data would let a `dopl.read`-only token mutate the workspace.
+   *
+   * The credit spend earns it for the reason the ping does: it is a POST whose
+   * subject is the SESSION, not the workspace's content, and a READ-ONLY agent
+   * still costs a credit per tool call — gating it on `dopl.write` would make
+   * read-only sessions free and leave the meter lying.
+   */
+  it("the `writeScopeExempt` set is EXACTLY the MCP liveness ping + the credit spend", () => {
     const exemptRoutes = files
       .filter((f) => /writeScopeExempt:\s*true/.test(readFileSync(f, "utf8")))
       .map(apiRel)
       .sort();
-    expect(exemptRoutes).toEqual(["user/mcp-status/route.ts"]);
+    expect(exemptRoutes).toEqual([
+      "mcp/credits/consume/route.ts",
+      "user/mcp-status/route.ts",
+    ]);
   });
 
   it("the `sessionOnly` set is exactly the destructive admin + credential-minting + consent routes", () => {

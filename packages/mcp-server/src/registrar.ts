@@ -18,9 +18,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
 import { workspaceContext } from "@dopl/client";
-import type { WorkspaceListItem } from "@dopl/client";
+import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
-import { entitlementDenied, type RegisterTool, type ToolResponse } from "./tools/respond.js";
+import {
+  creditsExhausted,
+  entitlementDenied,
+  type RegisterTool,
+  type ToolResponse,
+} from "./tools/respond.js";
 import { inlineOr } from "./tools/narration.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
@@ -97,27 +102,76 @@ function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
 }
 
 /**
- * Run a tool handler, converting an over-free-cap entitlement denial
- * (a 403 thrown by any write op through @dopl/client) into a friendly
- * tool error instead of an opaque framework throw. Every other error
- * rethrows unchanged, preserving existing behavior.
+ * THE BILLING SEAM FOR ONE TOOL CALL — charge, then run.
+ *
+ * `runWithEntitlementGuard` used to be the second half of this alone. It was
+ * widened rather than joined by a sibling because it is already called at
+ * EXACTLY the two terminal paths of `registerTool`'s wrapper and nowhere else,
+ * which makes it the only place a per-tool-call charge can be exactly-once.
+ * Splitting the charge into its own helper would mean two call sites per path
+ * and a future path that remembers one of them.
+ *
+ * ORDERING, non-negotiable: this runs AFTER `gates.opRefusal` (the §10 delete
+ * refusal must stay first and unconditional — a refused delete costs zero
+ * round trips) and AFTER workspace resolution (credits are per-workspace),
+ * and BEFORE the handler.
+ *
+ * NOT in `withWorkspaceAuth` beside `logMcpToolCall`: that fires per LOOPBACK
+ * request, and one tool call makes 0..N of them.
  */
-async function runWithEntitlementGuard(
-  run: () => Promise<ToolResponse>,
-): Promise<ToolResponse> {
-  try {
-    return await run();
-  } catch (e) {
-    const denied = entitlementDenied(e);
-    if (denied) return denied;
-    throw e;
+function createCreditedRunner(client: DoplClient) {
+  /**
+   * Spend one credit for `workspaceId`. Returns the refusal to hand back, or
+   * null to proceed.
+   *
+   * FAIL OPEN on anything that is not an honest "out of credits". A gate that
+   * refused tool calls because a loopback request failed would brick every
+   * agent in the product on a transient blip, and the operator would read it
+   * as "out of credits" for a workspace that is not. The server side makes the
+   * same call and states the same reason (`/api/mcp/credits/consume`).
+   */
+  async function charge(workspaceId: string): Promise<ToolResponse | null> {
+    try {
+      const outcome = await client.consumeCredits(workspaceId);
+      return outcome.allowed ? null : creditsExhausted(outcome.upgradeUrl);
+    } catch (err) {
+      console.error(
+        `[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return null;
+    }
   }
+
+  /**
+   * Charge one credit, then run the handler, converting an entitlement denial
+   * (a 403 thrown by any write op through @dopl/client) into a friendly tool
+   * error instead of an opaque framework throw. Every other error rethrows
+   * unchanged, preserving existing behavior.
+   */
+  return async function runWithCredits(
+    workspaceId: string,
+    run: () => Promise<ToolResponse>,
+  ): Promise<ToolResponse> {
+    const refusal = await charge(workspaceId);
+    if (refusal) return refusal;
+    try {
+      return await run();
+    } catch (e) {
+      const denied = entitlementDenied(e);
+      if (denied) return denied;
+      throw e;
+    }
+  };
 }
 
 /** Everything one session's registration helpers need to close over. */
 export interface RegistrarDeps {
   /** The SDK server both helpers publish onto. */
   server: McpServer;
+  /** The loopback client — used HERE only to charge MCP credits. */
+  client: DoplClient;
   /** The four gates for this session (see `gating.ts`). */
   gates: Gates;
   /** Membership cache + `workspace=` resolution + the M-3 refusal. */
@@ -138,8 +192,16 @@ export interface ToolRegistrars {
 }
 
 export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
-  const { server, gates, directory, activeWorkspace, sessionEffective, caller } =
-    deps;
+  const {
+    server,
+    client,
+    gates,
+    directory,
+    activeWorkspace,
+    sessionEffective,
+    caller,
+  } = deps;
+  const runWithCredits = createCreditedRunner(client);
 
   // ── Tool registration helper ─────────────────────────────────────
   // Every call funnels through here so:
@@ -252,7 +314,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
           role: resolved.role,
           source: "per-call arg",
         };
-        const result = await runWithEntitlementGuard(() =>
+        const result = await runWithCredits(resolved.id, () =>
           workspaceContext.run(resolved.id, () => handler(innerArgs)),
         );
         return appendDoplStatus(result, effective, caller);
@@ -265,7 +327,9 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       if (!activeWorkspace) {
         return directory.noWorkspaceError();
       }
-      const result = await runWithEntitlementGuard(() => handler(innerArgs));
+      const result = await runWithCredits(activeWorkspace.id, () =>
+        handler(innerArgs),
+      );
       return appendDoplStatus(result, sessionEffective(), caller);
     };
 
@@ -290,6 +354,15 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
   // wrapper. It is inert for today's two meta-tools — neither is hidden,
   // blocked, or carries an `op` — and it is tracked; do not make it worse by
   // adding a gate that only one path performs.
+  //
+  // MCP CREDITS ARE NOT CHARGED HERE — DECIDED, not inherited from F-146.
+  // `current_workspace` and `list_workspaces` are how a lost agent finds out
+  // WHERE it is and WHAT it may pass as `workspace=`; charging them would bill
+  // an agent for asking which workspace it is in, and an exhausted workspace
+  // could not even read the refusal's context. They are also USER-scoped, not
+  // workspace-scoped, so on a 0/2+-membership session there is no workspace to
+  // charge. If they are ever metered, the charge must be called EXPLICITLY on
+  // both paths, exactly as `opRefusal` is — not moved into the wrapper.
   function registerMetaTool<S extends ZodRawShape>(
     name: string,
     description: string,

@@ -21,6 +21,7 @@
  *     → MemberMethods     client-members.ts
  *     → ChannelMethods    client-channels.ts
  *     → SkillMethods      client-skills.ts
+ *     → BillingMethods    client-billing.ts
  *     → DoplClient        client.ts
  *
  * The order carries NO meaning — no link may depend on a sibling's methods,

@@ -10,6 +10,7 @@ export {
 } from "./errors.js";
 export type {
   BuildResult,
+  CreditConsumeResponse,
   WorkspaceRole,
   WorkspaceSummary,
   WorkspaceListItem,

@@ -155,16 +155,28 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 
 function subscriptionFields(subscription: Stripe.Subscription) {
   const item = selectSeatItem(subscription);
-  // Stripe's Basil API exposes current_period_end on the item; older
-  // payloads carried it at the subscription level. Prefer the sub-level
-  // value when present, else fall back to the item.
-  const subLevelPeriodEnd = (
-    subscription as unknown as { current_period_end?: number | null }
-  ).current_period_end;
-  const periodEnd = subLevelPeriodEnd ?? item?.current_period_end;
+  // Stripe's Basil API exposes current_period_start/end on the item; older
+  // payloads carried them at the subscription level. Prefer the sub-level
+  // value when present, else fall back to the item. Same rule for both
+  // bounds — the START is what anchors the MCP credit window to the
+  // workspace's own billing date (`features/billing/credits.ts ›
+  // resolveCreditPeriod`) instead of the calendar month.
+  const subLevel = subscription as unknown as {
+    current_period_start?: number | null;
+    current_period_end?: number | null;
+  };
+  const periodStart = subLevel.current_period_start ?? item?.current_period_start;
+  const periodEnd = subLevel.current_period_end ?? item?.current_period_end;
   return {
     seatCount: item?.quantity ?? 1,
     stripePriceId: item?.price?.id ?? null,
+    // Live now, will not renew. Always written (never left undefined): a
+    // subscription that was set to cancel and then RESUMED must clear the
+    // flag, and an omitted key would leave the old `true` standing.
+    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+    currentPeriodStart: periodStart
+      ? new Date(periodStart * 1000).toISOString()
+      : undefined,
     currentPeriodEnd: periodEnd
       ? new Date(periodEnd * 1000).toISOString()
       : undefined,
@@ -224,6 +236,9 @@ async function handleSubscriptionUpsert(
       stripeSubscriptionId: null,
       stripePriceId: null,
       seatCount: null,
+      // The sub is gone; a leftover `true` would render "ends on <date>" on a
+      // workspace that has already ended.
+      cancelAtPeriodEnd: false,
     });
     return;
   }
@@ -236,6 +251,10 @@ async function handleSubscriptionUpsert(
     stripeSubscriptionId: subscription.id,
     stripePriceId: fields.stripePriceId,
     seatCount: fields.seatCount,
+    cancelAtPeriodEnd: fields.cancelAtPeriodEnd,
+    ...(fields.currentPeriodStart
+      ? { currentPeriodStart: fields.currentPeriodStart }
+      : {}),
     ...(fields.currentPeriodEnd
       ? { currentPeriodEnd: fields.currentPeriodEnd }
       : {}),
@@ -275,6 +294,10 @@ async function handleCheckoutCompleted(
     stripeSubscriptionId: status === "canceled" ? null : subscriptionId,
     stripePriceId: status === "canceled" ? null : fields.stripePriceId,
     seatCount: status === "canceled" ? null : fields.seatCount,
+    cancelAtPeriodEnd: status === "canceled" ? false : fields.cancelAtPeriodEnd,
+    ...(fields.currentPeriodStart
+      ? { currentPeriodStart: fields.currentPeriodStart }
+      : {}),
     ...(fields.currentPeriodEnd
       ? { currentPeriodEnd: fields.currentPeriodEnd }
       : {}),
@@ -306,6 +329,7 @@ async function handleSubscriptionDeleted(
     stripeSubscriptionId: null,
     stripePriceId: null,
     seatCount: null,
+    cancelAtPeriodEnd: false,
   });
 }
 

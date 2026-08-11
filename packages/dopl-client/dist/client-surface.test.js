@@ -49,6 +49,10 @@ const BASE = "https://api.example.test";
  *   67 — less the EIGHTEEN that went with the workflows + clusters deletion
  *        on 2026-08-11 (five `*Cluster` + thirteen `*Workflow*`), along with
  *        `clusters.ts`, `workflows.ts` and both of their chain links.
+ *   68 — PLUS ONE: `consumeCredits`, the MCP credit spend, added with the
+ *        `BillingMethods` link (`client-billing.ts`) on 2026-08-11. It is the
+ *        first ADDITION this list has recorded — every prior delta was a
+ *        removal — so it is stated as one, not folded into the total.
  *
  * Stating the arithmetic is the whole value of the check: read as one number
  * with no history, a diff of seven — or of eighteen — looks like the class
@@ -59,6 +63,7 @@ const PUBLIC_SURFACE = [
     "awaitChannelMessages",
     "claimOntologyAnchor",
     "closeChannelThread",
+    "consumeCredits",
     "createChannel",
     "createChannelThread",
     "createChatFolder",
@@ -207,6 +212,32 @@ function captureWire() {
             (0, vitest_1.expect)(await wireOf(call)).toEqual(expected);
         });
     }
+    /**
+     * NOT a moved route — a new one, pinned here because the details that make
+     * it correct are invisible at the call site: the workspace it charges rides
+     * an EXPLICIT per-request override (the registrar calls it outside the
+     * handler's AsyncLocalStorage scope on one of its two paths), and POST is
+     * outside `IDEMPOTENT_METHODS` so the transport never retries a spend.
+     */
+    (0, vitest_1.it)("consumeCredits POSTs the consume route with an explicit workspace header", async () => {
+        cap = captureWire();
+        const original = global.fetch;
+        const headers = [];
+        global.fetch = (async (...args) => {
+            headers.push((args[1]?.headers ?? {}));
+            return original(...args);
+        });
+        await new client_js_1.DoplClient(BASE, "k").consumeCredits("ws-42");
+        global.fetch = original;
+        (0, vitest_1.expect)(cap.wires).toEqual([
+            {
+                path: "/api/mcp/credits/consume",
+                method: "POST",
+                tool: "_mcp_credits_consume",
+            },
+        ]);
+        (0, vitest_1.expect)(headers[0]["X-Workspace-Id"]).toBe("ws-42");
+    });
     (0, vitest_1.it)("pingMcpStatus still normalises a missing envelope to false / null", async () => {
         cap = captureWire();
         const res = await new client_js_1.DoplClient(BASE, "k").pingMcpStatus();

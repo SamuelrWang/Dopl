@@ -60,6 +60,15 @@ const COMPARE_ROWS: {
     team: { main: "Unlimited", sub: "per seat" },
   },
   {
+    // One MCP credit = one MCP tool call. Allowances live in
+    // `features/billing/credits.ts › MONTHLY_MCP_CREDITS` — retune there, then
+    // this row and `plans.ts › PLANS.features`, which are copy, not config.
+    label: "MCP credits",
+    free: { main: "500", sub: "/ month" },
+    solo: { main: "10,000", sub: "/ month" },
+    team: { main: "25,000", sub: "/ month" },
+  },
+  {
     label: "Price",
     free: { main: "Free" },
     solo: { main: "$5.99", sub: "/ month" },

@@ -46,6 +46,20 @@ export declare function isNotFound(e: unknown): boolean;
  */
 export declare function isAlreadyExists(e: unknown): boolean;
 /**
+ * The workspace has spent its MCP credit allowance for the current billing
+ * period. ONE wording, used by both surfaces: the registrar's up-front refusal
+ * (which reads `allowed: false` off the consume response, not an error) and
+ * `entitlementDenied` below, for the day a REST surface throws the code.
+ */
+export declare const CREDITS_EXHAUSTED_CODE = "credits_exhausted";
+/**
+ * The credits refusal, rendered exactly like an entitlement denial (message +
+ * upgrade link) so an agent reads one shape for every plan gate. The URL comes
+ * from the server on the consume response — the MCP package cannot import
+ * `billing/server/entitlements.ts › upgradeUrl`.
+ */
+export declare function creditsExhausted(upgradeUrl: string): ToolResponse;
+/**
  * Turn a thrown Dopl API error into a friendly tool error when it's a
  * plan-gate denial (HTTP 403, flat entitlement envelope), else null so
  * the caller rethrows.

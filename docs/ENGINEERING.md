@@ -914,6 +914,28 @@ The wave that took Channels from "two people, two agents, one pair-shaped thread
 
 **Everything these three shipped WITH is F-113 / F-114 / F-115 in `REFACTOR-FINDINGS.md`, and the same-day adversarial review round that corrected their copy and enforced the closed-thread routing claim is F-116.** Read the residuals before adding a `reopen` op, before treating `session_id` as a run id, or before auditing the web UI for the same ad-hoc label defect.
 
+### MCP credits — WHY THE COUNTER IS A CAS ROW, NOT A `COUNT` (2026-08-11)
+
+The obvious build was "count this period's rows in `mcp_tool_calls`". It was rejected on three measurements, and the reasons are worth keeping because each one also disqualifies the next analytics table somebody reaches for.
+
+- **`mcp_tool_calls` DOES NOT COUNT TOOL CALLS.** It counts LOOPBACK REQUESTS: one MCP tool call makes 0..N of them (`dopl_map` fans out, a `workspace=` arg adds a `listWorkspaces`, `dopl_channel(op="await")` polls ~4x). The 2148 rows live on that day were not 2148 tool calls. A meter built on it would have overbilled the tools that fan out and undercharged the ones that do not — invisibly, because both look like usage.
+- **ITS WRITER IS ALLOWED TO LOSE WRITES.** `analytics/server/mcp-tool-calls.ts › logMcpToolCall` is `void`-ed, fire-and-forget, and swallows every error BY DESIGN — correct for analytics, disqualifying for billing. A counter you cannot bill from is not a counter.
+- **A `COUNT(*)` OVER A GROWING TABLE IS ON THE HOTTEST PATH IN THE PRODUCT.** §12's "do not tax the hot write path to answer a question a cold reader asks once a day" cuts exactly here.
+
+So: one row per `(workspace_id, period_start)` in `workspace_credit_usage`, spent through `consume_workspace_credits` — a SINGLE `INSERT … ON CONFLICT DO UPDATE … WHERE used + amount <= limit RETURNING` statement (`20260811130000_mcp_credits.sql`). Three details are load-bearing:
+
+- **Modelled on `claim_workspace_checkout` (20260720210814), NOT on `check_and_record_rate_limit_subject` (20260608010000).** The rate limiter takes `pg_advisory_xact_lock`; the checkout claim's header records why that shape was abandoned here — **an earlier advisory-lock attempt leaked locks through PgBouncer transaction pooling.** A single-statement CAS is cross-instance correct with no lock to leak.
+- **BOTH limit paths need a guard.** The `ON CONFLICT … WHERE` clause guards only the UPDATE; the fresh INSERT is guarded by `IF p_amount <= p_limit` in the function body. Without it, a workspace on a zero-credit plan gets its first call free — the classic version of this bug.
+- **UPSERT, NOT UPDATE, for the same reason the checkout claim needed it:** most workspaces have no `workspace_billing` row at all until their first paid event, and none has a credit row until its first tool call.
+
+**The period SELF-ROLLS; there is no reset cron.** The resolved `period_start` is stamped on the row, so the first consume of a new window simply inserts a new row and the old one is never touched again. `features/billing/credits.ts › resolveCreditPeriod` picks the subscription anchor when both `workspace_billing` period columns are stamped and the end is still in the future, else the UTC calendar month — the fallback is what keeps a lapsed subscription from pinning a workspace to a window that never advances. `current_period_start` had to be ADDED (only the end was ever stored); `cancel_at_period_end` rode the same migration and the same webhook write site.
+
+**FAIL OPEN, decided rather than inherited.** The two existing precedents point opposite ways — `checkAndRecordRateLimitSubject` fails CLOSED, `logMcpToolCall` fails OPEN — so the direction had to be chosen. A credits gate that fails closed on a DB blip refuses every tool call in the product and tells the operator they are out of credits when they are not. Exhaustion is the ONLY hard block; the decision is stated at both halves of the seam (`/api/mcp/credits/consume` and `registrar.ts › createCreditedRunner`).
+
+**Meta-tools (`current_workspace`, `list_workspaces`) are exempt, deliberately.** They are how a lost agent finds out where it is and what it may pass as `workspace=`, they are user-scoped rather than workspace-scoped, and on a 0/2+-membership session there is no workspace to charge. F-146 already notes that `registerMetaTool` bypasses the wrapper by construction; that is the mechanism, not the reason.
+
+**Unrelated to the DELETED `credit_ledger` / `user_credits` feature** removed by hand outside migration history (see §7's baseline notes). Nothing was revived; this is a new, per-workspace, per-period counter.
+
 ---
 
 ## 9. API Routes

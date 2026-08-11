@@ -114,6 +114,9 @@ function createServer(client, options = {}) {
     const gates = (0, gating_js_1.createGates)(canWrite);
     const { registerTool, registerMetaTool } = (0, registrar_js_1.createToolRegistrars)({
         server,
+        // The registrar charges one MCP credit per domain-tool call through this
+        // client (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
+        client,
         gates,
         directory,
         activeWorkspace,

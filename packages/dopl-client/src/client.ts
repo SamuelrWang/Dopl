@@ -23,7 +23,7 @@
  * split is that this file stops being where methods accumulate.
  */
 
-import { SkillMethods } from "./client-skills.js";
+import { BillingMethods } from "./client-billing.js";
 
 // Re-exported from HERE, not just from `index.ts`: `client.test.ts` imports
 // `parseRetryAfter` from this module and `index.ts` re-exports
@@ -31,4 +31,4 @@ import { SkillMethods } from "./client-skills.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 
-export class DoplClient extends SkillMethods {}
+export class DoplClient extends BillingMethods {}

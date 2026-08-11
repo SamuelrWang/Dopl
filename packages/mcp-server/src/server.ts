@@ -183,6 +183,9 @@ export function createServer(
 
   const { registerTool, registerMetaTool } = createToolRegistrars({
     server,
+    // The registrar charges one MCP credit per domain-tool call through this
+    // client (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
+    client,
     gates,
     directory,
     activeWorkspace,

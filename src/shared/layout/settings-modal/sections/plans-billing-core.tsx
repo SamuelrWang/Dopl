@@ -13,6 +13,7 @@ import { PLANS } from "@/features/billing/plans";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
+import { UsageMeter } from "@/shared/ui/usage-meter";
 import { PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
 
 export type { CheckoutPlan };
@@ -267,7 +268,13 @@ function BillingSummary({
       ) : (
         <>
           {ent.isCapped && ent.objectCap !== null && (
-            <UsageMeter used={ent.objectsUsed} cap={ent.objectCap} over={ent.overCap} />
+            <UsageMeter
+              label="Ontology objects"
+              used={ent.objectsUsed}
+              limit={ent.objectCap}
+              over={ent.overCap}
+              overNote="New objects are paused. Nothing was deleted — reads and edits still work."
+            />
           )}
           {!ent.chatsWindowDays && (
             <p className="mt-3 text-caption text-text-secondary">
@@ -276,6 +283,17 @@ function BillingSummary({
           )}
         </>
       )}
+
+      {/* Credits are metered on EVERY plan — free, Pro and Team all have a
+          monthly MCP allowance — so this sits outside the plan branch above,
+          unlike the object cap, which only exists for capped free workspaces. */}
+      <UsageMeter
+        label="MCP credits"
+        used={ent.credits.used}
+        limit={ent.credits.limit}
+        over={ent.credits.remaining === 0 && ent.credits.limit > 0}
+        overNote="MCP tool calls are paused until the next billing period. Nothing was deleted — the app keeps working."
+      />
 
       <div className="mt-4">
         {ent.isPaid ? (
@@ -339,30 +357,3 @@ function BillingSummary({
   );
 }
 
-function UsageMeter({ used, cap, over }: { used: number; cap: number; over: boolean }) {
-  const pct = Math.min(100, Math.round((used / cap) * 100));
-  return (
-    <div className="mt-3">
-      <div className="mb-1.5 flex items-baseline justify-between text-caption">
-        <span className="text-text-secondary">Ontology objects</span>
-        <span className={cn("font-medium", over ? "text-warning" : "text-text-primary")}>
-          {used.toLocaleString()} / {cap.toLocaleString()}
-        </span>
-      </div>
-      <div className="concave-track">
-        <div
-          className={cn(
-            "h-1.5 rounded-full transition-[width]",
-            over ? "bg-warning" : "bg-surface-cta"
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      {over && (
-        <p className="mt-1.5 text-micro text-text-secondary">
-          New objects are paused. Nothing was deleted — reads and edits still work.
-        </p>
-      )}
-    </div>
-  );
-}

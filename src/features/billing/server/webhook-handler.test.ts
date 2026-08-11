@@ -242,6 +242,63 @@ describe("event-ordering watermark", () => {
   });
 });
 
+describe("period START + cancel_at_period_end (the MCP credits anchor)", () => {
+  it("writes current_period_start, preferring the sub level over the item", async () => {
+    // Without the START stored, a paid workspace's credit window falls back to
+    // the calendar month and its credits reset on the 1st, not on its own
+    // billing date (`features/billing/credits.ts › resolveCreditPeriod`).
+    const s = sub({
+      status: "active",
+      current_period_start: 1_700_000_000,
+      current_period_end: 1_702_000_000,
+      items: {
+        data: [
+          {
+            id: "si_1",
+            quantity: 3,
+            price: { id: "price_seat" },
+            current_period_start: 1,
+            current_period_end: 2,
+          },
+        ],
+      },
+    } as unknown as Partial<Stripe.Subscription>);
+
+    await processStripeEvent(event("customer.subscription.updated", s));
+
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        currentPeriodStart: new Date(1_700_000_000 * 1000).toISOString(),
+        currentPeriodEnd: new Date(1_702_000_000 * 1000).toISOString(),
+      })
+    );
+  });
+
+  it("mirrors cancel_at_period_end, and clears it when the sub resumes", async () => {
+    await processStripeEvent(
+      event(
+        "customer.subscription.updated",
+        sub({ status: "active", cancel_at_period_end: true })
+      )
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ cancelAtPeriodEnd: true })
+    );
+
+    // Always written, never omitted: an omitted key would leave the old `true`
+    // standing and tell a resumed customer their plan is still ending.
+    await processStripeEvent(
+      event("customer.subscription.updated", sub({ status: "active" }), 2000)
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenLastCalledWith(
+      WS,
+      expect.objectContaining({ cancelAtPeriodEnd: false })
+    );
+  });
+});
+
 describe("multi-item subscriptions + period end", () => {
   it("bills the seat-priced item, not data[0], and prefers sub-level period end", async () => {
     vi.stubEnv("STRIPE_PRO_SEAT_PRICE_ID", "price_seat");

@@ -25,9 +25,9 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoplClient = exports.parseRetryAfter = void 0;
-const client_skills_js_1 = require("./client-skills.js");
+const client_billing_js_1 = require("./client-billing.js");
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
-class DoplClient extends client_skills_js_1.SkillMethods {
+class DoplClient extends client_billing_js_1.BillingMethods {
 }
 exports.DoplClient = DoplClient;

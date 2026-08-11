@@ -1,12 +1,8 @@
 "use strict";
 /**
- * Skill method group — link 8 of the chain documented in `client-base.ts`
- * (`BillingMethods` extends this one). Pure delegation to `skills.ts`; no HTTP
- * here.
- *
- * Read paths are unrestricted; write paths are gated server-side by the
- * per-skill `agent_write_enabled` toggle for API-key (agent) callers. Skills
- * are single-file: one SKILL.md procedure body.
+ * Billing method group — link 9 and LAST of the chain documented in
+ * `client-base.ts`; `DoplClient` in `client.ts` extends this one. Pure
+ * delegation to `billing.ts`; no HTTP here.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -42,30 +38,17 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SkillMethods = void 0;
-const client_channels_js_1 = require("./client-channels.js");
-const skills = __importStar(require("./skills.js"));
-class SkillMethods extends client_channels_js_1.ChannelMethods {
-    listSkills() {
-        return skills.listSkills(this.transport);
-    }
-    getSkill(slug) {
-        return skills.getSkill(this.transport, slug);
-    }
-    createSkill(input) {
-        return skills.createSkill(this.transport, input);
-    }
-    updateSkill(slug, patch) {
-        return skills.updateSkill(this.transport, slug, patch);
-    }
-    deleteSkill(slug) {
-        return skills.deleteSkill(this.transport, slug);
-    }
-    readSkillBody(slug) {
-        return skills.readSkillBody(this.transport, slug);
-    }
-    writeSkillBody(slug, body, expectedVersion) {
-        return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
+exports.BillingMethods = void 0;
+const client_skills_js_1 = require("./client-skills.js");
+const billing = __importStar(require("./billing.js"));
+class BillingMethods extends client_skills_js_1.SkillMethods {
+    /**
+     * Spend one MCP credit for `workspaceId`. `allowed: false` means the
+     * workspace is out of credits for the current period — the caller renders
+     * the refusal; this method does not throw for it.
+     */
+    async consumeCredits(workspaceId) {
+        return billing.consumeCredits(this.transport, workspaceId);
     }
 }
-exports.SkillMethods = SkillMethods;
+exports.BillingMethods = BillingMethods;

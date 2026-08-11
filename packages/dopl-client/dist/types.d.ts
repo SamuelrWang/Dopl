@@ -174,3 +174,23 @@ export interface PendingStatus {
     pending_ingestions: number;
     recent: PendingIngestItem[];
 }
+/**
+ * The answer to one MCP credit spend (`POST /api/mcp/credits/consume`).
+ *
+ * `allowed` is the only field the registrar acts on; the counters are for the
+ * refusal wording and for anything that later wants to warn before the wall.
+ * `degraded: true` means the server FAILED OPEN — it could not read the
+ * counter, allowed the call anyway, and the numbers are zeroed rather than
+ * invented.
+ */
+export interface CreditConsumeResponse {
+    allowed: boolean;
+    used: number;
+    limit: number;
+    remaining: number;
+    periodStart: string;
+    periodEnd: string;
+    /** Where an exhausted caller is sent. Empty when the server failed open. */
+    upgradeUrl: string;
+    degraded?: boolean;
+}
