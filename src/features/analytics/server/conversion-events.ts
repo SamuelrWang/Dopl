@@ -8,7 +8,6 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 export type ConversionEventType =
   | "signup"
   | "trial_started"
-  | "first_cluster_built"
   | "first_ingest_completed"
   | "trial_expired"
   | "subscribed"
@@ -40,8 +39,9 @@ export async function logConversionEvent(params: {
 
 /**
  * Check if a user has ever fired a given event. Used to avoid duplicate
- * "first_cluster_built" / "first_ingest_completed" events on the 2nd+
- * occurrence.
+ * first-time events (e.g. "first_ingest_completed") on the 2nd+ occurrence.
+ * ("first_cluster_built" rows survive in the table as history; the event
+ * type lost its emitter when clusters were removed 2026-08-11.)
  */
 export async function hasFiredEvent(
   userId: string,
