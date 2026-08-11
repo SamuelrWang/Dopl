@@ -293,7 +293,35 @@ describe("SessionCard render", () => {
     );
     expect(markup).not.toContain("Working…");
     expect(markup).not.toContain("Work on this thread was interrupted.");
-    expect(markup).toContain("Here is the answer.");
+    // The reply itself starts collapsed (default-collapsed entries) — its
+    // author line is present, the body is behind the chevron.
+    expect(markup).not.toContain("Here is the answer.");
+    expect(markup).toContain('aria-expanded="false"');
+  });
+
+  it("starts every entry collapsed, summary or not", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard
+        session={session({
+          entries: [
+            agentReply(),
+            {
+              ...agentReply(),
+              id: "m3",
+              body: "Long body behind a summary",
+              metadata: { taskId: THREAD_ID, summary: "One-line summary" },
+            },
+          ],
+        })}
+      />
+    );
+    // Summary-less entry: body hidden, author line shown.
+    expect(markup).not.toContain("Here is the answer.");
+    // Summary-bearing entry: summary shown, body hidden.
+    expect(markup).toContain("One-line summary");
+    expect(markup).not.toContain("Long body behind a summary");
+    // Both chevrons read collapsed.
+    expect(markup).not.toContain('aria-expanded="true"');
   });
 
   it("renders a capped session's muted status chip and body note (no overlay case)", () => {
