@@ -6,7 +6,7 @@
 
 ## ✅ STATUS — PHASES 1–7 EXECUTED (2026-08-07)
 
-**All seven phases below are implemented and sit UNCOMMITTED in the `master` working tree.** Canvas, workflows and configuration are unreachable by a user and invisible to an agent; deletes are permanent app-wide. The durable statement of record is [ENGINEERING.md](ENGINEERING.md) §7 — *"Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE"* and *"DELETES ARE PERMANENT"* — not this plan. Read that first; this file is the *why* and the audit trail.
+**All seven phases below are implemented and are COMMITTED on `master`** (this said "sit UNCOMMITTED in the `master` working tree" until 2026-08-11; verified with `git status --short` — the tree is clean of them, they shipped in the 2026-08-07/08 launch wave). Deploy state is a measurement: re-check rather than trust this clause. Canvas, workflows and configuration are unreachable by a user and invisible to an agent; deletes are permanent app-wide. The durable statement of record is [ENGINEERING.md](ENGINEERING.md) §7 — *"Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE"* and *"DELETES ARE PERMANENT"* — not this plan. Read that first; this file is the *why* and the audit trail.
 
 | Phase | Shipped |
 |---|---|
@@ -18,15 +18,19 @@
 | **6 — Soft-delete removal (§2b)** | `features/trash/` deleted whole, with the skills trash modal, every `listTrashed*`/`restore*`/`purge*` service fn, the trash/restore API routes and the `purge-trash` cron + its `vercel.json` entry. All deletes are hard deletes behind a confirm dialog. **MCP deletes blocked entirely** at one choke point (`DELETE_BLOCKED_OPS` + the fail-closed `DELETE_OP_SHAPE`, one `DELETE_REFUSAL` string). `/api/workflows/**` deliberately left soft-deleting (D3 — retired surface, don't half-migrate). |
 | **7 — Docs** | This block; ENGINEERING.md §7 rewritten + stale canvas/workflow/cluster references marked retired throughout; RETIRED banners on `WORKFLOW-BUILDER-PLAN.md` and `WORKFLOW-PIVOT-HANDOFF.md`; `LAUNCH-READINESS-ROADMAP.md` scope note updated. `MULTIPLAYER-PLAN.md` needed nothing (zero workflow references). Root `CLAUDE.md` / `README.md` / `CONTRIBUTING.md` re-verified clean. |
 
-### ⚠️ Migrations WRITTEN but NOT APPLIED
+### ✅ Migrations — ALL APPLIED (measured 2026-08-11)
 
-| Migration | Effect | Apply gate |
+**This heading read "⚠️ Migrations WRITTEN but NOT APPLIED" until 2026-08-11, and the third row carried a 🚨 MUST BE APPLIED BEFORE DEPLOY flag. Both were false by then.** Measured against production on **2026-08-11** with `supabase migration list --linked`: **157 local migration files = 157 remote history rows, zero drift.** All four migrations named below — the three in the table and the `20260807000000` straggler under it — are in the remote history, along with everything through the 2026-08-10 security wave. The apply-gate column is kept as the **record of why each one was sequenced the way it was**; it is no longer an instruction.
+
+**Do not trust this paragraph either.** Deploy state is a MEASUREMENT and it expires the moment someone writes a migration — it has no diff, nothing in this repo observes it, and this exact sentence has now been wrong in this file once and in [LAUNCH-READINESS-ROADMAP.md](LAUNCH-READINESS-ROADMAP.md) twice. **Run `supabase migration list --linked` before reasoning about what is applied**, and re-date this line when you do.
+
+| Migration | Effect | Apply gate (HISTORICAL — all applied 2026-08-11) |
 |---|---|---|
 | `20260807100000_drop_workflow_tables_from_realtime.sql` | Drops the 5 `workflow_*` tables from `supabase_realtime`. Reversible via `ADD TABLE`; what is not recoverable is events occurring while unpublished. | **Ship in the SAME release as the Phase 5 client change (R4).** Applying it early is safe (nothing subscribes); shipping the client change without it only wastes WAL decode. |
 | `20260807110000_purge_soft_deleted_rows.sql` | One-time idempotent sweep of the tombstones `purge-trash` would have aged out. `channels` deliberately excluded — `channels.deleted_at` is the DM close/reopen mechanic, not a trash. | Not release-blocking. Until it runs, the surviving `deleted_at IS NULL` read filters are what keep pre-switch tombstones hidden — **do not drop those filters first.** |
-| `20260807120000_ontology_cluster_hard_delete_rpc.sql` | Creates `cascade_hard_delete_cluster(UUID, UUID)`. | 🚨 **MUST BE APPLIED BEFORE DEPLOY.** `ontology/server/repository.ts:186` calls this RPC by name; ship the code without the function and **every ontology cluster delete fails at the DB.** |
+| `20260807120000_ontology_cluster_hard_delete_rpc.sql` | Creates `cascade_hard_delete_cluster(UUID, UUID)`. | ✅ **APPLIED** (was flagged 🚨 MUST BE APPLIED BEFORE DEPLOY). `ontology/server/repository.ts` › `cascadeHardDeleteCluster` calls this RPC by name; shipping the code without the function would have made **every ontology cluster delete fail at the DB.** |
 
-Also still unapplied from the pre-retirement audit: `20260807000000_drop_unbound_tables_from_realtime.sql` (`channel_agents`, `clusters` — written by `0a3b007`, see §0). Same R4 pairing rule.
+Also from the pre-retirement audit and **likewise applied** (this line said "still unapplied" until 2026-08-11): `20260807000000_drop_unbound_tables_from_realtime.sql` (`channel_agents`, `clusters` — written by `0a3b007`, see §0). Same R4 pairing rule, same measurement above.
 
 ---
 
@@ -103,7 +107,7 @@ Commit `0a3b007` also matters here: it audited realtime-published tables, wrote 
 | Welcome popup "…and run workflows", workspace-name step, create-workspace dialog copy | `welcome-popup.tsx:139`, `workspace-name-step.tsx:32`, `create-workspace-dialog-core.tsx:88` |
 
 ### Residual copy naming hidden features
-Role picker + invite dialog "…KBs, skills, canvas" (`member-bits.tsx:18`, `invite-dialog.tsx:39`) · team detail "Workflow access" section (`team-detail.tsx:276,73`) · members list "No knowledge bases or workflows yet." (`members-list-pane.tsx:219,371`) · conflict dialog naming a workflow (`conflict-dialog.tsx:43-46`) · **Trash "Workflows" filter tab** (`workspace-trash-section.tsx:27,48,57,156` — see D6) · 409 `SKILL_ATTACHED_TO_WORKFLOWS` user-facing error (`skills/server/service-writes.ts:154-167`) · `layout-shell.tsx:19`.
+Role picker + invite dialog "…KBs, skills, canvas" (`member-bits.tsx:18`, `invite-dialog.tsx:39`) · team detail "Workflow access" section (`team-detail.tsx:276,73`) · members list "No knowledge bases or workflows yet." (`members-list-pane.tsx:219,371`) · conflict dialog naming a workflow (`conflict-dialog.tsx:43-46`) · **Trash "Workflows" filter tab** (`workspace-trash-section.tsx` — DELETED with the whole trash feature in Phase 6, so the line numbers this entry carried are unresolvable; see D6) · 409 `SKILL_ATTACHED_TO_WORKFLOWS` user-facing error (`skills/server/service-writes.ts:154-167`) · `layout-shell.tsx:19`.
 
 ### Docs that would mislead a future agent
 `docs/ENGINEERING.md:324` (**highest risk — CLAUDE.md points every agent here**; currently dirty in the other session), `:217` · `docs/WORKFLOW-BUILDER-PLAN.md` · `docs/WORKFLOW-PIVOT-HANDOFF.md` · `docs/migration-research/web-pages.md` · `docs/REFACTOR-FINDINGS.md:208,216` (also dirty). Root `CLAUDE.md`/`README.md`/`CONTRIBUTING.md` clean.
@@ -117,7 +121,7 @@ Role picker + invite dialog "…KBs, skills, canvas" (`member-bits.tsx:18`, `inv
 - **D3 — API routes: NO GATE.** Leave functional; unreachable in practice once D2 lands.
 - **D4 — Landing page: `overview`.**
 - **D5 — Seeds: keep seeds for surviving pages (ontology, knowledge, skills); remove workflow-related seeding only.** Concretely: the "Workspace upkeep" workflow (`seed-workspace.ts:130-141` + `workflows/server/seed.ts`), the `walk-a-workflow` skill (`skills/server/seed.ts:132-145`), workflow-teaching Dopl Guide KB entries (`knowledge/server/seed.ts:163-200`), and the WORKFLOW rubric in `bootstrap-prompt.ts:55,73,101`. Everything else seeds as today.
-- **D6 — superseded by a bigger call: KILL SOFT-DELETE ENTIRELY.** Samuel wants trash = permanent delete, with an "are you sure" confirm dialog on **every** destructive action app-wide. (The "Workflows" trash tab he couldn't find lives inside Settings → Trash, `workspace-trash-section.tsx:27` — it goes away with the whole trash feature.) See §2b — this is a new workstream beyond retirement.
+- **D6 — superseded by a bigger call: KILL SOFT-DELETE ENTIRELY.** Samuel wants trash = permanent delete, with an "are you sure" confirm dialog on **every** destructive action app-wide. (The "Workflows" trash tab he couldn't find lived inside Settings → Trash, `workspace-trash-section.tsx` — it went away with the whole trash feature, and the file is deleted.) See §2b — this is a new workstream beyond retirement.
 - **D7 — Teams: REMOVE `workflow` as a grantable resource type from UI + access-matrix output.** Existing grant rows stay valid in the DB (harmless); nothing renders them.
 - **D8 — Realtime publication: YES, drop the 5 workflow tables.** Clarification vs. the earlier draft: this is **reversible** — `ALTER PUBLICATION supabase_realtime ADD TABLE workflows;` re-enables it any time if workflows return. What is NOT recoverable: events that occurred while unpublished (no replay/backfill), and the silent-failure gotcha that a client binding on an unpublished table reports SUBSCRIBED while delivering nothing — which is why the client-binding removal and the publication migration must ship together (R4).
 
@@ -149,5 +153,5 @@ All decision gates resolved (§2) — every phase is go. ✅ **All seven are now
 - **R3** Gating API routes kills MCP tools (loopback) — gate at registrar.
 - **R4** `ui-sync-tables.test.mjs` now fails on published-but-unsubscribed drift → realtime binding removal MUST pair with the publication migration; un-publishing is silent-failure territory (a binding on an unpublished table goes SUBSCRIBED and delivers nothing) and re-adding is not an undo.
 - **R5** Canvas = ontology view (cheap); Configuration = mock-only (cheapest); Workflows = the real work.
-- **R6** Three hard runtime importers of `@/features/workflows` forbid deletion (hiding is fine): `trash/server/service.ts:39-44`, `workspaces/server/seed-workspace.ts:9`, `clusters/server/service.ts:5` (circular).
+- **R6** Three hard runtime importers of `@/features/workflows` forbid deletion (hiding is fine): `trash/server/service.ts` (**this importer no longer exists** — §2b deleted `features/trash/` whole, so R6 is down to two), `workspaces/server/seed-workspace.ts:9`, `clusters/server/service.ts:5` (circular).
 - **R7 (cross-doc)** `src/features/workflows` holds the repo's best optimistic-cache implementation (`use-workflows.ts:229-232`) — **harvest into the shared mutation layer (roadmap Phase B) before any future deletion.**

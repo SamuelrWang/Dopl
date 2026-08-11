@@ -134,11 +134,42 @@ jobs:
       - name: Typecheck @dopl/desktop-ui (the bundled SPA)
         run: npm run typecheck -w @dopl/desktop-ui
 
-      # 0 errors is the bar. Two warnings are known and tracked; `--max-warnings`
-      # is deliberately NOT set, so a new warning does not fail the build while a
-      # new ERROR does.
+      # 0 errors AND 0 warnings is the bar (both trees measured at true zero
+      # 2026-08-11, and --max-warnings 0 now holds it there — the old "two known
+      # warnings" this comment tracked were fixed in the launch wave, so the
+      # allowance had become a hole, not a kindness).
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --max-warnings 0
+
+      # THE DOCS' THREE ROTTABLE ANCHOR CLASSES (added 2026-08-11). A measurement
+      # over `docs/` put inline `path/to/file.ts:NNN` accuracy at ~33% and found
+      # F-ids referenced with no entry behind them — both rot silently, both
+      # mislead the next agent, and nothing had ever re-read one. This asserts
+      # the FILE exists (never the line: lines rot, existence is checkable) and
+      # that every `F-NNN` resolves to a live entry or to a deletion the
+      # findings log's header records.
+      #
+      # THE THIRD CLASS WAS ADDED THE SAME DAY, and it is the one with teeth:
+      # `path › symbolName` anchors — the form these docs PREFER over line
+      # numbers — must name a file that exists AND a symbol whose name appears
+      # in it. An adversarial read of INVARIANTS.md had just found
+      # `shared/api/error-handler.ts › withErrorHandler`: a file that never
+      # existed, naming a wrapper nothing ever exported, copied out of
+      # ENGINEERING.md where it had lived for months. A symbol anchor reads as
+      # MORE authoritative than a line number, so an unchecked one is worse.
+      #
+      # No dependencies, ~170ms (the symbol check reads the files an anchor
+      # names; reads are memoized), so it is a step here rather than a job.
+      #
+      # DELIBERATELY LAST in this job: it is the cheapest check and the least
+      # urgent, and putting it ahead of `tsc` would let a stale doc anchor hide
+      # a type error behind a red X.
+      #
+      # NOTE it is NOT covered by `npm run lint` above — `eslint.config.mjs`'s
+      # `globalIgnores` excludes `scripts/**` wholesale, so nothing in that tree
+      # is linted by the root config at any extension. Run it directly.
+      - name: Doc references (files exist, F-ids resolve, symbol anchors resolve)
+        run: node scripts/check-doc-refs.mjs
 
   size-check:
     name: file size cap (500 lines)
