@@ -78,9 +78,18 @@ function mapBillingRow(row: BillingRowShape): WorkspaceBillingRow {
     seatCount: row.seat_count,
     currentPeriodStart: row.current_period_start,
     currentPeriodEnd: row.current_period_end,
-    // The column is NOT NULL DEFAULT false; the `?? false` covers a row read
-    // before the migration lands, and keeps the fail-safe direction (an
-    // unknown cancel intent must never read as "your plan is ending").
+    // The column is NOT NULL DEFAULT false, so `?? false` is a TYPE-LEVEL
+    // narrowing (the row shape types it nullable), not a pre-migration
+    // fallback — it cannot be one: `BILLING_COLS` names the new columns, and
+    // PostgREST answers a select for a column that does not exist with a 400,
+    // so there is no "row with the key missing" state to catch. THE REAL
+    // COUPLING IS DEPLOY ORDER: this code must not ship ahead of
+    // `20260811130000_mcp_credits.sql`, which adds BOTH `current_period_start`
+    // and `cancel_at_period_end`, or every billing read 400s. It is applied
+    // (verify against the database, never against a migration header — see
+    // docs/INVARIANTS.md §12, and the near-miss in REFACTOR-FINDINGS). The
+    // `false` still keeps the fail-safe direction (an unknown cancel intent
+    // must never read as "your plan is ending").
     cancelAtPeriodEnd: row.cancel_at_period_end ?? false,
     lastStripeEventCreated: row.last_stripe_event_created,
   };

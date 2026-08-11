@@ -6,6 +6,7 @@ import {
   countActiveMembers,
   countOntologyObjects,
   getWorkspaceBilling,
+  type WorkspaceBillingRow,
 } from "./workspace-billing";
 
 /**
@@ -78,6 +79,34 @@ function paidEntitlement(
   if (plan === "team") return "team";
   if (plan === "solo" && memberCount <= SOLO_MAX_MEMBERS) return "solo";
   return null;
+}
+
+/**
+ * THE PLAN VERDICT ALONE, from data the caller already has — the SAME
+ * `paidEntitlement` logic `getWorkspaceEntitlements` runs (one definition, not
+ * a copy), minus everything the verdict does not need.
+ *
+ * WHY IT EXISTS: the per-tool-call credit path needs the entitled plan and
+ * NOTHING ELSE, and `getWorkspaceEntitlements` is three queries — one of which
+ * is a `COUNT(*)` over `ontology_objects` that only the object cap reads. On a
+ * hot path charged once per MCP tool call that count is pure tax. Callers that
+ * need the caps/window keep using `getWorkspaceEntitlements`, unchanged.
+ *
+ * Pure on purpose: the caller reads `workspace_billing` ONCE and feeds the row
+ * into both this and the credit-period rule, so the two can never disagree
+ * about which subscription state they were looking at.
+ */
+export function entitledPlanFor(
+  billing: Pick<WorkspaceBillingRow, "plan" | "status"> | null,
+  memberCount: number
+): WorkspacePlan {
+  return (
+    paidEntitlement(
+      billing?.plan ?? "free",
+      billing?.status ?? "free",
+      memberCount
+    ) ?? "free"
+  );
 }
 
 export async function getWorkspaceEntitlements(

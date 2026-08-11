@@ -207,6 +207,50 @@ describe("fail direction", () => {
     expect(error).toHaveBeenCalled();
     error.mockRestore();
   });
+
+  /**
+   * ONLY AN EXPLICIT `allowed === false` REFUSES.
+   *
+   * The fail-open promise above covers a THROWN error. A 200 with a body that
+   * does not parse into our shape — a proxy's JSON error page, a truncated
+   * response, a future shape change — is the more likely failure, and the
+   * original `outcome.allowed ? null : refuse` read `undefined` as a refusal:
+   * fail-OPEN on the rare path and fail-CLOSED on the common one. A body that
+   * does not say "no" is not a no.
+   */
+  it.each([
+    ["a body with no `allowed` key", { used: 1, limit: 500, upgradeUrl: UPGRADE }],
+    ["an empty object", {}],
+    ["`allowed: undefined`", { ...allowed(), allowed: undefined }],
+    ["`allowed` as a non-boolean", { ...allowed(), allowed: "true" }],
+  ])("FAILS OPEN on %s — the tool call proceeds", async (_label, body) => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(body);
+
+    const res = await map({});
+    expect(res.isError).toBeFalsy();
+    expect(textOf(res)).not.toContain("out of MCP credits");
+    expect(client.listKbBases).toHaveBeenCalled();
+  });
+
+  it("FAILS OPEN on a null/absent body rather than refusing", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(null);
+
+    const res = await map({});
+    expect(res.isError).toBeFalsy();
+    expect(client.listKbBases).toHaveBeenCalled();
+  });
+
+  it("still refuses on an EXPLICIT false — the fix does not disarm the gate", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue({ ...allowed(), allowed: false });
+
+    const res = await map({});
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toContain("out of MCP credits");
+    expect(client.listKbBases).not.toHaveBeenCalled();
+  });
 });
 
 describe("what is NOT charged", () => {

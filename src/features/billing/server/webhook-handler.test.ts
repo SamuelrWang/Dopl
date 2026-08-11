@@ -196,6 +196,87 @@ describe("mapStatus (via subscription.updated)", () => {
   });
 });
 
+/**
+ * B2a — EVERY CANCEL PATH NULLS THE PERIOD ANCHOR.
+ *
+ * A retained anchor whose end is still in the FUTURE keeps the MCP credit
+ * window on the key the paid plan had been spending against, so the first
+ * free-plan call is charged to a counter already past the 500 free limit and
+ * the workspace is refused every tool call until the dead period expires.
+ * `credits.ts › resolveCreditPeriod` also ignores the anchor on a free verdict
+ * — that half heals rows nobody's webhook reaches; this half stops the bad
+ * state being written in the first place, and keeps the row honest for
+ * anything else that reads it (`subscription_period_end` is on the wire).
+ */
+describe("cancellation clears the MCP credit period anchor (B2a)", () => {
+  it("customer.subscription.deleted nulls BOTH period columns", async () => {
+    await processStripeEvent(event("customer.subscription.deleted", sub()));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        status: "canceled",
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+      })
+    );
+  });
+
+  it("the canceled branch of subscription.updated nulls them too", async () => {
+    await processStripeEvent(
+      event(
+        "customer.subscription.updated",
+        sub({
+          status: "canceled",
+          current_period_start: 1_700_000_000,
+          current_period_end: 4_102_444_800,
+        } as unknown as Partial<Stripe.Subscription>)
+      )
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        plan: "free",
+        status: "canceled",
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+      })
+    );
+  });
+
+  it("a never-paid state (unpaid -> canceled) clears the anchor as well", async () => {
+    await processStripeEvent(
+      event("customer.subscription.updated", sub({ status: "unpaid" }))
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+      })
+    );
+  });
+
+  it("a LIVE subscription still writes its anchor — the clear is cancel-only", async () => {
+    await processStripeEvent(
+      event(
+        "customer.subscription.updated",
+        sub({
+          status: "active",
+          current_period_start: 1_700_000_000,
+          current_period_end: 1_702_000_000,
+        } as unknown as Partial<Stripe.Subscription>)
+      )
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        currentPeriodStart: new Date(1_700_000_000 * 1000).toISOString(),
+        currentPeriodEnd: new Date(1_702_000_000 * 1000).toISOString(),
+      })
+    );
+  });
+});
+
 describe("event-ordering watermark", () => {
   it("applies a fresh event and stamps the watermark", async () => {
     mockRepo.getStripeEventWatermark.mockResolvedValue(100);
@@ -525,6 +606,65 @@ describe("checkout.session.completed", () => {
     await processStripeEvent(event("checkout.session.completed", session, 200));
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
     expect(syncSeatQuantity).not.toHaveBeenCalled();
+  });
+
+  /**
+   * B3 — the period spreads are conditioned on `canceled` LIKE EVERY OTHER
+   * PAID FIELD in this branch. They were not: plan, sub id, price, seats and
+   * `cancelAtPeriodEnd` all had the ternary and the two anchors were written
+   * unconditionally, so a checkout event landing on an already-canceled sub
+   * (Stripe retries, or a sub canceled between session and delivery) wrote a
+   * live future anchor onto a free row — the B2 lockout, arriving by a path
+   * neither cancel handler covers.
+   */
+  it("a checkout whose subscription is already canceled writes NULL anchors", async () => {
+    retrieveSub.mockResolvedValue(
+      sub({
+        status: "canceled",
+        current_period_start: 1_700_000_000,
+        current_period_end: 4_102_444_800,
+      } as unknown as Partial<Stripe.Subscription>)
+    );
+    const session = {
+      metadata: { workspace_id: WS },
+      customer: "cus_1",
+      subscription: "sub_1",
+    };
+    await processStripeEvent(event("checkout.session.completed", session));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        plan: "free",
+        status: "canceled",
+        stripeSubscriptionId: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+      })
+    );
+  });
+
+  it("a checkout on a LIVE subscription still stamps the anchor", async () => {
+    retrieveSub.mockResolvedValue(
+      sub({
+        status: "active",
+        current_period_start: 1_700_000_000,
+        current_period_end: 1_702_000_000,
+      } as unknown as Partial<Stripe.Subscription>)
+    );
+    const session = {
+      metadata: { workspace_id: WS },
+      customer: "cus_1",
+      subscription: "sub_1",
+    };
+    await processStripeEvent(event("checkout.session.completed", session));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        status: "active",
+        currentPeriodStart: new Date(1_700_000_000 * 1000).toISOString(),
+        currentPeriodEnd: new Date(1_702_000_000 * 1000).toISOString(),
+      })
+    );
   });
 });
 

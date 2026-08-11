@@ -69,8 +69,22 @@ function parseInstant(value: string | null | undefined): Date | null {
 /**
  * Which period a call made `now` is charged to.
  *
- * SUBSCRIPTION ANCHOR when the workspace has BOTH period columns stamped by
- * the Stripe webhook AND the end is still in the future — a paid workspace's
+ * `entitledPlan` is THE ENTITLEMENT VERDICT (`server/entitlements.ts ›
+ * entitledPlanFor`), never the raw `workspace_billing.plan`, and it is the
+ * FIRST thing this rule reads:
+ *
+ * A FREE VERDICT IGNORES THE ANCHOR ENTIRELY — a free workspace's window is
+ * always the UTC calendar month. This is not a tidiness rule, it is the
+ * self-heal for a cancellation: cancel mid-period and the row keeps a period
+ * anchor whose end is still in the FUTURE, so the anchor branch would charge
+ * the next call to the SAME period key the paid plan had been spending
+ * against — 8,000 used against a fresh 500 limit, i.e. the workspace is locked
+ * out of MCP until the anchor expires. Reading the verdict first heals that
+ * without waiting for any webhook, and covers the degraded-solo case
+ * (`paidEntitlement`: solo with a second member) for free.
+ *
+ * SUBSCRIPTION ANCHOR for a PAID verdict with BOTH period columns stamped by
+ * the Stripe webhook AND an end still in the future — a paid workspace's
  * credits should roll on its own billing date, not on the 1st.
  *
  * UTC CALENDAR MONTH otherwise. Free workspaces usually have no
@@ -78,16 +92,24 @@ function parseInstant(value: string | null | undefined): Date | null {
  * canceled workspace to a window that never rolls. The calendar month always
  * advances, so the counter SELF-ROLLS on the next consume — no reset cron.
  *
+ * ENFORCEMENT AND THE METER MUST PASS THE SAME VERDICT (`credits-service.ts ›
+ * consumeMcpCredits` and `summarizeCredits`). A settings meter reading one
+ * window while the gate charges another shows a used/limit pair that does not
+ * explain the refusal the operator just saw.
+ *
  * Pure: `now` is injected so the fallback is testable.
  */
 export function resolveCreditPeriod(
   anchor: CreditPeriodAnchor,
+  entitledPlan: PlanId,
   now: Date = new Date()
 ): CreditPeriod {
-  const start = parseInstant(anchor.currentPeriodStart);
-  const end = parseInstant(anchor.currentPeriodEnd);
-  if (start && end && end.getTime() > now.getTime() && end > start) {
-    return { periodStart: start.toISOString(), periodEnd: end.toISOString() };
+  if (entitledPlan !== "free") {
+    const start = parseInstant(anchor.currentPeriodStart);
+    const end = parseInstant(anchor.currentPeriodEnd);
+    if (start && end && end.getTime() > now.getTime() && end > start) {
+      return { periodStart: start.toISOString(), periodEnd: end.toISOString() };
+    }
   }
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth();

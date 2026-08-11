@@ -54,7 +54,9 @@ export const POST = withWorkspaceAuth(
  */
 function failOpen(): CreditConsumeResult & { degraded: true } {
   return {
-    ...creditPeriodFor(null),
+    // No row was read and no verdict was resolved, so the window is the one a
+    // workspace with no subscription state gets: the UTC calendar month.
+    ...creditPeriodFor(null, "free"),
     allowed: true,
     used: 0,
     limit: 0,

@@ -191,7 +191,16 @@ export function withWorkspaceAuth(
       // op; is_write is the reliable HTTP-method signal. Fire-and-forget.
       if (ctx.agentTokenId) {
         const mcpTool = request.headers.get("x-mcp-tool");
-        if (mcpTool) {
+        // A LEADING UNDERSCORE MEANS INTERNAL — the MCP layer calling our own
+        // infrastructure routes, not an agent calling a tool. Those calls keep
+        // the header (it is worth having in a server log) but are NOT
+        // analytics: `_mcp_credits_consume` fires on EVERY tool call, so
+        // logging it would add one `mcp_tool_calls` insert per call and put a
+        // synthetic "tool" at the top of every usage query. The convention was
+        // already de facto — the only two `_`-prefixed names @dopl/client
+        // sends are `_mcp_credits_consume` and `_mcp_status_ping`, and no real
+        // tool name starts with `_`; this makes it binding.
+        if (mcpTool && !mcpTool.startsWith("_")) {
           const sep = mcpTool.indexOf("_");
           void logMcpToolCall({
             workspaceId: workspace.id,

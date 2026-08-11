@@ -110,11 +110,20 @@ function createCreditedRunner(client) {
      * agent in the product on a transient blip, and the operator would read it
      * as "out of credits" for a workspace that is not. The server side makes the
      * same call and states the same reason (`/api/mcp/credits/consume`).
+     *
+     * ⚠ ONLY `allowed === false` REFUSES — not "not truthy". A 200 whose body is
+     * missing `allowed` (a proxy's JSON error page, a shape change, a partial
+     * response) leaves `outcome.allowed` undefined, and `outcome.allowed ? …`
+     * read that as a refusal: the fail-open promise held for a THROWN error and
+     * silently inverted for a malformed answer, which is the more likely of the
+     * two. A body that does not say "no" is not a no.
      */
     async function charge(workspaceId) {
         try {
             const outcome = await client.consumeCredits(workspaceId);
-            return outcome.allowed ? null : (0, respond_js_1.creditsExhausted)(outcome.upgradeUrl);
+            return outcome?.allowed === false
+                ? (0, respond_js_1.creditsExhausted)(outcome.upgradeUrl)
+                : null;
         }
         catch (err) {
             console.error(`[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${err instanceof Error ? err.message : String(err)}`);

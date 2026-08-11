@@ -5,9 +5,11 @@ import {
   resolveCreditPeriod,
   type CreditPeriod,
 } from "../credits";
-import { getWorkspaceEntitlements, upgradeUrl } from "./entitlements";
+import type { PlanId } from "../plans";
+import { entitledPlanFor, upgradeUrl } from "./entitlements";
 import {
   consumeWorkspaceCredits,
+  countActiveMembers,
   getWorkspaceCreditsUsed,
   getWorkspaceBilling,
   type WorkspaceBillingRow,
@@ -42,12 +44,26 @@ export interface CreditConsumeResult extends CreditsSummary {
   upgradeUrl: string;
 }
 
-/** The credit window for a billing row (null row = calendar month). */
-export function creditPeriodFor(billing: WorkspaceBillingRow | null): CreditPeriod {
-  return resolveCreditPeriod({
-    currentPeriodStart: billing?.currentPeriodStart ?? null,
-    currentPeriodEnd: billing?.currentPeriodEnd ?? null,
-  });
+/**
+ * The credit window for a billing row (null row = calendar month).
+ *
+ * `entitledPlan` IS REQUIRED AND IS THE VERDICT, not `billing.plan`: a free
+ * verdict ignores the subscription anchor outright, which is what un-sticks a
+ * workspace canceled mid-period (see `../credits.ts › resolveCreditPeriod`).
+ * Both callers — enforcement and the settings meter — pass the same verdict,
+ * so `used` and `limit` always describe the window the gate charged.
+ */
+export function creditPeriodFor(
+  billing: WorkspaceBillingRow | null,
+  entitledPlan: PlanId
+): CreditPeriod {
+  return resolveCreditPeriod(
+    {
+      currentPeriodStart: billing?.currentPeriodStart ?? null,
+      currentPeriodEnd: billing?.currentPeriodEnd ?? null,
+    },
+    entitledPlan
+  );
 }
 
 /**
@@ -58,10 +74,10 @@ export function creditPeriodFor(billing: WorkspaceBillingRow | null): CreditPeri
  */
 export async function summarizeCredits(
   workspaceId: string,
-  plan: Parameters<typeof monthlyCreditsForPlan>[0],
+  plan: PlanId,
   billing: WorkspaceBillingRow | null
 ): Promise<CreditsSummary> {
-  const period = creditPeriodFor(billing);
+  const period = creditPeriodFor(billing, plan);
   const limit = monthlyCreditsForPlan(plan);
   const used = await getWorkspaceCreditsUsed(workspaceId, period.periodStart);
   return {
@@ -80,16 +96,27 @@ export async function summarizeCredits(
  *
  * THROWS on an unexpected read/RPC failure. The fail DIRECTION is the route's
  * decision, not this function's — see `POST /api/mcp/credits/consume`.
+ *
+ * THREE ROUND TRIPS, AND THAT IS A BUDGET, NOT AN OBSERVATION: the billing row
+ * and the member count (concurrent), then the RPC. It used to be five, because
+ * it called `getWorkspaceEntitlements` — which fans out to a `COUNT(*)` over
+ * `ontology_objects` for the object cap — and THEN read `workspace_billing` a
+ * second time for the period anchor. Neither the cap nor the chats window is
+ * on this path. `entitledPlanFor` is the same verdict logic with only the two
+ * inputs the verdict has, and the ONE billing row feeds both the verdict and
+ * the period. Do not reintroduce `getWorkspaceEntitlements` here: this runs
+ * once per MCP tool call.
  */
 export async function consumeMcpCredits(
   workspaceId: string
 ): Promise<CreditConsumeResult> {
-  const [entitlements, billing] = await Promise.all([
-    getWorkspaceEntitlements(workspaceId),
+  const [billing, memberCount] = await Promise.all([
     getWorkspaceBilling(workspaceId),
+    countActiveMembers(workspaceId),
   ]);
-  const period = creditPeriodFor(billing);
-  const limit = monthlyCreditsForPlan(entitlements.plan);
+  const plan = entitledPlanFor(billing, memberCount);
+  const period = creditPeriodFor(billing, plan);
+  const limit = monthlyCreditsForPlan(plan);
   const outcome = await consumeWorkspaceCredits(
     workspaceId,
     period.periodStart,

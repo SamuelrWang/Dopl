@@ -239,6 +239,14 @@ async function handleSubscriptionUpsert(
       // The sub is gone; a leftover `true` would render "ends on <date>" on a
       // workspace that has already ended.
       cancelAtPeriodEnd: false,
+      // AND THE PERIOD ANCHOR GOES WITH IT. A retained future anchor keeps the
+      // MCP credit window on the key the PAID plan was spending against, so
+      // the first free-plan call is charged to a counter already past the free
+      // limit and the workspace is locked out of MCP until that dead period
+      // would have ended. (`credits.ts › resolveCreditPeriod` also ignores the
+      // anchor on a free verdict — that half heals rows no webhook reaches.)
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
     });
     return;
   }
@@ -295,12 +303,14 @@ async function handleCheckoutCompleted(
     stripePriceId: status === "canceled" ? null : fields.stripePriceId,
     seatCount: status === "canceled" ? null : fields.seatCount,
     cancelAtPeriodEnd: status === "canceled" ? false : fields.cancelAtPeriodEnd,
-    ...(fields.currentPeriodStart
-      ? { currentPeriodStart: fields.currentPeriodStart }
-      : {}),
-    ...(fields.currentPeriodEnd
-      ? { currentPeriodEnd: fields.currentPeriodEnd }
-      : {}),
+    // Conditioned on `canceled` LIKE EVERY OTHER PAID FIELD ABOVE. They were
+    // not, so a checkout retried after the sub was canceled wrote a live
+    // future anchor onto a free row — the same MCP-credit lockout the cancel
+    // paths null the anchor to prevent, by a path neither of them covers.
+    // `undefined` (no period on the payload) leaves the stored value alone —
+    // `upsertWorkspaceBilling` only writes keys that are not `undefined`.
+    currentPeriodStart: status === "canceled" ? null : fields.currentPeriodStart,
+    currentPeriodEnd: status === "canceled" ? null : fields.currentPeriodEnd,
   });
   if (applied === "stale") return;
 
@@ -330,6 +340,9 @@ async function handleSubscriptionDeleted(
     stripePriceId: null,
     seatCount: null,
     cancelAtPeriodEnd: false,
+    // Same reason as the canceled branch of `handleSubscriptionUpsert`.
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
   });
 }
 
