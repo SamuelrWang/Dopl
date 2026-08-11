@@ -21,10 +21,16 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
 
 - **F-188 assigned 2026-08-10** (the debt-fix wave, commit `a02f692`): the consent inbox's missing workspace scope — a **user-reported** bug, and the only entry in this file so far that arrived that way rather than from an audit. Closed in the same wave. That wave also closed **F-067**, **F-186**, and **F-100's MCP half**, halved **F-060** (size cap) and **C-20** (addressing), and closed both of **F-159**'s remaining site-level items plus **F-178**'s `coldKeys` promotion. **Every number in this pass was re-measured**, not copied: all five suites were run (root 2674 / 180 files, SPA 177 / 27, desktop 2541, mcp-server 556 / 40, dopl-client 75 / 4 — all green), and the F-085 correction below came out of re-reading the code rather than the entry.
 
+- **F-189 through F-192 assigned 2026-08-10** (the security-rulings wave, commit `1d11a31` — C-12, C-13's visibility half, C-15 both halves, C-20's sweep half, with all four `20260810*` migrations APPLIED to production): the DM-close liveness regression the tombstone-hiding RLS policy created, the per-column-redaction failure mode that migration accepts, the departed-user rows that the C-20 sweep does NOT touch, and the un-CDN'd desktop download. **F-179 CLOSES in the same pass** — its open question was a production question, and the production query answered it (below). **The next free id is F-193.**
+  - **Every number in this pass was re-measured, all five suites run on the working tree: root 2733 / 186 files, SPA 177 / 27, desktop 2541, mcp-server 556 / 40, dopl-client 75 / 4 — all green.** Note root moved 2674 → **2733** (+59) and 180 → **186 files** in one wave; the 2707 in `1d11a31`'s own commit message was already stale by the time the docs were written, which is the third time in this file's history that a suite count in a commit message did not survive to the doc pass. Read the runner, not the message.
+  - **Two operational facts were verified by MEASUREMENT, not by reading the commit:** (1) `list_migrations` returns all four `20260810*` versions — applied. (2) `CRON_SECRET` **IS SET AND LIVE** — all three `/api/cron/*` routes answer **401** unauthenticated where they answered 503 before (`https://www.usedopl.com/api/cron/{oauth-cleanup,reconcile-seats,stale-threads}`; note the apex 307-redirects to `www`, so a curl without `-L` reports 307 and proves nothing). See the correction under "what this pass found" below — a dozen doc lines still said "unset".
+
 **⚠ TWO CANDIDATE FINDINGS FROM THIS PASS WERE NOT ASSIGNED IDS, DELIBERATELY** — the duplicated cold-cache filter (`coldKeys` / `ifCold`) and the unpinned M4 component wiring. Both were already recorded as open items **inside F-178**, by the agent that created them, and filing them again would have produced two ids pointing at debt that already has a home. **Checking before allocating is the rule this file keeps re-learning from the other direction** (F-160–F-162 are gaps because ids were allocated and never used). A finding that already has an owner does not need a number; it needs the owner's entry to stay open. **Vindicated 2026-08-10:** the cold-cache filter closed inside F-178 exactly as an owned open item, with no id ever allocated to it; the M4 wiring is still open in the same place.
 - **Three entries ADDED from what the verification itself turned up:** F-166 (the renumber), **F-167** (two migration files renamed out of a version collision — they will re-apply on the next push), **F-168** (another member's KB/skill body reaches your tool-capable agent unframed, which contradicts a decision F-101 recorded as deliberate).
 
 **What this pass found that is worth repeating.** The 2026-07-31 note said to verify against code, not commit messages. The failure mode this time was one level up: **entries verified against ANOTHER ENTRY.** F-146 wrote "assessed and left" over a residual set nobody had re-read; F-151 corrected that and was itself right; and then F-153's status line ("the two `eslint.config.mjs` deletions are OPEN and assigned to nobody") was already false when it was written, because a sibling agent had performed all three deletions in the same wave. Three of tonight's status lines were stale in the same direction — **they described the tree as of the moment the agent started, not the moment it finished.** A status line is a measurement and it expires; re-read it before you act on it.
+
+**What the 2026-08-10 pass found that is worth repeating: A FACT ABOUT THE ENVIRONMENT ROTS EXACTLY LIKE A FACT ABOUT THE CODE, AND NOTHING LINTS IT.** `CRON_SECRET` was unset for weeks and that sentence propagated into a dozen places — two `src/**` docblocks, an ENGINEERING §7 bullet, three audit findings, a roadmap row, the KB entry — each of them true when written and each of them load-bearing (three separate fixes were described as "inert until the secret is set", which was the reason not to worry about them). **It is now SET; all three `/api/cron/*` answer 401 where they answered 503.** Nobody was going to notice, because an env var has no diff. Note also that the check itself is easy to get wrong: the apex `usedopl.com` **307-redirects to `www`**, so `curl` without `-L` returns 307 and looks like neither answer. **The lesson generalizes past this variable: any doc sentence of the form "X is not configured yet" is a claim about a system nothing in this repo can observe, and it should be re-measured on sight rather than trusted.** ⚠ **The two `src/**` copies are still stale and are NOT fixed by this pass** (docs-only scope): `src/app/api/cron/stale-threads/route.ts:84` and `route.test.ts:7,217` both assert the secret is unset in Vercel — and the test's comment reasons about which branch "every run" takes, which is now the wrong branch. One-line follow-up, code-side.
 
 **And the deploy state in every entry was stale.** Twenty-seven entries carried "committed on `master`, **unpushed**" or "committed on `min-version-gate`, unmerged, undeployed". `git log origin/master..master` is **0** and `min-version-gate` is fully merged. Deploy state does not belong in a debt log — it goes out of date silently and nothing ever revisits it. The one deploy fact worth tracking is UNAPPLIED MIGRATIONS, and that is now F-156.
 
@@ -433,21 +439,24 @@ COMMIT;
 - **Residual 2 — per-server `timeout` blast radius.** `MCP_CLIENT_TIMEOUT_MS = 290_000` (`main/mcp-config.js:73`, written as `timeout:` at `:131`) applies to EVERY call to the `dopl` server, not just `await`: a genuinely hung short op hangs a session for ~290s instead of 60s. Accepted — the hold is the only op that can legitimately take minutes. **If Residual 1 is confirmed in production, consider dropping the per-server timeouts entirely rather than keeping two mechanisms.** (`test/mcp-client-timeout.test.mjs` pins the RELATION `AWAIT_HOLD_CAP_MS + AWAIT_HOLD_MARGIN_MS <= CLIENT_TIMEOUT_MS`, not a literal.)
 - Status: open (residuals 1-2)
 
-### F-093: The §2 file-size backlog — RE-MEASURED 2026-08-08
+### F-093: The §2 file-size backlog — RE-MEASURED 2026-08-10 (four over cap)
 - Location: `eslint.config.mjs` (the rule at `:34-39`, the exemption list); `docs/ENGINEERING.md` §2
 - Found during: production-hardening batch 1 (item L1); **absorbs F-153, deleted this pass as superseded** — the same way this entry absorbed F-041 on 2026-07-31.
 - Severity: smell (process); the lint half is real drift
 - **RE-MEASURED AGAIN 2026-08-08, at the END of the split wave. THE BACKLOG HALVED: FIVE files are over the 500-line cap and `eslint.config.mjs` exempts exactly those five.** `find` + `wc -l` over `src/**`, `packages/*/src/**` and `apps/*/src/**` in one pass. No unlisted file has crossed 500, so the cap is still holding on new code. **This is the first remeasure in this entry's history where EVERY departure was a SPLIT** — the four previous reductions were all deletions (trash teardown ×2, hand-rolled optimistic state, a lint-only file), and a deletion closes a row without teaching anything about how to close the next one.
 
-| File | 2026-08-08 | Note |
-|---|---|---|
-| `src/shared/supabase/types.ts` | 2793 | Exempt by §2 carve-out — generated |
-| `src/features/knowledge/server/seed-fixtures-data.ts` | 670 | Exempt by §2 carve-out — pure data |
-| `src/features/billing/components/upgrade-modal.tsx` | 570 | Split scheduled |
-| `src/features/billing/server/webhook-handler.test.ts` | 542 | Split by event kind |
-| `src/features/workspaces/server/invitations.ts` | 534 | Split scoped since F-041 (extract the accept/join sub-flows) |
+**RE-MEASURED AGAIN 2026-08-10 (C-20 wave). THE BACKLOG IS FOUR, and `eslint.config.mjs` exempts exactly those four — verified row-for-row in one `find` + `wc -l` pass, not read off the note above.** Third consecutive remeasure where the backlog SHRANK, and the second consecutive one where the departure was a **real split**. **One correction to the table below, in the direction this entry keeps predicting:** `src/shared/supabase/types.ts` is **2934**, not the 2793 recorded on 2026-08-08 — it drifts with every `gen types` and no measurement of it survives a schema wave, which is why its `eslint.config.mjs` comment says "~2934 (drifts with every gen)" rather than a number to be trusted. This wave added four migrations, so it moved.
 
-**FIVE ROWS LEFT, with their siblings measured in the same pass:**
+| File | 2026-08-10 | Note |
+|---|---|---|
+| `src/shared/supabase/types.ts` | **2934** (was 2793) | Exempt by §2 carve-out — generated; drifts with every `gen types`, do not quote it |
+| `src/features/knowledge/server/seed-fixtures-data.ts` | 670 | Exempt by §2 carve-out — pure data |
+| `src/features/billing/components/upgrade-modal.tsx` | 570 | Split scheduled — **now the oldest un-split row in the table** |
+| `src/features/billing/server/webhook-handler.test.ts` | 542 | Split by event kind |
+
+**`src/features/workspaces/server/invitations.ts` LEFT THE TABLE ON 2026-08-10 (C-20): 534 → 404, and its exemption was DELETED, not moved** — the `plans-billing.tsx` precedent for the fourth time. This is worth more than a row change because of *why* it split. F-041 scoped this split as "extract the accept/join sub-flows" and nobody did it for three weeks; what actually moved it was a **behavioural requirement landing on the file** — C-20 made `removeMember` responsible for what a departure costs inside `channels`, which is a different reason-to-change from minting and redeeming an invite. The seam was `membership-admin.ts` (209: `updateMemberRole`, `removeMember`, `countActiveOwners`), which is **not** the seam F-041 named. The original keeps a two-name re-export so no importer moved. **The generalizable part: a split scheduled on line count waits; a split scheduled by a new reason-to-change happens the same day.** §2 asks for the second and this table mostly records the first.
+
+**FIVE ROWS LEFT ON 2026-08-08, with their siblings measured in the same pass:**
 
 | Was | Now | Split into |
 |---|---|---|
@@ -1184,7 +1193,7 @@ The root of the menu renders each control's CURRENT VALUE and that value's plain
 
 ---
 
-## F-179 — `doplToolsPolicy` was not inert, it was DESTRUCTIVE: every restricted-profile session shipped with no dopl server (2026-08-08) — RESOLVED
+## F-179 — `doplToolsPolicy` was not inert, it was DESTRUCTIVE: every restricted-profile session shipped with no dopl server (2026-08-08) — ✅ FULLY RESOLVED (blast radius answered 2026-08-10: zero)
 
 - Location: `dopl-desktop-app/main/sdk-loader.js` (`buildMcpServers`, the removed `server.tools = doplToolsPolicy` assignment); `main/session-profiles.js:138,154,165` (the values, now unconsumed by design); `main/prompt-framing.js:203-208` (the F3b comment that mis-read the field)
 - Tests: `test/mcp-server-tools-policy.test.mjs` — pins "never sent", joins the deny lists to prove the bound is carried, and asserts `alwaysLoad: true` survives
@@ -1208,7 +1217,8 @@ The root of the menu renders each control's CURRENT VALUE and that value's plain
 
 **HOW IT WENT UNDETECTED — the reusable part.** Two independent misses. (1) **No test asserted the shape the SDK was HANDED.** The suite checked what `buildSessionToolConfig` RETURNED, which was correct, and stopped at the boundary. (2) **The CLI's rejection is a warning on a stream nothing reads** (`Skipped — invalid MCP server config for "dopl": tools.0: …`), so the loudest signal the system produced went nowhere. **A config field is not verified by testing the function that computes it; it is verified by asserting the object that crosses the process boundary, or by reading back what the runtime says it loaded.**
 
-- ⚠ **OPEN QUESTION FOR SAMUEL, not a code item:** whether any REAL session was affected in production. The defect is in the shipped desktop, so the blast radius is "every restricted-profile session on every build carrying the field" — determining whether that is zero requires knowing whether anyone ran a `read_only`/`dopl_only` session, which the code cannot answer.
+- ✅ **THE OPEN QUESTION IS ANSWERED, AND THE ANSWER IS ZERO (2026-08-10, production query).** The question was whether any REAL session was affected — unanswerable from code, because it turns on whether anyone ever ran a `read_only` / `dopl_only` session. It is answerable from the DATABASE, which is the part worth copying: **the profile is a column, so "was a restricted profile ever selected" is a `GROUP BY`, not an archaeology problem.** `SELECT agent_tool_profile, count(*) … FROM channel_members GROUP BY 1` returns **exactly one group: `full`**. No row has ever carried `read_only` or `dopl_only`, so no session ever launched under a profile that would have set the field, so the shipped outage had a blast radius of **zero real sessions**. The finding is now fully closed, defect and impact both.
+- ⚠ **ONE CAVEAT ON THE NUMBERS, because this file's failure mode is exactly this.** The query was first run against **38 rows / 21 channels / 2 users**; re-run after the C-15 purge migration (`20260810110000`) it returns **3 rows / 2 channels / 2 users**, because the purge hard-deleted 19 non-DM tombstoned channels and their rosters cascaded. **Both readings say `full` and only `full`** — the conclusion is invariant and that is why it survives — but if you quote a row count from this entry, quote which side of the purge it was taken on. A count is a measurement with a timestamp; the profile distribution is the finding.
 
 ---
 
@@ -1333,3 +1343,82 @@ The root of the menu renders each control's CURRENT VALUE and that value's plain
 
 **Residual, minor and deliberate:** `consent-service.listConsentRequests` still calls `collab.expireStalePending(ctx.userId)`, which is operator-scoped across all workspaces. That is correct — expiry is a TTL sweep, and a stale row is stale regardless of which workspace raised it — but it is the one remaining operator-only read on this path, so note it before "fixing" it to match.
 
+---
+
+## F-189 — Closing a DM stopped being a LIVE event: the tombstone-hiding RLS policy makes its own CDC frame undeliverable (2026-08-10)
+
+- Location: `supabase/migrations/20260810100000_channels_rls_hide_tombstoned.sql:202-213` (`channels_member_select`, the `AND deleted_at IS NULL` conjunct); `src/features/channels/server/repository.ts#softDeleteChannel` (the UPDATE that becomes invisible); `service-writes.deleteChannel` (the DM branch) and `service-workspace-departure.ts` (the departure branch) are the two callers
+- Found during: post-apply reasoning about what C-15's policy change costs, in the same wave that applied it
+- Severity: **bug (liveness regression, accepted for now)** — no data loss, no security consequence; the room is still correctly hidden, just not *promptly*
+- Status: **open, ACCEPTED.** Shipped knowingly in `1d11a31`; recorded here so the trade is not rediscovered as a mystery.
+
+**THE MECHANISM, WHICH IS THE WHOLE FINDING.** `channels` is in the `supabase_realtime` publication (verified: `channel_consent_requests`, `channel_members`, `channel_messages`, `channels`). Closing a DM is an **UPDATE** that stamps `deleted_at` — and `realtime.apply_rls` evaluates the **NEW** record against the subscriber's SELECT policy before delivering. That policy now requires `deleted_at IS NULL`. So the row the frame is announcing is, by the same statement that produced the frame, no longer visible to the subscriber, **and the frame is dropped.** The close was previously deliverable for exactly the reason §7 records about soft deletes generally: an `UPDATE` produces a full new record carrying `workspace_id`, so the `workspace_id=eq.<id>` filter matched and the doorbell rang. C-15 did not break the filter; it made the row fail the policy the filter is checked alongside.
+
+**EFFECT:** the peer's sidebar keeps rendering a DM that is closed until their next refetch. Nothing is wrong on screen except the timing — `listChannels` filters `deleted_at IS NULL`, so the next read drops it correctly. **This is a downgrade from live to next-refetch, not a stale-forever bug.**
+
+**⚠ THE OBVIOUS GENERALIZATION IS THE TRAP: this is a property of EVERY soft-delete-hiding SELECT policy, not of DMs.** Any table where (a) the tombstone is an UPDATE, (b) the table is in the publication, and (c) the SELECT policy excludes tombstones, has silently traded its delete doorbell for a refetch. `channels` is the only one in this codebase today because it is the only table that still soft-deletes AND is published — but the next `deleted_at IS NULL` added to a published table's policy inherits this for free and will not be noticed, because the failure is a frame that does not arrive.
+
+**REMEDY SKETCHED, NOT TAKEN — and the ORDER is the whole design.** Touch the peer's `channel_members` row (a no-op `UPDATE`, e.g. re-stamping a column it already carries) **BEFORE** stamping the channel tombstone. `channel_members` is published and carries `workspace_id` in its replica identity (`20260807150000`, `REPLICA IDENTITY USING INDEX`), so that UPDATE rides the existing `CHANNEL_TABLES` / `SYNC_TABLES` doorbell both subscribers already refetch on. It **must** come first: `channel_members_member_select` was rewritten in the same migration to require `c.deleted_at IS NULL` on the parent channel, so the identical touch performed AFTER the tombstone is dropped for exactly the reason this finding opens with. A remedy for this bug is one statement away from being another instance of it.
+
+**NOTE THE ASYMMETRY BETWEEN THE TWO CALLERS, because it is why this reads as "sometimes live".** The ordinary DM close (`deleteChannel`) writes only the `channels` UPDATE and is therefore fully dark. The **workspace-departure** close (`service-workspace-departure.ts`) also DELETEs the leaver's `channel_members` row, and a DELETE's deliverability turns on the subscription filter against `old_columns` (= the replica identity, which carries `workspace_id`) with `old_record` PK-redacted, rather than on a policy evaluation — so that path probably still rings the doorbell. **Reasoned from the deployed identity and §7's `apply_rls` note, NOT observed** — treat it as a hypothesis, and if you ever need it to be true, verify it against a live frame first. Same class of owed verification as F-190.
+
+---
+
+## F-190 — `channel_members` CDC may have gone dark for `authenticated`, and we will not know until someone watches a frame (2026-08-10)
+
+- Location: `supabase/migrations/20260810120000_channel_members_column_privileges.sql` (the `REVOKE SELECT ON public.channel_members FROM anon, authenticated` + per-column `GRANT`); rollback named in that file's header (`GRANT SELECT ON public.channel_members TO anon, authenticated;` — one statement)
+- Found during: writing the migration; recorded as an accepted risk at apply time, not discovered afterwards
+- Severity: **bug (potential outage, unobserved)** — the security property holds either way; what is at risk is a doorbell
+- Status: **open — VERIFICATION OWED AT FIRST LIVE OBSERVATION.** Do not close this by reasoning; close it by watching a roster change propagate.
+
+**WHAT C-15 DID AND WHY IT IS A COLUMN PRIVILEGE.** Samuel's ruling: per-member settings are private, role and roster basics stay public. `dto.mapMemberRow` already scrubbed `agent_tool_profile` — but the DTO **is not on every path**, which is the sentence the old docblock got wrong. `channel_members` is published and `authenticated` held table-wide SELECT, so the RAW row reached any channel member over CDC and over PostgREST with the anon key the browser ships. **A column privilege binds both consumers where a policy binds neither** (RLS filters rows, not columns), which is why the enforcement moved to `REVOKE` + a per-column `GRANT` rather than to another policy.
+
+**THE FAILURE MODE, STATED AS A CONDITIONAL BECAUSE THAT IS WHAT IT IS.** `realtime.apply_rls` redacts per column — but **if the deployed build tests table-level SELECT before it reaches the column loop**, the `REVOKE` reads as "no SELECT at all" and **every `channel_members` frame goes dark for `authenticated`**, not just the redacted column. That is not a security regression (dark is the safe direction) — it is the loss of the roster doorbell that §7 records as *already paid for* and that F-189's remedy proposes to lean on. Two findings would then be resting on a frame that no longer arrives.
+
+**WHY IT WAS SHIPPED ANYWAY.** The security property is the ruling and it holds under either behaviour; the failure is degraded liveness with a **one-statement rollback** already written into the migration header. Shipping and watching costs less than staging a realtime harness for a question one live roster change answers.
+
+**⚠ WHAT "VERIFY" MEANS HERE, precisely — because the wrong verification will read as a pass.** Do NOT verify by querying `information_schema.column_privileges`; that confirms the grant landed, which is not in doubt. Verify by **subscribing as an `authenticated` client and making a roster change** (add or remove a member), then checking whether the frame arrives and whether `agent_tool_profile` is absent from it. Three outcomes: frame arrives without the column (intended — close this finding); frame arrives WITH the column (the redaction does not bind CDC at all — a real leak, roll back and rethink); no frame (this finding is confirmed — roll back and find another shape). **And do not verify against upstream `walrus` master**, for the same reason §7 already warns about `apply_rls`: its master returns `coalesce(..., true)` in the neighbouring branch and says the opposite of what is deployed.
+
+**THE STANDING RULE THIS LEAVES BEHIND (also in ENGINEERING §7/§8):** a new per-member SETTING must be added to `dto.mapMemberRow`'s scrub **AND** left out of that migration's `GRANT` list. Two edits, and the second is the one that binds. Adding it to only the scrub reproduces exactly the gap C-15 closed.
+
+---
+
+## F-191 — The C-20 sweep removes the member but not their SESSION and THREAD-PARTICIPANT rows (2026-08-10)
+
+- Location: `src/features/channels/server/service-workspace-departure.ts#removeWorkspaceDepartedMember` (touches `channel_members` and `channels.deleted_at`, and nothing else); the unswept tables are `public.channel_sessions` (`20260805120000`) and `public.channel_task_participants` (`20260731130000`)
+- Found during: verifying C-20's sweep half against the tables that carry a `user_id` alongside a channel
+- Severity: smell (correctness of derived reads, no security consequence) — promoted from "not noticed" to "written down" precisely because the sweep's own docblock enumerates what it deliberately skips and these two are not in that list
+- Status: open
+- **Measured 2026-08-10 (production): 0 orphaned `channel_task_participants`, 0 orphaned `channel_sessions`, 0 ghost `channel_members`.** So this is a LATENT code gap, not an observed data problem — which is the honest framing and also the reason it is a smell rather than a bug. The C-20 backfill migration (`20260810140000`) found zero ghosts for the same reason: nobody has left this workspace yet.
+
+**WHY IT MATTERS EVEN AT ZERO ROWS.** C-20's whole thesis is that a departed member must be *removed*, not *filtered* — Samuel's words were "fully and cleanly removed". The sweep delivers that for the roster, which is the table with a BEHAVIOUR attached (`classify`'s implicit trigger keys on an exact `memberCount === 2`). These two tables have no such trigger, so the cost is smaller: a departed user's rows keep appearing in session lists and thread participant sets, i.e. the same "roster keeps rendering someone who left" the sweep exists to end, one layer down. **The gap is not that the rows are dangerous; it is that "fully removed" is now true of one table and false of two, and nothing says so.**
+
+**`channel_trust` IS FINE AND IS NOT PART OF THIS — verified, not assumed.** `trust-service.ts:47,60` calls `repo.isActiveWorkspaceMember(ctx.workspaceId, …)` on both the read and the grant path, so a trust rule naming a departed user is inert the moment they leave. That is the shape this finding is asking for on the other two, and it is worth noting that trust got there by **re-checking at read** rather than by sweeping at write — which is cheaper, needs no departure hook, and is the design to consider first.
+
+**Proposed resolution — read the sweep's docblock before choosing.** Either (a) extend `removeWorkspaceDepartedMember` with two more deletes, or (b) filter at read the way trust does. **(b) is likely right for `channel_sessions`** (a session is an ephemeral fact and a departed user's is definitionally over) and **(a) for `channel_task_participants`** (a participant set is durable and is read for addressing). Whichever is chosen, the choice belongs in that docblock's "WHAT THIS DELIBERATELY DOES NOT SWEEP" section, which currently names only `channel_tasks`.
+
+---
+
+## F-192 — The desktop DMG downloads at ~0.9 MB/s: the landing page serves 195 MB straight off GitHub release assets, with no CDN (2026-08-10)
+
+- Location: the landing-page download link → GitHub release asset URL (no intermediary); no Cloudflare/R2 or any other CDN in front of it
+- Found during: a real download, timed
+- Severity: smell (product/conversion, not correctness) — recorded because it is the first thing a new user experiences and nothing in the tree measures it
+- Status: open — **needs Samuel's Cloudflare account, so it is gated on him, not on code**
+
+**MEASURED, NOT ESTIMATED:** ~**0.9 MB/s** sustained, for a **195 MB** artifact ≈ **4 minutes** of staring at a progress bar before the app has done anything. GitHub release assets are not a CDN for this purpose: they are unaccelerated for most geographies and the rate is not something the repo can tune.
+
+**WHY THIS IS WORTH AN ID rather than a TODO.** Every other launch-readiness item in this tree is about what happens *after* someone is running the app. This one is entirely *before*, it is on the only path a new user takes, and four minutes is comfortably past where downloads get abandoned. It is also the cheapest item on the list to fix relative to its reach.
+
+**FIX SKETCHED:** put R2 (or any CDN) in front of the download and point the landing page at it, with the release asset as the origin so the publish flow does not change. **The blocker is an account, not an implementation** — this needs Samuel's Cloudflare account before anyone writes anything, so do not open a branch for it first. Two things to decide when it is unblocked: whether the auto-updater's feed moves too (it pulls from the same release assets and has the same problem, less visibly, on every update for every existing user), and whether the artifact itself can shrink — 195 MB is an Electron bundle and part of that number is a packaging question, not a delivery one.
+
+
+## F-193 — The release pipeline has dropped assets on both real releases, and the DMG is stapled after the yml is generated (2026-08-11)
+
+- Location: `dopl-desktop-app/package.json` `release` script (`electron-builder --mac --publish always`), `scripts/finish-notarize.sh`, and the by-hand `gh release upload` / `gh release edit` steps both releases needed
+- Found during: publishing 1.10.1
+- Severity: smell (operational — twice-observed, both fail-safe directions)
+- Description: two releases, two DIFFERENT partial-upload failures with no error surfaced either time. **1.10.0**: electron-builder uploaded the zip, both blockmaps and `latest-mac.yml` but NOT the DMG, and left the release in DRAFT (electron-builder's default) — undrafted and DMG-uploaded by hand. **1.10.1**: the inverse — DMG and both blockmaps landed, the zip and `latest-mac.yml` did not, and until the hand-repair the `releases/latest/download/latest-mac.yml` URL 404'd, which every auto-updater reads (fail-safe: updaters simply see nothing new). Both times the fix was `gh release upload --clobber` + `gh release edit --draft=false --latest`.
+- **Second, structural wrinkle:** the afterSign hook notarizes and staples the `.app`, `latest-mac.yml` is generated from the built artifacts, and only THEN does `finish-notarize.sh` staple the DMG — which changes its bytes, so the yml's DMG `sha512`/`size` describe pre-staple bytes. Harmless to the updater (it installs from the zip, whose hash is right) but the feed lies about the DMG until re-hashed by hand, which 1.10.1 needed.
+- Proposed resolution: a release wrapper script that does the whole verified sequence — build → staple DMG → regenerate/patch the yml's DMG entry → upload ALL five assets with a post-upload asset-list assertion → undraft → `curl` the `latest/download/latest-mac.yml` URL and diff it against the local file. The publish step should fail LOUD on a missing asset instead of leaving a draft that looks done.
+- Status: open

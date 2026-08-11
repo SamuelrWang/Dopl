@@ -4,9 +4,10 @@
  *
  * WHY THIS FILE EXISTS AT ALL. The audit's headline finding about this job was
  * not any individual bug, it was that NONE of them had a test — and could not
- * have been caught in production either, because `CRON_SECRET` is unset in
- * Vercel so every `/api/cron/*` route answers 503 and this sweep has never run.
- * A job whose first real execution will be its largest (a 14-day backlog, with a
+ * have been caught in production either, because `CRON_SECRET` was unset in
+ * Vercel until 2026-08-10, so every `/api/cron/*` route answered 503 and this
+ * sweep had never run.
+ * A job whose first real execution could be its largest (a 14-day backlog, with a
  * clock that only now identifies it correctly) posting real messages into real
  * shared transcripts is exactly the shape that needs its behaviour pinned
  * BEFORE the variable is set, not observed after.
@@ -214,8 +215,10 @@ describe("failure handling", () => {
   });
 
   it("fails closed when the cron secret gate refuses", async () => {
-    // `CRON_SECRET` is unset in Vercel today, so this is the branch every run
-    // currently takes — and the reason none of the above was ever observed.
+    // This was the branch EVERY run took until 2026-08-10 (secret unset in
+    // Vercel) — the reason none of the above was ever observed in production.
+    // The secret is set now; this pins the fail-closed shape for the next
+    // environment that lacks it (preview, local).
     vi.mocked(requireCronSecret).mockReturnValue(
       new Response(null, { status: 503 }) as never
     );

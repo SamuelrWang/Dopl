@@ -80,12 +80,14 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
  * Auth: CRON_SECRET bearer via requireCronSecret (fail-closed 503 when unset,
  * 401 without the secret), same as the other /api/cron/* routes.
  *
- * ⚠ OPERATIONAL NOTE FOR WHOEVER DEPLOYS THIS — READ BEFORE SETTING THE SECRET.
- * `CRON_SECRET` is UNSET in Vercel, so every /api/cron/* route answers 503 and
- * the scheduler runs nothing at all. That is the fail-closed behaviour working
- * as designed, and it is also why none of the three defects above was ever
- * observed. THE COROLLARY: setting the variable turns this job on for the FIRST
- * TIME, against a backlog of everything that has been idle for 14+ days since
+ * ⚠ OPERATIONAL HISTORY (secret SET 2026-08-10; this note is how it was done).
+ * `CRON_SECRET` was unset in Vercel until 2026-08-10, so every /api/cron/*
+ * route answered 503 and the scheduler ran nothing — fail-closed working as
+ * designed, and why none of the three defects above was ever observed. The
+ * first-run risk was retired before setting it: the candidate SELECT was run
+ * against production and returned ZERO rows (oldest open thread 2026-07-31),
+ * so the feared first sweep was empty by measurement, not hope. The sweep now
+ * runs daily at 07:00 UTC against a backlog bounded at 14+ days idle since
  * the feature shipped — and now with a clock that finally identifies those
  * correctly. The first run is therefore the largest one this job will ever have,
  * and each prompt it posts is a real message in a real shared transcript that
