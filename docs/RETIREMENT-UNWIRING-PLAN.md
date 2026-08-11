@@ -8,7 +8,7 @@
 
 **All seven phases below are implemented and are COMMITTED on `master`** (this said "sit UNCOMMITTED in the `master` working tree" until 2026-08-11; verified with `git status --short` — the tree is clean of them, they shipped in the 2026-08-07/08 launch wave). Deploy state is a measurement: re-check rather than trust this clause. Canvas, workflows and configuration are unreachable by a user and invisible to an agent; deletes are permanent app-wide. The durable statement of record is [ENGINEERING.md](ENGINEERING.md) §7 — *"Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE"* and *"DELETES ARE PERMANENT"* — not this plan. Read that first; this file is the *why* and the audit trail.
 
-⛔ **CONFIGURATION HAS SINCE GRADUATED FROM HIDE TO DELETE (2026-08-11).** `src/features/configuration/` and `apps/desktop-ui/src/pages/configuration/` are off disk. Everything this plan says below about hiding configuration is the record of what was done on 2026-08-07 and is not rewritten — but there is no longer a page behind any of it, so nothing here is a restore path. The `/{ws}/configuration` 302 in `src/shared/lib/url/website-retirement.ts` and the deep-link fallthrough stay, unchanged, for in-the-wild bookmarks.
+⛔ **CONFIGURATION AND THE CANVAS PAGE HAVE SINCE GRADUATED FROM HIDE TO DELETE (2026-08-11).** Off disk: `src/features/configuration/`, `apps/desktop-ui/src/pages/configuration/`, `apps/desktop-ui/src/pages/canvas/`, and `src/features/ontology/graph/` (dead the moment the canvas page went — it was its only importer). Everything this plan says below about hiding those two is the record of what was done on 2026-08-07 and is not rewritten — but there is no page behind any of it now, so nothing here is a restore path. Untouched, deliberately: the ontology data and the kanban Ontology page, and the URL machinery for both names — the `/{ws}/configuration` 302, `RETIRED_TOP_LEVEL` / `BILLING_INBOUND_PAGES` (Stripe returns), `WEB_ONLY_ROOTS` and `RESERVED_WORKSPACE_SLUGS` — which keep answering for in-the-wild links.
 
 | Phase | Shipped |
 |---|---|
@@ -44,7 +44,7 @@ Commit `0a3b007` also matters here: it audited realtime-published tables, wrote 
 
 ## Key structural facts
 
-- **Canvas is not its own feature.** `apps/desktop-ui/src/pages/canvas/index.tsx:31-44` renders `GraphView` — a second view of **ontology**. Hiding it costs one view, not data. Ontology page unaffected.
+- **Canvas is not its own feature.** Its page rendered `GraphView` — a second view of **ontology**. Hiding it costs one view, not data. Ontology page unaffected. (Both the page and `src/features/ontology/graph/` were deleted 2026-08-11; the paths this line used to cite no longer exist.)
 - **Configuration is 100% inert.** Zero API/fetch/supabase calls; fully mock-driven (`src/features/configuration/mock-data.ts`). Cheapest, safest hide. Zero MCP presence.
 - **The MCP server reaches `/api/workflows/*` and `/api/clusters/*` over loopback HTTP** (`src/app/api/mcp/route.ts:112` → `DoplClient` → real fetches). Gating those routes kills the agent tools. **Hide at the tool registrar, not the route.**
 - **The app's home page IS canvas.** `WORKSPACE_HOME_PATH = "canvas"` (`apps/desktop-ui/src/routes.tsx:69`) with **6 entry points** funneling through it (index redirect, boot, workspace switch, workspace create, ⌘⇧H menu, auth change). Miss the repoint → app boots into a 404.

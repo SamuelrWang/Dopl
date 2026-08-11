@@ -95,11 +95,10 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
  * every JSONB column and the whole relationships table left behind.
  *
  * WHY THIS EXISTS AS A SECOND PROJECTION RATHER THAN A THINNER SNAPSHOT. The
- * ontology board and the graph view render `attributes`, `methods` and
- * `template` off the snapshot (`kanban-card.tsx`, `graph-node.tsx`,
- * `template-editor.tsx`), and the graph view positions its nodes from
- * `cluster.layout` — so the full projection has real consumers and cannot be
- * thinned. What it did NOT have is a right to be the only projection: the four
+ * ontology board renders `attributes`, `methods` and `template` off the
+ * snapshot (`kanban-card.tsx`, `template-editor.tsx`), and `cluster.layout`
+ * round-trips through the reducer and `updateCluster` — so the full
+ * projection has real consumers and cannot be thinned. What it did NOT have is a right to be the only projection: the four
  * whole-table pulls it costs were also being paid by `dopl_map`, which the
  * server instructions mandate before every agent's first substantive reply and
  * which renders cluster names and column names. On a 366-object workspace that

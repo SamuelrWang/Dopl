@@ -21,11 +21,12 @@ import styles from "./app-shell.module.css";
 
 /**
  * RETIRED (2026-08-07): `canvas`, `workflows` and `configuration` are gone from
- * this union and from `NAV` (docs/RETIREMENT-UNWIRING-PLAN.md §3.1). The canvas
- * and workflows pages still exist in the repo, unrouted; re-adding either
- * section means re-adding its route row in `apps/desktop-ui/src/routes.tsx` AND
- * the hand copy in `dopl-desktop-app/main/deep-link-target.js`. `configuration`
- * was DELETED (2026-08-11) — no page remains behind that name.
+ * this union and from `NAV` (docs/RETIREMENT-UNWIRING-PLAN.md §3.1). The
+ * workflows pages still exist in the repo, unrouted; re-adding that section
+ * means re-adding its route row in `apps/desktop-ui/src/routes.tsx` AND the
+ * hand copy in `dopl-desktop-app/main/deep-link-target.js`. `configuration` and
+ * the canvas pages were DELETED (2026-08-11) — no page remains behind either
+ * name.
  */
 export type NavSection =
   | "overview"

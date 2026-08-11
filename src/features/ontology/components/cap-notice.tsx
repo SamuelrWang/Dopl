@@ -3,8 +3,8 @@
 /**
  * Slim inline cap strip for a capped Starter workspace: a quiet near-cap
  * label at ≥90%, a warning-toned strip once creates are frozen. Both
- * offer the upgrade prompt; nothing is ever deleted. Shared by the
- * ontology kanban (OntologyView) and graph (GraphView) surfaces.
+ * offer the upgrade prompt; nothing is ever deleted. Rendered by the
+ * ontology kanban (OntologyView).
  */
 export function CapNotice({
   used,
