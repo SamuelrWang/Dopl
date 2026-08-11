@@ -123,6 +123,16 @@ describe("H-3 write-gate coverage", () => {
         // UI and the desktop app — are unaffected.
         "channels/consent/[id]/route.ts",
         "channels/trust/route.ts",
+        // C-12 (Samuel 2026-08-10). `PATCH /channels/[channelId]/members`
+        // writes `agentToolProfile` and, since F-170 removed notify scope,
+        // NOTHING ELSE — so the whole method is gated. The profile is a
+        // CONTAINMENT control, not a preference: a spawned agent holding the
+        // desktop's device token and a `full` (Bash-capable) session could
+        // otherwise read its own bearer off disk and durably re-widen its own
+        // profile after the operator tightened it. Same threat model as the two
+        // routes above; the GET and the member add/remove on that file stay
+        // ungated (reads decide nothing, and invites are a separate decision).
+        "channels/[channelId]/members/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
         "oauth/grants/[id]/route.ts",
@@ -146,5 +156,36 @@ describe("H-3 write-gate coverage", () => {
         "workspaces/[workspaceSlug]/teams/[teamId]/route.ts",
       ].sort()
     );
+  });
+
+  /**
+   * THE SECOND GRANULARITY, PINNED THE SAME WAY (C-13, 2026-08-10).
+   *
+   * `sessionOnly` is a wrapper option and therefore per-METHOD. A route whose
+   * one method carries several writes — only some of which an agent may
+   * legitimately make — gates the FIELD instead, in the handler, via a
+   * `SESSION_ONLY_FIELDS` constant. That gate is invisible to the pin above
+   * (there is no `sessionOnly: true` in the file), so it gets its own, or the
+   * tripwire would report a shrinking set as healthy.
+   *
+   * ONE route qualifies today. Adding a second is a conscious edit here.
+   */
+  it("the FIELD-level session gate is exactly the channel visibility write", () => {
+    const fieldGated = files
+      .filter((f) => /SESSION_ONLY_FIELDS/.test(readFileSync(f, "utf8")))
+      .map(apiRel)
+      .sort();
+    expect(fieldGated).toEqual(["channels/[channelId]/route.ts"]);
+
+    // The constant names `visibility` and the refusal actually consults the
+    // caller type — a `SESSION_ONLY_FIELDS` that nothing reads would satisfy
+    // the file list above while gating nothing.
+    const src = readFileSync(
+      path.join(API_ROOT, "channels/[channelId]/route.ts"),
+      "utf8"
+    );
+    expect(src).toMatch(/SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility"\s*\]/);
+    expect(src).toMatch(/auth\.agentTokenId/);
+    expect(src).toMatch(/SESSION_REQUIRED/);
   });
 });

@@ -132,7 +132,13 @@ const eslintConfig = defineConfig([
       // REMOVED (2026-08-07): `ontology/server/repository.ts` was 538 and is now
       // 488 — the soft-delete/restore/purge read paths went with the trash
       // teardown, and the cascade delete moved into an RPC.
-      "src/features/workspaces/server/invitations.ts",
+      // REMOVED, not moved (2026-08-10, C-20): `workspaces/server/invitations.ts`
+      // was 534 and is now 404 — member ADMINISTRATION (`updateMemberRole`,
+      // `removeMember`, `countActiveOwners`) split into
+      // `membership-admin.ts` (209), which is where the channels departure
+      // sweep is wired. The original keeps the two-name re-export every caller
+      // already imports, so no importer moved. A real split, not a trimmed
+      // comment.
       // REMOVED (2026-08-07): `channels/components/channels-view-core.tsx` was
       // 588 and is now 439. Roughly a third of that was DELETION, not
       // extraction — the four hand-rolled optimistic override records (notify

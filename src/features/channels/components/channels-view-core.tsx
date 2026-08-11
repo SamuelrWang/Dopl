@@ -27,6 +27,7 @@ import { ChannelsSkeleton } from "./channels-skeleton";
 import { ChannelsOnboardingCore } from "./channels-onboarding-core";
 import { CreateChannelDialog } from "./create-channel-dialog";
 import { DirectMessageDialog } from "./direct-message-dialog";
+import { GoPublicDialog, needsGoPublicConfirm } from "./go-public-dialog";
 import { InviteDialog } from "./invite-dialog";
 import type { SendOptions } from "./message-composer";
 
@@ -105,6 +106,7 @@ export function ChannelsViewCore({
   const [createOpen, setCreateOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [goPublicOpen, setGoPublicOpen] = useState(false);
   // Double-fire guards, and only that: the OPTIMISTIC half of these two writes
   // is a cache patch now, so nothing here mirrors a server value.
   const [trustBusyIds, setTrustBusyIds] = useState<ReadonlySet<string>>(EMPTY_IDS);
@@ -298,6 +300,22 @@ export function ChannelsViewCore({
     });
   }
 
+  /**
+   * C-13: WIDENING TAKES A HUMAN, so the menu's toggle no longer reaches the
+   * write directly. private→public opens the confirm dialog and the write runs
+   * from there; public→private narrows the audience and goes straight through,
+   * the same way it always did. The decision lives in `go-public-dialog.tsx`
+   * beside the copy the human reads.
+   */
+  function handleToggleVisibility() {
+    if (!selected) return;
+    if (needsGoPublicConfirm(selected.visibility)) {
+      setGoPublicOpen(true);
+      return;
+    }
+    lifecycle.toggleVisibility();
+  }
+
   function handleSetToolProfile(profile: AgentToolProfile) {
     if (!selected) return;
     prefs.toolProfile.mutate({ channelId: selected.id, profile });
@@ -385,7 +403,7 @@ export function ChannelsViewCore({
           onToggleTrust={handleToggleTrust}
           onDecideConsent={handleDecideConsent}
           onToggleArchive={lifecycle.toggleArchive}
-          onToggleVisibility={lifecycle.toggleVisibility}
+          onToggleVisibility={handleToggleVisibility}
           onDelete={lifecycle.remove}
           onJoin={lifecycle.join}
           onLeave={lifecycle.leave}
@@ -426,6 +444,15 @@ export function ChannelsViewCore({
           void refetchChannels();
         }}
       />
+
+      {selected && (
+        <GoPublicDialog
+          open={goPublicOpen}
+          onOpenChange={setGoPublicOpen}
+          displayName={selected.name}
+          onConfirm={lifecycle.toggleVisibility}
+        />
+      )}
 
       {selected && (
         <InviteDialog

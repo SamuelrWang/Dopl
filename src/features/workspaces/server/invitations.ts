@@ -6,9 +6,7 @@ import type {
   Invitation,
   InvitationStatus,
   InvitedRole,
-  Role,
 } from "../types";
-import { canGrantRole, memberManageDenial } from "../member-policy";
 import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { requireWorkspaceRole } from "./authz";
@@ -393,142 +391,14 @@ async function joinInvitationTeams(
 }
 
 /**
- * Update a member's role. Owner can promote/demote anyone (including
- * themselves), admin can manage member/viewer but never owners, other
- * admins, or themselves. Refuses to demote the last remaining owner
- * (the workspace would be unrecoverable).
+ * MEMBER ADMINISTRATION MOVED, THE IMPORT PATH DID NOT (§2 split, 2026-08-10).
+ * `updateMemberRole` / `removeMember` now live in `membership-admin.ts` — this
+ * file was 534 lines and exempt-listed, so the C-20 departure sweep had to
+ * split it rather than grow it. Kept as a re-export because every caller
+ * already imports them from here (`api/workspaces/[workspaceSlug]/members/
+ * [userId]/route.ts`), the same barrel shape `teams/server/repository.ts` kept
+ * through its own split.
  */
-export async function updateMemberRole(
-  workspaceId: string,
-  callerId: string,
-  targetUserId: string,
-  newRole: Role
-): Promise<void> {
-  const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
+export { updateMemberRole, removeMember } from "./membership-admin";
 
-  const target = await findMembership(workspaceId, targetUserId);
-  if (!target || target.status !== "active") {
-    throw new HttpError(404, "MEMBER_NOT_FOUND", "Member not found");
-  }
-
-  // Hierarchy rules single-sourced in ../member-policy (shared with the
-  // members UI). Owners can still change their own role (last-owner
-  // protection below catches the unsafe case).
-  const denial = memberManageDenial(callerRole, target.role, targetUserId === callerId);
-  if (denial === "self") {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "You cannot change your own role — ask another admin or the owner"
-    );
-  }
-  if (denial === "target-protected") {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "Admins can only change member / viewer roles"
-    );
-  }
-  if (!canGrantRole(callerRole, newRole)) {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "Only the owner can grant admin or owner roles"
-    );
-  }
-
-  // Last-owner protection.
-  if (target.role === "owner" && newRole !== "owner") {
-    const ownerCount = await countActiveOwners(workspaceId);
-    if (ownerCount <= 1) {
-      throw new HttpError(
-        409,
-        "WORKSPACE_LAST_OWNER",
-        "Cannot demote the last owner — promote another member to owner first"
-      );
-    }
-  }
-
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("workspace_members")
-    .update({ role: newRole })
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", targetUserId);
-  if (error) throw error;
-}
-
-/**
- * Remove a member. Owner can remove anyone (including themselves, with
- * last-owner protection). Admin can remove member/viewer only — not
- * owners, other admins, or themselves.
- */
-export async function removeMember(
-  workspaceId: string,
-  callerId: string,
-  targetUserId: string
-): Promise<void> {
-  const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
-
-  const target = await findMembership(workspaceId, targetUserId);
-  if (!target || target.status !== "active") {
-    return; // Idempotent — nothing to remove.
-  }
-
-  if (memberManageDenial(callerRole, target.role, targetUserId === callerId) !== null) {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "Admins cannot remove owners, admins, or themselves"
-    );
-  }
-
-  if (target.role === "owner") {
-    const ownerCount = await countActiveOwners(workspaceId);
-    if (ownerCount <= 1) {
-      throw new HttpError(
-        409,
-        "WORKSPACE_LAST_OWNER",
-        "Cannot remove the last owner — transfer ownership first"
-      );
-    }
-  }
-
-  const db = supabaseAdmin();
-
-  // Team memberships are cleaned up by the member_removed_team_cleanup
-  // DB trigger on workspace_members delete — no manual sweep needed
-  // (the legacy workspace_resource_access table is no longer consulted).
-  const { error } = await db
-    .from("workspace_members")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", targetUserId);
-  if (error) throw error;
-
-  // Seat count dropped — reconcile the Pro subscription quantity.
-  // Best-effort: a billing hiccup must not fail the removal.
-  await syncSeatQuantity(workspaceId).catch((err) => {
-    console.error(
-      `[invitations] syncSeatQuantity failed for workspace ${workspaceId}:`,
-      err instanceof Error ? err.message : err
-    );
-  });
-}
-
-// Fast-fail UX only. The last-owner invariant is enforced authoritatively by
-// the DB trigger on workspace_members (H-5) — this app-side check just returns
-// a friendly 409 before the write; it is NOT the real backstop and its
-// read-then-write is racy on purpose (the trigger closes that race).
-async function countActiveOwners(workspaceId: string): Promise<number> {
-  const db = supabaseAdmin();
-  const { count, error } = await db
-    .from("workspace_members")
-    .select("user_id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId)
-    .eq("status", "active")
-    .eq("role", "owner");
-  if (error) throw error;
-  return count ?? 0;
-}
 

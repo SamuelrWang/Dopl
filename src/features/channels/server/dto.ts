@@ -192,6 +192,21 @@ export function mapMessageRow(
  * addMember / updateMyMemberSettings, which previously bypassed it.
  * Presence IS public to the workspace: you need it to know whether the agent
  * you are addressing is live.
+ *
+ * ⚠ THIS SCRUB IS NO LONGER THE ONLY LINE OF DEFENCE, AND IT WAS NEVER
+ * SUFFICIENT ON ITS OWN (C-15, Samuel's decision 2026-08-10: role is public,
+ * per-member settings are not). "It holds for every path" was false: this DTO
+ * is not on every path. `channel_members` is in the realtime publication and
+ * `authenticated` held table-wide SELECT, so the RAW row reached any channel
+ * member over CDC and over direct PostgREST with the anon key. The enforcement
+ * now lives in the DATABASE — column-level privileges, so it binds both of
+ * those consumers (`supabase/migrations/20260810120000_channel_members_column_privileges.sql`:
+ * `agent_tool_profile` is service_role-only; `role`, `user_id`, `channel_id`,
+ * `workspace_id`, `last_read_at`, `added_by`, `joined_at` stay readable).
+ * KEEP THIS SCRUB: it is defence in depth, and it is what shapes the API
+ * response — the server reads as service_role, so the column privilege does
+ * not redact anything on THIS path. Adding a new per-member SETTING means
+ * adding it to the scrub AND leaving it out of that migration's GRANT list.
  */
 export function mapMemberRow(
   row: ChannelMemberRow,

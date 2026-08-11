@@ -63,6 +63,16 @@ export {
   updateMyMemberSettings,
 } from "./service-writes-members";
 
+// C-20's sweep half (2026-08-10). NOT A HANDLER SURFACE — the one exception to
+// this barrel's opening line. It takes no `ChannelContext` and authorizes
+// nothing; its only legitimate caller is `workspaces/server/membership-admin`,
+// server-to-server, once the workspace removal has already committed. Wiring it
+// to a route or an MCP op would publish an unauthenticated "evict this user
+// from every room in the workspace" primitive. The module docblock carries the
+// DM decision (close the pair, don't strand the survivor) and why.
+export { removeWorkspaceDepartedMember } from "./service-workspace-departure";
+export type { DepartedMemberSweep } from "./service-workspace-departure";
+
 export { createTask, setTaskMode } from "./service-tasks";
 
 // C-26 / C-30 (2026-08-08): CLOSE and REOPEN are the only two writes that move a

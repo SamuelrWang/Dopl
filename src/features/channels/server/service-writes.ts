@@ -206,9 +206,12 @@ async function createDirectChannel(
  * missing side reads the channel as not-found (`getChannel` →
  * `loadVisibleChannel`), and the partial unique index on `direct_key` keeps
  * the live row reserving the pair, so a fresh DM can't be created either.
- * `removeMember` now refuses to tear a DM at all, but pairs damaged before
- * that guard existed are unreachable by any other repair path — re-asserting
- * here makes them self-heal on the next open, from EITHER side. Two membership
+ * `removeMember` refuses to tear a DM at the MEMBER level — but that is no
+ * longer the whole story: a WORKSPACE departure legitimately removes the
+ * leaver's row after soft-closing the pair (`service-workspace-departure.ts`),
+ * and pairs damaged before the member guard existed are unreachable by any
+ * other repair path — re-asserting here makes them self-heal on the next
+ * open, from EITHER side (a rejoined leaver included). Two membership
  * reads on a dedup path (not a hot one) is the whole cost.
  */
 async function reopenDirectChannel(

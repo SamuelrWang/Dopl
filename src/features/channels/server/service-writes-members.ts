@@ -108,6 +108,12 @@ export async function removeMember(
   // live row reserving the pair so a fresh DM can't be opened either. The
   // supported exit is deleting the CONVERSATION (soft-delete, reversible,
   // available to both members) — never dropping a membership row.
+  //
+  // THE REFUSAL IS ABOUT MEMBERS, NOT ABOUT THE ROW (C-20, 2026-08-10). A
+  // WORKSPACE departure does drop it — see `service-workspace-departure.ts`,
+  // which closes the pair (`deleted_at`, the same reversible exit) in the same
+  // breath so the survivor is never left holding a one-member DM. That path is
+  // server-to-server and never reaches this function.
   if (channel.is_direct) {
     throw new DirectChannelImmutableError("membership");
   }
