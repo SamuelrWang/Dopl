@@ -69,7 +69,7 @@ export const LATEST_VERSION_ENV = "DOPL_DESKTOP_LATEST_VERSION";
  * the clamp can never refuse the floor shipped beside it. The release feed
  * still wins whenever an instance has reached it (derived beats declared).
  */
-export const DEFAULT_DECLARED_LATEST = "1.10.0";
+export const DEFAULT_DECLARED_LATEST = "1.10.1";
 
 /**
  * `1.8.2`, optionally `1.9.0-beta.2`. Deliberately the same shape as
