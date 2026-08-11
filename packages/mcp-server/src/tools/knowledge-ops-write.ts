@@ -83,7 +83,7 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
     throw e;
   }
   return ok(
-    `Published knowledge base ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
+    `Published knowledge base ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`,
   );
 }
 

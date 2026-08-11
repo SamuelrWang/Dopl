@@ -429,7 +429,7 @@ const ALL_DOPL = [
 // exactly like "no drift". Fail here instead, naming what to repoint.
 test("the mcp-server source parser still finds what it is looking for", () => {
   const hiddenTools = hiddenNames();
-  assert.ok(registeredTools.length >= 15,
+  assert.ok(registeredTools.length >= 14,
     `only ${registeredTools.length} registration sites parsed — the register(...) call shape changed; repoint REGISTER_SITE`);
   assert.equal(new Set(registeredTools).size, registeredTools.length,
     "the same tool name is registered twice");
@@ -457,9 +457,28 @@ test("the desktop's Dopl tool lists match the MCP server's live surface", () => 
   assert.equal(live.length, 14, "the agent surface is documented as 14 tools");
 });
 
-test("RETIRED_DOPL_TOOLS is exactly the server's HIDDEN_TOOLS", () => {
-  assert.deepEqual(RETIRED_DOPL_TOOLS.map(shortName).sort(), [...hiddenNames()].sort(),
-    "a hidden tool missing from RETIRED_DOPL_TOOLS is UNCLASSIFIED, which resolves to `gate`, not deny");
+// RETIRED_DOPL_TOOLS is a SUPERSET of HIDDEN_TOOLS, never an equality.
+//
+// It was an equality until 2026-08-11, when the four names it held
+// (`dopl_workflow`/`_admin`, `dopl_cluster`/`_admin`) stopped being HIDDEN and
+// started being DELETED — server-side there is no registrar, no route and no
+// table left, so HIDDEN_TOOLS is now empty while these four stay denied. That
+// asymmetry is the containment rule, not drift: a deny may outlive its tool,
+// but a hidden tool may never be missing from the deny list, because dropping
+// it makes the name UNCLASSIFIED, which resolves to `gate` rather than to deny.
+// The direction that must never break is therefore HIDDEN ⊆ RETIRED, plus the
+// separate rule that nothing denied here is also live.
+test("every HIDDEN tool is denied, and nothing denied is live", () => {
+  const retired = RETIRED_DOPL_TOOLS.map(shortName);
+  for (const h of hiddenNames()) {
+    assert.ok(retired.includes(h),
+      `HIDDEN_TOOLS names ${h}, which is missing from RETIRED_DOPL_TOOLS — that makes it `
+      + "UNCLASSIFIED, which resolves to `gate`, not deny");
+  }
+  const live = [...DOPL_SAFE_TOOLS, ...DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL].map(shortName);
+  for (const r of retired) {
+    assert.ok(!live.includes(r), `${r} is denied AND offered — the lists contradict each other`);
+  }
 });
 
 test("the admin list is exactly the live *_admin tools", () => {

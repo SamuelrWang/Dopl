@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { PlanId, BillingStatus } from "../plans";
+import { MONTHLY_MCP_CREDITS } from "../credits";
 
 /**
  * Client mirror of the workspace entitlements the `/api/billing/status`
@@ -23,6 +24,20 @@ import type { PlanId, BillingStatus } from "../plans";
 export type WorkspacePlan = PlanId;
 export type { BillingStatus };
 
+/**
+ * The workspace's MCP credit meter for the CURRENT billing period. Every plan
+ * has one; the allowances live in `../credits.ts`. `periodStart`/`periodEnd`
+ * are ISO instants — the subscription anchor for a paid workspace, the UTC
+ * calendar month otherwise.
+ */
+export interface WorkspaceCreditsStatus {
+  used: number;
+  limit: number;
+  remaining: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
 export interface WorkspaceEntitlementsStatus {
   plan: WorkspacePlan;
   status: BillingStatus;
@@ -35,6 +50,9 @@ export interface WorkspaceEntitlementsStatus {
   canCreateObjects: boolean;
   /** null = full history. */
   chatsWindowDays: number | null;
+  credits: WorkspaceCreditsStatus;
+  /** Live now, will not renew (Stripe's `cancel_at_period_end`). */
+  cancelAtPeriodEnd: boolean;
   subscription_period_end: string | null;
   has_stripe_customer: boolean;
 }
@@ -53,6 +71,18 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   objectsUsed: 0,
   canCreateObjects: true,
   chatsWindowDays: 90,
+  // The free allowance, nothing spent — the degrade-to-Free direction this
+  // whole default takes. The period bounds are BLANK on purpose: this fallback
+  // measured nothing, and no surface renders credit dates today, so an
+  // invented window would be a number with no measurement behind it.
+  credits: {
+    used: 0,
+    limit: MONTHLY_MCP_CREDITS.free,
+    remaining: MONTHLY_MCP_CREDITS.free,
+    periodStart: "",
+    periodEnd: "",
+  },
+  cancelAtPeriodEnd: false,
   subscription_period_end: null,
   has_stripe_customer: false,
 };
@@ -79,7 +109,18 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
     staleTime: 5_000,
   });
   // Billing UI degrades to Free rather than erroring.
-  const data = query.data ?? DEFAULT_STATUS;
+  //
+  // FIELD-WISE, not just row-wise, for the two fields added after this hook
+  // shipped. The query cache is IndexedDB-persisted with a 24h gcTime (§8), so
+  // a response stored BEFORE the credits deploy is replayed into this hook
+  // after it — and `data.credits.used` on such a row is a crash, not a
+  // degrade. A new field on this payload takes a fallback here.
+  const raw = query.data ?? DEFAULT_STATUS;
+  const data: WorkspaceEntitlementsStatus = {
+    ...raw,
+    credits: raw.credits ?? DEFAULT_STATUS.credits,
+    cancelAtPeriodEnd: raw.cancelAtPeriodEnd ?? false,
+  };
 
   const isSolo = data.plan === "solo";
   const isTeam = data.plan === "team";

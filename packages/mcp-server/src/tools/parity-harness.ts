@@ -23,8 +23,6 @@ import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
 
 import type { RegisterTool } from "./respond.js";
-import { registerClusterTools } from "./cluster.js";
-import { registerWorkflowTools } from "./workflow.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
 import { registerChatTools } from "./chats.js";
@@ -48,8 +46,6 @@ export const REGISTRARS: Array<{
   file: string;
   register: (r: RegisterTool, c: DoplClient) => void;
 }> = [
-  { file: "cluster.ts", register: registerClusterTools },
-  { file: "workflow.ts", register: registerWorkflowTools },
   { file: "knowledge.ts", register: registerKnowledgeTools },
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
@@ -112,11 +108,23 @@ function parseOpTable(src: string, name: string, where: string): Record<string, 
   return out;
 }
 
-/** A bare tool-name table: `NAME = new Set([...])` in source. */
+/**
+ * A bare tool-name table: `NAME = new Set([...])` in source, with or without
+ * an explicit type argument (`new Set<string>([])` is what an EMPTY table has
+ * to be written as, because `new Set([])` infers `Set<never>`).
+ *
+ * NOT FOUND THROWS; EMPTY DOES NOT. The two are different answers and the
+ * caller must be able to tell them apart — "the table is gone or renamed" is a
+ * broken guard, "the table is empty" is a legitimate state (`HIDDEN_TOOLS` has
+ * been empty since workflows and clusters were deleted on 2026-08-11).
+ */
 function parseToolSet(src: string, name: string, where: string): Set<string> {
-  const start = src.indexOf(`${name} = new Set([`);
-  if (start < 0) throw new Error(`${name} not found in ${where}`);
-  const block = src.slice(start, src.indexOf("]);", start));
+  const decl = new RegExp(`${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(\\[`).exec(src);
+  if (!decl) throw new Error(`${name} not found in ${where}`);
+  const start = decl.index + decl[0].length;
+  const end = src.indexOf("]", start);
+  if (end < 0) throw new Error(`${name} in ${where} has no closing bracket`);
+  const block = src.slice(start, end);
   return new Set([...block.matchAll(/"([^"]+)"/g)].map((x) => x[1]));
 }
 
@@ -148,7 +156,10 @@ export const READ_ONLY_BLOCKED_TOOLS = parseToolSet(
   "READ_ONLY_BLOCKED_TOOLS",
   "gating.ts",
 );
-/** The retirement guard (D2) — tools whose registrar runs but never registers. */
+/**
+ * The hide-before-delete guard (D2) — tools whose registrar runs but never
+ * registers. EMPTY since 2026-08-11; see `gating.ts › HIDDEN_TOOLS`.
+ */
 export const HIDDEN_TOOLS = parseToolSet(GATING_SOURCE, "HIDDEN_TOOLS", "gating.ts");
 /** The §2b app-only-deletion table, same shape as WRITE_OPS. */
 export const DELETE_BLOCKED_OPS = parseOpTable(
@@ -164,5 +175,10 @@ export const DELETE_BLOCKED_OPS = parseOpTable(
  * `tools/list` an agent receives, because it never passes through the
  * `HIDDEN_TOOLS` guard in `registerTool`. Everything about the live surface is
  * asserted against this, not against `TOOLS`.
+ *
+ * Identical to `TOOLS` while `HIDDEN_TOOLS` is empty. Keep the distinction:
+ * collapsing the two would delete the only place the guard is expressed, and
+ * the next retirement would then ship a "hidden" tool that every parity
+ * assertion still treats as live.
  */
 export const VISIBLE_TOOLS = TOOLS.filter((t) => !HIDDEN_TOOLS.has(t.name));

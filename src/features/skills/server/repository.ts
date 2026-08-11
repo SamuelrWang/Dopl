@@ -4,7 +4,6 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type {
   Skill,
   SkillFile,
-  SkillUsedBy,
   SkillWriteSource,
 } from "../types";
 import {
@@ -271,7 +270,7 @@ export async function updateSkillRow(
  * PERMANENTLY delete a skill. Deletion is immediate and irreversible —
  * there is no trash (2026-08-07). Workspace-scoped as defense-in-depth.
  * The SKILL.md body lives in columns on this row (F-029); skill_versions,
- * skill_events, and workflow_skills cascade via `ON DELETE CASCADE`.
+ * and skill_events cascade via `ON DELETE CASCADE`.
  */
 export async function hardDeleteSkill(
   workspaceId: string,
@@ -405,26 +404,4 @@ export function pgErrorCode(err: unknown): string | null {
     return (err as { code?: string }).code ?? null;
   }
   return null;
-}
-
-// ─── Used-by (attachment graph) ─────────────────────────────────────
-
-/** Workflows referencing a skill (for the detail insights). */
-export async function listSkillUsedBy(
-  workspaceId: string,
-  skillId: string
-): Promise<SkillUsedBy> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workflow_skills")
-    .select("workflows(id, name)")
-    .eq("workspace_id", workspaceId)
-    .eq("skill_id", skillId);
-  if (error) throw error;
-  type WorkflowJoin = { workflows: { id: string; name: string } | null };
-  return {
-    workflows: ((data ?? []) as unknown as WorkflowJoin[])
-      .map((r) => r.workflows)
-      .filter((w): w is NonNullable<typeof w> => w !== null),
-  };
 }

@@ -14,16 +14,16 @@
  * the same class from the same entry point and call the same methods with the
  * same signatures. See `client-base.ts` for the chain and its ordering rules;
  * the domain method groups are the `client-<domain>.ts` files, and the HTTP
- * itself lives in the free-function modules they delegate to (`clusters.ts`,
- * `workflows.ts`, `workspaces.ts`, `knowledge.ts`, `ontology.ts`, `chats.ts`,
- * `members.ts`, `channel.ts`, `skills.ts`).
+ * itself lives in the free-function modules they delegate to
+ * (`workspaces.ts`, `knowledge.ts`, `ontology.ts`, `chats.ts`, `members.ts`,
+ * `channel.ts`, `skills.ts`).
  *
  * ADD NOTHING TO THIS FILE. A new method belongs in its domain's link — or in
  * a new link, added per the rules in `client-base.ts`. The whole point of the
  * split is that this file stops being where methods accumulate.
  */
 
-import { SkillMethods } from "./client-skills.js";
+import { BillingMethods } from "./client-billing.js";
 
 // Re-exported from HERE, not just from `index.ts`: `client.test.ts` imports
 // `parseRetryAfter` from this module and `index.ts` re-exports
@@ -31,4 +31,4 @@ import { SkillMethods } from "./client-skills.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 
-export class DoplClient extends SkillMethods {}
+export class DoplClient extends BillingMethods {}

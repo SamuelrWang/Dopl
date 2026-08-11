@@ -51,7 +51,9 @@ function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
     stripeSubscriptionId: "sub_1",
     stripePriceId: "price_seat",
     seatCount: 2,
+    currentPeriodStart: null,
     currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
     lastStripeEventCreated: null,
     ...overrides,
   };

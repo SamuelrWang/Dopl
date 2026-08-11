@@ -29,6 +29,7 @@
 
 import { notFound, redirect } from "next/navigation";
 import { BillingPageScreen } from "@/features/billing/components/billing-page-screen";
+import { resolveBillingTab } from "@/features/billing/billing-tabs";
 import {
   billingSelfPath,
   parseBillingIntent,
@@ -79,6 +80,7 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
 
   const billingParam = typeof query.billing === "string" ? query.billing : null;
   const planParam = typeof query.plan === "string" ? query.plan : null;
+  const tabParam = typeof query.tab === "string" ? query.tab : null;
 
   return (
     <BillingPageScreen
@@ -94,6 +96,14 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
           ? parseCheckoutPlan(planParam)
           : null
       }
+      // ANY recognised `?billing=` intent (upgrade / success / return) opens on
+      // Billing and outranks `?tab=`, because all three arrive mid-transaction
+      // and only the Billing pane runs the post-payment poll. Otherwise `?tab=`
+      // decides; a bare visit opens on Usage.
+      initialTab={resolveBillingTab(
+        tabParam,
+        parseBillingIntent(billingParam) !== null
+      )}
     />
   );
 }

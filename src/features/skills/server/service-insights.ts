@@ -1,12 +1,14 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { SkillContext, SkillUsage } from "../types";
-import * as repo from "./repository";
 import { getSkillBySlug } from "./service-reads";
 
 /**
- * Skill insights — agent read activity (`getSkillUsage`) and the
- * clusters/workflows a skill is attached to (`getSkillUsedBy`).
+ * Skill insights — agent read activity (`getSkillUsage`).
+ *
+ * There was a second reader here, `getSkillUsedBy`, answering "what is this
+ * skill attached to". Its only answer came from `workflow_skills`, so it went
+ * with workflows on 2026-08-11; nothing rendered it.
  */
 
 /**
@@ -41,10 +43,4 @@ export async function getSkillUsage(
     count30d: countRes.count ?? 0,
     lastUsedAt: last?.created_at ?? null,
   };
-}
-
-/** Clusters + workflows this skill is attached to. */
-export async function getSkillUsedBy(ctx: SkillContext, slug: string) {
-  const skill = await getSkillBySlug(ctx, slug);
-  return repo.listSkillUsedBy(ctx.workspaceId, skill.id);
 }

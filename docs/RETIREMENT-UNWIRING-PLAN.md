@@ -8,6 +8,14 @@
 
 **All seven phases below are implemented and are COMMITTED on `master`** (this said "sit UNCOMMITTED in the `master` working tree" until 2026-08-11; verified with `git status --short` — the tree is clean of them, they shipped in the 2026-08-07/08 launch wave). Deploy state is a measurement: re-check rather than trust this clause. Canvas, workflows and configuration are unreachable by a user and invisible to an agent; deletes are permanent app-wide. The durable statement of record is [ENGINEERING.md](ENGINEERING.md) §7 — *"Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE"* and *"DELETES ARE PERMANENT"* — not this plan. Read that first; this file is the *why* and the audit trail.
 
+⛔ **ALL THREE FEATURES HAVE SINCE GRADUATED FROM HIDE TO DELETE (2026-08-11), IN THREE COMMITS.** Configuration first, then the canvas page, then workflows together with the clusters container that only ever held them. Everything below is the record of the 2026-08-07 HIDE and is not rewritten — but nothing here is a restore path any more.
+
+**Wave 3 — workflows + clusters, off disk:** `src/features/workflows/` (40 files), `src/features/clusters/`, `src/app/api/workflows/**` (10 routes), `src/app/api/clusters/**`, `apps/desktop-ui/src/pages/workflows/`, `src/features/teams/server/invariant.ts` (the workflow↔KB invariant — its whole subject was workflows), `packages/mcp-server/src/tools/{workflow,workflow-ops-read,workflow-ops-write,workflow-render,cluster}.ts`, `packages/dopl-client/src/{workflows,client-workflows,clusters,client-clusters}.ts`, `src/shared/lib/cluster-name.ts`, `scripts/{smoke-workflows,port-workflows}.mts`, and `src/features/members/components/conflict-dialog.tsx` (the `TEAM_KB_ACCESS_CONFLICT` 409 lost its only producer with the invariant). **DB:** `supabase/migrations/20260811120000_drop_workflows_and_clusters.sql` drops all five `workflow_*` tables plus `clusters` and five assert/trigger functions — a repo file; whether it is APPLIED is deploy state, measure it.
+
+**What survives on purpose, all of it load-bearing:** `HIDDEN_TOOLS` (now empty — the mechanism is the hide-before-delete seam, not the workflows entry); `RETIRED_DOPL_TOOLS` in `dopl-desktop-app/main/tool-profiles.js`, which keeps all four deleted tool names so `UNIVERSAL_HARD_DENY` stays 8 (a name dropped from a deny list becomes *unclassified*, which resolves to `gate`); the `"workflow"` entry in both `RETIRED_RESOURCE_TYPES` render filters, because `team_resource_access.resource_type` still ACCEPTS the value; `"workflows"` in `website-retirement.ts › APP_PAGES`, the historical URL list; and the `seed-content.test.ts` guard that no seeded content teaches workflows.
+
+⛔ **CONFIGURATION AND THE CANVAS PAGE GRADUATED FIRST (2026-08-11).** Off disk: `src/features/configuration/`, `apps/desktop-ui/src/pages/configuration/`, `apps/desktop-ui/src/pages/canvas/`, and `src/features/ontology/graph/` (dead the moment the canvas page went — it was its only importer). Everything this plan says below about hiding those two is the record of what was done on 2026-08-07 and is not rewritten — but there is no page behind any of it now, so nothing here is a restore path. Untouched, deliberately: the ontology data and the kanban Ontology page, and the URL machinery for both names — the `/{ws}/configuration` 302, `RETIRED_TOP_LEVEL` / `BILLING_INBOUND_PAGES` (Stripe returns), `WEB_ONLY_ROOTS` and `RESERVED_WORKSPACE_SLUGS` — which keep answering for in-the-wild links.
+
 | Phase | Shipped |
 |---|---|
 | **1 — Nav + landing** | 5 route rows out of `WORKSPACE_PAGES`; 3 nav rows + their `NavSection` members out of `app-sidebar-core.tsx`; `WORKSPACE_HOME_PATH` → `"overview"` (D4); `deep-link-target.js` page table + `WORKSPACE_HOME_PAGE` moved in lockstep; Overview "Workflows" stat card removed. Page components remain on disk, unreferenced. |
@@ -42,7 +50,7 @@ Commit `0a3b007` also matters here: it audited realtime-published tables, wrote 
 
 ## Key structural facts
 
-- **Canvas is not its own feature.** `apps/desktop-ui/src/pages/canvas/index.tsx:31-44` renders `GraphView` — a second view of **ontology**. Hiding it costs one view, not data. Ontology page unaffected.
+- **Canvas is not its own feature.** Its page rendered `GraphView` — a second view of **ontology**. Hiding it costs one view, not data. Ontology page unaffected. (Both the page and `src/features/ontology/graph/` were deleted 2026-08-11; the paths this line used to cite no longer exist.)
 - **Configuration is 100% inert.** Zero API/fetch/supabase calls; fully mock-driven (`src/features/configuration/mock-data.ts`). Cheapest, safest hide. Zero MCP presence.
 - **The MCP server reaches `/api/workflows/*` and `/api/clusters/*` over loopback HTTP** (`src/app/api/mcp/route.ts:112` → `DoplClient` → real fetches). Gating those routes kills the agent tools. **Hide at the tool registrar, not the route.**
 - **The app's home page IS canvas.** `WORKSPACE_HOME_PATH = "canvas"` (`apps/desktop-ui/src/routes.tsx:69`) with **6 entry points** funneling through it (index redirect, boot, workspace switch, workspace create, ⌘⇧H menu, auth change). Miss the repoint → app boots into a 404.
@@ -93,21 +101,21 @@ Commit `0a3b007` also matters here: it audited realtime-published tables, wrote 
 | Item | Note |
 |---|---|
 | Tables `workflows`, `workflow_steps`, `workflow_step_edges`, `workflow_knowledge_bases`, `workflow_skills`, `clusters` | **Keep data.** Nothing FK-references `workflows.id`; join tables point outward |
-| Realtime bindings: 5 workflow tables | `src/features/workflows/client/realtime.ts:5-11` + `hooks/use-workflows.ts:178`; mirrored `dopl-desktop-app/main/ui-sync.js:71-72` | See Phase 5 + R4. Published tables cost WAL-decode + RLS eval on every write even with no subscribers (measured: `realtime.list_changes` 2.97M calls / 386min) |
+| Realtime bindings: 5 workflow tables | `src/features/workflows/client/realtime.ts` + `hooks/use-workflows.ts` (both DELETED 2026-08-11); mirrored in `dopl-desktop-app/main/ui-sync.js` | See Phase 5 + R4. Published tables cost WAL-decode + RLS eval on every write even with no subscribers (measured: `realtime.list_changes` 2.97M calls / 386min) |
 | `purge-trash` cron includes `workflows` | **Keep** — MCP can still soft-delete; removing leaks tombstones |
 | Analytics KPIs `first_cluster_built` → `conversion_signup_to_first_cluster_24h_pct` etc. | Quietly go to ~0/null if clusters hide — accept or swap metric |
 
 ### Onboarding & seeds
 | Surface | Location |
 |---|---|
-| Seed orchestrator creates **1 workflow** ("Workspace upkeep", 5 steps) per new workspace | `src/features/workspaces/server/seed-workspace.ts:56-152` → `workflows/server/seed.ts:17,43-103` |
+| Seed orchestrator creates **1 workflow** ("Workspace upkeep", 5 steps) per new workspace | `src/features/workspaces/server/seed-workspace.ts:56-152` → `workflows/server/seed.ts` (DELETED 2026-08-11; the seed call went first, on 2026-08-07) |
 | Seeded `walk-a-workflow` skill teaches agents `dopl_workflow op=step` | `src/features/skills/server/seed.ts:132-145` |
 | Dopl Guide KB teaches workflows throughout | `knowledge/server/seed.ts:57-200` |
 | Bootstrap agent prompt teaches WORKFLOW as one of three primitives | `src/features/onboarding/bootstrap-prompt.ts:55,73,101` |
 | Welcome popup "…and run workflows", workspace-name step, create-workspace dialog copy | `welcome-popup.tsx:139`, `workspace-name-step.tsx:32`, `create-workspace-dialog-core.tsx:88` |
 
 ### Residual copy naming hidden features
-Role picker + invite dialog "…KBs, skills, canvas" (`member-bits.tsx:18`, `invite-dialog.tsx:39`) · team detail "Workflow access" section (`team-detail.tsx:276,73`) · members list "No knowledge bases or workflows yet." (`members-list-pane.tsx:219,371`) · conflict dialog naming a workflow (`conflict-dialog.tsx:43-46`) · **Trash "Workflows" filter tab** (`workspace-trash-section.tsx` — DELETED with the whole trash feature in Phase 6, so the line numbers this entry carried are unresolvable; see D6) · 409 `SKILL_ATTACHED_TO_WORKFLOWS` user-facing error (`skills/server/service-writes.ts:154-167`) · `layout-shell.tsx:19`.
+Role picker + invite dialog "…KBs, skills, canvas" (`member-bits.tsx:18`, `invite-dialog.tsx:39`) · team detail "Workflow access" section (`team-detail.tsx:276,73`) · members list "No knowledge bases or workflows yet." (`members-list-pane.tsx:219,371`) · conflict dialog naming a workflow (`members/components/conflict-dialog.tsx` — DELETED 2026-08-11 with the whole `TEAM_KB_ACCESS_CONFLICT` path, which had no producer left) · **Trash "Workflows" filter tab** (`workspace-trash-section.tsx` — DELETED with the whole trash feature in Phase 6, so the line numbers this entry carried are unresolvable; see D6) · 409 `SKILL_ATTACHED_TO_WORKFLOWS` user-facing error (`skills/server/service-writes.ts:154-167`) · `layout-shell.tsx:19`.
 
 ### Docs that would mislead a future agent
 `docs/ENGINEERING.md:324` (**highest risk — CLAUDE.md points every agent here**; currently dirty in the other session), `:217` · `docs/WORKFLOW-BUILDER-PLAN.md` · `docs/WORKFLOW-PIVOT-HANDOFF.md` · `docs/migration-research/web-pages.md` · `docs/REFACTOR-FINDINGS.md:208,216` (also dirty). Root `CLAUDE.md`/`README.md`/`CONTRIBUTING.md` clean.
@@ -153,5 +161,5 @@ All decision gates resolved (§2) — every phase is go. ✅ **All seven are now
 - **R3** Gating API routes kills MCP tools (loopback) — gate at registrar.
 - **R4** `ui-sync-tables.test.mjs` now fails on published-but-unsubscribed drift → realtime binding removal MUST pair with the publication migration; un-publishing is silent-failure territory (a binding on an unpublished table goes SUBSCRIBED and delivers nothing) and re-adding is not an undo.
 - **R5** Canvas = ontology view (cheap); Configuration = mock-only (cheapest); Workflows = the real work.
-- **R6** Three hard runtime importers of `@/features/workflows` forbid deletion (hiding is fine): `trash/server/service.ts` (**this importer no longer exists** — §2b deleted `features/trash/` whole, so R6 is down to two), `workspaces/server/seed-workspace.ts:9`, `clusters/server/service.ts:5` (circular).
-- **R7 (cross-doc)** `src/features/workflows` holds the repo's best optimistic-cache implementation (`use-workflows.ts:229-232`) — **harvest into the shared mutation layer (roadmap Phase B) before any future deletion.**
+- **R6** Three hard runtime importers of `@/features/workflows` forbid deletion (hiding is fine): `trash/server/service.ts` (**this importer no longer exists** — §2b deleted `features/trash/` whole, so R6 is down to two), `workspaces/server/seed-workspace.ts:9`, `clusters/server/service.ts` (circular — and moot: both features were deleted together on 2026-08-11).
+- **R7 (cross-doc) — CLOSED, UNHARVESTED (2026-08-11).** `src/features/workflows` held the repo's best optimistic-cache implementation (`use-workflows.ts`); the tree was DELETED without harvesting it. The shared mutation layer (`src/shared/hooks/use-api-mutation.ts`) shipped independently, so the risk this line recorded became a fact rather than a blocker — recover the original from git history if the ontology reducer is not enough.

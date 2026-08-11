@@ -3,10 +3,10 @@
  * membership API shapes (src/features/members/types.ts and
  * src/features/teams/types.ts in the app).
  *
- * `resourceType` is intentionally a plain string: the grant table keeps
- * growing new resource kinds (knowledge_base, workflow, chat,
- * chat_folder, …) and a read client should render unknown kinds, not
- * reject them.
+ * `resourceType` is intentionally a plain string: the grant table both grows
+ * new resource kinds and keeps retired ones (knowledge_base, skill, chat,
+ * chat_folder, the long-dead `workflow`, …), and a read client should render
+ * an unknown kind, not reject it.
  */
 
 import type { WorkspaceRole, WorkspaceSummary } from "./types.js";

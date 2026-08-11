@@ -8,10 +8,8 @@ import { SectionBox } from "@/shared/ui/section-box";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { WorkspaceMemberView } from "../types";
-import { TeamAccessConflictError } from "../teams-client";
 import { useAccessWrites } from "../hooks/use-access-writes";
 import { useTeamWrites } from "../hooks/use-team-writes";
-import type { ConflictState } from "./conflict-dialog";
 import { Avatar } from "./member-bits";
 import { AccessLevelControl, ScopePill, TeamColorTile } from "./team-bits";
 
@@ -23,15 +21,13 @@ interface Props {
   canManage: boolean;
   /** Clears the pane's selection after the team leaves the list. */
   onDeleted: () => void;
-  openConflict: (conflict: ConflictState) => void;
 }
 
 /**
  * Team detail — the right pane of the members console: crumb top bar,
  * identity header box (name/description editable inline for admins),
  * then Members and per-resource access section boxes. Replaces the old
- * slide-out drawer; 409 grant conflicts bubble to the shared
- * ConflictDialog with the autoGrant retry.
+ * slide-out drawer.
  */
 export function TeamDetail({
   workspaceSlug,
@@ -40,7 +36,6 @@ export function TeamDetail({
   resources,
   canManage,
   onDeleted,
-  openConflict,
 }: Props) {
   const teamWrites = useTeamWrites(workspaceSlug);
   const accessWrites = useAccessWrites(workspaceSlug);
@@ -86,33 +81,21 @@ export function TeamDetail({
     setError(err instanceof Error ? err.message : "Something went wrong");
 
   /**
-   * A grant flips the segment on the click (the teams cache carries the level),
-   * and a 409 rolls it back before the ConflictDialog opens — so the retry
-   * re-applies the patch cleanly instead of stacking a second edit on the first.
+   * A grant flips the segment on the click — the teams cache carries the
+   * level, so the pane repaints before the PUT leaves and the layer rolls the
+   * patch back if it is refused.
    */
   function changeGrant(type: TeamResourceType, id: string, level: AccessLevel | null) {
     setError(null);
-    const run = (autoGrant: boolean) =>
-      accessWrites.setGrant.mutateAsync({
+    void accessWrites.setGrant
+      .mutateAsync({
         teamId: team.id,
         resourceType: type,
         resourceId: id,
         memberIds: team.memberIds,
         level,
-        autoGrant,
-      });
-    void run(false).catch((err: unknown) => {
-      if (err instanceof TeamAccessConflictError) {
-        openConflict({
-          details: err.details,
-          retry: async () => {
-            await run(true).catch(failed);
-          },
-        });
-        return;
-      }
-      failed(err);
-    });
+      })
+      .catch(failed);
   }
 
   /**

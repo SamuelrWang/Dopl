@@ -73,22 +73,6 @@ async function main() {
       check(`${table} = ${n}`, got === n, `got ${got}`);
     }
 
-    // Workflows are RETIRED from seeding (2026-08-07, D5). The tables are
-    // still on disk and `features/workflows/server/{seed,service-seed}.ts`
-    // still compile — these zeros are what catches the seed being rewired.
-    console.log("== 2b. retired surfaces seed nothing ==");
-    const retired = [
-      "workflows",
-      "workflow_steps",
-      "workflow_step_edges",
-      "workflow_knowledge_bases",
-      "workflow_skills",
-    ] as const;
-    for (const table of retired) {
-      const got = await countRows(table, wsId);
-      check(`${table} = 0 (retired)`, got === 0, `got ${got}`);
-    }
-
     console.log("== 3. cross-refs resolve to real rows ==");
     const { data: skills, error: skillsErr } = await admin
       .from("skills")

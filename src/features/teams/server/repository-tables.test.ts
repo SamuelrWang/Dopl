@@ -263,7 +263,6 @@ describe("repository.ts re-export surface", () => {
       "replaceInvitationTeams",
       // resources
       "listTeamsModeResources",
-      "listKnowledgeBaseAccessMetas",
       "getResourceAccessMeta",
       "setResourceAccessModeRow",
       // teams, which stayed

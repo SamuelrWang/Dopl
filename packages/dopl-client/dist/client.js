@@ -15,9 +15,9 @@
  * the same class from the same entry point and call the same methods with the
  * same signatures. See `client-base.ts` for the chain and its ordering rules;
  * the domain method groups are the `client-<domain>.ts` files, and the HTTP
- * itself lives in the free-function modules they delegate to (`clusters.ts`,
- * `workflows.ts`, `workspaces.ts`, `knowledge.ts`, `ontology.ts`, `chats.ts`,
- * `members.ts`, `channel.ts`, `skills.ts`).
+ * itself lives in the free-function modules they delegate to
+ * (`workspaces.ts`, `knowledge.ts`, `ontology.ts`, `chats.ts`, `members.ts`,
+ * `channel.ts`, `skills.ts`).
  *
  * ADD NOTHING TO THIS FILE. A new method belongs in its domain's link — or in
  * a new link, added per the rules in `client-base.ts`. The whole point of the
@@ -25,9 +25,9 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoplClient = exports.parseRetryAfter = void 0;
-const client_skills_js_1 = require("./client-skills.js");
+const client_billing_js_1 = require("./client-billing.js");
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
-class DoplClient extends client_skills_js_1.SkillMethods {
+class DoplClient extends client_billing_js_1.BillingMethods {
 }
 exports.DoplClient = DoplClient;

@@ -13,7 +13,7 @@ server; shipping them here just saves you the work of writing them yourself.
 ## 1. Workspace-awareness nudge (highest leverage)
 
 The most common failure mode is answering "what do I know about X?" / "what's in
-my Y cluster?" from general knowledge instead of the user's actual workspace.
+my workspace about Y?" from general knowledge instead of the user's actual workspace.
 This hook runs on every user prompt and, when the prompt looks like a question
 about the user's own saved material, reminds the agent to check Dopl first.
 
@@ -22,11 +22,11 @@ about the user's own saved material, reminds the agent to check Dopl first.
   "hooks": {
     "UserPromptSubmit": [
       {
-        "matcher": ".*(what do i (know|have)|my notes|my (knowledge|kb|cluster|skill)|in my .* (cluster|workspace|kb|knowledge base)|find my|pull together|summari[sz]e my).*",
+        "matcher": ".*(what do i (know|have)|my notes|my (knowledge|kb|skill)|in my .* (workspace|kb|knowledge base)|find my|pull together|summari[sz]e my).*",
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"This looks like a question about the user'\\''s own Dopl workspace. Before answering from general knowledge, call dopl_kb(op=search) for their knowledge bases and/or dopl_cluster(op=list)+dopl_cluster(op=get) to see what's in the relevant cluster. Ground the answer in what they actually have.\"}'"
+            "command": "echo '{\"additionalContext\": \"This looks like a question about the user'\\''s own Dopl workspace. Before answering from general knowledge, call dopl_kb(op=search) for their knowledge bases and/or dopl_search across the workspace. Ground the answer in what they actually have.\"}'"
           }
         ]
       }
@@ -46,8 +46,8 @@ about the user's own saved material, reminds the agent to check Dopl first.
 
 ## 2. Session-start workspace load
 
-Reminds the agent, on the first prompt of a session, to load the user's clusters
-and canvas so the conversation is grounded from turn one. (The server
+Reminds the agent, on the first prompt of a session, to load the user's workspace
+map so the conversation is grounded from turn one. (The server
 instructions already say to do this; the hook makes it explicit for setups where
 the model tends to skip it.)
 
@@ -60,7 +60,7 @@ the model tends to skip it.)
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"If this is the first turn of the session, call dopl_cluster(op=list) and dopl_map in parallel before your substantive reply so questions about the workspace are grounded in current state. Once per session is enough.\"}'"
+            "command": "echo '{\"additionalContext\": \"If this is the first turn of the session, call dopl_map before your substantive reply so questions about the workspace are grounded in current state. Once per session is enough.\"}'"
           }
         ]
       }
@@ -87,8 +87,8 @@ After adding any of these to your settings file:
 
 If a hook doesn't fire, the most common cause is a regex that doesn't match. For
 `PostToolUse` matchers, MCP tools are addressed as
-`mcp__{server_name}__{tool_name}` — e.g. `mcp__dopl__dopl_cluster`,
-`mcp__dopl__dopl_kb`.
+`mcp__{server_name}__{tool_name}` — e.g. `mcp__dopl__dopl_kb`,
+`mcp__dopl__dopl_map`.
 
 ---
 

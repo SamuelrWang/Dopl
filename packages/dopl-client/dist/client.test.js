@@ -33,18 +33,18 @@ const BASE = "https://api.example.test";
 (0, vitest_1.describe)("DoplClient headers", () => {
     let mock;
     (0, vitest_1.beforeEach)(() => {
-        mock = installFetchMock([() => jsonResponse(200, { clusters: [] })]);
+        mock = installFetchMock([() => jsonResponse(200, { workspaces: [] })]);
     });
     (0, vitest_1.afterEach)(() => mock.restore());
     (0, vitest_1.it)("sends Authorization bearer", async () => {
         const client = new client_js_1.DoplClient(BASE, "sk-dopl-abc");
-        await client.listClusters();
+        await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
         (0, vitest_1.expect)(headers.Authorization).toBe("Bearer sk-dopl-abc");
     });
     (0, vitest_1.it)("omits X-Dopl-Client when identifier not provided", async () => {
         const client = new client_js_1.DoplClient(BASE, "k");
-        await client.listClusters();
+        await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
         (0, vitest_1.expect)(headers["X-Dopl-Client"]).toBeUndefined();
     });
@@ -52,21 +52,21 @@ const BASE = "https://api.example.test";
         const client = new client_js_1.DoplClient(BASE, "k", {
             clientIdentifier: "@dopl/cli@1.2.3",
         });
-        await client.listClusters();
+        await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
         (0, vitest_1.expect)(headers["X-Dopl-Client"]).toBe("@dopl/cli@1.2.3");
     });
     (0, vitest_1.it)("sets the tool header name with the called tool", async () => {
         const client = new client_js_1.DoplClient(BASE, "k");
-        await client.listClusters();
+        await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
-        (0, vitest_1.expect)(headers["X-MCP-Tool"]).toBe("list_clusters");
+        (0, vitest_1.expect)(headers["X-MCP-Tool"]).toBe("list_workspaces");
     });
     (0, vitest_1.it)("uses a custom tool header name", async () => {
         const client = new client_js_1.DoplClient(BASE, "k", { toolHeaderName: "X-Dopl-Cli" });
-        await client.listClusters();
+        await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
-        (0, vitest_1.expect)(headers["X-Dopl-Cli"]).toBe("list_clusters");
+        (0, vitest_1.expect)(headers["X-Dopl-Cli"]).toBe("list_workspaces");
         (0, vitest_1.expect)(headers["X-MCP-Tool"]).toBeUndefined();
     });
 });
@@ -81,27 +81,27 @@ const BASE = "https://api.example.test";
         mock = installFetchMock([
             () => textResponse(503, ""),
             () => textResponse(503, ""),
-            () => jsonResponse(200, { clusters: [{ id: "a" }] }),
+            () => jsonResponse(200, { workspaces: [{ id: "a" }] }),
         ]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        const { clusters } = await client.listClusters();
-        (0, vitest_1.expect)(clusters).toEqual([{ id: "a" }]);
+        const { workspaces } = await client.listWorkspaces();
+        (0, vitest_1.expect)(workspaces).toEqual([{ id: "a" }]);
         (0, vitest_1.expect)(mock.calls).toHaveLength(3);
     });
     (0, vitest_1.it)("does NOT retry on POST (non-idempotent)", async () => {
         mock = installFetchMock([() => textResponse(503, "")]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        await (0, vitest_1.expect)(client.createCluster("x")).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
+        await (0, vitest_1.expect)(client.createOntologyCluster({ name: "x" })).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
         (0, vitest_1.expect)(mock.calls).toHaveLength(1);
     });
     (0, vitest_1.it)("honors Retry-After seconds on 429", async () => {
         const spy = vitest_1.vi.spyOn(global, "setTimeout");
         mock = installFetchMock([
             () => textResponse(429, "", { "retry-after": "2" }),
-            () => jsonResponse(200, { clusters: [] }),
+            () => jsonResponse(200, { workspaces: [] }),
         ]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        await client.listClusters();
+        await client.listWorkspaces();
         const delays = spy.mock.calls.map((call) => Number(call[1]));
         (0, vitest_1.expect)(delays.some((ms) => ms === 2000)).toBe(true);
         spy.mockRestore();
@@ -109,7 +109,7 @@ const BASE = "https://api.example.test";
     (0, vitest_1.it)("does NOT retry on 4xx other than 429", async () => {
         mock = installFetchMock([() => textResponse(404, "")]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        await (0, vitest_1.expect)(client.listClusters()).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
+        await (0, vitest_1.expect)(client.listWorkspaces()).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
         (0, vitest_1.expect)(mock.calls).toHaveLength(1);
     });
     (0, vitest_1.it)("retries on network errors then eventually fails", async () => {
@@ -128,7 +128,7 @@ const BASE = "https://api.example.test";
             },
         ]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        await (0, vitest_1.expect)(client.listClusters()).rejects.toBeInstanceOf(errors_js_1.DoplNetworkError);
+        await (0, vitest_1.expect)(client.listWorkspaces()).rejects.toBeInstanceOf(errors_js_1.DoplNetworkError);
         (0, vitest_1.expect)(mock.calls).toHaveLength(4);
     });
     (0, vitest_1.it)("wraps AbortError into DoplTimeoutError", async () => {
@@ -140,7 +140,7 @@ const BASE = "https://api.example.test";
         ]);
         const client = new client_js_1.DoplClient(BASE, "k");
         const err = await client
-            .createCluster("x")
+            .createOntologyCluster({ name: "x" })
             .catch((e) => e);
         (0, vitest_1.expect)(err).toBeInstanceOf(errors_js_1.DoplTimeoutError);
     });
@@ -151,7 +151,7 @@ const BASE = "https://api.example.test";
     (0, vitest_1.it)("401 → DoplAuthError without retry", async () => {
         mock = installFetchMock([() => textResponse(401, "")]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        await (0, vitest_1.expect)(client.listClusters()).rejects.toBeInstanceOf(errors_js_1.DoplAuthError);
+        await (0, vitest_1.expect)(client.listWorkspaces()).rejects.toBeInstanceOf(errors_js_1.DoplAuthError);
         (0, vitest_1.expect)(mock.calls).toHaveLength(1);
     });
     (0, vitest_1.it)("parses structured error body into code/apiMessage", async () => {
@@ -159,7 +159,7 @@ const BASE = "https://api.example.test";
             () => jsonResponse(400, { error: { code: "BAD_REQUEST", message: "Missing field" } }),
         ]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        const err = (await client.listClusters().catch((e) => e));
+        const err = (await client.listWorkspaces().catch((e) => e));
         (0, vitest_1.expect)(err.code).toBe("BAD_REQUEST");
         (0, vitest_1.expect)(err.apiMessage).toBe("Missing field");
     });

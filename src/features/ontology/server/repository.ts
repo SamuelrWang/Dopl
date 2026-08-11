@@ -149,7 +149,7 @@ export async function updateCluster(
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = stripNullBytes(patch.name);
   if (patch.purpose !== undefined) update.purpose = stripNullBytes(patch.purpose);
-  // Layout merge semantics (shared with workflows service.updateWorkflow):
+  // Layout merge semantics:
   // a non-empty layout patch SHALLOW-MERGES per node id into the stored
   // layout, so two tabs each dragging a different card don't clobber each
   // other. An explicit empty `{}` is the reset signal — it REPLACES, wiping

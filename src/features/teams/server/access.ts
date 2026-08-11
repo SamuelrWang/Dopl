@@ -85,13 +85,17 @@ export async function requireEffectiveAccess(
     opts
   );
   if (level === null) {
-    // The CODE stays `WORKFLOW_NOT_FOUND` for every non-KB type — callers
-    // and `workflows/server/service-trash.test.ts` branch on it — but the
-    // MESSAGE is generic: it renders to users, this fn also guards
-    // chats/skills, and workflows are retired from the UI.
+    // `RESOURCE_NOT_FOUND` for every non-KB type. The literal used to be
+    // `WORKFLOW_NOT_FOUND` — this guard has covered chats, chat folders and
+    // skills for a long time and only the code still said otherwise. It was
+    // renamed with the workflows deletion (2026-08-11) after a whole-repo
+    // grep found the producer below was the ONLY mention of the old literal:
+    // no consumer branched on it in `src/`, `apps/`, `packages/` or the
+    // desktop tree. It matches what `teams/server/service.ts` already throws
+    // for the same condition.
     throw new HttpError(
       404,
-      resourceType === "knowledge_base" ? "KNOWLEDGE_BASE_NOT_FOUND" : "WORKFLOW_NOT_FOUND",
+      resourceType === "knowledge_base" ? "KNOWLEDGE_BASE_NOT_FOUND" : "RESOURCE_NOT_FOUND",
       resourceType === "knowledge_base" ? "Knowledge base not found" : "Resource not found"
     );
   }

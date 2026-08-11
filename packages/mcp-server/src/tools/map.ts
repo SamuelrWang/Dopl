@@ -16,8 +16,8 @@ const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
 /**
  * EVERY string this tool renders is a one-liner LABEL, and every one of them is
  * typed by a workspace member: a knowledge base's name and description, a
- * skill's name and `when_to_use`, a workflow's name and description, an
- * ontology cluster's name and purpose, a column's name. None carries a charset
+ * skill's name and `when_to_use`, an ontology cluster's name and purpose, a
+ * column's name. None carries a charset
  * rule anywhere in the product (only KB folder names and entry titles do, via
  * `NAME_RE`) — so newlines, backticks and `##` are all legal in all of them.
  *
@@ -38,7 +38,8 @@ const NO_NAME = "`(unnamed)`";
  * THE SCOPE LINE, AND WHY IT IS NOT A NICETY.
  *
  * This description used to open "every knowledge base, skill, workflow cluster,
- * and ontology cluster". It is not every one of them and never was:
+ * and ontology cluster" (two of those four are since deleted). It is not every
+ * one of them and never was:
  * `listSkills` is visibility-filtered server-side and this file then drops
  * everything that is not `status === "active"` (below); `listKbBases` drops
  * bases the caller cannot read. Two agents on two machines compared their
@@ -57,9 +58,11 @@ const MAP_DESCRIPTION = `Curated routing manifest of the active workspace: the A
 
 /**
  * Domains fanned out below — the denominator the PARTIAL READ notice reports
- * against. Three since the workflow retirement (2026-08-07): the Clusters and
- * Workflows reads went with the section they fed, so the denominator had to
- * come down with them or the notice would report "1 of 5" out of three.
+ * against. Three since the workflow retirement (2026-08-07, deleted
+ * 2026-08-11): the Clusters and Workflows reads went with the sections they
+ * fed, so the denominator had to come down with them or the notice would
+ * report "1 of 5" out of three. THE RULE IS THE POINT — this number is the
+ * count of reads fanned out below, never a constant maintained beside them.
  */
 const DOMAIN_COUNT = 3;
 
@@ -86,7 +89,7 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * in the chat archive and the knowledge bases — and found the CHANNELS feature
  * only because a KB entry happened to mention a past exchange. Nothing in the
  * discovery surface named the contact path. This map lists knowledge bases,
- * skills, workflows and ontology; `dopl_channel` is DEFERRED in some clients, so
+ * skills and ontology; `dopl_channel` is DEFERRED in some clients, so
  * its own description is invisible until ToolSearch loads it and the tool NAME
  * is the only pre-discovery signal there is. A name does not say "this is how
  * you reach a person".

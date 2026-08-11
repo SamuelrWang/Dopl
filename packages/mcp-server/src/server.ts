@@ -32,8 +32,6 @@ import { DoplClient } from "@dopl/client";
 import type { WorkspaceListItem, WorkspaceRole, WorkspaceSummary } from "@dopl/client";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerSkillTools } from "./tools/skills.js";
-import { registerClusterTools } from "./tools/cluster.js";
-import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerChatTools } from "./tools/chats.js";
 import { registerMembersTool } from "./tools/members.js";
 import { registerMapTool } from "./tools/map.js";
@@ -185,6 +183,9 @@ export function createServer(
 
   const { registerTool, registerMetaTool } = createToolRegistrars({
     server,
+    // The registrar charges one MCP credit per domain-tool call through this
+    // client (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
+    client,
     gates,
     directory,
     activeWorkspace,
@@ -202,13 +203,11 @@ export function createServer(
   // Each registrar exposes a single `dopl_<domain>` action-tool (plus a
   // `dopl_<domain>_admin` companion where the domain has destructive ops)
   // that dispatches on an `op` arg.
-  // RETIRED but still wired: both calls are no-ops because every tool they
-  // register is in HIDDEN_TOOLS. Left in place on purpose — "hide, don't
-  // delete" — so the feature comes back by editing that one set, and so the
-  // parity/scope suites keep checking these tools' schemas against their
-  // sources while they sit dormant.
-  registerClusterTools(registerTool, client); // dopl_cluster + dopl_cluster_admin (hidden)
-  registerWorkflowTools(registerTool, client); // dopl_workflow + dopl_workflow_admin (hidden)
+  // This list IS the surface: every published tool is registered here and
+  // nowhere else, so `tools/list` is these calls minus `gating.ts ›
+  // HIDDEN_TOOLS`. `registerClusterTools` / `registerWorkflowTools` sat here
+  // as deliberate no-ops from 2026-08-07 (hidden, not deleted); their tools
+  // and this pair of calls were deleted on 2026-08-11.
   registerKnowledgeTools(registerTool, client, caller); // dopl_kb + dopl_kb_admin (user bases)
   registerSkillTools(registerTool, client, caller); // dopl_skill + dopl_skill_admin
   registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)

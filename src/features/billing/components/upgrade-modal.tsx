@@ -22,6 +22,7 @@ import {
 const PAID_UNLOCKS = [
   "Uncapped ontology objects",
   "Full chat history restored",
+  "10,000+ MCP credits every month",
   "Priority support",
 ] as const;
 

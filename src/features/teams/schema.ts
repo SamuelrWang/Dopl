@@ -32,7 +32,7 @@ const TeamNameSchema = safeLabel("Team name", 80);
  * (migration 20260708120000). Chat sharing belongs to the chats surface, which
  * enforces that; a grant written from here would sidestep it.
  */
-const CONSOLE_RESOURCE_TYPES = ["knowledge_base", "workflow", "skill"] as const;
+const CONSOLE_RESOURCE_TYPES = ["knowledge_base", "skill"] as const;
 
 const TeamGrantInputSchema = z.object({
   resourceType: z.enum(CONSOLE_RESOURCE_TYPES),
@@ -47,8 +47,6 @@ export const TeamCreateSchema = z.object({
   icon: z.string().max(40).optional(),
   memberIds: z.array(z.string().uuid()).max(200).optional(),
   grants: z.array(TeamGrantInputSchema).max(200).optional(),
-  /** Resolve workflow↔KB conflicts in the initial grants by auto-creating read grants. */
-  autoGrant: z.boolean().optional(),
 });
 export type TeamCreateInput = z.infer<typeof TeamCreateSchema>;
 
@@ -65,13 +63,11 @@ export const TeamMembersAddSchema = z.object({
 });
 export type TeamMembersAddInput = z.infer<typeof TeamMembersAddSchema>;
 
-/** `level: null` removes the grant. `autoGrant` lets an admin resolve a
- *  workflow↔KB conflict by auto-creating read grants on the missing side. */
+/** `level: null` removes the grant. */
 export const TeamGrantSetSchema = z.object({
   resourceType: z.enum(CONSOLE_RESOURCE_TYPES),
   resourceId: z.string().uuid(),
   level: z.enum(["read", "edit"]).nullable(),
-  autoGrant: z.boolean().optional(),
 });
 export type TeamGrantSetInput = z.infer<typeof TeamGrantSetSchema>;
 
@@ -79,6 +75,5 @@ export const AccessModeSetSchema = z.object({
   resourceType: z.enum(CONSOLE_RESOURCE_TYPES),
   resourceId: z.string().uuid(),
   accessMode: z.enum(["workspace", "teams"]),
-  autoGrant: z.boolean().optional(),
 });
 export type AccessModeSetInput = z.infer<typeof AccessModeSetSchema>;

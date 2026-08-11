@@ -41,36 +41,36 @@ import { DELETE_REFUSAL, isBlockedDeleteOp } from "./delete-policy.js";
 import type { ToolResponse } from "./tools/respond.js";
 
 /**
- * RETIREMENT (2026-08-07, D1 + D2) — the tools an agent no longer sees.
+ * THE HIDE-BEFORE-DELETE SEAM — a registered tool an agent no longer sees.
  *
- * Workflows and their clusters are hidden from users and agents for launch.
- * The CODE STAYS: `cluster.ts` / `workflow.ts` are untouched, their registrars
- * are still called by `server.ts`, and `/api/workflows/**` + `/api/clusters/**`
- * stay live and authenticated (D3) — nothing is deleted, so bringing the
- * feature back is deleting four strings from this set.
+ * EMPTY, AND THAT IS THE CURRENT STATE, NOT A DEAD MECHANISM. It held four
+ * names from 2026-08-07 to 2026-08-11: `dopl_workflow`, `dopl_workflow_admin`,
+ * `dopl_cluster`, `dopl_cluster_admin`. Those tools have now been DELETED —
+ * registrars, routes, tables and all — so there is nothing left to suppress
+ * and the set is `[]`. A tool that no longer exists must not be listed here:
+ * `delete-block.test.ts` asserts every HIDDEN name still has a registrar, and
+ * a name with none is a claim about a gate that guards nothing.
  *
- * WHY AT THE REGISTRAR AND NOT AT THE ROUTE. The MCP server reaches those
- * routes over LOOPBACK HTTP through `DoplClient`, so gating the routes would
- * have killed the tools by 500-ing them — an agent would still SEE
- * `dopl_workflow` in `tools/list`, call it, and be told the server is broken.
- * Refusing at the registrar is the honest shape: the tool never registers, so
- * it is absent from `tools/list` and there is nothing to call. Same mechanism
- * and same choke point as `READ_ONLY_BLOCKED_TOOLS`, one table below it.
+ * THE TABLE STAYS BECAUSE THE ORDER OF OPERATIONS DOES. Retiring a feature is
+ * two steps — hide it, then delete it — and this is step one's whole
+ * implementation. The next retirement adds its tool names here, ships, and
+ * deletes the code in a later change with the surface already dark.
+ *
+ * WHY AT THE REGISTRAR AND NOT AT THE ROUTE. The MCP server reaches the app's
+ * routes over LOOPBACK HTTP through `DoplClient`, so gating a route would kill
+ * the tool by 500-ing it — the agent would still SEE the tool in `tools/list`,
+ * call it, and be told the server is broken. Refusing at the registrar is the
+ * honest shape: the tool never registers, so it is absent from `tools/list`
+ * and there is nothing to call. Same mechanism and same choke point as
+ * `READ_ONLY_BLOCKED_TOOLS`, one table below it.
  */
-export const HIDDEN_TOOLS = new Set([
-  "dopl_workflow",
-  "dopl_workflow_admin",
-  "dopl_cluster",
-  "dopl_cluster_admin",
-]);
+export const HIDDEN_TOOLS = new Set<string>([]);
 
 /** Purely destructive tools aren't even registered for a read-only session. */
 export const READ_ONLY_BLOCKED_TOOLS = new Set([
   "dopl_chats_admin",
-  "dopl_cluster_admin",
   "dopl_kb_admin",
   "dopl_skill_admin",
-  "dopl_workflow_admin",
   "dopl_ontology_admin",
 ]);
 
@@ -83,7 +83,6 @@ export const READ_ONLY_BLOCKED_TOOLS = new Set([
  * sync with the tool's `op` enum; a new write op must be added here.
  */
 export const WRITE_OPS: Record<string, Set<string>> = {
-  dopl_cluster: new Set(["create", "update"]),
   dopl_ontology: new Set([
     "create_cluster",
     "update_cluster",
@@ -115,18 +114,6 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     "write",
     "set_visibility",
   ]),
-  dopl_workflow: new Set([
-    "create",
-    "update",
-    "set_graph",
-    "add_node",
-    "update_node",
-    "remove_node",
-    "connect",
-    "disconnect",
-    "set_cluster",
-    "restore_workflow",
-  ]),
   dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
   dopl_channel: new Set([
     "open",
@@ -156,8 +143,9 @@ export const WRITE_OPS: Record<string, Set<string>> = {
 export interface Gates {
   /**
    * Suppressed at registration: absent from `tools/list`, nothing to call.
-   * Retired features (D2) and, for a read-only session, the destructive tools.
-   * The honest way to remove a capability is for the tool not to exist.
+   * A feature mid-retirement (`HIDDEN_TOOLS`, empty today) and, for a
+   * read-only session, the destructive tools. The honest way to remove a
+   * capability is for the tool not to exist.
    */
   isSuppressedTool(name: string): boolean;
   /** The `op` a call is asking for, or undefined for an op-less tool. */

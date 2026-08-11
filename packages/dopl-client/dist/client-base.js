@@ -16,14 +16,13 @@
  *
  *   DoplClientBase        (here)
  *     → WorkspaceMethods  client-workspaces.ts
- *     → ClusterMethods    client-clusters.ts
- *     → WorkflowMethods   client-workflows.ts
  *     → KnowledgeMethods  client-knowledge.ts
  *     → OntologyMethods   client-ontology.ts
  *     → ChatMethods       client-chats.ts
  *     → MemberMethods     client-members.ts
  *     → ChannelMethods    client-channels.ts
  *     → SkillMethods      client-skills.ts
+ *     → BillingMethods    client-billing.ts
  *     → DoplClient        client.ts
  *
  * The order carries NO meaning — no link may depend on a sibling's methods,

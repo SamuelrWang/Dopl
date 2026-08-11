@@ -57,21 +57,21 @@ describe("DoplClient headers", () => {
   let mock: ReturnType<typeof installFetchMock>;
 
   beforeEach(() => {
-    mock = installFetchMock([() => jsonResponse(200, { clusters: [] })]);
+    mock = installFetchMock([() => jsonResponse(200, { workspaces: [] })]);
   });
 
   afterEach(() => mock.restore());
 
   it("sends Authorization bearer", async () => {
     const client = new DoplClient(BASE, "sk-dopl-abc");
-    await client.listClusters();
+    await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer sk-dopl-abc");
   });
 
   it("omits X-Dopl-Client when identifier not provided", async () => {
     const client = new DoplClient(BASE, "k");
-    await client.listClusters();
+    await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
     expect(headers["X-Dopl-Client"]).toBeUndefined();
   });
@@ -80,23 +80,23 @@ describe("DoplClient headers", () => {
     const client = new DoplClient(BASE, "k", {
       clientIdentifier: "@dopl/cli@1.2.3",
     });
-    await client.listClusters();
+    await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
     expect(headers["X-Dopl-Client"]).toBe("@dopl/cli@1.2.3");
   });
 
   it("sets the tool header name with the called tool", async () => {
     const client = new DoplClient(BASE, "k");
-    await client.listClusters();
+    await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
-    expect(headers["X-MCP-Tool"]).toBe("list_clusters");
+    expect(headers["X-MCP-Tool"]).toBe("list_workspaces");
   });
 
   it("uses a custom tool header name", async () => {
     const client = new DoplClient(BASE, "k", { toolHeaderName: "X-Dopl-Cli" });
-    await client.listClusters();
+    await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
-    expect(headers["X-Dopl-Cli"]).toBe("list_clusters");
+    expect(headers["X-Dopl-Cli"]).toBe("list_workspaces");
     expect(headers["X-MCP-Tool"]).toBeUndefined();
   });
 });
@@ -112,18 +112,18 @@ describe("DoplClient retries", () => {
     mock = installFetchMock([
       () => textResponse(503, ""),
       () => textResponse(503, ""),
-      () => jsonResponse(200, { clusters: [{ id: "a" }] }),
+      () => jsonResponse(200, { workspaces: [{ id: "a" }] }),
     ]);
     const client = new DoplClient(BASE, "k");
-    const { clusters } = await client.listClusters();
-    expect(clusters).toEqual([{ id: "a" }]);
+    const { workspaces } = await client.listWorkspaces();
+    expect(workspaces).toEqual([{ id: "a" }]);
     expect(mock.calls).toHaveLength(3);
   });
 
   it("does NOT retry on POST (non-idempotent)", async () => {
     mock = installFetchMock([() => textResponse(503, "")]);
     const client = new DoplClient(BASE, "k");
-    await expect(client.createCluster("x")).rejects.toBeInstanceOf(DoplApiError);
+    await expect(client.createOntologyCluster({ name: "x" })).rejects.toBeInstanceOf(DoplApiError);
     expect(mock.calls).toHaveLength(1);
   });
 
@@ -131,10 +131,10 @@ describe("DoplClient retries", () => {
     const spy = vi.spyOn(global, "setTimeout");
     mock = installFetchMock([
       () => textResponse(429, "", { "retry-after": "2" }),
-      () => jsonResponse(200, { clusters: [] }),
+      () => jsonResponse(200, { workspaces: [] }),
     ]);
     const client = new DoplClient(BASE, "k");
-    await client.listClusters();
+    await client.listWorkspaces();
     const delays = spy.mock.calls.map((call) => Number(call[1]));
     expect(delays.some((ms) => ms === 2000)).toBe(true);
     spy.mockRestore();
@@ -143,7 +143,7 @@ describe("DoplClient retries", () => {
   it("does NOT retry on 4xx other than 429", async () => {
     mock = installFetchMock([() => textResponse(404, "")]);
     const client = new DoplClient(BASE, "k");
-    await expect(client.listClusters()).rejects.toBeInstanceOf(DoplApiError);
+    await expect(client.listWorkspaces()).rejects.toBeInstanceOf(DoplApiError);
     expect(mock.calls).toHaveLength(1);
   });
 
@@ -163,7 +163,7 @@ describe("DoplClient retries", () => {
       },
     ]);
     const client = new DoplClient(BASE, "k");
-    await expect(client.listClusters()).rejects.toBeInstanceOf(DoplNetworkError);
+    await expect(client.listWorkspaces()).rejects.toBeInstanceOf(DoplNetworkError);
     expect(mock.calls).toHaveLength(4);
   });
 
@@ -176,7 +176,7 @@ describe("DoplClient retries", () => {
     ]);
     const client = new DoplClient(BASE, "k");
     const err = await client
-      .createCluster("x")
+      .createOntologyCluster({ name: "x" })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DoplTimeoutError);
   });
@@ -189,7 +189,7 @@ describe("DoplClient error mapping", () => {
   it("401 → DoplAuthError without retry", async () => {
     mock = installFetchMock([() => textResponse(401, "")]);
     const client = new DoplClient(BASE, "k");
-    await expect(client.listClusters()).rejects.toBeInstanceOf(DoplAuthError);
+    await expect(client.listWorkspaces()).rejects.toBeInstanceOf(DoplAuthError);
     expect(mock.calls).toHaveLength(1);
   });
 
@@ -199,7 +199,7 @@ describe("DoplClient error mapping", () => {
         jsonResponse(400, { error: { code: "BAD_REQUEST", message: "Missing field" } }),
     ]);
     const client = new DoplClient(BASE, "k");
-    const err = (await client.listClusters().catch((e: unknown) => e)) as DoplApiError;
+    const err = (await client.listWorkspaces().catch((e: unknown) => e)) as DoplApiError;
     expect(err.code).toBe("BAD_REQUEST");
     expect(err.apiMessage).toBe("Missing field");
   });

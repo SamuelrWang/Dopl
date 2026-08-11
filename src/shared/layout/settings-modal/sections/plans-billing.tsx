@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   formatMoney,
   SOLO_PRICE,
@@ -8,6 +8,7 @@ import {
   useWorkspaceEntitlements,
 } from "@/features/billing/components/use-workspace-entitlements";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
+import { useBillingPortal } from "@/features/billing/components/use-billing-portal";
 import type { Role } from "@/features/workspaces/types";
 import { PlansBillingCore, type CheckoutPlan } from "./plans-billing-core";
 import styles from "../settings-modal.module.css";
@@ -24,6 +25,7 @@ import styles from "../settings-modal.module.css";
 export function PlansBilling({
   billingReturn = null,
   initialCheckoutPlan = null,
+  onCheckoutOpenChange,
   role,
   workspaceId,
 }: {
@@ -36,6 +38,20 @@ export function PlansBilling({
    * settings modal opens on the plan list, unchanged.
    */
   initialCheckoutPlan?: CheckoutPlan | null;
+  /**
+   * Reports whether the embedded checkout form is CURRENTLY MOUNTED.
+   *
+   * A host that can unmount this pane — the `/billing/[segment]` tab shell can,
+   * on a tab click — needs to know, because Stripe's form holds card entry that
+   * exists only in this tree: unmounting it discards whatever the person typed
+   * and the session it was collected under, with no warning and nothing to
+   * restore. The signal goes UP so the host can make its own control inert
+   * rather than this pane guessing at a host it does not know it has.
+   *
+   * Must be referentially stable (a `useState` setter is). Optional — the
+   * settings modal never unmounts the pane out from under checkout.
+   */
+  onCheckoutOpenChange?: (open: boolean) => void;
   role: Role;
   workspaceId?: string;
 }) {
@@ -44,36 +60,20 @@ export function PlansBilling({
   const [checkoutPlan, setCheckoutPlan] = useState<CheckoutPlan | null>(
     initialCheckoutPlan
   );
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [portalError, setPortalError] = useState<string | null>(null);
+  // The portal POST + redirect moved to `useBillingPortal` when the billing
+  // page's payment-method card needed the identical handoff; the behaviour is
+  // unchanged.
+  const portal = useBillingPortal(workspaceId);
 
-  async function handleManage() {
-    setPortalLoading(true);
-    setPortalError(null);
-    try {
-      const res = await fetch("/api/billing/portal", {
-        method: "POST",
-        headers: workspaceId ? { "x-workspace-id": workspaceId } : undefined,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) {
-        // Portal route errors are flat strings; wrapper-layer errors
-        // (withWorkspaceAuth) are the nested { error: { message } } shape.
-        const message =
-          typeof data.error === "string"
-            ? data.error
-            : typeof data.error?.message === "string"
-              ? data.error.message
-              : "Couldn't open billing portal";
-        throw new Error(message);
-      }
-      window.location.href = data.url;
-    } catch (err) {
-      setPortalError(err instanceof Error ? err.message : "Couldn't open billing portal");
-    } finally {
-      setPortalLoading(false);
-    }
-  }
+  // The exact condition the checkout branch below renders on, so the signal
+  // cannot drift from what is actually mounted.
+  const checkoutOpen = Boolean(checkoutPlan) && !ent.isPaid;
+  useEffect(() => {
+    onCheckoutOpenChange?.(checkoutOpen);
+    // Unmounting this pane unmounts the form with it — the host must not be
+    // left holding a stale "checkout is open".
+    return () => onCheckoutOpenChange?.(false);
+  }, [checkoutOpen, onCheckoutOpenChange]);
 
   if (checkoutPlan && !ent.isPaid) {
     return (
@@ -106,9 +106,9 @@ export function PlansBilling({
       role={role}
       workspaceId={workspaceId}
       onUpgrade={setCheckoutPlan}
-      onManage={handleManage}
-      portalLoading={portalLoading}
-      portalError={portalError}
+      onManage={portal.open}
+      portalLoading={portal.loading}
+      portalError={portal.error}
     />
   );
 }

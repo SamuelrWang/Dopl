@@ -33,8 +33,6 @@ exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
-const cluster_js_1 = require("./tools/cluster.js");
-const workflow_js_1 = require("./tools/workflow.js");
 const chats_js_1 = require("./tools/chats.js");
 const members_js_1 = require("./tools/members.js");
 const map_js_1 = require("./tools/map.js");
@@ -116,6 +114,9 @@ function createServer(client, options = {}) {
     const gates = (0, gating_js_1.createGates)(canWrite);
     const { registerTool, registerMetaTool } = (0, registrar_js_1.createToolRegistrars)({
         server,
+        // The registrar charges one MCP credit per domain-tool call through this
+        // client (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
+        client,
         gates,
         directory,
         activeWorkspace,
@@ -131,13 +132,11 @@ function createServer(client, options = {}) {
     // Each registrar exposes a single `dopl_<domain>` action-tool (plus a
     // `dopl_<domain>_admin` companion where the domain has destructive ops)
     // that dispatches on an `op` arg.
-    // RETIRED but still wired: both calls are no-ops because every tool they
-    // register is in HIDDEN_TOOLS. Left in place on purpose — "hide, don't
-    // delete" — so the feature comes back by editing that one set, and so the
-    // parity/scope suites keep checking these tools' schemas against their
-    // sources while they sit dormant.
-    (0, cluster_js_1.registerClusterTools)(registerTool, client); // dopl_cluster + dopl_cluster_admin (hidden)
-    (0, workflow_js_1.registerWorkflowTools)(registerTool, client); // dopl_workflow + dopl_workflow_admin (hidden)
+    // This list IS the surface: every published tool is registered here and
+    // nowhere else, so `tools/list` is these calls minus `gating.ts ›
+    // HIDDEN_TOOLS`. `registerClusterTools` / `registerWorkflowTools` sat here
+    // as deliberate no-ops from 2026-08-07 (hidden, not deleted); their tools
+    // and this pair of calls were deleted on 2026-08-11.
     (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client, caller); // dopl_kb + dopl_kb_admin (user bases)
     (0, skills_js_1.registerSkillTools)(registerTool, client, caller); // dopl_skill + dopl_skill_admin
     (0, chats_js_1.registerChatTools)(registerTool, client); // dopl_chats + dopl_chats_admin (archive)

@@ -1,10 +1,10 @@
 # Canvas Clusters → Workflows Pivot — Implementation Handoff
 
-> **⛔ RETIRED 2026-08-07. THE WORKFLOW ENTITY THIS HANDOFF INTRODUCED IS HIDDEN FROM USERS AND FROM AGENTS.**
+> **⛔ RETIRED 2026-08-07, DELETED 2026-08-11. THE WORKFLOW ENTITY THIS HANDOFF INTRODUCED NO LONGER EXISTS.**
 >
-> Canvas, Workflows and Configuration were retired from every user-facing and agent-facing surface on 2026-08-07 — unrouted, off the sidebar, out of the tour and the seeds, and `dopl_workflow` / `dopl_workflow_admin` / `dopl_cluster` / `dopl_cluster_admin` no longer register (they are absent from `tools/list`). **Hide, don't delete:** `src/features/{workflows,clusters}` and the `/api/workflows/**` routes still exist and still compile; nothing reaches them.
+> Canvas, Workflows and Configuration were retired from every user-facing and agent-facing surface on 2026-08-07 — unrouted, off the sidebar, out of the tour and the seeds, and `dopl_workflow` / `dopl_workflow_admin` / `dopl_cluster` / `dopl_cluster_admin` no longer register (they are absent from `tools/list`). **Hide, then delete:** `src/features/{workflows,clusters}`, the `/api/workflows/**` routes and the six tables behind them were removed from the tree on 2026-08-11. Nothing below resolves.
 >
-> See [RETIREMENT-UNWIRING-PLAN.md](RETIREMENT-UNWIRING-PLAN.md) for what was unwired and [ENGINEERING.md](ENGINEERING.md) §7 "Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE" for the statement of record. **This file is kept for history only** — the review it invites was completed long ago, and nothing below is a live contract.
+> See [RETIREMENT-UNWIRING-PLAN.md](RETIREMENT-UNWIRING-PLAN.md) for what was unwired and [ENGINEERING.md](ENGINEERING.md) §7 "Canvas, Workflows & Configuration — RETIRED 2026-08-07, DELETED 2026-08-11" for the statement of record. **This file is kept for history only** — the review it invites was completed long ago, and nothing below is a live contract.
 
 > Audience: a reviewer (human or stronger model) checking this work.
 > Scope: a two-session change that removed the spatial "cluster" grouping from

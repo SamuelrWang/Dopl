@@ -206,4 +206,33 @@ describe("what the URL is allowed to do", () => {
       (await render({ billing: "success", plan: "solo" })).initialCheckoutPlan
     ).toBeNull();
   });
+
+  it("opens on Usage for a bare visit and on Billing mid-transaction", async () => {
+    // The tab is resolved HERE, on the server, so a shared `?tab=` link and a
+    // Stripe return both decide the FIRST paint rather than a flash of the
+    // wrong pane. `?billing=` in any of its three values means the visitor was
+    // sent here by a payment flow.
+    expect((await render({})).initialTab).toBe("usage");
+    expect((await render({ billing: "upgrade" })).initialTab).toBe("billing");
+    expect((await render({ billing: "success" })).initialTab).toBe("billing");
+    expect((await render({ billing: "return" })).initialTab).toBe("billing");
+  });
+
+  it("lets ?tab= decide when there is no intent, and ignores junk", async () => {
+    expect((await render({ tab: "billing" })).initialTab).toBe("billing");
+    expect((await render({ tab: "invoices" })).initialTab).toBe("usage");
+  });
+
+  it("keeps a payment intent on Billing even when ?tab= says otherwise", async () => {
+    // `?billing=success&tab=usage` is not a preference — it is what a checkout
+    // return BECOMES once the shell writes `?tab=` on a click. Resolving it to
+    // Usage strands the payer: the post-payment poll lives in the Billing pane,
+    // so nothing would ever correct their stale Starter plan.
+    expect(
+      (await render({ tab: "usage", billing: "success" })).initialTab
+    ).toBe("billing");
+    expect((await render({ tab: "usage", billing: "return" })).initialTab).toBe(
+      "billing"
+    );
+  });
 });

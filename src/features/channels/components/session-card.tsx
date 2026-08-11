@@ -83,14 +83,18 @@ export function SessionCard({
     summary: string
   ) => Promise<void>;
 }) {
-  // Per-entry collapse. An entry that leads with a one-line summary starts
-  // COLLAPSED (summary only, full body behind the chevron); an entry with no
-  // summary keeps today's behavior (body shown, the chevron hides it). Clicking
-  // the chevron toggles just that entry's body, keeping its avatar/author/time.
+  // Per-entry collapse. EVERY entry present at mount starts COLLAPSED (a
+  // summary-bearing entry shows its one-liner, a summary-less one just its
+  // author/time line); the chevron expands one entry at a time. Entries that
+  // ARRIVE while the card is mounted are deliberately NOT added to the set —
+  // live activity the viewer is watching renders expanded. The state is
+  // component-local on purpose: switching channels or leaving the page
+  // unmounts the card and resets everything to collapsed. Expansion is a
+  // transient reading gesture, not a preference — do not persist it.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     for (const entry of session.entries) {
-      if (entry.kind === "message" && readSummary(entry.metadata)) {
+      if (entry.kind === "message") {
         initial.add(entry.id);
       }
     }

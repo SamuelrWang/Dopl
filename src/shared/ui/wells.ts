@@ -1,7 +1,8 @@
 /**
  * Field-well class recipes — study-notes design language, verbatim.
- * Promoted from ontology-bits when configuration became the second
- * consumer (same path SectionBox took).
+ * Promoted out of ontology-bits once a second consumer appeared (same path
+ * SectionBox took); today that second consumer is
+ * `features/channels/components/message-composer.tsx`.
  */
 
 /** Concave input well — the global .concave-field recipe for add-row fields. */

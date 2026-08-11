@@ -1,12 +1,17 @@
 /**
  * THE POLYMORPHIC-RESOURCE WRITE PATH.
  *
- * `team_resource_access.resource_id` points at one of FIVE tables depending on
+ * `team_resource_access.resource_id` points at one of FOUR tables depending on
  * `resource_type`, and the repository is the only thing that knows which. It
  * used to decide with an inline `knowledge_base ? knowledge_bases : workflows`
  * ternary, so `skill` writes went to the `workflows` table — and a Supabase
  * `.update()` matching zero rows returns `{ error: null }`, so nothing threw,
  * the route 200'd, and the skill's scope silently never changed.
+ *
+ * `workflow` is no longer a resource type and `workflows` no longer a table
+ * (deleted 2026-08-11), but the regression guard below is NOT about workflows —
+ * it is about the map dispatching each type to its own table. It keeps naming
+ * the old fallback because that is the table a broken dispatch fell through to.
  *
  * That failure mode is INVISIBLE to every test that mocks at a higher layer: it
  * has no error, no exception, and no wrong return value. The only way to catch
@@ -74,7 +79,6 @@ beforeEach(() => vi.clearAllMocks());
 describe("setResourceAccessModeRow — table routing", () => {
   it.each([
     ["knowledge_base", "knowledge_bases"],
-    ["workflow", "workflows"],
     ["skill", "skills"],
   ] as const)("writes a %s to the %s table", async (resourceType, table) => {
     const { builder, calls } = makeDb();
@@ -96,18 +100,6 @@ describe("setResourceAccessModeRow — table routing", () => {
     await setResourceAccessModeRow(WS, "skill", RESOURCE, "workspace");
 
     expect(calls.from).not.toContain("workflows");
-  });
-
-  it("still writes legacy workflow rows (retired from the UI, live in the DB)", async () => {
-    // D7 retired workflows from the members console; existing grant rows and
-    // access modes stay valid, so this branch must keep working.
-    const { builder, calls } = makeDb();
-    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
-
-    await setResourceAccessModeRow(WS, "workflow", RESOURCE, "workspace");
-
-    expect(calls.from).toEqual(["workflows"]);
-    expect(calls.update[0]).toMatchObject({ access_mode: "workspace" });
   });
 
   it.each(["chat", "chat_folder"] as const)(
@@ -160,18 +152,18 @@ describe("getResourceAccessMeta — table + column routing", () => {
     expect(meta?.createdBy).toBe("user-3");
   });
 
-  it("reads a workflow's creator from user_id, not created_by", async () => {
-    // Workflows are the odd one out — the column is `user_id`.
+  it("reads a chat folder's creator from user_id, not created_by", async () => {
+    // Chat folders are the odd one out — the creator column is `user_id`.
     const { builder, calls } = makeDb({
-      name: "Nightly sync",
+      name: "Kickoffs",
       access_mode: "teams",
       user_id: "user-4",
     });
     vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
 
-    const meta = await getResourceAccessMeta(WS, "workflow", RESOURCE);
+    const meta = await getResourceAccessMeta(WS, "chat_folder", RESOURCE);
 
-    expect(calls.from).toEqual(["workflows"]);
+    expect(calls.from).toEqual(["chat_folders"]);
     expect(calls.select[0]).toContain("user_id");
     expect(meta?.createdBy).toBe("user-4");
   });

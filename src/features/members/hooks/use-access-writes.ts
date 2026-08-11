@@ -22,13 +22,11 @@ import { teamsRequest } from "../teams-client";
  * workspace/teams scope — on the shared mutation layer.
  *
  * Both go through the FEATURE-INJECTED transport (`teamsRequest`), the same
- * composition channels uses for `channelRequest`: a 409
- * `TEAM_KB_ACCESS_CONFLICT` has to arrive at the caller as a
- * `TeamAccessConflictError` carrying `details`, or the ConflictDialog's
- * "grant read access?" retry has nothing to open with. The retry is just the
- * same draft with `autoGrant: true` — and because the layer rolled the
- * optimistic patch back on the 409, the retry re-applies it cleanly rather
- * than stacking a second edit on top of the first.
+ * composition channels uses for `channelRequest`, so a refusal reaches the
+ * caller as an `Error` carrying the server's message. (This is also where the
+ * `TEAM_KB_ACCESS_CONFLICT` 409 used to be translated into a retryable typed
+ * error — that status had one producer, the workflow↔KB invariant, and it went
+ * with workflows on 2026-08-11.)
  *
  * The scope toggle is the launch audit's "segmented control doesn't move":
  * `SegmentedControl` is driven straight off the cached `accessMode`, so
@@ -49,15 +47,12 @@ export interface GrantDraft {
    * click, never from the selection while the PUT is in flight.
    */
   memberIds: string[];
-  /** Second attempt after a 409 — lets the server fix the KB invariant itself. */
-  autoGrant?: boolean;
 }
 
 export interface ResourceScopeDraft {
   resourceType: TeamResourceType;
   resourceId: string;
   accessMode: AccessMode;
-  autoGrant?: boolean;
 }
 
 export function setGrantConfig(
@@ -72,7 +67,6 @@ export function setGrantConfig(
         resourceType: draft.resourceType,
         resourceId: draft.resourceId,
         level: draft.level,
-        autoGrant: draft.autoGrant,
       },
     }),
     // Grants live on the TEAM row, so this one patch moves both surfaces that
@@ -89,13 +83,11 @@ export function setGrantConfig(
           draft.level
         )
       ),
+    // The TEAMS cache is NOT invalidated: the grant is fully computed above and
+    // invalidating it would re-download the cache this write just reconciled.
+    // (It used to be, on the `autoGrant` retry, because that asked the SERVER
+    // to write grants on OTHER teams — that path went with workflows.)
     invalidate: (draft) => [
-      // The TEAMS cache only on the autoGrant retry. A plain grant is fully
-      // computed above and invalidating it would re-download the cache this
-      // write just reconciled; an autoGrant asks the SERVER to write additional
-      // grants on OTHER teams to satisfy the KB invariant, and those are the
-      // rows no client can guess.
-      ...(draft.autoGrant ? [teamsKey] : []),
       // Every member of the team, always. `member-detail` reads a per-member
       // `…/members/<id>/access` entry that ONLY the server computes and nothing
       // else refreshes — the pane does not unmount — so a grant changed here
@@ -121,7 +113,6 @@ export function setResourceScopeConfig(
         resourceType: draft.resourceType,
         resourceId: draft.resourceId,
         accessMode: draft.accessMode,
-        autoGrant: draft.autoGrant,
       },
     }),
     optimistic: (draft) =>
@@ -135,10 +126,9 @@ export function setResourceScopeConfig(
             draft.accessMode
           )
       ),
-    // Flipping a resource INTO teams-mode can make the server write grant rows
-    // (that is what `autoGrant` resolves), and flipping it back out changes
-    // which grants still apply. Neither is computable here — the teams cache is
-    // the one this write may not reconcile itself.
+    // Flipping a resource between scopes changes which grants still apply, and
+    // that is not computable here — the teams cache is the one this write may
+    // not reconcile itself.
     invalidate: () => [memberKeys.teams(workspaceSlug).all],
   };
 }

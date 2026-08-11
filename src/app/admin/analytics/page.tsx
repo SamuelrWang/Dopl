@@ -52,25 +52,6 @@ export default async function AdminAnalyticsPage() {
         />
       </section>
 
-      {/* Conversion ratios */}
-      <section className="mb-8">
-        <h2 className="text-sm font-medium text-text-primary mb-3">
-          Conversion funnels
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Funnel
-            label="Signup → first cluster in 24h"
-            description="% of new signups who built a cluster within their first day."
-            pct={m.conversion_signup_to_first_cluster_24h_pct}
-          />
-          <Funnel
-            label="Paid users who built a cluster in session 1"
-            description="% of paid users whose first cluster landed within 1h of signup."
-            pct={m.paid_users_who_clustered_in_session1_pct}
-          />
-        </div>
-      </section>
-
       {/* Daily series */}
       <section>
         <h2 className="text-sm font-medium text-text-primary mb-3">
@@ -133,26 +114,3 @@ function Kpi({
   );
 }
 
-function Funnel({
-  label,
-  description,
-  pct,
-}: {
-  label: string;
-  description: string;
-  pct: number | null;
-}) {
-  return (
-    <div className="rounded-lg border border-border-default bg-surface-raised-1 px-4 py-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="text-sm text-text-primary">{label}</div>
-        <div className="text-lg font-semibold text-text-primary">
-          {pct === null ? "—" : `${pct.toFixed(1)}%`}
-        </div>
-      </div>
-      <p className="mt-1 text-xs text-text-tertiary leading-relaxed">
-        {description}
-      </p>
-    </div>
-  );
-}

@@ -116,7 +116,7 @@ Prior DATA-LOADING-AUDIT status: every projection fix landed; every **pagination
 | `reconcile-seats` cron: unbounded `Promise.allSettled` fan-out, 2 DB + 2 Stripe calls each — will trip Stripe rate limits silently (`api/cron/reconcile-seats/route.ts:58-60`) | P1 | S |
 | `ensureFolderPath` 3 round-trips per path segment on every MCP path-addressed KB write (`knowledge/server/path.ts:210-259`) | P2 | M |
 | `stale-threads` per-row insert; correct form is `.upsert(…, { onConflict: "channel_id,client_msg_id", ignoreDuplicates: true })` (`api/cron/stale-threads/route.ts:97-128`) | P2 | S |
-| Invite-accept per-team insert (`workspaces/server/invitations.ts:384-386`); invariant per-KB upsert (`teams/server/invariant.ts:107-116`) | P2 | S |
+| Invite-accept per-team insert (`workspaces/server/invitations.ts:384-386`); ~~invariant per-KB upsert (`teams/server/invariant.ts`)~~ — **that file is DELETED (2026-08-11): it was the workflow↔KB invariant and it went with workflows** | P2 | S |
 
 Models to copy: `chat_create_with_messages` / `chat_append_messages` / `cascade_soft_delete_cluster` RPCs — single-call batch shapes already in the codebase.
 
@@ -130,7 +130,7 @@ Boot chain (detailed in §2.2). Additional findings:
 | `my-access` route runs `findMembership` a third redundant time (`api/workspaces/[workspaceSlug]/my-access/route.ts:40,52`; thread `opts.role` into `teams/server/access.ts:115`) | P1 | S |
 | Token refresh is lazy on first API call instead of at launch (`dopl-desktop-app/main/ui-bridge.js:215`) — adds a hop to every cold start after ~48min | P1 | S |
 | Knowledge page chain depth 5 from launch (`pages/knowledge/index.tsx:111,124`) | P1 | M |
-| N+1s: join-links up to 100 parallel `getUserById` (`workspaces/server/join-links.ts:248-277` → one `.in()` on profiles); `listFolderAncestors` one query per hop (`knowledge/server/repository-folders.ts:86-100`); per-segment path resolve (`knowledge/server/path.ts:92-107`); 2N serial reads per KB narrowing save (`teams/server/invariant.ts:160-204`) | P1 | M |
+| N+1s: join-links up to 100 parallel `getUserById` (`workspaces/server/join-links.ts:248-277` → one `.in()` on profiles); `listFolderAncestors` one query per hop (`knowledge/server/repository-folders.ts:86-100`); per-segment path resolve (`knowledge/server/path.ts:92-107`); ~~2N serial reads per KB narrowing save (`teams/server/invariant.ts`)~~ — **the narrowing check is DELETED (2026-08-11) with workflows; a KB narrowing now costs zero reads** | P1 | M |
 | `staleTime: 0, refetchOnMount: "always"` on boot + ontology (`pages/boot/index.tsx:62-63`, `use-ontology.ts:79-80`) — the ontology one sits on the unbounded graph | P1 | S |
 
 ### 3.4 Un-optimistic data layer
@@ -150,7 +150,7 @@ Boot chain (detailed in §2.2). Additional findings:
 2. `src/shared/hooks/use-api-mutation.ts` — thin `useMutation` wrapper over `apiRequest` (transport-injected like `use-api-query-core`) with `optimistic: (draft) => (cache) => nextCache` wired to `onMutate` + snapshot + `onError` rollback, auto-invalidate on settle, `pending` flag, and `settleWith(coordinator)` for the existing `createRefetchCoordinator`.
 3. `src/shared/ui/pending.ts` — `data-pending` class recipe + `PendingRow` shell so optimistic rows look deliberately provisional.
 
-Reusable primitives already in-repo: `createRefetchCoordinator` (`src/shared/realtime/refetch-coordinator.ts:24`), `createMergeScheduler`, `persist-gate`, `keyed-serializer`, three working optimistic reference implementations (`use-content-descriptions.ts:70-101`, channels override maps, `use-channel-permission-preset.ts:140`). **The most complete optimistic engine lives in `src/features/workflows` (`use-workflows.ts:229-232`) and ontology's `graphReducer` — harvest before workflows is retired.**
+Reusable primitives already in-repo: `createRefetchCoordinator` (`src/shared/realtime/refetch-coordinator.ts:24`), `createMergeScheduler`, `persist-gate`, `keyed-serializer`, three working optimistic reference implementations (`use-content-descriptions.ts:70-101`, channels override maps, `use-channel-permission-preset.ts:140`). ⚠ **NOT HARVESTED. The most complete optimistic engine lived in `src/features/workflows` (`use-workflows.ts`); that tree was DELETED on 2026-08-11 without harvesting it.** What survives as the reference implementation is ontology's `graphReducer` plus the shipped `src/shared/hooks/use-api-mutation.ts`. Recover the workflows version from git history if the reducer is not enough.
 
 ### 3.5 Static hosting
 

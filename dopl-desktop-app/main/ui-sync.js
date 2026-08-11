@@ -65,9 +65,9 @@ const { diag } = require('./diag');
 // … DROP`. Not ceremony: `skill_files` sat here until review caught 20260716064733 dropping the
 // table while its 20260502100200 publication ADD stayed — and ONE dead name makes realtime
 // refuse the whole channel, i.e. no live updates at all.
-// THE 5 `workflow_*` TABLES LEFT 2026-08-07 (RETIREMENT-UNWIRING-PLAN.md Phase 5 / D8): page
-// unrouted, `useWorkflowsRealtime` neutered. PAIRED with migration 20260807100000 — dropping
-// the publication alone leaves a binding that joins, says SUBSCRIBED and delivers nothing.
+// THE 5 `workflow_*` TABLES LEFT 2026-08-07 (Phase 5 / D8), PAIRED with migration
+// 20260807100000 — dropping the publication alone leaves a binding that joins, says SUBSCRIBED
+// and delivers nothing. They and `clusters` were DROPPED by 20260811120000, with the feature.
 const SYNC_TABLES = Object.freeze([
   'knowledge_bases', 'knowledge_folders', 'knowledge_entries',
   'skills', 'skill_versions',

@@ -1,7 +1,7 @@
 /**
- * Skill method group — link 10 and LAST of the chain documented in
- * `client-base.ts`; `DoplClient` in `client.ts` extends this one. Pure
- * delegation to `skills.ts`; no HTTP here.
+ * Skill method group — link 8 of the chain documented in `client-base.ts`
+ * (`BillingMethods` extends this one). Pure delegation to `skills.ts`; no HTTP
+ * here.
  *
  * Read paths are unrestricted; write paths are gated server-side by the
  * per-skill `agent_write_enabled` toggle for API-key (agent) callers. Skills

@@ -1,11 +1,11 @@
 /**
  * Generic graph-drawing geometry — the substrate the ontology graph and
- * the workflow graph both render on. Nothing here knows about a domain:
+ * the (since deleted) workflow graph both rendered on. Nothing here knows about a domain:
  * a `SceneNode<T>` carries an opaque `data` payload and a free-form
  * `kind`; edge visual style is resolved by the caller (see EdgeLayer's
  * `styles` prop), so `SceneEdge.kind` is a plain string keyed into a
  * caller-supplied style map. Layout modules (ontology's column tree,
- * workflows' layered DAG) produce the `NodeLayout`/`SceneLayout` shapes
+ * a layered DAG) produce the `NodeLayout`/`SceneLayout` shapes
  * EdgeLayer consumes.
  */
 
@@ -26,7 +26,7 @@ export interface Point {
 export type GraphLayout = Record<string, Point>;
 
 /** A positioned card on the graph. `data` is domain payload (an ontology
- *  object, a workflow step, …); `kind` is a domain discriminator the
+ *  object, …); `kind` is a domain discriminator the
  *  renderer branches on. */
 export interface SceneNode<T = unknown> {
   id: string;

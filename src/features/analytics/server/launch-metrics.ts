@@ -15,8 +15,6 @@ export interface LaunchMetrics {
   signups_total: number;
   pro_workspaces: number;
   mrr_usd: number;
-  conversion_signup_to_first_cluster_24h_pct: number | null;
-  paid_users_who_clustered_in_session1_pct: number | null;
   daily: Array<{
     day: string; // YYYY-MM-DD
     signups: number;
@@ -59,65 +57,21 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
       .toFixed(2)
   );
 
-  // ── Funnel ratios from conversion_events ─────────────────────────
-  const [signupEvents, firstClusterEvents, subscribedEvents, firstIngestEvents] =
-    await Promise.all([
-      fetchEvents("signup"),
-      fetchEvents("first_cluster_built"),
-      fetchEvents("subscribed"),
-      fetchEvents("first_ingest_completed"),
-    ]);
+  // ── Daily time series (last 30 days) from conversion_events ──────
+  // (The first_cluster_built funnel ratios were dropped 2026-08-11 with the
+  // clusters feature — the event lost its only emitter, so those tiles could
+  // never move again. Historical rows remain in conversion_events.)
+  const [signupEvents, subscribedEvents] = await Promise.all([
+    fetchEvents("signup"),
+    fetchEvents("subscribed"),
+  ]);
 
-  // signup → first_cluster within 24h
-  const signupByUser = new Map<string, string>();
-  for (const e of signupEvents) signupByUser.set(e.user_id, e.occurred_at);
-
-  let firstClusterWithin24h = 0;
-  for (const e of firstClusterEvents) {
-    const signupTs = signupByUser.get(e.user_id);
-    if (!signupTs) continue;
-    const dt = new Date(e.occurred_at).getTime() - new Date(signupTs).getTime();
-    if (dt >= 0 && dt <= 24 * 60 * 60 * 1000) firstClusterWithin24h++;
-  }
-  const convFirstCluster24h =
-    signupEvents.length > 0
-      ? pct(firstClusterWithin24h / signupEvents.length)
-      : null;
-
-  // Subscribed users — for the session-1 cluster metric and the daily series.
-  const subscribedUserSet = new Set(subscribedEvents.map((e) => e.user_id));
-
-  // paid users who built a cluster within 1h of signup (≈ session 1)
-  // (Proxy: first_cluster event within 1h of signup, then limited to
-  // users who ended up paid.)
-  const firstClusterByUser = new Map<string, string>();
-  for (const e of firstClusterEvents) firstClusterByUser.set(e.user_id, e.occurred_at);
-
-  let paidAndEarlyCluster = 0;
-  for (const userId of subscribedUserSet) {
-    const signup = signupByUser.get(userId);
-    const cluster = firstClusterByUser.get(userId);
-    if (!signup || !cluster) continue;
-    const dt = new Date(cluster).getTime() - new Date(signup).getTime();
-    if (dt >= 0 && dt <= 60 * 60 * 1000) paidAndEarlyCluster++;
-  }
-  const convPaidSession1Cluster =
-    subscribedUserSet.size > 0
-      ? pct(paidAndEarlyCluster / subscribedUserSet.size)
-      : null;
-
-  // ── Daily time series (last 30 days) ─────────────────────────────
   const daily = buildDailySeries(signupEvents, subscribedEvents, 30);
-
-  // Intentionally unused metric kept for future (first ingest funnel).
-  void firstIngestEvents;
 
   return {
     signups_total: signupsTotal ?? 0,
     pro_workspaces: paying,
     mrr_usd: mrrUsd,
-    conversion_signup_to_first_cluster_24h_pct: convFirstCluster24h,
-    paid_users_who_clustered_in_session1_pct: convPaidSession1Cluster,
     daily,
   };
 }
@@ -130,10 +84,6 @@ async function fetchEvents(
     .select("user_id, occurred_at")
     .eq("event_type", eventType);
   return (data ?? []) as Array<{ user_id: string; occurred_at: string }>;
-}
-
-function pct(n: number): number {
-  return Number((n * 100).toFixed(1));
 }
 
 function buildDailySeries(

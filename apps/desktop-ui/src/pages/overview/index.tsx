@@ -15,25 +15,19 @@ import { RouterLink, useWorkspaceRoute } from "#/components/app-shell";
  * `src/app/[workspaceSlug]/(app)/overview/page.tsx` (docs/migration-research/
  * web-pages.md §4).
  *
- * The RSC's four `supabaseAdmin()` head-counts + `isMcpConnected` are one
+ * The RSC's three `supabaseAdmin()` head-counts + `isMcpConnected` are one
  * client read here: `GET /api/workspaces/{segment}/overview-counts`. The stat
  * row and the members panel are the web app's own components, imported through
  * `@/` as their Next-free cores with the SPA's router and transport injected;
  * `ConnectClients` / `AgentSkillCard` are reused verbatim (they never fetch).
  */
 
-/**
- * `GET /api/workspaces/[workspaceSlug]/overview-counts`. Still carries
- * `workflows` — the route and the table are untouched by the retirement
- * (docs/RETIREMENT-UNWIRING-PLAN.md §3.1); the stat row simply stopped
- * rendering a card for it, because there is no longer a page to link to.
- */
+/** `GET /api/workspaces/[workspaceSlug]/overview-counts`. */
 interface OverviewCountsBody extends WorkspaceOverviewCounts {
   isMcpConnected: boolean;
 }
 
 const ZERO_COUNTS: OverviewCountsBody = {
-  workflows: 0,
   knowledgeBases: 0,
   skills: 0,
   members: 0,

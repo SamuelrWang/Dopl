@@ -13,11 +13,6 @@ import type { TeamCreateInput, TeamUpdateInput } from "../schema";
 import { TeamNotFoundError } from "./errors";
 import { listEffectiveAccess, resolveLevel } from "./access";
 import {
-  computeWorkflowAudience,
-  validateKbNarrowing,
-  validateWorkflowKbInvariant,
-} from "./invariant";
-import {
   deleteGrantRow,
   deleteTeamMemberRow,
   deleteTeamRow,
@@ -60,13 +55,7 @@ export async function createTeam(
       await insertTeamMembers(team.id, workspaceId, input.memberIds, callerId);
     }
 
-    // KB grants first so a same-payload workflow grant sees them when the
-    // invariant computes the new team's readable KBs.
-    const grants = [...(input.grants ?? [])].sort((a, b) => {
-      if (a.resourceType === b.resourceType) return 0;
-      return a.resourceType === "knowledge_base" ? -1 : 1;
-    });
-    for (const grant of grants) {
+    for (const grant of input.grants ?? []) {
       await setTeamGrant(
         workspaceId,
         callerId,
@@ -74,7 +63,7 @@ export async function createTeam(
         grant.resourceType,
         grant.resourceId,
         grant.level,
-        { role, autoGrant: input.autoGrant }
+        { role }
       );
     }
   } catch (err) {
@@ -111,8 +100,7 @@ export async function deleteTeam(
   await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
-  // Members + grants cascade via FK. Removing a team's grants can never
-  // break the workflow↔KB invariant: the team leaves both audiences at once.
+  // Members + grants cascade via FK.
   await deleteTeamRow(teamId);
 }
 
@@ -177,9 +165,13 @@ export async function removeTeamMember(
 /* ----------------------------- grants ----------------------------- */
 
 /**
- * Set or update a team's grant on a resource. Workflow grants are
- * invariant-checked: the widened audience must be able to read every
- * attached KB (autoGrant lets the admin create the missing read grants).
+ * Set or update a team's grant on a resource.
+ *
+ * There is NO cross-resource check left here. The one that used to live on
+ * this path was the workflow↔KB invariant (every team that could read a
+ * workflow had to be able to read every KB attached to it); workflows are
+ * deleted (2026-08-11) and it went with them, along with the `autoGrant`
+ * escape hatch that existed only to resolve it.
  */
 export async function setTeamGrant(
   workspaceId: string,
@@ -188,9 +180,9 @@ export async function setTeamGrant(
   resourceType: TeamResourceType,
   resourceId: string,
   level: AccessLevel,
-  opts?: { autoGrant?: boolean; role?: Role }
+  opts?: { role?: Role }
 ): Promise<void> {
-  const role = opts?.role ?? (await requireWorkspaceRole(workspaceId, callerId, "admin"));
+  if (!opts?.role) await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   const meta = await getResourceAccessMeta(workspaceId, resourceType, resourceId);
@@ -198,27 +190,10 @@ export async function setTeamGrant(
     throw new HttpError(404, "RESOURCE_NOT_FOUND", `${resourceType.replace("_", " ")} not found`);
   }
 
-  if (resourceType === "workflow") {
-    const audience = await computeWorkflowAudience(workspaceId, resourceId);
-    const widened = audience === "all" ? "all" : [...new Set([...audience, teamId])];
-    const attachedKbIds = await listAttachedKbIds(workspaceId, resourceId);
-    await validateWorkflowKbInvariant({
-      workspaceId,
-      workflowId: resourceId,
-      workflowName: meta.name,
-      kbIds: attachedKbIds,
-      audience: widened,
-      autoGrant: opts?.autoGrant ? { callerId, role } : undefined,
-    });
-  }
-
   await upsertGrant(workspaceId, teamId, resourceType, resourceId, level);
 }
 
-/**
- * Remove a team's grant. Removing a KB grant is invariant-checked: any
- * workflow whose audience still contains this team must not depend on it.
- */
+/** Remove a team's grant. */
 export async function removeTeamGrant(
   workspaceId: string,
   callerId: string,
@@ -230,18 +205,6 @@ export async function removeTeamGrant(
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
 
-  if (resourceType === "knowledge_base") {
-    const meta = await getResourceAccessMeta(workspaceId, resourceType, resourceId);
-    if (meta && meta.accessMode === "teams") {
-      await validateKbNarrowing({
-        workspaceId,
-        knowledgeBaseId: resourceId,
-        knowledgeBaseName: meta.name,
-        losingTeamIds: [teamId],
-      });
-    }
-  }
-
   await deleteGrantRow(teamId, resourceType, resourceId);
 }
 
@@ -250,47 +213,24 @@ export async function removeTeamGrant(
 /**
  * Flip a resource between workspace-wide and teams-scoped access.
  *
- *   KB -> teams:       narrowing; checked against attached workflows.
- *   workflow -> workspace: audience widens to everyone; every attached
- *                          teams-mode KB becomes a conflict.
- *   KB -> workspace / workflow -> teams: pure widening/narrowing of the
- *                          resource itself, never breaks the invariant.
+ * Both directions are a pure widening/narrowing of the resource itself.
+ * The cross-resource checks that used to guard this (a KB narrowing under
+ * an attached workflow, a workflow widening to the whole workspace over a
+ * teams-mode KB) went with workflows on 2026-08-11.
  */
 export async function setResourceAccessMode(
   workspaceId: string,
   callerId: string,
   resourceType: TeamResourceType,
   resourceId: string,
-  mode: AccessMode,
-  opts?: { autoGrant?: boolean }
+  mode: AccessMode
 ): Promise<void> {
-  const role = await requireWorkspaceRole(workspaceId, callerId, "admin");
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const meta = await getResourceAccessMeta(workspaceId, resourceType, resourceId);
   if (!meta) {
     throw new HttpError(404, "RESOURCE_NOT_FOUND", `${resourceType.replace("_", " ")} not found`);
   }
   if (meta.accessMode === mode) return;
-
-  if (resourceType === "knowledge_base" && mode === "teams") {
-    await validateKbNarrowing({
-      workspaceId,
-      knowledgeBaseId: resourceId,
-      knowledgeBaseName: meta.name,
-      losingTeamIds: "allUngranted",
-    });
-  }
-
-  if (resourceType === "workflow" && mode === "workspace") {
-    const attachedKbIds = await listAttachedKbIds(workspaceId, resourceId);
-    await validateWorkflowKbInvariant({
-      workspaceId,
-      workflowId: resourceId,
-      workflowName: meta.name,
-      kbIds: attachedKbIds,
-      audience: "all",
-      autoGrant: opts?.autoGrant ? { callerId, role } : undefined,
-    });
-  }
 
   await setResourceAccessModeRow(workspaceId, resourceType, resourceId, mode);
 }
@@ -303,17 +243,11 @@ export async function getAccessMatrix(
 ): Promise<AccessMatrix> {
   const callerRole = await requireWorkspaceRole(workspaceId, callerId, "viewer");
   const db = supabaseAdmin();
-  const [teams, kbs, wfs, skills] = await Promise.all([
+  const [teams, kbs, skills] = await Promise.all([
     listTeams(workspaceId, callerId),
     db
       .from("knowledge_bases")
       .select("id, name, access_mode, created_by")
-      .eq("workspace_id", workspaceId)
-      .is("deleted_at", null)
-      .order("name"),
-    db
-      .from("workflows")
-      .select("id, name, access_mode, user_id")
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null)
       .order("name"),
@@ -325,7 +259,6 @@ export async function getAccessMatrix(
       .order("name"),
   ]);
   if (kbs.error) throw kbs.error;
-  if (wfs.error) throw wfs.error;
   if (skills.error) throw skills.error;
 
   const resources: AccessMatrixResource[] = [
@@ -340,18 +273,6 @@ export async function getAccessMatrix(
       name: r.name,
       accessMode: r.access_mode,
       createdBy: r.created_by,
-    })),
-    ...((wfs.data ?? []) as Array<{
-      id: string;
-      name: string;
-      access_mode: AccessMode;
-      user_id: string | null;
-    }>).map((r) => ({
-      resourceType: "workflow" as const,
-      resourceId: r.id,
-      name: r.name,
-      accessMode: r.access_mode,
-      createdBy: r.user_id,
     })),
     ...((skills.data ?? []) as Array<{
       id: string;
@@ -438,22 +359,6 @@ async function assertActiveMembers(
       { userIds: missing }
     );
   }
-}
-
-async function listAttachedKbIds(
-  workspaceId: string,
-  workflowId: string
-): Promise<string[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workflow_knowledge_bases")
-    .select("knowledge_base_id")
-    .eq("workspace_id", workspaceId)
-    .eq("workflow_id", workflowId);
-  if (error) throw error;
-  return ((data ?? []) as Array<{ knowledge_base_id: string }>).map(
-    (r) => r.knowledge_base_id
-  );
 }
 
 async function insertTeamOrConflict(args: {

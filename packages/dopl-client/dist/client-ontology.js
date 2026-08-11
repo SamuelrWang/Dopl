@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Ontology method group — link 6 of the chain documented in `client-base.ts`.
+ * Ontology method group — link 4 of the chain documented in `client-base.ts`.
  * Pure delegation to `ontology.ts`; no HTTP here.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {

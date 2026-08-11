@@ -9,8 +9,8 @@ Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
-dialogs/doc-pane), Ontology, Members, Chats, Skills, Configuration,
-Settings, Workspaces (invite/join/create cards), Billing, MCP-connect.
+dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings,
+Workspaces (invite/join/create cards), Billing, MCP-connect.
 Exempt: marketing pages and auth + onboarding (their own crystal/3D
 kit). The F-022 legacy Button/Dialog primitives are retired (deleted
 2026-07-17). Every new page starts on this system.
@@ -63,10 +63,10 @@ Utilities generated from `@theme` (values live in `:root`):
 | `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track`. |
 | `.btn-light`     | Small raised light button (toolbar / compact chrome).                   |
 | `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.)       |
-| `.graph-substrate` | Dotted recessed world surface behind graph views (Canvas, Workflows) and their skeletons. |
+| `.graph-substrate` | Dotted recessed world surface behind a graph view and its skeleton. Its only remaining user is the retired Workflows tree — the Canvas page was deleted 2026-08-11. |
 | `.graph-node-lift` | Elevation applied to a graph card WHILE dragging (deeper shadow + grabbing cursor). |
 | `.graph-port`    | Raised connector dot on a workflow step card edge; `data-active` = drag source, `data-target` = live drop target, `data-variant="output"` = inked source dot. |
-| `.graph-node` / `.graph-node-selected` / `.graph-node-target` | Graph card resting / selected-ring / connect-drop-target surfaces (shared by Canvas + Workflows cards). |
+| `.graph-node` / `.graph-node-selected` / `.graph-node-target` | Graph card resting / selected-ring / connect-drop-target surfaces. Written for two callers; only the Workflows cards are left. |
 
 Composition pattern (CSS modules welcome for layout, recipes come from kit):
 
@@ -87,6 +87,7 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `AvatarWithPresence` (`avatar-with-presence.tsx`) | `Avatar` wrapped in a presence ring — `ring-success` online / `ring-text-disabled` offline, floated off the avatar by a transparent `p-0.5` gap so it reads on any surface. Prefer over a standalone presence dot wherever an avatar is shown. |
 | `SegmentedControl` (`segmented-control.tsx`) | ALL scope/filter tab rows. Concave track + a raised thumb that slides between slots (0.28s ease-out-quint). Never compose `.concave-track`/`.raised-tab` tabs by hand. |
 | `SectionBox` (`section-box.tsx`) | Labelled section card (see Patterns below). |
+| `UsageMeter` (`usage-meter.tsx`) | THE "used / limit" bar — label row + `.concave-track` well + a bare `h-1.5 rounded-full` fill with an inline width %. The only progress-bar recipe; it was module-private in the billing pane until a second meter (MCP credits) needed it, and the billing page's Usage tab is the third caller. **`over` is a verdict the CALLER passes**, not `used >= limit` arithmetic — an entitlement gate decides it. Never hand-roll `.concave-track` + a fill. |
 | `EmptyState` (`empty-state.tsx`) | Centered icon + title + description placeholder for empty panes. |
 | `SearchField` (`search-field.tsx`) | Search-icon + concave-field input well (`sm`/`md`). Never inline the recipe. |
 | `Switch` (`switch.tsx`) | Boolean toggles (concave track, raised thumb). |
@@ -100,10 +101,9 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`
-(CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens),
+(CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens) and
 `src/features/ontology/components/` (utility-class styling on the same
-tokens), and `src/features/configuration/components/` (two-pane guide
-builder composing SectionBox + wells + SegmentedControl).
+tokens).
 
 ## Patterns
 

@@ -25,7 +25,13 @@ export interface WorkspaceBillingRow {
   stripeSubscriptionId: string | null;
   stripePriceId: string | null;
   seatCount: number | null;
+  /** Subscription period ANCHOR. `currentPeriodStart` is what lets the MCP
+   *  credit window roll on the workspace's own billing date instead of the
+   *  1st; null (free / never subscribed) falls back to the calendar month. */
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
+  /** Stripe's `cancel_at_period_end`: live now, will not renew. */
+  cancelAtPeriodEnd: boolean;
   /** Stripe `event.created` (epoch seconds) of the last applied billing
    *  event — the freshness watermark that drops stale/out-of-order replays. */
   lastStripeEventCreated: number | null;
@@ -38,12 +44,14 @@ export interface WorkspaceBillingUpsert {
   stripeSubscriptionId?: string | null;
   stripePriceId?: string | null;
   seatCount?: number | null;
+  currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
   lastStripeEventCreated?: number;
 }
 
 const BILLING_COLS =
-  "workspace_id, plan, status, stripe_customer_id, stripe_subscription_id, stripe_price_id, seat_count, current_period_end, last_stripe_event_created";
+  "workspace_id, plan, status, stripe_customer_id, stripe_subscription_id, stripe_price_id, seat_count, current_period_start, current_period_end, cancel_at_period_end, last_stripe_event_created";
 
 interface BillingRowShape {
   workspace_id: string;
@@ -53,7 +61,9 @@ interface BillingRowShape {
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
   seat_count: number | null;
+  current_period_start: string | null;
   current_period_end: string | null;
+  cancel_at_period_end: boolean | null;
   last_stripe_event_created: number | null;
 }
 
@@ -66,7 +76,21 @@ function mapBillingRow(row: BillingRowShape): WorkspaceBillingRow {
     stripeSubscriptionId: row.stripe_subscription_id,
     stripePriceId: row.stripe_price_id,
     seatCount: row.seat_count,
+    currentPeriodStart: row.current_period_start,
     currentPeriodEnd: row.current_period_end,
+    // The column is NOT NULL DEFAULT false, so `?? false` is a TYPE-LEVEL
+    // narrowing (the row shape types it nullable), not a pre-migration
+    // fallback — it cannot be one: `BILLING_COLS` names the new columns, and
+    // PostgREST answers a select for a column that does not exist with a 400,
+    // so there is no "row with the key missing" state to catch. THE REAL
+    // COUPLING IS DEPLOY ORDER: this code must not ship ahead of
+    // `20260811130000_mcp_credits.sql`, which adds BOTH `current_period_start`
+    // and `cancel_at_period_end`, or every billing read 400s. It is applied
+    // (verify against the database, never against a migration header — see
+    // docs/INVARIANTS.md §12, and the near-miss in REFACTOR-FINDINGS). The
+    // `false` still keeps the fail-safe direction (an unknown cancel intent
+    // must never read as "your plan is ending").
+    cancelAtPeriodEnd: row.cancel_at_period_end ?? false,
     lastStripeEventCreated: row.last_stripe_event_created,
   };
 }
@@ -103,8 +127,12 @@ export async function upsertWorkspaceBilling(
     row.stripe_subscription_id = patch.stripeSubscriptionId;
   if (patch.stripePriceId !== undefined) row.stripe_price_id = patch.stripePriceId;
   if (patch.seatCount !== undefined) row.seat_count = patch.seatCount;
+  if (patch.currentPeriodStart !== undefined)
+    row.current_period_start = patch.currentPeriodStart;
   if (patch.currentPeriodEnd !== undefined)
     row.current_period_end = patch.currentPeriodEnd;
+  if (patch.cancelAtPeriodEnd !== undefined)
+    row.cancel_at_period_end = patch.cancelAtPeriodEnd;
   if (patch.lastStripeEventCreated !== undefined)
     row.last_stripe_event_created = patch.lastStripeEventCreated;
 
@@ -223,6 +251,66 @@ export async function countActiveMembers(workspaceId: string): Promise<number> {
     .eq("status", "active");
   if (error) throw error;
   return count ?? 0;
+}
+
+/** Outcome of one atomic credit spend: whether it was allowed, and the
+ *  counter AFTER the attempt (unchanged when refused). */
+export interface CreditConsumeRow {
+  allowed: boolean;
+  used: number;
+}
+
+/**
+ * Spend `amount` MCP credits against `(workspaceId, periodStart)`, refusing
+ * when it would take the counter past `limit`. Atomic cross-instance
+ * compare-and-set in Postgres (`consume_workspace_credits` — a single
+ * upsert-CAS statement, no advisory lock), so two concurrent tool calls can
+ * never both spend the last credit. See migration 20260811130000_mcp_credits.
+ *
+ * THROWS on a DB error — the caller decides the fail direction, and the MCP
+ * path deliberately fails OPEN (see `credits-service.ts`).
+ */
+export async function consumeWorkspaceCredits(
+  workspaceId: string,
+  periodStart: string,
+  amount: number,
+  limit: number
+): Promise<CreditConsumeRow> {
+  const { data, error } = await supabaseAdmin().rpc(
+    "consume_workspace_credits",
+    {
+      p_workspace_id: workspaceId,
+      p_period_start: periodStart,
+      p_amount: amount,
+      p_limit: limit,
+    }
+  );
+  if (error) throw error;
+  // A `RETURNS TABLE` function comes back as a one-row array.
+  const row = (data as { allowed: boolean; used: number }[] | null)?.[0];
+  if (!row) {
+    throw new Error("consume_workspace_credits returned no row");
+  }
+  return { allowed: row.allowed === true, used: row.used ?? 0 };
+}
+
+/**
+ * Credits already spent in `(workspaceId, periodStart)`. NO ROW MEANS ZERO —
+ * the counter row is created by the first consume of a period, so "never
+ * called an MCP tool this month" and "used 0" are the same state.
+ */
+export async function getWorkspaceCreditsUsed(
+  workspaceId: string,
+  periodStart: string
+): Promise<number> {
+  const { data, error } = await supabaseAdmin()
+    .from("workspace_credit_usage")
+    .select("used")
+    .eq("workspace_id", workspaceId)
+    .eq("period_start", periodStart)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { used: number } | null)?.used ?? 0;
 }
 
 /** Live (non-trashed) ontology objects in a workspace — the object cap meter. */

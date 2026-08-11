@@ -15,6 +15,7 @@
  * one wrapper.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./tools/respond.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
@@ -23,6 +24,8 @@ import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } fro
 export interface RegistrarDeps {
     /** The SDK server both helpers publish onto. */
     server: McpServer;
+    /** The loopback client — used HERE only to charge MCP credits. */
+    client: DoplClient;
     /** The four gates for this session (see `gating.ts`). */
     gates: Gates;
     /** Membership cache + `workspace=` resolution + the M-3 refusal. */

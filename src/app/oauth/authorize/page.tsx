@@ -153,7 +153,7 @@ export default async function AuthorizePage({
                 <span className="mr-1 font-mono text-[11px] uppercase tracking-wide text-[#9a9a9a]">
                   read
                 </span>
-                Search and read your knowledge bases, skills, and clusters.
+                Search and read your knowledge bases, skills, and workspace.
               </p>
             </div>
             <label className="flex cursor-pointer items-start gap-3">
@@ -168,7 +168,7 @@ export default async function AuthorizePage({
                   write
                 </span>
                 Create, update, and delete your content — knowledge bases,
-                skills, clusters, and canvas.
+                skills, chats, and the ontology.
               </p>
             </label>
           </div>

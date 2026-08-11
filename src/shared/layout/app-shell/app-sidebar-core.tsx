@@ -20,11 +20,11 @@ import type { SettingsSection } from "@/shared/layout/settings-modal";
 import styles from "./app-shell.module.css";
 
 /**
- * RETIRED (2026-08-07): `canvas`, `workflows` and `configuration` are gone from
- * this union and from `NAV` — the pages still exist in the repo but nothing
- * routes to them (docs/RETIREMENT-UNWIRING-PLAN.md §3.1). Re-adding a section
- * means re-adding its route row in `apps/desktop-ui/src/routes.tsx` AND the
- * hand copy in `dopl-desktop-app/main/deep-link-target.js`.
+ * RETIRED (2026-08-07), then DELETED (2026-08-11): `canvas`, `workflows` and
+ * `configuration` are gone from this union, from `NAV`, and from the tree — no
+ * page remains behind any of the three names. Adding a section back means a
+ * route row in `apps/desktop-ui/src/routes.tsx` AND the hand copy in
+ * `dopl-desktop-app/main/deep-link-target.js`.
  */
 export type NavSection =
   | "overview"

@@ -8,7 +8,7 @@
  * single coalesced refetch once writes have drained.
  *
  * This is the guard that stops a remote event mid-edit from clobbering an
- * unsent optimistic change (a debounced ontology PATCH, a workflow
+ * unsent optimistic change (a debounced ontology PATCH, a graph
  * merge-scheduler entry). Framework-agnostic and synchronously testable.
  */
 export interface RefetchCoordinator {

@@ -18,7 +18,6 @@ import { TeamDetail } from "./team-detail";
 import { ResourceDetail } from "./resource-detail";
 import { CreateTeamDialog } from "./create-team-dialog";
 import { InviteDialog } from "./invite-dialog";
-import { ConflictDialog, type ConflictState } from "./conflict-dialog";
 import { ApiError } from "@/shared/api/api-client";
 import { useInvitationWrites } from "../hooks/use-invitation-writes";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
@@ -64,7 +63,6 @@ export function MembersView({
   const [selection, setSelection] = useState<Selection>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
-  const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const { members, loading, refresh: refreshMembers } = useMembers(workspaceSlug);
@@ -244,7 +242,6 @@ export function MembersView({
           resources={resourceList}
           canManage={canManage}
           onDeleted={() => setSelection(null)}
-          openConflict={setConflict}
         />
       ) : selectedResource ? (
         <ResourceDetail
@@ -253,7 +250,6 @@ export function MembersView({
           resource={selectedResource}
           teams={teamList}
           canManage={canManage}
-          openConflict={setConflict}
         />
       ) : (
         <EmptyState icon={UsersRound} title="Nothing to show yet." />
@@ -271,7 +267,6 @@ export function MembersView({
           setTab("teams");
           setSelection(null);
         }}
-        openConflict={setConflict}
       />
 
       <InviteDialog
@@ -293,13 +288,6 @@ export function MembersView({
         workspaceId={workspaceId}
         canManageBilling={canManage}
         variant="add-member"
-      />
-
-      <ConflictDialog
-        conflict={conflict}
-        onOpenChange={(open) => {
-          if (!open) setConflict(null);
-        }}
       />
     </div>
   );

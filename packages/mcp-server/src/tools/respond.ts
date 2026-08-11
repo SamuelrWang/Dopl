@@ -79,12 +79,41 @@ export function isAlreadyExists(e: unknown): boolean {
 }
 
 /**
- * Plan-gate denial codes the API returns as a flat `{ error: <code>,
- * message, upgrade_url }` envelope: the free-plan object cap and the
- * free-plan chat retention window. Both mean "the data is intact,
- * upgrading lifts the gate".
+ * The workspace has spent its MCP credit allowance for the current billing
+ * period. ONE wording, used by both surfaces: the registrar's up-front refusal
+ * (which reads `allowed: false` off the consume response, not an error) and
+ * `entitlementDenied` below, for the day a REST surface throws the code.
  */
-const ENTITLEMENT_CODES = new Set(["over_free_cap", "chat_outside_retention"]);
+export const CREDITS_EXHAUSTED_CODE = "credits_exhausted";
+
+const CREDITS_EXHAUSTED_MESSAGE =
+  "This workspace is out of MCP credits for the current billing period. Nothing was deleted — credits reset at the start of the next period, and upgrading raises the monthly allowance.";
+
+/**
+ * Plan-gate denial codes the API returns as a flat `{ error: <code>,
+ * message, upgrade_url }` envelope: the free-plan object cap, the free-plan
+ * chat retention window, and the monthly MCP credit allowance. All three mean
+ * "the data is intact, upgrading lifts the gate".
+ */
+const ENTITLEMENT_CODES = new Set([
+  "over_free_cap",
+  "chat_outside_retention",
+  CREDITS_EXHAUSTED_CODE,
+]);
+
+/**
+ * The credits refusal, rendered exactly like an entitlement denial (message +
+ * upgrade link) so an agent reads one shape for every plan gate. The URL comes
+ * from the server on the consume response — the MCP package cannot import
+ * `billing/server/entitlements.ts › upgradeUrl`.
+ */
+export function creditsExhausted(upgradeUrl: string): ToolResponse {
+  return err(
+    upgradeUrl
+      ? `${CREDITS_EXHAUSTED_MESSAGE}\n\nUpgrade to continue: ${upgradeUrl}`
+      : CREDITS_EXHAUSTED_MESSAGE
+  );
+}
 
 /**
  * Turn a thrown Dopl API error into a friendly tool error when it's a
@@ -109,7 +138,9 @@ export function entitlementDenied(e: unknown): ToolResponse | null {
       ? rec.apiMessage
       : code === "chat_outside_retention"
         ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
-        : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
+        : code === CREDITS_EXHAUSTED_CODE
+          ? CREDITS_EXHAUSTED_MESSAGE
+          : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
   const url = typeof rec.upgradeUrl === "string" ? rec.upgradeUrl : "";
   return err(url ? `${message}\n\nUpgrade to continue: ${url}` : message);
 }

@@ -181,7 +181,7 @@ export interface UpdateBasePatch {
   description?: string | null;
   agentWriteEnabled?: boolean;
   /** Two-way — the service layer gates who may change scope and runs
-   *  the workflow↔KB narrowing invariant; this repo function takes
+   *  the (since deleted) workflow↔KB narrowing invariant; this repo function takes
    *  whatever it's given and trusts the caller. */
   visibility?: "public" | "private";
   accessMode?: "workspace" | "teams";

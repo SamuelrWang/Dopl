@@ -135,7 +135,7 @@ describe("DoplTransport — caller cancellation", () => {
     const external = new AbortController();
     external.abort();
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    await expect(client.listClusters()).rejects.toBeInstanceOf(DoplAbortError);
+    await expect(client.listWorkspaces()).rejects.toBeInstanceOf(DoplAbortError);
     expect(stub.calls).toBe(0);
   });
 
@@ -148,14 +148,14 @@ describe("DoplTransport — caller cancellation", () => {
       return pendingUntilAborted(signal);
     });
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    const err = await client.listClusters().catch((e: unknown) => e);
+    const err = await client.listWorkspaces().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DoplAbortError);
     expect(err).not.toBeInstanceOf(DoplTimeoutError);
     expect(String((err as Error).message)).toContain("aborted by the caller");
   });
 
   it("spends NO retry budget after an abort, on a retriable GET", async () => {
-    // The load-bearing count. listClusters is a GET, so the retry budget is
+    // The load-bearing count. listWorkspaces is a GET, so the retry budget is
     // live; before the fix a mid-hold abort burned every remaining attempt
     // (each with a backoff sleep) against a caller that had already gone.
     const external = new AbortController();
@@ -164,7 +164,7 @@ describe("DoplTransport — caller cancellation", () => {
       return pendingUntilAborted(signal);
     });
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    await expect(client.listClusters()).rejects.toBeInstanceOf(DoplAbortError);
+    await expect(client.listWorkspaces()).rejects.toBeInstanceOf(DoplAbortError);
     expect(stub.calls).toBe(1);
   });
 
@@ -176,7 +176,7 @@ describe("DoplTransport — caller cancellation", () => {
     });
     const transport = new DoplTransport(BASE, "k");
     await expect(
-      transport.request("/api/clusters", { signal: perCall.signal })
+      transport.request("/api/workspaces", { signal: perCall.signal })
     ).rejects.toBeInstanceOf(DoplAbortError);
     expect(stub.calls).toBe(1);
   });
@@ -185,11 +185,11 @@ describe("DoplTransport — caller cancellation", () => {
     // A 215s await hold links the SAME Request.signal once per poll. Without
     // teardown those accumulate for the life of the function.
     stub = stubFetch(
-      async () => new Response(JSON.stringify({ clusters: [] }), { status: 200 })
+      async () => new Response(JSON.stringify({ workspaces: [] }), { status: 200 })
     );
     const external = new AbortController();
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    for (let i = 0; i < 5; i++) await client.listClusters();
+    for (let i = 0; i < 5; i++) await client.listWorkspaces();
     expect(getEventListeners(external.signal, "abort")).toHaveLength(0);
   });
 
@@ -198,7 +198,7 @@ describe("DoplTransport — caller cancellation", () => {
     const external = new AbortController();
     external.abort();
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    await expect(client.createCluster("x")).rejects.toBeInstanceOf(DoplAbortError);
+    await expect(client.createOntologyCluster({ name: "x" })).rejects.toBeInstanceOf(DoplAbortError);
     expect(stub.calls).toBe(0);
   });
 
@@ -212,10 +212,10 @@ describe("DoplTransport — caller cancellation", () => {
       signalSeenByFetch = signal;
       external.abort();
       await new Promise((r) => setTimeout(r, 5));
-      return new Response(JSON.stringify({ id: "c1" }), { status: 200 });
+      return new Response(JSON.stringify({ cluster: { id: "c1" } }), { status: 200 });
     });
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    await expect(client.createCluster("x")).resolves.toEqual({ id: "c1" });
+    await expect(client.createOntologyCluster({ name: "x" })).resolves.toEqual({ id: "c1" });
     expect(signalSeenByFetch?.aborted).toBe(false);
   });
 
@@ -224,7 +224,7 @@ describe("DoplTransport — caller cancellation", () => {
       throw new DOMException("aborted", "AbortError");
     });
     const client = new DoplClient(BASE, "k");
-    const err = await client.createCluster("x").catch((e: unknown) => e);
+    const err = await client.createOntologyCluster({ name: "x" }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DoplTimeoutError);
     expect(err).not.toBeInstanceOf(DoplAbortError);
   });

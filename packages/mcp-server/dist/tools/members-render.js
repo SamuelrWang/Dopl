@@ -120,21 +120,26 @@ function typeLabel(resourceType) {
     return TYPE_LABELS[resourceType] ?? resourceType;
 }
 /**
- * D7 (retirement, 2026-08-07) — `workflow` is no longer a grantable resource
- * type anywhere a human or an agent can see.
+ * THE CONTAINMENT FLOOR FOR A GRANT ROW WHOSE FEATURE NO LONGER EXISTS.
  *
- * THE ROWS DO NOT COME FROM US. Hiding `dopl_workflow` removes the tool; it
- * does not remove `resource_type = 'workflow'` rows from the access matrix,
- * which the backend builds from `team_grants` and hands over whole. So an agent
- * that could no longer list, read or open a workflow was still being shown a
- * grid of who can edit which one — a feature advertised by its permissions
- * after the feature itself was gone.
+ * `workflow` was hidden as a grantable type on 2026-08-07 (D7) and the whole
+ * feature was DELETED on 2026-08-11 — tool, routes, tables. The app no longer
+ * emits `workflow` in the access matrix and its `TeamResourceType` no longer
+ * names one.
  *
- * THE GRANTS STAY IN THE DATABASE. They are valid rows describing real
- * permissions on real workflows, and the plan is explicit that nothing is
- * deleted (D7: "Existing grant rows stay valid in the DB (harmless); nothing
- * renders them"). This is a RENDER filter, applied at the seam where the
- * payload enters our narration, and un-retiring is deleting one string.
+ * THE SET STAYS ANYWAY, because THE ROWS DO NOT COME FROM US. This tool renders
+ * a payload the backend builds from `team_resource_access` and hands over
+ * whole, and `resource_type` still ACCEPTS `'workflow'` at the database — the
+ * drop migration deliberately left that CHECK value alone. A surviving or
+ * replayed row would otherwise reach an agent as a grid of who can edit a
+ * resource that does not exist: a feature advertised by its permissions after
+ * the feature itself is gone. That is what this filter costs one string to
+ * prevent, and it is applied at the seam where the payload enters our
+ * narration.
+ *
+ * The app holds the mirror of this predicate
+ * (`src/features/teams/access-levels.ts`); this package cannot import from
+ * `src/`, so the two are hand copies. One string per package, not five.
  */
 const RETIRED_RESOURCE_TYPES = new Set(["workflow"]);
 function isRetiredResourceType(resourceType) {

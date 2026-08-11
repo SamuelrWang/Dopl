@@ -16,7 +16,7 @@ export interface SeedEntryInput {
   /**
    * Stable cross-reference handle (NOT the DB id). The seed orchestrator
    * maps this key → the inserted entry's uuid so ontology objects and
-   * workflow steps can point at specific entries by a name that's known
+   * other seeds can point at specific entries by a name that's known
    * at authoring time.
    */
   key?: string;

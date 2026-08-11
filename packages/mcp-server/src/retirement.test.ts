@@ -2,12 +2,14 @@
  * THE TWO PROMISES THIS PHASE MAKES TO AN AGENT, checked through the real
  * `createServer` rather than through the registrars.
  *
- *   1. D1/D2 — the retired tools are NOT IN `tools/list`. `parity.test.ts`
- *      captures tools by calling each registrar directly, which is the right
- *      level for schema parity but bypasses the `HIDDEN_TOOLS` guard entirely:
- *      it would pass unchanged if the guard were deleted. This suite registers
- *      against a mocked `McpServer` and asserts on what actually landed there,
- *      which is the only place the guard is observable.
+ *   1. D1/D2 — the retired tool NAMES are NOT IN `tools/list` and not in the
+ *      instructions. They were hidden by `HIDDEN_TOOLS` on 2026-08-07 and
+ *      DELETED on 2026-08-11, so what this now guards is REGROWTH, not a gate:
+ *      the names must not come back as tools and must not come back as routing
+ *      prose. Registering against a mocked `McpServer` and asserting on what
+ *      actually landed there is what makes that observable — `parity.test.ts`
+ *      calls each registrar directly, which is the right level for schema
+ *      parity and cannot see the server's published surface at all.
  *
  *   2. §2b — a delete op REFUSES, and refuses BEFORE it does anything. The
  *      refusal is worth pinning as behavior and not just as a table because the
@@ -113,6 +115,12 @@ beforeEach(() => {
 
 // ── 1. The retired tools do not exist ────────────────────────────────
 
+/**
+ * Names that were published, then hidden (2026-08-07), then deleted with
+ * their registrars, routes and tables (2026-08-11). Nothing in the tree can
+ * register one today — which is exactly why the list is worth keeping: it is
+ * the regrowth guard, and it costs four strings.
+ */
 const RETIRED = [
   "dopl_workflow",
   "dopl_workflow_admin",
@@ -131,7 +139,7 @@ describe("retired tools never register (D1/D2)", () => {
     }
   });
 
-  it("hiding them did not take the surviving tools with them", () => {
+  it("removing them did not take the surviving tools with them", () => {
     build();
     for (const name of [
       "dopl_kb",

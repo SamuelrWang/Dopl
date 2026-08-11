@@ -8,10 +8,9 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/user/onboarding-state — has the caller finished onboarding?
  * Reads `profiles.onboarded_at` (via `isOnboarded`), which is the same
- * gate the RSC boot pages use before redirecting to `/onboarding`
- * (`src/app/[workspaceSlug]/(app)/page.tsx`, `src/app/canvas/page.tsx`,
- * `src/app/auth/callback/route.ts`). The SPA's launch sequence needs it
- * over HTTP.
+ * gate `src/app/auth/callback/route.ts` applies before redirecting to
+ * `/onboarding`. (It used to name two RSC boot pages beside it; both left
+ * with the web app.) The SPA's launch sequence needs it over HTTP.
  *
  * NOT the same question as `GET /api/onboarding/mcp-status` — that one
  * asks whether an agent has connected over MCP, which a user can skip

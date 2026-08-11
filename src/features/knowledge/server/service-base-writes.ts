@@ -1,10 +1,6 @@
 import "server-only";
 import { meetsMinRole } from "@/features/workspaces/types";
 import {
-  validateKbGoingPrivate,
-  validateKbNarrowing,
-} from "@/features/teams/server/invariant";
-import {
   deleteGrantRow,
   deleteGrantsForResource,
   listGrantsForResource,
@@ -134,9 +130,8 @@ export async function createBase(
     }
   }
 
-  // Initial grants. A brand-new base has no attached workflows, so no
-  // invariant check is needed. Roll the base back on failure so a retry
-  // doesn't trip the slug uniqueness constraint with an orphan.
+  // Initial grants. Roll the base back on failure so a retry doesn't trip
+  // the slug uniqueness constraint with an orphan.
   if (teamGrants.length > 0) {
     try {
       for (const grant of teamGrants) {
@@ -172,8 +167,6 @@ export async function updateBase(
   // Sharing scope (visibility / accessMode / teamGrants) is fully
   // changeable, but only by the owner or a workspace admin, and never
   // by agents — same human-only rule as the agent-write toggle.
-  // Narrowing transitions are invariant-checked against attached
-  // workflows; widening never conflicts.
   const sharingRequested =
     patch.visibility !== undefined ||
     patch.accessMode !== undefined ||
@@ -184,10 +177,9 @@ export async function updateBase(
   let dropAllGrants = false;
 
   if (sharingRequested) {
-    // Agents MAY publish (private→public) a base they created — needed so an
-    // agent can reference its own KB in a workflow (which requires public
-    // KBs). A "pure publish" is visibility:'public' with no accessMode/team
-    // change. Everything else about sharing scope (accessMode, team grants,
+    // Agents MAY publish (private→public) a base they created. A "pure
+    // publish" is visibility:'public' with no accessMode/team change.
+    // Everything else about sharing scope (accessMode, team grants,
     // un-publishing) stays human-only.
     const agentPurePublish =
       ctx.source === "agent" &&
@@ -219,13 +211,6 @@ export async function updateBase(
       // back, so they may not create this state either.
       if (ctx.apiKeyWorkspaceId != null) {
         throw new WorkspaceKeyPrivateVisibilityError();
-      }
-      if (base.visibility === "public") {
-        await validateKbGoingPrivate({
-          workspaceId: ctx.workspaceId,
-          knowledgeBaseId: base.id,
-          knowledgeBaseName: base.name,
-        });
       }
       dropAllGrants = true;
     } else if (targetMode === "teams") {
@@ -259,8 +244,6 @@ export async function updateBase(
         }
       }
 
-      // Upsert new grants BEFORE the narrowing checks so freshly granted
-      // teams aren't counted as losing access.
       for (const [teamId, level] of addedOrRaised) {
         await upsertGrant(
           ctx.workspaceId,
@@ -270,24 +253,10 @@ export async function updateBase(
           level
         );
       }
-      if (grantTeamIdsToRemove.length > 0) {
-        await validateKbNarrowing({
-          workspaceId: ctx.workspaceId,
-          knowledgeBaseId: base.id,
-          knowledgeBaseName: base.name,
-          losingTeamIds: grantTeamIdsToRemove,
-        });
-      }
-      // Flipping a workspace-visible base to teams narrows it for every
-      // non-granted audience member. (private → teams is pure widening.)
-      if (base.visibility === "public" && base.accessMode === "workspace") {
-        await validateKbNarrowing({
-          workspaceId: ctx.workspaceId,
-          knowledgeBaseId: base.id,
-          knowledgeBaseName: base.name,
-          losingTeamIds: "allUngranted",
-        });
-      }
+      // NARROWING IS UNCHECKED, DELIBERATELY. The only cross-resource
+      // dependency a KB ever had was the workflow↔KB invariant, and
+      // workflows were deleted on 2026-08-11; a base narrowing its audience
+      // can no longer strand a dependent resource's readers.
     }
     // → workspace is pure widening: grants stay as inert rows (the mode
     // remembers them if re-narrowed), matching `setResourceAccessMode`.
@@ -356,7 +325,7 @@ export async function updateBase(
  * Team grants are NOT cleared here on purpose: `team_resource_access` has a
  * polymorphic `resource_id` with no FK, so the cleanup is an AFTER DELETE
  * trigger on `knowledge_bases` (`knowledge_base_grants_cleanup`, migration
- * 20260807130000) — the same shape workflows, chats, chat folders and skills
+ * 20260807130000) — the same shape chats, chat folders and skills
  * already use. The trigger also covers the delete paths this function isn't
  * (workspace cascade, admin SQL), which a DELETE statement here would miss.
  */

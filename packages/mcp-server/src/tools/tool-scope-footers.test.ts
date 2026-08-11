@@ -27,7 +27,6 @@ import { describe, it, expect, vi } from "vitest";
 
 import { registerSkillTools } from "./skills";
 import { registerKnowledgeTools } from "./knowledge";
-import { registerWorkflowTools } from "./workflow";
 import { registerOntologyTool } from "./ontology";
 import { registerMapTool } from "./map";
 import { registerSearchTool } from "./search";
@@ -131,8 +130,6 @@ describe("dopl_map carries its own scope", () => {
       stub({
         listKbBases: vi.fn(async () => [BASE]),
         listSkills: vi.fn(async () => [SKILL]),
-        listClusters: vi.fn(async () => ({ clusters: [] })),
-        listWorkflows: vi.fn(async () => ({ workflows: [] })),
         getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
       }),
       "dopl_map",
@@ -206,68 +203,6 @@ describe("dopl_kb listings carry their own scope", () => {
 
 });
 
-// ─── dopl_workflow — the list and the entry-index truncation ─────────
-
-describe("dopl_workflow carries its own scope", () => {
-  it("op=list names the team filter and the trash", async () => {
-    const text = await callTool(
-      registerWorkflowTools,
-      stub({
-        listWorkflows: vi.fn(async () => ({
-          workflows: [{ name: "Onboard", slug: "onboard", step_count: 2 }],
-        })),
-      }),
-      "dopl_workflow",
-      { op: "list" },
-    );
-    expect(text).toContain("Workflows you can read");
-    expect(text).toContain("not the workspace's workflow count");
-  });
-
-  it("op=get no longer announces a total it then truncates", async () => {
-    // 60 indexed entries, 50 rendered. The header read `Entries (60)` and then
-    // listed 50 with nothing between them — a count and a list that disagreed,
-    // in the same block, with no way to tell which was the answer.
-    const entries = Array.from({ length: 60 }, (_, i) => ({
-      entry_id: `e-${i}`,
-      title: `Entry ${i}`,
-      folder_path: null,
-    }));
-    const text = await callTool(
-      registerWorkflowTools,
-      stub({
-        getWorkflow: vi.fn(async () => ({
-          id: "wf-1",
-          slug: "onboard",
-          name: "Onboard",
-          description: null,
-          cluster_id: null,
-          updated_at: "2026-08-01T00:00:00Z",
-          graph: { nodes: [], edges: [] },
-          knowledge_bases: [
-            {
-              knowledge_base_id: "kb-1",
-              slug: "notes",
-              name: "Notes",
-              description: null,
-              entries_index: entries,
-            },
-          ],
-          skills: [],
-        })),
-      }),
-      "dopl_workflow",
-      { op: "get", slug: "onboard" },
-    );
-
-    expect(text).toContain("Entries (60 indexed)");
-    expect(text).toContain("Listing 50 of 60 INDEXED entries");
-    // And it must point at the surface that DOES have the base's contents,
-    // because the index is capped server-side before it ever gets here.
-    expect(text).toContain('dopl_kb(op="get_tree", base="notes")');
-  });
-});
-
 // ─── dopl_ontology(op="resolve") — a cap that printed nothing ────────
 
 describe("dopl_ontology(op='resolve') admits its cap", () => {
@@ -318,7 +253,6 @@ describe("dopl_search carries its own scope", () => {
           name: `ship ${i}`,
         })),
       ),
-      listWorkflows: vi.fn(async () => ({ workflows: [] })),
       getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
     });
 

@@ -75,7 +75,6 @@ function mount() {
       resources={[]}
       canManage
       onDeleted={() => {}}
-      openConflict={() => {}}
     />
   );
   return {

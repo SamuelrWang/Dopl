@@ -15,7 +15,7 @@
  * USER'S DISK and then never updated — a stale sentence here outlives every
  * server deploy and is read BEFORE the server's own instructions arrive. So it
  * must not name a tool the server no longer registers (an agent that reads
- * "call dopl_workflow" and finds no such tool concludes the connection is
+ * "call dopl_thing" and finds no such tool concludes the connection is
  * broken), and it must not promise a capability the server refuses.
  */
 export function buildDoplSkillMd(mcpUrl: string): string {

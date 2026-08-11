@@ -37,8 +37,10 @@ export const DELETE_BLOCKED_OPS: Record<string, Set<string>> = {
   dopl_skill_admin: new Set(["delete"]),
   dopl_chats_admin: new Set(["delete", "delete_folder"]),
   dopl_ontology_admin: new Set(["delete_object", "delete_cluster"]),
-  // dopl_workflow_admin / dopl_cluster_admin are in HIDDEN_TOOLS — they never
-  // register, so they need no row here.
+  // A tool with no registrar needs no row: `dopl_workflow_admin` and
+  // `dopl_cluster_admin` were hidden here on 2026-08-07 and deleted outright
+  // on 2026-08-11. `delete-block.test.ts` pins this map against the live
+  // registrar list, so a stale row fails rather than lingering.
 };
 
 /** An op name that reads as a deletion. The fail-closed half of the rule. */

@@ -35,7 +35,7 @@ export type WriteSource = "user" | "agent";
  *
  * For knowledge bases visibility is two-way: the owner or a workspace
  * admin can flip scope via the Sharing settings (narrowing transitions
- * are workflow-invariant-checked). Skills keep the original one-way
+ * are unchecked). Skills keep the original one-way
  * private → public rule. New items default to `'private'` from the
  * app code (DB column default is `'public'` so existing rows stay
  * visible, but `createBase` / `createSkill` override).

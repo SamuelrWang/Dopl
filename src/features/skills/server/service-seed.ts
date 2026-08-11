@@ -6,7 +6,7 @@ import { buildSeedSkills } from "./seed";
 export interface SeedSkillsResult {
   skillsCreated: number;
   /** slug → { id, name } for the seeded skills, so the ontology and
-   *  workflow seeds can point their skill references at real ids. */
+   *  later seeds can point their skill references at real ids. */
   skillIdBySlug: Record<string, { id: string; name: string }>;
 }
 

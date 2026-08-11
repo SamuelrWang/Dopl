@@ -126,8 +126,7 @@ export async function updateSkill(
   }
   const nextAgentWriteEnabled = patch.agentWriteEnabled;
   // Sharing scope (full three-way model). Changing it is owner-or-
-  // workspace-admin only; agents may re-scope skills THEY created
-  // (needed so an agent can publish its own skill for workflow refs).
+  // workspace-admin only; agents may re-scope skills THEY created.
   // Going team-scoped replaces the grant set wholesale; any other scope
   // drops all grants. Non-admin owners may only grant teams they belong
   // to (plus already-granted teams) — the KB/chat rule.
@@ -151,18 +150,11 @@ export async function updateSkill(
       visibility: patch.visibility,
       accessMode: wantsTeams ? "teams" : "workspace",
     };
-    // NARROWING IS NO LONGER BLOCKED BY ATTACHMENTS (2026-08-07, retirement).
-    // This used to 409 `SKILL_ATTACHED_TO_WORKFLOWS` when the skill was
-    // referenced by a workflow, to protect the invariant that an attached
-    // skill stays workspace-public (see `assertSkillAttachable`). That
-    // invariant only ever protected workflow EXECUTION, and workflows are
-    // retired: no page renders them, no MCP tool registers for them, so a
-    // user hitting the 409 had no surface on which to detach anything. The
-    // error named a feature they cannot see and offered a remedy they cannot
-    // perform — an unresolvable dead end on a legitimate privacy action.
-    // Short-circuiting is the safe direction: narrowing only ever RESTRICTS
-    // access, the `workflow_skills` rows are untouched, and if workflows ever
-    // come back the check comes back with them.
+    // NARROWING IS NOT BLOCKED BY ATTACHMENTS, and there is nothing left that
+    // could block it: the one attachment check that ever guarded this path
+    // (409 `SKILL_ATTACHED_TO_WORKFLOWS`, protecting the invariant that a
+    // workflow-attached skill stays workspace-public) was short-circuited when
+    // workflows were hidden on 2026-08-07 and deleted with them on 2026-08-11.
     if (wantsTeams) {
       grantTeamIds = [...new Set(patch.teamIds ?? [])];
       if (!isAdmin && grantTeamIds.length > 0) {

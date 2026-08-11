@@ -39,6 +39,7 @@ export const PLANS: ReadonlyArray<PlanDef> = [
       "Unlimited ontology objects while you work solo",
       "Teams of 2+: up to 100 ontology objects",
       "90 days of chat history",
+      "500 MCP credits / month",
       "Community support",
     ],
   },
@@ -50,6 +51,7 @@ export const PLANS: ReadonlyArray<PlanDef> = [
     features: [
       "Unlimited ontology objects",
       "Full chat history",
+      "10,000 MCP credits / month",
       "Priority support",
       "Single-member workspace — upgrade to Team anytime",
     ],
@@ -62,6 +64,7 @@ export const PLANS: ReadonlyArray<PlanDef> = [
     features: [
       "Unlimited ontology objects for the whole workspace",
       "Full chat history for everyone",
+      "25,000 MCP credits / month",
       "Priority support",
       "Seats sync automatically as members join or leave",
     ],

@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Knowledge-base method group (Item 4) — link 5 of the chain documented in
+ * Knowledge-base method group (Item 4) — link 3 of the chain documented in
  * `client-base.ts`. Pure delegation to `knowledge.ts`; no HTTP here.
  *
  * User-authored, editable knowledge bases. Path-based methods accept a base
@@ -41,9 +41,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KnowledgeMethods = void 0;
-const client_workflows_js_1 = require("./client-workflows.js");
+const client_workspaces_js_1 = require("./client-workspaces.js");
 const kb = __importStar(require("./knowledge.js"));
-class KnowledgeMethods extends client_workflows_js_1.WorkflowMethods {
+class KnowledgeMethods extends client_workspaces_js_1.WorkspaceMethods {
     listKbBases() {
         return kb.listKbBases(this.transport);
     }

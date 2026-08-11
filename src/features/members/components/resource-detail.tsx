@@ -7,9 +7,7 @@ import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import { DEFAULT_TEAM_COLOR } from "../constants";
-import { TeamAccessConflictError } from "../teams-client";
 import { useAccessWrites } from "../hooks/use-access-writes";
-import type { ConflictState } from "./conflict-dialog";
 import { resourceMeta } from "./member-bits";
 import { AccessLevelControl, ScopePill } from "./team-bits";
 
@@ -18,7 +16,6 @@ interface Props {
   resource: AccessMatrixResource;
   teams: TeamView[];
   canManage: boolean;
-  openConflict: (conflict: ConflictState) => void;
 }
 
 /**
@@ -31,7 +28,6 @@ export function ResourceDetail({
   resource: r,
   teams,
   canManage,
-  openConflict,
 }: Props) {
   const { setGrant, setScope, pending: busy } = useAccessWrites(workspaceSlug);
   const [error, setError] = useState<string | null>(null);
@@ -43,30 +39,10 @@ export function ResourceDetail({
       (g) => g.resourceType === r.resourceType && g.resourceId === r.resourceId
     )?.level ?? null;
 
-  /**
-   * Both access writes share one shape: fire without `autoGrant`, and on a 409
-   * offer the ConflictDialog a retry that sets it. The optimistic patch is
-   * rolled back by the layer before the dialog opens, so the retry re-applies
-   * it rather than stacking a second edit on the first.
-   */
-  function run(fire: (autoGrant: boolean) => Promise<unknown>) {
+  /** Both access writes report into the pane's one error line. */
+  function run(fire: () => Promise<unknown>) {
     setError(null);
-    void fire(false).catch((err: unknown) => {
-      if (err instanceof TeamAccessConflictError) {
-        openConflict({
-          details: err.details,
-          retry: async () => {
-            await fire(true).catch((retryErr: unknown) =>
-              setError(
-                retryErr instanceof Error
-                  ? retryErr.message
-                  : "Something went wrong"
-              )
-            );
-          },
-        });
-        return;
-      }
+    void fire().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : "Something went wrong");
     });
   }
@@ -76,25 +52,23 @@ export function ResourceDetail({
   // the old segment until the round trip finished.
   function changeScope(next: "workspace" | "teams") {
     if (!canManage || next === r.accessMode) return;
-    run((autoGrant) =>
+    run(() =>
       setScope.mutateAsync({
         resourceType: r.resourceType,
         resourceId: r.resourceId,
         accessMode: next,
-        autoGrant,
       })
     );
   }
 
   function changeGrant(team: TeamView, level: AccessLevel | null) {
-    run((autoGrant) =>
+    run(() =>
       setGrant.mutateAsync({
         teamId: team.id,
         resourceType: r.resourceType,
         resourceId: r.resourceId,
         memberIds: team.memberIds,
         level,
-        autoGrant,
       })
     );
   }

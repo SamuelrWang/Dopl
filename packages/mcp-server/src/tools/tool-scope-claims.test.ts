@@ -3,10 +3,11 @@
  *
  * WHY THIS SUITE EXISTS, in one incident. `dopl_map`'s description opened
  * "Compact manifest of the active workspace — EVERY knowledge base, skill,
- * workflow cluster, and ontology cluster". It returns none of those four in
- * full: skills are filtered to `status === "active"` in `map.ts` itself, and
- * `listSkills` / `listWorkflows` / `listKbBases` are each visibility-filtered
- * server-side before the rows arrive. Two agents on two machines called it,
+ * workflow cluster, and ontology cluster" (two of those four have since been
+ * deleted outright). It returned none of them in full: skills are filtered to
+ * `status === "active"` in `map.ts` itself, and `listSkills` / `listKbBases`
+ * are visibility-filtered server-side before the rows arrive. Two agents on
+ * two machines called it,
  * got "10 knowledge bases, 6 skills" against "4 KBs, 1 skill", and did
  * everything right from there: they formed a permissions hypothesis, tested it
  * with `access_matrix`, disproved it, tested workspace targeting, disproved
@@ -38,9 +39,9 @@
  * LIKE `channel-law.test.ts`, THIS PINS PROSE, NOT BEHAVIOUR. Every assertion
  * is a string match on a registered description. Whether a disclosure is TRUE
  * is checked against the code that owns each filter — `canSeeSkill` in
- * `src/features/skills/server/service-shared.ts`, `listWorkflows` in
- * `src/features/workflows/server/service.ts` — and this suite is worthless
- * against a change on that side. What it is worth is that the class cannot
+ * `src/features/skills/server/service-shared.ts`, `filterTeamVisibleBases` in
+ * `src/features/knowledge/server/service-bases.ts` — and this suite is
+ * worthless against a change on that side. What it is worth is that the class cannot
  * return silently: the next "every" is a red test, not a false escalation.
  */
 
@@ -49,8 +50,6 @@ import type { DoplClient } from "@dopl/client";
 
 import type { RegisterTool } from "./respond";
 import { toolGroupSource } from "./tool-group-files";
-import { registerClusterTools } from "./cluster";
-import { registerWorkflowTools } from "./workflow";
 import { registerKnowledgeTools } from "./knowledge";
 import { registerSkillTools } from "./skills";
 import { registerChatTools } from "./chats";
@@ -64,8 +63,6 @@ const REGISTRARS: Array<{
   file: string;
   register: (r: RegisterTool, c: DoplClient) => void;
 }> = [
-  { file: "cluster.ts", register: registerClusterTools },
-  { file: "workflow.ts", register: registerWorkflowTools },
   { file: "knowledge.ts", register: registerKnowledgeTools },
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
@@ -197,45 +194,11 @@ interface FilteredOp {
 
 const LEDGER: FilteredOp[] = [
   {
-    // The op that was in this ledger's blind spot: its bullet used to DISCLOSE
-    // an overcount ("unfiltered ... they include team-scoped workflows you
-    // cannot open"), which was an honest description of a real disclosure bug.
-    // The rollup is filtered server-side now (filterTeamVisibleWorkflows), so
-    // the bullet states a filter like every other row here — and this row is
-    // what stops it from drifting back to describing an unfiltered listing.
-    tool: "dopl_cluster",
-    op: "list",
-    filter: "teams-mode workflows without a grant dropped from the rollup (clusters/server/service.ts)",
-    proof: "client.listClusters()",
-    discloses: ["YOU CAN READ", "not its total"],
-  },
-  {
-    tool: "dopl_cluster",
-    op: "get",
-    filter: "same rollup filter; the cluster itself stays visible to every member",
-    proof: "client.getCluster(slug)",
-    discloses: ["YOU CAN READ", "empty list rather than as not-found"],
-  },
-  {
     tool: "dopl_skill",
     op: "list",
     filter: 'status === "active" (skills-ops-read.ts) + canSeeSkill server-side',
     proof: 's.status === "active"',
     discloses: ["drafts are absent", "no grant on", "access_matrix"],
-  },
-  {
-    tool: "dopl_workflow",
-    op: "list",
-    filter: "teams-mode rows without a grant dropped (workflows/server/service.ts)",
-    proof: "client.listWorkflows()",
-    discloses: ["YOU CAN READ", "Team-scoped workflows", 'op="list_trash"'],
-  },
-  {
-    tool: "dopl_workflow",
-    op: "list_trash",
-    filter: "trashed teams-mode workflows are invisible to grantees",
-    proof: "client.listWorkflowTrash()",
-    discloses: ["YOU CAN SEE"],
   },
   {
     tool: "dopl_kb",

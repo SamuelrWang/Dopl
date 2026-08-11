@@ -73,7 +73,7 @@ const WORKSPACE: Workspace = {
   updatedAt: "2026-08-01T00:00:00Z",
 };
 
-const COUNTS = { workflows: 3, knowledgeBases: 2, skills: 7, members: 4 };
+const COUNTS = { knowledgeBases: 2, skills: 7, members: 4 };
 
 const SEGMENT = "acme-abc123def456";
 

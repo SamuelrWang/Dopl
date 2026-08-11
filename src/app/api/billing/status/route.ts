@@ -1,29 +1,13 @@
 import { NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
-import { getWorkspaceEntitlements } from "@/features/billing/server/entitlements";
-import { getWorkspaceBilling } from "@/features/billing/server/workspace-billing";
+import { getWorkspaceBillingStatus } from "@/features/billing/server/status-service";
 
 /**
  * Billing status for the active workspace — the entitlements summary the
- * UI renders (consumed by `useWorkspaceEntitlements`). Any active member
- * may read it.
+ * UI renders (consumed by `useWorkspaceEntitlements`), including the MCP
+ * credit meter. Any active member may read it. The payload is assembled by
+ * `billing/server/status-service.ts`; this handler is the thin boundary.
  */
-export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
-  const [entitlements, billing] = await Promise.all([
-    getWorkspaceEntitlements(workspaceId),
-    getWorkspaceBilling(workspaceId),
-  ]);
-
-  return NextResponse.json({
-    plan: entitlements.plan,
-    status: entitlements.status,
-    memberCount: entitlements.memberCount,
-    seatCount: entitlements.seatCount,
-    objectCap: entitlements.objectCap,
-    objectsUsed: entitlements.objectsUsed,
-    canCreateObjects: entitlements.canCreateObjects,
-    chatsWindowDays: entitlements.chatsWindowDays,
-    subscription_period_end: billing?.currentPeriodEnd ?? null,
-    has_stripe_customer: !!billing?.stripeCustomerId,
-  });
-});
+export const GET = withWorkspaceAuth(async (_request, { workspaceId }) =>
+  NextResponse.json(await getWorkspaceBillingStatus(workspaceId))
+);

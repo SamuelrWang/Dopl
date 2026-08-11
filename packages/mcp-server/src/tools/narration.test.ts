@@ -135,8 +135,6 @@ function mockClient(directory: WorkspaceListItem[]): DoplClient {
     setWorkspaceId: vi.fn(),
     listKbBases: vi.fn().mockResolvedValue([]),
     listSkills: vi.fn().mockResolvedValue([]),
-    listClusters: vi.fn().mockResolvedValue({ clusters: [] }),
-    listWorkflows: vi.fn().mockResolvedValue({ workflows: [] }),
     getOntology: vi.fn().mockResolvedValue({ clusters: [], objects: {} }),
   } as unknown as DoplClient;
 }

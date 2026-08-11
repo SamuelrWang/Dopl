@@ -1,6 +1,6 @@
 /**
  * Teams feature — named member groups inside a workspace that carry
- * resource access grants for knowledge bases and workflows.
+ * resource access grants for knowledge bases and skills.
  *
  * Scoping model: a resource's `access_mode` is either 'workspace'
  * (every active member, level by role default) or 'teams' (only teams
@@ -73,16 +73,6 @@ export interface EffectiveAccessResult {
   defaultLevel: AccessLevel;
   isAdmin: boolean;
   teamsModeResources: TeamsModeResourceAccess[];
-}
-
-/** One conflicting KB in a workflow↔KB invariant violation (409 payload). */
-export interface KbTeamConflict {
-  knowledgeBaseId: string;
-  knowledgeBaseName: string;
-  /** Teams in the workflow's audience that lack read on this KB. */
-  teams: Array<{ teamId: string; teamName: string }>;
-  /** True when the workflow is workspace-mode (audience = everyone) — autoGrant can't fix it. */
-  audienceIsAllMembers: boolean;
 }
 
 /** Resource descriptor for the access matrix tab. */

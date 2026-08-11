@@ -1,5 +1,5 @@
 /**
- * Chats (archive) method group — link 7 of the chain documented in
+ * Chats (archive) method group — link 5 of the chain documented in
  * `client-base.ts`. Pure delegation to `chats.ts`; no HTTP here.
  *
  * Agent-exported conversation archive. Reads return the caller's own chats
