@@ -45,6 +45,27 @@ const NON_GET_EXPORT =
 const USES_WRAPPER = /\b(withUserAuth|withWorkspaceAuth|withMcpAccess)\b/;
 
 /**
+ * Source with block and line comments removed.
+ *
+ * ⚠ THE THREE SET PINS BELOW ARE REGEXES OVER TEXT, so a route whose DOCBLOCK
+ * quotes `sessionOnly: true` stays on the list after the real option is
+ * deleted. Caught 2026-08-11 while `billing/cancel` was written: its header
+ * explained the gate in those exact words, the gate was removed as a mutation
+ * check, and this suite stayed green. Stripping comments first makes the pin
+ * read the CODE, which is the only thing that gates anything.
+ *
+ * Deliberately naive (no string/regex-literal awareness) — it runs over route
+ * files, where an option name inside a string literal would itself be the bug.
+ */
+function withoutComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+function code(file: string): string {
+  return withoutComments(readFileSync(file, "utf8"));
+}
+
+/**
  * Non-GET routes that legitimately bypass the `withUserAuth` method gate.
  * Each carries its own auth model — keep this list minimal and reasoned.
  */
@@ -102,7 +123,7 @@ describe("H-3 write-gate coverage", () => {
    */
   it("the `writeScopeExempt` set is EXACTLY the MCP liveness ping + the credit spend", () => {
     const exemptRoutes = files
-      .filter((f) => /writeScopeExempt:\s*true/.test(readFileSync(f, "utf8")))
+      .filter((f) => /writeScopeExempt:\s*true/.test(code(f)))
       .map(apiRel)
       .sort();
     expect(exemptRoutes).toEqual([
@@ -113,7 +134,7 @@ describe("H-3 write-gate coverage", () => {
 
   it("the `sessionOnly` set is exactly the destructive admin + credential-minting + consent routes", () => {
     const sessionOnlyRoutes = files
-      .filter((f) => /sessionOnly:\s*true/.test(readFileSync(f, "utf8")))
+      .filter((f) => /sessionOnly:\s*true/.test(code(f)))
       .map(apiRel)
       .sort();
     expect(sessionOnlyRoutes).toEqual(
@@ -126,6 +147,12 @@ describe("H-3 write-gate coverage", () => {
         // depend on, and could delete the token whose last_used_at records it.
         // Both methods are cookie-session only.
         "auth/mcp-device-token/route.ts",
+        // Added 2026-08-11 with the in-app cancel flow. Ending the
+        // subscription is the most expensive thing an agent could do on this
+        // surface, and unlike the portal handoff it does NOT bounce through a
+        // Stripe-hosted page a human has to click through — the write happens
+        // on our own route. Same reasoning as the other three billing writes.
+        "billing/cancel/route.ts",
         "billing/checkout/route.ts",
         // Channels v1.2 H-1. The consent gate exists to keep a HUMAN in the
         // loop on a spawned agent that is processing an untrusted teammate's
@@ -185,7 +212,7 @@ describe("H-3 write-gate coverage", () => {
    */
   it("the FIELD-level session gate is exactly the channel visibility write", () => {
     const fieldGated = files
-      .filter((f) => /SESSION_ONLY_FIELDS/.test(readFileSync(f, "utf8")))
+      .filter((f) => /SESSION_ONLY_FIELDS/.test(code(f)))
       .map(apiRel)
       .sort();
     expect(fieldGated).toEqual(["channels/[channelId]/route.ts"]);

@@ -8,6 +8,7 @@ import {
   useWorkspaceEntitlements,
 } from "@/features/billing/components/use-workspace-entitlements";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
+import { useBillingPortal } from "@/features/billing/components/use-billing-portal";
 import type { Role } from "@/features/workspaces/types";
 import { PlansBillingCore, type CheckoutPlan } from "./plans-billing-core";
 import styles from "../settings-modal.module.css";
@@ -44,36 +45,10 @@ export function PlansBilling({
   const [checkoutPlan, setCheckoutPlan] = useState<CheckoutPlan | null>(
     initialCheckoutPlan
   );
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [portalError, setPortalError] = useState<string | null>(null);
-
-  async function handleManage() {
-    setPortalLoading(true);
-    setPortalError(null);
-    try {
-      const res = await fetch("/api/billing/portal", {
-        method: "POST",
-        headers: workspaceId ? { "x-workspace-id": workspaceId } : undefined,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) {
-        // Portal route errors are flat strings; wrapper-layer errors
-        // (withWorkspaceAuth) are the nested { error: { message } } shape.
-        const message =
-          typeof data.error === "string"
-            ? data.error
-            : typeof data.error?.message === "string"
-              ? data.error.message
-              : "Couldn't open billing portal";
-        throw new Error(message);
-      }
-      window.location.href = data.url;
-    } catch (err) {
-      setPortalError(err instanceof Error ? err.message : "Couldn't open billing portal");
-    } finally {
-      setPortalLoading(false);
-    }
-  }
+  // The portal POST + redirect moved to `useBillingPortal` when the billing
+  // page's payment-method card needed the identical handoff; the behaviour is
+  // unchanged.
+  const portal = useBillingPortal(workspaceId);
 
   if (checkoutPlan && !ent.isPaid) {
     return (
@@ -106,9 +81,9 @@ export function PlansBilling({
       role={role}
       workspaceId={workspaceId}
       onUpgrade={setCheckoutPlan}
-      onManage={handleManage}
-      portalLoading={portalLoading}
-      portalError={portalError}
+      onManage={portal.open}
+      portalLoading={portal.loading}
+      portalError={portal.error}
     />
   );
 }

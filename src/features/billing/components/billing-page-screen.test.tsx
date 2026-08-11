@@ -7,6 +7,12 @@
  * fetch, the tour and the graph engine back into the KEEP set, and Stage D
  * stops being a deletion. So this file pins both halves — the two panes are
  * really there, and the app shell really is not.
+ *
+ * SINCE THE USAGE/BILLING SPLIT it also pins the tab contract: which pane a
+ * URL opens on, and that each tab carries what it claims. The default is not
+ * cosmetic — a 402 upgrade envelope and a Stripe checkout return both land
+ * here, and a visitor mid-transaction who is shown a usage meter has been
+ * dropped by the flow that sent them.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -21,17 +27,63 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { BillingPageScreen } from "./billing-page-screen";
+import { resolveBillingTab } from "../billing-tabs";
+import {
+  BILLING_STATUS_PATH,
+  type WorkspaceEntitlementsStatus,
+} from "./use-workspace-entitlements";
 
-function paint(node: ReactElement): string {
+const FREE: WorkspaceEntitlementsStatus = {
+  plan: "free",
+  status: "free",
+  memberCount: 3,
+  seatCount: null,
+  objectCap: 100,
+  objectsUsed: 12,
+  canCreateObjects: true,
+  chatsWindowDays: 90,
+  credits: {
+    used: 120,
+    limit: 500,
+    remaining: 380,
+    periodStart: "2026-08-01T00:00:00.000Z",
+    // Midday UTC on purpose: `formatDate` renders in the RUNNER's timezone, and
+    // a midnight instant flips to the previous day for anyone west of UTC.
+    periodEnd: "2026-09-01T12:00:00.000Z",
+  },
+  cancelAtPeriodEnd: false,
+  subscription_period_end: null,
+  has_stripe_customer: false,
+};
+
+const TEAM: WorkspaceEntitlementsStatus = {
+  ...FREE,
+  plan: "team",
+  status: "active",
+  seatCount: 4,
+  objectCap: null,
+  chatsWindowDays: null,
+  credits: { ...FREE.credits, limit: 25_000, remaining: 24_880 },
+  subscription_period_end: "2026-09-04T12:00:00.000Z",
+  has_stripe_customer: true,
+};
+
+/** Seeds the billing-status cache so the panes render their LOADED state —
+ *  `useApiQuery`'s key is `[path, workspaceId, query]`, built by the hook. */
+function paint(node: ReactElement, status: WorkspaceEntitlementsStatus): string {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  client.setQueryData([BILLING_STATUS_PATH, "ws-1", undefined], status);
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>{node}</QueryClientProvider>
   );
 }
 
-function screen(overrides: Partial<Parameters<typeof BillingPageScreen>[0]> = {}) {
+function screen(
+  overrides: Partial<Parameters<typeof BillingPageScreen>[0]> = {},
+  status: WorkspaceEntitlementsStatus = FREE
+) {
   return paint(
     <BillingPageScreen
       workspaceName="Acme"
@@ -39,18 +91,89 @@ function screen(overrides: Partial<Parameters<typeof BillingPageScreen>[0]> = {}
       role="owner"
       billingReturn={null}
       initialCheckoutPlan={null}
+      initialTab="billing"
       {...overrides}
-    />
+    />,
+    status
   );
 }
 
-describe("what the page carries", () => {
-  it("names the workspace being billed", () => {
-    // A multi-workspace admin arriving from a Stripe return has to be able to
-    // tell WHICH workspace this is before they read a price.
-    expect(screen()).toContain("Acme");
+describe("which tab a URL opens on", () => {
+  it("opens on Usage for a bare visit", () => {
+    expect(resolveBillingTab(null, false)).toBe("usage");
   });
 
+  it("opens on Billing when the visitor arrived with a ?billing= intent", () => {
+    // The 402 upgrade envelopes, the Stripe checkout return and the portal
+    // return all carry one. They are mid-transaction; the plan cards are what
+    // they were sent for.
+    expect(resolveBillingTab(null, true)).toBe("billing");
+  });
+
+  it("lets an explicit ?tab= beat the intent, in both directions", () => {
+    expect(resolveBillingTab("usage", true)).toBe("usage");
+    expect(resolveBillingTab("billing", false)).toBe("billing");
+  });
+
+  it("ignores a ?tab= that names no tab", () => {
+    expect(resolveBillingTab("invoices", false)).toBe("usage");
+    expect(resolveBillingTab("", true)).toBe("billing");
+  });
+
+  it("renders the tab switcher itself", () => {
+    const markup = screen();
+    expect(markup).toContain('role="tablist"');
+    expect(markup).toContain("Usage");
+    expect(markup).toContain("Billing");
+  });
+
+  it("renders ONE pane — the tabs are exclusive, not a stacked page", () => {
+    // Usage carries the meters; Billing carries the plan cards + danger zone.
+    const usage = screen({ initialTab: "usage" });
+    expect(usage).toContain("MCP credits");
+    expect(usage).not.toContain("Plans and Billing");
+    expect(usage).not.toContain("Delete account");
+
+    const billing = screen({ initialTab: "billing" });
+    expect(billing).toContain("Plans and Billing");
+    expect(billing).not.toContain("Workspace limits");
+  });
+});
+
+describe("the Usage tab", () => {
+  const usage = (status: WorkspaceEntitlementsStatus) =>
+    screen({ initialTab: "usage" }, status);
+
+  it("meters MCP credits on a FREE workspace and says when they reset", () => {
+    const markup = usage(FREE);
+    expect(markup).toContain("MCP credits");
+    expect(markup).toContain("120");
+    expect(markup).toContain("500");
+    expect(markup).toContain("Resets Sep 1, 2026");
+  });
+
+  it("meters them on a paid workspace too — every plan has an allowance", () => {
+    expect(usage(TEAM)).toContain("25,000");
+  });
+
+  it("meters ontology objects against the cap only while capped", () => {
+    expect(usage(FREE)).toContain("12 / 100");
+    // Uncapped: the count, and the word for no cap. Never an empty track
+    // against a limit that does not exist.
+    const paid = usage(TEAM);
+    expect(paid).toContain("Unlimited");
+    expect(paid).not.toContain("12 / 100");
+  });
+
+  it("carries the members/seats and chat-history lines", () => {
+    expect(usage(FREE)).toContain("Last 90 days");
+    const team = usage(TEAM);
+    expect(team).toContain("4 billable seats");
+    expect(team).toContain("Full history");
+  });
+});
+
+describe("the Billing tab", () => {
   it("carries Plans & Billing — plan, entitlements, upgrade, portal", () => {
     const markup = screen();
     expect(markup).toContain("Plans and Billing");
@@ -67,6 +190,40 @@ describe("what the page carries", () => {
     expect(markup).toContain("Delete account");
   });
 
+  it("shows card, invoices and cancel ONLY for a paying workspace", () => {
+    // A Starter workspace has no Stripe customer, so an empty card and an
+    // empty invoice table would be inventing an account it does not have.
+    const free = screen();
+    expect(free).not.toContain("Payment method");
+    expect(free).not.toContain("Invoices");
+    expect(free).not.toContain("Cancel plan");
+
+    const paid = screen({}, TEAM);
+    expect(paid).toContain("Payment method");
+    expect(paid).toContain("Invoices");
+    expect(paid).toContain("Cancel plan");
+  });
+
+  it("hides all three from a member — they are admin-only routes", () => {
+    const markup = screen({ role: "member" }, TEAM);
+    expect(markup).not.toContain("Payment method");
+    expect(markup).not.toContain("Invoices");
+    expect(markup).not.toContain("Cancel plan");
+  });
+
+  it("quotes the end date on the cancel section, not just a warning", () => {
+    // The date IS the consequence: nothing stops today, and a cancel dialog
+    // that does not say when access ends is asking for a decision blind.
+    expect(screen({}, TEAM)).toContain("Sep 4, 2026");
+  });
+
+  it("swaps cancel for resume once the plan is already ending", () => {
+    const ending = screen({}, { ...TEAM, cancelAtPeriodEnd: true });
+    expect(ending).toContain("Plan ending");
+    expect(ending).toContain("Resume plan");
+    expect(ending).not.toContain("Cancel plan");
+  });
+
   it("passes the post-checkout signal straight through to the pane", () => {
     expect(screen({ billingReturn: "success" })).toContain(
       "Finalizing your subscription"
@@ -81,6 +238,8 @@ describe("what the page carries", () => {
 describe("what the page deliberately leaves out", () => {
   const SOURCES = [
     "src/features/billing/components/billing-page-screen.tsx",
+    "src/features/billing/components/billing-plans-pane.tsx",
+    "src/features/billing/components/billing-usage-pane.tsx",
     "src/app/billing/[segment]/page.tsx",
     "src/app/billing/page.tsx",
   ];

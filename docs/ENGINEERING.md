@@ -936,6 +936,15 @@ So: one row per `(workspace_id, period_start)` in `workspace_credit_usage`, spen
 
 **Unrelated to the DELETED `credit_ledger` / `user_credits` feature** removed by hand outside migration history (see §7's baseline notes). Nothing was revived; this is a new, per-workspace, per-period counter.
 
+### The billing page split — USAGE vs BILLING, and what came in-app (2026-08-11)
+
+`/billing/[segment]` grew a card, an invoice table and a cancel flow the same week it grew a credit meter. Four decisions are worth keeping.
+
+- **TWO TABS ON ONE ROUTE, VIA `?tab=` — NOT A SECOND PATH LEVEL.** `[segment]` is the WORKSPACE segment (`{slug}-{publicId}`), so `/billing/[segment]/usage` would have meant re-deriving every helper in `features/billing/url.ts`, every `upgrade_url` envelope already in the wild, every Stripe `return_url`, and `dopl-desktop-app/main/deep-link-target.js`'s hand-copied page table (pinned by its own test). A query param touches none of them and is still shareable. The resolver is a pure module of its own — `features/billing/billing-tabs.ts › resolveBillingTab` — **deliberately not in `url.ts`**, which is the money-URL BUILDER and must not gain a param no `return_url` carries. The RSC page calls it so the link decides the FIRST paint; the client shell holds it as state and syncs the address bar with `history.replaceState` (a router push would re-run a `force-dynamic` RSC and remount an open checkout form to change one word).
+- **THE DEFAULT FLIPS ON INTENT, NOT ON ROLE.** A bare visit opens Usage; any recognised `?billing=` (upgrade / success / return) opens Billing, because all three mean the visitor was sent here mid-transaction by a 402 envelope, a checkout return or the portal.
+- **READ THE CARD IN-APP, EDIT IT IN STRIPE.** Brand/last4/expiry answers the question people open billing for and needs no PCI surface of ours; CHANGING a card does, so "Update" stays the hosted-portal handoff every other card affordance uses. Same split for invoices: the table is ours, the PDF is Stripe's. The portal POST + redirect is now one hook (`components/use-billing-portal.ts`) because a second surface needed it.
+- **CANCEL SETS `cancel_at_period_end` AND WRITES THE LOCAL ROW IN THE SAME REQUEST.** Never `subscriptions.cancel` — an immediate cancel revokes access already paid for. The local write is not optimism: Stripe's `customer.subscription.updated` echo arrives seconds later through a different process, and the person who just clicked has to be told NOW when access ends. `lastStripeEventCreated` is deliberately NOT stamped, or the real event would look stale and be dropped (same rule as `upgrade-to-team`). Resume is the identical call with `false`, which is why it is one route and not two. `sessionOnly: true` on it, like every other billing write — and unlike the portal handoff, this one ends the subscription on our own route with no Stripe-hosted page a human must click through.
+
 ---
 
 ## 9. API Routes

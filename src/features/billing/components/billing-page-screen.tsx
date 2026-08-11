@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { Role } from "@/features/workspaces/types";
-import { DeleteAccount } from "@/shared/layout/settings-modal/sections/delete-account";
-import { PlansBilling } from "@/shared/layout/settings-modal/sections/plans-billing";
+import type { BillingTab } from "../billing-tabs";
 import type { CheckoutPlan } from "../url";
+import { BillingPlansPane } from "./billing-plans-pane";
+import { BillingUsagePane } from "./billing-usage-pane";
 import styles from "./billing-page.module.css";
 
 /**
@@ -18,11 +21,26 @@ import styles from "./billing-page.module.css";
  * the custom checkout. Billing therefore keeps a page — decision D1(a) in
  * docs/migration-research/website-retirement-plan.md — and this is it.
  *
- * ASSEMBLY, NOT NEW PRODUCT. Both panes are the shipped settings-modal
- * sections, rendered as page sections instead of modal panes: `PlansBilling`
- * (plan + entitlements + embedded checkout + portal + the in-place Solo→Team
- * switch) and `DeleteAccount` (the account danger zone the desktop app links
- * out to — `apps/desktop-ui/.../account-actions.tsx`, plan D4).
+ * THIS FILE IS THE SHELL AND NOTHING ELSE: header, the two tabs, the active
+ * pane. Both panes are their own modules (`./billing-usage-pane`,
+ * `./billing-plans-pane`), which is what keeps a page that now carries a card,
+ * an invoice table and a cancel flow under the 500-line cap.
+ *
+ * ONE ROUTE, TWO TABS — NOT TWO ROUTES. `[segment]` is the WORKSPACE segment
+ * (`{slug}-{publicId}`), so a second path level would mean re-deriving every
+ * helper in `../url.ts`, the `upgrade_url` envelopes already in the wild, and
+ * the desktop's hand-copied deep-link table. The tab is a `?tab=` query param
+ * instead: shareable, and invisible to all of that.
+ *
+ * Which tab a given URL opens on is decided by `../billing-tabs.ts ›
+ * resolveBillingTab`, called by the RSC page — a pure module of its own so the
+ * page can import it without pulling this client tree (and its Stripe panes)
+ * into a server render.
+ *
+ * WHY THE DEFAULT FLIPS. A bare visit lands on Usage — the question a member
+ * has. An arrival carrying `?billing=` (a 402 upgrade envelope, a Stripe
+ * checkout return, a portal return) lands on Billing, because that visitor was
+ * sent here mid-transaction and the plan cards are what they were promised.
  *
  * WHAT IT DELIBERATELY LEAVES OUT. No `AppShell`, no rail, sidebar, workspace
  * switcher, tour, join-notices or graph engine — importing the app layout would
@@ -32,6 +50,11 @@ import styles from "./billing-page.module.css";
  * uploader (GAP-21) also stays out — it is workspace branding, not billing or
  * account, and it is the only remaining reason to open web settings.
  */
+const TABS = [
+  { key: "usage" as const, label: "Usage" },
+  { key: "billing" as const, label: "Billing" },
+];
+
 export interface BillingPageScreenProps {
   workspaceName: string;
   workspaceId: string;
@@ -40,6 +63,10 @@ export interface BillingPageScreenProps {
   billingReturn: "success" | "return" | null;
   /** From `?billing=upgrade&plan=…`; opens checkout at mount. */
   initialCheckoutPlan: CheckoutPlan | null;
+  /** Resolved by the RSC page from `?tab=` + `?billing=`. Server-resolved
+   *  rather than read from `useSearchParams` so the shareable link decides the
+   *  FIRST paint, not the second. */
+  initialTab: BillingTab;
 }
 
 export function BillingPageScreen({
@@ -48,7 +75,23 @@ export function BillingPageScreen({
   role,
   billingReturn,
   initialCheckoutPlan,
+  initialTab,
 }: BillingPageScreenProps) {
+  const [tab, setTab] = useState<BillingTab>(initialTab);
+
+  function selectTab(next: BillingTab) {
+    setTab(next);
+    // `history.replaceState`, not a router push: switching tabs is not a
+    // navigation, and this page is `force-dynamic`, so a push would re-run the
+    // whole RSC (and remount an open checkout form) to change one word in the
+    // address bar. Same call the ontology cluster switcher makes.
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", next);
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -67,31 +110,24 @@ export function BillingPageScreen({
           Payment lives in your browser — the desktop app never handles card
           details. Everything else about Dopl is in the app.
         </p>
+        <SegmentedControl
+          className="mt-4 max-w-xs"
+          options={TABS}
+          value={tab}
+          onChange={selectTab}
+        />
       </header>
 
-      <section className="bento px-6 py-5">
-        <PlansBilling
+      {tab === "usage" ? (
+        <BillingUsagePane workspaceId={workspaceId} />
+      ) : (
+        <BillingPlansPane
+          workspaceId={workspaceId}
+          role={role}
           billingReturn={billingReturn}
           initialCheckoutPlan={initialCheckoutPlan}
-          role={role}
-          workspaceId={workspaceId}
         />
-        <p className="mt-4 text-caption text-text-muted">
-          Done here? Go back to the Dopl app — your plan updates there on its
-          own.
-        </p>
-      </section>
-
-      <section className="bento px-6 py-5">
-        <h2 className="mb-1 text-title font-semibold tracking-tight text-text-primary">
-          Account
-        </h2>
-        <p className="mb-4 text-caption text-text-secondary">
-          Deleting your account is permanent, which is why it stays here rather
-          than behind a click in the app.
-        </p>
-        <DeleteAccount />
-      </section>
+      )}
     </div>
   );
 }

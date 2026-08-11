@@ -175,6 +175,68 @@ export async function createPortalSession(
   return session.url;
 }
 
+/**
+ * The customer's DEFAULT payment method — what Stripe will charge next.
+ *
+ * Two sources, in Stripe's own order of authority: the subscription-level
+ * default (`invoice_settings.default_payment_method`, what the portal edits),
+ * then the newest attached card. A customer with a card attached but no default
+ * set is the normal state after an embedded checkout, so falling back is not a
+ * guess — it is the same method Stripe would charge.
+ *
+ * Returns null for a deleted customer or one with no card at all; the caller
+ * renders "no payment method on file" rather than an error.
+ */
+export async function getDefaultPaymentMethod(
+  stripeCustomerId: string
+): Promise<Stripe.PaymentMethod | null> {
+  const stripe = getStripe();
+  const customer = await stripe.customers.retrieve(stripeCustomerId, {
+    expand: ["invoice_settings.default_payment_method"],
+  });
+  if (!customer.deleted) {
+    const preferred = customer.invoice_settings?.default_payment_method;
+    // Expanded → an object; unexpanded/absent → a string id or null. Only the
+    // object carries the card, and the expand above is what makes it one.
+    if (preferred && typeof preferred !== "string") return preferred;
+  }
+  const cards = await stripe.paymentMethods.list({
+    customer: stripeCustomerId,
+    type: "card",
+    limit: 1,
+  });
+  return cards.data[0] ?? null;
+}
+
+/** The customer's most recent invoices, newest first (Stripe's own order). */
+export async function listCustomerInvoices(
+  stripeCustomerId: string,
+  limit: number
+): Promise<Stripe.Invoice[]> {
+  const stripe = getStripe();
+  const invoices = await stripe.invoices.list({
+    customer: stripeCustomerId,
+    limit,
+  });
+  return invoices.data;
+}
+
+/**
+ * Set (or clear) Stripe's `cancel_at_period_end` on a subscription. Clearing it
+ * is the RESUME path — the subscription was never canceled, it was flagged not
+ * to renew, so resuming is the same call with `false` and needs no new
+ * checkout.
+ */
+export async function setSubscriptionCancelAtPeriodEnd(
+  stripeSubscriptionId: string,
+  cancelAtPeriodEnd: boolean
+): Promise<Stripe.Subscription> {
+  const stripe = getStripe();
+  return stripe.subscriptions.update(stripeSubscriptionId, {
+    cancel_at_period_end: cancelAtPeriodEnd,
+  });
+}
+
 export function constructWebhookEvent(
   body: string,
   signature: string

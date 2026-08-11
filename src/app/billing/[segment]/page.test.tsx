@@ -206,4 +206,23 @@ describe("what the URL is allowed to do", () => {
       (await render({ billing: "success", plan: "solo" })).initialCheckoutPlan
     ).toBeNull();
   });
+
+  it("opens on Usage for a bare visit and on Billing mid-transaction", async () => {
+    // The tab is resolved HERE, on the server, so a shared `?tab=` link and a
+    // Stripe return both decide the FIRST paint rather than a flash of the
+    // wrong pane. `?billing=` in any of its three values means the visitor was
+    // sent here by a payment flow.
+    expect((await render({})).initialTab).toBe("usage");
+    expect((await render({ billing: "upgrade" })).initialTab).toBe("billing");
+    expect((await render({ billing: "success" })).initialTab).toBe("billing");
+    expect((await render({ billing: "return" })).initialTab).toBe("billing");
+  });
+
+  it("lets an explicit ?tab= override the intent, and ignores junk", async () => {
+    expect((await render({ tab: "billing" })).initialTab).toBe("billing");
+    expect(
+      (await render({ tab: "usage", billing: "success" })).initialTab
+    ).toBe("usage");
+    expect((await render({ tab: "invoices" })).initialTab).toBe("usage");
+  });
 });

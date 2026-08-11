@@ -87,6 +87,7 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `AvatarWithPresence` (`avatar-with-presence.tsx`) | `Avatar` wrapped in a presence ring — `ring-success` online / `ring-text-disabled` offline, floated off the avatar by a transparent `p-0.5` gap so it reads on any surface. Prefer over a standalone presence dot wherever an avatar is shown. |
 | `SegmentedControl` (`segmented-control.tsx`) | ALL scope/filter tab rows. Concave track + a raised thumb that slides between slots (0.28s ease-out-quint). Never compose `.concave-track`/`.raised-tab` tabs by hand. |
 | `SectionBox` (`section-box.tsx`) | Labelled section card (see Patterns below). |
+| `UsageMeter` (`usage-meter.tsx`) | THE "used / limit" bar — label row + `.concave-track` well + a bare `h-1.5 rounded-full` fill with an inline width %. The only progress-bar recipe; it was module-private in the billing pane until a second meter (MCP credits) needed it, and the billing page's Usage tab is the third caller. **`over` is a verdict the CALLER passes**, not `used >= limit` arithmetic — an entitlement gate decides it. Never hand-roll `.concave-track` + a fill. |
 | `EmptyState` (`empty-state.tsx`) | Centered icon + title + description placeholder for empty panes. |
 | `SearchField` (`search-field.tsx`) | Search-icon + concave-field input well (`sm`/`md`). Never inline the recipe. |
 | `Switch` (`switch.tsx`) | Boolean toggles (concave track, raised thumb). |
