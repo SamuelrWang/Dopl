@@ -8,6 +8,8 @@
 
 **All seven phases below are implemented and are COMMITTED on `master`** (this said "sit UNCOMMITTED in the `master` working tree" until 2026-08-11; verified with `git status --short` — the tree is clean of them, they shipped in the 2026-08-07/08 launch wave). Deploy state is a measurement: re-check rather than trust this clause. Canvas, workflows and configuration are unreachable by a user and invisible to an agent; deletes are permanent app-wide. The durable statement of record is [ENGINEERING.md](ENGINEERING.md) §7 — *"Canvas, Workflows & Configuration — RETIRED FROM EVERY SURFACE"* and *"DELETES ARE PERMANENT"* — not this plan. Read that first; this file is the *why* and the audit trail.
 
+⛔ **CONFIGURATION HAS SINCE GRADUATED FROM HIDE TO DELETE (2026-08-11).** `src/features/configuration/` and `apps/desktop-ui/src/pages/configuration/` are off disk. Everything this plan says below about hiding configuration is the record of what was done on 2026-08-07 and is not rewritten — but there is no longer a page behind any of it, so nothing here is a restore path. The `/{ws}/configuration` 302 in `src/shared/lib/url/website-retirement.ts` and the deep-link fallthrough stay, unchanged, for in-the-wild bookmarks.
+
 | Phase | Shipped |
 |---|---|
 | **1 — Nav + landing** | 5 route rows out of `WORKSPACE_PAGES`; 3 nav rows + their `NavSection` members out of `app-sidebar-core.tsx`; `WORKSPACE_HOME_PATH` → `"overview"` (D4); `deep-link-target.js` page table + `WORKSPACE_HOME_PAGE` moved in lockstep; Overview "Workflows" stat card removed. Page components remain on disk, unreferenced. |

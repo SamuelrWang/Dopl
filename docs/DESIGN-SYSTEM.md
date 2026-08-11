@@ -9,8 +9,8 @@ Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
-dialogs/doc-pane), Ontology, Members, Chats, Skills, Configuration,
-Settings, Workspaces (invite/join/create cards), Billing, MCP-connect.
+dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings,
+Workspaces (invite/join/create cards), Billing, MCP-connect.
 Exempt: marketing pages and auth + onboarding (their own crystal/3D
 kit). The F-022 legacy Button/Dialog primitives are retired (deleted
 2026-07-17). Every new page starts on this system.
@@ -100,10 +100,9 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`
-(CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens),
+(CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens) and
 `src/features/ontology/components/` (utility-class styling on the same
-tokens), and `src/features/configuration/components/` (two-pane guide
-builder composing SectionBox + wells + SegmentedControl).
+tokens).
 
 ## Patterns
 

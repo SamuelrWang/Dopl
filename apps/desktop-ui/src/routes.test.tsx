@@ -98,9 +98,10 @@ describe("app routes", () => {
   });
 
   it("has no route for the retired pages", () => {
-    // canvas / canvas2 / workflows / configuration are hidden, not deleted —
-    // the page components still exist, so the only thing standing between a
-    // user and them is this table (docs/RETIREMENT-UNWIRING-PLAN.md §3.1).
+    // canvas / canvas2 / workflows are hidden, not deleted — those page
+    // components still exist, so the only thing standing between a user and
+    // them is this table (docs/RETIREMENT-UNWIRING-PLAN.md §3.1).
+    // `configuration` has no page left; its row must stay absent all the same.
     const paths = WORKSPACE_PAGES.map((page) => page.path);
     for (const retired of ["canvas", "canvas2", "workflows", "configuration"]) {
       expect(paths).not.toContain(retired);

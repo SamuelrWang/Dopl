@@ -58,9 +58,10 @@ const WORKSPACE_HOME_PAGE = 'overview';
  * fails when the two disagree.
  *
  * RETIRED (2026-08-07): `canvas`, `canvas2`, `workflows` and `configuration`
- * left this table with their SPA routes (docs/RETIREMENT-UNWIRING-PLAN.md §3.1).
- * An old bookmark naming one is not refused — it is an unknown page inside a
- * real workspace, so it opens that workspace's home page, which is the point.
+ * left this table with their SPA routes (docs/RETIREMENT-UNWIRING-PLAN.md §3.1);
+ * `configuration`'s page was then DELETED (2026-08-11). An old bookmark naming
+ * any of them is not refused — it is an unknown page inside a real workspace, so
+ * it opens that workspace's home page, which is the point.
  */
 const WORKSPACE_PAGES = {
   overview: false,
