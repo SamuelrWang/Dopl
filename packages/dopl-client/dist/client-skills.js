@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Skill method group — link 10 and LAST of the chain documented in
+ * Skill method group — link 8 and LAST of the chain documented in
  * `client-base.ts`; `DoplClient` in `client.ts` extends this one. Pure
  * delegation to `skills.ts`; no HTTP here.
  *

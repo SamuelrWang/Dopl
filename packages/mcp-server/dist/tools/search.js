@@ -76,7 +76,7 @@ function registerSearchTool(register, client) {
         // instead of the old whole-query .includes() that missed
         // near-verbatim multi-word queries and dumped everything for a
         // lone space (audit fix F-15). Knowledge entries still use the
-        // backend hybrid search; this only governs skills/workflows/objects.
+        // backend hybrid search; this only governs skills/objects.
         const fold = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         const terms = fold(args.query).split(" ").filter(Boolean);
         const matches = (...fields) => {
@@ -151,8 +151,9 @@ function registerSearchTool(register, client) {
             lines.push((0, ontology_clipped_1.clippedNote)("the ontology group searched a prefix of the graph and a match outside it could not appear"));
         }
         // GROUPS, not domains: the three reads are exactly the three groups
-        // above. Four until the workflow retirement (2026-08-07) — the
-        // denominator moves with the reads, never independently of them.
+        // above. Four until the workflow retirement (2026-08-07; deleted
+        // 2026-08-11) — the denominator moves with the reads, never
+        // independently of them.
         lines.push("", scopeNote(limit, reads.notice(3, "groups")));
         return (0, respond_1.ok)(lines.join("\n"));
     });

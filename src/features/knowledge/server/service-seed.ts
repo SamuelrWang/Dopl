@@ -8,7 +8,7 @@ import { deriveSlug } from "./service-shared";
 /**
  * A base inserted by the seed, with each entry's stable `key` mapped to
  * its inserted uuid + title. The orchestrator threads `entryIdByKey`
- * into the ontology + workflow seeds so their cross-references resolve.
+ * into the ontology seed so its cross-references resolve.
  */
 export interface SeededBase {
   baseId: string;

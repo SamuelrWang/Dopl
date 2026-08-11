@@ -71,11 +71,12 @@ function mcpShortName(full) {
 // segment to look Dopl-ish re-breaks the UUID form already observed in the field.
 //
 // RETIRED NAMES BELONG IN THIS VOCABULARY TOO (2026-08-07). `dopl_workflow` /
-// `dopl_cluster` and their admins are no longer registered by the server, but they are
+// `dopl_cluster` and their admins were DELETED from the server on 2026-08-11, but they are
 // still on the deny lists (RETIRED_DOPL_TOOLS), and a deny list is only reached through
 // this normalizer — that is the entire F-139 finding. Leave them out and a retired admin
 // arriving under a connector or UUID server segment stays unclassified, which resolves to
-// `gate`: a button for the exact tool the table says can never be opened.
+// `gate`: a button for the exact tool the table says can never be opened. The name being
+// unregisterable does not make it unsendable — this list is derived, so it follows.
 const DOPL_TOOL_PREFIX = DOPL_SERVER_PREFIX + '__';
 const DOPL_SHORT_NAMES = [DOPL_CHANNEL_TOOL]
   .concat(DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS)

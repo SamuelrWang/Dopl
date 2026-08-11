@@ -59,7 +59,7 @@ const WORKSPACE_HOME_PAGE = 'overview';
  *
  * RETIRED (2026-08-07): `canvas`, `canvas2`, `workflows` and `configuration`
  * left this table with their SPA routes (docs/RETIREMENT-UNWIRING-PLAN.md §3.1);
- * the `configuration` and canvas pages were then DELETED (2026-08-11). An old
+ * all four pages were then DELETED (2026-08-11). An old
  * bookmark naming any of them is not refused — it is an unknown page inside a
  * real workspace, so it opens that workspace's home page, which is the point.
  * (`canvas` ALSO appears in `WEB_ONLY_ROOTS` below, for the workspace-less

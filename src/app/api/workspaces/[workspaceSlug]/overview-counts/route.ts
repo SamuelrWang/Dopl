@@ -12,15 +12,15 @@ interface Ctx {
 
 /**
  * GET /api/workspaces/[workspaceSlug]/overview-counts — everything the
- * overview page's header needs in one round trip: the four head-counts
+ * overview page's header needs in one round trip: the three head-counts
  * behind the stat cards plus the agent-connected badge. Any active
  * member can read (same gate as the sibling members / teams routes:
  * `resolveApiWorkspace` is membership-scoped, so a non-member 404s).
  *
- * Shape: `{ workflows, knowledgeBases, skills, members, isMcpConnected }`.
+ * Shape: `{ knowledgeBases, skills, members, isMcpConnected }`.
  *
- * The alternative — counting four list endpoints client-side — is four
- * full payloads for four integers.
+ * The alternative — counting three list endpoints client-side — is three
+ * full payloads for three integers.
  *
  * `isMcpConnected` failures degrade to `false` (and count failures to 0
  * inside the service), matching the RSC page: a stale badge beats a 500

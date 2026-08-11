@@ -103,11 +103,11 @@ const DOPL_CHANNEL_TOOL = 'mcp__dopl__dopl_channel';
 // non-admin tool a restricted spawn must not reach (see DOPL_CHANNEL_TOOL).
 //
 // RETIREMENT (2026-08-07): `dopl_workflow` and `dopl_cluster` came off this list
-// when server.ts stopped registering them (its HIDDEN_TOOLS guard). An allow-list
-// entry for a tool that does not exist is a harmless no-op at the CLI, but it is
-// not harmless HERE: this list is the desktop's written record of the server's
-// surface, four test files read it as such, and a name that outlives the tool
-// makes the record lie about what a spawn can reach.
+// when server.ts stopped registering them; the tools themselves were DELETED on
+// 2026-08-11. An allow-list entry for a tool that does not exist is a harmless
+// no-op at the CLI, but it is not harmless HERE: this list is the desktop's
+// written record of the server's surface, four test files read it as such, and a
+// name that outlives the tool makes the record lie about what a spawn can reach.
 const DOPL_SAFE_TOOLS = [
   'mcp__dopl__dopl_kb',
   'mcp__dopl__dopl_search',
@@ -125,8 +125,9 @@ const DOPL_SAFE_TOOLS = [
 // list (braces).
 //
 // FOUR since the retirement (2026-08-07): `dopl_cluster_admin` and
-// `dopl_workflow_admin` are unregistered server-side, so there is no tool left
-// for the CLI to offer or for this list to deny. Each of the four that remain
+// `dopl_workflow_admin` were unregistered server-side and are now DELETED
+// (2026-08-11), so there is no tool left for the CLI to offer. Each of the four
+// that remain
 // now REFUSES every delete op at the server (§2b — deletion is app-only), which
 // makes this list belt-and-braces on top of a server that already says no; it
 // stays because a deny the operator cannot click through is still the stronger
@@ -138,24 +139,27 @@ const DOPL_ADMIN_TOOLS = [
   'mcp__dopl__dopl_chats_admin',
 ];
 
-// The Dopl tools the SERVER no longer registers (retirement, 2026-08-07 — the
-// HIDDEN_TOOLS guard in packages/mcp-server/src/server.ts). They are gone from
-// DOPL_SAFE_TOOLS and DOPL_ADMIN_TOOLS above, which are the lists that describe
-// what a spawn CAN reach; this one exists so removing them does not quietly
-// LOOSEN containment.
+// Dopl tools that NO LONGER EXIST. Hidden by the server on 2026-08-07, then
+// DELETED on 2026-08-11 — registrars, routes, tables and all. Nothing can
+// register these names any more. They are gone from DOPL_SAFE_TOOLS and
+// DOPL_ADMIN_TOOLS above, which are the lists that describe what a spawn CAN
+// reach; this one exists so removing them does not quietly LOOSEN containment.
 //
-// WHY THE DENY OUTLIVES THE TOOL. `dopl_cluster_admin` and
-// `dopl_workflow_admin` were hard-denied under every profile — a state the
-// session table describes as immovable: no operator click, no task grant and no
-// `bypass` opens it. Drop them from DOPL_ADMIN_TOOLS alone and they become
-// UNCLASSIFIED, which resolves to `gate` — one click away from running, in the
-// two profiles where a click is available. The tool not existing server-side is
-// a good reason to expect the call never to arrive; it is not a reason for the
-// desktop to start offering a button if it does. Containment must not depend on
-// the server's current tool list, which is the whole premise of these layers.
+// THE DENY OUTLIVES THE TOOL, DELIBERATELY, and deleting the tool is not the
+// event that retires the deny. `dopl_cluster_admin` and `dopl_workflow_admin`
+// were hard-denied under every profile — a state the session table describes as
+// immovable: no operator click, no task grant and no `bypass` opens it. Drop
+// them from DOPL_ADMIN_TOOLS alone and they become UNCLASSIFIED, which resolves
+// to `gate` — one click away from running, in the two profiles where a click is
+// available. That the tool no longer exists is a good reason to expect the call
+// never to arrive; it is not a reason for the desktop to start offering a button
+// if it does, because the caller is a CLI we do not control and the name is
+// attacker-suppliable. Containment must not depend on the server's current tool
+// list, which is the whole premise of these layers.
 //
 // Unrecognized names in a deny list are harmless no-ops at the CLI (see the
-// header), so this costs nothing and can be deleted the day the feature returns.
+// header), so this costs nothing. UNIVERSAL_HARD_DENY = admins + these = 8
+// (docs/INVARIANTS.md §11 pins the number); do not shorten this list to tidy up.
 const RETIRED_DOPL_TOOLS = [
   'mcp__dopl__dopl_workflow',
   'mcp__dopl__dopl_workflow_admin',

@@ -1,5 +1,5 @@
 /**
- * Channel method group — link 9 of the chain documented in `client-base.ts`.
+ * Channel method group — link 7 of the chain documented in `client-base.ts`.
  * Pure delegation to `channel.ts`; no HTTP here.
  *
  * Cross-user, agent-to-agent collaboration threads. Messages carry a

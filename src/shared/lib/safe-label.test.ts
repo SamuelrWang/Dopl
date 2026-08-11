@@ -22,8 +22,6 @@ import { describe, it, expect } from "vitest";
 import { SAFE_LABEL_RE,
   SAFE_PROSE_RE, safeLabel, safeLabelMessage, safeOptionalLabel } from "./safe-label";
 import { WorkspaceCreateSchema, WorkspaceUpdateSchema } from "@/features/workspaces/schema";
-import { ClusterNameSchema } from "@/features/clusters/schema";
-import { WorkflowNameSchema, WorkflowStepTitleSchema } from "@/features/workflows/schema";
 import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
 import { SkillCreateSchema } from "@/features/skills/schema";
 import { TeamCreateSchema } from "@/features/teams/schema";
@@ -103,10 +101,6 @@ const BOUNDED_FIELDS: BoundedField[] = [
       WorkspaceCreateSchema.safeParse({ name: "Acme", description: v }).success,
   },
   {
-    column: "clusters.name",
-    accepts: (v) => ClusterNameSchema.safeParse(v).success,
-  },
-  {
     column: "knowledge_bases.name",
     accepts: (v) => KnowledgeBaseCreateSchema.safeParse({ name: v }).success,
   },
@@ -128,14 +122,6 @@ const BOUNDED_FIELDS: BoundedField[] = [
         whenToUse: "w",
         folder: v,
       }).success,
-  },
-  {
-    column: "workflows.name",
-    accepts: (v) => WorkflowNameSchema.safeParse(v).success,
-  },
-  {
-    column: "workflow_steps.title",
-    accepts: (v) => WorkflowStepTitleSchema.safeParse(v).success,
   },
   {
     column: "teams.name",

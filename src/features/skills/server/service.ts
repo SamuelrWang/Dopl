@@ -58,6 +58,6 @@ export {
   restoreFileVersion,
 } from "./service-history";
 
-export { getSkillUsage, getSkillUsedBy } from "./service-insights";
+export { getSkillUsage } from "./service-insights";
 
 export { seedWorkspace } from "./service-seed";

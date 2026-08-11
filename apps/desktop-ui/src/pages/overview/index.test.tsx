@@ -66,7 +66,6 @@ function mockApi() {
     if (path === "/api/workspaces/acme-ab12cd/overview-counts") {
       return Promise.resolve(
         ok({
-          workflows: 3,
           knowledgeBases: 7,
           skills: 11,
           members: 2,
@@ -115,10 +114,8 @@ describe("overview page", () => {
     // retirement and nothing failed, because only Skills was ever checked
     // and the "2 people in this workspace" line below is MembersWidgetCore
     // copy, not a card. Deleting "Knowledge bases" or "Members" must fail
-    // HERE. The row doubles as navigation, so each href is a real route —
-    // note `workflows: 3` is still in the payload above (the counts route is
-    // untouched by the retirement); a fourth card would link to "Not found"
-    // (docs/RETIREMENT-UNWIRING-PLAN.md §3.1) and trips the length check.
+    // HERE. The row doubles as navigation, so each href is a real route, and
+    // the length check is what stops a fourth card linking to "Not found".
     const skills = screen.getByRole("link", { name: /Skills 11 agent playbooks/ });
     const statRow = skills.parentElement as HTMLElement;
     const cards = within(statRow).getAllByRole("link");

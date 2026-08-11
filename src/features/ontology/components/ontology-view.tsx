@@ -33,7 +33,7 @@ interface Props {
    * The desktop SPA injects its hash-router equivalent: the packaged renderer
    * is a `file://` document where replacing the path is a Chromium security
    * error, so the same intent has to travel through the router there. Same
-   * seam, same reason, as `WorkflowsView`.
+   * seam.
    */
   replaceUrl?: (path: string) => void;
 }

@@ -10,7 +10,7 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * — the port of both `src/app/[workspaceSlug]/(app)/ontology/page.tsx` and its
  * `[clusterSlug]/page.tsx` sibling (docs/migration-research/web-pages.md §7).
  *
- * ONE component serves both routes, for the same reason workflows does: the two
+ * ONE component serves both routes: the two
  * RSCs differ only in passing `initialClusterSlug`, which here is just
  * `useParams().clusterSlug`, and registering both rows with the same component
  * type is what lets react-router reconcile them instead of remounting. That

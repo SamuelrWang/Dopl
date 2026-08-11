@@ -107,7 +107,7 @@ const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();
 // GATES them and only `bypass` covers them, and (b) `dopl_only` stops SHADOWING them via
 // allowedTools. The read half is derived by subtraction, and this list must stay a SUBSET of
 // DOPL_SAFE_TOOLS — session-permission-hardening.test.mjs's partition test catches it if not.
-// (dopl_workflow / dopl_cluster left in the 2026-08-07 retirement, with their server tools.)
+// (dopl_workflow / dopl_cluster left in the 2026-08-07 retirement; deleted 2026-08-11.)
 const DOPL_WRITE_TOOLS = ['mcp__dopl__dopl_kb', 'mcp__dopl__dopl_skill',
   'mcp__dopl__dopl_ontology', 'mcp__dopl__dopl_chats'];
 const DOPL_READ_TOOLS = DOPL_SAFE_TOOLS

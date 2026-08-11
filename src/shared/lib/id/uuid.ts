@@ -1,6 +1,6 @@
 /**
  * Loose UUID test used to disambiguate "id or slug" references at
- * service resolution points (skills, clusters, workflows). App slugs
+ * service resolution points (skills, ontology clusters). App slugs
  * are kebab-case and can never match the 8-4-4-4-12 hex shape.
  */
 const UUID_RE =

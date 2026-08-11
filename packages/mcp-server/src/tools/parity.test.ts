@@ -45,8 +45,6 @@ import {
 // forces a conscious classification — that failure IS the security review
 // for the new op. Human-audit this list against the sources.
 const READ_OPS: Record<string, string[]> = {
-  dopl_cluster: ["list", "get"],
-  dopl_workflow: ["list", "get", "step", "list_trash"],
   dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "search"],
   dopl_skill: ["list", "get", "read", "authoring_guide"],
   dopl_chats: ["list", "get", "folders", "guide"],
@@ -105,8 +103,6 @@ describe("tool capture", () => {
         "dopl_channel",
         "dopl_chats",
         "dopl_chats_admin",
-        "dopl_cluster",
-        "dopl_cluster_admin",
         "dopl_kb",
         "dopl_kb_admin",
         "dopl_map",
@@ -116,8 +112,6 @@ describe("tool capture", () => {
         "dopl_search",
         "dopl_skill",
         "dopl_skill_admin",
-        "dopl_workflow",
-        "dopl_workflow_admin",
       ].sort(),
     );
   });
@@ -127,10 +121,16 @@ describe("tool capture", () => {
     expect(READ_ONLY_BLOCKED_TOOLS.size).toBeGreaterThan(0);
   });
 
-  it("parsed non-empty HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
+  it("parsed the HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
     // A parse that silently returned {} would turn every assertion below into
-    // a vacuous pass, which is the failure mode this whole file exists to avoid.
-    expect(HIDDEN_TOOLS.size).toBeGreaterThan(0);
+    // a vacuous pass, which is the failure mode this whole file exists to
+    // avoid. DELETE_BLOCKED_OPS is checked by SIZE. HIDDEN_TOOLS cannot be:
+    // it is legitimately empty since workflows and clusters were deleted
+    // (2026-08-11), so the parse itself is the assertion — `parseToolSet`
+    // THROWS when the constant is missing or renamed and returns an empty set
+    // only when the table really is empty. `delete-block.test.ts` pins the
+    // emptiness as a value.
+    expect(HIDDEN_TOOLS).toBeInstanceOf(Set);
     expect(Object.keys(DELETE_BLOCKED_OPS).length).toBeGreaterThan(0);
   });
 });

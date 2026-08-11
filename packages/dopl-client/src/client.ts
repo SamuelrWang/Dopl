@@ -14,9 +14,9 @@
  * the same class from the same entry point and call the same methods with the
  * same signatures. See `client-base.ts` for the chain and its ordering rules;
  * the domain method groups are the `client-<domain>.ts` files, and the HTTP
- * itself lives in the free-function modules they delegate to (`clusters.ts`,
- * `workflows.ts`, `workspaces.ts`, `knowledge.ts`, `ontology.ts`, `chats.ts`,
- * `members.ts`, `channel.ts`, `skills.ts`).
+ * itself lives in the free-function modules they delegate to
+ * (`workspaces.ts`, `knowledge.ts`, `ontology.ts`, `chats.ts`, `members.ts`,
+ * `channel.ts`, `skills.ts`).
  *
  * ADD NOTHING TO THIS FILE. A new method belongs in its domain's link — or in
  * a new link, added per the rules in `client-base.ts`. The whole point of the

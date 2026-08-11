@@ -210,11 +210,6 @@ export interface SkillContext {
 
 export type { SourceProvider };
 
-/** Workflows a skill is attached to (detail-page insights). */
-export interface SkillUsedBy {
-  workflows: Array<{ id: string; name: string }>;
-}
-
 /** Agent read activity for a skill, derived from mcp_events. */
 export interface SkillUsage {
   /** MCP reads in the last 30 days (workspace-scoped attribution). */

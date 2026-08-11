@@ -2,6 +2,12 @@
 
 Written 2026-07-06. Owner: Samuel. Status: proposed, not started.
 
+> ⚠ **The table inventory below is a 2026-07-06 capture and has drifted.** The
+> `workflows` group (4 tables) and `clusters` no longer exist — those features
+> were retired 2026-08-07 and DELETED 2026-08-11
+> (`supabase/migrations/20260811120000_drop_workflows_and_clusters.sql`). Re-count
+> before planning against it; the argument the doc makes is unaffected.
+
 ## Why
 
 Authorization today is app code someone must remember to write per service.

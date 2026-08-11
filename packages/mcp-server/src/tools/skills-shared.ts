@@ -3,7 +3,7 @@
  * line, and the error mappers both the read and the write handlers need.
  *
  * Split out of `skills.ts` at the §2 500-line cap when the scope line landed —
- * the same read/shared/write seam `knowledge.ts` and `workflow.ts` already use,
+ * the same read/shared/write seam `knowledge.ts` already uses,
  * chosen because these three helpers are exactly the pieces BOTH sides call
  * (`failureDetail` from op="get"/"read" and from every write; `NO_NAME` from
  * the list rows and from the write confirmations). The `skills-` filename

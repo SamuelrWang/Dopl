@@ -18,21 +18,15 @@ export interface TeamsModeResourceRow {
   createdBy: string | null;
 }
 
-/** Every teams-mode resource in the workspace (live KBs + workflows + skills). */
+/** Every teams-mode resource in the workspace (live KBs + skills). */
 export async function listTeamsModeResources(
   workspaceId: string
 ): Promise<TeamsModeResourceRow[]> {
   const db = supabaseAdmin();
-  const [kbs, wfs, skills] = await Promise.all([
+  const [kbs, skills] = await Promise.all([
     db
       .from("knowledge_bases")
       .select("id, created_by")
-      .eq("workspace_id", workspaceId)
-      .eq("access_mode", "teams")
-      .is("deleted_at", null),
-    db
-      .from("workflows")
-      .select("id, user_id")
       .eq("workspace_id", workspaceId)
       .eq("access_mode", "teams")
       .is("deleted_at", null),
@@ -44,7 +38,6 @@ export async function listTeamsModeResources(
       .is("deleted_at", null),
   ]);
   if (kbs.error) throw kbs.error;
-  if (wfs.error) throw wfs.error;
   if (skills.error) throw skills.error;
   return [
     ...((kbs.data ?? []) as Array<{ id: string; created_by: string | null }>).map(
@@ -52,13 +45,6 @@ export async function listTeamsModeResources(
         resourceType: "knowledge_base" as const,
         resourceId: r.id,
         createdBy: r.created_by,
-      })
-    ),
-    ...((wfs.data ?? []) as Array<{ id: string; user_id: string | null }>).map(
-      (r) => ({
-        resourceType: "workflow" as const,
-        resourceId: r.id,
-        createdBy: r.user_id,
       })
     ),
     ...((skills.data ?? []) as Array<{ id: string; created_by: string | null }>).map(
@@ -71,25 +57,6 @@ export async function listTeamsModeResources(
   ];
 }
 
-/** name + access_mode for a batch of live KBs (invariant checks). */
-export async function listKnowledgeBaseAccessMetas(
-  workspaceId: string,
-  kbIds: string[]
-): Promise<Array<{ id: string; name: string; accessMode: AccessMode }>> {
-  if (kbIds.length === 0) return [];
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("knowledge_bases")
-    .select("id, name, access_mode")
-    .eq("workspace_id", workspaceId)
-    .in("id", kbIds)
-    .is("deleted_at", null);
-  if (error) throw error;
-  return ((data ?? []) as Array<{ id: string; name: string; access_mode: AccessMode }>).map(
-    (r) => ({ id: r.id, name: r.name, accessMode: r.access_mode })
-  );
-}
-
 export interface ResourceAccessMeta {
   name: string;
   accessMode: AccessMode;
@@ -99,22 +66,21 @@ export interface ResourceAccessMeta {
 /**
  * WHERE EACH GRANTABLE RESOURCE TYPE ACTUALLY LIVES.
  *
- * `team_resource_access.resource_id` is polymorphic across FIVE tables, and
+ * `team_resource_access.resource_id` is polymorphic across FOUR tables, and
  * every one of them spells "the name" and "the creator" differently. The two
  * functions below used to decide the table with an inline ternary each —
  * `knowledge_base ? … : workflows` — which silently routed `skill`, `chat` and
- * `chat_folder` into `workflows`. A Supabase `.update()` that matches zero rows
- * returns `{ error: null }`, so the miss did not throw, did not 500, and did
- * not change anything: a skill's scope toggle "succeeded" and reverted on the
- * next refetch.
+ * `chat_folder` into the (since deleted) `workflows` table. A Supabase
+ * `.update()` that matches zero rows returns `{ error: null }`, so the miss did
+ * not throw, did not 500, and did not change anything: a skill's scope toggle
+ * "succeeded" and reverted on the next refetch.
  *
  * `satisfies Record<TeamResourceType, …>` is the load-bearing part — adding a
- * sixth resource type now fails to compile here instead of quietly resolving to
+ * fifth resource type now fails to compile here instead of quietly resolving to
  * the wrong table.
  */
 const RESOURCE_TABLES = {
   knowledge_base: { table: "knowledge_bases", nameCol: "name", creatorCol: "created_by" },
-  workflow: { table: "workflows", nameCol: "name", creatorCol: "user_id" },
   skill: { table: "skills", nameCol: "name", creatorCol: "created_by" },
   chat: { table: "chats", nameCol: "title", creatorCol: "owner_id" },
   chat_folder: { table: "chat_folders", nameCol: "name", creatorCol: "user_id" },

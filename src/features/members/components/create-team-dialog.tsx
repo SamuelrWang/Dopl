@@ -11,8 +11,7 @@ import type { AccessMatrixResource } from "@/features/teams/types";
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { WorkspaceMemberView } from "../types";
 import { DEFAULT_TEAM_COLOR } from "../constants";
-import { TeamAccessConflictError, createTeam } from "../teams-client";
-import type { ConflictState } from "./conflict-dialog";
+import { createTeam } from "../teams-client";
 import { Avatar } from "./member-bits";
 import { AccessLevelControl, ColorSwatchPicker } from "./team-bits";
 
@@ -24,7 +23,6 @@ interface Props {
   resources: AccessMatrixResource[];
   currentUserId: string;
   onCreated: () => void;
-  openConflict: (conflict: ConflictState) => void;
 }
 
 /**
@@ -41,7 +39,6 @@ export function CreateTeamDialog({
   resources,
   currentUserId,
   onCreated,
-  openConflict,
 }: Props) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(DEFAULT_TEAM_COLOR);
@@ -81,7 +78,7 @@ export function CreateTeamDialog({
     });
   }
 
-  async function submit(autoGrant: boolean) {
+  async function submit() {
     const trimmed = name.trim();
     if (!trimmed) {
       setError("Team name required");
@@ -103,21 +100,11 @@ export function CreateTeamDialog({
           ];
           return { resourceType, resourceId, level };
         }),
-        autoGrant: autoGrant || undefined,
       });
       reset();
       onOpenChange(false);
       onCreated();
     } catch (err) {
-      if (err instanceof TeamAccessConflictError) {
-        openConflict({
-          details: err.details,
-          retry: async () => {
-            await submit(true);
-          },
-        });
-        return;
-      }
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
@@ -226,7 +213,7 @@ export function CreateTeamDialog({
         <div className="flex flex-col gap-1.5 pt-1">
           <button
             type="button"
-            onClick={() => void submit(false)}
+            onClick={() => void submit()}
             disabled={submitting || name.trim() === ""}
             className="h-10 rounded-md bg-accent-primary text-accent-on text-body font-medium hover:bg-accent-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >

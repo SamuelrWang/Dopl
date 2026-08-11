@@ -60,7 +60,7 @@ export function pruneLayout(
  * SHALLOW-MERGES per node id over the current layout, so two tabs each
  * dragging a different card don't clobber each other (the `layout` column is
  * one blob, so a partial write must fold in the untouched nodes here). Shared
- * by the ontology repository + workflows service so the merge-except-empty
+ * by the ontology repository so the merge-except-empty
  * semantic is defined once.
  */
 export function mergeStoredLayout(

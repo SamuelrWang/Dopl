@@ -64,7 +64,6 @@ export interface WorkspaceWithRole extends Workspace {
  * `GET /api/workspaces/[workspaceSlug]/overview-counts` (the SPA's twin).
  */
 export interface WorkspaceOverviewCounts {
-  workflows: number;
   knowledgeBases: number;
   skills: number;
   members: number;

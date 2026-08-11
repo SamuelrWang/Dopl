@@ -1,5 +1,5 @@
 /**
- * Members / teams / access method group (READ-ONLY) — link 8 of the chain
+ * Members / teams / access method group (READ-ONLY) — link 6 of the chain
  * documented in `client-base.ts`. Pure delegation to `members.ts`; no HTTP
  * here.
  *

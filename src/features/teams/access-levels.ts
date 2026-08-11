@@ -13,7 +13,6 @@ import type { Role } from "@/features/workspaces/types";
 export type AccessLevel = "read" | "edit";
 export type TeamResourceType =
   | "knowledge_base"
-  | "workflow"
   | "chat"
   | "chat_folder"
   | "skill";
@@ -43,13 +42,20 @@ export function capLevel(level: AccessLevel, ceiling: AccessLevel): AccessLevel 
 /* ------------------------ retired resource types ------------------------ */
 
 /**
- * D7 (retirement, 2026-08-07) — `workflow` is no longer a resource type any
- * human-facing surface may render.
+ * THE CONTAINMENT FLOOR FOR A GRANT ROW WHOSE FEATURE NO LONGER EXISTS.
  *
- * THE ROWS DO NOT COME FROM US. The grants stay valid in the database and the
- * server keeps emitting them (D7: "Existing grant rows stay valid in the DB
- * (harmless); nothing renders them"). This is a RENDER filter, applied where a
- * payload enters the UI — so un-retiring is deleting one string, here.
+ * `workflow` was hidden on 2026-08-07 (D7) and the feature was DELETED on
+ * 2026-08-11 — tables, routes, types, the resource-table map, the lot. Nothing
+ * in this tree can emit a `workflow` row any more, and `TeamResourceType` no
+ * longer names one.
+ *
+ * THE SET STAYS ANYWAY, and that is the point: the rows do not come from us.
+ * `team_resource_grants.resource_type` still ACCEPTS `'workflow'` (the CHECK
+ * constraint deliberately kept the value — see
+ * `supabase/migrations/20260811120000_drop_workflows_and_clusters.sql`), so a
+ * surviving or replayed row reaches a payload without passing any code we
+ * deleted. This is a RENDER filter applied where a payload enters the UI; it
+ * costs one string and it fails safe.
  *
  * The MCP package holds the mirror of this predicate
  * (`packages/mcp-server/src/tools/members-render.ts`); it cannot import from

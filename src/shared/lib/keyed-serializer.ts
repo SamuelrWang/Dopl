@@ -7,7 +7,7 @@
  * `run` calls are made synchronously (the case a bare promise race loses).
  * Distinct keys are independent: they neither order nor block one another.
  *
- * Used to order rapid connect/disconnect on the SAME workflow edge: the
+ * Used to order rapid connect/disconnect on the SAME graph edge: the
  * DELETE can no longer overtake the POST by racing on network timing,
  * because it only issues once the POST's op has settled.
  *

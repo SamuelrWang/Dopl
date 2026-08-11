@@ -205,7 +205,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
   - ~~(4) F-22 unknown-param rejection deferred~~ — **RESOLVED.** `strictInput()` at **`packages/mcp-server/src/registrar.ts:95`, applied at both registration helpers (`:274`, `:306`) — it was `server.ts:370-372/:883/:907` before the 2026-08-08 split**; an unknown key is now `-32602` naming the field. The SDK-strips-unknown-args reasoning this item recorded is out of date.
 - **Still open:**
   1. **`proxy.ts` may not be wired as Next middleware.** Re-confirmed 2026-08-08: `src/proxy.ts` exists and there is no `src/middleware.ts`. It IS active (Next 16 renamed `middleware.ts` → `proxy.ts`, and the build manifest lists `ƒ Proxy (Middleware)`) — this item survives only as the warning that a search for the OLD name finds nothing and reports "this project has no middleware layer", which is exactly the mistake F-158 records a hosting audit making.
-  5. **F-24 cluster name casing (JUDGMENT).** `normalizeClusterName` (`src/shared/lib/cluster-name.ts:14`, called at `src/features/clusters/server/service.ts:186,240`) forces UPPER_SNAKE. It was load-bearing for the canvas tab — which is retired — so the reason this was KEPT is now gone; revisit if clusters should preserve casing.
+  5. ~~**F-24 cluster name casing (JUDGMENT).**~~ — **MOOT (2026-08-11).** `normalizeClusterName` forced UPPER_SNAKE for the canvas tab; `src/shared/lib/cluster-name.ts` and its only caller `src/features/clusters/server/service.ts` were both deleted with the clusters feature. Ontology clusters are a different type and were never subject to this rule.
   6. **By-id lookups reveal cross-workspace existence.** `assertSameWorkspace` (`src/features/knowledge/server/service-entries.ts:55,105,183`, `path.ts:105`) throws a mismatch error rather than a generic 404 (info oracle; no data crosses).
   7. **Seeded starter skills are read-only to agents** (`src/features/skills/server/service-seed.ts:41` `agentWriteEnabled: false`). Behaviour to confirm, not a bug — flip the seed if agents should edit starter skills.
 - Status: open (follow-ups tracked)
@@ -991,15 +991,17 @@ COMMIT;
 
 ---
 
-## F-182 — An `autoGrant` retry writes grants on OTHER teams, whose members' access panes are never invalidated
+## F-182 — ✅ RESOLVED BY DELETION (2026-08-11) — an `autoGrant` retry wrote grants on OTHER teams, whose members' access panes were never invalidated
 
-- Location: `src/features/members/hooks/use-access-writes.ts:90-108` — `invalidate` adds `teamsKey` when `draft.autoGrant`, then enumerates `draft.memberIds` (this team's members only)
+⛔ **CLOSED, AND NOT BY A FIX.** `autoGrant` existed only to resolve the workflow↔KB invariant, and that invariant (`src/features/teams/server/invariant.ts`) was deleted with workflows on 2026-08-11. The flag is gone from the schema, both routes, `GrantDraft` / `ResourceScopeDraft` and the mutation configs; `TEAM_KB_ACCESS_CONFLICT` has no producer left, so the retry path this finding describes cannot be entered. **No code writes grants on another team any more, so there are no other teams' panes to invalidate.** The class of bug survives and F-181 (predicate invalidation) is still the general answer — this instance simply has no site.
+
+- Location (historical): `src/features/members/hooks/use-access-writes.ts` — `invalidate` added `teamsKey` when `draft.autoGrant`, then enumerated `draft.memberIds` (this team's members only)
 - Found during: adversarial review of the members conversion
 - Severity: smell
 - Description: the config's own comment states the mechanism and stops one step short of the consequence: *"an autoGrant asks the SERVER to write additional grants on OTHER teams to satisfy the KB invariant, and those are the rows no client can guess."* It invalidates the teams cache for that reason — but the rows the server wrote belong to members of the CONFLICT teams, and `draft.memberIds` is the acting team's roster. Those members' `…/members/<id>/access` panes keep rendering the pre-grant answer until something else refreshes them, and the pane does not unmount.
-- **Narrow but real:** it needs an admin to take the `TEAM_KB_ACCESS_CONFLICT` retry path (`teams/server/errors.ts:17-20`), and the stale pane is under-stated rather than wrong-in-the-dangerous-direction. Recorded because it is the same class as the per-item-key rule and the acting agent explicitly reasoned about the *other* half of it.
-- Proposed resolution: fix-now once F-181 lands — a predicate invalidation over `…/members/*/access` covers this case for free. Until then, return the affected member ids in the autoGrant response and enumerate them.
-- Status: open
+- **Narrow but real (while it existed):** it needed an admin to take the `TEAM_KB_ACCESS_CONFLICT` retry path, and the stale pane was under-stated rather than wrong-in-the-dangerous-direction. Recorded because it is the same class as the per-item-key rule and the acting agent explicitly reasoned about the *other* half of it.
+- Proposed resolution (superseded): fix once F-181 lands — a predicate invalidation over `…/members/*/access` would have covered it for free.
+- Status: resolved by deletion (2026-08-11)
 
 ---
 

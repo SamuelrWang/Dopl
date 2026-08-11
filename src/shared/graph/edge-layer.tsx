@@ -137,7 +137,7 @@ const FALLBACK_STYLE: EdgeStyle = { stroke: "var(--text-muted)", width: 1.5 };
  * World-space SVG under the node cards. Orthogonal edges (straight
  * segments, rounded elbows) styled per kind by the caller-supplied
  * `styles` map; label pills are HTML siblings so they pick up the kit
- * type tokens. Domain-agnostic: the ontology graph and the workflow
+ * type tokens. Domain-agnostic: the ontology graph and any future
  * graph pass their own styles + markers.
  */
 export function EdgeLayer({ edges, rects, focusId, styles, defaultStyle, markers }: Props) {

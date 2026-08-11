@@ -28,7 +28,7 @@
 // Run: `node --test dopl-desktop-app/test/ui-sync-tables.test.mjs`
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, fnOf } from "./helpers/source-probe.mjs";
@@ -266,29 +266,25 @@ test("nothing is published that no consumer binds", () => {
 // pass. So `PUB.dropped` is proof the table left the PUBLICATION and is NOT proof the
 // table is gone. What proves each one still stands is that server code still reads it
 // — which is also the reason each was kept, so the pin and the justification are the
-// same fact. (`clusters` predates this migration directory entirely: there is no
-// CREATE TABLE for it anywhere, so `createBody` cannot be that evidence.)
+// same fact.
 //
 // The value is the FEATURE that reads the table, not a file inside it. A file path was
 // the first cut and it broke on the first refactor that touched no realtime wiring at
-// all: deleting the orphaned `listTrashedWorkflows` / `purgeWorkflow` helpers moved the
-// `workflows` reads out of `server/repository.ts` into `server/service.ts`, and this
-// suite reported a pure code move as "the TABLE is now droppable". Feature ownership is
-// the stable fact — a read moving between one feature's own server modules is a
-// refactor, a read LEAVING the feature (or vanishing) is the change worth failing on.
+// all: moving the `workflows` reads between two of that feature's own server modules
+// made this suite report a pure code move as "the TABLE is now droppable". Feature
+// ownership is the stable fact — a read moving between one feature's own server modules
+// is a refactor, a read LEAVING the feature (or vanishing) is the change worth failing
+// on.
+//
+// ONE ENTRY LEFT. `clusters` and the five `workflow_*` names sat here from 2026-08-07,
+// un-published but still read. On 2026-08-11 the answer this pin demands came back
+// "nothing reads them" for real, and the map's own instruction was followed rather than
+// weakened: the tables were DROPPED (20260811120000) and the features deleted in the
+// same commit. Their assertions moved to the drop test below, which is a stronger claim.
 const STILL_READ_BY = {
   // 20260807000000 — unbound by attrition: the subscriber was deleted and the
   // publication entry was simply never cleaned up after it.
   channel_agents: "channels", // author attribution (server/repository-agents.ts)
-  clusters: "clusters", // cluster CRUD (server/service.ts)
-  // 20260807100000 — unbound BY DECISION: the workflows retirement
-  // (RETIREMENT-UNWIRING-PLAN.md Phase 5 / D8). Hidden, not deleted — every one of these
-  // is still read and written by the server through the API routes left functional (D3).
-  workflows: "workflows",
-  workflow_steps: "workflows",
-  workflow_step_edges: "workflows",
-  workflow_knowledge_bases: "workflows",
-  workflow_skills: "workflows",
 };
 
 /**
@@ -305,19 +301,11 @@ function serverReadersOf(feature, table) {
   );
 }
 
-// The five names 20260807100000 removed, kept apart from the map above so the pairing
-// assertion can name them as a set and the retirement's own reversal is one edit.
-const RETIRED_WORKFLOW_PUB = Object.freeze([
-  "workflows", "workflow_steps", "workflow_step_edges",
-  "workflow_knowledge_bases", "workflow_skills",
-]);
-
 test("every deliberately un-published table stays un-published, and its TABLE stands", () => {
-  // Each of these was bound once — channel_agents by the deleted agent-chips hook,
-  // clusters by the deleted legacy canvas, the five workflow tables by the retired
-  // workflows page — so each has a real ADD in the history and the DROP is what makes it
-  // absent, not an oversight. That is what `PUB.added` proves before anything else: a name
-  // that was never published would make this whole pin measure nothing.
+  // `channel_agents` was bound once, by the deleted agent-chips hook, so it has a real ADD
+  // in the history and the DROP is what makes it absent, not an oversight. That is what
+  // `PUB.added` proves before anything else: a name that was never published would make
+  // this whole pin measure nothing.
   for (const t of Object.keys(STILL_READ_BY)) {
     assert.ok(PUB.added.has(t), `${t} was never published — this pin measures nothing`);
     assert.ok(!PUB.current.has(t), `${t} is published again with no subscriber`);
@@ -331,29 +319,66 @@ test("every deliberately un-published table stays un-published, and its TABLE st
   }
 });
 
-test("the workflow retirement un-wired BOTH halves, and neither can come back alone", () => {
-  // R4. The two halves are `20260807100000_drop_workflow_tables_from_realtime.sql` and the
-  // removal of these names from SYNC_TABLES + the WORKFLOW_TABLES literal in
-  // src/features/workflows/client/realtime.ts. Un-publishing is not a table drop: a binding
-  // on an unpublished table is ACCEPTED, the channel reports SUBSCRIBED, and no event ever
-  // arrives — so a half-revert has no symptom until someone notices a stale page.
+// ── THE TABLES THAT WERE ACTUALLY DROPPED ──────────────────────────────────
+
+// The six names 20260811120000 dropped: the five `workflow_*` tables that
+// 20260807100000 un-published, plus `clusters`, the container that only ever held
+// workflows. Un-publishing was step one and this is step two, so the pairing rule the
+// retirement test used to enforce ("neither half can come back alone") is now a stronger
+// one — there is no half left to come back to.
+const DROPPED_TABLES = Object.freeze([
+  "workflows", "workflow_steps", "workflow_step_edges",
+  "workflow_knowledge_bases", "workflow_skills", "clusters",
+]);
+
+/**
+ * Tables a BARE `DROP TABLE` really removed — NOT `PUB.dropped`, which is an ever-set
+ * whose bare-DROP pass also swallows the tail of every `ALTER PUBLICATION … DROP TABLE
+ * public.x` and so says "dropped" about a table that was merely un-published. Every name
+ * below was un-published on 2026-08-07, so `PUB.dropped` has said `true` about all six
+ * since then: asserting on it here would have been a vacuous pass measuring nothing,
+ * which is the exact failure this file's header warns about twice. The alternation is
+ * the same discriminator `currentPublication` uses — it consumes the ALTER PUBLICATION
+ * form first, so only a standalone statement reaches the capture.
+ */
+function bareDroppedTables() {
+  const RE = /(ALTER PUBLICATION supabase_realtime DROP TABLE|DROP TABLE) (?:IF EXISTS )?(?:public\.)?(\w+)/g;
+  const out = new Set();
+  for (const m of PUB.sql.matchAll(RE)) if (m[1] === "DROP TABLE") out.add(m[2]);
+  return out;
+}
+
+test("the dropped tables are gone from the schema, the feed, and the tree", () => {
+  // R4, rewritten down when the feature was deleted (2026-08-11). It used to assert the
+  // two halves of the 2026-08-07 UN-PUBLISH: the migration, and the removal of these
+  // names from SYNC_TABLES + the feature's own `WORKFLOW_TABLES` literal. Both of those
+  // reads went through files that no longer exist, and the failure mode they guarded is
+  // subsumed: a binding on a DROPPED table is refused outright, which kills the whole
+  // channel — louder than the un-published case, where the channel reports SUBSCRIBED and
+  // silently delivers nothing.
   const watched = featureWatchedTables();
-  for (const t of RETIRED_WORKFLOW_PUB) {
-    assert.ok(!PUB.current.has(t), `${t} is back in supabase_realtime — re-publishing is `
-      + "only correct if a subscriber ships in the SAME release");
+  const bareDropped = bareDroppedTables();
+  assert.ok(bareDropped.has("skill_files"),
+    "the bare-DROP discriminator has stopped working — it must still see the "
+    + "20260716064733 drop it was written for");
+  assert.ok(!bareDropped.has("channel_agents"),
+    "the bare-DROP discriminator now matches an ALTER PUBLICATION tail — channel_agents "
+    + "was only UN-PUBLISHED and its table still stands");
+  for (const t of DROPPED_TABLES) {
+    assert.ok(bareDropped.has(t), `${t} has no bare DROP TABLE in supabase/migrations — `
+      + "the drop migration is missing, or it was written as an ALTER PUBLICATION only");
+    assert.ok(!PUB.current.has(t), `${t} is in supabase_realtime with no table behind it`);
+    assert.ok(!SYNC_TABLES.includes(t), `${t} is bound by main but the table is dropped — `
+      + "one refused binding refuses the WHOLE channel");
+    assert.ok(!LISTENER_BOUND.includes(t), `${t} is bound by realtime.js but is dropped`);
     assert.ok(!watched.has(t), `${t} is hook-watched again (${watched.get(t)}) but the `
-      + "publication drop still stands — that channel will go SUBSCRIBED and deliver nothing");
-    assert.ok(!SYNC_TABLES.includes(t), `${t} is bound by main again with no publication`);
+      + "table no longer exists");
   }
-  // Not just absent from the list — absent from the WIRING. A `useWorkflowsRealtime` that
-  // still calls the shared hook would re-open a per-mount channel on unpublished tables.
-  const hookSrc = readFileSync(join(HERE, "..", "..", "src", "features", "workflows",
-    "client", "realtime.ts"), "utf8");
-  assert.doesNotMatch(hookSrc, /useWorkspaceTablesRealtime\s*\(/,
-    "useWorkflowsRealtime subscribes again — it must stay inert while the tables are "
-    + "out of supabase_realtime");
-  const callerSrc = readFileSync(join(HERE, "..", "..", "src", "features", "workflows",
-    "hooks", "use-workflows.ts"), "utf8");
-  assert.doesNotMatch(callerSrc, /^\s*useWorkflowsRealtime\(/m,
-    "use-workflows.ts calls useWorkflowsRealtime again — remove it or ship the re-publish");
+  // NO TREE LEFT TO REGROW FROM. The features were deleted in the same commit as the
+  // migration; a directory reappearing is the signal that someone reverted one half.
+  for (const feat of ["workflows", "clusters"]) {
+    assert.ok(!existsSync(join(HERE, "..", "..", "src", "features", feat)),
+      `src/features/${feat} is back but its tables are dropped — restore the migration `
+      + "in the SAME change or the feature 500s on its first query");
+  }
 });

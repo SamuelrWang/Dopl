@@ -17,7 +17,8 @@
  *       (repo returns null) surfaces the conflict.
  *
  *   (5) deleteSkill is a PERMANENT hard delete (2026-08-07) and narrowing a
- *       skill's sharing is no longer blocked by workflow attachments.
+ *       skill's sharing is blocked by nothing — no attachment check remains
+ *       on the write path.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -31,7 +32,6 @@ vi.mock("./repository", () => ({
   updateSkillBody: vi.fn(),
   updateSkillRow: vi.fn(),
   listSlugsForWorkspace: vi.fn(),
-  listSkillUsedBy: vi.fn(),
   hardDeleteSkill: vi.fn(),
 }));
 
@@ -333,32 +333,26 @@ describe("deleteSkill — permanent delete", () => {
   });
 });
 
-// ── (5b) Narrowing is no longer blocked by workflow attachments ──────
+// ── (5b) Narrowing is blocked by nothing ────────────────────────────
 //
 // `updateSkill` used to 409 SKILL_ATTACHED_TO_WORKFLOWS when a narrowing
-// (public→private, or public→teams) hit a skill referenced by a workflow. With
-// workflows retired and invisible the user had no surface on which to detach
-// anything, so the error named a feature they cannot see and offered a remedy
-// they cannot perform. The check short-circuits; the `workflow_skills` rows are
-// untouched.
+// (public→private, or public→teams) hit a skill an attached resource depended
+// on. That check was short-circuited on 2026-08-07 and its whole subject was
+// deleted on 2026-08-11. The assertion that survives is the one that matters
+// to a user: a privacy narrowing APPLIES, and it does so in one write.
 
-describe("updateSkill sharing narrowing — attachments no longer block", () => {
-  it("narrows to private even when the skill is attached to workflows", async () => {
+describe("updateSkill sharing narrowing — nothing blocks it", () => {
+  it("narrows a workspace-public skill to private in one write", async () => {
     mockRepo.findSkillBySlug.mockResolvedValue(
       skill({ id: "s-1", visibility: "public", accessMode: "workspace" })
     );
     mockRepo.updateSkillRow.mockResolvedValue(
       skill({ id: "s-1", visibility: "private" })
     );
-    mockRepo.listSkillUsedBy.mockResolvedValue({
-      workflows: [{ id: "w-1", name: "Workspace upkeep" }],
-    });
 
     const saved = await updateSkill(ctx(), "skill-x", { visibility: "private" });
 
     expect(saved.visibility).toBe("private");
     expect(mockRepo.updateSkillRow).toHaveBeenCalledTimes(1);
-    // The attachment lookup isn't even consulted on the write path any more.
-    expect(mockRepo.listSkillUsedBy).not.toHaveBeenCalled();
   });
 });

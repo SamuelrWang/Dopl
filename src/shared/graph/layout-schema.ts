@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Zod validation for a persisted graph `layout` (the draggable-node
- * positions both the ontology cluster PATCH and the workflow PATCH
+ * positions the ontology cluster PATCH
  * accept). Shape: `{ [nodeId]: { x, y } }` with finite, bounded
  * coordinates. Shared so both routes validate identically.
  *

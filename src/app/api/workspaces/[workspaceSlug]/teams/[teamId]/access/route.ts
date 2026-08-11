@@ -33,9 +33,7 @@ export const GET = withUserAuth(
 
 /**
  * PUT /api/workspaces/[workspaceSlug]/teams/[teamId]/access — set or remove
- * one grant. `level: null` removes. Admin+ only. May return 409
- * TEAM_KB_ACCESS_CONFLICT; retry with `autoGrant: true` to auto-create the
- * missing read grants where resolvable.
+ * one grant. `level: null` removes. Admin+ only.
  */
 export const PUT = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
@@ -60,8 +58,7 @@ export const PUT = withUserAuth(
           params.teamId,
           input.resourceType,
           input.resourceId,
-          input.level,
-          { autoGrant: input.autoGrant }
+          input.level
         );
       }
       return NextResponse.json({ ok: true });

@@ -16,8 +16,6 @@
  *
  *   DoplClientBase        (here)
  *     → WorkspaceMethods  client-workspaces.ts
- *     → ClusterMethods    client-clusters.ts
- *     → WorkflowMethods   client-workflows.ts
  *     → KnowledgeMethods  client-knowledge.ts
  *     → OntologyMethods   client-ontology.ts
  *     → ChatMethods       client-chats.ts

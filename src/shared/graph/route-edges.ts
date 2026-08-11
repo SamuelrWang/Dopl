@@ -14,7 +14,7 @@ import type { EdgeSide, NodeRect, Point, SceneEdge } from "./types";
  *
  * Pure and deterministic (stable in input edge order) so it unit-tests
  * without a DOM. Replaces the per-feature side/mid guessing the ontology
- * and workflow layouts used to do.
+ * layouts used to do.
  */
 
 export interface RouteOptions {

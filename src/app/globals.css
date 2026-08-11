@@ -753,16 +753,19 @@ html {
     0 3px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* Dotted graph substrate — the recessed world surface the ontology and
-   workflow graphs lay their node cards on. One definition; both features
-   (and their skeletons) compose it over a `bg-bg-inset` recessed viewport. */
+/* Dotted graph substrate — the recessed world surface a graph lays its node
+   cards on. ⚠ NO CURRENT CONSUMER: the ontology graph view and the workflow
+   graph were both deleted on 2026-08-11. Kept with `.graph-node-*` and
+   `.graph-port` as one coherent recipe set for the next graph surface —
+   delete the group or none of it. */
 .graph-substrate {
   background-image: radial-gradient(rgba(35, 42, 49, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 /* Graph node card surfaces — the resting / selected / drop-target elevation
-   recipes shared by the ontology object cards and the workflow step cards.
+   recipes (last used by the ontology object cards and the workflow step cards,
+   both deleted 2026-08-11).
    The card shell (layout, radius, border WIDTH, bg-elevated) stays in the
    component; these set the border COLOR + double-shadow per state. Defined
    before `.graph-node-lift` so that class (same layer) wins while dragging. */
@@ -800,7 +803,8 @@ html {
 }
 
 /* Connection port — a small raised handle sitting on a graph node's edge
-   that a drag-to-connect gesture starts from (workflow graph). A white
+   that a drag-to-connect gesture starts from (last used by the workflow
+   graph, deleted 2026-08-11). A white
    raised dot with a hairline ring; it scales up on hover and while a
    connect-drag is live (driven by `data-active`). One kit recipe; the
    feature toggles visibility with opacity utilities. */

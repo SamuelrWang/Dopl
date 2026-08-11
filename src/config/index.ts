@@ -56,7 +56,7 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
 ]);
 
 // ── Descriptor convention ───────────────────────────────────────────
-// Agent-facing descriptions (knowledge entries/folders, workflow
+// Agent-facing descriptions (knowledge entries/folders, ontology
 // clusters) are capped at 300 chars: long enough for a useful preview,
 // short enough that the MCP listings they stream into stay lean.
 export const DESCRIPTION_MAX = 300;

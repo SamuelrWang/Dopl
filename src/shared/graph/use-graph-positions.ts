@@ -37,7 +37,7 @@ export interface UseGraphPositions {
 
 /**
  * The hybrid-layout resolver + persistence bridge shared by the ontology
- * and workflow graphs. It merges the domain auto-layout with the user's
+ * graphs. It merges the domain auto-layout with the user's
  * dragged positions (stored wins per node), exposes `moveNode` for
  * optimistic drags, and debounces the server write through the shared
  * merge-scheduler (flush-on-unmount, so a drag inside the window survives

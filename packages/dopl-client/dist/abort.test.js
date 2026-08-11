@@ -111,7 +111,7 @@ function pendingUntilAborted(signal) {
         const external = new AbortController();
         external.abort();
         const client = new client_js_1.DoplClient(BASE, "k", { signal: external.signal });
-        await (0, vitest_1.expect)(client.listClusters()).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
+        await (0, vitest_1.expect)(client.listWorkspaces()).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
         (0, vitest_1.expect)(stub.calls).toBe(0);
     });
     (0, vitest_1.it)("an abort mid-flight raises DoplAbortError, not DoplTimeoutError", async () => {
@@ -123,13 +123,13 @@ function pendingUntilAborted(signal) {
             return pendingUntilAborted(signal);
         });
         const client = new client_js_1.DoplClient(BASE, "k", { signal: external.signal });
-        const err = await client.listClusters().catch((e) => e);
+        const err = await client.listWorkspaces().catch((e) => e);
         (0, vitest_1.expect)(err).toBeInstanceOf(errors_js_1.DoplAbortError);
         (0, vitest_1.expect)(err).not.toBeInstanceOf(errors_js_1.DoplTimeoutError);
         (0, vitest_1.expect)(String(err.message)).toContain("aborted by the caller");
     });
     (0, vitest_1.it)("spends NO retry budget after an abort, on a retriable GET", async () => {
-        // The load-bearing count. listClusters is a GET, so the retry budget is
+        // The load-bearing count. listWorkspaces is a GET, so the retry budget is
         // live; before the fix a mid-hold abort burned every remaining attempt
         // (each with a backoff sleep) against a caller that had already gone.
         const external = new AbortController();
@@ -138,7 +138,7 @@ function pendingUntilAborted(signal) {
             return pendingUntilAborted(signal);
         });
         const client = new client_js_1.DoplClient(BASE, "k", { signal: external.signal });
-        await (0, vitest_1.expect)(client.listClusters()).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
+        await (0, vitest_1.expect)(client.listWorkspaces()).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
         (0, vitest_1.expect)(stub.calls).toBe(1);
     });
     (0, vitest_1.it)("a per-call signal aborts one request without touching the transport", async () => {
@@ -148,17 +148,17 @@ function pendingUntilAborted(signal) {
             return pendingUntilAborted(signal);
         });
         const transport = new transport_js_1.DoplTransport(BASE, "k");
-        await (0, vitest_1.expect)(transport.request("/api/clusters", { signal: perCall.signal })).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
+        await (0, vitest_1.expect)(transport.request("/api/workspaces", { signal: perCall.signal })).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
         (0, vitest_1.expect)(stub.calls).toBe(1);
     });
     (0, vitest_1.it)("leaves NO listener on the caller's signal after a completed request", async () => {
         // A 215s await hold links the SAME Request.signal once per poll. Without
         // teardown those accumulate for the life of the function.
-        stub = stubFetch(async () => new Response(JSON.stringify({ clusters: [] }), { status: 200 }));
+        stub = stubFetch(async () => new Response(JSON.stringify({ workspaces: [] }), { status: 200 }));
         const external = new AbortController();
         const client = new client_js_1.DoplClient(BASE, "k", { signal: external.signal });
         for (let i = 0; i < 5; i++)
-            await client.listClusters();
+            await client.listWorkspaces();
         (0, vitest_1.expect)((0, node_events_1.getEventListeners)(external.signal, "abort")).toHaveLength(0);
     });
     (0, vitest_1.it)("refuses to START a mutation once the caller is gone", async () => {
@@ -166,7 +166,7 @@ function pendingUntilAborted(signal) {
         const external = new AbortController();
         external.abort();
         const client = new client_js_1.DoplClient(BASE, "k", { signal: external.signal });
-        await (0, vitest_1.expect)(client.createCluster("x")).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
+        await (0, vitest_1.expect)(client.createOntologyCluster({ name: "x" })).rejects.toBeInstanceOf(errors_js_1.DoplAbortError);
         (0, vitest_1.expect)(stub.calls).toBe(0);
     });
     (0, vitest_1.it)("does NOT interrupt a mutation that is already on the wire", async () => {
@@ -179,10 +179,10 @@ function pendingUntilAborted(signal) {
             signalSeenByFetch = signal;
             external.abort();
             await new Promise((r) => setTimeout(r, 5));
-            return new Response(JSON.stringify({ id: "c1" }), { status: 200 });
+            return new Response(JSON.stringify({ cluster: { id: "c1" } }), { status: 200 });
         });
         const client = new client_js_1.DoplClient(BASE, "k", { signal: external.signal });
-        await (0, vitest_1.expect)(client.createCluster("x")).resolves.toEqual({ id: "c1" });
+        await (0, vitest_1.expect)(client.createOntologyCluster({ name: "x" })).resolves.toEqual({ id: "c1" });
         (0, vitest_1.expect)(signalSeenByFetch?.aborted).toBe(false);
     });
     (0, vitest_1.it)("an unset signal changes nothing — timeouts still read as timeouts", async () => {
@@ -190,7 +190,7 @@ function pendingUntilAborted(signal) {
             throw new DOMException("aborted", "AbortError");
         });
         const client = new client_js_1.DoplClient(BASE, "k");
-        const err = await client.createCluster("x").catch((e) => e);
+        const err = await client.createOntologyCluster({ name: "x" }).catch((e) => e);
         (0, vitest_1.expect)(err).toBeInstanceOf(errors_js_1.DoplTimeoutError);
         (0, vitest_1.expect)(err).not.toBeInstanceOf(errors_js_1.DoplAbortError);
     });

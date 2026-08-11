@@ -150,40 +150,6 @@ async function main() {
       else fail("User 2 can only see own canvas panels", `got ${u2Panels?.length} panels`);
     }
 
-    // ── Test 3: Clusters RLS ──
-    console.log("\n── Test 3: Clusters RLS ──");
-
-    // Create a global cluster (user_id = NULL)
-    const { data: globalCluster } = await admin
-      .from("clusters")
-      .insert({ slug: `global-test-${Date.now()}`, name: "Global Test Cluster" })
-      .select()
-      .single();
-
-    // Create a user-scoped cluster for user 1
-    const { data: u1Cluster } = await admin
-      .from("clusters")
-      .insert({ slug: `user1-test-${Date.now()}`, name: "User 1 Cluster", user_id: user1Id })
-      .select()
-      .single();
-
-    // Create a user-scoped cluster for user 2
-    const { data: u2Cluster } = await admin
-      .from("clusters")
-      .insert({ slug: `user2-test-${Date.now()}`, name: "User 2 Cluster", user_id: user2Id })
-      .select()
-      .single();
-
-    // User 1 should see global + own cluster, NOT user 2's cluster
-    const { data: u1Clusters } = await s1.client.from("clusters").select("*");
-    const u1Ids = new Set(u1Clusters?.map((c) => c.id));
-    if (globalCluster && u1Ids.has(globalCluster.id)) ok("User 1 can see global clusters");
-    else fail("User 1 can see global clusters");
-    if (u1Cluster && u1Ids.has(u1Cluster.id)) ok("User 1 can see own clusters");
-    else fail("User 1 can see own clusters");
-    if (u2Cluster && !u1Ids.has(u2Cluster.id)) ok("User 1 cannot see User 2's clusters");
-    else fail("User 1 cannot see User 2's clusters");
-
     // ── Test 5: Entries are readable by all authenticated users ──
     console.log("\n── Test 5: Shared tables (entries, sources, chunks, tags) ──");
 
@@ -233,9 +199,8 @@ async function main() {
     // Check user 1's data exists before deletion
     const { data: preProfile } = await admin.from("profiles").select("id").eq("id", user1Id);
     const { data: prePanels } = await admin.from("canvas_panels").select("id").eq("user_id", user1Id);
-    const { data: preClusters } = await admin.from("clusters").select("id").eq("user_id", user1Id);
 
-    console.log(`  Pre-delete: ${preProfile?.length} profiles, ${prePanels?.length} panels, ${preClusters?.length} clusters`);
+    console.log(`  Pre-delete: ${preProfile?.length} profiles, ${prePanels?.length} panels`);
 
     // Set ingested_by on test entry to user 1
     if (testEntry) {
@@ -256,24 +221,12 @@ async function main() {
     if (!postPanels || postPanels.length === 0) ok("Canvas panels deleted on user deletion");
     else fail("Canvas panels deleted on user deletion", `${postPanels.length} rows remain`);
 
-    // Verify cascade: user clusters deleted
-    const { data: postClusters } = await admin.from("clusters").select("id").eq("user_id", user1Id);
-    if (!postClusters || postClusters.length === 0) ok("User clusters deleted on user deletion");
-    else fail("User clusters deleted on user deletion", `${postClusters.length} rows remain`);
-
     // Verify: entries preserved (ingested_by set to NULL)
     if (testEntry) {
       const { data: postEntry } = await admin.from("entries").select("id, ingested_by").eq("id", testEntry.id).single();
       if (postEntry && postEntry.ingested_by === null) ok("Entry preserved with ingested_by = NULL");
       else if (postEntry) fail("Entry ingested_by should be NULL", `got ${postEntry.ingested_by}`);
       else fail("Entry should still exist after user deletion");
-    }
-
-    // Verify: global cluster still exists
-    if (globalCluster) {
-      const { data: postGlobal } = await admin.from("clusters").select("id").eq("id", globalCluster.id).single();
-      if (postGlobal) ok("Global cluster preserved after user deletion");
-      else fail("Global cluster preserved after user deletion");
     }
 
     user1Id = null; // Already deleted
@@ -290,11 +243,8 @@ async function main() {
     if (user1Id) await deleteTestUser(user1Id).catch(() => {});
     if (user2Id) await deleteTestUser(user2Id).catch(() => {});
 
-    // Clean up test entries and clusters created by admin
+    // Clean up test entries created by admin
     await admin.from("entries").delete().eq("source_url", "https://test.example/rls-test");
-    await admin.from("clusters").delete().like("slug", "global-test-%");
-    await admin.from("clusters").delete().like("slug", "user1-test-%");
-    await admin.from("clusters").delete().like("slug", "user2-test-%");
 
     console.log("Done.\n");
   }

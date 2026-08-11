@@ -15,7 +15,7 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[workspaceSlug]/access-matrix — teams + all KB/workflow
+ * GET /api/workspaces/[workspaceSlug]/access-matrix — teams + all KB/skill
  * resources with their access modes, for the Access tab. Any active member.
  */
 export const GET = withUserAuth(
@@ -35,8 +35,7 @@ export const GET = withUserAuth(
 
 /**
  * PUT /api/workspaces/[workspaceSlug]/access-matrix — flip a resource between
- * workspace-wide and teams-scoped access. Admin+ only. May 409 with
- * TEAM_KB_ACCESS_CONFLICT (retry with autoGrant where resolvable).
+ * workspace-wide and teams-scoped access. Admin+ only.
  */
 export const PUT = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
@@ -51,8 +50,7 @@ export const PUT = withUserAuth(
         userId,
         input.resourceType,
         input.resourceId,
-        input.accessMode,
-        { autoGrant: input.autoGrant }
+        input.accessMode
       );
       return NextResponse.json({ ok: true });
     } catch (err) {

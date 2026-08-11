@@ -79,7 +79,7 @@ async function opSetVisibility(client, ref, visibility) {
             return denied;
         throw e;
     }
-    return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`);
+    return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`);
 }
 async function opCreateFolder(client, ref, path, description) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);

@@ -24,7 +24,10 @@
  *     every other domain already delegated to a module this refactor never
  *     touched. Those are the ones whose path, verb, and tool header are pinned
  *     here — including the `encodeURIComponent` on every interpolated segment,
- *     which is the detail a move is most likely to drop.
+ *     which is the detail a move is most likely to drop. TWO of the three are
+ *     now gone: `clusters.ts` and `workflows.ts` were DELETED with their
+ *     features on 2026-08-11, so what remains pinned is `workspaces.ts`. The
+ *     `encodeURIComponent` assertion survives on `getWorkspace`.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -38,46 +41,41 @@ const BASE = "https://api.example.test";
  * rather than typed by hand.
  *
  * PROVENANCE, stated exactly, because "the pre-split surface" is what this
- * used to say and it is off by seven. HEAD's `client.d.ts` declared 92 methods
- * (93 members, less the constructor). This list has 85. The difference is NOT
- * the split — which moved declarations between files and dropped none — but
- * the trash teardown that landed in the same working tree and removed
- * `listChatsTrash`, `listKbTrash`, `restoreChat`, `restoreKbBase`,
- * `restoreKbEntry`, `restoreKbFolder` and `restoreOntologyCluster` from the
- * class outright. So this is the POST-TEARDOWN surface, and the split's
- * guarantee is that it did not change it further.
+ * used to say and it was off by seven. The chain of edits, in order:
  *
- * That distinction is the whole value of the check below: read as "the
- * pre-split list", a diff of seven would look like the split silently eating
- * methods. It is two changes in one diff, and only one of them is a move.
+ *   92 — HEAD's `client.d.ts` at the §2 split (93 members, less constructor)
+ *   85 — less the SEVEN the trash teardown removed in the same working tree
+ *        (`listChatsTrash`, `listKbTrash`, `restoreChat`, `restoreKbBase`,
+ *        `restoreKbEntry`, `restoreKbFolder`, `restoreOntologyCluster`). The
+ *        SPLIT itself moved declarations between files and dropped none.
+ *   67 — less the EIGHTEEN that went with the workflows + clusters deletion
+ *        on 2026-08-11 (five `*Cluster` + thirteen `*Workflow*`), along with
+ *        `clusters.ts`, `workflows.ts` and both of their chain links.
+ *
+ * Stating the arithmetic is the whole value of the check: read as one number
+ * with no history, a diff of seven — or of eighteen — looks like the class
+ * silently eating methods rather than three deliberate changes.
  */
 const PUBLIC_SURFACE = [
-  "addWorkflowNode",
   "appendChatMessages",
   "awaitChannelMessages",
   "claimOntologyAnchor",
   "closeChannelThread",
-  "connectWorkflow",
   "createChannel",
   "createChannelThread",
   "createChatFolder",
-  "createCluster",
   "createKbBase",
   "createKbFolderByPath",
   "createOntologyCluster",
   "createOntologyObject",
   "createSkill",
-  "createWorkflow",
   "deleteChat",
   "deleteChatFolder",
-  "deleteCluster",
   "deleteKbBase",
   "deleteKbByPath",
   "deleteOntologyCluster",
   "deleteOntologyObject",
   "deleteSkill",
-  "deleteWorkflow",
-  "disconnectWorkflow",
   "exportChat",
   "getAccessMatrix",
   "getActiveWorkspace",
@@ -85,7 +83,6 @@ const PUBLIC_SURFACE = [
   "getChannel",
   "getChannelThread",
   "getChat",
-  "getCluster",
   "getKbBase",
   "getKbTree",
   "getMemberAccess",
@@ -94,7 +91,6 @@ const PUBLIC_SURFACE = [
   "getOntology",
   "getOntologyAnchor",
   "getSkill",
-  "getWorkflow",
   "getWorkspace",
   "getWorkspaceId",
   "inviteToChannel",
@@ -104,12 +100,9 @@ const PUBLIC_SURFACE = [
   "listChannels",
   "listChatFolders",
   "listChats",
-  "listClusters",
   "listKbBases",
   "listKbDirByPath",
   "listSkills",
-  "listWorkflowTrash",
-  "listWorkflows",
   "listWorkspaceMembers",
   "listWorkspaceTeams",
   "listWorkspaces",
@@ -120,21 +113,15 @@ const PUBLIC_SURFACE = [
   "readChannelMessages",
   "readKbFileByPath",
   "readSkillBody",
-  "removeWorkflowNode",
-  "restoreWorkflow",
   "searchKb",
   "setChannelThreadMode",
-  "setWorkflowGraph",
   "setWorkspaceId",
   "updateChat",
   "updateChatFolder",
-  "updateCluster",
   "updateKbBase",
   "updateOntologyCluster",
   "updateOntologyObject",
   "updateSkill",
-  "updateWorkflow",
-  "updateWorkflowNode",
   "writeKbFileByPath",
   "writeSkillBody",
 ] as const;
@@ -169,8 +156,8 @@ describe("DoplClient public surface (frozen across the §2 split)", () => {
 
   it("is a single flat class — no sub-client namespaces were introduced", () => {
     // The split had one tempting shortcut that would have broken every
-    // caller: `client.workflows.list()` instead of `client.listWorkflows()`.
-    for (const ns of ["workflows", "clusters", "workspaces", "kb", "channels", "skills"]) {
+    // caller: `client.kb.listBases()` instead of `client.listKbBases()`.
+    for (const ns of ["workspaces", "kb", "channels", "skills"]) {
       expect((client as unknown as Record<string, unknown>)[ns]).toBeUndefined();
     }
   });
@@ -228,30 +215,6 @@ describe("routes that MOVED out of client.ts", () => {
   }
 
   const cases: Array<[string, (c: DoplClient) => Promise<unknown>, Wire]> = [
-    // ── clusters.ts ──────────────────────────────────────────────────
-    ["createCluster", (c) => c.createCluster("n"), { path: "/api/clusters", method: "POST", tool: "canvas_create_cluster" }],
-    ["listClusters", (c) => c.listClusters(), { path: "/api/clusters", method: "GET", tool: "list_clusters" }],
-    ["getCluster", (c) => c.getCluster("a/b"), { path: "/api/clusters/a%2Fb", method: "GET", tool: "get_cluster" }],
-    ["updateCluster", (c) => c.updateCluster("s", { name: "x" }), { path: "/api/clusters/s", method: "PATCH", tool: "update_cluster" }],
-    ["deleteCluster", (c) => c.deleteCluster("s"), { path: "/api/clusters/s", method: "DELETE", tool: "delete_cluster" }],
-
-    // ── workflows.ts ─────────────────────────────────────────────────
-    ["listWorkflows", (c) => c.listWorkflows(), { path: "/api/workflows", method: "GET", tool: "list_workflows" }],
-    ["getWorkflow", (c) => c.getWorkflow("a b"), { path: "/api/workflows/a%20b", method: "GET", tool: "get_workflow" }],
-    ["createWorkflow", (c) => c.createWorkflow("n"), { path: "/api/workflows", method: "POST", tool: "create_workflow" }],
-    ["updateWorkflow", (c) => c.updateWorkflow("w", { name: "x" }), { path: "/api/workflows/w", method: "PATCH", tool: "update_workflow" }],
-    ["deleteWorkflow", (c) => c.deleteWorkflow("w"), { path: "/api/workflows/w", method: "DELETE", tool: "delete_workflow" }],
-    // D3 — these two SURVIVED the trash teardown on purpose. Pinned so a
-    // future "dead code" sweep has to argue with a failing test.
-    ["listWorkflowTrash", (c) => c.listWorkflowTrash(), { path: "/api/workflows/trash", method: "GET", tool: "list_workflow_trash" }],
-    ["restoreWorkflow", (c) => c.restoreWorkflow("w"), { path: "/api/workflows/w/restore", method: "POST", tool: "restore_workflow" }],
-    ["setWorkflowGraph", (c) => c.setWorkflowGraph("w", { nodes: [], edges: [] }), { path: "/api/workflows/w/graph", method: "POST", tool: "set_workflow_graph" }],
-    ["addWorkflowNode", (c) => c.addWorkflowNode("w", { ref: "r" }), { path: "/api/workflows/w/nodes", method: "POST", tool: "add_workflow_node" }],
-    ["updateWorkflowNode", (c) => c.updateWorkflowNode("w", "n/1", {}), { path: "/api/workflows/w/nodes/n%2F1", method: "PATCH", tool: "update_workflow_node" }],
-    ["removeWorkflowNode", (c) => c.removeWorkflowNode("w", "n"), { path: "/api/workflows/w/nodes/n", method: "DELETE", tool: "remove_workflow_node" }],
-    ["connectWorkflow", (c) => c.connectWorkflow("w", "a", "b"), { path: "/api/workflows/w/edges", method: "POST", tool: "connect_workflow" }],
-    ["disconnectWorkflow", (c) => c.disconnectWorkflow("w", "a", "b"), { path: "/api/workflows/w/edges", method: "DELETE", tool: "disconnect_workflow" }],
-
     // ── workspaces.ts ────────────────────────────────────────────────
     ["listWorkspaces", (c) => c.listWorkspaces(), { path: "/api/workspaces", method: "GET", tool: "list_workspaces" }],
     ["getWorkspace", (c) => c.getWorkspace("s p"), { path: "/api/workspaces/s%20p", method: "GET", tool: "get_workspace" }],

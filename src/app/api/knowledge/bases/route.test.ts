@@ -8,7 +8,7 @@
  *
  *   1. **The fold is additive.** `bases` must keep its exact shape and stay
  *      the first-class key; existing readers (`features/knowledge/client/api.ts`,
- *      the workflow/ontology pick menus, and `@dopl/client`'s `kb_list_bases`)
+ *      the ontology pick menus, and `@dopl/client`'s `kb_list_bases`)
  *      destructure `data.bases` and must not notice the change.
  *   2. **Owner names are scoped to the bases actually returned.** The lookup
  *      takes the post-visibility list as its input, so a base filtered out by

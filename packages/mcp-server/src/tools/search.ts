@@ -86,7 +86,7 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
       // instead of the old whole-query .includes() that missed
       // near-verbatim multi-word queries and dumped everything for a
       // lone space (audit fix F-15). Knowledge entries still use the
-      // backend hybrid search; this only governs skills/workflows/objects.
+      // backend hybrid search; this only governs skills/objects.
       const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       const terms = fold(args.query).split(" ").filter(Boolean);
       const matches = (...fields: Array<string | null | undefined>) => {
@@ -181,8 +181,9 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
       }
 
       // GROUPS, not domains: the three reads are exactly the three groups
-      // above. Four until the workflow retirement (2026-08-07) — the
-      // denominator moves with the reads, never independently of them.
+      // above. Four until the workflow retirement (2026-08-07; deleted
+      // 2026-08-11) — the denominator moves with the reads, never
+      // independently of them.
       lines.push("", scopeNote(limit, reads.notice(3, "groups")));
       return ok(lines.join("\n"));
     }

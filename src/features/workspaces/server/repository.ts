@@ -308,10 +308,9 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 }
 
 /**
- * Head-counts for the overview stat cards: four `count: "exact", head: true`
+ * Head-counts for the overview stat cards: three `count: "exact", head: true`
  * queries in parallel, no row payloads. Soft-deleted knowledge bases and
- * skills are excluded; `workflows` has no `deleted_at` column so it counts
- * every row.
+ * skills are excluded.
  *
  * A failed count comes back as `null` from PostgREST and degrades to 0
  * rather than throwing — a stat card reading zero beats a 500 on the
@@ -330,8 +329,7 @@ export async function countWorkspaceResources(
     if (soft) q = q.is("deleted_at", null);
     return q;
   };
-  const [wf, kb, sk, mem] = await Promise.all([
-    count("workflows", false),
+  const [kb, sk, mem] = await Promise.all([
     count("knowledge_bases", true),
     count("skills", true),
     db
@@ -340,7 +338,6 @@ export async function countWorkspaceResources(
       .eq("workspace_id", workspaceId),
   ]);
   return {
-    workflows: wf.count ?? 0,
     knowledgeBases: kb.count ?? 0,
     skills: sk.count ?? 0,
     members: mem.count ?? 0,

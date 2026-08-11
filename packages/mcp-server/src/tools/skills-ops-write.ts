@@ -148,7 +148,7 @@ export async function opSetVisibility(
     const skill = await client.updateSkill(slug, { visibility });
     return ok(
       visibility === "public"
-        ? `Published skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`
+        ? `Published skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) — now visible workspace-wide.`
         : `Skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it, and it drops out of every other member's dopl_skill(op="list").`,
     );
   } catch (e) {

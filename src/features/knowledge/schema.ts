@@ -161,7 +161,7 @@ export const KnowledgeBaseUpdateSchema = z
     /**
      * Two-way visibility: scope is fully changeable by the owner or a
      * workspace admin. Narrowing transitions (→ private, grant removal)
-     * are invariant-checked against attached workflows in the service.
+     * are applied as-is by the service (no cross-resource check remains).
      */
     visibility: z.enum(["public", "private"]).optional(),
     accessMode: z.enum(["workspace", "teams"]).optional(),

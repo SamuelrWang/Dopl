@@ -98,11 +98,10 @@ describe("app routes", () => {
   });
 
   it("has no route for the retired pages", () => {
-    // `workflows` is hidden, not deleted — its page components still exist, so
-    // the only thing standing between a user and them is this table
-    // (docs/RETIREMENT-UNWIRING-PLAN.md §3.1). `canvas`, `canvas2` and
-    // `configuration` have no page left; their rows must stay absent all the
-    // same, since a re-added row would now resolve to nothing.
+    // None of these has a page component left (`configuration` and the two
+    // canvas pages went 2026-08-11; `workflows` went with the same wave).
+    // Their rows must stay absent all the same: a re-added row would now
+    // resolve to nothing, which is a blank pane rather than an import error.
     const paths = WORKSPACE_PAGES.map((page) => page.path);
     for (const retired of ["canvas", "canvas2", "workflows", "configuration"]) {
       expect(paths).not.toContain(retired);

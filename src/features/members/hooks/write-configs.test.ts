@@ -338,7 +338,7 @@ const accessKey = (userId: string) => [
 ];
 
 describe("team grant — the per-member access panes", () => {
-  function grantRun(qc: QueryClient, autoGrant?: boolean) {
+  function grantRun(qc: QueryClient) {
     qc.setQueryData(entry(teamsPath(SLUG)), {
       teams: [{ id: "t-1", memberIds: ["u-1", "u-2"], grants: [] }],
     });
@@ -352,7 +352,6 @@ describe("team grant — the per-member access panes", () => {
       resourceId: "kb-1",
       level: "read",
       memberIds: ["u-1", "u-2"],
-      autoGrant,
     });
     net.settle(undefined);
     return run;
@@ -364,18 +363,6 @@ describe("team grant — the per-member access panes", () => {
     await grantRun(qc);
 
     expect(invalidate.mock.calls.map(([args]) => args)).toEqual([
-      { queryKey: accessKey("u-1") },
-      { queryKey: accessKey("u-2") },
-    ]);
-  });
-
-  it("adds the teams cache on the autoGrant retry — the server wrote rows no client can guess", async () => {
-    const qc = client();
-    const invalidate = vi.spyOn(qc, "invalidateQueries");
-    await grantRun(qc, true);
-
-    expect(invalidate.mock.calls.map(([args]) => args)).toEqual([
-      { queryKey: [teamsPath(SLUG)] },
       { queryKey: accessKey("u-1") },
       { queryKey: accessKey("u-2") },
     ]);

@@ -24,6 +24,9 @@
  *     every other domain already delegated to a module this refactor never
  *     touched. Those are the ones whose path, verb, and tool header are pinned
  *     here — including the `encodeURIComponent` on every interpolated segment,
- *     which is the detail a move is most likely to drop.
+ *     which is the detail a move is most likely to drop. TWO of the three are
+ *     now gone: `clusters.ts` and `workflows.ts` were DELETED with their
+ *     features on 2026-08-11, so what remains pinned is `workspaces.ts`. The
+ *     `encodeURIComponent` assertion survives on `getWorkspace`.
  */
 export {};

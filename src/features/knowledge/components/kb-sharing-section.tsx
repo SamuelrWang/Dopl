@@ -4,12 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/members/hooks/use-teams";
-import {
-  ConflictDialog,
-  type ConflictState,
-} from "@/features/members/components/conflict-dialog";
-import type { TeamConflictDetails } from "@/features/members/teams-client";
-import { KnowledgeApiError, updateBase } from "../client/api";
+import { updateBase } from "../client/api";
 import { kbScope, type KbScope } from "../scope";
 import type { KnowledgeBase } from "../types";
 import type { KnowledgeRouting } from "./knowledge-v2/routing";
@@ -34,8 +29,11 @@ interface Props {
  * Settings → Sharing: the three-way scope picker + per-team grant
  * editor. Editable by the KB owner or a workspace admin (mirrors the
  * service-side `ScopeChangeForbiddenError` rule); everyone else gets a
- * read-only summary. Narrowing changes can 409 against the workflow↔KB
- * invariant — surfaced via the shared ConflictDialog.
+ * read-only summary.
+ *
+ * Narrowing used to be able to 409 against the workflow↔KB invariant, opening
+ * a shared conflict dialog. Workflows were deleted on 2026-08-11 and that was
+ * the status's only producer, so a save now either applies or fails as itself.
  */
 export function KbSharingSection({
   workspaceId,
@@ -54,7 +52,6 @@ export function KbSharingSection({
   const [grants, setGrants] = useState<TeamGrantDraft[]>([]);
   const [grantsSeeded, setGrantsSeeded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [conflict, setConflict] = useState<ConflictState | null>(null);
 
   // Current grants live on TeamView.grants — seed the draft once the
   // teams fetch lands (the modal mounts this section only while open).
@@ -119,22 +116,8 @@ export function KbSharingSection({
       toast({ title: "Sharing updated" });
       routing.refreshServerData();
     } catch (err) {
-      if (
-        err instanceof KnowledgeApiError &&
-        err.code === "TEAM_KB_ACCESS_CONFLICT"
-      ) {
-        setConflict({
-          details: err.details as TeamConflictDetails,
-          // Narrowing conflicts are never autoGrant-resolvable; the
-          // dialog renders its informational variant and this retry is
-          // unreachable. Provided for interface completeness.
-          retry: async () => {},
-        });
-      } else {
-        const msg =
-          err instanceof Error ? err.message : "Couldn't update sharing";
-        toast({ title: "Couldn't update sharing", description: msg });
-      }
+      const msg = err instanceof Error ? err.message : "Couldn't update sharing";
+      toast({ title: "Couldn't update sharing", description: msg });
     } finally {
       setSaving(false);
     }
@@ -202,13 +185,6 @@ export function KbSharingSection({
           {saving ? "Saving…" : "Update sharing"}
         </button>
       </div>
-
-      <ConflictDialog
-        conflict={conflict}
-        onOpenChange={(open) => {
-          if (!open) setConflict(null);
-        }}
-      />
     </div>
   );
 }

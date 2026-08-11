@@ -1,13 +1,13 @@
 /**
- * Knowledge-base method group (Item 4) — link 5 of the chain documented in
+ * Knowledge-base method group (Item 4) — link 3 of the chain documented in
  * `client-base.ts`. Pure delegation to `knowledge.ts`; no HTTP here.
  *
  * User-authored, editable knowledge bases. Path-based methods accept a base
  * id and a "/"-separated path; the server resolves to folder/entry rows.
  */
-import { WorkflowMethods } from "./client-workflows.js";
+import { WorkspaceMethods } from "./client-workspaces.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
-export declare class KnowledgeMethods extends WorkflowMethods {
+export declare class KnowledgeMethods extends WorkspaceMethods {
     listKbBases(): Promise<KnowledgeBase[]>;
     getKbBase(baseId: string): Promise<KnowledgeBase>;
     getKbTree(baseId: string, opts?: {

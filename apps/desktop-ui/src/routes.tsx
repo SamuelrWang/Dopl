@@ -31,15 +31,14 @@ import OnboardingPage from "#/pages/onboarding";
  * Rows whose `path` contains a `:param` are detail routes — the layout's nav
  * skips them (it cannot invent an id).
  *
- * RETIRED (2026-08-07): `canvas`, `canvas2`, `configuration`, `workflows` and
- * `workflows/:slug` are gone from this table. The workflows pages still exist
- * under `#/pages/**` with nothing importing or routing to them
- * (docs/RETIREMENT-UNWIRING-PLAN.md §3.1); restoring one means restoring its
- * row here, its `NavSection` + `NAV` row in
+ * RETIRED (2026-08-07), then DELETED (2026-08-11): `canvas`, `canvas2`,
+ * `configuration`, `workflows` and `workflows/:slug` are gone from this table
+ * AND their page components are gone from the tree. There is nothing left to
+ * restore behind those five paths, and their rows must stay absent all the
+ * same — a re-added row would now resolve to nothing. Adding any page back
+ * means a row here, a `NavSection` + `NAV` row in
  * `src/shared/layout/app-shell/app-sidebar-core.tsx`, and the hand copy in
- * `dopl-desktop-app/main/deep-link-target.js`. `configuration` and the two
- * canvas pages were DELETED (2026-08-11) — there is nothing left to restore
- * behind those three paths, and their rows must stay absent all the same.
+ * `dopl-desktop-app/main/deep-link-target.js`.
  */
 
 export interface PageRoute {

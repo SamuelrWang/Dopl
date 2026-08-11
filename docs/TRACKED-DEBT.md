@@ -49,7 +49,7 @@ workspace flows.
 
 **Why:** Three near-identical kebab pipelines exist:
 
-- [`src/shared/lib/slug/slugify.ts`](../src/shared/lib/slug/slugify.ts) — generic, used by entries / KBs / clusters
+- [`src/shared/lib/slug/slugify.ts`](../src/shared/lib/slug/slugify.ts) — generic, used by entries / KBs (the clusters caller went with that feature, 2026-08-11)
 - [`src/features/workspaces/slug.ts`](../src/features/workspaces/slug.ts) — workspaces, with reserved-set check
 - [`src/features/workspaces/server/canvases.ts`](../src/features/workspaces/server/canvases.ts) `slugifyCanvasName` — duplicate of the workspace shape with a different reserved set
 

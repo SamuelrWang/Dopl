@@ -2,11 +2,13 @@
  * INVARIANT SUITE — the two REMOVALS the launch surface makes, checked against
  * the tables that enforce them.
  *
- *   1. D1/D2 — workflows and their clusters are RETIRED: their registrars still
- *      run, but `HIDDEN_TOOLS` keeps every tool they register out of
- *      `tools/list`. What has to hold is that the set names real tools, names
- *      both halves of each retired feature, and that no surviving description
- *      routes an agent to one of them.
+ *   1. D1/D2 — the hide-before-delete seam. `HIDDEN_TOOLS` keeps a named tool
+ *      out of `tools/list` while its code is still in the tree. It is EMPTY
+ *      today: workflows and their clusters were its only entries, hidden
+ *      2026-08-07 and deleted 2026-08-11. What has to hold is that every name
+ *      in it is a REAL registered tool (a name with no registrar is dead law
+ *      that reads as coverage), that no surviving description routes an agent
+ *      to one, and that the visible list is exactly the surviving tools.
  *
  *   2. §2b — DELETION IS APP-ONLY. Every op on every live `_admin` tool is
  *      refused, and each of those tools SAYS SO in its own description, so
@@ -51,12 +53,16 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
     }
   });
 
-  it("hides workflows and their clusters, both halves of each (D1 + D2)", () => {
-    // Hiding an action tool but not its admin twin would leave the delete op
-    // as the ONE reachable operation on a retired feature.
-    expect([...HIDDEN_TOOLS].sort()).toEqual(
-      ["dopl_cluster", "dopl_cluster_admin", "dopl_workflow", "dopl_workflow_admin"].sort(),
-    );
+  it("is EMPTY — nothing is mid-retirement (workflows/clusters were deleted)", () => {
+    // Pinned as a VALUE, not skipped. The set held four names between
+    // 2026-08-07 and 2026-08-11; those tools are now deleted outright, so the
+    // honest state is `[]` and this test is what makes a re-hide deliberate.
+    // The mechanism is NOT dead: the next feature to retire adds its names
+    // here, ships dark, and is deleted in a later change. When that happens,
+    // this expectation changes with it — and the rule the sibling test states
+    // still applies (both halves of a domain, the action tool AND its admin
+    // twin, or the delete op is the one reachable operation left).
+    expect([...HIDDEN_TOOLS]).toEqual([]);
   });
 
   it("the live tool list is exactly the surviving tools", () => {
@@ -81,10 +87,14 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
     );
   });
 
-  it("no surviving tool's description sends an agent to a retired tool", () => {
+  it("no surviving tool's description sends an agent to a hidden tool", () => {
     // The tool is gone from `tools/list`; a description that still routes to it
     // teaches a call that cannot be made, which reads to the agent as a broken
-    // connection rather than as a removed feature.
+    // connection rather than as a removed feature. VACUOUS while HIDDEN_TOOLS
+    // is empty, and kept for the same reason the table is: it is the second
+    // half of the hide step, and it must already exist when the next one runs.
+    // The DELETED names are pinned separately and non-vacuously by
+    // `retirement.test.ts › RETIRED`, against the real `buildInstructions`.
     for (const tool of VISIBLE_TOOLS) {
       for (const hidden of HIDDEN_TOOLS) {
         expect(
