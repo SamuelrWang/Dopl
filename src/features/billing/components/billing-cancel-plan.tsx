@@ -18,6 +18,20 @@ import { useCancelPlan } from "./use-billing-account";
  * and gets the red block at the bottom of the page; cancelling a subscription
  * is reversible from this same section for the rest of the period, so it is a
  * quiet text button rather than a wall.
+ *
+ * THE DIALOG CLOSES ON CONFIRM, AND THE FAILURE LANDS IN THE SECTION. This is
+ * the `pending-invitations.tsx` pattern, and it is the pattern because of what
+ * `ConfirmDialog` does with a throw: it SWALLOWS it and keeps itself open,
+ * expecting the caller to surface the reason somewhere. A caller that renders
+ * that reason underneath the dialog renders it behind the scrim — the message
+ * exists, is in the DOM, and is unreadable, while the only thing on screen is
+ * a dialog that did nothing and did not say why. So the confirm dismisses
+ * first and the section owns the outcome, where nothing covers it.
+ *
+ * THE BUTTON STAYS DISABLED PAST THE POST. `useCancelPlan().pending` spans the
+ * awaited status invalidation, not just the round trip — see the hook. Between
+ * the two, this section is still rendering "Cancel plan" from the OLD status,
+ * so a live button is a second cancel of an already-cancelled plan.
  */
 export function BillingCancelPlan({
   workspaceId,
@@ -35,10 +49,15 @@ export function BillingCancelPlan({
 
   const endsOn = currentPeriodEnd ? formatDate(currentPeriodEnd) : null;
 
+  /**
+   * NEVER RETHROWS. The throw was what kept the dialog open on top of the
+   * message this sets, so the failure is captured here and rendered by the
+   * section; both callers can therefore treat the click as finished.
+   */
   async function run(resume: boolean) {
     setError(null);
     try {
-      await cancel.mutateAsync({ resume });
+      await cancel.submit({ resume });
     } catch (err) {
       setError(
         err instanceof Error
@@ -47,9 +66,19 @@ export function BillingCancelPlan({
             ? "Couldn't resume the plan"
             : "Couldn't cancel the plan"
       );
-      throw err;
     }
   }
+
+  /** The section's own failure banner — bordered, not a stray red line, because
+   *  it is the only report a dismissed dialog leaves behind. */
+  const banner = error ? (
+    <p
+      role="alert"
+      className="mt-4 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-caption text-danger"
+    >
+      {error}
+    </p>
+  ) : null;
 
   if (cancelAtPeriodEnd) {
     return (
@@ -65,12 +94,12 @@ export function BillingCancelPlan({
         <button
           type="button"
           disabled={cancel.pending}
-          onClick={() => void run(true).catch(() => {})}
+          onClick={() => void run(true)}
           className="auth-btn-3d mt-4 flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white disabled:cursor-default disabled:opacity-60"
         >
           {cancel.pending ? "Resuming…" : "Resume plan"}
         </button>
-        {error && <p className="mt-3 text-caption text-danger">{error}</p>}
+        {banner}
       </section>
     );
   }
@@ -91,9 +120,9 @@ export function BillingCancelPlan({
         onClick={() => setConfirming(true)}
         className="mt-4 cursor-pointer rounded-lg border border-border-default bg-bg-elevated px-4 py-1.5 text-small font-medium text-danger transition-colors hover:bg-danger/10 disabled:cursor-default disabled:opacity-50"
       >
-        Cancel plan
+        {cancel.pending ? "Cancelling…" : "Cancel plan"}
       </button>
-      {error && <p className="mt-3 text-caption text-danger">{error}</p>}
+      {banner}
 
       <ConfirmDialog
         open={confirming}
@@ -107,7 +136,14 @@ export function BillingCancelPlan({
         confirmLabel="Cancel plan"
         cancelLabel="Keep plan"
         destructive
-        onConfirm={() => run(false)}
+        // Dismiss FIRST, then run. `ConfirmDialog` closes on a resolve and
+        // stays open on a throw, and `run` never throws — so without this the
+        // dialog would sit over the section for the whole round trip and the
+        // outcome, good or bad, would land behind it.
+        onConfirm={() => {
+          setConfirming(false);
+          void run(false);
+        }}
       />
     </section>
   );

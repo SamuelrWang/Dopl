@@ -6,7 +6,7 @@
 -- DROP TABLE removes the tables' own triggers; the functions are dropped explicitly after.
 -- team_resource_access rows with resource_type='workflow' were already zero at capture
 -- (see data-snapshot-2026-08-11.json), the DELETE is belt-and-braces.
--- The 'workflow' value deliberately STAYS in the team_resource_grants resource_type CHECK
+-- The 'workflow' value deliberately STAYS in the team_resource_access resource_type CHECK
 -- constraint — removing it buys nothing once rows are purged and would rewrite a shared
 -- constraint three other migrations extended.
 

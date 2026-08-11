@@ -50,7 +50,7 @@ export function capLevel(level: AccessLevel, ceiling: AccessLevel): AccessLevel 
  * longer names one.
  *
  * THE SET STAYS ANYWAY, and that is the point: the rows do not come from us.
- * `team_resource_grants.resource_type` still ACCEPTS `'workflow'` (the CHECK
+ * `team_resource_access.resource_type` still ACCEPTS `'workflow'` (the CHECK
  * constraint deliberately kept the value — see
  * `supabase/migrations/20260811120000_drop_workflows_and_clusters.sql`), so a
  * surviving or replayed row reaches a payload without passing any code we

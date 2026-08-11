@@ -15,7 +15,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { BillingInvoices } from "./billing-invoices";
 import { BILLING_INVOICES_PATH } from "./use-billing-account";
-import { formatInvoiceAmount, type InvoiceDto } from "../billing-account";
+import {
+  formatInvoiceAmount,
+  isInvoiceStatus,
+  type InvoiceDto,
+} from "../billing-account";
 
 function invoice(overrides: Partial<InvoiceDto> = {}): InvoiceDto {
   return {
@@ -90,6 +94,55 @@ describe("the empty and loading states", () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).not.toContain("Loading…");
     expect(markup).not.toContain("No invoices yet");
+  });
+});
+
+describe("a status Stripe invented after we shipped", () => {
+  it("recognises exactly the five we have meaning for", () => {
+    expect(isInvoiceStatus("paid")).toBe(true);
+    expect(isInvoiceStatus("uncollectible")).toBe(true);
+    expect(isInvoiceStatus("disputed")).toBe(false);
+    expect(isInvoiceStatus(null)).toBe(false);
+  });
+
+  it("renders an unrecognised one in the NEUTRAL tone, not untoned", () => {
+    // The DTO calls this field an `InvoiceStatus` on the strength of a cast at
+    // the Stripe boundary. A sixth value can land in a live payload with no
+    // deploy on our side, and `STATUS_TONE[it]` is `undefined` — a pill with no
+    // colour class at all, silently.
+    const markup = table([
+      invoice({ status: "disputed" as InvoiceDto["status"] }),
+    ]);
+    expect(markup).toContain("disputed");
+    expect(markup).toContain("text-text-secondary");
+    expect(markup).not.toContain("undefined");
+  });
+});
+
+describe("a row that has to hold a long number", () => {
+  it("keeps the whole amount rather than clipping it to a fixed column", () => {
+    // `w-20` fits "$1,234.56" and nothing wider. A zero-decimal currency has no
+    // subunit to hide behind, so a real ¥ invoice is exactly the case that
+    // overflowed. `min-w-20` holds the alignment edge; the date gives up space.
+    const markup = table([
+      invoice({ currency: "jpy", amountPaid: 123456789, amountDue: 123456789 }),
+    ]);
+    expect(markup).toContain("¥123,456,789");
+    expect(markup).toContain("min-w-20");
+    expect(markup).not.toContain('class="w-20');
+  });
+
+  it("renders every row even when the DTO degraded the id away", () => {
+    // `toInvoiceDto` falls back to `invoice.id ?? invoice.number ?? ""`, so two
+    // draft-ish rows can arrive sharing the empty-string id — one React key for
+    // two rows. The index-composed fallback is what keeps them separate.
+    const markup = table([
+      invoice({ id: "", number: null, amountPaid: 100, amountDue: 100 }),
+      invoice({ id: "", number: null, amountPaid: 200, amountDue: 200 }),
+    ]);
+    expect(markup.match(/<li /g) ?? []).toHaveLength(2);
+    expect(markup).toContain("$1.00");
+    expect(markup).toContain("$2.00");
   });
 });
 

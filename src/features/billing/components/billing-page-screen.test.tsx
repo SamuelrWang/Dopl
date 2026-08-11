@@ -110,9 +110,17 @@ describe("which tab a URL opens on", () => {
     expect(resolveBillingTab(null, true)).toBe("billing");
   });
 
-  it("lets an explicit ?tab= beat the intent, in both directions", () => {
-    expect(resolveBillingTab("usage", true)).toBe("usage");
+  it("lets ?tab= decide when no intent is present", () => {
     expect(resolveBillingTab("billing", false)).toBe("billing");
+    expect(resolveBillingTab("usage", false)).toBe("usage");
+  });
+
+  it("puts the INTENT above ?tab=, because only Billing polls", () => {
+    // `?billing=success&tab=usage` is a URL the shell itself produces — it
+    // writes `?tab=` on every click — so honouring `?tab=` here would strand a
+    // reloading payer on Usage, where the post-payment poll never mounts and
+    // their plan stays Starter forever.
+    expect(resolveBillingTab("usage", true)).toBe("billing");
   });
 
   it("ignores a ?tab= that names no tab", () => {

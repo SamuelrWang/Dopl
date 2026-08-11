@@ -19,15 +19,30 @@
 export type BillingTab = "usage" | "billing";
 
 /**
- * `?tab=` wins when it names a tab. Otherwise a `?billing=` intent decides:
- * upgrade / success / return all mean the visitor arrived MID-TRANSACTION (a
- * 402 envelope, a checkout return, a portal return) and the plan cards are what
- * they were sent for. A bare visit opens on Usage — the question a member has.
+ * A `?billing=` intent WINS. Upgrade / success / return all mean the visitor
+ * arrived MID-TRANSACTION (a 402 envelope, a checkout return, a portal return)
+ * and the plan cards are what they were sent for. Only then does `?tab=`
+ * decide; a bare visit opens on Usage — the question a member has.
+ *
+ * WHY THE INTENT OUTRANKS AN EXPLICIT `?tab=`, WHICH IS NOT THE OBVIOUS ORDER.
+ * The pair is not a user preference against a hint — it is a URL that has been
+ * EDITED after the fact. The shell writes `?tab=` on every tab click with
+ * `replaceState`, so `?billing=success&tab=usage` is what a checkout return
+ * becomes the moment someone glances at Usage, and reloading or sharing that
+ * URL used to resolve to Usage — where the post-payment poll
+ * (`plans-billing-core`, the ONLY consumer of `billing=success`) never mounts,
+ * so a paying customer sits on a stale Starter plan with nothing scheduled to
+ * correct it. Ordering the other way makes the money path the one that cannot
+ * be lost to a stray param. The shell closes the pair from its side too: a
+ * manual tab click DROPS `billing` from the URL, because that click is what
+ * consumes the intent — so the two are never both present for long enough for
+ * this precedence to override a live choice.
  */
 export function resolveBillingTab(
   tabParam: string | null | undefined,
   hasBillingIntent: boolean
 ): BillingTab {
+  if (hasBillingIntent) return "billing";
   if (tabParam === "usage" || tabParam === "billing") return tabParam;
-  return hasBillingIntent ? "billing" : "usage";
+  return "usage";
 }

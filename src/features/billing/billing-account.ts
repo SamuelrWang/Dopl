@@ -23,8 +23,12 @@ export interface PaymentMethodDto {
   /** "visa" / "mastercard" / … — Stripe's own brand slug, lowercased. */
   brand: string;
   last4: string;
-  expMonth: number;
-  expYear: number;
+  /** NULL WHEN STRIPE REPORTED NONE, never `0`. A card object without an
+   *  expiry is rare but legal (some wallet-backed methods), and `0` is not a
+   *  month — a zero default renders "00 / 0" and asserts an expiry Stripe never
+   *  gave us. Null means "do not claim to know", and the pane drops the line. */
+  expMonth: number | null;
+  expYear: number | null;
 }
 
 /** Stripe's invoice statuses, verbatim. `null` is a Stripe possibility. */
@@ -34,6 +38,29 @@ export type InvoiceStatus =
   | "paid"
   | "uncollectible"
   | "void";
+
+/**
+ * THE SAME FIVE, AS A VALUE. Stripe's status vocabulary is theirs, not ours —
+ * a new one can appear in a live payload without a deploy on our side, and it
+ * arrives as a plain string that TypeScript has already been told is an
+ * `InvoiceStatus`. This is the runtime half of that claim, so a status we do
+ * not recognise can be rendered in a neutral tone instead of being looked up
+ * in a `Record` that has no entry for it.
+ */
+export const INVOICE_STATUSES: readonly InvoiceStatus[] = [
+  "draft",
+  "open",
+  "paid",
+  "uncollectible",
+  "void",
+];
+
+/** Narrows a wire string to one of the five we have styling and meaning for. */
+export function isInvoiceStatus(
+  value: string | null | undefined
+): value is InvoiceStatus {
+  return value != null && (INVOICE_STATUSES as readonly string[]).includes(value);
+}
 
 export interface InvoiceDto {
   id: string;
@@ -97,7 +124,13 @@ export function formatCardLabel(method: PaymentMethodDto): string {
   return `${brand} •••• ${method.last4}`;
 }
 
-/** "04 / 2029" — a card expiry, zero-padded month. */
-export function formatCardExpiry(method: PaymentMethodDto): string {
+/**
+ * "04 / 2029" — a card expiry, zero-padded month. NULL when Stripe reported no
+ * expiry at all: the caller drops the whole "Expires" line rather than printing
+ * a placeholder, because a made-up expiry is worse than a missing one on the
+ * card people open this page to check.
+ */
+export function formatCardExpiry(method: PaymentMethodDto): string | null {
+  if (method.expMonth == null || method.expYear == null) return null;
   return `${String(method.expMonth).padStart(2, "0")} / ${method.expYear}`;
 }

@@ -62,8 +62,11 @@ function toPaymentMethodDto(
   return {
     brand: card.brand ?? "card",
     last4: card.last4 ?? "••••",
-    expMonth: card.exp_month ?? 0,
-    expYear: card.exp_year ?? 0,
+    // NULL, NOT ZERO. `0` is not a month: it renders "00 / 0" and states an
+    // expiry Stripe never reported. Null is the honest answer and the pane
+    // drops the line for it.
+    expMonth: card.exp_month ?? null,
+    expYear: card.exp_year ?? null,
   };
 }
 

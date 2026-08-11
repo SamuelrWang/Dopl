@@ -218,11 +218,21 @@ describe("what the URL is allowed to do", () => {
     expect((await render({ billing: "return" })).initialTab).toBe("billing");
   });
 
-  it("lets an explicit ?tab= override the intent, and ignores junk", async () => {
+  it("lets ?tab= decide when there is no intent, and ignores junk", async () => {
     expect((await render({ tab: "billing" })).initialTab).toBe("billing");
+    expect((await render({ tab: "invoices" })).initialTab).toBe("usage");
+  });
+
+  it("keeps a payment intent on Billing even when ?tab= says otherwise", async () => {
+    // `?billing=success&tab=usage` is not a preference — it is what a checkout
+    // return BECOMES once the shell writes `?tab=` on a click. Resolving it to
+    // Usage strands the payer: the post-payment poll lives in the Billing pane,
+    // so nothing would ever correct their stale Starter plan.
     expect(
       (await render({ tab: "usage", billing: "success" })).initialTab
-    ).toBe("usage");
-    expect((await render({ tab: "invoices" })).initialTab).toBe("usage");
+    ).toBe("billing");
+    expect((await render({ tab: "usage", billing: "return" })).initialTab).toBe(
+      "billing"
+    );
   });
 });

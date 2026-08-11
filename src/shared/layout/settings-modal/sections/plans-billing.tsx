@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   formatMoney,
   SOLO_PRICE,
@@ -25,6 +25,7 @@ import styles from "../settings-modal.module.css";
 export function PlansBilling({
   billingReturn = null,
   initialCheckoutPlan = null,
+  onCheckoutOpenChange,
   role,
   workspaceId,
 }: {
@@ -37,6 +38,20 @@ export function PlansBilling({
    * settings modal opens on the plan list, unchanged.
    */
   initialCheckoutPlan?: CheckoutPlan | null;
+  /**
+   * Reports whether the embedded checkout form is CURRENTLY MOUNTED.
+   *
+   * A host that can unmount this pane — the `/billing/[segment]` tab shell can,
+   * on a tab click — needs to know, because Stripe's form holds card entry that
+   * exists only in this tree: unmounting it discards whatever the person typed
+   * and the session it was collected under, with no warning and nothing to
+   * restore. The signal goes UP so the host can make its own control inert
+   * rather than this pane guessing at a host it does not know it has.
+   *
+   * Must be referentially stable (a `useState` setter is). Optional — the
+   * settings modal never unmounts the pane out from under checkout.
+   */
+  onCheckoutOpenChange?: (open: boolean) => void;
   role: Role;
   workspaceId?: string;
 }) {
@@ -49,6 +64,16 @@ export function PlansBilling({
   // page's payment-method card needed the identical handoff; the behaviour is
   // unchanged.
   const portal = useBillingPortal(workspaceId);
+
+  // The exact condition the checkout branch below renders on, so the signal
+  // cannot drift from what is actually mounted.
+  const checkoutOpen = Boolean(checkoutPlan) && !ent.isPaid;
+  useEffect(() => {
+    onCheckoutOpenChange?.(checkoutOpen);
+    // Unmounting this pane unmounts the form with it — the host must not be
+    // left holding a stale "checkout is open".
+    return () => onCheckoutOpenChange?.(false);
+  }, [checkoutOpen, onCheckoutOpenChange]);
 
   if (checkoutPlan && !ent.isPaid) {
     return (

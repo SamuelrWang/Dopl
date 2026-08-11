@@ -36,11 +36,16 @@ export function BillingPlansPane({
   role,
   billingReturn,
   initialCheckoutPlan,
+  onCheckoutOpenChange,
 }: {
   workspaceId: string;
   role: Role;
   billingReturn: "success" | "return" | null;
   initialCheckoutPlan: CheckoutPlan | null;
+  /** Passed straight through from `PlansBilling` to the tab shell, which
+   *  disables the tab switcher while Stripe's card form is mounted — switching
+   *  tabs unmounts this pane and takes the half-entered card with it. */
+  onCheckoutOpenChange?: (open: boolean) => void;
 }) {
   // Same args as the panes below → one cache entry, one request.
   const ent = useWorkspaceEntitlements(workspaceId);
@@ -54,6 +59,7 @@ export function BillingPlansPane({
         <PlansBilling
           billingReturn={billingReturn}
           initialCheckoutPlan={initialCheckoutPlan}
+          onCheckoutOpenChange={onCheckoutOpenChange}
           role={role}
           workspaceId={workspaceId}
         />

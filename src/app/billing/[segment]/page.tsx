@@ -96,9 +96,10 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
           ? parseCheckoutPlan(planParam)
           : null
       }
-      // `?tab=` wins when it names a tab; otherwise ANY recognised `?billing=`
-      // intent (upgrade / success / return) opens on Billing, because all three
-      // arrive mid-transaction. A bare visit opens on Usage.
+      // ANY recognised `?billing=` intent (upgrade / success / return) opens on
+      // Billing and outranks `?tab=`, because all three arrive mid-transaction
+      // and only the Billing pane runs the post-payment poll. Otherwise `?tab=`
+      // decides; a bare visit opens on Usage.
       initialTab={resolveBillingTab(
         tabParam,
         parseBillingIntent(billingParam) !== null

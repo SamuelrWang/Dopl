@@ -78,6 +78,9 @@ export function BillingPageScreen({
   initialTab,
 }: BillingPageScreenProps) {
   const [tab, setTab] = useState<BillingTab>(initialTab);
+  // Reported up by `PlansBilling` while Stripe's card form is mounted. The
+  // switcher is inert for as long as it is true — see below.
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   function selectTab(next: BillingTab) {
     setTab(next);
@@ -88,6 +91,15 @@ export function BillingPageScreen({
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", next);
+      // THE INTENT IS CONSUMED BY THIS CLICK, so it leaves the URL with it.
+      // `?billing=` outranks `?tab=` at resolve time (`../billing-tabs`) —
+      // deliberately, so a checkout return cannot be stranded on Usage — which
+      // means a URL carrying BOTH would reload onto Billing no matter which
+      // tab the person actually chose, and would re-run the post-payment poll
+      // for a payment they already watched land. `session_id` rides along with
+      // it; on its own it names a Stripe session nothing reads any more.
+      url.searchParams.delete("billing");
+      url.searchParams.delete("session_id");
       window.history.replaceState(null, "", `${url.pathname}${url.search}`);
     }
   }
@@ -110,12 +122,24 @@ export function BillingPageScreen({
           Payment lives in your browser — the desktop app never handles card
           details. Everything else about Dopl is in the app.
         </p>
+        {/* INERT WHILE CHECKOUT IS MOUNTED. The two tabs are exclusive, so a
+            click here unmounts the Billing pane — and with it Stripe's card
+            form, the card details half-typed into it, and the checkout session
+            they were being collected under. There is no state to restore
+            afterwards, so the switcher waits rather than asking. "← Back to
+            plans" inside the pane is the exit. */}
         <SegmentedControl
           className="mt-4 max-w-xs"
           options={TABS}
           value={tab}
           onChange={selectTab}
+          disabled={checkoutOpen}
         />
+        {checkoutOpen && (
+          <p role="status" className="mt-2 text-caption text-text-muted">
+            Finish checkout — or go back to plans — before switching tabs.
+          </p>
+        )}
       </header>
 
       {tab === "usage" ? (
@@ -126,6 +150,7 @@ export function BillingPageScreen({
           role={role}
           billingReturn={billingReturn}
           initialCheckoutPlan={initialCheckoutPlan}
+          onCheckoutOpenChange={setCheckoutOpen}
         />
       )}
     </div>
