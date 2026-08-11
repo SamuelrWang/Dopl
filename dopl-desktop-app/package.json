@@ -11,7 +11,9 @@
     "test:live": "node test/live/run.js",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
-    "release": "electron-builder --mac --publish always",
+    "//release": "F-193: `release` is the SUPPORTED path — it preflights, builds, staples the DMG, re-hashes latest-mac.yml's DMG entry, uploads all five assets and ASSERTS they landed, undrafts, then diffs the public feed. `release:raw` is the bare electron-builder command it wraps; it reports success on a partial upload and leaves a draft (it did so on 1.10.0 and again, differently, on 1.10.1). Use it only to debug the wrapper.",
+    "release": "bash scripts/release.sh",
+    "release:raw": "electron-builder --mac --publish always",
     "notarize": "bash scripts/finish-notarize.sh"
   },
   "dependencies": {

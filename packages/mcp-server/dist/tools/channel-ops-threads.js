@@ -255,7 +255,7 @@ async function opProposeClose(client, channelRef, threadId, outcome, summary) {
         // way whether or not anybody acts on the prompt. Saying so is what stops
         // an agent treating its own proposal as the end of the exchange and going
         // quiet on a thread that is still live.
-        `Proposed closing thread **${(0, channel_shared_1.inlineOr)(proposed.thread.title, NO_TITLE)}** in **${chName}** as ${proposed.outcome}${summaryNote}. NOTHING IS CLOSED: your operator sees this as a prompt and decides, and until they do the thread is open and fully live — it routes, it accepts posts, and a reply may still arrive. Do not propose again; a repeat collapses into the same prompt. If more comes in, keep working the thread and answer it.`,
+        `Proposed closing thread **${(0, channel_shared_1.inlineOr)(proposed.thread.title, NO_TITLE)}** in **${chName}** as ${proposed.outcome}${summaryNote}. NOTHING IS CLOSED: your operator sees this as a prompt and decides, and until they do the thread is open and fully live — it routes, it accepts posts, and a reply may still arrive. Repeating this call with nothing new said collapses into the same prompt — do not retry it idly. If the exchange CONTINUES and later concludes again, a fresh proposal is legitimate and will raise a new prompt. In the meantime, keep working the thread and answer what comes in.`,
         ...marker,
     ].join("\n"));
 }

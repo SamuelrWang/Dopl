@@ -167,9 +167,15 @@ describe("opProposeClose — the result claims NO finality at all (DECISION 2)",
     expect(text).toContain("NOTHING IS CLOSED");
     expect(text).toContain("your operator sees this as a prompt and decides");
     expect(text).toContain("the thread is open and fully live");
-    expect(text).toContain("keep working the thread and answer it");
-    // Propose ONCE: a repeat collapses into the prompt they already have.
-    expect(text).toContain("Do not propose again");
+    expect(text).toContain("keep working the thread and answer what comes in");
+    // F-172: proposals are RE-RAISABLE after genuine further exchange — the
+    // key is (thread, outcome, activity anchor). The copy must teach both
+    // halves: an idle retry dedupes, a post-conversation proposal is fresh.
+    // Pinned NEGATIVELY too: the pre-F-172 "Do not propose again" taught
+    // one-shot-forever, the exact behavior the server no longer has.
+    expect(text).toContain("collapses into the same prompt");
+    expect(text).toContain("a fresh proposal is legitimate");
+    expect(text).not.toContain("Do not propose again");
     // The marker seq still rides out — never a guessed cursor.
     expect(text).toContain("Proposal note posted at seq 355");
   });
