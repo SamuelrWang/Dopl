@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { InvitationStatus } from "../types";
+import { DesktopHandoffPanel } from "./desktop-handoff-panel";
 
 interface Props {
   /**
@@ -31,11 +31,21 @@ const ROLE_LABELS: Record<string, string> = {
  *   - if the invitee is signed in → Accept button hits the API
  *   - if not → Sign in CTA that bounces through /login and back here
  *   - if the link is dead (expired/revoked/used) → friendly explainer
+ *   - once accepted → the desktop handoff, into the workspace they just joined
+ *
+ * THE ACCEPT USED TO END IN A `router.push('/{slug}-{publicId}')`, which is a
+ * URL the website retirement 302s to `/get-started` — so the reward for
+ * accepting an invitation was a download page that never mentioned the
+ * workspace. Accepting is a MEMBERSHIP, and membership is spent in the desktop
+ * app, so the card hands off with `dopl://open/{segment}` instead
+ * (`desktop-handoff-panel.tsx`).
  */
 export function AcceptInviteCard({ status, token, needsAuth }: Props) {
-  const router = useRouter();
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joined, setJoined] = useState<{ slug: string; publicId: string } | null>(
+    null
+  );
 
   const dead = status.expired || status.revoked || status.alreadyAccepted;
   const reason = status.revoked
@@ -62,8 +72,7 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
         workspaceSlug: string;
         workspacePublicId: string;
       };
-      router.push(`/${workspaceSlug}-${workspacePublicId}`);
-      router.refresh();
+      setJoined({ slug: workspaceSlug, publicId: workspacePublicId });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setAccepting(false);
@@ -101,7 +110,12 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
         )}
       </p>
 
-      {dead ? (
+      {joined ? (
+        <DesktopHandoffPanel
+          workspace={joined}
+          heading={`You've joined ${status.workspace.name}.`}
+        />
+      ) : dead ? (
         <div className="mt-6 rounded-md bg-danger/10 border border-danger/20 p-3">
           <p className="text-small text-danger">{reason}</p>
           <p className="text-caption text-text-muted mt-1.5">
@@ -134,9 +148,12 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
         </div>
       )}
 
-      <p className="mt-6 text-micro uppercase tracking-wider text-text-muted font-mono">
-        Expires {new Date(status.invitation.expiresAt).toLocaleString()}
-      </p>
+      {/* An expiry an accepted invitation can no longer reach is noise. */}
+      {!joined && (
+        <p className="mt-6 text-micro uppercase tracking-wider text-text-muted font-mono">
+          Expires {new Date(status.invitation.expiresAt).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 }

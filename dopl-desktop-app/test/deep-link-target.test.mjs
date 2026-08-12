@@ -273,6 +273,58 @@ test("it never throws, whatever it is handed", () => {
   }
 });
 
+// ── The web producer ─────────────────────────────────────────────────────────
+
+test("the WEB's workspace handoff link resolves to that workspace", () => {
+  // `/join/{token}` and `/invite/{token}` survive the website retirement, and
+  // what they hand a new member is `dopl://open/{segment}` — built by
+  // `src/features/workspaces/url.ts › workspaceDeepLink`, on the other side of
+  // a process boundary that nothing type-checks. So the producer's literal is
+  // READ, not assumed, and run through this parser: a change to either half
+  // that the other does not follow fails here rather than in someone's browser.
+  const urlSrc = readFileSync(
+    join(HERE, "..", "..", "src", "features", "workspaces", "url.ts"),
+    "utf8"
+  );
+  const scheme = /const DESKTOP_SCHEME = "([^"]+)"/.exec(urlSrc);
+  assert.ok(scheme, "could not find DESKTOP_SCHEME in url.ts");
+  assert.equal(`${scheme[1]}://`, PROTOCOL_PREFIX);
+
+  // The two shapes that module emits, reproduced from its own template.
+  const verb = /return `\$\{DESKTOP_SCHEME\}:\/\/(\w+)`/.exec(urlSrc);
+  const path = /return `\$\{DESKTOP_SCHEME\}:\/\/(\w+)\/\$\{workspaceSegment\(ws\)\}`/.exec(
+    urlSrc
+  );
+  assert.ok(verb && path, "workspaceDeepLink no longer builds the links this test knows");
+  assert.equal(verb[1], VERB_OPEN, "the degraded link must still be the open verb");
+  assert.equal(path[1], VERB_OPEN);
+
+  const link = `${PROTOCOL_PREFIX}${path[1]}/${SEG}`;
+  const parsed = parseDeepLink(link);
+  assert.equal(parsed.verb, VERB_OPEN);
+  assert.equal(
+    webPathToRoute(parsed.target),
+    `/${SEG}/${WORKSPACE_HOME_PAGE}`,
+    `${link} must open the workspace, not home`
+  );
+
+  // The workspace-less degradation: a workspace the server could not read back
+  // still opens the app rather than resolving to a malformed path.
+  const bare = parseDeepLink(`${PROTOCOL_PREFIX}${verb[1]}`);
+  assert.equal(bare.verb, VERB_OPEN);
+  assert.equal(webPathToRoute(bare.target), HOME_ROUTE);
+});
+
+test("`join` and `invite` stay WEB-ONLY — the workspace crosses, never the invite URL", () => {
+  // The handoff deliberately does not teach the grammar about invite tokens: a
+  // token is a WEB credential, spent by a browser against a Next route, and the
+  // app has no way to redeem one. Both roots must keep resolving home.
+  assert.ok(targetModule.WEB_ONLY_ROOTS.has("join"));
+  assert.ok(targetModule.WEB_ONLY_ROOTS.has("invite"));
+  assert.equal(webPathToRoute(`/join/${"a".repeat(64)}`), HOME_ROUTE);
+  assert.equal(webPathToRoute("/invite/some-token"), HOME_ROUTE);
+});
+
 // ── The drift alarm ──────────────────────────────────────────────────────────
 
 test("the page table matches the SPA's route table", () => {

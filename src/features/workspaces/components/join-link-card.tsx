@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
+import { DesktopHandoffPanel, JoinPendingPanel } from "./desktop-handoff-panel";
 
 interface Props {
   workspaceName: string;
@@ -14,12 +13,34 @@ interface Props {
 }
 
 /**
+ * `POST /api/join/[token]`'s answer, structurally. `RequestJoinResult` in
+ * `../server/join-links` is the authority, but that module is `server-only` and
+ * this is a client component — so the shape is restated rather than imported.
+ */
+type JoinOutcome =
+  | { outcome: "already_member"; workspaceSlug: string; workspacePublicId: string }
+  | { outcome: "requested" | "already_pending" };
+
+/**
  * Join-link landing card. Mirrors the accept-invite card, but joining
  * files an admin-approval request instead of granting membership:
  *   - signed out → sign-in CTA bouncing through /login back to this page
- *   - signed in  → "Request to join"; on success the visitor is routed
- *     to their own workspace where the awaiting-approval popup picks up
- *   - already a member → straight into the workspace
+ *   - signed in  → "Request to join"; on success the card says the request
+ *     is with an admin and to open the desktop app once it lands
+ *   - already a member → the desktop handoff, straight into the workspace
+ *
+ * NOTHING HERE NAVIGATES ANY MORE. Both branches used to `router.push` an SPA
+ * path — `/{slug}-{publicId}` and the post-auth landing — and the first of
+ * those is a URL the retirement map 302s to `/get-started`, so a member
+ * arriving through this card was shown a download page instead of their
+ * workspace. The product lives in the desktop app; the outcome of a join is a
+ * `dopl://` handoff (`desktop-handoff-panel.tsx`), not a page.
+ *
+ * THE ALREADY-MEMBER BRANCH IS ALSO THE APPROVED-REQUEST BRANCH. A requester
+ * who comes back to the same link after an admin approves them clicks the same
+ * button, and `requestJoin` answers `already_member` — so the approved moment
+ * needs no new endpoint and no polling, only this card being honest about the
+ * answer it already gets.
  */
 export function JoinLinkCard({
   workspaceName,
@@ -28,9 +49,9 @@ export function JoinLinkCard({
   token,
   needsAuth,
 }: Props) {
-  const router = useRouter();
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<JoinOutcome | null>(null);
 
   const inviter = inviterName ?? inviterEmail;
 
@@ -45,18 +66,7 @@ export function JoinLinkCard({
       if (!res.ok) {
         throw new Error(body?.error?.message || body?.error || "Failed to request");
       }
-      if (body.outcome === "already_member") {
-        router.push(`/${body.workspaceSlug}-${body.workspacePublicId}`);
-      } else {
-        // Land the visitor somewhere that exists. This used to push `/canvas`
-        // to reach the awaiting-approval popup mounted on the workspace canvas;
-        // Stage D deleted both the page and the popup, and the push only still
-        // "worked" because the retirement map 302s it. `/` would dump them on
-        // the marketing page with no feedback, so this goes to the post-auth
-        // landing directly — one hop, and a route that is actually there.
-        router.push(WEB_POST_AUTH_LANDING);
-      }
-      router.refresh();
+      setOutcome(body as JoinOutcome);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setJoining(false);
@@ -83,10 +93,28 @@ export function JoinLinkCard({
             <span className="text-text-primary">{workspaceName}</span>.
           </>
         )}{" "}
-        An admin will approve your request once you ask to join.
+        {/* Dropped once the answer is in hand — it is either already wrong
+            (they were a member all along) or superseded by the panel below. */}
+        {!outcome && "An admin will approve your request once you ask to join."}
       </p>
 
-      {needsAuth ? (
+      {outcome?.outcome === "already_member" ? (
+        <DesktopHandoffPanel
+          workspace={{
+            slug: outcome.workspaceSlug,
+            publicId: outcome.workspacePublicId,
+          }}
+          heading={`You're already a member of ${workspaceName}.`}
+        />
+      ) : outcome ? (
+        <JoinPendingPanel
+          heading={
+            outcome.outcome === "already_pending"
+              ? `Your request to join ${workspaceName} is already with an admin.`
+              : `Request sent to the ${workspaceName} admins.`
+          }
+        />
+      ) : needsAuth ? (
         <div className="mt-6 flex flex-col gap-3">
           <p className="text-caption text-text-tertiary">
             Sign in or create an account to join. We&apos;ll bring you back here.
