@@ -1,6 +1,6 @@
 /**
- * `GET /api/workspaces/resolve?segment=...` — the SPA router's twin of
- * `resolvePageWorkspace`.
+ * `GET /api/workspaces/resolve?segment=...` — the SPA router's face on
+ * `resolveWorkspaceSegmentForUser`.
  *
  * THE PROPERTY THIS FILE EXISTS FOR: on the web, a stale `{slug}` in the URL
  * is corrected by an RSC `redirect()` the user never sees. The SPA has no such

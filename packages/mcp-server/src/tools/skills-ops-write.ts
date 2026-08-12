@@ -19,13 +19,13 @@ export async function opWrite(
   force?: boolean,
 ): Promise<ToolResponse> {
   try {
-    const { file, webUrl } = await client.writeSkillBody(
+    const { file } = await client.writeSkillBody(
       slug,
       body,
       force ? null : expected_version
     );
     return ok(
-      `Wrote SKILL.md in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.\nView in Dopl: ${webUrl}`
+      `Wrote SKILL.md in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.`
     );
   } catch (e) {
     if (isConflict(e)) {

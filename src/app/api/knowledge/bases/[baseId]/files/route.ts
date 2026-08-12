@@ -4,7 +4,6 @@ import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with
 import { parseJson } from "@/shared/api/parse-json";
 import { DESCRIPTION_MAX } from "@/config";
 import { HttpError } from "@/shared/lib/http-error";
-import { knowledgeEntryUrl } from "@/shared/lib/url/resource-url";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
@@ -70,19 +69,13 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     // updated_at (mirrors the skills file route + ID-based entry route).
     // Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const { entry, base } = await writeFileByPath(ctx, baseId, input.path, {
+    const { entry } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
       excerpt: input.excerpt,
       expectedUpdatedAt,
     });
-    const webUrl = knowledgeEntryUrl({
-      origin: request.nextUrl.origin,
-      workspace: { slug: auth.workspaceSlug, publicId: auth.workspacePublicId },
-      base,
-      entryId: entry.id,
-    });
-    return NextResponse.json({ entry, webUrl });
+    return NextResponse.json({ entry });
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }

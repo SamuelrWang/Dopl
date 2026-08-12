@@ -17,8 +17,8 @@ const respond_1 = require("./respond");
 const skills_shared_1 = require("./skills-shared");
 async function opWrite(client, slug, body, expected_version, force) {
     try {
-        const { file, webUrl } = await client.writeSkillBody(slug, body, force ? null : expected_version);
-        return (0, respond_1.ok)(`Wrote SKILL.md in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.\nView in Dopl: ${webUrl}`);
+        const { file } = await client.writeSkillBody(slug, body, force ? null : expected_version);
+        return (0, respond_1.ok)(`Wrote SKILL.md in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.`);
     }
     catch (e) {
         if ((0, respond_1.isConflict)(e)) {

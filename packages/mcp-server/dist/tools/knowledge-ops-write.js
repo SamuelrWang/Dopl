@@ -126,11 +126,9 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
     if ((0, knowledge_shared_1.isErr)(base))
         return base;
     let entry;
-    let webUrl;
     try {
         const res = await client.writeKbFileByPath(base.id, path, { body, title, excerpt }, force ? null : expected_version);
         entry = res.entry;
-        webUrl = res.webUrl;
     }
     catch (e) {
         if ((0, respond_1.isConflict)(e)) {
@@ -160,7 +158,7 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
     const note = canonicalPath !== path
         ? ` Address future reads/moves with path ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)}.`
         : "";
-    return (0, respond_1.ok)(`Wrote ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}\nView in Dopl: ${webUrl}`);
+    return (0, respond_1.ok)(`Wrote ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}`);
 }
 async function opMoveFile(client, ref, from_path, to_path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);

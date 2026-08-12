@@ -1,6 +1,5 @@
 import "server-only";
 import { cache } from "react";
-import { notFound, redirect } from "next/navigation";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
 import {
@@ -86,28 +85,6 @@ export const resolveWorkspaceSegmentForUser = cache(
   return null;
   }
 );
-
-/**
- * Page-level wrapper around `resolveWorkspaceSegmentForUser`. 404s when
- * no workspace is reachable, 301s to the canonical URL when the inbound
- * segment is stale, otherwise returns the resolved workspace.
- *
- * `tail` lets canvas / knowledge / skills pages preserve their deeper
- * segment when redirecting (e.g. `/old-slug/main` → `/new-canonical/main`).
- */
-export async function resolvePageWorkspace(
-  segment: string,
-  userId: string,
-  tail: string = ""
-): Promise<Workspace> {
-  const resolved = await resolveWorkspaceSegmentForUser(segment, userId);
-  if (!resolved) notFound();
-  if (resolved.needsRedirect) {
-    const suffix = tail ? `/${tail}` : "";
-    redirect(`/${resolved.canonical}${suffix}`);
-  }
-  return resolved.workspace;
-}
 
 /**
  * API-route wrapper. Returns the workspace if reachable, null otherwise.

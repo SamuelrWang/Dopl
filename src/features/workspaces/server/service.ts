@@ -267,8 +267,8 @@ export async function listMyWorkspacesWithRole(
  * used to inline these `supabaseAdmin()` queries itself (ENGINEERING §8:
  * pages don't talk to Supabase).
  *
- * Membership is NOT checked here; both callers resolve the workspace
- * membership-scoped first (`resolvePageWorkspace` / `resolveApiWorkspace`).
+ * Membership is NOT checked here; callers resolve the workspace
+ * membership-scoped first (`resolveApiWorkspace`).
  */
 export async function getWorkspaceOverviewCounts(
   workspaceId: string

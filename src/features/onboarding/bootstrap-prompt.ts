@@ -2,8 +2,11 @@
  * The paste-into-your-agent BOOTSTRAP prompt + the static HTML card
  * template the agent fills and renders. Pure data — no React, no server
  * code, no AI keys. Dopl never generates the card itself: it hands the
- * agent this template and (from each write) an access-checked URL; the
- * agent fills the template and renders it inline.
+ * agent this template; the agent fills it and renders it inline.
+ *
+ * The card carried a "view in Dopl" link until the write routes stopped
+ * returning `webUrl` — every such URL pointed into the retired website
+ * and 302'd to `/get-started`, so the link was worse than no link.
  *
  * Copy here must stay MODEL-AGNOSTIC: no "Claude", "Codex", "Cursor",
  * etc. Address "your AI agent" / "your environment" only.
@@ -19,7 +22,6 @@ import { MCP_SERVER_NAME } from "./constants";
  *   {{TYPE}}      "Knowledge" | "Skill"
  *   {{SCOPE}}     the knowledge base or skill it belongs to
  *   {{BODY_HTML}} the entry/skill body, converted to HTML by the agent
- *   {{URL}}       the "View in Dopl" URL returned by the write tool
  */
 export const DOPL_CARD_TEMPLATE = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;border:1px solid #e6e6e6;border-radius:12px;overflow:hidden;background:#fff;color:#1a1a1a">
   <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f0f0f0">
@@ -31,9 +33,6 @@ export const DOPL_CARD_TEMPLATE = `<div style="font-family:system-ui,-apple-syst
   </div>
   <div style="padding:14px 16px;font-size:14px;line-height:1.6">
     {{BODY_HTML}}
-  </div>
-  <div style="padding:10px 16px;border-top:1px solid #f0f0f0;font-size:12px">
-    <a href="{{URL}}" style="color:#4f46e5;text-decoration:none">view in Dopl →</a>
   </div>
 </div>`;
 
@@ -61,7 +60,7 @@ CONNECT
 
 PHASE 0 — INSTANT SEED (do immediately, before anything else):
 - From what you ALREADY know (your memory, this conversation, my open project/files), write ONE small, high-confidence KB entry right now. Ask nothing first.
-- Render its card + the "View in Dopl" link (PHASE 3), then tell me in one line: "Here's a first entry so you can see how this works; correct anything that's wrong."
+- Render its card (PHASE 3), then tell me in one line: "Here's a first entry so you can see how this works; correct anything that's wrong."
 - Then go to PHASE 1.
 
 PHASE 1 — PROPOSE (once):
@@ -76,11 +75,11 @@ PHASE 2 — INTERVIEW:
 
 PHASE 3 — WRITE + SHOW (every time you write):
 - Write or update the artifact with the admin tool, in the schema below, one atomic topic per entry.
-- The write tool returns "View in Dopl: <url>". RENDER a visual card of what you wrote, inline, using your environment's HTML/artifact capability — fill this template (replace every {{SLOT}}, convert the body to HTML, self-contained, no external libraries):
+- RENDER a visual card of what you wrote, inline, using your environment's HTML/artifact capability — fill this template (replace every {{SLOT}}, convert the body to HTML, self-contained, no external libraries):
 
 ${DOPL_CARD_TEMPLATE}
 
-- Also surface the same URL as a plain clickable link. If you can't render inline HTML, fall back to clean markdown — never a raw text dump.
+- If you can't render inline HTML, fall back to clean markdown — never a raw text dump.
 - Then continue with more gap questions, or ask: "Go deeper, or move to the next topic?"
 
 PHASE 4 — NEXT:
@@ -90,7 +89,7 @@ RULES:
 - Fill from memory first; ask only real gaps. Batch ≤3 questions and always let me say "good enough, move on."
 - Capture the NEGATIVES: what I removed, what I DON'T do, disqualifiers, gotchas. Half the value is anti-knowledge.
 - Never write secrets, credentials, or private personal data.
-- Every write gets a rendered card + the link. Keep entries atomic.
+- Every write gets a rendered card. Keep entries atomic.
 
 RUBRICS:
 

@@ -160,7 +160,6 @@ describe("write paths thread the new args", () => {
   it("write_file forwards `excerpt` in the write input", async () => {
     const write = vi.fn().mockResolvedValue({
       entry: entry({ id: "e-new", title: "notes", excerpt: "sum" }),
-      webUrl: "https://app/entry",
     });
     const client = {
       listKbBases: vi.fn().mockResolvedValue([BASE]),

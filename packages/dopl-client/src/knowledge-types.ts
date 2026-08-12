@@ -111,10 +111,6 @@ export interface KnowledgeWriteFileInput {
 
 export interface KnowledgeWriteFileResult {
   entry: KnowledgeEntry;
-  /** Absolute web URL to the written entry; built server-side from the
-   * access-checked base, so it only ever points at a resource the
-   * caller is entitled to. */
-  webUrl: string;
 }
 
 export interface KnowledgePathOpResult {

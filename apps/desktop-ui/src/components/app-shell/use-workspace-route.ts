@@ -12,9 +12,11 @@ import {
   type BootPayload,
 } from "#/pages/boot/use-boot-state";
 
-/** `GET /api/workspaces/resolve?segment=` — the HTTP twin of the web app's
- *  `resolvePageWorkspace` (docs/migration-research/web-pages.md §1.5). Still
- *  live, still the web app's route, and still read directly by the chats page.
+/** `GET /api/workspaces/resolve?segment=` — the HTTP twin of the server's
+ *  `resolveWorkspaceSegmentForUser` (docs/migration-research/web-pages.md
+ *  §1.5; the RSC-only `resolvePageWorkspace` wrapper was deleted 2026-08-11).
+ *  Still live, still the web app's route, and still read directly by the
+ *  chats page.
  *  The SPA gets the same answer — plus role, caller id and the access matrix —
  *  from `POST /api/boot`, and SEEDS this key from it so the callers that still
  *  ask never pay a request. */

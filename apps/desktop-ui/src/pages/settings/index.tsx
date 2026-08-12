@@ -17,7 +17,8 @@ import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
  * `src/app/[workspaceSlug]/(app)/settings/page.tsx`
  * (docs/migration-research/web-pages.md §14).
  *
- * The RSC's two server calls (`resolvePageWorkspace` + `resolveMembershipOrThrow`)
+ * The RSC's two server calls (segment resolution — the since-deleted
+ * `resolvePageWorkspace` — plus `resolveMembershipOrThrow`)
  * collapse into the endpoint §14 names as already covering them:
  * `GET /api/workspaces/{segment}` → `{ workspace, role }`. That is the same
  * path+key the settings modal's workspace pane reads — both build it with
