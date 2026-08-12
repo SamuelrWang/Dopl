@@ -430,13 +430,20 @@ html {
 :root {
   /* Titlebar removed (was 32px) — kept at 0 so derived panel insets stay valid. */
   --shell-titlebar-h: 0px;
-  --shell-rail-w: 62px;
-  --shell-sidebar-w: 204px;
+  /* Rail removed (2026-08-11) — the workspace switcher lives in the sidebar
+     brand pill now. Kept at 0 so the derived panel insets stay valid. */
+  --shell-rail-w: 0px;
+  --shell-sidebar-w: 232px;
+  /* Sidebar surface + resting nav-chip fill (Folkd-style sidebar). */
+  --shell-surface: #ececec;
+  --shell-chip: #e2e2e2;
   /* Matches --shell-gap-bottom so the panel's top and bottom margins are equal. */
   --shell-gap-top: 6px;
   --shell-gap-right: 6px;
   --shell-gap-bottom: 6px;
-  --shell-gap-left: 4px;
+  /* Matches `.page-float`'s 8px side margin so the sidebar's brand pill sits
+     the same distance from the window edge as from the page card. */
+  --shell-gap-left: 8px;
   --shell-panel-radius: 0px;
   /* Derived: viewport insets of the white main panel. */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
@@ -743,6 +750,16 @@ html {
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
 }
 
+/* Individual segmented pill — the resting face of one stadium-shaped option
+   in a TRACKLESS segmented row (SegmentedControl): flat #e9eaec fill, fully
+   rounded ends, hairline drawn as a ring (not a border) so swapping the
+   active pill to .raised-tab never shifts layout. */
+.seg-pill {
+  background: #e9eaec;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
 /* Raised active tab face — white gradient popping out of a concave track. */
 .raised-tab {
   background: linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
@@ -752,6 +769,42 @@ html {
     0 1px 2px rgba(0, 0, 0, 0.12),
     0 3px 6px rgba(0, 0, 0, 0.08);
 }
+
+/* Nav chip — THE hug-width nav item, ONE recipe for every nav rail in the app
+   (app-shell sidebar rows + footer button, settings-modal section list). It is
+   written for BOTH `<a>` and `<button>`: `border: none`, an explicit
+   font-size/weight (a button does not inherit them without help), inherited
+   family, `text-decoration: none` and `cursor: pointer`, so the two element
+   types render identically.
+
+   The resting fill is applied only when NOT active, so an active chip —
+   `class="nav-chip nav-chip-active raised-tab"` — has no background of its own
+   to fight `.raised-tab`'s gradient. Never fork these values into a module. */
+.nav-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 10px;
+  color: #3a3d42;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, filter 120ms ease;
+}
+.nav-chip svg { flex: 0 0 auto; width: 19px; height: 19px; color: #8a8f97; }
+.nav-chip:not(.nav-chip-active) { background: var(--shell-chip); }
+.nav-chip:not(.nav-chip-active):hover { filter: brightness(0.97); }
+
+/* Selected chip — the ink darkens here; the raised white FACE comes from
+   `.raised-tab`, composed alongside this class in the TSX. */
+.nav-chip.nav-chip-active { color: #26282c; }
+.nav-chip.nav-chip-active svg { color: #4a4d52; }
 
 /* Dotted graph substrate — the recessed world surface a graph lays its node
    cards on. ⚠ NO CURRENT CONSUMER: the ontology graph view and the workflow

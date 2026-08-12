@@ -64,7 +64,8 @@ const SUPABASE_STORAGE_ORIGIN = "https://mrefkedvdehahjejreae.supabase.co";
  * set inline `style` attributes and inject <style> tags at runtime.
  *
  * `img-src` carries the exact Supabase storage origin so workspace icons load
- * (`AppRailCore`'s `<img src={ws.iconUrl}>` — journey-audit GAP-20).
+ * (`WorkspaceSwitcherCore`'s glyph `<img src={ws.iconUrl}>` — journey-audit
+ * GAP-20; the rail that first motivated this was removed 2026-08-11).
  *
  * CLOSED SEAM — member AVATARS do not need an origin here and must never get
  * one. They are NOT Supabase URLs: `profiles.avatar_url` is copied from the

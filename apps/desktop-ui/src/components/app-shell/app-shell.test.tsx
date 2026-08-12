@@ -130,7 +130,7 @@ describe("app shell", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   });
 
-  it("renders the section nav and the workspace rail for the routed workspace", async () => {
+  it("renders the section nav and the workspace switcher for the routed workspace", async () => {
     renderShell("/acme-ab12cd/overview");
 
     expect(await screen.findByText("page body")).toBeInTheDocument();
@@ -142,14 +142,8 @@ describe("app shell", () => {
       "href",
       "/acme-ab12cd/channels"
     );
-    // The rail tile is the workspace from `GET /api/workspaces`.
-    await waitFor(() =>
-      expect(screen.getByTitle("Acme")).toHaveAttribute(
-        "href",
-        "/acme-ab12cd/knowledge"
-      )
-    );
-    // The brand pill names the open workspace.
+    // The brand pill names the open workspace (the rail was removed
+    // 2026-08-11 — switching lives in this pill's popover).
     expect(screen.getByRole("button", { name: /Acme/ })).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });

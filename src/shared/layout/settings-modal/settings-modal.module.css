@@ -2,7 +2,7 @@
  * Settings modal — study-notes popup language on the global design tokens.
  *
  * Chrome only (overlay, card, nav, pane). Section content is styled with
- * the token utilities + kit classes (concave-field, concave-sel, btn-light,
+ * the token utilities + kit classes (concave-field, nav-chip, btn-light,
  * SECTION_BOX_INSET) in the TSX. Values come from :root — no palette fork.
  */
 
@@ -220,18 +220,30 @@
 }
 .close:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-secondary); }
 
-/* ---------- Left nav (study-notes settings rail) ---------- */
+/* ---------- Left nav (the app-shell sidebar's chip rail) ----------
+   Same gray surface as the shell sidebar (`--shell-surface`, not the inset
+   well) so the chips sit on the identical background in both places. */
 .nav {
   width: 192px;
   flex: 0 0 192px;
-  background: var(--bg-inset);
+  background: var(--shell-surface);
   border-right: 1px solid var(--border-subtle);
   padding: 12px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
 }
-.navGroup { margin-bottom: 14px; }
+/* LAYOUT ONLY — a left-aligned column of hug-width chips, exactly like the
+   shell sidebar's `.nav`. The rows are the global kit's `.nav-chip` /
+   `.nav-chip-active` (+ `.raised-tab` when selected); there is deliberately
+   no local nav-item recipe to drift from it. */
+.navGroup {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
 .navGroupLabel {
   font-size: var(--text-label);
   font-weight: 600;
@@ -239,31 +251,6 @@
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 4px 10px 6px;
-}
-.navItem {
-  width: 100%;
-  display: block;
-  margin-bottom: 2px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: var(--text-small);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease;
-}
-.navItem:not(.navActive):hover {
-  background: rgba(0, 0, 0, 0.035);
-  color: var(--text-primary);
-}
-/* Surface comes from the global .concave-sel composed in the TSX;
-   this class only carries the active typography. */
-.navActive {
-  color: var(--text-primary);
-  font-weight: 500;
 }
 
 .navFoot { margin-top: auto; padding-top: 12px; }

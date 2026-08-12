@@ -78,7 +78,17 @@ export function WorkspaceSwitcherCore({
         aria-expanded={open}
         onClick={() => setOpenState(!open)}
       >
-        <span className={styles.brandPillName}>{workspaceName}</span>
+        <WorkspaceGlyph
+          name={active?.name ?? workspaceName}
+          iconUrl={active?.iconUrl ?? null}
+          size="md"
+        />
+        <span className={styles.brandPillText}>
+          <span className={styles.brandPillName}>{workspaceName}</span>
+          {active && (
+            <span className={styles.brandPillSub}>{active.role}</span>
+          )}
+        </span>
         <ChevronsUpDown size={15} className={styles.brandChevron} />
       </button>
 
@@ -216,7 +226,7 @@ function WorkspaceGlyph({
         box
       )}
     >
-      {(name.trim()[0] || "?").toUpperCase()}
+      {((name ?? "").trim()[0] || "?").toUpperCase()}
     </span>
   );
 }

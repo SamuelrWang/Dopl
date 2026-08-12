@@ -10,16 +10,15 @@ export interface SegmentedOption<K extends string = string> {
 }
 
 /**
- * Recessed segmented switcher — a `.concave-track` holding equal-width
- * slots and a single `.raised-tab` thumb that SLIDES between them
- * (0.28s ease-out-quint) instead of the highlight jumping. THE blessed
- * segmented-tabs primitive: any pane that needs scope/filter tabs
- * composes this instead of hand-rolling the track/thumb recipe, so the
- * animation stays identical everywhere.
- *
- * Geometry: the track has 4px padding and a 4px gap (matching
- * `.concave-track`), so a slot is (100% − 8px − gaps) / n and the thumb
- * travels its own width plus one gap per step.
+ * Segmented switcher — a TRACKLESS row of individual stadium pills: each
+ * option is its own hug-width `.seg-pill` (flat gray fill, fully rounded
+ * ends), and the active one swaps that face for the kit's `.raised-tab`
+ * (the pill radius stays on the button, ring-for-border in both faces so
+ * the swap never shifts layout). THE blessed segmented-tabs primitive:
+ * any pane that needs scope/filter tabs composes this instead of
+ * hand-rolling the pill recipe, so the look stays identical everywhere.
+ * No shared track and no sliding thumb — pills hug their labels, so there
+ * is no fixed slot geometry for a thumb to travel.
  */
 export function SegmentedControl<K extends string>({
   options,
@@ -40,29 +39,8 @@ export function SegmentedControl<K extends string>({
   /** Layout-only additions (margins, width) — recipes stay in the kit. */
   className?: string;
 }) {
-  const n = options.length;
-  const index = Math.max(
-    0,
-    options.findIndex((o) => o.key === value)
-  );
   return (
-    <div
-      role="tablist"
-      className={cn(
-        "concave-track relative flex items-center gap-1",
-        className
-      )}
-    >
-      <span
-        aria-hidden
-        className="raised-tab pointer-events-none absolute left-1 top-1 rounded-[7px]"
-        style={{
-          height: "calc(100% - 8px)",
-          width: `calc((100% - 8px - ${(n - 1) * 4}px) / ${n})`,
-          transform: `translateX(calc(${index} * (100% + 4px)))`,
-          transition: "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
-        }}
-      />
+    <div role="tablist" className={cn("flex items-center gap-1.5", className)}>
       {options.map(({ key, label, count }) => (
         <button
           key={key}
@@ -72,10 +50,10 @@ export function SegmentedControl<K extends string>({
           disabled={disabled}
           onClick={() => value !== key && onChange(key)}
           className={cn(
-            "relative z-[1] flex h-[27px] flex-1 items-center justify-center gap-1.5 rounded-[7px] text-caption font-medium transition-colors",
+            "flex h-[27px] items-center justify-center gap-1.5 rounded-full px-3 text-caption font-medium transition-colors",
             value === key
-              ? "text-text-primary"
-              : "text-text-secondary hover:text-text-primary",
+              ? "raised-tab text-text-primary"
+              : "seg-pill text-text-secondary hover:text-text-primary",
             disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
           )}
         >

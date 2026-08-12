@@ -58,7 +58,8 @@ export interface SettingsModalCoreProps {
 
 /**
  * Settings modal in the study-notes popup language: darkened scrim, a
- * floating card, inset left nav with concave-pressed active tabs, and a
+ * floating card, a left nav of kit `.nav-chip` rows on the shell's gray
+ * surface (the active one raised, identical to the app sidebar), and a
  * scrolling right pane. All section content styles with the global
  * tokens + kit classes.
  *
@@ -93,8 +94,10 @@ export function SettingsModalCore({
                 type="button"
                 onClick={() => onSectionChange(item.id)}
                 className={cn(
-                  styles.navItem,
-                  section === item.id && ["concave-sel", styles.navActive]
+                  // The SAME kit chip the app-shell sidebar renders — one
+                  // recipe, two nav rails. `.navGroup` supplies column layout.
+                  "nav-chip",
+                  section === item.id && "nav-chip-active raised-tab"
                 )}
               >
                 {item.label}

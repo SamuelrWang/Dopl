@@ -14,7 +14,11 @@
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: var(--rail);
+  /* Dark window frame removed (2026-08-11): the root paints the SAME gray as
+     `.surface`, so the surface's margins read as breathing room instead of a
+     navy border. `--rail` is still defined (other features use it) — it is
+     simply no longer the app frame. */
+  background: var(--shell-surface);
   color: var(--ink);
   font-family: var(--font-app), system-ui, sans-serif;
   font-size: 15px;
@@ -30,137 +34,6 @@
 /* ---------- Body layout ---------- */
 .body { flex: 1; display: flex; min-height: 0; }
 
-/* ---------- Workspace rail (far left) ---------- */
-.rail {
-  width: var(--shell-rail-w);
-  flex: 0 0 var(--shell-rail-w);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 13px;
-  padding: 6px 0 16px;
-  /* Layered drop-shadow = the tile floats off the rail (same 3D language as
-     the auth/onboarding crystal slab). Hairline at the end seats the edge. */
-  --ws-float:
-    0 2px 3px rgba(0, 0, 0, 0.32),
-    0 5px 12px rgba(0, 0, 0, 0.22),
-    0 0 0 1px rgba(0, 0, 0, 0.22);
-  --ws-float-hi:
-    0 4px 6px rgba(0, 0, 0, 0.34),
-    0 11px 22px rgba(0, 0, 0, 0.28),
-    0 0 0 1px rgba(0, 0, 0, 0.24);
-}
-.wsTile {
-  position: relative;
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  /* Raised face: lighter at the top, darker at the bottom — reads as a
-     convex tile catching light from above. */
-  background: linear-gradient(180deg, #44515d 0%, #333d47 100%);
-  color: #cdd6df;
-  overflow: hidden;
-  text-decoration: none;
-  box-shadow: var(--ws-float);
-  transition: border-radius 0.16s ease, background 0.16s ease,
-    box-shadow 0.16s ease, transform 0.12s ease;
-}
-/* Glossy bevel rim, painted ABOVE the workspace image so the 3D edge shows
-   on icon tiles too: top specular highlight, dark lower lip, faint rim. */
-.wsTile::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.30),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-}
-.wsTile:not(.wsActive):hover {
-  border-radius: 6px;
-  background: linear-gradient(180deg, #4d5b67 0%, #3a4550 100%);
-  box-shadow: var(--ws-float-hi);
-  transform: translateY(-1.5px);
-}
-/* Press: sink the tile back into the rail. */
-.wsTile:active {
-  transform: translateY(1px);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(0, 0, 0, 0.22);
-}
-/* Selected workspace: the light hairline ring, layered over the raised
-   float so the active tile reads lifted and lit, not just outlined. */
-.wsActive {
-  box-shadow: 0 0 0 1.5px rgba(233, 238, 243, 0.9), var(--ws-float);
-}
-.wsTile img { width: 100%; height: 100%; object-fit: cover; }
-.wsLetter { font-family: var(--font-app), system-ui, sans-serif; font-size: 21px; font-weight: 500; }
-.wsAdd {
-  position: relative;
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: linear-gradient(180deg, #44515d 0%, #333d47 100%);
-  color: #9fb0bd;
-  text-decoration: none;
-  box-shadow: var(--ws-float);
-  transition: border-radius 0.16s ease, background 0.16s ease,
-    color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
-}
-.wsAdd::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.30),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-}
-.wsAdd:hover {
-  border-radius: 6px;
-  background: linear-gradient(180deg, #4d5b67 0%, #3a4550 100%);
-  color: #dce4eb;
-  box-shadow: var(--ws-float-hi);
-  transform: translateY(-1.5px);
-}
-.wsAdd:active {
-  transform: translateY(1px);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(0, 0, 0, 0.22);
-}
-.railSpacer { flex: 1; }
-.wsMe {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-  background: var(--black);
-  color: #e9eef3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-app), system-ui, sans-serif;
-  font-size: 18px;
-  font-weight: 500;
-  cursor: pointer;
-  text-decoration: none;
-}
-
 /* ---------- Surface (rounded panel group) ---------- */
 .surface {
   flex: 1;
@@ -169,34 +42,43 @@
   border-radius: 8px;
   overflow: hidden;
   margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
-  /* Neutral gray frame behind the sidebar + content panels. Matches the
-     study-notes sidebar surface so both products share one rail color. */
-  background: #f1f2f4;
+  /* Neutral gray frame behind the sidebar + content panels. */
+  background: var(--shell-surface);
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   Sidebar — the canonical skin for every workspace page: gray surface,
-   small muted type, hairline-fenced nav group, an indented (concave) gray
-   selection, the Pro card under the nav, and the footer pinned to the
-   bottom. Brand is a raised workspace pill.
+   Sidebar — the canonical skin for every workspace page (Folkd-style,
+   2026-08-11): gray surface, hug-width gray nav chips (every item carries
+   a resting fill), the active chip RAISED via the kit's .raised-tab
+   recipe, the Pro card under the nav, and the footer pinned to the
+   bottom. Brand is a raised workspace-switcher pill with the glyph.
    ───────────────────────────────────────────────────────────────────── */
+/* Padding-top is load-bearing, not taste: the brand pill's top edge must land
+   on the page card's top edge. Page card = `.page-float`, whose margin-top is
+   7px inside `.surface`; the sidebar shares that same surface top, so
+   `padding-top + .brand padding-top` must equal 7px (7 + 0 here).
+   Left/right padding are equal (12px) so the pill's gap to the window edge
+   (--shell-gap-left 8 + 12 = 20) equals its gap to the page card
+   (12 + .page-float margin-left 8 = 20). */
 .sidebar {
   width: var(--shell-sidebar-w);
   flex: 0 0 var(--shell-sidebar-w);
-  background: #f1f2f4;
-  padding: 8px 12px 20px 12px;
+  background: var(--shell-surface);
+  padding: 7px 12px 20px 12px;
   display: flex;
   flex-direction: column;
 }
 
-/* Brand → bordered raised workspace pill (avatar + name + chevrons). */
-.brand { padding: 2px 2px 0; margin-bottom: 14px; }
+/* Brand → bordered raised workspace pill (avatar + name + chevrons).
+   Zero padding: every inset the pill has comes from `.sidebar`, so the two
+   alignment equations above are read in one place. */
+.brand { padding: 0; margin-bottom: 14px; }
 .brandPill {
   display: inline-flex;
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: 10px;
   background: linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
   border: 1px solid #e2e2e0;
@@ -223,10 +105,16 @@
   outline: 2px solid rgba(0, 0, 0, 0.28);
   outline-offset: 2px;
 }
-.brandPillName {
+.brandPillText {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.brandPillName {
+  min-width: 0;
+  font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: #26282c;
@@ -234,64 +122,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.brandPillSub {
+  font-size: 11.5px;
+  color: #7c858f;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .brandChevron { color: #9a9ea4; flex: 0 0 auto; }
 
-/* Nav group — fenced by top + bottom hairlines, tighter, muted. Fixed item
-   height (34px) + 1px gap = a 35px pitch the sliding thumb steps through. */
+/* Nav group — a left-aligned column of hug-width chips. LAYOUT ONLY: the chip
+   recipe itself (fill, ink, metrics, icon sizing, hover, and the active ink
+   that pairs with `.raised-tab`) is the global kit's `.nav-chip` /
+   `.nav-chip-active`, composed in the TSX. Never re-declare it here — the
+   settings-modal nav renders the same chip off the same two classes. */
 .nav {
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 10px 0;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-}
-/* Indented (concave) selection that slides between items on navigation,
-   instead of the highlight jumping. */
-.navThumb {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 10px;
-  height: 34px;
-  border-radius: 8px;
-  background: #e9e9e7;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 1px 1px rgba(0, 0, 0, 0.06),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.7);
-  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
-  z-index: 0;
-}
-.navItem {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  height: 34px;
-  padding: 0 11px;
-  border-radius: 8px;
-  color: #3a3d42;
-  font-size: 14.5px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: color 120ms ease, background 120ms ease;
-}
-.navItem svg { flex: 0 0 auto; color: #8a8f97; width: 19px; height: 19px; }
-
-/* Selected — just the text/icon tint; the sliding thumb draws the pill. */
-.navItem.navActive {
-  color: #26282c;
-}
-.navItem.navActive svg { color: #4a4d52; }
-
-/* Hover — flat subtle gray on non-active items. */
-.navItem:not(.navActive):hover {
-  background: rgba(0, 0, 0, 0.035);
+  align-items: flex-start;
+  gap: 7px;
+  padding: 12px 0;
 }
 
 /* Pro upsell card — seated in the open space right under the nav divider. */
@@ -344,36 +195,17 @@
     0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Footer — pinned to the bottom, behind its own hairline. */
+/* Footer — pinned to the bottom; LAYOUT ONLY, exactly like `.nav`. Its rows
+   are the same kit `.nav-chip` (a <button> instead of an <a>), which is why
+   there is no `.footItem` recipe to keep in sync any more. */
 .foot {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
+  align-items: flex-start;
+  gap: 7px;
+  padding-top: 12px;
 }
-.footItem {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 7px 10px;
-  color: #3a3d42;
-  font-size: 14.5px;
-  font-weight: 500;
-  text-decoration: none;
-  border-radius: 8px;
-  background: none;
-  border: 1px solid transparent;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  transition: background 120ms ease;
-}
-.footItem:hover {
-  background: rgba(0, 0, 0, 0.035);
-}
-.footItem svg { color: #8a8f97; width: 19px; height: 19px; }
 
 /* ---------- Main panel ---------- */
 .main {

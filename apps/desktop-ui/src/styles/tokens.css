@@ -449,13 +449,20 @@ html {
 :root {
   /* Titlebar removed (was 32px) — kept at 0 so derived panel insets stay valid. */
   --shell-titlebar-h: 0px;
-  --shell-rail-w: 62px;
-  --shell-sidebar-w: 204px;
+  /* Rail removed (2026-08-11) — the workspace switcher lives in the sidebar
+     brand pill now. Kept at 0 so the derived panel insets stay valid. */
+  --shell-rail-w: 0px;
+  --shell-sidebar-w: 232px;
+  /* Sidebar surface + resting nav-chip fill (Folkd-style sidebar). */
+  --shell-surface: #ececec;
+  --shell-chip: #e2e2e2;
   /* Matches --shell-gap-bottom so the panel's top and bottom margins are equal. */
   --shell-gap-top: 6px;
   --shell-gap-right: 6px;
   --shell-gap-bottom: 6px;
-  --shell-gap-left: 4px;
+  /* Matches `.page-float`'s 8px side margin so the sidebar's brand pill sits
+     the same distance from the window edge as from the page card. */
+  --shell-gap-left: 8px;
   --shell-panel-radius: 0px;
   /* Derived: viewport insets of the white main panel. */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));

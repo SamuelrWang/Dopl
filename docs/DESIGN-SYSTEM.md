@@ -60,7 +60,9 @@ Utilities generated from `@theme` (values live in `:root`):
 | `.concave-field` | Pressed-in input well (`#e9eaec`, inset shadows, focus ring). Alias of `.auth-field-3d`. |
 | `.concave-sel`   | Pressed-in selected state (`#e9e9e7`) for tabs/rows. Alias of `.btn-pressed`. |
 | `.concave-track` | Recessed switcher track (radius 10, 4px pad) that tab pills sit inside. |
-| `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track`. |
+| `.seg-pill`      | Resting face of one stadium pill in a TRACKLESS segmented row — flat `#e9eaec` fill, fully rounded ends, ring hairline. `SegmentedControl` renders one per option; active swaps to `.raised-tab` (2026-08-12). |
+| `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track` — also composed onto the active `.nav-chip` and the active `.seg-pill` option. |
+| `.nav-chip`      | Hug-width sidebar/nav chip (`--shell-chip` fill on `--shell-surface`, radius 10, h36) for `<a>` and `<button>`. Active = `.nav-chip-active` + `.raised-tab`. THE nav recipe — app sidebar + settings modal both compose it; never fork it locally. |
 | `.btn-light`     | Small raised light button (toolbar / compact chrome).                   |
 | `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.)       |
 | `.graph-substrate` | Dotted recessed world surface behind a graph view and its skeleton. Its only remaining user is the retired Workflows tree — the Canvas page was deleted 2026-08-11. |

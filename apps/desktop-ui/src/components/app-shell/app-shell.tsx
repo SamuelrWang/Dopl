@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { AppRailCore } from "@/shared/layout/app-shell/app-rail-core";
 import {
   AppSidebarCore,
   activeSectionFromPath,
@@ -139,12 +138,8 @@ export function AppShellLayout() {
   return (
     <div className={styles.root}>
       <div className={styles.body}>
-        <AppRailCore
-          workspaces={workspaces}
-          activePublicId={workspace.publicId}
-          onAddWorkspace={() => setCreateWsOpen(true)}
-          Link={RouterLink}
-        />
+        {/* Rail removed (2026-08-11) — workspace switching + creation live in
+            the sidebar's switcher popover (`WorkspaceSwitcherCore`). */}
         <div className={styles.surface}>
           <AppSidebarCore
             workspaceSegment={segment}

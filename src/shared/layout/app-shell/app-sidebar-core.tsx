@@ -102,31 +102,22 @@ export function AppSidebarCore({
       {brand}
 
       <nav className={styles.nav}>
-        {/* The sliding thumb exists only when a nav row is active — on a
-            non-nav route (/settings) it would otherwise park on Overview. */}
-        {activeSection !== null && (
-          <span
-            className={styles.navThumb}
-            style={{
-              transform: `translateY(${
-                Math.max(
-                  0,
-                  NAV.findIndex((n) => n.section === activeSection)
-                ) * 35
-              }px)`,
-            }}
-          />
-        )}
         {NAV.map(({ label, icon: Icon, section }) => (
           <Link
             key={section}
             href={sectionPath(workspaceSegment, section)}
-            className={cn(styles.navItem, section === activeSection && styles.navActive)}
+            className={cn(
+              // The kit's ONE nav-chip recipe (globals.css / kit.css); the
+              // module contributes column layout only. Active chip = darker
+              // ink + the kit's raised white face over the chip's radius.
+              "nav-chip",
+              section === activeSection && "nav-chip-active raised-tab"
+            )}
           >
             <Icon size={20} strokeWidth={1.8} />
             {label}
             {section === "channels" && consentCount > 0 && (
-              <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-warning/30 bg-warning/10 px-1 text-micro font-semibold text-warning">
+              <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-warning px-1 text-micro font-semibold text-accent-on">
                 <span aria-hidden>{consentCount}</span>
                 <span className="sr-only">
                   {consentCount === 1
@@ -158,7 +149,7 @@ export function AppSidebarCore({
       <div className={styles.foot}>
         <button
           type="button"
-          className={styles.footItem}
+          className="nav-chip"
           onClick={() => onOpenSettings("account")}
         >
           <Settings size={20} strokeWidth={1.8} />
