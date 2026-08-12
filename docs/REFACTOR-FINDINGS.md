@@ -120,6 +120,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Severity: smell
 - Description: after workspaces moved to `{slug}-{publicId}` URLs, the resolver still falls back to slug-only lookup so pre-migration bookmarks keep working. Each fallback hit logs a `legacy_slug_redirect` system event.
 - Proposed resolution: defer — delete the legacy branch once the event drops to zero hits over 14 consecutive days. (`findWorkspaceBySlug`/`findMemberWorkspaceBySlug` have other callers; only the `segment.ts` branch dies.)
+- **Measured 2026-08-11 (production `system_events`, `source = 'legacy_slug_redirect'`): 26 all-time, 18 in the last 30 days, most recent 2026-08-06.** Criterion unmet — a deletion attempt this day was correctly aborted on this measurement. `RESERVED_WORKSPACE_SLUGS` retirement (src/config › `RESERVED_WORKSPACE_SLUGS`, checked only by `service.ts › renameWorkspace`) is coupled to this entry and waits with it. Re-measure with: `select count(*) filter (where created_at >= now() - interval '14 days') from system_events where source = 'legacy_slug_redirect'`.
 - Status: open
 
 ### F-017: PublicId rollout skipped for clusters
