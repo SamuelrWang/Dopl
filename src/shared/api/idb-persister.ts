@@ -52,9 +52,16 @@ const CACHE_SCHEMA_VERSION = "1";
  */
 export const QUERY_CACHE_BUSTER = [
   CACHE_SCHEMA_VERSION,
-  process.env.NEXT_PUBLIC_QUERY_CACHE_BUSTER ||
-    process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT_ID ||
-    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+  // `process` only exists where Next's compiler inlined these reads (the
+  // literal `process.env.NEXT_PUBLIC_*` member expressions must stay inside
+  // the branch for that inlining to fire). The Vite SPA has no Node globals —
+  // an unguarded read is an import-time ReferenceError that whites out the
+  // whole renderer — and it layers its own build identity on top
+  // (`DESKTOP_QUERY_CACHE_BUSTER`, apps/desktop-ui/src/lib/query-client.ts).
+  (typeof process !== "undefined" &&
+    (process.env.NEXT_PUBLIC_QUERY_CACHE_BUSTER ||
+      process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT_ID ||
+      process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA)) ||
     "dev",
 ].join(":");
 

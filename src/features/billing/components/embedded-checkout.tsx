@@ -11,9 +11,25 @@ import {
 import { Skeleton } from "@/shared/ui/skeleton";
 import { checkoutAppearance } from "./checkout-appearance";
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
+/**
+ * Lazy singleton, NEVER a module-level read: `process` doesn't exist in the
+ * Vite-bundled desktop renderer, and a top-level `process.env.*` is an
+ * import-time ReferenceError that whites out the whole SPA (the same rule
+ * `@/shared/supabase/browser.ts` follows). Desktop never calls this —
+ * checkout degrades behind the settings modal — so the guard only has to
+ * keep the import side-effect-free.
+ */
+let stripePromise: ReturnType<typeof loadStripe> | null = null;
+function getStripePromise() {
+  if (!stripePromise) {
+    stripePromise = loadStripe(
+      (typeof process !== "undefined" &&
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) ||
+        ""
+    );
+  }
+  return stripePromise;
+}
 
 /**
  * Native checkout for a paid plan. The backend creates a custom-checkout
@@ -104,7 +120,7 @@ export function EmbeddedCheckoutForm({
 
   return (
     <CheckoutElementsProvider
-      stripe={stripePromise}
+      stripe={getStripePromise()}
       options={{
         clientSecret,
         elementsOptions: { appearance: checkoutAppearance },
