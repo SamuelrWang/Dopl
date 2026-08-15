@@ -59,6 +59,37 @@ export interface KnowledgeBase {
   deletedAt: string | null;
 }
 
+/**
+ * Per-base list-view counters, computed rather than stored — deliberately
+ * a SIBLING of `KnowledgeBase` rather than fields on it.
+ *
+ * `KnowledgeBase` is one of the four interfaces hand-mirrored into
+ * `packages/dopl-client/src/knowledge-types.ts` and pinned field-for-field
+ * by `scripts/check-knowledge-type-drift.ts`; widening it would push a
+ * display-only number onto every MCP `kb_*` payload. Keyed by base id and
+ * carried alongside `bases` in the list response, exactly as `ownerNames`
+ * is.
+ *
+ * `lastEntryUpdatedAt` is CONTENT freshness (newest active entry write),
+ * not `KnowledgeBase.updatedAt` — that one moves when the base's own
+ * name/description/sharing row is written and stands still while an agent
+ * fills the base with files.
+ */
+export interface KnowledgeBaseStats {
+  entryCount: number;
+  lastEntryUpdatedAt: string | null;
+  /**
+   * Summed `octet_length(body)` of the base's live entries — the stored
+   * `knowledge_bases.storage_bytes` counter, NOT a re-sum per request.
+   *
+   * `null` = UNKNOWN, and the distinction is the contract: an EMPTY base is
+   * `0`, while `null` means the counter could not be read (most likely because
+   * this build deployed ahead of its migration). A meter is rendered for `0`
+   * and suppressed for `null` — never drawn empty on a guess.
+   */
+  storageBytes: number | null;
+}
+
 export interface KnowledgeFolder {
   id: string;
   workspaceId: string;

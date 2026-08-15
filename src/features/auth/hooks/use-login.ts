@@ -75,16 +75,12 @@ export function useLoginActions(): LoginActions {
       return error ? { error: error.message } : {};
     },
 
-    async sendMagicLink(email) {
-      // Works for new and existing users — Supabase creates the auth row on
-      // first link. Keeps pre-password (magic-link era) users able to sign in.
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: buildCallbackUrl() },
-      });
-      return error ? { error: error.message } : {};
-    },
-
+    // NO `sendMagicLink`. `signInWithOtp` was the form's third credential path
+    // ("Email me a sign-in link instead"); the control and the action member
+    // both went on 2026-08-13, leaving password + OAuth. A pre-password user
+    // with no password on file still has a road in: "Forgot password?" (which
+    // is the same email round-trip, ending on a page that SETS one) and Google
+    // or GitHub, which auto-provision on first sign-in.
     async resetPassword(email) {
       // Route the recovery link through /auth/callback (which exchanges the code
       // into a live session) and forward to the set-new-password page.

@@ -38,6 +38,13 @@ export type LiquidGlassProps = {
   tintColor?: string;
   /** Standalone blur over the refraction (px). */
   blur?: number;
+  /** Build the displacement map ONCE on mount and never rebuild on resize.
+   *  For scroll-scrubbed cards whose box animates every frame: a rebuild
+   *  swaps the `<feImage>` data-URI, and the async decode pops the
+   *  refraction visibly. The frozen map stretches with the box
+   *  (`preserveAspectRatio="none"`), so the rim scales WITH the panel —
+   *  visually consistent — instead of popping at each rebuild. */
+  staticMap?: boolean;
   style?: CSSProperties;
 };
 
@@ -59,6 +66,7 @@ export function LiquidGlass({
   tint = 0,
   tintColor = "#ffffff",
   blur = 5,
+  staticMap = false,
   style,
 }: LiquidGlassProps) {
   const rawId = useId();
@@ -78,10 +86,11 @@ export function LiquidGlass({
       setMap(buildDisplacementMap(canvas, w, h, { radius, rim: splay, curve, feather }));
     };
     draw();
+    if (staticMap) return; // one map for the card's whole life — see the prop doc
     const ro = new ResizeObserver(draw);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [radius, splay, curve, feather]);
+  }, [radius, splay, curve, feather, staticMap]);
 
   // Chromatic split: red takes the larger displacement, green+blue ride the smaller.
   const sR = depth * (1 + chroma);

@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "lucide-react";
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
-import { Popover, MenuItem } from "@/shared/ui/popover-menu";
+import { Popover, MenuItem, MenuDivider } from "@/shared/ui/popover-menu";
 import { RolePill } from "@/features/members/components/member-bits";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { WorkspaceLike } from "./workspace-types";
@@ -92,13 +92,15 @@ export function WorkspaceSwitcherCore({
         <ChevronsUpDown size={15} className={styles.brandChevron} />
       </button>
 
-      <Popover
-        open={open}
-        onClose={close}
-        className="w-[248px] overflow-hidden rounded-xl border-border-strong p-0"
-      >
+      {/* Width only — radius, padding, border and shadow are the kit's
+          `.menu-card` (globals.css), the landing Menu dropdown's surface.
+          The old `p-0 overflow-hidden rounded-xl border-border-strong`
+          overrides existed to make full-bleed `border-t` section rules reach
+          the card edge; the card is padded now and the rules are
+          `MenuDivider`. */}
+      <Popover open={open} onClose={close} className="w-[248px]">
         {/* Current workspace header */}
-        <div className="flex items-start gap-2.5 px-3 py-2.5">
+        <div className="flex items-start gap-2.5 px-2.5 py-2">
           <WorkspaceGlyph
             name={active?.name ?? workspaceName}
             iconUrl={active?.iconUrl ?? null}
@@ -120,31 +122,31 @@ export function WorkspaceSwitcherCore({
         </div>
 
         {/* Current-workspace actions */}
-        <div className="border-t border-border-subtle py-1">
-          <MenuItem
-            icon={<Settings size={13} />}
-            onSelect={() => {
-              close();
-              onOpenSettings("workspace");
-            }}
-          >
-            Workspace settings
-          </MenuItem>
-          <MenuItem
-            icon={<UserPlus size={13} />}
-            onSelect={() => go(`/${segment}/members`)}
-          >
-            Invite members
-          </MenuItem>
-        </div>
+        <MenuDivider />
+        <MenuItem
+          icon={<Settings size={13} />}
+          onSelect={() => {
+            close();
+            onOpenSettings("workspace");
+          }}
+        >
+          Workspace settings
+        </MenuItem>
+        <MenuItem
+          icon={<UserPlus size={13} />}
+          onSelect={() => go(`/${segment}/members`)}
+        >
+          Invite members
+        </MenuItem>
 
         {/* Switch workspace */}
-        <div className="border-t border-border-subtle py-1">
-          <p className="px-3 pt-1 pb-1 text-label font-semibold uppercase tracking-wide text-text-muted">
+        <MenuDivider />
+        <div>
+          <p className="px-2.5 pt-1 pb-1 text-label font-semibold uppercase tracking-wide text-text-muted">
             Switch workspace
           </p>
           {isLoading && workspaces.length === 0 ? (
-            <p className="px-3 py-1.5 text-small text-text-muted">Loading…</p>
+            <p className="px-2.5 py-1.5 text-small text-text-muted">Loading…</p>
           ) : (
             workspaces.map((ws) => {
               const isActive = ws.publicId === workspacePublicId;
@@ -155,7 +157,7 @@ export function WorkspaceSwitcherCore({
                   role="menuitemradio"
                   aria-checked={isActive}
                   onClick={() => go(`/${workspaceSegment(ws)}`)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-surface-raised-2"
+                  className="menu-row flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left"
                 >
                   <WorkspaceGlyph name={ws.name} iconUrl={ws.iconUrl} size="sm" />
                   <span className="min-w-0 flex-1">
@@ -180,17 +182,16 @@ export function WorkspaceSwitcherCore({
         </div>
 
         {/* Create workspace */}
-        <div className="border-t border-border-subtle py-1">
-          <MenuItem
-            icon={<Plus size={13} />}
-            onSelect={() => {
-              close();
-              onCreateWorkspace();
-            }}
-          >
-            Create workspace
-          </MenuItem>
-        </div>
+        <MenuDivider />
+        <MenuItem
+          icon={<Plus size={13} />}
+          onSelect={() => {
+            close();
+            onCreateWorkspace();
+          }}
+        >
+          Create workspace
+        </MenuItem>
       </Popover>
     </div>
   );

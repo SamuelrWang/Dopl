@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { explicitPostAuthTarget, WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
+import { AUTH_ENTRY_ROUTES, isAuthEntryRoute } from "@/shared/auth/auth-routes";
 import {
   LOGIN_BOUNCE_COOKIE,
   LOGIN_BOUNCE_LIMIT,
@@ -16,7 +17,8 @@ import {
 } from "@/shared/lib/url/website-retirement";
 
 const PUBLIC_ROUTES = [
-  "/login",
+  // `/login` + `/signup` — one screen, two routes; `shared/auth/auth-routes.ts`.
+  ...AUTH_ENTRY_ROUTES,
   "/auth/callback",
   // Desktop app sign-in bridge: /auth/desktop-start (pre-auth, kicks off OAuth
   // in the system browser) and /auth/desktop-handoff (hands the session to the
@@ -91,9 +93,8 @@ const PUBLIC_ROUTES = [
 // client's 60s time-to-headers budget. Spending any of that on authenticating a
 // route that self-authenticates is pure risk.
 //
-// The rest of PUBLIC_ROUTES stays BELOW the auth call on purpose: /login and the
-// marketing pages are public but session-AWARE (a signed-in visitor to /login is
-// bounced into the app), so they still need the claims read.
+// The rest stays BELOW the auth call on purpose: the auth entry routes and the
+// marketing pages are session-AWARE, so they still need the claims read.
 const SELF_AUTH_ROUTES = [
   "/api/mcp",
   "/api/oauth",
@@ -257,11 +258,11 @@ export async function proxy(request: NextRequest) {
   // right here — because `/canvas` is itself on the RETIRE list.
   const retired = isWebsiteRetired();
 
-  // If authenticated, redirect landing page and login into the app.
-  if (userId && (pathname === "/" || pathname === "/login")) {
+  // If authenticated, redirect the landing page and BOTH auth entry routes in.
+  if (userId && (pathname === "/" || isAuthEntryRoute(pathname))) {
     // Q4: only `/login` can loop — it is the only path a server component
     // redirects to (`if (!user) redirect("/login")`, 19 call sites), and
-    // nothing redirects to `/`.
+    // nothing redirects to `/` or to `/signup`.
     const bounces =
       pathname === "/login" ? readLoginBounce(request).count : 0;
     if (bounces >= LOGIN_BOUNCE_LIMIT) {
@@ -291,12 +292,11 @@ export async function proxy(request: NextRequest) {
     // is an attack, and it reads as null so this falls through to the default —
     // it can never make the middleware emit an off-origin `Location`.
     //
-    // Only `/login` participates. A `?redirectTo=` on the marketing landing page
-    // has no producer and no meaning.
-    const target =
-      pathname === "/login"
-        ? explicitPostAuthTarget(request.nextUrl.searchParams.get("redirectTo"))
-        : null;
+    // BOTH auth entry routes participate (the switch between them navigates,
+    // carrying the query). The landing page does not: no producer, no meaning.
+    const target = isAuthEntryRoute(pathname)
+      ? explicitPostAuthTarget(request.nextUrl.searchParams.get("redirectTo"))
+      : null;
 
     const url = request.nextUrl.clone();
     if (target) {
@@ -319,7 +319,7 @@ export async function proxy(request: NextRequest) {
       // as hostile; either way it has no business riding to the destination,
       // where it used to sit as decoration. The landing page's query (utm and
       // friends) is left alone.
-      if (pathname === "/login") url.search = "";
+      if (isAuthEntryRoute(pathname)) url.search = "";
     }
     const response = redirectPreservingSession(url, supabaseResponse);
     if (pathname === "/login") {
@@ -495,6 +495,6 @@ export async function proxy(request: NextRequest) {
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicons/|pricing|privacy|terms|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicons/|pricing|privacy|terms|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml|woff2?|mp3)$).*)",
   ],
 };

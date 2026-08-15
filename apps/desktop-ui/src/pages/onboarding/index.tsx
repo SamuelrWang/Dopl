@@ -4,6 +4,9 @@ import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { ONBOARDING_STATE_PATH } from "#/pages/boot/use-boot-state";
+// Same bundled banner the signed-out screen passes, for the same reason: the
+// shared layout's default is a web-only `public/` path (see that file).
+import frameworkBanner from "#/assets/framework-banner.jpg";
 
 /**
  * /onboarding — first-run flow for new signups. Port of
@@ -63,6 +66,7 @@ export default function OnboardingPage() {
   return (
     <OnboardingFlowCore
       initialStep={state.data?.surveyCompleted ? "connect" : "survey"}
+      bannerSrc={frameworkBanner}
       // The server answers `/{segment}/overview` — already a valid SPA path.
       onDone={(to) => navigate(to, { replace: true })}
     />

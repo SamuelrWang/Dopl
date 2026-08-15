@@ -92,12 +92,18 @@ const CREDITS_EXHAUSTED_MESSAGE =
 /**
  * Plan-gate denial codes the API returns as a flat `{ error: <code>,
  * message, upgrade_url }` envelope: the free-plan object cap, the free-plan
- * chat retention window, and the monthly MCP credit allowance. All three mean
- * "the data is intact, upgrading lifts the gate".
+ * chat retention window, the monthly MCP credit allowance, and the per-knowledge
+ * -base storage cap. All four mean "the data is intact, upgrading lifts the
+ * gate".
+ *
+ * `kb_storage_full` reaches an agent through the ordinary write path — `kb_*`
+ * writes are loopback HTTP calls into the same route handlers a browser uses,
+ * so the server-side gate covers both surfaces with one implementation.
  */
 const ENTITLEMENT_CODES = new Set([
   "over_free_cap",
   "chat_outside_retention",
+  "kb_storage_full",
   CREDITS_EXHAUSTED_CODE,
 ]);
 
@@ -140,7 +146,9 @@ export function entitlementDenied(e: unknown): ToolResponse | null {
         ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
         : code === CREDITS_EXHAUSTED_CODE
           ? CREDITS_EXHAUSTED_MESSAGE
-          : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
+          : code === "kb_storage_full"
+            ? "This knowledge base has reached its storage limit. Nothing was deleted — it stays readable, and deleting files or writing a smaller one still works."
+            : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
   const url = typeof rec.upgradeUrl === "string" ? rec.upgradeUrl : "";
   return err(url ? `${message}\n\nUpgrade to continue: ${url}` : message);
 }

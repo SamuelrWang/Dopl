@@ -63,6 +63,7 @@ describe("static assets never reach the proxy", () => {
     "/img/site_thumbnail.jpg",
     "/fonts/inter.woff2",
     "/fonts/inter.woff",
+    "/audio/landing-ambient.mp3",
   ])("%s", (path) => {
     expect(re.test(path)).toBe(false);
   });

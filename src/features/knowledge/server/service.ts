@@ -23,6 +23,8 @@ import "server-only";
  *   - `service-folders.ts`  — folder reads + writes + `getBaseTree`
  *   - `service-entries.ts`  — entry reads + writes + `resolveEntryRefs`
  *   - `service-paths.ts`    — path-addressed reads + writes
+ *   - `service-storage.ts`  — the per-KB storage cap (growth gate + limit)
+ *   - `service-stars.ts`    — PER-USER base stars (a favourite, scoped to ctx.userId)
  *   - `service-seed.ts`     — workspace fixture seeding
  *
  * DELETES ARE PERMANENT (2026-08-07). Soft-delete, trash listing, restore
@@ -39,6 +41,7 @@ export type { AuthLike } from "./service-shared";
 export {
   listBases,
   listBaseOwnerNames,
+  listBaseStats,
   getBaseById,
   getBaseBySlug,
 } from "./service-bases";
@@ -78,5 +81,18 @@ export {
   listDirByPath,
 } from "./service-paths";
 export type { WriteFileByPathInput } from "./service-paths";
+
+export {
+  assertStorageHeadroom,
+  bodyBytes,
+  kbStorageDeniedBody,
+  resolveKbStorageLimit,
+} from "./service-storage";
+
+export {
+  listStarredBaseIds,
+  starBase,
+  unstarBase,
+} from "./service-stars";
 
 export { seedWorkspace } from "./service-seed";

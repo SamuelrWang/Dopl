@@ -69,9 +69,16 @@ export function ownerRef(owner: ChatOwner): string {
   return `${inlineOr(owner.name, "`(unnamed member)`")} (\`${owner.userId}\`)`;
 }
 
+/**
+ * The sharing word an AGENT reads for a chat folder. Workspace-visible
+ * renders as `public` — the same word `op="update_folder"` takes on the
+ * wire (`visibility: "private" | "public"`), so what the agent reads back
+ * is what it would have to write. Team scope keeps its own word: it is a
+ * different level, not this one.
+ */
 export function folderScopeLabel(f: { visibility: string; accessMode: string }): string {
   if (f.visibility === "private") return "private";
-  return f.accessMode === "teams" ? "team-shared" : "workspace-shared";
+  return f.accessMode === "teams" ? "team-shared" : "public";
 }
 
 export function hiddenNote(hiddenCount: number): string {

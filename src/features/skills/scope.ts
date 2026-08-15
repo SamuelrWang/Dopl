@@ -23,5 +23,5 @@ export function skillScope(
 export const SKILL_SCOPE_LABEL: Record<SkillScope, string> = {
   private: "Private",
   team: "Team",
-  workspace: "Shared",
+  workspace: "Public",
 };

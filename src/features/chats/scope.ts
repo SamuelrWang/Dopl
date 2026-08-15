@@ -22,5 +22,5 @@ export function chatScope(
 export const CHAT_SCOPE_LABEL: Record<ChatScope, string> = {
   private: "Private",
   team: "Team",
-  workspace: "Shared",
+  workspace: "Public",
 };

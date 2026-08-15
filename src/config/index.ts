@@ -48,8 +48,10 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "pricing",
   "privacy",
   "settings",
-  // `signup` removed in audit fix S-13 — no top-level /signup route
-  // exists. Re-add here if a public signup page lands.
+  // Re-added 2026-08-13, on the condition S-13 set when it removed this: the
+  // public signup page landed (`src/app/signup/page.tsx`), so a workspace
+  // slugged "signup" would now be silently shadowed by it.
+  "signup",
   "terms",
   "welcome",
   "workspaces",

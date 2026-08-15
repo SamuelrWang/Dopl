@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
  * actually lands. Nothing here can claim to be done when it isn't.
  *
  * Onboarding is exempt from the token/type scale (DESIGN-SYSTEM: "Exempt:
- * marketing pages and auth + onboarding (their own crystal/3D kit)"), so the
+ * marketing pages and auth + onboarding (their own glass/3D kit)"), so the
  * px/hex values here match the sibling steps rather than the app tokens.
  */
 

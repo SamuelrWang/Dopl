@@ -1,6 +1,8 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { mapKnowledgeError } from "@/features/knowledge/server/http-mapping";
+import { KnowledgeStorageLimitError } from "@/features/knowledge/server/errors";
+import { kbStorageDeniedBody } from "@/features/knowledge/server/service-storage";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
@@ -38,6 +40,17 @@ export function knowledgeDownloadResponse(
 }
 
 export function toKnowledgeErrorResponse(err: unknown): NextResponse {
+  // PLAN GATE FIRST, and it deliberately skips `mapKnowledgeError`. The
+  // per-KB storage cap answers with the FLAT `{ error, message, upgrade_url }`
+  // envelope at 403 — the same shape and status the ontology object cap uses
+  // (`api/ontology/objects/route.ts`) — because `@dopl/client` and the MCP
+  // `respond.ts › entitlementDenied` path parse that shape, not the nested one
+  // `HttpError.toResponseBody()` emits. Handled HERE rather than in each write
+  // route so all three entry-write surfaces (POST entries, PATCH entry, PUT
+  // files-by-path) cannot drift apart.
+  if (err instanceof KnowledgeStorageLimitError) {
+    return NextResponse.json(kbStorageDeniedBody(err), { status: 403 });
+  }
   // Domain errors map first; anything unrecognized falls through to the
   // shared HttpError pass-through / generic 500. The raw error is never
   // leaked to the client — it could expose DB internals, file paths, or

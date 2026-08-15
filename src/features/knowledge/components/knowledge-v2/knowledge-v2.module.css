@@ -46,192 +46,40 @@
   border-right: 1px solid var(--kv-border);
 }
 
-/* List header: "Knowledge ▾" + trailing icon actions. */
-.listHead {
+/* Breadcrumb bar at the top of the base-detail list pane: "Knowledge ›
+   {base}". Small text on purpose — the base's name is the DETAIL pane's
+   header, so a second title here would read as a second page. */
+.paneCrumbs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
   padding: 14px 14px 10px;
-}
-.listTitle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--text-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--kv-text);
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.listTitle:hover {
-  background: var(--kv-row-hover);
-}
-.listTitle svg {
-  color: var(--kv-text-3);
+  font-size: var(--text-small);
 }
 .headSpacer {
   flex: 1;
 }
-.iconBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  border: none;
-  background: none;
-  color: var(--kv-text-2);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-.iconBtn:hover {
-  background: var(--kv-row-hover);
-  color: var(--kv-text);
-}
-
 /* The search well lives in the shared <SearchField> primitive
    (src/shared/ui/search-field.tsx) — concave well + leading icon. */
 
 /* Filter tabs live in the shared <SegmentedControl> primitive
-   (src/shared/ui/segmented-control.tsx) — sliding raised-tab thumb on a
-   concave track. */
+   (src/shared/ui/segmented-control.tsx) — a trackless row of stadium
+   pills. Home mode only; the base-detail pane has one base to show. */
 
-/* Scrolling list body. Top hairline closes off the search/tabs header zone. */
+/* Scrolling tree body. Top hairline closes off the breadcrumb zone. */
 .listBody {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 0 16px;
+  padding: 6px 0 16px;
   border-top: 1px solid var(--kv-border);
-}
-/* Each base block (row + its expanded tree) is delimited by a hairline,
-   matching the reference's separated list items. */
-.kbItem {
-  border-bottom: 1px solid var(--kv-border);
-}
-/* "Shared with me" section divider on the All filter — the standard
-   11px uppercase panel label. */
-.listSection {
-  font-size: var(--text-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv-text-2);
-  padding: 12px 16px 6px 14px;
-  border-bottom: 1px solid var(--kv-border);
 }
 .listBody::-webkit-scrollbar {
   width: 0;
 }
 
-/* ───────────────────────── KB rows ───────────────────────── */
-
-.kbRow {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  padding: 9px 16px 9px 14px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.kbRow:hover {
-  background: var(--kv-row-hover);
-}
-.kbRowActive {
-  background: var(--kv-row-active);
-}
-/* Left accent bar on the selected row. */
-.kbRowActive::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--kv-accent);
-}
-.disclosure {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 18px;
-  margin-top: 1px;
-  color: var(--kv-text-3);
-  flex: 0 0 16px;
-  transition: transform 0.14s ease;
-}
-.disclosureOpen {
-  transform: rotate(90deg);
-}
-.rowBtn {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 0;
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-.rowMain {
-  flex: 1;
-  min-width: 0;
-}
-.rowTopline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rowTitle {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--text-body);
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--kv-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.rowTime {
-  flex: 0 0 auto;
-  font-size: var(--text-micro);
-  color: var(--kv-text-3);
-}
-.rowSub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-  font-size: var(--text-caption);
-  color: var(--kv-text-2);
-}
-.rowSub svg {
-  color: var(--kv-text-3);
-  flex: 0 0 auto;
-}
-.rowSubText {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ───────────────────────── Tree rows (expanded KB) ───────────────────────── */
+/* ───────────────────────── Tree rows (the opened base) ───────────────────────── */
 
 .tree {
   padding: 2px 0 6px;
@@ -284,11 +132,6 @@
 }
 .treeEmpty {
   padding: 6px 16px;
-  font-size: var(--text-caption);
-  color: var(--kv-text-3);
-}
-.treeLoading {
-  padding: 8px 16px;
   font-size: var(--text-caption);
   color: var(--kv-text-3);
 }
@@ -642,4 +485,372 @@
 }
 .detailEmpty p {
   font-size: var(--text-body);
+}
+
+/* ═════════════════════ KNOWLEDGE HOME (the card grid) ═════════════════════
+   The `/knowledge` mode: one page-wide column instead of the two panes.
+   `.shell` still applies — it carries the --kv-* aliases these rules read —
+   so only the axis changes. */
+
+.shellHome {
+  flex-direction: column;
+  min-height: 0;
+}
+/* THE WHOLE COLUMN SCROLLS, not an inner region. With the hero + assistant
+   box above the grid, an inner-only scroller (the old .homeBody overflow)
+   left the wheel dead over the hero and squeezed the grid into whatever
+   sliver remained — scrolling the page is what reveals the cards, so the
+   hero must scroll away with it. */
+.home {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.home::-webkit-scrollbar {
+  width: 0;
+}
+.homeHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px 12px;
+}
+/* Hero banner — image band above the scope pills, glass panel overlaid by
+   the TSX (shared LiquidGlass), and the chat panel attached under it.
+   ONE ROUNDED CONTAINER, TWO BANDS: the border and the 14px radius live here
+   and `overflow:hidden` clips both children, so the image owns the top
+   corners and the chat panel owns the bottom ones with no seam, no gap and
+   no second border between them. Height is now auto — the chat panel grows
+   the hero, and everything below it (pills, grid) is in normal flow. */
+.homeHero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  margin: 0 22px 14px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--kv-border-strong);
+}
+/* The image band. It is the LiquidGlass panel's containing block — the glass
+   is positioned against this fixed 210px, so attaching the chat below can
+   never stretch it. The image still crops via cover. */
+.homeHeroBand {
+  position: relative;
+  flex: 0 0 auto;
+  height: 210px;
+}
+.homeHeroImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Decorative: no native image drag-ghost, no selection, no cursor story. */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+/* HERO CHAT — the height animation, and nothing else. Everything the panel
+   looks like is kit + tokens in `home/hero-chat.tsx`; what cannot be
+   expressed there is this: `grid-template-rows` interpolating 0fr→1fr over an
+   `overflow:hidden` child is the auto-height transition that needs no
+   measurement — no ResizeObserver, and no max-height guess that either clips
+   a long conversation or eases against a number the content never reaches. */
+.heroChatReveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-out;
+}
+.heroChatReveal[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+/* Both are load-bearing: without `overflow:hidden` the content ignores the
+   0fr track, and without `min-height:0` the grid item refuses to shrink
+   below its content. */
+.heroChatRevealInner {
+  overflow: hidden;
+  min-height: 0;
+}
+/* The conversation log caps at roughly ten body lines and scrolls inside
+   itself past that — the box never grows beyond this, the reveal animation
+   eases to the capped height, and the input row stays put below. */
+.heroChatLog {
+  max-height: calc(var(--text-body) * 1.625 * 10);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+.heroChatLog::-webkit-scrollbar {
+  width: 8px;
+}
+.heroChatLog::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heroChatReveal {
+    transition: none;
+  }
+}
+
+/* Hairline sits ABOVE the filters (between the hero and the pills), not
+   between the pills and the grid. */
+.homeFilters {
+  padding: 14px 22px;
+  border-top: 1px solid var(--kv-border);
+}
+.homeBody {
+  flex: 0 0 auto;
+  padding: 4px 22px 26px;
+}
+
+/* Fixed-size cells: `1fr` columns + a fixed row height, so every card is
+   the same size no matter how long its description is. Three across at the
+   desktop width the app opens at, two below it. */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 244px;
+  gap: 16px;
+}
+@media (max-width: 1180px) {
+  .cardGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 15px 13px;
+  text-align: left;
+  font: inherit;
+  border: 1px solid var(--kv-border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  /* Elevated resting face — the bento float recipe (soft double shadow),
+     so cards sit OFF the panel instead of flat on it. */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 6px 18px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+
+  /* THE CARD'S SCOPE HUE, set once here and read by the two places that must
+     agree: the visibility pill top-right and the description's accent sliver.
+     One variable rather than two colour rules, so "the line matches the pill"
+     cannot drift — a scope modifier below rebinds it and both move together.
+     The neutral default stands in for a card whose scope has no modifier. */
+  --kv-scope: var(--kv-text-3);
+}
+/* Scope hues, from the global status/link palette — no local colours.
+   Public reads as the permissive/"shared with everyone" green, Team as the
+   palette's one blue, Private as the neutral ink it already used. */
+.scopePrivate {
+  --kv-scope: var(--text-secondary);
+}
+.scopeTeam {
+  --kv-scope: var(--link);
+}
+.scopePublic {
+  --kv-scope: var(--success);
+}
+.card:hover {
+  border-color: var(--kv-border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 20px rgba(0, 0, 0, 0.05);
+}
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.cardName {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kv-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Visibility pill — same recipe as the base overview's `.pillBlue`, but the
+   hue comes from `--kv-scope` so each level is its own colour: a soft tint of
+   the hue behind the word, the hue itself as the ink. */
+.cardScope {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  background: color-mix(in oklab, var(--kv-scope) 12%, white);
+  color: var(--kv-scope);
+}
+
+/* The nested inset panel: a step darker than the card face, with a
+   vertical accent sliver down the left of the description. */
+/* The inset well spans everything below the name — description, meta and the
+   Open row are ROWS inside it, fenced by hairlines. The description row
+   flexes so the foot stays pinned to the card's bottom on fixed heights. */
+.cardInset {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border-radius: 9px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+.cardDescRow {
+  display: flex;
+  gap: 9px;
+  flex: 1;
+  min-height: 0;
+  padding: 9px 10px;
+}
+/* Divider rows: the hairline is inset from the well's edges (margin carries
+   the horizontal inset, so the border stops short of the rounded corners). */
+.cardMetaRow {
+  display: flex;
+  flex-direction: column;
+  margin: 0 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--kv-border);
+}
+/* Carries the SAME hue as the visibility pill (see `--kv-scope` on `.card`),
+   so the sliver beside the description restates the card's scope rather than
+   being one more hairline. */
+.cardAccent {
+  flex: 0 0 2px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--kv-scope);
+}
+.cardDesc {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-caption);
+  font-style: italic;
+  line-height: 1.45;
+  /* Reserve three lines even when the row is squeezed by the fixed card
+     height — the clamp below caps at 3, this floors at 3. */
+  min-height: calc(var(--text-caption) * 1.45 * 3);
+  color: var(--kv-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cardDescEmpty {
+  color: var(--kv-text-3);
+}
+
+.cardMeta {
+  font-size: var(--text-micro);
+  /* Same gray as the storage meter's label (text-secondary), not muted. */
+  color: var(--kv-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Star on the left, Open on the right — two real <button>s now that the card
+   itself is an <article> rather than one big button (see base-card.tsx). */
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--kv-border);
+}
+
+/* The per-user star. Unstarred is a MUTED OUTLINE — the same faint grey the
+   card uses for a missing description, so an unstarred grid reads as unmarked
+   rather than as N disabled controls. Starred swaps to the global `--warning`
+   token, which is the palette's gold: it exists in all four token copies
+   (globals.css, apps/desktop-ui tokens.css, dopl-desktop-app session
+   tokens.css, and the .lightScope block in app-shell.module.css), so no new
+   token was minted for one icon. */
+.cardStar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--kv-text-3);
+  cursor: pointer;
+  transition: color 0.14s ease, background 0.14s ease;
+}
+.cardStar:hover {
+  background: var(--kv-row-hover);
+  color: var(--kv-text-2);
+}
+.cardStarOn,
+.cardStarOn:hover {
+  color: var(--warning);
+}
+
+/* Composed onto the kit's .btn-light face. Stadium ends (the `.seg-pill`
+   geometry), so the one CTA on the card reads as a button rather than as
+   another rounded rectangle among the card's 12/9/7px corners. */
+.cardOpen {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--kv-text);
+}
+
+/* Trailing dashed cell — create. */
+.cardNew {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  font: inherit;
+  border: 1px dashed var(--kv-border-strong);
+  border-radius: 12px;
+  background: none;
+  color: var(--kv-text-2);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.cardNew:hover {
+  background: var(--bg-inset);
+  border-color: var(--kv-text-3);
+  color: var(--kv-text);
+}
+.cardNewPlus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: inherit;
+}
+.cardNewLabel {
+  font-size: var(--text-body);
+  font-weight: 500;
 }

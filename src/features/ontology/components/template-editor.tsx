@@ -8,7 +8,9 @@ import type { GraphAction } from "../graph-state";
 import type { OntologyObject, TemplateField } from "../types";
 import { FIELD_WELL } from "./ontology-bits";
 
-const KIND_LABELS: Record<TemplateField["kind"], string> = {
+/** Shared with the column header card's read-only template preview, so the
+ *  two renderings of a field's kind can never drift apart. */
+export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
   pill: "Tag",
   ref: "Object",

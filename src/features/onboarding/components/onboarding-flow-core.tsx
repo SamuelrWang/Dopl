@@ -33,13 +33,21 @@ export interface OnboardingFlowCoreProps {
    * and the wordmark stands alone.
    */
   brand?: ReactNode;
+  /**
+   * Right-pane banner, passed straight through to `AuthSplitLayout` — same
+   * `file://` problem as `brand`, same fix: the packaged SPA hands over a
+   * Vite-bundled asset URL, and anything else falls back to the layout's
+   * `public/` default. See `shared/layout/auth-split/auth-split-layout.tsx` ›
+   * AuthSplitLayout for why the shared file can't import the image itself.
+   */
+  bannerSrc?: string;
 }
 
 /**
  * The onboarding stepper's Next-free core (see `./onboarding-flow` for the web
  * binding): survey → MCP connect → (transition) workspace naming. Reuses the
  * login split layout — the questionnaire fades in on the left where the sign-in
- * form was, crystal panel on the right.
+ * form was, banner panel on the right.
  *
  * Both writes go through `apiRequest`, the transport seam the desktop renderer
  * rides over IPC (the packaged renderer ships `connect-src 'none'`, so the raw
@@ -50,6 +58,7 @@ export function OnboardingFlowCore({
   redirectTo,
   onDone,
   brand,
+  bannerSrc,
 }: OnboardingFlowCoreProps) {
   const [step, setStep] = useState<OnboardingStep>(initialStep);
   const [submitting, setSubmitting] = useState(false);
@@ -122,7 +131,7 @@ export function OnboardingFlowCore({
   // No auto-advance: the user clicks Continue (enabled once connected) to finish.
 
   return (
-    <AuthSplitLayout>
+    <AuthSplitLayout bannerSrc={bannerSrc}>
       <div className="w-full max-w-[360px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
         {/* Brand: mark + wordmark (matches login), then step indicator */}
         <div className="mb-6 flex flex-col items-start gap-1.5">

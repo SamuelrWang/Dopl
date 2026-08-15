@@ -8,10 +8,11 @@ import { BaseSettingsModal } from "../base-settings-modal";
 import { MoveToDialog } from "../move-to-dialog";
 import { ListPanel } from "./list/list-panel";
 import { DetailPanel } from "./detail/detail-panel";
+import { KnowledgeHome } from "./home/knowledge-home";
 import { useKnowledgeV2Controller } from "./use-knowledge-v2-controller";
 import type { BaseTree, KbTeamRef, Selection } from "./types";
 import type { KnowledgeRouting, KnowledgeUrlSync } from "./routing";
-import type { KnowledgeBase } from "../../types";
+import type { KnowledgeBase, KnowledgeBaseStats } from "../../types";
 import styles from "./knowledge-v2.module.css";
 
 interface Props {
@@ -20,6 +21,13 @@ interface Props {
   bases: KnowledgeBase[];
   /** Display names for foreign base owners, keyed by user id. */
   ownerNames?: Record<string, string>;
+  /** `{entryCount, lastEntryUpdatedAt, storageBytes}` keyed by base id — the
+   *  home cards' meta line + storage bar, folded into the same list response as
+   *  `ownerNames`. */
+  baseStats?: Record<string, KnowledgeBaseStats>;
+  /** The workspace's per-base storage cap in bytes, same response. Read by
+   *  BOTH modes: the home cards and the selected base's overview. */
+  kbStorageLimit?: number | null;
   currentUserId: string;
   role: Role;
   /** Admin-only: kbId → teams granted, for the base overview. */
@@ -29,6 +37,8 @@ interface Props {
   /** SSR-resolved trees to seed (the deep-linked base), keyed by baseId. */
   initialTrees?: Record<string, BaseTree>;
   onCreate: () => void;
+  /** Bundled hero image for the home banner — injected by the host app. */
+  heroImageSrc?: string;
   /** Router bindings for the moves that leave this tree (./routing.ts). */
   routing: KnowledgeRouting;
   /** Selection ↔ address-bar adapter; defaults to the History API. */
@@ -36,22 +46,36 @@ interface Props {
 }
 
 /**
- * Knowledge V2 root — the two-pane layout (list + detail) that fills the app
- * shell's content area. All state + URL sync + tree mutations live in the
- * controller hook; this component composes the panes and the root-mounted
- * delete/move dialogs. The far-left workspace rail + nav are the shell's.
+ * Knowledge V2 root — TWO MODES over one controller, picked by the selection:
+ *
+ *   - **no selection → HOME** (`/knowledge`): the card grid over every visible
+ *     base, with search + scope pills. Mounts no trees.
+ *   - **a selection → BASE DETAIL** (`/knowledge/{base}`): the two-pane
+ *     list+detail view, the list pane scoped to that ONE base's tree.
+ *
+ * The selection is the mode because the selection is already what the URL
+ * encodes, in both directions (`use-knowledge-v2-controller` § URL ↔ selection
+ * sync). Reading `useParams` here instead would fork that agreement and put
+ * the mode one render behind the view.
+ *
+ * All state + URL sync + tree mutations live in the controller hook; this
+ * composes the modes and the root-mounted delete/move dialogs. The far-left
+ * workspace rail + nav are the shell's.
  */
 export function KnowledgeV2({
   workspaceId,
   workspaceSegment,
   bases,
   ownerNames,
+  baseStats,
+  kbStorageLimit,
   currentUserId,
   role,
   kbTeams,
   initialSelection,
   initialTrees,
   onCreate,
+  heroImageSrc,
   routing,
   urlSync,
 }: Props) {
@@ -64,39 +88,70 @@ export function KnowledgeV2({
     urlSync,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsBase = c.selection?.base ?? null;
+  // ONE name for the base this view is on. Non-null below the home
+  // early-return, which is what makes the detail branch's props total.
+  const openBase = c.selection?.base ?? null;
+
+  if (!openBase) {
+    return (
+      <div className={cn("page-float", styles.shell, styles.shellHome)}>
+        <KnowledgeHome
+          bases={c.visibleBases}
+          filterCounts={c.filterCounts}
+          baseStats={baseStats}
+          kbStorageLimit={kbStorageLimit}
+          ownerNames={ownerNames}
+          // Stars come from the CONTROLLER, not from a prop: they are per-user
+          // and ride the same live base-list query the controller already owns,
+          // so threading them through the host page would only give the grid a
+          // second, staler copy.
+          starredBaseIds={c.starredBaseIds}
+          currentUserId={currentUserId}
+          query={c.query}
+          onQueryChange={c.setQuery}
+          filter={c.filter}
+          onFilterChange={c.setFilter}
+          onOpenBase={c.handleSelectBase}
+          onToggleStar={c.toggleStar}
+          onCreate={onCreate}
+          heroImageSrc={heroImageSrc}
+        />
+
+        {/* Home has no base selected, so the base-scoped dialogs below have
+            nothing to act on — only the create flow (owned by the caller)
+            is reachable from here. */}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("page-float", styles.shell)}>
       <ListPanel
-        bases={c.visibleBases}
-        ownerNames={ownerNames}
-        currentUserId={currentUserId}
-        query={c.query}
-        onQueryChange={c.setQuery}
-        filter={c.filter}
-        onFilterChange={c.setFilter}
-        selectedBaseId={c.selectedBaseId}
+        base={openBase}
+        tree={c.trees[openBase.id]}
         selectedEntryId={c.selectedEntryId}
-        expanded={c.expanded}
-        trees={c.trees}
-        canEdit={c.canEdit}
+        canEdit={c.canEdit(openBase.id)}
         editingNodeId={c.editingNodeId}
         treeHandlers={c.treeHandlers}
-        onSelectBase={c.handleSelectBase}
-        onToggleExpand={c.handleToggleExpand}
         onSelectEntry={c.handleSelectEntry}
-        onCreate={onCreate}
+        // A REAL navigation, not a local state flip: leaving a base is the
+        // one move here that changes which route matches, and routing it
+        // through `goToBase` keeps history honest (Back returns to the base)
+        // and lets the URL→selection handler clear the selection, exactly as
+        // it does for a delete.
+        onGoHome={() => routing.goToBase(null, "push")}
       />
       <DetailPanel
         selection={c.selection}
         workspaceId={workspaceId}
-        selectedTree={settingsBase ? c.trees[settingsBase.id] : undefined}
+        selectedTree={c.trees[openBase.id]}
         openEntry={c.openEntry}
         openEntryStatus={c.openEntryStatus}
         refetchOpenEntry={c.refetchOpenEntry}
         kbTeams={kbTeams}
-        canEditBase={settingsBase ? c.canEdit(settingsBase.id) : false}
+        baseStats={baseStats}
+        kbStorageLimit={kbStorageLimit}
+        canEditBase={c.canEdit(openBase.id)}
         onTreeRefresh={c.refreshTree}
         onBaseSaved={() => {
           // The bases list is a live query now — refetch it so the local
@@ -147,20 +202,21 @@ export function KnowledgeV2({
         />
       ) : null}
 
-      {settingsBase ? (
-        <BaseSettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          workspaceId={workspaceId}
-          workspaceSlug={workspaceSegment}
-          base={settingsBase}
-          currentUserId={currentUserId}
-          role={role}
-          folders={c.trees[settingsBase.id]?.folders ?? []}
-          onFoldersChanged={() => c.refreshTree(settingsBase.id)}
-          routing={routing}
-        />
-      ) : null}
+      {/* Mounted for the whole life of the detail mode, not gated on
+          `settingsOpen`: ModalShell drives its enter transition off the
+          `open` prop changing after mount. */}
+      <BaseSettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        workspaceId={workspaceId}
+        workspaceSlug={workspaceSegment}
+        base={openBase}
+        currentUserId={currentUserId}
+        role={role}
+        folders={c.trees[openBase.id]?.folders ?? []}
+        onFoldersChanged={() => c.refreshTree(openBase.id)}
+        routing={routing}
+      />
     </div>
   );
 }

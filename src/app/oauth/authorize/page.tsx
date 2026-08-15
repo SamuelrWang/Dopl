@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  *      issues the authorization code and redirects back to the client.
  *
  * Shares the light split layout with /login + onboarding (left form column,
- * right crystal panel). Server component with a plain HTML form — no client
+ * right banner panel). Server component with a plain HTML form — no client
  * JS required.
  */
 
@@ -198,7 +198,7 @@ export default async function AuthorizePage({
 }
 
 /** Light split surface shared with /login: brand + title in the left column,
- *  crystal panel on the right (collapses on mobile). */
+ *  banner panel on the right (collapses on mobile). */
 function Screen({ title, body }: { title: string; body: React.ReactNode }) {
   return (
     <AuthSplitLayout>

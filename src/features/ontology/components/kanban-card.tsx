@@ -1,12 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
 import { pendingRow } from "@/shared/ui/pending";
-import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphState } from "../graph-state";
-import type { AttributeValue } from "../types";
 import { ObjectHoverCard } from "./object-hover-card";
 
 interface Props {
@@ -20,10 +16,36 @@ interface Props {
 }
 
 /**
- * Compact card in a column. Click selects (opens the editor panel); the
- * chevron drops the card open inline with its attribute values.
- * Hovering shows the cursor-following quick view (suppressed while the
- * dropdown is open).
+ * One object in a lane: name, description, a hairline, then its counts.
+ * The whole card selects (opening the editor panel), and hovering shows the
+ * cursor-following quick view.
+ *
+ * ── FIXED HEIGHT, near-square but deliberately short of it. 216px against a
+ *    264px inner width (the 288px lane less its 2 × 12px padding), so
+ *    0.82 : 1. Written as `h-[216px]` rather than a scale step because the
+ *    number is the board's arithmetic — 18 × the 12px dot pitch — and the
+ *    scale has nothing at 216. The card is `base-card`'s structure in
+ *    utilities: a head row, a description that FLEXES into whatever the fixed
+ *    height leaves, and a meta row pinned to the bottom edge.
+ *
+ *    The eight-line clamp is arithmetic, not taste. 216 − the meta row (1px
+ *    hairline + 16px `py-2` + a 14.7px micro line ≈ 32) − 20px of body
+ *    padding − an 18.75px name line − the 2px gap leaves ≈ 143px, and
+ *    `text-caption` is 11.5px × 1.4 = 16.1px per line: eight lines (128.8px)
+ *    is the last one that fits with its ellipsis inside the box (nine would
+ *    need 144.9). Re-do the sum if the height, the paddings, the lane padding
+ *    or the type scale move.
+ *
+ * There is no inline expand any more (2026-08-12). The chevron dropped the
+ * card open on an attribute preview that BOTH the hover card and the panel
+ * already show — a third rendering of the same rows, and the one control on
+ * the card that did not do what the card does.
+ *
+ * The card is a `<div>` with an `onClick`, not a `<button>` wrapping
+ * everything: the title button is the accessible control (it carries the
+ * object's name), and the container's handler is the mouse convenience that
+ * lets the meta row be part of the same target. Same reasoning, at length, in
+ * `knowledge-v2/home/base-card`.
  */
 export function KanbanCard({
   objectId,
@@ -32,67 +54,46 @@ export function KanbanCard({
   pending = false,
   onSelect,
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
-  const { nameOf } = useWorkspaceResources();
   const object = graph.objects[objectId];
   if (!object) return null;
 
   return (
     <div
-      onMouseEnter={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
-      onMouseMove={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
+      onMouseEnter={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setHoverPos(null)}
+      onClick={() => onSelect(objectId)}
+      data-selected={selected ? "true" : undefined}
       {...pendingRow(
         pending,
-        cn(
-          "overflow-hidden rounded-xl border bg-bg-elevated transition-shadow",
-          selected
-            ? "border-border-highlight shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)]"
-            : "border-border-default shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]"
-        )
+        "kanban-card flex h-[216px] shrink-0 flex-col rounded-[10px] border bg-bg-elevated"
       )}
     >
       <button
         type="button"
-        onClick={() => onSelect(objectId)}
-        className="flex w-full items-start gap-2 px-3 pt-2.5 pb-1 text-left"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(objectId);
+        }}
+        className="flex min-h-0 w-full flex-1 flex-col items-start px-3 pt-3 pb-2 text-left"
       >
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-body font-semibold tracking-tight text-text-primary">
-            {object.name}
-          </div>
-          {object.subtitle && (
-            <div className="mt-0.5 truncate text-caption text-text-secondary">
-              {object.subtitle}
-            </div>
-          )}
-        </div>
-        <span
-          role="button"
-          tabIndex={0}
-          aria-label={open ? "Collapse" : "Expand"}
-          onClick={(e) => {
-            e.stopPropagation();
-            setHoverPos(null);
-            setOpen((o) => !o);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpen((o) => !o);
-            }
-          }}
-          className="rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
-        >
-          <ChevronDown
-            size={13}
-            className={cn("transition-transform", open && "rotate-180")}
-          />
+        <span className="block w-full truncate text-body font-semibold tracking-tight text-text-primary">
+          {object.name}
         </span>
+        {/* The flexible middle, `base-card`'s `.cardDesc` in utilities: it
+            takes the space the fixed height leaves and clamps with an
+            ellipsis at the last line that fits. No `block` next to the clamp
+            — the clamp IS a display rule (-webkit-box), and whichever of the
+            two the stylesheet emitted last would win. An absent description
+            leaves the space empty, exactly like an empty knowledge card. */}
+        {object.subtitle && (
+          <span className="mt-0.5 line-clamp-[8] w-full min-h-0 flex-1 text-caption text-text-secondary">
+            {object.subtitle}
+          </span>
+        )}
       </button>
-      <div className="flex items-center gap-2 px-3 pb-2 text-micro text-text-muted">
+      <div className="flex shrink-0 items-center gap-1.5 border-t border-border-subtle px-3 py-2 text-micro text-text-muted">
         <span>{object.attributes.length} attrs</span>
         <span aria-hidden>·</span>
         <span>{object.relationships.length} edges</span>
@@ -100,50 +101,9 @@ export function KanbanCard({
         <span>{object.methods.length} actions</span>
       </div>
 
-      {open && (
-        <div className="border-t border-border-subtle bg-bg-inset px-3 py-2 shadow-[inset_0_2px_4px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.05)]">
-          {object.attributes.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              {object.attributes.slice(0, 5).map((attr) => (
-                <div key={attr.key} className="flex items-baseline gap-2 text-caption">
-                  <span className="w-24 shrink-0 truncate text-text-muted">
-                    {attr.label}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-text-primary">
-                    {previewValue(attr.value, graph, nameOf)}
-                  </span>
-                </div>
-              ))}
-              {object.attributes.length > 5 && (
-                <span className="text-micro text-text-muted">
-                  +{object.attributes.length - 5} more
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="text-caption text-text-muted">No attributes yet.</p>
-          )}
-        </div>
-      )}
-      {hoverPos && !open && (
+      {hoverPos && (
         <ObjectHoverCard object={object} graph={graph} x={hoverPos.x} y={hoverPos.y} />
       )}
     </div>
   );
-}
-
-function previewValue(
-  value: AttributeValue,
-  graph: GraphState,
-  nameOf: (id: string) => string | null
-): string {
-  if (value.kind === "knowledge" || value.kind === "skill") {
-    const names = value.value.map((id) => nameOf(id)).filter(Boolean);
-    return names.length ? names.join(", ") : "—";
-  }
-  if (value.kind === "ref") {
-    const names = value.value.map((id) => graph.objects[id]?.name).filter(Boolean);
-    return names.length ? names.join(", ") : "—";
-  }
-  return value.value || "—";
 }

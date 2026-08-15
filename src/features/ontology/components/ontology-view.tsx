@@ -215,7 +215,10 @@ export function OntologyView({
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-          <div className="concave-track flex items-center gap-1">
+          {/* Trackless stadium pills — same language as SegmentedControl
+              (.seg-pill resting, .raised-tab active); hand-composed because
+              of the trailing new-cluster button and pending states. */}
+          <div className="flex items-center gap-1.5">
             {graph.clusters.map((c) => (
               <button
                 key={c.id}
@@ -224,10 +227,10 @@ export function OntologyView({
                 {...pendingRow(
                   pendingIds.has(c.id),
                   cn(
-                    "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
+                    "flex h-[27px] items-center gap-1.5 rounded-full px-3 text-caption font-medium transition-colors",
                     c.id === cluster.id
                       ? "raised-tab text-text-primary"
-                      : "text-text-secondary hover:text-text-primary"
+                      : "seg-pill text-text-secondary hover:text-text-primary"
                   )
                 )}
               >
@@ -240,7 +243,7 @@ export function OntologyView({
                 type="button"
                 onClick={handleCreateCluster}
                 aria-label="New cluster"
-                className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-muted transition hover:text-text-primary"
+                className="flex h-[27px] w-[27px] items-center justify-center rounded-full text-text-muted transition hover:text-text-primary"
               >
                 <Plus size={12} />
               </button>

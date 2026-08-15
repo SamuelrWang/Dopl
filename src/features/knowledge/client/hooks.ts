@@ -12,8 +12,13 @@
  * `KnowledgeApiError`, `data` kept while a same-key refetch is in
  * flight (no flicker), cleared on key change (no cross-workspace leak).
  */
-import { useCallback, useMemo } from "react";
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -24,6 +29,7 @@ import {
   fetchBaseList,
   fetchEntry,
   fetchTree,
+  setBaseStar,
   type KnowledgeBaseList,
 } from "./api";
 
@@ -107,8 +113,7 @@ function useKnowledgeQuery<T>(
  * `GET /api/knowledge/bases` answers both halves in a single response, so
  * they share one key: a page that needs `ownerNames` (the desktop SPA's
  * knowledge page, which has no RSC to compute them) and the two-pane
- * controller's `useKnowledgeBases` ride the same request instead of hitting
- * the route twice.
+ * controller ride the same request instead of hitting the route twice.
  */
 export function useKnowledgeBaseList(
   workspaceId?: string,
@@ -130,7 +135,7 @@ export function useKnowledgeBaseList(
   );
 }
 
-/** The cache key `useKnowledgeBaseList`/`useKnowledgeBases` share. */
+/** The cache key every reader and writer of the base list shares. */
 export function knowledgeBasesQueryKey(workspaceId?: string) {
   return ["knowledge", `bases:${workspaceId ?? "default"}`] as const;
 }
@@ -164,22 +169,77 @@ export function seedKnowledgeBase(
   );
 }
 
-export function useKnowledgeBases(
-  workspaceId?: string,
-  options?: { initialData?: KnowledgeBase[] }
-): Result<KnowledgeBase[]> {
-  const seed = options?.initialData;
-  const list = useKnowledgeBaseList(
-    workspaceId,
-    // An SSR seed carries the bases only; `ownerNames` reaches the web page
-    // as its own RSC prop, so an empty map here is the honest value and no
-    // consumer reads it off this seeded entry.
-    seed !== undefined ? { initialData: { bases: seed, ownerNames: {} } } : undefined
-  );
-  return useMemo(
-    () => ({ ...list, data: list.data ? list.data.bases : null }),
-    [list]
-  );
+/*
+ * `useKnowledgeBases` — the bases-only projection of the list — was DELETED
+ * 2026-08-12 when the controller started needing `starredBaseIds` off the same
+ * entry and moved onto `useKnowledgeBaseList` directly. It had one caller. A
+ * projection hook that drops four of the five keys is a trap on a response
+ * that keeps growing folds: every new key needs a second reader, and the
+ * second reader is a second render behind the first.
+ */
+
+/**
+ * Toggle the caller's star on one base, OPTIMISTICALLY.
+ *
+ * The star rides the base-list cache entry (`starredBaseIds`), so the whole
+ * write is a patch of that one key — which is what makes the grid reorder on
+ * the click rather than on the round trip.
+ *
+ * WHY THIS IS HAND-ROLLED AND NOT `useApiMutation`. INVARIANTS §8 rule 6: a
+ * feature's READS must be on `useApiQuery` before its WRITES adopt that layer,
+ * and knowledge reads are not — they are on `useKnowledgeQuery` above, under
+ * `["knowledge", key]` keys that `apiQueryKey` does not mint. Adopting the
+ * write layer here would patch a key nothing is subscribed to and fail
+ * SILENTLY: the toggle would look wired and the grid would never move. The
+ * layer's RULES still apply and are followed one at a time below; only its
+ * plumbing is unavailable.
+ *
+ *   - Rule 2 — cancel BEFORE patching, and only an entry that HAS data. A
+ *     first-load query cancelled here would strand the grid empty.
+ *   - Rule 5 — MERGE, never replace: the patch rewrites `starredBaseIds` and
+ *     leaves `bases` / `baseStats` / `ownerNames` / `kbStorageLimit` alone.
+ *   - Rule 1 — NO invalidation. The write's own end state is the whole answer;
+ *     re-downloading the list would only re-fetch what we just computed. There
+ *     is no cold-cache case to cover either (`coldKeys`): the only way to
+ *     reach this control is a rendered card, which means the entry is warm.
+ *   - Rule 4 — keyed by the id captured AT SUBMIT, in the mutation variables.
+ *
+ * ROLLBACK IS THE SNAPSHOT, NOT THE INVERSE OPERATION. On failure the previous
+ * entry is restored wholesale rather than the id being toggled back — an
+ * inverse would be wrong if a refetch landed in between, and it is the one
+ * case where being exactly right costs nothing.
+ */
+export function useToggleBaseStar(workspaceId?: string) {
+  const queryClient = useQueryClient();
+  const key = knowledgeBasesQueryKey(workspaceId);
+  return useMutation({
+    mutationFn: ({ baseId, starred }: { baseId: string; starred: boolean }) =>
+      setBaseStar(baseId, starred, workspaceId),
+    onMutate: async ({ baseId, starred }) => {
+      const previous = queryClient.getQueryData<KnowledgeBaseList>(key);
+      // Declines on a cold entry — there is nothing to patch and nothing to
+      // roll back to, and cancelling a first load would leave the surface
+      // empty with no request scheduled to fill it.
+      if (!previous) return { previous: undefined };
+      await queryClient.cancelQueries({ queryKey: key });
+      queryClient.setQueryData<KnowledgeBaseList>(key, (prev) =>
+        prev
+          ? {
+              ...prev,
+              starredBaseIds: starred
+                ? prev.starredBaseIds.includes(baseId)
+                  ? prev.starredBaseIds
+                  : [...prev.starredBaseIds, baseId]
+                : prev.starredBaseIds.filter((id) => id !== baseId),
+            }
+          : prev
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+  });
 }
 
 export function useKnowledgeTree(

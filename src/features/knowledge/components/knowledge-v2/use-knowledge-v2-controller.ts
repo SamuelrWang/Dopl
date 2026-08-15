@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchEntry as apiFetchEntry, fetchTree } from "../../client/api";
-import { useKnowledgeBases, useKnowledgeEntry } from "../../client/hooks";
+import {
+  useKnowledgeBaseList,
+  useKnowledgeEntry,
+  useToggleBaseStar,
+} from "../../client/hooks";
 import { useKnowledgeRealtime } from "../../client/realtime";
 import { kbScope } from "../../scope";
 import type { KnowledgeBase, KnowledgeEntry } from "../../types";
@@ -14,8 +18,12 @@ import {
   type KnowledgeUrlSync,
 } from "./routing";
 import { reportError } from "./utils";
-import { readLastBaseId, writeLastBaseId } from "./last-base";
+import { scopeCounts } from "./list-filters";
 import { useKnowledgeV2Trees } from "./use-knowledge-v2-trees";
+
+/** Stable empty array — a fresh `[]` per render would re-run every memo that
+ *  depends on the star set (and, downstream, re-sort the grid) forever. */
+const EMPTY_STARS: string[] = [];
 
 interface ControllerArgs {
   workspaceId: string;
@@ -39,10 +47,18 @@ interface ControllerArgs {
 
 /**
  * Owns the Knowledge V2 root's client state: scope filter, base-name search,
- * per-base expansion + lazily-loaded trees, the detail selection, and the
- * open entry's body. Keeps the URL in sync with the selection (shallow history
- * updates, no navigation) and re-derives the selection on browser back/forward.
- * Tree mutations live in `useKnowledgeV2Trees`; this composes them in.
+ * lazily-loaded trees, the detail selection, and the open entry's body. Keeps
+ * the URL in sync with the selection (shallow history updates, no navigation)
+ * and re-derives the selection on browser back/forward. Tree mutations live in
+ * `useKnowledgeV2Trees`; this composes them in.
+ *
+ * **`selection === null` IS THE HOME MODE.** The knowledge root renders a card
+ * grid over `visibleBases`, and a base's page renders the two-pane tree+detail
+ * view — one component, one controller, and the selection decides which
+ * (`knowledge-v2.tsx`). That is why nothing here auto-selects a base any more:
+ * an auto-select at `/knowledge` would rewrite the URL to a base before the
+ * grid ever painted, making the home route unreachable. Selection is only ever
+ * set by a user move (a card, a tree row, back/forward) or a deep link.
  */
 export function useKnowledgeV2Controller({
   workspaceId,
@@ -60,29 +76,44 @@ export function useKnowledgeV2Controller({
   // agent/remote base name/description edits appear without a reload —
   // the realtime subscriber below refetches it. Everything downstream reads
   // this `bases` exactly as before.
-  const basesQuery = useKnowledgeBases(workspaceId, { initialData: initialBases });
-  const bases = basesQuery.data ?? initialBases;
+  //
+  // THE WHOLE LIST RESPONSE, not just its `bases` half: the caller's own stars
+  // ride the same cache entry (`starredBaseIds`), and reading them from a
+  // second hook would put the grid's order one render behind the toggle that
+  // moved it. The seed's `starredBaseIds: []` is only ever reached on a COLD
+  // entry, which this view cannot start from — its host resolves the same
+  // query before it renders — so it never asserts "nothing starred" over a
+  // real answer.
+  const basesQuery = useKnowledgeBaseList(workspaceId, {
+    initialData: {
+      bases: initialBases,
+      ownerNames: {},
+      baseStats: {},
+      kbStorageLimit: null,
+      starredBaseIds: [],
+    },
+  });
+  const bases = basesQuery.data?.bases ?? initialBases;
+  const starredBaseIds = basesQuery.data?.starredBaseIds ?? EMPTY_STARS;
 
-  // Auto-select (Feature A): kill the empty right pane whenever ≥1 base
-  // exists. A deep link (initialSelection) wins; otherwise seed the FIRST
-  // SSR base deterministically so SSR + first client render agree (no
-  // hydration mismatch, no landing-preview flash). A mount effect below
-  // upgrades this to the per-workspace persisted base when one is stored.
-  const initialResolvedSelection: Selection | null =
-    initialSelection ??
-    (initialBases.length > 0 ? { kind: "base", base: initialBases[0] } : null);
-  // Read-once snapshot of the persisted preference (client-only; SSR → null,
-  // never rendered so no hydration mismatch). Captured before any write so
-  // the persist effect can't clobber it first.
-  const [persistedBaseId] = useState<string | null>(() =>
-    typeof window !== "undefined" ? readLastBaseId(workspaceId) : null
+  // Per-user star toggle. Optimistic against the list cache above, so the grid
+  // reorders on the click; a failure rolls the entry back (client/hooks.ts).
+  const starMutation = useToggleBaseStar(workspaceId);
+  const starMutate = starMutation.mutate;
+  const toggleStar = useCallback(
+    (baseId: string, starred: boolean) => starMutate({ baseId, starred }),
+    [starMutate]
   );
+
+  // A deep link is the ONLY thing that starts this view on a base. No base
+  // in the URL means the home grid, so there is nothing to resolve and
+  // nothing to auto-open — the previous "select the first base" seed (and
+  // the per-workspace last-base preference that upgraded it) existed purely
+  // to fill an empty right pane the grid now replaces.
+  const initialResolvedSelection: Selection | null = initialSelection;
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ListFilter>("all");
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(initialResolvedSelection ? [initialResolvedSelection.base.id] : [])
-  );
   const [trees, setTrees] = useState<Record<string, BaseTree>>(
     () => initialTrees ?? {}
   );
@@ -101,17 +132,29 @@ export function useKnowledgeV2Controller({
     openSeed ? { initialData: openSeed, initialEntryId: openSeed.id } : undefined
   );
 
-  const visibleBases = useMemo(() => {
+  // Two stages, because the scope pills carry COUNTS and a count is only
+  // meaningful before its own filter runs: `queryBases` answers "what does
+  // the search match", `visibleBases` narrows that to the active pill, and
+  // the badges are cut from the stage in between.
+  const queryBases = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return bases.filter((b) => {
-      if (filter !== "all" && kbScope(b) !== filter) return false;
-      if (!q) return true;
-      return (
+    if (!q) return bases;
+    return bases.filter(
+      (b) =>
         b.name.toLowerCase().includes(q) ||
         (b.description?.toLowerCase().includes(q) ?? false)
-      );
-    });
-  }, [bases, filter, query]);
+    );
+  }, [bases, query]);
+
+  const filterCounts = useMemo(() => scopeCounts(queryBases), [queryBases]);
+
+  const visibleBases = useMemo(
+    () =>
+      filter === "all"
+        ? queryBases
+        : queryBases.filter((b) => kbScope(b) === filter),
+    [queryBases, filter]
+  );
 
   const loadTree = useCallback(
     async (baseId: string) => {
@@ -172,33 +215,12 @@ export function useKnowledgeV2Controller({
     [workspaceId]
   );
 
-  const handleToggleExpand = useCallback(
-    (base: KnowledgeBase) => {
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        if (next.has(base.id)) {
-          next.delete(base.id);
-        } else {
-          next.add(base.id);
-          if (!trees[base.id]) void loadTree(base.id);
-        }
-        return next;
-      });
-    },
-    [trees, loadTree]
-  );
-
+  /** Open a base — the home grid's card, and the only way into detail mode
+   *  that isn't a URL. The list pane shows exactly this base's tree, so
+   *  there is no per-base expansion state left to set. */
   const handleSelectBase = useCallback(
     (base: KnowledgeBase) => {
       setSelection({ kind: "base", base });
-      // Selecting a base also opens its file tree; collapsing stays on
-      // the chevron only, so re-clicking a selected base never folds it.
-      setExpanded((prev) => {
-        if (prev.has(base.id)) return prev;
-        const next = new Set(prev);
-        next.add(base.id);
-        return next;
-      });
       if (!trees[base.id]) void loadTree(base.id);
     },
     [trees, loadTree]
@@ -252,7 +274,6 @@ export function useKnowledgeV2Controller({
       try {
         const entry = await apiFetchEntry(entryId, workspaceId);
         setSelection({ kind: "entry", base, entry });
-        setExpanded((prev) => new Set(prev).add(baseId));
         if (!trees[baseId]) void loadTree(baseId);
       } catch (err) {
         reportError(err, "Couldn't open the search result");
@@ -340,7 +361,6 @@ export function useKnowledgeV2Controller({
       // Back/Forward resolves here exactly as it does on a cold load.
       const base = findBaseBySegment(bases, baseSegment);
       if (!base) return;
-      setExpanded((prev) => new Set(prev).add(base.id));
       if (!trees[base.id]) void loadTree(base.id);
       const tree = trees[base.id];
       const entry =
@@ -351,49 +371,6 @@ export function useKnowledgeV2Controller({
     });
   }, [sync, bases, trees, loadTree]);
 
-  // ── Auto-select resolution (Feature A) ─────────────────────────────
-  // Runs once the base list is available. A deep link is already applied
-  // (initialSelection) and its tree seeded, so skip. Otherwise upgrade the
-  // deterministic first-base seed to the per-workspace persisted base when
-  // one is stored + still present, and make sure the selected base's tree
-  // loads. Guarded so it resolves exactly once (fires when the list arrives
-  // for a workspace that started with an empty SSR seed).
-  const didResolveRef = useRef(false);
-  useEffect(() => {
-    if (didResolveRef.current) return;
-    if (initialSelection) {
-      didResolveRef.current = true;
-      return;
-    }
-    // Zero bases: keep the empty/create state — nothing to select.
-    if (bases.length === 0) return;
-    didResolveRef.current = true;
-    const preferred =
-      (persistedBaseId
-        ? bases.find((b) => b.id === persistedBaseId)
-        : undefined) ?? bases[0];
-    if (!preferred) return;
-    if (selection?.base.id !== preferred.id) {
-      // Auto-select replaces history rather than pushing (it's not a user
-      // navigation): pre-seed the URL-sync ref so the effect uses replaceState.
-      prevBaseIdRef.current = preferred.id;
-      // One-shot resolution once the base list arrives — sanctioned mount-sync
-      // pattern (same as use-ontology's first-snapshot seed), guarded by
-      // didResolveRef so it runs at most once.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelection({ kind: "base", base: preferred });
-      setExpanded((prev) => new Set(prev).add(preferred.id));
-    }
-    if (!trees[preferred.id]) void loadTree(preferred.id);
-  }, [bases, initialSelection, persistedBaseId, selection, trees, loadTree]);
-
-  // Persist the selected base per workspace (any path: click, deep link,
-  // auto-select) so the next visit reopens it.
-  useEffect(() => {
-    const baseId = selection?.base.id;
-    if (baseId) writeLastBaseId(workspaceId, baseId);
-  }, [selection?.base.id, workspaceId]);
-
   const selectedBaseId = selection?.base.id ?? null;
   const selectedEntryId =
     selection?.kind === "entry" ? selection.entry.id : null;
@@ -403,8 +380,16 @@ export function useKnowledgeV2Controller({
     setQuery,
     filter,
     setFilter,
+    /** Search-matched bases, BEFORE the scope pill — what the counts count. */
+    queryBases,
+    /** Per-pill badge counts, cut from `queryBases`. */
+    filterCounts,
     visibleBases,
-    expanded,
+    /** The CALLER'S starred base ids — the home grid lifts these to the front.
+     *  Stars never touch `filterCounts`: a favourite changes the ORDER of the
+     *  results, never which ones there are. */
+    starredBaseIds,
+    toggleStar,
     trees,
     selection: reconciledSelection,
     selectedBaseId,
@@ -416,7 +401,6 @@ export function useKnowledgeV2Controller({
      *  own rename/description change reflects without waiting on realtime. */
     refetchBases: basesQuery.refetch,
     refreshTree,
-    handleToggleExpand,
     handleSelectBase,
     handleSelectEntry,
     selectEntryById,

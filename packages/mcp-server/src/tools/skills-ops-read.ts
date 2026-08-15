@@ -104,7 +104,7 @@ export async function opGet(
         ? "private"
         : skill.accessMode === "teams"
           ? "team-shared"
-          : "workspace-shared";
+          : "public";
     lines.push(
       `id: \`${skill.id}\` · status: ${skill.status} · sharing: ${scope} · folder: ${skill.folder ? inlineOr(skill.folder, "`(unnamed folder)`") : "—"} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
     );

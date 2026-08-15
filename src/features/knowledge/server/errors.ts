@@ -172,6 +172,43 @@ export class KnowledgePathConflictError extends Error {
 }
 
 /**
+ * Thrown when a write would push a knowledge base past its plan's per-base
+ * storage cap. A PLAN GATE, not a validation error — it does NOT go through
+ * `mapKnowledgeError`/the nested envelope. `toKnowledgeErrorResponse` catches
+ * it and emits the flat `{ error, message, upgrade_url }` plan-gate envelope at
+ * 403, the same shape and status the ontology object cap uses
+ * (`api/ontology/objects/route.ts`), because API-first clients — `@dopl/client`
+ * and every MCP agent behind it — already parse exactly that.
+ *
+ * FREEZE, NEVER DELETE: only GROWTH throws this. Reads, deletes, moves,
+ * renames and shrinking edits are untouched even while the base is over cap.
+ *
+ * Carries the three numbers a caller needs to explain itself without a second
+ * request: what is stored, what the cap is, and how much this write wanted.
+ */
+export class KnowledgeStorageLimitError extends Error {
+  readonly code = "kb_storage_full";
+  readonly baseId: string;
+  readonly usedBytes: number;
+  readonly limitBytes: number;
+  readonly deltaBytes: number;
+  constructor(
+    baseId: string,
+    usedBytes: number,
+    limitBytes: number,
+    deltaBytes: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "KnowledgeStorageLimitError";
+    this.baseId = baseId;
+    this.usedBytes = usedBytes;
+    this.limitBytes = limitBytes;
+    this.deltaBytes = deltaBytes;
+  }
+}
+
+/**
  * Thrown when a PATCH carries an `expectedUpdatedAt` precondition that
  * doesn't match the row's current `updated_at`. Maps to 412 — the
  * client should refetch and retry. Item 5.A.3 added this to prevent

@@ -18,8 +18,14 @@ export function kbScope(
   return base.accessMode === "teams" ? "team" : "workspace";
 }
 
+/**
+ * The word a HUMAN reads for each level. `workspace` reads "Public" —
+ * the same vocabulary the MCP surface already uses (`dopl_kb`
+ * `op="set_visibility"` takes `visibility="public"`). The storage/wire
+ * spelling stays `workspace`; only the label converged.
+ */
 export const KB_SCOPE_LABEL: Record<KbScope, string> = {
   private: "Private",
   team: "Team",
-  workspace: "Workspace",
+  workspace: "Public",
 };

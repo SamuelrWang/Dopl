@@ -28,7 +28,7 @@ const FILTERS: ReadonlyArray<{ key: ChatFilter; label: string }> = [
   { key: "all", label: "All" },
   { key: "private", label: "Private" },
   { key: "team", label: "Team" },
-  { key: "workspace", label: "Shared" },
+  { key: "workspace", label: "Public" },
 ];
 
 const EMPTY_COPY: Record<ChatFilter, string> = {
@@ -36,7 +36,7 @@ const EMPTY_COPY: Record<ChatFilter, string> = {
   private:
     "No private chats yet — your agent exports conversations here via dopl_chats.",
   team: "No chats have been shared with your teams yet.",
-  workspace: "No chats have been shared with the workspace yet.",
+  workspace: "No chats are public to the workspace yet.",
 };
 
 interface Props {

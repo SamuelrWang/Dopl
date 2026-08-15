@@ -17,7 +17,12 @@ import { DeleteBaseConfirm } from "../../delete-base-confirm";
 import { KnowledgeSearch } from "../../knowledge-search";
 import { KnowledgeApiError, deleteBase } from "../../../client/api";
 import { evictDeletedBase } from "../../../client/hooks";
-import type { KnowledgeBase, KnowledgeEntry, KnowledgeFolder } from "../../../types";
+import type {
+  KnowledgeBase,
+  KnowledgeBaseStats,
+  KnowledgeEntry,
+  KnowledgeFolder,
+} from "../../../types";
 import type { BaseTree, KbTeamRef, Selection } from "../types";
 import type { KnowledgeRouting } from "../routing";
 import { BaseOverview } from "./base-overview";
@@ -41,6 +46,11 @@ interface Props {
   refetchOpenEntry: () => void;
   /** Admin-only: kbId → teams granted, surfaced in the base overview. */
   kbTeams?: Record<string, KbTeamRef[]>;
+  /** Per-base counters from the list response — the overview reads the
+   *  selected base's `storageBytes` from it. Absent = unknown, no bar. */
+  baseStats?: Record<string, KnowledgeBaseStats>;
+  /** The workspace's per-base storage cap in bytes, same response. */
+  kbStorageLimit?: number | null;
   /** Whether the current user may edit the selected base's name/description. */
   canEditBase: boolean;
   /** Refresh a base's tree after an entry save. */
@@ -94,6 +104,8 @@ export function DetailPanel({
   openEntryStatus,
   refetchOpenEntry,
   kbTeams,
+  baseStats,
+  kbStorageLimit,
   canEditBase,
   onTreeRefresh,
   onBaseSaved,
@@ -262,6 +274,8 @@ export function DetailPanel({
             canEdit={canEditBase}
             onSaved={onBaseSaved}
             teams={kbTeams?.[selection.base.id]}
+            storageBytes={baseStats?.[selection.base.id]?.storageBytes ?? null}
+            storageLimit={kbStorageLimit ?? null}
             tree={selectedTree}
             onTreeRefresh={onTreeRefresh}
           />

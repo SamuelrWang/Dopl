@@ -4,7 +4,9 @@
    SOURCE OF TRUTH: `src/app/globals.css` — the auth-3D controls and the
    `@layer components` kit (.page-float, .bento, .concave-field, .concave-sel,
    .concave-track, .seg-pill, .raised-tab, .nav-chip, .nav-chip-active,
-   .btn-light, .auth-btn-3d, .graph-*). Documented in docs/DESIGN-SYSTEM.md.
+   .btn-light, .auth-btn-3d, .graph-*, .kanban-substrate, .kanban-card).
+   Documented in
+   docs/DESIGN-SYSTEM.md.
 
    ⚠ DRIFT WARNING (REFACTOR-FINDINGS F-074) — see the header of tokens.css.
    Same copy, same rot risk, same rule: edit globals.css and this file in one
@@ -210,14 +212,41 @@
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
-/* Raised active tab face — white gradient popping out of a concave track. */
+/* Raised active tab face — white gradient popping out of a concave track.
+   ONE elevation with `.auth-btn-3d-light` (the landing/auth white button):
+   same gradient stops (#fff → #f2f2f2), same hairline (#d4d4d4), same bevel
+   (white top, black bottom), same two drops. The app's raised surfaces and
+   the landing's raised button are the same object at different scales, so
+   they may not read at different depths.
+
+   ⚠ The hairline is an INSET RING, not a real `border`, and that is
+   load-bearing: `.raised-tab` is toggled ON elements whose resting face has
+   no border (`.nav-chip` declares `border: none`, `.seg-pill` and the Switch
+   thumb draw theirs as a ring), and all of them are content-sized or
+   fixed-size. A real 1px border would make every active nav chip and
+   segmented pill 2px wider than its resting siblings and jitter the row on
+   every selection. `inset 0 0 0 1px` rasterises identically to a 1px border
+   — it fills the outermost pixel of the padding box, over the gradient —
+   while occupying no layout space.
+
+   Shadow ORDER is the recipe, not decoration: box-shadows paint first-on-top,
+   so the hairline is declared first and the bevel insets are pushed one pixel
+   further in (`0 2px` / `0 -2px` instead of `0 1px` / `0 -1px`) so each shows
+   the second pixel, exactly as they sit inside the real border on
+   `.auth-btn-3d-light`.
+
+   No hover/active states here on purpose: this is a RESTING face for an
+   already-selected item, and `.auth-btn-3d-light`'s lift/press belong to a
+   control you can still press. Behavioural states stay with the consumer
+   (`.nav-chip`, SegmentedControl, Switch). */
 .raised-tab {
-  background: linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 0 0 1px rgba(0, 0, 0, 0.05),
-    0 1px 2px rgba(0, 0, 0, 0.12),
-    0 3px 6px rgba(0, 0, 0, 0.08);
+    inset 0 0 0 1px #d4d4d4,
+    inset 0 2px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.06),
+    0 2px 3px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.06);
 }
 
 /* Nav chip — THE hug-width nav item, ONE recipe for every nav rail in the app
@@ -264,6 +293,26 @@
 .graph-substrate {
   background-image: radial-gradient(rgba(35, 42, 49, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+/* Ontology board substrate — a MODIFIER on `.graph-substrate`, never a second
+   dot recipe: the gradient and its ink stay defined once above, and this
+   changes only the two things the board needs.
+
+   `background-size` halves the pitch to 12px because the board's geometry has
+   to land ON the grid: lanes are 288px (24 tiles), the gutter between them is
+   12px (1 tile, with a dot dead centre) and the board's padding is 24px (2),
+   so every lane edge falls on a tile boundary. At the inherited 24px pitch a
+   12px gutter puts every second lane half a tile out.
+
+   `background-attachment: local` makes the dots cover the whole SCROLLABLE
+   area rather than the visible pane, and travel with the content — a lane
+   that starts on a dot line stays on it through a scroll. Tiles originate at
+   the scroller's PADDING edge, which is what ties the arithmetic above to
+   what is actually painted. */
+.kanban-substrate {
+  background-size: 12px 12px;
+  background-attachment: local;
 }
 
 /* Graph node card surfaces — the resting / selected / drop-target elevation
@@ -347,7 +396,155 @@
     0 2px 6px rgba(0, 0, 0, 0.28);
 }
 
+/* Kanban card — a white card floating inside a flat inset lane (the ontology
+   board's column header card and every object card). ONE class, three states:
+   resting hairline elevation, a shallow lift on hover, and a highlight ring
+   while `data-selected="true"` (the card open in the editor panel). The shell
+   — radius, border WIDTH, bg-elevated, layout — stays in the component; this
+   sets the border COLOR and the shadow, the two things that were hardcoded as
+   `shadow-[…rgba]` recipes before. Kept deliberately flatter than `.bento` and
+   `.graph-node`: these cards sit on an inset lane, not on the page surface,
+   so a deep ambient shadow reads as dirt in the gutter. */
+.kanban-card {
+  border-color: var(--border-default);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition:
+    box-shadow 0.12s ease-out,
+    border-color 0.12s ease-out;
+}
+.kanban-card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.kanban-card[data-selected="true"] {
+  border-color: var(--border-highlight);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Menu card — THE dropdown surface ──────────────────────────────────
+   Ported VERBATIM from the landing Menu dropdown: the recipe originates at
+   `src/features/marketing/marketing.css › .lp-nav-menu-card` /
+   `.lp-nav-menu-item` / `.lp-nav-menu-divider` and the `lpMenuIn` /
+   `lpMenuOut` keyframes (markup: `features/marketing/components/site-nav.tsx`).
+   It lives here rather than being imported because marketing.css is a
+   page-scoped sheet neither app loads; the copies are the same design and
+   must be edited together.
+
+   The card is the raised light face at CARD scale: white-to-grey gradient,
+   hairline border, a top inset highlight for the bevel, then THREE drops — a
+   1px seat, a near shadow that ties it to its trigger, and a wide ambient one
+   that lifts it off the page. `padding: 7px` is what makes the rows read as
+   floating chips instead of a flush list; radius 16 is the card, radius 10 is
+   the row inside it.
+
+   `transform-origin` follows the side the panel hangs from, so it unfolds out
+   of its trigger rather than out of nowhere. `.menu-card` is the ONE dropdown
+   surface — see `src/shared/ui/popover-menu.tsx`, which is the only thing
+   allowed to compose it. Consumer Tailwind utilities still win (utilities
+   layer over components layer), so per-menu width/padding overrides hold. */
+.menu-card {
+  padding: 7px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
+  border: 1px solid #dcdcdc;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.08),
+    0 20px 46px rgba(0, 0, 0, 0.16);
+  transform-origin: top left;
+  animation: menuCardIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.menu-card[data-origin="right"] { transform-origin: top right; }
+/* Exit: inert and unclickable while it plays out — the backdrop is already
+   gone by then, so a card that still took pointer events would eat the click
+   that follows a dismissal. */
+.menu-card[data-state="closing"] {
+  animation: menuCardOut 140ms ease-in forwards;
+  pointer-events: none;
+}
+
+/* Menu row — the item face inside `.menu-card`. Hover/focus is "the faintest
+   possible raise": a white-gradient tint plus the button family's 1px lift;
+   press is the same pressed-in inset the kit uses everywhere. Colour, density
+   and type stay with `MenuItem` — this is elevation only, so a destructive or
+   selected row can tint itself without forking the recipe. */
+.menu-row {
+  border-radius: 10px;
+  transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+.menu-row:hover,
+.menu-row:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.07);
+}
+.menu-row:focus-visible {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 2px rgba(24, 24, 24, 0.28);
+}
+.menu-row:active {
+  transform: translateY(1px);
+  background: #ededed;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* Section rule inside a `.menu-card` — inset from the card's padding so it
+   stops short of the rounded corners (marketing.css › .lp-nav-menu-divider). */
+.menu-divider {
+  height: 1px;
+  margin: 7px 2px;
+  background: var(--border-subtle);
+}
+
 } /* @layer components */
+
+/* Menu-card open/close — replicated from marketing.css › `lpMenuIn` /
+   `lpMenuOut` (the landing Menu dropdown). Outside `@layer components` for the
+   same reason `loginFadeIn` is: keyframes are not layered rules.
+
+   The rotateX is 7deg and no more: enough that the card's top edge arrives
+   first — an unfold, not a fade — while the labels stay unsmeared. */
+@keyframes menuCardIn {
+  from {
+    opacity: 0;
+    transform: perspective(760px) rotateX(-7deg) translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(760px) rotateX(0deg) translateY(0) scale(1);
+  }
+}
+@keyframes menuCardOut {
+  from {
+    opacity: 1;
+    transform: perspective(760px) rotateX(0deg) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: perspective(760px) rotateX(-4deg) translateY(-4px) scale(0.985);
+  }
+}
+
+/* Reduced motion: the card still opens and closes, instantly and in place.
+   `popover-menu.tsx` skips the closing phase entirely under the same query,
+   so nothing waits on an animation that will not run. */
+@media (prefers-reduced-motion: reduce) {
+  .menu-card,
+  .menu-card[data-state="closing"] {
+    animation: none;
+  }
+  .menu-row {
+    transition: none;
+  }
+}
 
 /* ─────────────────────────────────────────────────────────────────────
    Auth-adjacent surface rules that live OUTSIDE @layer components in

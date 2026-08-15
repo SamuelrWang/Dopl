@@ -18,6 +18,10 @@ interface Props {
   onSaved?: () => void;
   /** Teams granted on this base (admin view); undefined for members. */
   teams?: MetaTeamRef[];
+  /** This base's stored bytes; `null` = unknown (no bar). */
+  storageBytes?: number | null;
+  /** The workspace's per-base cap in bytes; `null` = unknown (no bar). */
+  storageLimit?: number | null;
   /** The selected base's tree — feeds the Contents section (no extra fetch). */
   tree?: BaseTree;
   /** Refresh the base's tree after a folder-description / entry-excerpt save. */
@@ -38,6 +42,8 @@ export function BaseOverview({
   canEdit,
   onSaved,
   teams,
+  storageBytes,
+  storageLimit,
   tree,
   onTreeRefresh,
 }: Props) {
@@ -58,6 +64,8 @@ export function BaseOverview({
         scopeLabel={vm.scopeLabel}
         accessLabel={vm.accessLabel}
         teams={teams}
+        storageBytes={storageBytes}
+        storageLimit={storageLimit}
       />
       <OverviewContents
         tree={tree}

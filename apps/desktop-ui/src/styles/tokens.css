@@ -58,6 +58,7 @@
 
   /* Status */
   --color-success: var(--success);
+  --color-caution: var(--caution);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
 
@@ -227,8 +228,8 @@
   --bg-base: #f5f7fa;
   --bg-elevated: #fbfcfd;
   --bg-elevated-hover: #f1f4f7;
-  --bg-inset: #eef1f5;
-  --bg-inset-hover: #e6ebf0;
+  --bg-inset: #f1f1f1;
+  --bg-inset-hover: #eaeaea;
   --bg-overlay: #fefefe;
 
   /* Opaque panel surfaces */
@@ -265,6 +266,7 @@
 
   /* Status colors */
   --success: oklch(0.55 0.15 155);
+  --caution: oklch(0.72 0.15 95);
   --warning: oklch(0.62 0.13 75);
   --danger: oklch(0.55 0.22 25);
 

@@ -4,9 +4,9 @@ import { SiteNav } from "@/features/marketing/components/site-nav";
 import { PricingContent } from "@/features/marketing/components/pricing-content";
 
 /**
- * Standalone /pricing page — landing shell around the shared
- * PricingContent body (the site-nav pricing popup renders the same body).
- * Kept as a real route for deep links, middle-click, and no-JS.
+ * /pricing — landing shell around the PricingContent body. The site-nav
+ * "Pricing" link navigates here; it used to intercept the click and open the
+ * same body in a popup, and that popup is gone.
  */
 export default function PricingPage() {
   return (

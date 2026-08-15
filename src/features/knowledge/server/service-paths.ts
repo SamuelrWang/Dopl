@@ -22,6 +22,7 @@ import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
 import { assertAgentCanDelete, assertBaseWritable, errorCode } from "./service-shared";
 import { getBaseById } from "./service-bases";
+import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
 /**
  * Path-based reads + writes — the agent-friendly addressing layer.
@@ -140,6 +141,16 @@ export async function writeFileByPath(
         resolved.entry.updatedAt
       );
     }
+    // Storage gate on the NET delta, before the write. `body === undefined`
+    // preserves the column, so a title/excerpt-only upsert has no delta; a
+    // shrink is negative and always allowed.
+    if (input.body !== undefined) {
+      await assertStorageHeadroom(
+        ctx,
+        base,
+        bodyBytes(input.body) - bodyBytes(resolved.entry.body)
+      );
+    }
     let saved;
     try {
       saved = await repo.updateEntryRow(
@@ -183,6 +194,10 @@ export async function writeFileByPath(
   if (input.expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(input.expectedUpdatedAt, "deleted");
   }
+
+  // Storage gate BEFORE the mkdir -p: refusing after creating the parent
+  // folders would leave empty scaffolding behind for a write that never landed.
+  await assertStorageHeadroom(ctx, base, bodyBytes(input.body));
 
   // mkdir -p parents, then create.
   const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);

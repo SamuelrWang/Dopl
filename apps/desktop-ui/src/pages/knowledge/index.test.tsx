@@ -1,347 +1,48 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
-import KnowledgePage from "./index";
-import KnowledgeDetailPage from "./detail";
-import { WORKSPACE_ID } from "#/test-utils/bridge";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  BASE_B_SEG,
+  NEW_BASE_SEG,
+  RENAMED_B_SEG,
+  SEGMENT,
+  installKnowledgeBridge,
+  paths,
+  renderAt,
+} from "./test-fixtures";
 
 /**
- * Smoke test for the ported knowledge slice.
+ * BASE DETAIL — the `/knowledge/:kbSlug` mode, plus every way a URL resolves
+ * into it: deep links, legacy slugs, the canonical-segment replace, and the
+ * create/rename/delete moves that change which base the URL names.
  *
- * The data layer is mocked at `window.dopl` — the ONE seam both clients sit
- * on. The SPA's transport picks the bridge over `fetch`, and so does the web
- * `api-client` that every reused knowledge module (`client/api.ts`,
- * `client/hooks.ts`) calls, so a single fake serves the whole tree and the
- * request log below is the real wire traffic. Its presence also puts the
- * reused components in desktop mode, where realtime and presence no-op.
+ * The card grid's own behaviour lives in `./home.test.tsx`; the fake server
+ * both suites drive is `./test-fixtures.tsx`.
  */
 
-const USER_ID = "user-1";
+describe("knowledge base detail", () => {
+  beforeEach(installKnowledgeBridge);
 
-const BASE_A = {
-  id: "base-a",
-  workspaceId: WORKSPACE_ID,
-  name: "Product specs",
-  slug: "product-specs",
-  publicId: "aaaaaaaaaaaa",
-  description: "What we ship",
-  visibility: "private",
-  accessMode: "workspace",
-  agentWriteEnabled: false,
-  createdBy: USER_ID,
-  createdAt: "2026-07-01T00:00:00Z",
-  updatedAt: "2026-07-01T00:00:00Z",
-};
-const BASE_B = {
-  ...BASE_A,
-  id: "base-b",
-  name: "Sales playbook",
-  slug: "sales-playbook",
-  publicId: "bbbbbbbbbbbb",
-  description: "How we sell",
-  createdBy: "user-2",
-};
+  it("scopes the detail pane to ONE base's tree, under a breadcrumb", async () => {
+    renderAt(`/${SEGMENT}/knowledge/${BASE_B_SEG}`);
+    await screen.findByDisplayValue("Cold outreach");
 
-const ENTRY_1 = {
-  id: "entry-1",
-  baseId: "base-b",
-  folderId: null,
-  title: "Cold outreach",
-  slug: "cold-outreach",
-  body: "# Cold outreach\n\nOpen with the problem.",
-  excerpt: "Open with the problem.",
-  position: 0,
-  createdAt: "2026-07-01T00:00:00Z",
-  updatedAt: "2026-07-02T00:00:00Z",
-};
-const ENTRY_2 = {
-  ...ENTRY_1,
-  id: "entry-2",
-  title: "Discovery call",
-  slug: "discovery-call",
-  body: "# Discovery call\n\nAsk about the pain.",
-  position: 1,
-};
+    // The opened base's tree, expanded, and nothing of the other base.
+    expect(screen.getByText("Discovery call")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Product specs" })).toBeNull();
+    // The base-LIST controls have no job here.
+    expect(screen.queryByPlaceholderText("Search")).toBeNull();
+    expect(screen.queryByRole("tablist")).toBeNull();
 
-const NEW_BASE = {
-  ...BASE_A,
-  id: "base-c",
-  name: "Onboarding",
-  slug: "onboarding",
-  publicId: "cccccccccccc",
-  description: null,
-};
-
-const requests: Array<{ path: string; method: string }> = [];
-/** Set once the create POST lands, so the list refetch reflects it. */
-let created: typeof NEW_BASE | null = null;
-/** Set once the slug PATCH lands, so the list refetch reflects it. */
-let renamedB: typeof BASE_B | null = null;
-/** Set once the DELETE lands — hard delete, so the row never comes back. */
-let deletedB = false;
-
-function ok(body: unknown) {
-  return { status: 200, statusText: "OK", hasBody: true, body };
-}
-
-const WORKSPACE = {
-  id: WORKSPACE_ID,
-  slug: "acme",
-  publicId: "ab12cd34ef56",
-  name: "Acme",
-};
-
-function route(path: string) {
-  // ONE read for workspace + role + caller id (P0-2). `resolve` and `me` are
-  // still live endpoints, but the page no longer waits on them in series —
-  // the boot answer is seeded into their cache entries.
-  if (path === "/api/boot") {
-    return ok({
-      isOnboarded: true,
-      surveyCompleted: true,
-      userId: USER_ID,
-      workspace: WORKSPACE,
-      segment: "acme-ab12cd34ef56",
-      needsRedirect: false,
-      role: "admin",
-      myAccess: { defaultLevel: "edit", overrides: [] },
-    });
-  }
-  if (path.startsWith("/api/workspaces/resolve")) {
-    return ok({
-      workspace: WORKSPACE,
-      canonical: "acme-ab12cd34ef56",
-      needsRedirect: false,
-    });
-  }
-  if (path === "/api/workspaces/me") return ok({ role: "admin", userId: USER_ID });
-  if (path === "/api/knowledge/bases") {
-    return ok({
-      bases: [
-        BASE_A,
-        ...(deletedB ? [] : [renamedB ?? BASE_B]),
-        ...(created ? [created] : []),
-      ],
-      ownerNames: { "user-2": "Dana Reed" },
-    });
-  }
-  if (path === "/api/knowledge/bases/base-c/tree") {
-    return ok({ base: created, folders: [], entries: [] });
-  }
-  if (path.endsWith("/teams")) {
-    return ok({
-      teams: [
-        {
-          id: "team-1",
-          name: "Revenue",
-          color: "#f00",
-          grants: [
-            {
-              teamId: "team-1",
-              resourceType: "knowledge_base",
-              resourceId: "base-b",
-              level: "edit",
-            },
-          ],
-          memberIds: [],
-        },
-      ],
-    });
-  }
-  if (path === "/api/knowledge/bases/base-b/tree") {
-    // A hard-deleted base's tree is GONE, not merely absent from the list.
-    // Serving it forever would let a stale cache — or an eviction-triggered
-    // refetch — repopulate content the delete was supposed to destroy, and
-    // the test would pass on a fiction. See `evictDeletedBase`.
-    if (deletedB) {
-      return { status: 404, statusText: "Not Found", hasBody: true, body: { error: "Not found" } };
-    }
-    return ok({ base: BASE_B, folders: [], entries: [ENTRY_1, ENTRY_2] });
-  }
-  if (path === "/api/knowledge/bases/base-a/tree") {
-    return ok({ base: BASE_A, folders: [], entries: [] });
-  }
-  if (path === "/api/knowledge/entries/entry-1") return ok({ entry: ENTRY_1 });
-  if (path === "/api/knowledge/entries/entry-2") return ok({ entry: ENTRY_2 });
-  if (path.startsWith("/api/members/my-access")) return ok({ resources: [] });
-  if (path === "/api/user/profile") return ok({ display_name: "Sam", email: "s@x.io" });
-  return null;
-}
-
-const apiRequest = vi.fn((path: string, opts?: { method?: string }) => {
-  requests.push({ path, method: opts?.method ?? "GET" });
-  if (path === "/api/knowledge/bases/base-b" && opts?.method === "PATCH") {
-    renamedB = { ...BASE_B, slug: "playbook-v2" };
-    return Promise.resolve({
-      status: 200,
-      statusText: "OK",
-      hasBody: true,
-      body: { base: renamedB },
-    });
-  }
-  if (path === "/api/knowledge/bases/base-b" && opts?.method === "DELETE") {
-    deletedB = true;
-    return Promise.resolve({
-      status: 204,
-      statusText: "No Content",
-      hasBody: false,
-      body: null,
-    });
-  }
-  if (path === "/api/knowledge/bases" && opts?.method === "POST") {
-    created = NEW_BASE;
-    return Promise.resolve({
-      status: 201,
-      statusText: "Created",
-      hasBody: true,
-      body: { base: NEW_BASE },
-    });
-  }
-  const answer = route(path.split("?")[0]) ?? route(path);
-  if (!answer) return Promise.reject(new Error(`unexpected request: ${path}`));
-  return Promise.resolve(answer);
-});
-
-const paths = () => requests.map((r) => r.path);
-
-const SEGMENT = "acme-ab12cd34ef56";
-const BASE_A_SEG = "product-specs-aaaaaaaaaaaa";
-const BASE_B_SEG = "sales-playbook-bbbbbbbbbbbb";
-const NEW_BASE_SEG = "onboarding-cccccccccccc";
-const RENAMED_B_SEG = "playbook-v2-bbbbbbbbbbbb";
-
-/** Both knowledge rows, wired exactly as `routes.tsx` registers them. */
-function renderAt(entry: string) {
-  const router = createMemoryRouter(
-    [
-      { path: "/:workspaceSegment/knowledge", element: <KnowledgePage /> },
-      { path: "/:workspaceSegment/knowledge/:kbSlug", element: <KnowledgeDetailPage /> },
-    ],
-    { initialEntries: [entry] }
-  );
-  render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  );
-  return router;
-}
-
-describe("knowledge index + KB detail", () => {
-  beforeEach(() => {
-    requests.length = 0;
-    created = null;
-    renamedB = null;
-    deletedB = false;
-    // The controller persists the last-opened base per workspace; without
-    // this, one test's selection auto-selects a different base in the next.
-    localStorage.clear();
-    vi.stubGlobal("dopl", {
-      apiRequest,
-      getAuthState: () => Promise.resolve({ signedIn: true, userId: USER_ID }),
-      onAuthState: () => () => {},
-      openExternal: () => Promise.resolve({ ok: true }),
-    });
-    // Nothing may reach the network; a call here is a bug, not a fallback.
-    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("no network"))));
-  });
-
-  it("lists the workspace's bases with foreign-owner attribution", async () => {
-    renderAt(`/${SEGMENT}/knowledge`);
-
-    // Scoped to the list pane's row buttons — the detail pane echoes the
-    // auto-selected base's name too.
-    expect(
-      await screen.findByRole("button", { name: /Product specs/ })
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Sales playbook/ })).toBeInTheDocument();
-    // `ownerNames` — the half that had no route until it was folded into
-    // GET /api/knowledge/bases. Own bases carry no attribution.
-    expect(screen.getByText("Dana Reed")).toBeInTheDocument();
-
-    expect(paths()).toContain("/api/knowledge/bases");
-    expect(paths()).toContain(`/api/workspaces/${SEGMENT}/teams`);
-    // One request for the list, not one per consumer: the page's
-    // useKnowledgeBaseList and the controller's useKnowledgeBases share a key.
-    expect(paths().filter((p) => p === "/api/knowledge/bases")).toHaveLength(1);
-  });
-
-  it("selecting a base pushes its canonical URL WITHOUT remounting the view", async () => {
-    const router = renderAt(`/${SEGMENT}/knowledge`);
-    const salesRow = await screen.findByRole("button", { name: /Sales playbook/ });
-
-    // Transient view state that only survives if the component instance does.
-    fireEvent.change(screen.getByPlaceholderText("Search"), {
-      target: { value: "sales" },
-    });
-    expect(
-      screen.queryByRole("button", { name: /Product specs/ })
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(salesRow);
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe(
-        `/${SEGMENT}/knowledge/${BASE_B_SEG}`
-      );
-    });
-    // The route match moved from the index row to the :kbSlug row. Both rows
-    // render the same component type, so react-router reconciles instead of
-    // remounting — the filter text and its effect are still here.
-    expect(screen.getByPlaceholderText("Search")).toHaveValue("sales");
-    expect(
-      screen.queryByRole("button", { name: /Product specs/ })
-    ).not.toBeInTheDocument();
-  });
-
-  it("Back returns to the previous base without a clobbering re-write", async () => {
-    const router = renderAt(`/${SEGMENT}/knowledge`);
-    // Every navigation the router performs, in order — the only way to prove
-    // the write effect did NOT fire a second, stale one behind our back.
-    const moves: string[] = [];
-    router.subscribe((state) => {
-      moves.push(`${state.historyAction} ${state.location.pathname}`);
-    });
-
-    await screen.findByRole("button", { name: /Sales playbook/ });
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe(`/${SEGMENT}/knowledge/${BASE_A_SEG}`);
-    });
-    // Auto-select is not a user navigation, so it REPLACES.
-    expect(moves).toEqual([`REPLACE /${SEGMENT}/knowledge/${BASE_A_SEG}`]);
-
-    fireEvent.click(screen.getByRole("button", { name: /Sales playbook/ }));
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe(`/${SEGMENT}/knowledge/${BASE_B_SEG}`);
-    });
-    // A new base is one PUSH — not a push plus a corrective replace.
-    expect(moves).toEqual([
-      `REPLACE /${SEGMENT}/knowledge/${BASE_A_SEG}`,
-      `PUSH /${SEGMENT}/knowledge/${BASE_B_SEG}`,
-    ]);
-
-    await router.navigate(-1);
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe(`/${SEGMENT}/knowledge/${BASE_A_SEG}`);
-    });
-    // The whole point: exactly ONE POP lands, and the write effect does not
-    // re-assert the pre-Back selection over it or push a truncating entry.
-    expect(moves).toEqual([
-      `REPLACE /${SEGMENT}/knowledge/${BASE_A_SEG}`,
-      `PUSH /${SEGMENT}/knowledge/${BASE_B_SEG}`,
-      `POP /${SEGMENT}/knowledge/${BASE_A_SEG}`,
-    ]);
-    // And the view followed the URL, not just the address bar.
-    expect(await screen.findByText("What we ship")).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe(`/${SEGMENT}/knowledge/${BASE_A_SEG}`);
+    // "Knowledge › Sales playbook", with the first crumb navigating out.
+    const crumbs = screen.getByLabelText("Knowledge base breadcrumb");
+    expect(crumbs.textContent).toContain("Knowledge");
+    expect(crumbs.textContent).toContain("Sales playbook");
+    expect(within(crumbs).getByRole("button", { name: "Knowledge" })).toBeInTheDocument();
   });
 
   it("selects a newly created base instead of dropping the navigation", async () => {
     const router = renderAt(`/${SEGMENT}/knowledge`);
-    await screen.findByRole("button", { name: /Sales playbook/ });
+    await screen.findByRole("article", { name: "Sales playbook" });
 
     fireEvent.click(screen.getByLabelText("New knowledge base"));
     // ModalShell mounts a frame later (rAF-driven enter transition).
@@ -403,7 +104,7 @@ describe("knowledge index + KB detail", () => {
     // resolver must speak ONE grammar: a legacy slug-only URL pushed into
     // history has to select its base here exactly as it does on first paint.
     const router = renderAt(`/${SEGMENT}/knowledge`);
-    await screen.findByRole("button", { name: /Sales playbook/ });
+    await screen.findByRole("article", { name: "Sales playbook" });
 
     await act(() => router.navigate(`/${SEGMENT}/knowledge/sales-playbook`));
 
@@ -468,7 +169,7 @@ describe("knowledge index + KB detail", () => {
       expect(router.state.location.pathname).toBe(`/${SEGMENT}/knowledge`);
     });
     expect(
-      await screen.findByRole("button", { name: /Product specs/ })
+      await screen.findByRole("article", { name: "Product specs" })
     ).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
     // waitFor, not a bare expect: the deep-linked ENTRY selection clears on a
@@ -478,7 +179,7 @@ describe("knowledge index + KB detail", () => {
     // last thing to go, which is exactly why it is the thing worth pinning.
     await waitFor(() =>
       expect(
-        screen.queryByRole("button", { name: /Sales playbook/ })
+        screen.queryByRole("article", { name: "Sales playbook" })
       ).not.toBeInTheDocument()
     );
   });

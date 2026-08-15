@@ -36,7 +36,7 @@ const SCOPE_OPTIONS: Array<{
   { key: "team", label: "Team", desc: "Specific teams", Icon: Users },
   {
     key: "workspace",
-    label: "Shared",
+    label: "Public",
     desc: "Everyone in this workspace",
     Icon: Building2,
   },
@@ -47,7 +47,7 @@ const PILL =
 
 /**
  * Sharing control — the KB three-way scope model on a compact popover:
- * Private / Team (pick teams) / Shared (workspace). `readOnly` renders a
+ * Private / Team (pick teams) / Public (the whole workspace). `readOnly` renders a
  * plain scope pill. `locked` (inherited scope, e.g. a chat filed in a
  * folder) renders a locked pill whose popover shows the note instead of
  * the menu. Menu content comes from `children` and mounts only while

@@ -184,6 +184,47 @@ export async function countEntriesForBase(baseId: string): Promise<number> {
   return count ?? 0;
 }
 
+/** One active entry's base + last-write stamp — the raw material the
+ *  service folds into per-base list stats. camelCase already: no
+ *  snake_case key leaves this layer. */
+export interface EntryStamp {
+  baseId: string;
+  updatedAt: string;
+}
+
+/**
+ * Every active entry's `(base, updated_at)` pair for a SET of bases, in
+ * ONE query — the base list's "{N} entries · updated {when}" columns.
+ *
+ * Two columns and no bodies, because the alternative shapes are both
+ * worse: `countEntriesForBase` is per-base (N round trips for a list
+ * that renders in one grid), and a `count`/`max` aggregate needs a
+ * grouped RPC, i.e. a migration, for a number the caller re-derives from
+ * these rows for free. The service does the fold (repositories hold no
+ * business logic); the id list is the caller's post-visibility base set,
+ * so nothing hidden is ever counted.
+ */
+export async function listEntryStampsForBases(
+  workspaceId: string,
+  baseIds: string[]
+): Promise<EntryStamp[]> {
+  if (baseIds.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_entries")
+    .select("knowledge_base_id, updated_at")
+    .eq("workspace_id", workspaceId)
+    .in("knowledge_base_id", baseIds)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (
+    (data ?? []) as unknown as Array<{
+      knowledge_base_id: string;
+      updated_at: string;
+    }>
+  ).map((row) => ({ baseId: row.knowledge_base_id, updatedAt: row.updated_at }));
+}
+
 /**
  * Batch id lookup for active entries — name resolution for ontology
  * knowledge-attribute refs (`GET /api/knowledge/entries?ids=`). Meta

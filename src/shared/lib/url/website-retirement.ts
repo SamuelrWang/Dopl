@@ -129,6 +129,12 @@ const RESERVED_TOP_LEVEL = new Set([
   "oauth",
   "pricing",
   "privacy",
+  // The signup half of the auth split (2026-08-13). `/signup` is already KEEP
+  // by accident — `parseSegment` rejects a dashless single segment, so the
+  // bare-workspace branch never claims it — but "by accident" is not a rule,
+  // and the day a `{slug}-{publicId}`-shaped auth route exists the accident
+  // stops holding. Naming it puts it under the same guard as `/login`.
+  "signup",
   "terms",
 ]);
 

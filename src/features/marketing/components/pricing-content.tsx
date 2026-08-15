@@ -17,9 +17,9 @@ import type { User } from "@supabase/supabase-js";
  * summary; a comparison strip underneath spells out the deltas (object
  * caps, chat history, members, price) so it's obvious what each tier gets
  * and when caps apply. Subscribing hands off to the in-app Plans & Billing
- * pane so checkout always carries an explicit workspace id. Rendered two
- * ways — the /pricing page body and the site-nav pricing popup
- * (`.lp-modal`) — so it carries no page chrome of its own.
+ * pane so checkout always carries an explicit workspace id. This is the body
+ * of the /pricing page (its only render site — a site-nav popup variant used
+ * to share it), so it carries no page chrome of its own.
  */
 
 const PLAN_SUMMARY: Record<string, string> = {

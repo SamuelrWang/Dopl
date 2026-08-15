@@ -1,6 +1,10 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { KnowledgeBase, KnowledgeContext } from "../types";
+import type {
+  KnowledgeBase,
+  KnowledgeBaseStats,
+  KnowledgeContext,
+} from "../types";
 import { KnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
 import {
@@ -81,6 +85,67 @@ export async function listBaseOwnerNames(
   if (foreign.length === 0) return {};
   const names = await repo.fetchProfileNames(foreign);
   return Object.fromEntries(names);
+}
+
+/**
+ * Entry count + newest content write + stored bytes per base, keyed by base id
+ * — the "{N} entries · updated {when}" line and the usage bar on the knowledge
+ * home cards.
+ *
+ * Takes the POST-visibility base list for the same reason
+ * `listBaseOwnerNames` does: the id set is the fence, so a base hidden by
+ * the private/teams gate can never contribute a count through this key.
+ * Every id in `bases` gets an entry — an empty base is `0`, never a
+ * missing key the client has to guess at.
+ *
+ * TWO QUERIES, BOTH BATCHED, and the second one is allowed to fail on its own.
+ * `storageBytes` reads a column that exists only after
+ * `20260812120000_knowledge_base_storage_bytes.sql` is applied, so a build that
+ * ships ahead of its migration must lose the BAR and keep the COUNTS — hence
+ * the local catch and `null` (= unknown) rather than letting the whole stats
+ * map degrade to `{}` at the route.
+ */
+export async function listBaseStats(
+  ctx: KnowledgeContext,
+  bases: KnowledgeBase[]
+): Promise<Record<string, KnowledgeBaseStats>> {
+  const stats: Record<string, KnowledgeBaseStats> = {};
+  for (const base of bases) {
+    stats[base.id] = {
+      entryCount: 0,
+      lastEntryUpdatedAt: null,
+      storageBytes: null,
+    };
+  }
+  if (bases.length === 0) return stats;
+  const baseIds = bases.map((b) => b.id);
+  const [stamps, storage] = await Promise.all([
+    repo.listEntryStampsForBases(ctx.workspaceId, baseIds),
+    repo
+      .listBaseStorageBytes(ctx.workspaceId, baseIds)
+      .catch(() => new Map<string, number>()),
+  ]);
+  for (const base of bases) {
+    const bytes = storage.get(base.id);
+    if (bytes !== undefined) stats[base.id].storageBytes = bytes;
+  }
+  for (const { baseId, updatedAt } of stamps) {
+    const stat = stats[baseId];
+    // A row for a base outside the visible set can only mean the query
+    // ignored its `in` filter; drop it rather than inventing a key.
+    if (!stat) continue;
+    stat.entryCount += 1;
+    // Parsed, not lexicographic: Postgres timestamps reach us with a
+    // variable fractional-second tail, and string ordering on those is
+    // only accidentally right.
+    if (
+      stat.lastEntryUpdatedAt === null ||
+      Date.parse(updatedAt) > Date.parse(stat.lastEntryUpdatedAt)
+    ) {
+      stat.lastEntryUpdatedAt = updatedAt;
+    }
+  }
+  return stats;
 }
 
 export async function getBaseById(

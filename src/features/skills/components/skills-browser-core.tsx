@@ -20,14 +20,14 @@ const FILTERS: ReadonlyArray<{ key: SkillFilter; label: string }> = [
   { key: "all", label: "All" },
   { key: "private", label: "Private" },
   { key: "team", label: "Team" },
-  { key: "workspace", label: "Shared" },
+  { key: "workspace", label: "Public" },
 ];
 
 const EMPTY_COPY: Record<SkillFilter, string> = {
   all: "No skills yet — press + to write one, or ask your agent for dopl_skill.",
   private: "No private skills — new skills you create start here.",
   team: "No skills have been shared with your teams yet.",
-  workspace: "No skills have been shared with the workspace yet.",
+  workspace: "No skills are public to the workspace yet.",
 };
 
 /** Postgres timestamps are full ISO strings; render "Jul 8". */
@@ -56,7 +56,7 @@ export interface SkillsBrowserCoreProps {
 /**
  * Skills index — two-pane .page-float browser matching the chats /
  * knowledge pattern: the scope-filtered list on the left (All / Private
- * / Shared), the selected skill's FULL tabbed editor on the right. No
+ * / Team / Public), the selected skill's FULL tabbed editor on the right. No
  * separate detail route — selecting a row loads the editor in place.
  *
  * Next-free by construction: `./skills-browser.tsx` is the web app's thin

@@ -44,13 +44,15 @@ export default function DesktopStartPage() {
     <Shell>
       {error ? (
         <>
-          <p style={{ fontWeight: 600 }}>Couldn’t start sign-in</p>
-          <p style={{ color: "#646d78", fontSize: 14 }}>{error}</p>
+          <p className="text-display font-semibold tracking-tight text-text-primary">
+            Couldn’t start sign-in
+          </p>
+          <p className="max-w-sm text-title text-text-secondary">{error}</p>
         </>
       ) : (
         <>
           <Spinner />
-          <p style={{ color: "#646d78", fontSize: 14 }}>
+          <p className="max-w-sm text-title text-text-secondary">
             Redirecting to {provider === "github" ? "GitHub" : "Google"}…
           </p>
         </>
@@ -61,40 +63,25 @@ export default function DesktopStartPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-        background: "#d6dee7",
-        color: "#232a31",
-        textAlign: "center",
-        padding: 24,
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
+    // Same shell as its sibling /auth/desktop-handoff, class for class: no
+    // font-family of its own (`body` already sets `var(--font-app)`, the
+    // landing page's grotesk — the `system-ui` this used to hard-set was the
+    // only reason the redirect read as a different product than the page the
+    // user came from). `bg-white` matches the login page's surface
+    // (`auth-split-layout.tsx` › AuthSplitLayout) — without an explicit
+    // surface the body's `.mosaic-bg` app-frame navy shows through.
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-white p-6 text-center text-text-primary">
       {children}
     </div>
   );
 }
 
 function Spinner() {
+  // Ring drawn from the ink token at two strengths (15% track, solid head)
+  // instead of the literal #232a31 pair, and spun by Tailwind's own
+  // `animate-spin` — the hand-rolled `@keyframes` this injected into the
+  // document was a local recipe for something the framework already ships.
   return (
-    <div
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: "50%",
-        border: "3px solid rgba(35,42,49,0.15)",
-        borderTopColor: "#232a31",
-        animation: "doplSpin 0.8s linear infinite",
-      }}
-    >
-      <style>{`@keyframes doplSpin{to{transform:rotate(360deg)}}`}</style>
-    </div>
+    <div className="size-7 animate-spin rounded-full border-[3px] border-text-primary/15 border-t-text-primary" />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useLoginCore, type LoginActions } from "../hooks/use-login-core";
+import { useLoginCore, type LoginActions, type LoginMode } from "../hooks/use-login-core";
 import { PasswordRequirements } from "./password-requirements";
 
 /** Shape the ToS/Privacy links are rendered with. The web app wraps `next/link`;
@@ -10,16 +10,38 @@ import { PasswordRequirements } from "./password-requirements";
 export type LegalLinkProps = { href: string; className?: string; children: ReactNode };
 export type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
 
+/** What the mode-switch renderer is handed: the mode it must lead TO, plus the
+ *  class and label the in-place fallback would have used, so a host's link is
+ *  the same control rather than a lookalike. */
+export type ModeSwitchProps = { to: LoginMode; className: string; children: ReactNode };
+export type ModeSwitchComponent = (props: ModeSwitchProps) => ReactNode;
+
 export interface LoginFormCoreProps {
   /** Everything the form cannot do by itself. An absent member disables that
    *  control and prints a one-line reason (see `LoginActions`). */
   actions: LoginActions;
-  /** Brand mark above the wordmark. The web app passes its `/favicons/…`
-   *  `<img>`; the packaged SPA passes a bundled asset, because an absolute
-   *  path under `file://` resolves to the filesystem root. */
+  /** Brand mark above the wordmark, rendered INSIDE the form column. Omit it
+   *  and the whole lockup goes — which is what the web hosts do, because there
+   *  the brand sits in the page's upper-left corner instead
+   *  (`shared/layout/auth-split/auth-split-layout.tsx`, `brand` prop). The
+   *  packaged SPA still passes one: its window has no page chrome to put a
+   *  corner mark in, and it must pass a BUNDLED asset because an absolute
+   *  `/favicons/…` path under `file://` resolves to the filesystem root. */
   brand?: ReactNode;
   /** Renderer for the footer's Terms/Privacy links. Defaults to a plain `<a>`. */
   legalLink?: LegalLinkComponent;
+  /** Renderer for the sign-up ⇄ sign-in switch. THE WEB PASSES A LINK: each
+   *  mode is its own route (`/signup`, `/login`), so switching is a navigation
+   *  and the URL never lies about which flow is on screen. The desktop SPA
+   *  omits it — that renderer has no router and no routes — and the fallback
+   *  below toggles `mode` in place, which is why this is optional rather than
+   *  required. */
+  modeSwitch?: ModeSwitchComponent;
+  /** Which mode the screen OPENS on. Required, and set per host rather than
+   *  sniffed at runtime: on the web it is a property of the ROUTE (`/signup`
+   *  opens on "signup", `/login` on "signin"); the desktop app is only ever
+   *  reached by someone who already installed it, so it opens on "signin". */
+  defaultMode: LoginMode;
 }
 
 const DefaultLegalLink: LegalLinkComponent = ({ href, className, children }) => (
@@ -29,59 +51,99 @@ const DefaultLegalLink: LegalLinkComponent = ({ href, className, children }) => 
 );
 
 /**
- * Left column of the login screen: Dopl brand + email/password form with a
- * magic-link fallback and Google/GitHub social sign-in. Light theme.
+ * Left column of the login screen: email/password form plus Google/GitHub
+ * social sign-in. Light theme.
  *
  * This is the whole visual surface, free of `next/*` and of supabase, so the
- * web `/login` page and the desktop app's signed-out screen render the SAME
- * pixels. `./login-form` is the web binding; the desktop SPA's binding is
- * `apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`.
+ * web `/signup` + `/login` pages and the desktop app's signed-out screen render
+ * the SAME pixels. `./login-form` is the web binding; the desktop SPA's binding
+ * is `apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`.
  */
-export function LoginFormCore({ actions, brand, legalLink }: LoginFormCoreProps) {
+export function LoginFormCore({
+  actions,
+  brand,
+  legalLink,
+  modeSwitch,
+  defaultMode,
+}: LoginFormCoreProps) {
   const {
+    mode,
+    setMode,
     email,
     setEmail,
     password,
     setPassword,
-    remember,
-    setRemember,
     error,
     message,
     pending,
     signInFailed,
     signInWithPassword,
     signUpWithPassword,
-    sendMagicLink,
     resetPassword,
     signInWithProvider,
-  } = useLoginCore(actions);
+  } = useLoginCore(actions, defaultMode);
 
   const [showPassword, setShowPassword] = useState(false);
   const busy = pending !== null;
+  const isSignUp = mode === "signup";
+  // Heading and submit label are the SAME string, so the screen can never
+  // claim one flow while running the other.
+  const title = isSignUp ? "Sign Up" : "Log In";
+  const submitLabel = isSignUp
+    ? pending === "signup"
+      ? "Creating…"
+      : title
+    : pending === "password"
+      ? "Signing in…"
+      : title;
 
   // Both password controls ride one host capability, so they share one note.
   const canPassword = Boolean(actions.signInWithPassword && actions.signUpWithPassword);
-  const canMagic = Boolean(actions.sendMagicLink);
   const canOauth = Boolean(actions.oauth);
   const canReset = Boolean(actions.resetPassword);
 
   const LegalLink = legalLink ?? DefaultLegalLink;
 
+  // The switch names its DESTINATION, with no preamble — so its label is the
+  // OTHER mode's title, and never the current heading.
+  const switchTo: LoginMode = isSignUp ? "signin" : "signup";
+  const switchLabel = isSignUp ? "Log In" : "Sign Up";
+  const switchClass =
+    "cursor-pointer text-[14px] font-medium text-[#181818] hover:underline disabled:opacity-60";
+
   return (
     <div className="w-full max-w-[336px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
-      {/* Brand: logo mark above wordmark */}
-      <div className="flex flex-col items-start gap-1.5">
-        {brand}
-        <span
-          className="text-[21px] font-medium text-[#181818]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
-        >
-          Dopl
-        </span>
-      </div>
+      {/* Brand: logo mark above wordmark — IN-FORM, and only for a host that
+          has nowhere else to put it (the desktop SPA). The web hosts pass no
+          `brand` and the layout paints the same lockup in the page's
+          upper-left corner instead, so this block disappears entirely rather
+          than doubling it. */}
+      {brand && (
+        <div className="mb-7 flex flex-col items-start gap-1.5">
+          {brand}
+          <span
+            className="text-[21px] font-medium text-[#181818]"
+            style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
+          >
+            Dopl
+          </span>
+        </div>
+      )}
 
-      <h2 className="mt-7 text-[30px] font-bold leading-none tracking-[-0.8px] text-[#181818]">
-        Sign in
+      {/* Landing-page display type (`features/marketing/marketing.css`
+          › .lp-mp-heading): weight 400 at a fluid clamp with tight tracking.
+          The face is inherited — `AuthSplitLayout` already scopes the same
+          Helvetica grotesk the landing page uses. */}
+      <h2
+        className="text-[#181818]"
+        style={{
+          fontWeight: 400,
+          fontSize: "clamp(23px, 2.5vw, 37px)",
+          lineHeight: 1.04,
+          letterSpacing: "-0.03em",
+        }}
+      >
+        {title}
       </h2>
 
       {(error || message) && (
@@ -97,40 +159,49 @@ export function LoginFormCore({ actions, brand, legalLink }: LoginFormCoreProps)
         </div>
       )}
 
-      <form onSubmit={signInWithPassword}>
-        {/* Email */}
+      {/* One form, two flows — the active mode picks the submit handler, so
+          Enter in a field does exactly what the button under it says. */}
+      <form onSubmit={isSignUp ? signUpWithPassword : signInWithPassword}>
+        {/* Email.
+
+            THE FIELDS CARRY NO VISIBLE LABEL AND NO LEADING ICON — the
+            placeholder is the label. `aria-label` therefore does the naming
+            work the `<label htmlFor>` used to: a placeholder is not an
+            accessible name (it vanishes on the first keystroke), so dropping
+            one without the other would take the field's name away from every
+            screen reader and from every test that finds it by label. */}
         <div className="mt-7">
-          <label htmlFor="login-email" className="mb-2 block text-[14px] font-medium text-[#181818]">
-            Email Address
-          </label>
-          <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-[10px] px-[16px]">
-            <MailIcon />
+          {/* `rounded-full` (not the kit's usual `rounded-[10px]`) is applied
+              HERE, at the call site: `.auth-field-3d`/`.concave-field` carries
+              no radius of its own, and every other surface using the concave
+              recipe keeps its rectangle. */}
+          <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-full px-[16px]">
             <input
               id="login-email"
               type="email"
               required
+              aria-label="Email Address"
+              placeholder="Email Address"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-transparent text-[14px] text-[#181818] focus:outline-none"
+              className="w-full bg-transparent text-[14px] text-[#181818] placeholder:text-[#9a9a9a] focus:outline-none"
             />
           </div>
         </div>
 
         {/* Password */}
         <div className="mt-5">
-          <label htmlFor="login-password" className="mb-2 block text-[14px] font-medium text-[#181818]">
-            Password
-          </label>
-          <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-[10px] px-[16px]">
-            <LockIcon />
+          <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-full px-[16px]">
             <input
               id="login-password"
               type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
+              aria-label="Password"
+              placeholder="Password"
+              autoComplete={isSignUp ? "new-password" : "current-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-transparent text-[14px] text-[#181818] focus:outline-none"
+              className="w-full bg-transparent text-[14px] text-[#181818] placeholder:text-[#9a9a9a] focus:outline-none"
             />
             <button
               type="button"
@@ -156,55 +227,49 @@ export function LoginFormCore({ actions, brand, legalLink }: LoginFormCoreProps)
           )}
         </div>
 
-        {/* Remember */}
-        <label className="mt-5 flex cursor-pointer items-center gap-2.5 select-none">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="h-[18px] w-[18px] rounded-[4px] border-2 border-[#181818] accent-[#181818]"
-          />
-          <span className="text-[14px] text-[#181818]">Remember me</span>
-        </label>
+        {/* There is no "Remember me": the session is always persisted (see
+            `../hooks/use-login-core`), so a checkbox here would be decoration. */}
 
-        {/* Sign in */}
+        {/* Submit — pill, per the call-site note on the fields above. */}
         <button
           type="submit"
           disabled={busy || !canPassword}
-          className="auth-btn-3d mt-7 flex h-[46px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold text-white"
+          className="auth-btn-3d mt-7 flex h-[46px] w-full cursor-pointer items-center justify-center rounded-full text-[15px] font-semibold text-white"
         >
-          {pending === "password" ? "Signing in…" : "Sign in"}
+          {submitLabel}
         </button>
         {!canPassword && (
           <UnavailableNote>Update the Dopl app to sign in with a password here.</UnavailableNote>
         )}
       </form>
 
-      {/* Links */}
-      <div className="mt-5 leading-[1.55]">
-        <p className="text-[14px] text-[#9a9a9a]">
-          Don&apos;t have an account?{" "}
+      {/* Mode switch — the label is the DESTINATION, with no preamble. A host
+          that gave us `modeSwitch` renders it as a LINK to that mode's route;
+          otherwise it toggles in place.
+
+          It hangs off the RIGHT edge of the submit button (which is `w-full`,
+          so the column's right edge is the button's) at a short 12px drop, so
+          it reads as that button's alternative rather than as the first item
+          of the block below it — the socials keep their own 28px break. */}
+      <div className="mt-3 flex justify-end leading-[1.55]">
+        {modeSwitch ? (
+          modeSwitch({ to: switchTo, className: switchClass, children: switchLabel })
+        ) : (
           <button
             type="button"
-            onClick={signUpWithPassword}
-            disabled={busy || !canPassword}
-            className="cursor-pointer font-medium text-[#181818] hover:underline disabled:opacity-60"
+            onClick={() => setMode(switchTo)}
+            disabled={busy}
+            className={switchClass}
           >
-            {pending === "signup" ? "Creating…" : "Sign up"}
+            {switchLabel}
           </button>
-        </p>
+        )}
       </div>
 
-      {/* Magic-link fallback */}
-      <button
-        type="button"
-        onClick={sendMagicLink}
-        disabled={busy || !canMagic}
-        className="mt-2 block cursor-pointer text-[13px] text-[#9a9a9a] hover:text-[#181818] hover:underline disabled:opacity-60"
-      >
-        {pending === "magic" ? "Sending link…" : "Email me a sign-in link instead"}
-      </button>
-      {!canMagic && <UnavailableNote>Update the Dopl app to use email sign-in links.</UnavailableNote>}
+      {/* THE MAGIC LINK IS GONE (2026-08-13) — the "Email me a sign-in link
+          instead" button, its unavailable note, and the action behind it. Two
+          credential paths remain, password and OAuth; a user with no password
+          on file reaches one through "Forgot password?" above. */}
 
       {/* Socials */}
       <div className="mt-7 flex gap-5">
@@ -266,24 +331,9 @@ function SocialButton({
   );
 }
 
-function MailIcon() {
-  return (
-    <svg className="h-[18px] w-[18px] flex-none text-[#181818]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3 7 9 6 9-6" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg className="h-[18px] w-[18px] flex-none text-[#181818]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="5" y="11" width="14" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </svg>
-  );
-}
-
+/** The eye is the ONLY field affordance left. `MailIcon` and `LockIcon` went
+ *  with the visible labels (2026-08-13): a placeholder already says what the
+ *  field is, and a decorative glyph repeating it is noise inside a 46px well. */
 function EyeIcon({ off }: { off: boolean }) {
   return (
     <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

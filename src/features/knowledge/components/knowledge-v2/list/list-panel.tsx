@@ -1,162 +1,90 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { SearchField } from "@/shared/ui/search-field";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { ChevronRight } from "lucide-react";
+import { SkeletonRow } from "@/shared/ui/skeleton";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
-import type { BaseTree, ListFilter as Filter } from "../types";
+import type { BaseTree as BaseTreeData } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
-import { KbRow } from "./kb-row";
+import { BaseTree } from "./base-tree";
 import styles from "../knowledge-v2.module.css";
 
-const FILTERS: ReadonlyArray<{ key: Filter; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "private", label: "Private" },
-  { key: "team", label: "Team" },
-  { key: "workspace", label: "Shared" },
-];
-
 interface Props {
-  bases: KnowledgeBase[];
-  /** Display names for foreign base owners, keyed by user id. */
-  ownerNames?: Record<string, string>;
-  currentUserId: string;
-  query: string;
-  onQueryChange: (q: string) => void;
-  filter: Filter;
-  onFilterChange: (f: Filter) => void;
-  selectedBaseId: string | null;
+  /** The ONE base this pane is scoped to — the route's base, always. */
+  base: KnowledgeBase;
+  /** That base's tree; `undefined` until the first load lands. */
+  tree: BaseTreeData | undefined;
   selectedEntryId: string | null;
-  expanded: Set<string>;
-  trees: Record<string, BaseTree>;
-  canEdit: (baseId: string) => boolean;
+  canEdit: boolean;
   editingNodeId: string | null;
   treeHandlers: TreeHandlers;
-  onSelectBase: (base: KnowledgeBase) => void;
-  onToggleExpand: (base: KnowledgeBase) => void;
   onSelectEntry: (base: KnowledgeBase, entry: KnowledgeEntry) => void;
-  onCreate: () => void;
+  /** Back to the home grid — the "Knowledge" crumb. */
+  onGoHome: () => void;
 }
 
 /**
- * Middle list pane: "Knowledge" header, search, scope filter tabs, and the
- * scrollable list of knowledge bases (each expandable to its file tree).
+ * BASE DETAIL list pane: a breadcrumb and the opened base's folder/file tree,
+ * always expanded. Nothing else.
+ *
+ * It used to list EVERY base as a row that expanded into its own tree, with a
+ * search field and the scope pills above them. All three moved to the home
+ * grid, which is where a choice between bases is now made — a pane scoped to
+ * one base has no list to filter, no scope to switch, and no second base to
+ * collapse this one in favour of. What is left is the crumb back out.
  */
 export function ListPanel({
-  bases,
-  ownerNames,
-  currentUserId,
-  query,
-  onQueryChange,
-  filter,
-  onFilterChange,
-  selectedBaseId,
+  base,
+  tree,
   selectedEntryId,
-  expanded,
-  trees,
   canEdit,
   editingNodeId,
   treeHandlers,
-  onSelectBase,
-  onToggleExpand,
   onSelectEntry,
-  onCreate,
+  onGoHome,
 }: Props) {
   return (
     <div className={styles.listPane}>
-      <div className={styles.listHead}>
-        {/* A heading, not a button. This was a `.listTitle` <button> with a
-            ▾ chevron and no `onClick` — an affordance for a menu that does
-            not exist. Matched to the sibling list panes (skills, members,
-            chats): title + count, both on the shared tokens. The dead
-            "Filter" icon button that sat beside it is gone for the same
-            reason — the scope filter it implied is the SegmentedControl
-            three rows below, which works. */}
-        <h1 className="text-title font-semibold tracking-tight text-text-primary">
+      {/* A crumb, not a title: the base's NAME is the detail pane's header,
+          and repeating it here as an <h1> would make the pane look like a
+          page of its own. */}
+      {/* Distinct label from the DETAIL pane's breadcrumb (the entry's
+          folder path), which is on screen at the same time — two navs both
+          called "Breadcrumb" are ambiguous to a screen reader and to a test. */}
+      <nav className={styles.paneCrumbs} aria-label="Knowledge base breadcrumb">
+        <button type="button" className={styles.crumbBtn} onClick={onGoHome}>
           Knowledge
-        </h1>
-        <span className="text-caption text-text-muted">{bases.length}</span>
-        <div className={styles.headSpacer} />
-        <button
-          type="button"
-          className={styles.iconBtn}
-          aria-label="New knowledge base"
-          onClick={onCreate}
-        >
-          <Plus size={18} />
         </button>
-      </div>
-
-      <SearchField
-        value={query}
-        onChange={onQueryChange}
-        className="mx-3.5 mb-3"
-      />
-
-      <SegmentedControl
-        options={FILTERS}
-        value={filter}
-        onChange={onFilterChange}
-        className="mx-3.5 mb-3"
-      />
+        <ChevronRight size={12} className={styles.crumbSep} />
+        <span className={styles.crumbCurrent}>{base.name}</span>
+      </nav>
 
       <div className={styles.listBody}>
-        {bases.length === 0 ? (
-          <p className={styles.treeEmpty} style={{ padding: "10px 18px" }}>
-            No knowledge bases match.
-          </p>
+        {!tree || tree.status === "loading" ? (
+          // A skeleton, not the "Loading…" line the old expandable base row
+          // used: opening a card is now THE way into this pane, so that text
+          // would flash on every visit (docs/DESIGN-SYSTEM.md — no text
+          // loaders). The shimmer is aria-hidden, so the status role and the
+          // sr-only label belong to this wrapper or the announcement is lost.
+          <div role="status" aria-busy="true" aria-live="polite">
+            <span className="sr-only">Loading knowledge base</span>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonRow key={i} leading="square" />
+            ))}
+          </div>
+        ) : tree.status === "error" ? (
+          <p className={styles.treeEmpty}>Couldn’t load this base</p>
         ) : (
-          groupBases(bases, filter, currentUserId).map(({ label, items }) => (
-            <div key={label ?? "own"}>
-              {label && <p className={styles.listSection}>{label}</p>}
-              {items.map((base) => (
-                <KbRow
-                  key={base.id}
-                  base={base}
-                  ownerName={
-                    base.createdBy && base.createdBy !== currentUserId
-                      ? (ownerNames?.[base.createdBy] ?? "Another member")
-                      : null
-                  }
-                  selected={selectedBaseId === base.id}
-                  expanded={expanded.has(base.id)}
-                  tree={trees[base.id]}
-                  selectedEntryId={selectedEntryId}
-                  canEdit={canEdit(base.id)}
-                  editingNodeId={editingNodeId}
-                  handlers={treeHandlers}
-                  onSelectBase={onSelectBase}
-                  onToggleExpand={onToggleExpand}
-                  onSelectEntry={onSelectEntry}
-                />
-              ))}
-            </div>
-          ))
+          <BaseTree
+            base={base}
+            tree={tree}
+            selectedEntryId={selectedEntryId}
+            canEdit={canEdit}
+            editingNodeId={editingNodeId}
+            handlers={treeHandlers}
+            onSelectEntry={onSelectEntry}
+          />
         )}
       </div>
     </div>
   );
-}
-
-/**
- * On the All filter, other members' bases sit under a trailing
- * "Shared with me" section (mirrors the chats list). Other filters
- * render one unlabeled group.
- */
-function groupBases(
-  bases: KnowledgeBase[],
-  filter: Filter,
-  currentUserId: string
-): Array<{ label: string | null; items: KnowledgeBase[] }> {
-  if (filter !== "all") return [{ label: null, items: bases }];
-  const own = bases.filter(
-    (b) => b.createdBy === null || b.createdBy === currentUserId
-  );
-  const shared = bases.filter(
-    (b) => b.createdBy !== null && b.createdBy !== currentUserId
-  );
-  const groups: Array<{ label: string | null; items: KnowledgeBase[] }> = [];
-  if (own.length > 0) groups.push({ label: null, items: own });
-  if (shared.length > 0) groups.push({ label: "Shared with me", items: shared });
-  return groups;
 }

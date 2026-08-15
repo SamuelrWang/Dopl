@@ -4,6 +4,7 @@ import { CalendarCheck, CalendarDays, Flag, Users, UsersRound } from "lucide-rea
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { cn } from "@/shared/lib/utils";
 import { TeamChip } from "@/features/members/components/team-bits";
+import { StorageMeter } from "../storage-meter";
 import styles from "../knowledge-v2.module.css";
 
 export interface MetaTeamRef {
@@ -29,6 +30,11 @@ export interface MetaCardProps {
   accessLabel: string;
   /** Teams granted access (teams-mode bases). Empty/undefined hides the row. */
   teams?: MetaTeamRef[];
+  /** This base's stored bytes; `null` = unknown, which hides the meter
+   *  entirely rather than drawing an empty track. */
+  storageBytes?: number | null;
+  /** The workspace's per-base storage cap in bytes; `null` = unknown. */
+  storageLimit?: number | null;
 }
 
 /**
@@ -49,6 +55,8 @@ export function MetaCard({
   scopeLabel,
   accessLabel,
   teams,
+  storageBytes,
+  storageLimit,
 }: MetaCardProps) {
   return (
     <div className={styles.metaCard}>
@@ -134,6 +142,16 @@ export function MetaCard({
             <span className={styles.metaVal}>{updatedAt}</span>
           </div>
         </div>
+
+        {/* Storage sits UNDER the meta grid rather than inside it: it is the
+            only value here that is a quantity against a ceiling, and the grid's
+            key/value rows have nowhere to put a bar. Renders nothing when
+            either half is unknown. */}
+        <StorageMeter
+          usedBytes={storageBytes ?? null}
+          limitBytes={storageLimit ?? null}
+          className="mt-0"
+        />
       </div>
     </div>
   );

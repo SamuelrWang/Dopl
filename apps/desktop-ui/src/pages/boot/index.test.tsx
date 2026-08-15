@@ -24,10 +24,15 @@ const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true }))
 // Typed as the bridge's own result so a test can answer `{ ok: false, error }`.
 const beginSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
 const passwordSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
-const sendMagicLink = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
+// No `sendMagicLink` mock: the form's "Email me a sign-in link instead" control
+// and the `LoginActions` member behind it were deleted (2026-08-13). Main still
+// implements the op; nothing in this renderer calls it.
 
-// The crystal panel needs ResizeObserver + a canvas 2D context — neither
-// exists in jsdom. Same passthrough the onboarding suite uses.
+// The split's right pane is decorative — a bundled banner under a LiquidGlass
+// slab that builds its displacement map on a canvas — and nothing here tests
+// it, so the layout collapses to a passthrough. Same one the onboarding suite
+// uses. (It is no longer load-bearing: `test-setup.ts` polyfills
+// ResizeObserver and `buildDisplacementMap` returns "" without a 2D context.)
 vi.mock("@/shared/layout/auth-split", () => ({
   AuthSplitLayout: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="auth-split">{children}</div>
@@ -110,7 +115,6 @@ describe("boot page", () => {
         openExternal,
         beginSignIn,
         passwordSignIn,
-        sendMagicLink,
         appOrigin: "https://www.usedopl.com",
       });
   });
@@ -120,16 +124,26 @@ describe("boot page", () => {
 
     renderBoot();
 
-    // The web /login form, not a stand-in card (Samuel's #1 complaint).
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    // The web login form, not a stand-in card (Samuel's #1 complaint) — but
+    // opened on SIGN IN, which is this host's `defaultMode` (the web splits the
+    // two modes across `/signup` and `/login`). Heading and submit label agree.
+    expect(await screen.findByRole("heading", { name: "Log In" })).toBeInTheDocument();
+    // The fields carry no visible label any more — the placeholder is the
+    // label and `aria-label` is the accessible name, so these still resolve.
     expect(screen.getByLabelText("Email Address")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Remember me" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Email me a sign-in link instead" })
-    ).toBeInTheDocument();
+    // No "Remember me": the session is ALWAYS persisted (main stores the
+    // credential on disk), so the checkbox is gone — not hidden.
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText("Remember me")).toBeNull();
+    expect(screen.getByRole("button", { name: "Log In" })).toBeEnabled();
+    // The mode switch names its destination, with no "Don't have an account?".
+    // A BUTTON, not a link: this host passes no `modeSwitch`, because it has no
+    // routes to navigate between — the core toggles the mode in place.
+    expect(screen.getByRole("button", { name: "Sign Up" })).toBeInTheDocument();
+    expect(screen.queryByText(/have an account/i)).toBeNull();
+    // The magic-link fallback is GONE — password and OAuth are what is left.
+    expect(screen.queryByText(/sign-in link/i)).toBeNull();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeInTheDocument();
     expect(screen.getByAltText("Dopl")).toBeInTheDocument();
@@ -294,14 +308,13 @@ describe("signed-out login form", () => {
         openExternal,
         beginSignIn,
         passwordSignIn,
-        sendMagicLink,
         appOrigin: "https://www.usedopl.com",
       });
   });
 
   async function renderForm() {
     renderBoot();
-    await screen.findByRole("heading", { name: "Sign in" });
+    await screen.findByRole("heading", { name: "Log In" });
   }
 
   function type(label: string, value: string) {
@@ -313,7 +326,7 @@ describe("signed-out login form", () => {
 
     type("Email Address", "sam@usedopl.com");
     type("Password", "hunter2-Hunter!");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
 
     await waitFor(() =>
       expect(passwordSignIn).toHaveBeenCalledWith({
@@ -326,12 +339,19 @@ describe("signed-out login form", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("sign up reuses passwordSignIn with mode: sign-up", async () => {
+  it("switching to sign up reuses passwordSignIn with mode: sign-up", async () => {
     await renderForm();
+
+    // The switch flips the whole screen IN PLACE — heading, submit label,
+    // handler — because this host passes no `modeSwitch`. On the web the same
+    // control is a link to the other route.
+    fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
+    expect(await screen.findByRole("heading", { name: "Sign Up" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log In" })).toBeInTheDocument();
 
     type("Email Address", "new@usedopl.com");
     type("Password", "hunter2-Hunter!");
-    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
 
     await waitFor(() =>
       expect(passwordSignIn).toHaveBeenCalledWith({
@@ -340,6 +360,10 @@ describe("signed-out login form", () => {
         password: "hunter2-Hunter!",
       })
     );
+
+    // …and back, so the switch is symmetric rather than one-way.
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
+    expect(await screen.findByRole("heading", { name: "Log In" })).toBeInTheDocument();
   });
 
   it("surfaces a failed sign-in in the banner", async () => {
@@ -349,24 +373,15 @@ describe("signed-out login form", () => {
 
     type("Email Address", "sam@usedopl.com");
     type("Password", "wrong-Password1!");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Invalid login credentials");
   });
 
-  it("the magic-link fallback calls sendMagicLink", async () => {
-    await renderForm();
-
-    type("Email Address", "sam@usedopl.com");
-    fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link instead" }));
-
-    await waitFor(() =>
-      expect(sendMagicLink).toHaveBeenCalledWith({ email: "sam@usedopl.com" })
-    );
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Check your email for a sign-in link."
-    );
-  });
+  // THE MAGIC-LINK TEST IS GONE (2026-08-13), with the control it covered. It
+  // asserted `sendMagicLink({ email })` off an "Email me a sign-in link instead"
+  // button; `LoginActions` no longer carries the member, so this host cannot
+  // wire the bridge op even if main still implements it.
 
   it("the social buttons start OAuth in main, per provider", async () => {
     await renderForm();
@@ -386,7 +401,7 @@ describe("signed-out login form", () => {
 
     await renderForm();
 
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Log In" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeDisabled();
     expect(
       screen.getByText("Update the Dopl app to sign in with a password here.")

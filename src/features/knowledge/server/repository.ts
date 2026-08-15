@@ -24,6 +24,7 @@ import "server-only";
  *   - `repository-bases.ts`   — base reads + writes + hard delete
  *   - `repository-folders.ts` — folder reads + ancestor walk + writes + hard delete
  *   - `repository-entries.ts` — entry reads (incl. path-resolver helpers) + writes + hard delete
+ *   - `repository-stars.ts`   — PER-USER base stars (every statement filtered by user_id)
  */
 
 export {
@@ -37,6 +38,8 @@ export {
   insertBases,
   updateBaseRow,
   hardDeleteBase,
+  listBaseStorageBytes,
+  getBaseStorageBytes,
   fetchProfileNames,
 } from "./repository-bases";
 export type { InsertBaseArgs, UpdateBasePatch } from "./repository-bases";
@@ -59,6 +62,7 @@ export {
   findActiveEntryById,
   listEntriesForBase,
   countEntriesForBase,
+  listEntryStampsForBases,
   listEntriesByIds,
   insertEntry,
   insertEntries,
@@ -66,8 +70,15 @@ export {
   hardDeleteEntry,
 } from "./repository-entries";
 export type {
+  EntryStamp,
   ListEntriesOpts,
   InsertEntryArgs,
   InsertEntriesArgs,
   UpdateEntryPatch,
 } from "./repository-entries";
+
+export {
+  listStarredBaseIds,
+  insertBaseStar,
+  deleteBaseStar,
+} from "./repository-stars";

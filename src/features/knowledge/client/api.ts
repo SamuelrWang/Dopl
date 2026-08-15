@@ -16,6 +16,7 @@
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
   KnowledgeBase,
+  KnowledgeBaseStats,
   KnowledgeFolder,
   KnowledgeEntry,
 } from "@/features/knowledge/types";
@@ -77,13 +78,29 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 // ─── Bases ──────────────────────────────────────────────────────────
 
-/** `GET /api/knowledge/bases` in full: the list plus the owner-name map the
- *  route folds in (display names for bases created by *other* members). */
+/** `GET /api/knowledge/bases` in full: the list plus the two maps the route
+ *  folds in — display names for bases created by *other* members, and the
+ *  per-base counters the home grid renders. */
 export interface KnowledgeBaseList {
   bases: KnowledgeBase[];
   /** Display names for foreign base owners, keyed by user id. `{}` when
    *  every visible base is the caller's own. */
   ownerNames: Record<string, string>;
+  /** `{entryCount, lastEntryUpdatedAt, storageBytes}` keyed by base id. `{}`
+   *  only when the route degraded — a base with no entries still gets a zeroed
+   *  entry, so a MISSING key means "unknown", never "empty". */
+  baseStats: Record<string, KnowledgeBaseStats>;
+  /** The workspace's per-base storage cap in bytes, from its
+   *  entitlement-resolved plan. `null` = unknown (an old server, or a failed
+   *  billing read) — the meters are suppressed rather than drawn against a
+   *  guessed cap. */
+  kbStorageLimit: number | null;
+  /** The CALLER'S OWN starred base ids, always a subset of `bases`. Per-user:
+   *  a favourite, not a property of the base, so it rides the response rather
+   *  than the row. `[]` is a real answer (nothing starred) AND the degraded
+   *  one — an unknown star and no star render identically, so there is no
+   *  third value to carry. */
+  starredBaseIds: string[];
 }
 
 export async function fetchBaseList(
@@ -92,8 +109,41 @@ export async function fetchBaseList(
   const data = await request<{
     bases: KnowledgeBase[];
     ownerNames?: Record<string, string>;
+    baseStats?: Record<string, KnowledgeBaseStats>;
+    kbStorageLimit?: number | null;
+    starredBaseIds?: string[];
   }>("/api/knowledge/bases", { workspaceId });
-  return { bases: data.bases, ownerNames: data.ownerNames ?? {} };
+  return {
+    bases: data.bases,
+    ownerNames: data.ownerNames ?? {},
+    baseStats: data.baseStats ?? {},
+    // `?? null` covers the pre-deploy server that does not send the key at all
+    // — indistinguishable, correctly, from a server that could not resolve it.
+    kbStorageLimit: data.kbStorageLimit ?? null,
+    // A server that predates stars sends no key; `[]` renders as "nothing
+    // starred", which is exactly what such a server means.
+    starredBaseIds: data.starredBaseIds ?? [],
+  };
+}
+
+/**
+ * Star or unstar ONE base for the calling user.
+ *
+ * Two idempotent verbs rather than a toggle, matching the route: the caller
+ * states the end state it wants, so a retry after an ambiguous failure cannot
+ * flip the value back. Returns nothing worth reading — the client already knows
+ * the end state it asked for, and reconciling against an echo of its own
+ * argument would only add a way for the two to disagree.
+ */
+export async function setBaseStar(
+  baseId: string,
+  starred: boolean,
+  workspaceId?: string
+): Promise<void> {
+  await request<{ starred: boolean }>(`/api/knowledge/bases/${baseId}/star`, {
+    method: starred ? "PUT" : "DELETE",
+    workspaceId,
+  });
 }
 
 export async function fetchBases(workspaceId?: string): Promise<KnowledgeBase[]> {

@@ -11,7 +11,7 @@ neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
 dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings,
 Workspaces (invite/join/create cards), Billing, MCP-connect.
-Exempt: marketing pages and auth + onboarding (their own crystal/3D
+Exempt: marketing pages and auth + onboarding (their own glass/3D
 kit). The F-022 legacy Button/Dialog primitives are retired (deleted
 2026-07-17). Every new page starts on this system.
 
@@ -44,6 +44,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `text-text-muted`                             | `#98a2ad`        | faint / placeholders       |
 | `text-text-disabled`                          | `#c4cad1`        | disabled                   |
 | `text-danger` / `bg-danger/10`                | red              | destructive text / soft bg |
+| `text-success` / `text-caution` / `text-warning` / `text-danger` | green → yellow → amber → red | the severity RAMP, in order. `caution` sits between success and warning; it exists so a four-band meter has a yellow that is not the amber `warning`. |
 | `bg-bg-elevated`                              | `#fbfcfd`        | card / panel surface       |
 | `bg-card-surface-subtle`                      | `#f4f6f9`        | header strips, inset cards |
 | `bg-bg-inset`                                 | `#eef1f5`        | concave body fill, wells   |
@@ -61,14 +62,17 @@ Utilities generated from `@theme` (values live in `:root`):
 | `.concave-sel`   | Pressed-in selected state (`#e9e9e7`) for tabs/rows. Alias of `.btn-pressed`. |
 | `.concave-track` | Recessed switcher track (radius 10, 4px pad) that tab pills sit inside. |
 | `.seg-pill`      | Resting face of one stadium pill in a TRACKLESS segmented row — flat `#e9eaec` fill, fully rounded ends, ring hairline. `SegmentedControl` renders one per option; active swaps to `.raised-tab` (2026-08-12). |
-| `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track` — also composed onto the active `.nav-chip` and the active `.seg-pill` option. |
+| `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track` — also composed onto the active `.nav-chip`, the active `.seg-pill` option and the `Switch` thumb. ONE elevation with `.auth-btn-3d-light` (2026-08-15): identical gradient (`#fff → #f2f2f2`), hairline (`#d4d4d4`), bevel and drops. Its hairline is an `inset 0 0 0 1px` RING, not a `border`, because the class is toggled onto content-sized elements whose resting face has none — a real border would make every active chip 2px wider than its siblings. Resting face only; behavioural states belong to the consumer. |
 | `.nav-chip`      | Hug-width sidebar/nav chip (`--shell-chip` fill on `--shell-surface`, radius 10, h36) for `<a>` and `<button>`. Active = `.nav-chip-active` + `.raised-tab`. THE nav recipe — app sidebar + settings modal both compose it; never fork it locally. |
 | `.btn-light`     | Small raised light button (toolbar / compact chrome).                   |
-| `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.)       |
-| `.graph-substrate` | Dotted recessed world surface behind a graph view and its skeleton. Its only remaining user is the retired Workflows tree — the Canvas page was deleted 2026-08-11. |
+| `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.) `.auth-btn-3d-light` is THE white-raised elevation reference: `.raised-tab` and the app-shell's `.brandPill` are the same face at other scales. |
+| `.menu-card` / `.menu-row` / `.menu-divider` | THE dropdown surface, its row face and its section rule (2026-08-15). Ported from the landing Menu dropdown — `src/features/marketing/marketing.css › .lp-nav-menu-card` / `.lp-nav-menu-item` / `.lp-nav-menu-divider` plus the `lpMenuIn`/`lpMenuOut` keyframes, replicated in the global layer as `menuCardIn`/`menuCardOut` (marketing.css is page-scoped and the app never loads it — edit both together). Card: 16px radius, 7px padding, white→`#f6f6f6` gradient, `#dcdcdc` hairline, top inset bevel + three drops, unfolding on a 7° `rotateX`. Row: 10px radius with a 1px hover lift and a pressed-in `:active`. **Only `Popover` composes these** — never hand-roll a menu surface. |
+| `.graph-substrate` | Dotted world surface (24px pitch) behind a board or graph view and its skeleton. THE dot recipe — the ontology kanban board and its skeleton compose it (with `.kanban-substrate`); the retired Workflows tree is the other user (the Canvas page was deleted 2026-08-11). |
+| `.kanban-substrate` | Modifier on `.graph-substrate` for the ontology board: halves the pitch to 12px so the board's geometry lands on the grid (288px lanes = 24 tiles, 12px gutter = 1, 24px board padding = 2), and `background-attachment: local` so the dots cover the whole scrollable area and travel with the lanes instead of staying pinned to the pane. Tiles originate at the scroller's padding edge — keep every board dimension a multiple of 12px and each lane edge stays on a grid line. |
 | `.graph-node-lift` | Elevation applied to a graph card WHILE dragging (deeper shadow + grabbing cursor). |
 | `.graph-port`    | Raised connector dot on a workflow step card edge; `data-active` = drag source, `data-target` = live drop target, `data-variant="output"` = inked source dot. |
 | `.graph-node` / `.graph-node-selected` / `.graph-node-target` | Graph card resting / selected-ring / connect-drop-target surfaces. Written for two callers; only the Workflows cards are left. |
+| `.kanban-card`   | White card floating inside a flat inset lane — the ontology board's column header card and every object card. ONE class, three states: resting hairline elevation, a shallow hover lift, and a highlight ring on `data-selected="true"`. Sets border COLOR + shadow only; radius/border-width/`bg-bg-elevated`/layout stay in the component. Flatter than `.bento` and `.graph-node` on purpose — these sit on an inset lane, not on the page surface. |
 
 Composition pattern (CSS modules welcome for layout, recipes come from kit):
 
@@ -84,12 +88,12 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 
 | Primitive | Use |
 | --------- | --- |
-| `Popover` / `MenuItem` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter/context menus. Trigger-anchored by default; pass `at={{x,y}}` for portal/cursor-positioned menus (viewport-clamped). `MenuItem` takes `icon` + `destructive`. Never hand-roll the backdrop/Escape/clamp pattern. |
+| `Popover` / `MenuItem` / `MenuDivider` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter/context menus. Trigger-anchored by default; pass `at={{x,y}}` for portal/cursor-positioned menus (viewport-clamped). `MenuItem` takes `icon` + `destructive`; `MenuDivider` is the section rule (a `border-t` on a group wrapper runs into the card's corner radius). Never hand-roll the backdrop/Escape/clamp pattern. Wears the kit's `.menu-card`/`.menu-row`, so a consumer's `className` is for WIDTH, not for the surface. The card outlives `open` by 140ms to play its exit — while it does it carries no `role` and is `inert`, so a dismissed menu leaves the a11y tree and the tab order immediately; `prefers-reduced-motion` skips the phase. |
 | `Avatar` (`avatar.tsx`) | Profile pictures with neutral initials fallback. No gradients — identity color belongs to teams. |
 | `AvatarWithPresence` (`avatar-with-presence.tsx`) | `Avatar` wrapped in a presence ring — `ring-success` online / `ring-text-disabled` offline, floated off the avatar by a transparent `p-0.5` gap so it reads on any surface. Prefer over a standalone presence dot wherever an avatar is shown. |
 | `SegmentedControl` (`segmented-control.tsx`) | ALL scope/filter tab rows. Concave track + a raised thumb that slides between slots (0.28s ease-out-quint). Never compose `.concave-track`/`.raised-tab` tabs by hand. |
 | `SectionBox` (`section-box.tsx`) | Labelled section card (see Patterns below). |
-| `UsageMeter` (`usage-meter.tsx`) | THE "used / limit" bar — label row + `.concave-track` well + a bare `h-1.5 rounded-full` fill with an inline width %. The only progress-bar recipe; it was module-private in the billing pane until a second meter (MCP credits) needed it, and the billing page's Usage tab is the third caller. **`over` is a verdict the CALLER passes**, not `used >= limit` arithmetic — an entitlement gate decides it. Never hand-roll `.concave-track` + a fill. |
+| `UsageMeter` (`usage-meter.tsx`) | THE "used / limit" bar — label row + `.concave-track` well + a bare `h-1.5 rounded-full` fill with an inline width %. The only progress-bar recipe; it was module-private in the billing pane until a second meter (MCP credits) needed it, and the billing page's Usage tab is the third caller. **`over` is a verdict the CALLER passes**, not `used >= limit` arithmetic — an entitlement gate decides it. `tone` picks the fill: `"cta"` (default) is the flat CTA ink; `"ramp"` colours it by how full (<50 success / <75 caution / <90 warning / else danger, bands module-private) — for meters that get GLANCED at rather than read (`knowledge-v2/storage-meter.tsx` is the only one). Never hand-roll `.concave-track` + a fill. |
 | `EmptyState` (`empty-state.tsx`) | Centered icon + title + description placeholder for empty panes. |
 | `SearchField` (`search-field.tsx`) | Search-icon + concave-field input well (`sm`/`md`). Never inline the recipe. |
 | `Switch` (`switch.tsx`) | Boolean toggles (concave track, raised thumb). |

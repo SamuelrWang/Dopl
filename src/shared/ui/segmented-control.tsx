@@ -58,9 +58,16 @@ export function SegmentedControl<K extends string>({
           )}
         >
           {label}
-          {count !== undefined && (
-            <span className="text-micro text-text-muted">{count}</span>
-          )}
+          {count !== undefined &&
+            (value === key ? (
+              // Active tab: the count sits in a solid dark pill inside the
+              // raised face (reference: "All (48)" chip).
+              <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta">
+                {count}
+              </span>
+            ) : (
+              <span className="text-micro text-text-muted">{count}</span>
+            ))}
         </button>
       ))}
     </div>

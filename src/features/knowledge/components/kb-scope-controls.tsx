@@ -26,7 +26,7 @@ const SCOPE_OPTIONS: Array<{
   { key: "team", label: "Teams", desc: "Specific teams", Icon: Users },
   {
     key: "workspace",
-    label: "Workspace",
+    label: "Public",
     desc: "Everyone in this workspace",
     Icon: Building2,
   },

@@ -249,6 +249,65 @@ export async function hardDeleteBase(
   if (error) throw error;
 }
 
+/**
+ * `knowledge_bases.storage_bytes` for a SET of bases, keyed by base id — the
+ * usage bar's `used` half.
+ *
+ * A SEPARATE, NARROW QUERY RATHER THAN A COLUMN ON THE BASE ROW, and that is
+ * the whole point of it: `KNOWLEDGE_BASE_COLS` feeds `mapBaseRow`, whose output
+ * is the `KnowledgeBase` interface that `scripts/check-knowledge-type-drift.ts`
+ * pins field-for-field against the SDK's mirror. Adding the counter there would
+ * push a display-only number onto every MCP `kb_*` payload. Same rationale as
+ * `types.ts › KnowledgeBaseStats`, applied one layer down.
+ *
+ * Two columns and an `in` filter, so the whole grid costs one round trip.
+ * Workspace-filtered like every other batch read here.
+ */
+export async function listBaseStorageBytes(
+  workspaceId: string,
+  baseIds: string[]
+): Promise<Map<string, number>> {
+  if (baseIds.length === 0) return new Map();
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_bases")
+    .select("id, storage_bytes")
+    .eq("workspace_id", workspaceId)
+    .in("id", baseIds);
+  if (error) throw error;
+  return new Map(
+    ((data ?? []) as unknown as Array<{ id: string; storage_bytes: number | null }>).map(
+      (row) => [row.id, Number(row.storage_bytes ?? 0)]
+    )
+  );
+}
+
+/**
+ * One base's `storage_bytes` — the write gate's `used` reading. Returns `null`
+ * when the row is gone, which the caller must NOT read as zero: the gate fails
+ * OPEN on an unknown counter (see `service-storage.ts`).
+ *
+ * ⚠ `storage_bytes` arrives as a JS `number` even though the column is BIGINT.
+ * PostgREST serialises int8 as a JSON number and `supabase-js` does not
+ * re-widen it; that is exact up to 2^53 bytes (~9 PB), which no knowledge base
+ * will reach before this comment is archaeology.
+ */
+export async function getBaseStorageBytes(
+  workspaceId: string,
+  baseId: string
+): Promise<number | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_bases")
+    .select("storage_bytes")
+    .eq("id", baseId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return Number((data as { storage_bytes: number | null }).storage_bytes ?? 0);
+}
+
 /** Display names for base owners (list-pane attribution). */
 export async function fetchProfileNames(
   userIds: string[]

@@ -18,8 +18,9 @@ import OnboardingPage from "./index";
  * never-resolving tripwire — the flow used to call it directly, and the
  * packaged renderer ships `connect-src 'none'`.
  *
- * `AuthSplitLayout` is mocked: its crystal panel instantiates a canvas 2D
- * context, which jsdom does not provide (the engine throws by design).
+ * `AuthSplitLayout` is mocked to a passthrough: its right pane is purely
+ * decorative (a bundled banner under a LiquidGlass slab) and no assertion here
+ * touches it.
  */
 
 vi.mock("@/shared/layout/auth-split", () => ({
@@ -163,7 +164,9 @@ describe("onboarding page", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    // "Log In" since 2026-08-13 — the shared form's heading and submit label
+    // are one string, and both took the landing page's wording.
+    expect(await screen.findByRole("heading", { name: "Log In" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 

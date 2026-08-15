@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { KnowledgeBase } from "../../../types";
+import type { BaseTree } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
 import { ListPanel } from "./list-panel";
 
 /**
- * P0-6 "dead controls visible at launch". This header shipped two buttons
- * with no `onClick` and no plan to get one: a "Knowledge ▾" title button
- * implying a menu that does not exist, and a "Filter" icon duplicating the
- * scope SegmentedControl three rows below it. Both are gone; the only control
- * left in the header is the one that works.
+ * The base-detail list pane, after the home grid took the base LIST away.
+ *
+ * What this file pins is an absence as much as a presence: the pane is scoped
+ * to ONE base, so the controls that only make sense across several — the base
+ * rows, the search field that filtered them, the scope pills — must not come
+ * back here. It also still carries P0-6's rule that a visible control does
+ * something: the crumb is the pane's only button and it navigates.
  */
 
 const noopTreeHandlers = {} as TreeHandlers;
@@ -27,50 +30,62 @@ function base(over: Partial<KnowledgeBase> = {}): KnowledgeBase {
   } as KnowledgeBase;
 }
 
-function render(bases: KnowledgeBase[] = [base()]) {
+const READY: BaseTree = {
+  status: "ready",
+  folders: [],
+  entries: [
+    { id: "e-1", title: "Cold outreach", folderId: null, position: 0 },
+  ] as unknown as BaseTree["entries"],
+};
+
+function render(tree: BaseTree | null = READY) {
   return renderToStaticMarkup(
     <ListPanel
-      bases={bases}
-      currentUserId="u-me"
-      query=""
-      onQueryChange={() => {}}
-      filter="all"
-      onFilterChange={() => {}}
-      selectedBaseId={null}
+      base={base()}
+      tree={tree ?? undefined}
       selectedEntryId={null}
-      expanded={new Set()}
-      trees={{}}
-      canEdit={() => true}
+      canEdit
       editingNodeId={null}
       treeHandlers={noopTreeHandlers}
-      onSelectBase={() => {}}
-      onToggleExpand={() => {}}
       onSelectEntry={() => {}}
-      onCreate={() => {}}
+      onGoHome={() => {}}
     />
   );
 }
 
-describe("knowledge ListPanel header", () => {
-  it("no longer offers a dead Filter button", () => {
-    expect(render()).not.toContain('aria-label="Filter"');
-  });
-
-  it("renders the pane title as a heading, not a menu-less button", () => {
+describe("knowledge base-detail list pane", () => {
+  it("leads with a Knowledge › {base} breadcrumb, not a pane title", () => {
     const html = render();
-    expect(html).toContain("<h1");
+    expect(html).toContain('aria-label="Knowledge base breadcrumb"');
     expect(html).toContain("Knowledge");
-    // the ▾ that promised a dropdown is gone with the button
-    expect(html).not.toContain("lucide-chevron-down");
+    expect(html).toContain("Product specs");
+    // A title would make the pane read as a page of its own; the base name
+    // already heads the DETAIL pane.
+    expect(html).not.toContain("<h1");
   });
 
-  it("keeps the one header control that works, and shows the base count", () => {
-    const html = render([base(), base({ id: "kb-2", slug: "runbooks" })]);
-    expect(html).toContain('aria-label="New knowledge base"');
-    expect(html).toContain(">2<");
+  it("shows the opened base's tree expanded, with no base rows around it", () => {
+    const html = render();
+    expect(html).toContain("Cold outreach");
+    // The disclosure chevron that folded a base row away has no meaning when
+    // the pane holds exactly one base.
+    expect(html).not.toContain('aria-label="Collapse"');
+    expect(html).not.toContain('aria-label="Expand"');
   });
 
-  it("leaves the working scope filter in place below the search", () => {
-    expect(render()).toContain('role="tablist"');
+  it("drops the base-list search and the scope pills", () => {
+    const html = render();
+    // The search field filtered the BASE LIST — there is no list here. Content
+    // search within the base lives in the detail pane's top bar.
+    expect(html).not.toContain('placeholder="Search"');
+    expect(html).not.toContain('role="tablist"');
+  });
+
+  it("renders a skeleton, not an empty tree, before the fetch lands", () => {
+    const html = render(null);
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Loading knowledge base");
+    // …and NOT a visible text loader (docs/DESIGN-SYSTEM.md).
+    expect(html).toContain("sr-only");
   });
 });

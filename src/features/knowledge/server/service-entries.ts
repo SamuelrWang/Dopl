@@ -22,6 +22,7 @@ import {
   filterTeamVisibleBases,
 } from "./service-shared";
 import { getBaseById } from "./service-bases";
+import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
 /**
  * Knowledge entry reads + writes, plus `resolveEntryRefs` (the
@@ -109,6 +110,8 @@ export async function createEntry(
       );
     }
   }
+  // Storage gate. A create is pure growth, so its delta is the whole body.
+  await assertStorageHeadroom(ctx, base, bodyBytes(input.body));
   const created = await repo.insertEntry({
     workspaceId: ctx.workspaceId,
     knowledgeBaseId: base.id,
@@ -137,6 +140,17 @@ export async function updateEntry(
   await assertBaseWritable(ctx, base);
   if (expectedUpdatedAt && entry.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, entry.updatedAt);
+  }
+  // Storage gate, on the NET delta. `patch.body === undefined` leaves the
+  // column alone, so a title/position-only patch has no delta at all — and a
+  // shrink is negative, which `assertStorageHeadroom` waves through even when
+  // the base is already over cap (that edit is the way OUT of the hole).
+  if (patch.body !== undefined) {
+    await assertStorageHeadroom(
+      ctx,
+      base,
+      bodyBytes(patch.body) - bodyBytes(entry.body)
+    );
   }
   const saved = await repo.updateEntryRow(
     id,

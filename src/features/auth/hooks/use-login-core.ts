@@ -35,42 +35,62 @@ export interface LoginActions {
    *  auth transition and the boot screen swaps itself out). */
   signInWithPassword?(email: string, password: string): Promise<LoginActionResult>;
   signUpWithPassword?(email: string, password: string): Promise<LoginActionResult>;
-  sendMagicLink?(email: string): Promise<LoginActionResult>;
+  // THERE IS NO `sendMagicLink` HERE ANY MORE, and re-adding one would put a
+  // fourth credential path back on a screen that now has three. The form's
+  // "Email me a sign-in link instead" control was deleted with it (2026-08-13).
+  // The desktop MAIN process still implements the op (`main/auth-password.js`,
+  // reachable over the bridge) — what went is the login form's use of it.
   oauth?(provider: SocialProvider): Promise<LoginActionResult>;
   resetPassword?(email: string): Promise<LoginActionResult>;
 }
 
+/** Which credential flow the screen is showing. The HOST picks the starting
+ *  one — the web has a ROUTE per mode (`/signup` and `/login`), the desktop SPA
+ *  opens on sign-in — and the switch under the submit control flips it: by
+ *  navigation on the web, in place on the desktop (see `LoginFormCoreProps`). */
+export type LoginMode = "signin" | "signup";
+
 /** Which action is in flight — one at a time, and it names the button's label. */
-export type LoginPending =
-  | null
-  | "password"
-  | "signup"
-  | "magic"
-  | "reset"
-  | SocialProvider;
+export type LoginPending = null | "password" | "signup" | "reset" | SocialProvider;
 
 const SIGNUP_SENT = "Check your email to confirm your account.";
-const MAGIC_SENT = "Check your email for a sign-in link.";
 const RESET_SENT = "Check your email to reset your password.";
 
 /**
  * The login form's state machine, free of `next/*` and of supabase.
  *
  * Everything host-specific arrives through `actions`; what stays here is the
- * part both apps must agree on — field state, the single in-flight slot, the
- * error/message banner, the password policy gate on sign-up, and the
+ * part both apps must agree on — field state, the mode, the single in-flight
+ * slot, the error/message banner, the password policy gate on sign-up, and the
  * "email first" guards. See `./use-login` for the web binding.
+ *
+ * THERE IS NO "remember me" STATE, and re-adding one would be a lie: neither
+ * binding has a non-remembered path to choose. The web client persists the
+ * session in cookies (`shared/supabase/browser.ts` › getSupabaseBrowser, a
+ * `@supabase/ssr` browser client) and the desktop app stores the credential on
+ * disk in MAIN (`dopl:password-sign-in` → authTokens). Sessions are ALWAYS
+ * remembered; the checkbox that used to sit here reached no auth call.
  */
-export function useLoginCore(actions: LoginActions) {
+export function useLoginCore(actions: LoginActions, defaultMode: LoginMode) {
+  const [mode, setModeState] = useState<LoginMode>(defaultMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<LoginPending>(null);
   // True after a failed password sign-in — used to surface the otherwise-hidden
   // "Forgot password?" link only when it's actually relevant.
   const [signInFailed, setSignInFailed] = useState(false);
+
+  /** Switching modes clears the banner: a sign-in failure ("Invalid login
+   *  credentials") left standing under a "Sign up" heading reads as a
+   *  complaint about the form the user has not submitted yet. */
+  function setMode(next: LoginMode) {
+    setModeState(next);
+    setError(null);
+    setMessage(null);
+    setSignInFailed(false);
+  }
 
   async function run(
     kind: LoginPending,
@@ -106,7 +126,10 @@ export function useLoginCore(actions: LoginActions) {
     if (!ok) setSignInFailed(true);
   }
 
-  async function signUpWithPassword() {
+  /** Both credential flows are the FORM's submit handler now (one per mode),
+   *  so this takes the same optional event as its sign-in twin. */
+  async function signUpWithPassword(e?: React.FormEvent) {
+    e?.preventDefault();
     const signUp = actions.signUpWithPassword;
     if (!signUp) return;
     await run(
@@ -120,19 +143,6 @@ export function useLoginCore(actions: LoginActions) {
         return signUp(email, password);
       },
       SIGNUP_SENT
-    );
-  }
-
-  async function sendMagicLink() {
-    const send = actions.sendMagicLink;
-    if (!send) return;
-    await run(
-      "magic",
-      async () => {
-        if (!email) return { error: "Enter your email first." };
-        return send(email);
-      },
-      MAGIC_SENT
     );
   }
 
@@ -158,19 +168,18 @@ export function useLoginCore(actions: LoginActions) {
   }
 
   return {
+    mode,
+    setMode,
     email,
     setEmail,
     password,
     setPassword,
-    remember,
-    setRemember,
     error,
     message,
     pending,
     signInFailed,
     signInWithPassword,
     signUpWithPassword,
-    sendMagicLink,
     resetPassword,
     signInWithProvider,
   };

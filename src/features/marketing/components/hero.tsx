@@ -1,37 +1,23 @@
-import { GET_STARTED_URL, HERO } from "../constants";
-import { ArrowUpRight } from "./icons";
-import { ImageDeck } from "./image-deck";
+import { ControlSection } from "./control-section";
+import { DevelopersSection } from "./developers-section";
+import { FrameworkSection } from "./framework-section";
+import { HeroBanner } from "./hero-banner";
+import { HeroIntro } from "./hero-intro";
+import { MultiplayerSection } from "./multiplayer-section";
 
 /**
- * Centered headline + subhead + the page's single CTA, over an image deck.
- *
- * This row held a dark "Login" primary beside a light "Download" secondary, then
- * one Download in the primary surface. It is now "Get Started" — the SAME button,
- * same classes, same place, pointed at `/login`, which hands off to
- * `/get-started` and the dmg the moment an account exists. See ../constants.ts.
+ * Composition only — the order of the landing's opening sections. Each piece
+ * owns its own markup and styles; change the running order here, nowhere else.
  */
 export function Hero() {
   return (
     <section className="lp-hero">
-      <h1 className="lp-headline">
-        {HERO.headlineLines.map((line, i) => (
-          <span key={i} className="lp-headline-line">
-            {line}
-          </span>
-        ))}
-      </h1>
-
-      <p className="lp-subhead">{HERO.subhead}</p>
-
-      <div className="lp-cta-row">
-        {/* No `download` attribute: this is a page now, not a file. */}
-        <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
-          {HERO.primaryCta}
-          <ArrowUpRight size={14} />
-        </a>
-      </div>
-
-      <ImageDeck />
+      <HeroIntro />
+      <HeroBanner />
+      <MultiplayerSection />
+      <FrameworkSection />
+      <ControlSection />
+      <DevelopersSection />
     </section>
   );
 }

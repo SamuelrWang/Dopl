@@ -173,8 +173,12 @@ export function ObjectPanel({
  * become unreachable with it — descendants that hang under no other parent.
  * Mirrors `delete-cluster-dialog.tsx`'s shape: without the count, a card that
  * silently takes a subtree with it reads identical to one that takes nothing.
+ *
+ * Exported for the kanban column header's own delete confirm: the same delete
+ * is reachable from the lane's kebab menu, and two spellings of this sentence
+ * would drift.
  */
-function deleteObjectMessage(label: string, count: number): string {
+export function deleteObjectMessage(label: string, count: number): string {
   if (count === 0) {
     return `This permanently deletes "${label}". This can't be undone.`;
   }

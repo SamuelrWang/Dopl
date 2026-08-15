@@ -1,20 +1,22 @@
 /**
- * `GET /api/knowledge/bases` — the base list, now carrying owner names.
+ * `GET /api/knowledge/bases` — the base list, plus the two maps folded onto it.
  *
  * THE PROPERTY THIS FILE EXISTS FOR: `ownerNames` was RSC-only
  * (`knowledge/page.tsx:51`), so the SPA's list pane had no attribution for
  * bases shared by other members. It was folded into this response rather than
- * given its own endpoint — which makes two things load-bearing:
+ * given its own endpoint, and `baseStats` (entry counts + newest content
+ * write, for the home grid's cards) later joined it on the same terms —
+ * which makes two things load-bearing:
  *
  *   1. **The fold is additive.** `bases` must keep its exact shape and stay
  *      the first-class key; existing readers (`features/knowledge/client/api.ts`,
  *      the ontology pick menus, and `@dopl/client`'s `kb_list_bases`)
  *      destructure `data.bases` and must not notice the change.
- *   2. **Owner names are scoped to the bases actually returned.** The lookup
+ *   2. **Both maps are scoped to the bases actually returned.** Each lookup
  *      takes the post-visibility list as its input, so a base filtered out by
- *      the private/teams-mode gate can never leak its owner's display name
- *      through this key. Feeding `listBaseOwnerNames` anything other than the
- *      output of `listBases` would break that.
+ *      the private/teams-mode gate can never leak its owner's display name —
+ *      or its entry count — through these keys. Feeding either one anything
+ *      other than the output of `listBases` would break that.
  *
  * Auth is mocked at the wrapper (mirroring `api/ontology/objects/route.test.ts`)
  * — what is under test is the composition, not `withWorkspaceAuth`.
@@ -49,22 +51,40 @@ vi.mock("@/features/knowledge/server/service", () => ({
   createBase: vi.fn(),
   listBases: vi.fn(),
   listBaseOwnerNames: vi.fn(),
+  listBaseStats: vi.fn(),
+  listStarredBaseIds: vi.fn(),
+  resolveKbStorageLimit: vi.fn(),
 }));
 
 import { GET } from "./route";
 import {
   listBaseOwnerNames,
+  listBaseStats,
   listBases,
+  listStarredBaseIds,
+  resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
 
 const mockListBases = vi.mocked(listBases);
 const mockOwnerNames = vi.mocked(listBaseOwnerNames);
+const mockBaseStats = vi.mocked(listBaseStats);
+const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
+const mockStarred = vi.mocked(listStarredBaseIds);
 
 function base(id: string, createdBy: string | null): KnowledgeBase {
   return { id, createdBy } as unknown as KnowledgeBase;
 }
 
 const VISIBLE = [base("kb-1", "user-1"), base("kb-2", "user-2")];
+
+const STATS = {
+  "kb-1": {
+    entryCount: 3,
+    lastEntryUpdatedAt: "2026-08-01T00:00:00Z",
+    storageBytes: 4_231_000,
+  },
+  "kb-2": { entryCount: 0, lastEntryUpdatedAt: null, storageBytes: 0 },
+};
 
 function getReq(): NextRequest {
   return new NextRequest("http://localhost/api/knowledge/bases", { method: "GET" });
@@ -74,44 +94,133 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockListBases.mockResolvedValue(VISIBLE);
   mockOwnerNames.mockResolvedValue({ "user-2": "Dana Ortiz" });
+  mockBaseStats.mockResolvedValue(STATS);
+  mockStorageLimit.mockResolvedValue(5_000_000);
+  mockStarred.mockResolvedValue(["kb-2"]);
 });
 
 describe("GET /api/knowledge/bases", () => {
-  it("returns the bases untouched alongside the owner-name map", async () => {
+  it("returns the bases untouched alongside both folded maps", async () => {
     const res = await GET(getReq());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       bases: VISIBLE,
       ownerNames: { "user-2": "Dana Ortiz" },
+      baseStats: STATS,
+      kbStorageLimit: 5_000_000,
+      starredBaseIds: ["kb-2"],
     });
   });
 
-  it("looks names up for exactly the bases it is about to return", async () => {
-    // Not the unfiltered set: a base hidden by the private/teams-mode gate
-    // must not leak its owner through `ownerNames`.
+  it("carries the per-base storage cap ONCE, not per card", async () => {
+    // The grid draws N bars against ONE limit. Resolving it here is what keeps
+    // a grid of N bases at one request; asking per card would be N+1.
     await GET(getReq());
-    expect(mockOwnerNames).toHaveBeenCalledWith(
-      { workspaceId: "ws-1", userId: "user-1" },
-      VISIBLE
-    );
+    expect(mockStorageLimit).toHaveBeenCalledTimes(1);
+    expect(mockStorageLimit).toHaveBeenCalledWith("ws-1");
+  });
+
+  it("degrades an unresolvable cap to null — never to a guessed limit", async () => {
+    // `null` reads as UNKNOWN at the client and suppresses every bar. A
+    // fallback number here would draw bars against a cap nobody enforces.
+    mockStorageLimit.mockRejectedValue(new Error("billing down"));
+
+    const res = await GET(getReq());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.kbStorageLimit).toBeNull();
+    expect(body.bases).toHaveLength(2);
+  });
+
+  it("looks both maps up for exactly the bases it is about to return", async () => {
+    // Not the unfiltered set: a base hidden by the private/teams-mode gate
+    // must not leak its owner — or its entry count — through these keys.
+    await GET(getReq());
+    const ctx = { workspaceId: "ws-1", userId: "user-1" };
+    expect(mockOwnerNames).toHaveBeenCalledWith(ctx, VISIBLE);
+    expect(mockBaseStats).toHaveBeenCalledWith(ctx, VISIBLE);
+    // The stars ride the same fence, and the context is where the USER comes
+    // from — nothing about this request names whose stars to read.
+    expect(mockStarred).toHaveBeenCalledWith(ctx, VISIBLE);
+  });
+
+  it("degrades a stats failure to an empty map instead of 500ing the list", async () => {
+    // The counters are cosmetic; the list is not. `kb_list_bases` over MCP
+    // rides this same route and must not lose the bases to a count query.
+    mockBaseStats.mockRejectedValue(new Error("entries table down"));
+
+    const res = await GET(getReq());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.bases).toHaveLength(2);
+    expect(body.baseStats).toEqual({});
   });
 
   it("returns an empty map (not a missing key) for the solo case", async () => {
     mockListBases.mockResolvedValue([base("kb-1", "user-1")]);
     mockOwnerNames.mockResolvedValue({});
+    mockStarred.mockResolvedValue([]);
+
+    mockBaseStats.mockResolvedValue({
+      "kb-1": { entryCount: 0, lastEntryUpdatedAt: null, storageBytes: 0 },
+    });
 
     const body = (await (await GET(getReq())).json()) as Record<string, unknown>;
     expect(body.ownerNames).toEqual({});
     expect("ownerNames" in body).toBe(true);
+    // A base with no entries is a ZEROED entry, never a missing key — the
+    // card renders "0 entries" and an empty bar, and a missing key means
+    // "unknown".
+    expect(body.baseStats).toEqual({
+      "kb-1": { entryCount: 0, lastEntryUpdatedAt: null, storageBytes: 0 },
+    });
   });
 
   it("still answers with an empty base list when the caller can see nothing", async () => {
     mockListBases.mockResolvedValue([]);
     mockOwnerNames.mockResolvedValue({});
+    mockBaseStats.mockResolvedValue({});
+
+    mockStarred.mockResolvedValue([]);
 
     const res = await GET(getReq());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ bases: [], ownerNames: {} });
+    expect(await res.json()).toEqual({
+      bases: [],
+      ownerNames: {},
+      baseStats: {},
+      kbStorageLimit: 5_000_000,
+      starredBaseIds: [],
+    });
+  });
+
+  it("degrades a star failure to [] instead of 500ing the list", async () => {
+    // Same rule as the two maps, and here the degraded value is a REAL one:
+    // an unknown star and no star render identically, so there is nothing an
+    // "unknown" sentinel could change. The grid falls back to list order.
+    mockStarred.mockRejectedValue(new Error("stars table down"));
+
+    const res = await GET(getReq());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.bases).toHaveLength(2);
+    expect(body.starredBaseIds).toEqual([]);
+  });
+
+  it("keeps the stars OFF the base rows — the SDK type must not widen", async () => {
+    // `starredBaseIds` is a sibling key for the same reason `baseStats` is:
+    // pushing a per-user, display-only fact onto `KnowledgeBase` would put it
+    // on every MCP `kb_*` payload and break
+    // `scripts/check-knowledge-type-drift.ts`.
+    const body = (await (await GET(getReq())).json()) as {
+      bases: Array<Record<string, unknown>>;
+      starredBaseIds: string[];
+    };
+    expect(body.starredBaseIds).toEqual(["kb-2"]);
+    for (const b of body.bases) {
+      expect("starred" in b).toBe(false);
+      expect("starredAt" in b).toBe(false);
+    }
   });
 
   it("maps a service failure through the knowledge error envelope, not a raw throw", async () => {

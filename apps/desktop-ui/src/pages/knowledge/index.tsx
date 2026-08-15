@@ -7,6 +7,9 @@ import { useWorkspaceAccess, type WorkspaceAccess } from "#/hooks/use-workspace-
 import { useKnowledgeUrlSync } from "./use-knowledge-url-sync";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { KnowledgeV2PreviewCore } from "@/features/knowledge/components/knowledge-v2/landing-preview-core";
+// Vite-bundled hero for the knowledge home banner — the shared tree takes it
+// as a prop (it cannot import an SPA-local asset; WelcomePopup precedent).
+import knowledgeHero from "#/assets/knowledge-hero.jpg";
 import type { KnowledgeRouting } from "@/features/knowledge/components/knowledge-v2/routing";
 import type {
   BaseTree,
@@ -26,14 +29,25 @@ import type { TeamView } from "@/features/teams/types";
  * the port of `src/app/[workspaceSlug]/(app)/knowledge/{page,[kbSlug]/page}.tsx`.
  *
  * ONE component serves BOTH routes, and that is load-bearing rather than a
- * convenience. The two-pane view keeps every open tree, the expansion set and
- * an unsaved editor body in the controller's state, and the web app protected
- * all of it by moving the address bar with the raw History API instead of
- * navigating. Registering `knowledge` and `knowledge/:kbSlug` with the same
- * component type gives the hash router the same property: react-router
- * reconciles the two matches, so selecting a base changes the URL and the
- * params without remounting anything. `./detail.tsx` re-exports this for the
- * second route row.
+ * convenience. The view keeps every open tree and an unsaved editor body in
+ * the controller's state, and the web app protected all of it by moving the
+ * address bar with the raw History API instead of navigating. Registering
+ * `knowledge` and `knowledge/:kbSlug` with the same component type gives the
+ * hash router the same property: react-router reconciles the two matches, so
+ * selecting a base changes the URL and the params without remounting
+ * anything. `./detail.tsx` re-exports this for the second route row.
+ *
+ * TWO ROUTES, TWO MODES, still one component. The knowledge root renders a
+ * card grid over the bases; a base's URL renders the two-pane tree+detail
+ * view. `KnowledgeV2` picks between them off the CONTROLLER'S SELECTION, not
+ * off `useParams` — the selection and the URL are already kept in agreement in
+ * both directions, and a second reader of the route would run one render
+ * behind that. Crossing between the modes is a real navigation, so the DETAIL
+ * SUBTREE unmounts even though this component does not; that is safe because
+ * `doc-pane.tsx` flushes a final PUT from its unmount cleanup, so an unsaved
+ * body is written rather than dropped. What survives the crossing is
+ * everything the controller owns: loaded trees, the search text, the scope
+ * filter.
  *
  * What the two RSCs did before rendering, this does client-side:
  *   - `listBases` + `listBaseOwnerNames` → `GET /api/knowledge/bases`, which
@@ -49,9 +63,16 @@ import type { TeamView } from "@/features/teams/types";
  */
 export default function KnowledgePage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
+  // The skeleton has to match the mode it is standing in for, and the route
+  // already says which: no `:kbSlug` means the single-surface card grid, so a
+  // two-pane ghost here would resolve into a shape the user never asked for.
+  const { kbSlug } = useParams();
+  const variant = kbSlug ? "two-pane" : "page";
 
   if (error) return <PageError error={error} onRetry={refetch} />;
-  if (isPending || !access) return <PageLoading label="Loading knowledge" variant="two-pane" />;
+  if (isPending || !access) {
+    return <PageLoading label="Loading knowledge" variant={variant} />;
+  }
 
   // Every knowledge query needs the resolved workspace id, and the knowledge
   // hooks have no `enabled` switch — so the data half only mounts once the
@@ -162,7 +183,14 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
   if (baseList.error) {
     return <PageError error={baseList.error} onRetry={baseList.refetch} />;
   }
-  if (!bases) return <PageLoading label="Loading knowledge" variant="two-pane" />;
+  if (!bases) {
+    return (
+      <PageLoading
+        label="Loading knowledge"
+        variant={deepLink.kbSlug ? "two-pane" : "page"}
+      />
+    );
+  }
 
   if (deepLink.kbSlug && !deepLinkBase && !deepLinkResolved) {
     // `resolvePageKb` calls `notFound()` here; the SPA has no 404 route, so
@@ -211,11 +239,14 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
         workspaceId={workspaceId}
         bases={bases}
         ownerNames={baseList.data?.ownerNames}
+        baseStats={baseList.data?.baseStats}
+        kbStorageLimit={baseList.data?.kbStorageLimit}
         currentUserId={currentUserId}
         role={role}
         kbTeams={kbTeams}
         initialSelection={initialSelection}
         initialTrees={initialTrees}
+        heroImageSrc={knowledgeHero}
         routing={routing}
         urlSync={urlSync}
       />

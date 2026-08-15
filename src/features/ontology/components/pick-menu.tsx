@@ -62,7 +62,7 @@ export function PickMenu({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={close}
-        className="max-h-64 w-56 overflow-y-auto rounded-xl border-border-strong p-1"
+        className="max-h-64 w-56 overflow-y-auto"
       >
         {groups.length === 0 && (
           <p className="px-2 py-1.5 text-small text-text-muted">

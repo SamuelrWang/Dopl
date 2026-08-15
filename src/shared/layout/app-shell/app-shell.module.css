@@ -73,6 +73,18 @@
    Zero padding: every inset the pill has comes from `.sidebar`, so the two
    alignment equations above are read in one place. */
 .brand { padding: 0; margin-bottom: 14px; }
+/* Resting face is `.auth-btn-3d-light` (globals.css), value for value — the
+   landing/auth white button, the sidebar's active `.raised-tab` chip and this
+   trigger are ONE elevation. It had its own flatter recipe (#e2e2e0 hairline,
+   a single 3px/8px drop) and read as a different, shallower object sitting
+   directly above chips that did not. A real `border` is safe here where it is
+   not on `.raised-tab`: this pill is `width: 100%`, so the extra 2px comes out
+   of the content box, not the layout.
+
+   NO hover/press TRANSFORM, unlike `.auth-btn-3d-light`: the pill's top edge
+   is aligned to the page card's top edge by the padding equation above, and a
+   1px lift is exactly the misalignment that equation exists to prevent. The
+   states are the same shadow family, held in place. */
 .brandPill {
   display: inline-flex;
   align-items: center;
@@ -80,26 +92,31 @@
   width: 100%;
   padding: 7px 10px;
   border-radius: 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
-  border: 1px solid #e2e2e0;
+  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  border: 1px solid #d4d4d4;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 2px rgba(0, 0, 0, 0.06),
-    0 3px 8px rgba(0, 0, 0, 0.05);
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 2px 3px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition:
     background 0.12s ease,
-    box-shadow 0.12s ease;
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
 }
 .brand { position: relative; }
 .brandPill:hover {
-  background: linear-gradient(180deg, #ffffff 0%, #f1f1f1 100%);
-  border-color: #d8d8d6;
+  filter: brightness(0.99);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 7px rgba(0, 0, 0, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.08);
 }
 .brandPill:active {
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.08),
-    0 1px 1px rgba(0, 0, 0, 0.04);
+    inset 0 2px 4px rgba(0, 0, 0, 0.14),
+    0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .brandPill:focus-visible {
   outline: 2px solid rgba(0, 0, 0, 0.28);
@@ -221,142 +238,6 @@
 .scroll { flex: 1; overflow-y: auto; padding-right: 38px; padding-bottom: 40px; }
 .scroll::-webkit-scrollbar { width: 0; }
 
-.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 20px; }
-.title { display: flex; align-items: center; gap: 14px; }
-.title h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
-.tag {
-  background: var(--black);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 8px;
-  letter-spacing: -0.01em;
-}
-
-/* hero */
-.hero {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  color: #fff;
-  min-height: 320px;
-  margin-bottom: 42px;
-  background: linear-gradient(118deg, #3b4f5e 0%, #414c52 30%, #4a4138 62%, #251d15 100%);
-  display: flex;
-}
-.heroBlobs { position: absolute; inset: 0; z-index: 1; filter: blur(2px); }
-.heroBlobs span {
-  position: absolute;
-  border-radius: 24%;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25);
-}
-.heroInner { position: relative; z-index: 2; padding: 48px 50px; max-width: 62%; }
-.hero h2 {
-  font-family: var(--font-app), system-ui, sans-serif;
-  font-weight: 400;
-  font-size: 38px;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-  margin-bottom: 16px;
-}
-.hero p { font-size: 18px; line-height: 1.45; color: #e2e8ed; margin-bottom: 28px; max-width: 440px; }
-.heroActions { display: flex; align-items: center; gap: 28px; }
-.tryit {
-  background: #e5d6ce;
-  color: #232a31;
-  border: none;
-  border-radius: 8px;
-  padding: 13px 28px;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.howit { color: #fff; font-size: 16px; font-weight: 600; text-decoration: none; cursor: pointer; }
-
-/* section head */
-.sectionHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; gap: 20px; }
-.sectionTitle {
-  font-family: var(--font-app), system-ui, sans-serif;
-  font-size: 32px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: #1e242b;
-}
-.createNew {
-  background: var(--black);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* cards */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 26px;
-  max-width: 1160px;
-}
-@media (max-width: 1100px) { .cards { grid-template-columns: repeat(2, 1fr); } }
-.card {
-  border: 1.5px solid var(--line);
-  border-radius: 8px;
-  background: #f6f8fb;
-  padding: 24px 26px;
-  min-height: 250px;
-  display: flex;
-  flex-direction: column;
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
-}
-.card:hover { border-color: #b9c6d3; background: #fdfefe; transform: translateY(-2px); }
-.card h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: #1e242b; margin: 0 0 10px; }
-.cardDesc { font-size: 16px; line-height: 1.4; color: var(--ink-soft); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.cardMeta {
-  margin-top: auto;
-  padding-top: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-faint);
-}
-
-.cardNew {
-  border-style: dashed;
-  border-color: #c4cfda;
-  background: #f2f5f9;
-  cursor: pointer;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-.cardNew:hover { background: #eef2f7; transform: none; }
-.plus {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #dce3ea;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #646d78;
-  margin-bottom: 16px;
-}
-
-.empty { font-size: 16px; color: var(--ink-soft); padding: 8px 0 30px; }
-
 /* ---------- KB detail panel ----------
    White main panel hosting the existing KnowledgeBaseView (tree + doc
    pane). No padding — the view fills the panel edge-to-edge and draws
@@ -380,8 +261,8 @@
   --bg-base: #f5f7fa;
   --bg-elevated: #fbfcfd;
   --bg-elevated-hover: #f1f4f7;
-  --bg-inset: #eef1f5;
-  --bg-inset-hover: #e6ebf0;
+  --bg-inset: #f1f1f1;
+  --bg-inset-hover: #eaeaea;
   --bg-overlay: #fefefe;
   --panel-surface: #fbfcfd;
   --panel-surface-focus: #ffffff;
@@ -410,6 +291,7 @@
   --accent-on: #fefefe;
   --link: #2f6fed;
   --success: oklch(0.55 0.15 155);
+  --caution: oklch(0.72 0.15 95);
   --warning: oklch(0.62 0.13 75);
   --danger: oklch(0.55 0.22 25);
   --surface-raised-1: oklch(0 0 0 / 2%);

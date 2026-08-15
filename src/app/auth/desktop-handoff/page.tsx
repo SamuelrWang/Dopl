@@ -56,51 +56,44 @@ export default function DesktopHandoffPage() {
   }, []);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-        background: "#d6dee7",
-        color: "#232a31",
-        textAlign: "center",
-        padding: 24,
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
+    // No font-family of its own: `body` already sets `var(--font-app)`, which
+    // globals.css pins to the landing page's grotesk (`.lp` --grotesk =
+    // Helvetica Neue). The `system-ui` this used to hard-set was the only
+    // reason the handoff read as a different product than the page the user
+    // came from. `bg-white` matches the login page's surface
+    // (`auth-split-layout.tsx` › AuthSplitLayout) — without an explicit
+    // surface the body's `.mosaic-bg` app-frame navy shows through.
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-white p-6 text-center text-text-primary">
       {error ? (
         <>
-          <p style={{ fontWeight: 600 }}>Sign-in incomplete</p>
-          <p style={{ color: "#646d78", fontSize: 14, maxWidth: 360 }}>{error}</p>
+          <p className="text-display font-semibold tracking-tight text-text-primary">
+            Sign-in incomplete
+          </p>
+          <p className="max-w-sm text-title text-text-secondary">{error}</p>
         </>
       ) : (
         <>
-          <p style={{ fontWeight: 600, fontSize: 18 }}>You’re signed in ✓</p>
-          <p style={{ color: "#646d78", fontSize: 14, maxWidth: 360 }}>
+          <p className="text-display font-semibold tracking-tight text-text-primary">
+            You’re signed in ✓
+          </p>
+          <p className="max-w-sm text-title text-text-secondary">
             Returning you to the Dopl app… If nothing happens, click below.
           </p>
           {deepLink && (
+            // The kit's raised primary CTA (`.auth-btn-3d`, globals.css) — the
+            // same 3D face the landing hero's "Get Started" wears
+            // (`.lp-btn--3d` is a copy of this recipe). `rounded-full` is
+            // applied HERE, at the call site, because the kit class carries no
+            // radius of its own — the same call-site pill the login submit
+            // button uses (`features/auth/components/login-form-core.tsx`).
             <a
               href={deepLink}
-              style={{
-                marginTop: 8,
-                padding: "10px 22px",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#fff",
-                background: "#1c2127",
-                borderRadius: 8,
-                textDecoration: "none",
-              }}
+              className="auth-btn-3d mt-2 inline-flex h-10 cursor-pointer items-center justify-center rounded-full px-6 text-title font-semibold text-white no-underline"
             >
               Open the Dopl app
             </a>
           )}
-          <p style={{ color: "#98a2ad", fontSize: 12, marginTop: 8 }}>
+          <p className="mt-2 text-small text-text-muted">
             You can close this tab once the app opens.
           </p>
         </>

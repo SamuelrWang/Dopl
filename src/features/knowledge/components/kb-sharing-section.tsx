@@ -130,7 +130,7 @@ export function KbSharingSection({
           ? "Shared with specific teams. Only the owner or a workspace admin can change sharing."
           : kbScope(base) === "private"
             ? "Private to its owner."
-            : "Shared with the whole workspace. Only the owner or a workspace admin can change sharing."}
+            : "Public to the whole workspace. Only the owner or a workspace admin can change sharing."}
       </p>
     );
   }
