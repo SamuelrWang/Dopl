@@ -1,9 +1,7 @@
 /**
- * Unit — createCluster partial-failure rollback decision (F-031).
- *
- * The cluster POST fires first and dispatches CLUSTER_ADD before the seed
- * column/card POSTs, so a later failure leaves an orphan cluster (local +
- * server) that must be undone; a first-POST failure created nothing.
+ * Unit — createCluster partial-failure rollback decision (F-031). Cluster POST
+ * fires first, so a later failure leaves an orphan cluster to undo; a
+ * first-POST failure created nothing.
  */
 
 import { describe, it, expect } from "vitest";

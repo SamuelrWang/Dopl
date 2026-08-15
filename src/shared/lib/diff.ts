@@ -1,8 +1,5 @@
-/**
- * Line-level diff for the version-history views. Classic LCS dynamic
- * program — skill/knowledge files are small (KBs, not MBs), so the
- * O(n·m) table is fine and keeps this dependency-free.
- */
+/** Line-level diff for version-history views. Classic LCS DP — files are KBs,
+ *  so the O(n·m) table is fine and keeps this dependency-free. */
 
 export interface DiffRow {
   type: "same" | "add" | "del";
@@ -12,8 +9,8 @@ export interface DiffRow {
   right?: { num: number; text: string };
 }
 
-/** Guard: beyond this many lines per side, fall back to a plain swap
- *  (whole file removed + added) instead of an O(n·m) table. */
+/** ⚠ Beyond this many lines per side, fall back to a plain swap (whole file
+ *  removed + added) instead of an O(n·m) table. */
 const MAX_LINES = 5_000;
 
 export function diffLines(before: string, after: string): DiffRow[] {
@@ -27,7 +24,6 @@ export function diffLines(before: string, after: string): DiffRow[] {
     ];
   }
 
-  // LCS length table (a[i:], b[j:]).
   const n = a.length;
   const m = b.length;
   const table: Uint32Array = new Uint32Array((n + 1) * (m + 1));

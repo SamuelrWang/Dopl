@@ -1,15 +1,13 @@
 /**
- * Thread grouping — THE READ SIDE.
+ * Thread grouping — THE READ SIDE. Everything the session card asks of a session
+ * AFTER `groupThread` built it: which lane an entry renders in, whether a
+ * terminal marker's body is content, what the live close proposal is, how a
+ * header line is trimmed.
  *
- * Everything the session card asks of a session AFTER `groupThread` has built
- * it: which lane an entry renders in, whether a terminal marker's body is
- * content, what the live close proposal is, how a header line is trimmed.
- *
- * Split out of `group-thread.ts` (§2, 819 lines) on the seam §2 asks for — one
- * file per reason to change. These functions change when the CARD changes; the
- * state machine changes when the transcript's shape does. Nothing here reads or
- * writes a `Draft`, and nothing here is called during the grouping pass except
- * the two helpers `computeSummary` borrows.
+ * ⚠ These change when the CARD changes; the state machine changes when the
+ * transcript's shape does. Nothing here reads or writes a `Draft`, and nothing
+ * here runs during the grouping pass except the two helpers `computeSummary`
+ * borrows.
  */
 
 import type { ChannelMessage } from "../types";
@@ -28,9 +26,9 @@ export function truncateSummary(text: string, max = 120): string {
 }
 
 /**
- * The LATEST close proposal in a session, or null. Latest rather than first: a
- * long exchange can be proposed on, continue, and be proposed on again, and the
- * live prompt is the most recent one.
+ * The LATEST close proposal in a session, or null. ⚠ Latest, not first — a long
+ * exchange can be proposed on, continue, and be proposed on again, and the live
+ * prompt is the most recent.
  */
 export function readCloseProposal(session: {
   entries: ChannelMessage[];

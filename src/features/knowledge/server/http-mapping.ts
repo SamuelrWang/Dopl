@@ -16,11 +16,8 @@ import {
   WorkspaceKeyPrivateVisibilityError,
 } from "./errors";
 
-/**
- * Maps a knowledge-feature domain error to an `HttpError`. Returns
- * `null` for anything unrecognized so the caller can fall through to
- * the generic 500 path.
- */
+/** Domain error → `HttpError`. `null` for anything unrecognized, so callers
+ *  fall through to the generic 500 path. */
 export function mapKnowledgeError(err: unknown): HttpError | null {
   if (err instanceof KnowledgeBaseNotFoundError) {
     return new HttpError(404, "KNOWLEDGE_BASE_NOT_FOUND", err.message);

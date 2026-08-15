@@ -8,24 +8,17 @@ import type {
 } from "../types";
 
 /**
- * Row interfaces and row→domain mappers. The row shapes mirror the
- * snake_case Postgres columns; the mappers translate to the camelCase
- * domain types in `../types.ts`.
- *
- * `select(...)` in repository.ts uses the *_COLS constants below so
- * the row shape is explicit and stays in sync with the migration.
+ * Row interfaces (snake_case Postgres columns) and row→domain mappers to the
+ * camelCase types in `../types.ts`. ⚠ `select(...)` in repository.ts uses the
+ * *_COLS constants below, so row shape stays in sync with the migration.
  */
 
 /**
- * Postgres `text`/`varchar` columns reject the NUL byte (U+0000). An
- * unsanitized insert/update carrying one fails with an opaque 500
- * ("unsupported Unicode escape sequence \\u0000"). Strip NULs from
- * user-supplied text at the DB write boundary so a stray control byte in
- * a body/title/name degrades to "content minus the NUL" instead of a 500
- * (F-7). NUL is never meaningful in markdown/plain text, so stripping is
- * lossless in practice; other C0 control chars are valid Postgres text
- * and are left intact (titles/names reject them via NAME_RE at the schema
- * layer, where a clear validation error is possible).
+ * ⚠ Postgres `text`/`varchar` reject NUL (U+0000) with an opaque 500
+ * ("unsupported Unicode escape sequence \\u0000"). Strip NULs at the DB write
+ * boundary so a stray control byte degrades to "content minus the NUL" (F-7).
+ * Other C0 controls are valid Postgres text and are LEFT INTACT — titles/names
+ * reject them via NAME_RE at the schema layer, where the error is clear.
  */
 export function stripNulls<T extends string | null | undefined>(value: T): T {
   return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;
@@ -40,12 +33,8 @@ export const KNOWLEDGE_FOLDER_COLS =
 export const KNOWLEDGE_ENTRY_COLS =
   "id, workspace_id, knowledge_base_id, folder_id, title, excerpt, body, entry_type, position, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
-/**
- * Used by `listEntriesForBase({ includeBody: false })` to skip the
- * heavy `body` column when only metadata is needed (tree views, search
- * results). Repository merges in an empty `body` so the domain shape
- * stays consistent.
- */
+/** For `listEntriesForBase({ includeBody: false })` — skips the heavy `body`
+ *  column. Repository merges in an empty `body` to keep the domain shape. */
 export const KNOWLEDGE_ENTRY_META_COLS =
   "id, workspace_id, knowledge_base_id, folder_id, title, excerpt, entry_type, position, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
@@ -97,10 +86,8 @@ export interface KnowledgeEntryRow {
   deleted_at: string | null;
 }
 
-/**
- * Variant of the row used when `body` was omitted from the SELECT.
- * Repository merges in `body: ""` before mapping.
- */
+/** Row variant when `body` was omitted from the SELECT. Repository merges in
+ *  `body: ""` before mapping. */
 export type KnowledgeEntryMetaRow = Omit<KnowledgeEntryRow, "body">;
 
 export function mapBaseRow(row: KnowledgeBaseRow): KnowledgeBase {

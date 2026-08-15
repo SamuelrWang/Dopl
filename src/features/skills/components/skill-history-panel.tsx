@@ -1,14 +1,9 @@
 "use client";
 
-/**
- * SkillHistoryPanel — the version-history rail for a skill.
- *
- * One merged timeline: SKILL.md body snapshots (SkillVersion) and
- * structural events (SkillEvent), newest first. Clicking a snapshot
- * opens a side-by-side diff against the previous snapshot; Restore rolls
- * the body back (server mints a new version — the timeline is
- * append-only).
- */
+/** Version-history rail: body snapshots (SkillVersion) and structural events
+ *  (SkillEvent) merged newest-first. A snapshot opens a diff against the
+ *  previous one; Restore rolls the body back and the server mints a new
+ *  version — the timeline is append-only. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bot, History, RotateCcw, User, X } from "lucide-react";
@@ -26,8 +21,8 @@ import { errMessage } from "./skill-view-utils";
 
 interface Props {
   slug: string;
-  /** Workspace being viewed — forwarded to every history call so the
-   *  route targets THIS workspace, not the caller's default. */
+  /** ⚠ Forwarded to every history call so the route targets THIS workspace,
+   *  not the caller's default. */
   workspaceId: string;
   canEdit: boolean;
   /** Bump to refetch (e.g. after a save lands). */
@@ -68,8 +63,8 @@ export function SkillHistoryPanel({
   const [error, setError] = useState<string | null>(null);
   const [diffFor, setDiffFor] = useState<SkillVersion | null>(null);
 
-  // Refetch trigger — flip `loading` during render (sanctioned
-  // adjust-state pattern) instead of synchronously inside the effect.
+  // Refetch trigger: flip `loading` during render (adjust-state pattern),
+  // not synchronously inside the effect.
   const fetchKey = `${slug}:${refreshKey}`;
   const [lastFetchKey, setLastFetchKey] = useState(fetchKey);
   if (lastFetchKey !== fetchKey) {
@@ -105,8 +100,8 @@ export function SkillHistoryPanel({
     return items.sort((a, b) => (a.at < b.at ? 1 : -1));
   }, [versions, events]);
 
-  /** The immediately-older snapshot, for the diff baseline. All versions
-   *  belong to the one SKILL.md now, so it's just the next one down. */
+  /** Diff baseline: the immediately-older snapshot. All versions belong to
+   *  the one SKILL.md, so it's the next one down. */
   const previousOf = useCallback(
     (v: SkillVersion): SkillVersion | null => {
       const ordered = [...versions].sort((a, b) =>

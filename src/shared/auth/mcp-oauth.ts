@@ -4,19 +4,18 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME, describeCredential, type McpCredential } from "./mcp-credential";
 
 /**
- * mcp-oauth — core of Dopl's self-built OAuth 2.1 authorization server for the
- * remote MCP endpoint. Lives in shared/auth (alongside api-keys.ts) because
- * `validateAccessToken` is consumed by BOTH auth points — the MCP transport
- * boundary (with-mcp-transport-auth.ts) and the loopback /api/* guard
- * (with-auth.ts) — and shared/ must not import from features/.
+ * Core of Dopl's OAuth 2.1 authorization server for the remote MCP endpoint.
+ * ⚠ Lives in shared/auth because `validateAccessToken` is consumed by BOTH auth
+ * points (with-mcp-transport-auth.ts and with-auth.ts) and shared/ must not
+ * import from features/.
  *
  * Security model:
- *   - Only SHA-256 hashes of codes/tokens are stored; plaintext is returned
- *     once at issuance and never persisted.
- *   - Authorization codes are single-use (atomic consume) + PKCE-S256 bound.
- *   - Access tokens are short-lived; refresh tokens rotate (reuse ⇒ reject).
- *   - All DB access is via the service role (supabaseAdmin); the tables have
- *     RLS enabled with no policies.
+ *   - Only SHA-256 hashes of codes/tokens stored; plaintext returned once at
+ *     issuance, never persisted.
+ *   - Authorization codes single-use (atomic consume) + PKCE-S256 bound.
+ *   - Access tokens short-lived; refresh tokens rotate (reuse ⇒ reject).
+ *   - All DB access via service role (supabaseAdmin); tables have RLS enabled
+ *     with no policies.
  */
 
 export const MCP_SCOPES = ["dopl.read", "dopl.write"] as const;
@@ -30,16 +29,15 @@ const CLIENT_PREFIX = "dopl_client_";
 export const ACCESS_TTL_S = 60 * 60; // 1 hour
 const REFRESH_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const CODE_TTL_S = 5 * 60; // 5 minutes
-/** Device (CLI) access token TTL — long-lived so a desktop listener stays
- *  connected without a refresh round-trip. */
+/** Device (CLI) token TTL — long-lived so a desktop listener stays connected
+ *  without a refresh round-trip. */
 export const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
 
-// The reserved device client + the row classifier live in `mcp-credential.ts`.
-// ONE definition — do not restate the client id here.
+// ⚠ Reserved device client + row classifier live in `mcp-credential.ts`. ONE
+// definition — do not restate the client id here.
 
-// Per-instance debounce so a hot token doesn't write last_used_at on every
-// request (mirrors touchMcpStatus). Serverless instances each keep their own
-// map — fine: at most one write/min/token/instance.
+// Per-instance debounce so a hot token doesn't write last_used_at every request
+// (mirrors touchMcpStatus). At most one write/min/token/instance.
 const lastUsedTouched = new Map<string, number>();
 const LAST_USED_TOUCH_MS = 60_000;
 
@@ -51,7 +49,7 @@ function randToken(prefix: string): string {
   return prefix + randomBytes(32).toString("hex");
 }
 
-/** Is this string a Dopl OAuth access token (the `dopl_at_` prefix)? */
+/** Dopl OAuth access token? (`dopl_at_` prefix) */
 export function isOAuthAccessToken(token: string): boolean {
   return token.startsWith(ACCESS_PREFIX);
 }
@@ -133,11 +131,10 @@ export async function issueAuthCode(input: {
 }
 
 /**
- * Validate + atomically consume an authorization code. Returns the bound
- * identity/scopes, or null on any failure (unknown, expired, replayed,
- * client/redirect mismatch, or PKCE failure). Single-use is enforced by the
- * conditional `consumed_at IS NULL` update — a concurrent second exchange
- * loses the race and gets null.
+ * Validate + atomically consume an authorization code. Null on any failure
+ * (unknown, expired, replayed, client/redirect mismatch, PKCE failure).
+ * ⚠ Single-use enforced by the conditional `consumed_at IS NULL` update — a
+ * concurrent second exchange loses the race and gets null.
  */
 export async function consumeAuthCode(input: {
   code: string;
@@ -230,15 +227,13 @@ async function ensureDeviceClient(): Promise<void> {
 }
 
 /**
- * Mint a long-lived (90-day) device access token for a CLI / desktop
- * listener, minted directly from an authenticated Dopl session (the
- * `/api/auth/mcp-device-token` endpoint gates it to cookie callers). Reuses
- * the exact `mcp_tokens` storage + `validateAccessToken` path the OAuth flow
- * uses — the only differences from `issueTokens` are the far-longer TTL, the
- * reserved device client, no refresh token (a device re-mints rather than
- * rotating), and the human `deviceLabel` (stored as `client_name` so the
- * token is listable + revocable from the settings "Connected apps" list).
- * Scopes default to the full read+write MCP set.
+ * Mint a 90-day device access token for a CLI / desktop listener from an
+ * authenticated session (`/api/auth/mcp-device-token` gates it to cookie
+ * callers). Same `mcp_tokens` storage + `validateAccessToken` path as OAuth;
+ * differs only in TTL, the reserved device client, NO refresh token (a device
+ * re-mints rather than rotating), and `deviceLabel` stored as `client_name` so
+ * the token is listable/revocable from "Connected apps". Scopes default to full
+ * read+write.
  */
 export async function issueDeviceToken(input: {
   userId: string;
@@ -247,10 +242,9 @@ export async function issueDeviceToken(input: {
 }): Promise<{ token: string; expiresAt: string }> {
   await ensureDeviceClient();
   const db = supabaseAdmin();
-  // One active device token per (user, label): revoke prior mints for the same
-  // label so a looping client can't grow unbounded 90-day credentials. Clients
-  // include a per-device label (e.g. hostname) so two machines don't churn
-  // each other's tokens.
+  // ⚠ One active token per (user, label): revoke prior mints so a looping client
+  // can't grow unbounded 90-day credentials. Clients send a per-device label
+  // (e.g. hostname) so two machines don't churn each other's tokens.
   await db
     .from("mcp_tokens")
     .update({ revoked_at: new Date().toISOString() })
@@ -278,30 +272,21 @@ export async function issueDeviceToken(input: {
 }
 
 /**
- * F-085 — REVOKE a caller's device tokens. The server half of desktop
- * sign-out: until this existed, signing out could only delete the app's local
- * copies while the 90-day `dopl.read`+`dopl.write` bearer stayed valid until it
- * expired or the operator found it in the web "Connected apps" list.
+ * Revoke a caller's device tokens — the server half of desktop sign-out.
  *
- * Scoped three ways, and each one is load-bearing:
- *   - `user_id` — a caller can only ever revoke their OWN tokens;
- *   - `client_id` = the reserved device client — this surface mints device
- *     tokens, so it revokes device tokens and nothing else; an OAuth agent
- *     grant goes through `revokeGrant` (`DELETE /api/oauth/grants/[id]`);
+ * ⚠ Three scopes, each load-bearing:
+ *   - `user_id` — a caller can only revoke their OWN tokens;
+ *   - `client_id` = reserved device client — device tokens ONLY; an OAuth agent
+ *     grant goes through `revokeGrant`;
  *   - `revoked_at IS NULL` — an already-revoked row keeps its ORIGINAL
- *     timestamp, so the record of when access actually ended survives.
+ *     timestamp, preserving when access actually ended.
  *
- * "Revoked" is a soft `revoked_at` stamp — the same representation
- * `issueDeviceToken`, `rotateRefreshToken`, `revokeFamily` and `revokeGrant`
- * all use — and `validateAccessToken` rejects on `revoked_at` BEFORE the expiry
- * check, so a revoked token is dead on its very next call (nothing caches it;
- * `lastUsedTouched` only debounces a write).
+ * Soft `revoked_at` stamp, same as `issueDeviceToken` / `rotateRefreshToken` /
+ * `revokeFamily` / `revokeGrant`. `validateAccessToken` rejects on `revoked_at`
+ * BEFORE the expiry check, so a revoked token is dead on its next call.
  *
- * IDEMPOTENT by construction: an unknown label/id, or one already revoked,
- * matches no row and returns 0 rather than failing. Both selectors may be given
- * at once; the returned count is de-duplicated over row ids, and counting the
- * caller's OWN rows leaks nothing across users (contrast RFC 7009's always-200
- * rule, which exists because that endpoint is unauthenticated).
+ * IDEMPOTENT: unknown or already-revoked matches no row and returns 0. Both
+ * selectors may be given at once; count is de-duplicated over row ids.
  */
 export async function revokeDeviceTokens(input: {
   userId: string;
@@ -342,14 +327,12 @@ export async function revokeDeviceTokens(input: {
 }
 
 /**
- * Resolve an access token to an identity. The single validation entry point
- * used by the MCP transport boundary AND the loopback /api/* guard. Returns
- * null for non-tokens, unknown/expired/revoked tokens. Touches last_used_at
- * fire-and-forget.
+ * Resolve an access token to an identity. Single validation entry point for the
+ * MCP transport boundary AND the loopback /api/* guard. Null for non-tokens and
+ * unknown/expired/revoked tokens. Touches last_used_at fire-and-forget.
  *
- * `credential` describes WHICH credential answered — the two columns this
- * select used to skip. Descriptive only: nothing gates on it, and the label
- * inside it is caller-supplied text (see `mcp-credential.ts`).
+ * ⚠ `credential` is DESCRIPTIVE only — nothing gates on it, and the label inside
+ * is caller-supplied text (`mcp-credential.ts`).
  */
 export async function validateAccessToken(
   token: string,
@@ -365,7 +348,6 @@ export async function validateAccessToken(
   if (data.revoked_at) return null;
   if (new Date(data.access_expires_at).getTime() < Date.now()) return null;
 
-  // Debounced last_used_at write (per instance).
   const now = Date.now();
   if (now - (lastUsedTouched.get(data.id) ?? 0) > LAST_USED_TOUCH_MS) {
     lastUsedTouched.set(data.id, now);
@@ -383,11 +365,8 @@ export async function validateAccessToken(
   return { userId: data.user_id, scopes: data.scopes, tokenId: data.id, credential };
 }
 
-/**
- * Rotate a refresh token: revoke the presented one and issue a fresh pair.
- * Reuse of an already-rotated refresh token returns null (the conditional
- * revoke loses the race / finds it already revoked).
- */
+/** Rotate a refresh token: revoke the presented one, issue a fresh pair. Reuse
+ *  of an already-rotated token returns null. */
 export async function rotateRefreshToken(input: {
   refreshToken: string;
   clientId: string;
@@ -404,9 +383,8 @@ export async function rotateRefreshToken(input: {
   if (error || !data) return null;
   if (data.client_id !== input.clientId) return null;
 
-  // Reuse detection (OAuth 2.1 BCP §4.13.2): an already-revoked refresh token
-  // presented again means it was rotated already — the classic stolen-token
-  // signal. Revoke the whole family and refuse.
+  // ⚠ Reuse detection (OAuth 2.1 BCP §4.13.2): an already-revoked refresh token
+  // presented again is the stolen-token signal — revoke the whole family.
   if (data.revoked_at) {
     await revokeFamily(data.family_id);
     return null;
@@ -419,7 +397,7 @@ export async function rotateRefreshToken(input: {
     return null;
   }
 
-  // Atomically revoke this token (rotation); losing the race ⇒ null.
+  // Atomic rotation revoke; losing the race ⇒ null.
   const { data: revoked } = await db
     .from("mcp_tokens")
     .update({ revoked_at: new Date().toISOString() })
@@ -428,7 +406,7 @@ export async function rotateRefreshToken(input: {
     .select("id");
   if (!revoked || revoked.length === 0) return null;
 
-  // New tokens stay in the same family so a future reuse revokes the chain.
+  // ⚠ Same family, so a future reuse revokes the chain.
   return issueTokens({
     userId: data.user_id,
     clientId: data.client_id,

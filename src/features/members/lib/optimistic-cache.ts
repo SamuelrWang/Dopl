@@ -12,25 +12,19 @@ import type {
 } from "../types";
 
 /**
- * The pure half of the members console's optimistic layer: how each cache
- * absorbs one membership / team / access change.
+ * Pure half of the members console's optimistic layer: how each cache
+ * absorbs one membership / team / access change. No React, no DOM, no net.
  *
- * Split from the hooks so every rule here is testable with no React, no DOM and
- * no network — which matters because these are the rules that decide whether a
- * revoked invitation actually leaves the screen, and whether a rolled-back
- * failure puts it back where it was.
+ * ⚠ CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
+ * endpoint returned and applies `select` on read, so patch
+ * `{ members: [...] }` / `{ teams: [...] }`, never the selected array —
+ * selectors filter (`useInvitations` drops accepted, `useWorkspaceResources`
+ * drops retired types), so writing the SELECTED shape back would delete the
+ * rows the selector hid.
  *
- * THE CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
- * endpoint returned and applies `select` on read, so a patch operates on
- * `{ members: [...] }` / `{ teams: [...] }`, never on the selected array —
- * including where the selector filters (`useInvitations` drops accepted rows,
- * `useWorkspaceResources` drops retired types). A patch that wrote the SELECTED
- * shape back would delete the rows the selector had hidden.
- *
- * AN UNDEFINED CACHE STAYS UNDEFINED, everywhere. Seeding a query that has
- * never loaded would render a one-row list and then flip to the full list when
- * the read lands; the mutation layer also declines to cancel such a query for
- * exactly this reason.
+ * ⚠ AN UNDEFINED CACHE STAYS UNDEFINED, everywhere. Seeding a never-loaded
+ * query renders a one-row list that flips to the full list on read. The
+ * mutation layer declines to cancel such a query for the same reason.
  */
 
 export interface MembersCache {
@@ -54,11 +48,7 @@ export interface JoinLinkCache {
 
 // ── Roster ──────────────────────────────────────────────────────────
 
-/**
- * The role chip and the role SELECT read the same roster row, so patching it
- * is what stops the control showing the old value for the length of the round
- * trip (the "stale-value toggle" class in the launch audit).
- */
+/** Role chip and role SELECT read the same roster row. */
 export function setMemberRole(
   cache: MembersCache | undefined,
   userId: string,
@@ -131,11 +121,8 @@ export function dropTeamRef(
 
 // ── Invitations & join requests ─────────────────────────────────────
 
-/**
- * A revoked invitation is a hard delete server-side, so dropping the row IS
- * the revoked state — and the layer's snapshot restore is what puts it back if
- * the DELETE fails.
- */
+/** Revoke is a hard delete server-side, so dropping the row IS the revoked
+ *  state; snapshot restore puts it back if the DELETE fails. */
 export function dropInvitation(
   cache: InvitationsCache | undefined,
   invitationId: string
@@ -147,13 +134,8 @@ export function dropInvitation(
   };
 }
 
-/**
- * A resolved join request leaves the queue at once, approve or decline. The
- * queue only ever holds pending rows, so dropping it is the decided state —
- * and it is also what makes the approve/decline pair un-double-fireable: the
- * row (and its two buttons) is gone one frame after the click, not one round
- * trip after it.
- */
+/** Queue holds only pending rows, so dropping IS the decided state — and it
+ *  makes approve/decline un-double-fireable (buttons gone next frame). */
 export function dropJoinRequest(
   cache: JoinRequestsCache | undefined,
   requestId: string
@@ -167,7 +149,7 @@ export function dropJoinRequest(
 
 // ── Teams ───────────────────────────────────────────────────────────
 
-/** Patch one team row — the crumb, the list row and the header read it. */
+/** Crumb, list row and header all read this row. */
 export function patchTeam(
   cache: TeamsCache | undefined,
   teamId: string,
@@ -188,12 +170,9 @@ export function dropTeam(
   return { ...cache, teams: cache.teams.filter((t) => t.id !== teamId) };
 }
 
-/**
- * Team membership, with `memberCount` kept in step — the list row's
- * "N members" caption and the detail pane's "Members · N" label are computed
- * from two different fields of the same row, and patching one without the
- * other is how a team reads "3 members" above a list of 2.
- */
+/** ⚠ Patch `memberCount` with `memberIds` — the list caption reads the count,
+ *  the detail pane reads the ids; one without the other shows "3 members"
+ *  above a list of 2. */
 export function setTeamMembers(
   cache: TeamsCache | undefined,
   teamId: string,
@@ -229,14 +208,10 @@ export function dropMemberFromTeams(
   };
 }
 
-/**
- * Set (or clear, with `level: null`) one team's grant on one resource.
- *
- * Grants live on the TEAM row, not on the resource row, so this single patch is
- * what moves both surfaces that render the level: the team detail's grant boxes
- * and the resource detail's per-team list. The Access tab's "N team grants"
- * caption is derived from the same array, so it follows without a second patch.
- */
+/** Set (or clear, `level: null`) one team's grant on one resource. Grants
+ *  live on the TEAM row, not the resource row, so this one patch moves the
+ *  team detail's grant boxes, the resource detail's per-team list, and the
+ *  Access tab's "N team grants" caption. */
 export function setTeamGrant(
   cache: TeamsCache | undefined,
   teamId: string,
@@ -265,11 +240,8 @@ export function setTeamGrant(
 
 // ── Access matrix ───────────────────────────────────────────────────
 
-/**
- * Flip a resource between workspace-wide and teams-scoped. The segmented
- * control is driven straight off `accessMode`, so this patch is the thumb
- * moving on the click rather than after the round trip.
- */
+/** Flip a resource between workspace-wide and teams-scoped. The segmented
+ *  control renders straight off `accessMode`. */
 export function setResourceMode(
   cache: ResourcesCache | undefined,
   resourceType: TeamResourceType,

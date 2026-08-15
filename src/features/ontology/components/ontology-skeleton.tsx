@@ -1,16 +1,12 @@
 import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
 
 /**
- * Loading skeleton for the ontology kanban board. Mirrors the loaded
- * shape — the header strip (trackless pill row + name/purpose inputs +
- * add-column button) over a dotted substrate carrying flat inset lanes,
- * each hugging a short white header card, its fixed-height object cards,
- * and the add button. Slots inside the view's `.page-float` Frame,
- * replacing the bare "Loading ontology…" text.
+ * Loading skeleton for the ontology kanban board. ⚠ Must mirror the loaded
+ * shape (`kanban-board.tsx`); slots inside the view's `.page-float` Frame.
  *
- * It composes `.kanban-substrate` for the pitch even though nothing scrolls
- * here (`overflow-hidden`) — `background-attachment: local` is inert without
- * a scroller, and one class keeps the two surfaces literally identical.
+ * Composes `.kanban-substrate` even though nothing scrolls here
+ * (`overflow-hidden`) — `background-attachment: local` is inert without a
+ * scroller, and one class keeps the two surfaces identical.
  */
 export function OntologyBoardSkeleton() {
   return (
@@ -18,7 +14,7 @@ export function OntologyBoardSkeleton() {
       <span className="sr-only">Loading ontology</span>
 
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-        {/* Trackless pill row — mirrors the live switcher's .seg-pill shape. */}
+        {/* Mirrors the live switcher's .seg-pill shape. */}
         <div className="flex items-center gap-1.5">
           <Skeleton className="h-[27px] w-20 rounded-full" />
           <Skeleton className="h-[27px] w-16 rounded-full" />
@@ -30,8 +26,8 @@ export function OntologyBoardSkeleton() {
         <Skeleton className="h-7 w-20 rounded-md" />
       </div>
 
-      {/* Same geometry as the live board: 12px dot pitch, 24px board padding,
-          12px gutter, lanes that hug their contents. */}
+      {/* ⚠ Same geometry as the live board: 12px dot pitch, 24px padding,
+          12px gutter, lanes hug contents. */}
       <div className="graph-substrate kanban-substrate flex min-h-0 flex-1 items-start gap-3 overflow-hidden p-6">
         {[3, 2, 3].map((cards, i) => (
           <ColumnSkeleton key={i} cards={cards} />
@@ -44,7 +40,7 @@ export function OntologyBoardSkeleton() {
 function ColumnSkeleton({ cards }: { cards: number }) {
   return (
     <div className="flex w-72 shrink-0 flex-col gap-2 self-start rounded-[14px] bg-bg-inset p-3">
-      {/* Header card — collapsed, so shorter than an object card. */}
+      {/* Header card, collapsed — shorter than an object card. */}
       <div className="flex shrink-0 items-center gap-2 rounded-[10px] border border-border-default bg-bg-elevated px-2.5 py-2">
         <SkeletonLine w="50%" h={12} />
         <Skeleton className="ml-auto h-4 w-6 rounded-full" />

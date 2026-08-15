@@ -6,8 +6,7 @@ import { HttpError } from "@/shared/lib/http-error";
 const BUCKET = "workspace-icons";
 const MAX_BYTES = 2 * 1024 * 1024;
 
-/** Allowed upload types → file extension. Mirrors the bucket's
- * allowed_mime_types in the migration. */
+/** ⚠ Must mirror the bucket's allowed_mime_types in the migration. */
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -17,11 +16,10 @@ const MIME_EXT: Record<string, string> = {
 };
 
 /**
- * Upload a workspace icon to the public `workspace-icons` bucket and
- * return its public URL. Each upload gets a random filename (cache-busts
- * the CDN on change); any previously-stored icon for the workspace is
- * removed so the bucket never accumulates orphans. Throws `HttpError`
- * (400) on bad type/size, (500) on a storage failure.
+ * Upload a workspace icon to the public `workspace-icons` bucket, return its
+ * public URL. Random filename per upload (cache-busts the CDN); prior icons are
+ * removed so the bucket never accumulates orphans. Throws `HttpError` 400 on
+ * bad type/size, 500 on storage failure.
  */
 export async function uploadWorkspaceIcon(workspaceId: string, file: File): Promise<string> {
   const ext = MIME_EXT[file.type];
@@ -57,8 +55,8 @@ export async function clearWorkspaceIcon(workspaceId: string): Promise<void> {
 
 /**
  * Delete all icon objects under `{workspaceId}/` except `keepPath`.
- * Best-effort — a stale orphan is harmless and we never want cleanup
- * failure to fail the user-facing request.
+ * Best-effort — a stale orphan is harmless; cleanup must never fail the
+ * user-facing request.
  */
 async function removeIconObjects(workspaceId: string, keepPath: string | null): Promise<void> {
   const db = supabaseAdmin();

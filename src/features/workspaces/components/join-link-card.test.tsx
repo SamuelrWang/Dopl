@@ -1,21 +1,14 @@
 // @vitest-environment jsdom
 /**
- * THE JOIN PAGE'S ENDINGS, AND THE ONE THAT WAS A DEAD END.
+ * The join page's endings. ⚠ The load-bearing assertion is NEGATIVE: this card
+ * must never push an SPA path — `/{slug}-{publicId}` is 302'd to
+ * `/get-started` by `website-retirement.ts › retirementRedirect`. Pinned as a
+ * SOURCE assertion because an absent `router.push` cannot be observed by
+ * rendering (idiom: `channels/components/go-public-dialog.test.tsx`).
  *
- * `already_member` used to `router.push('/{slug}-{publicId}')` — a URL the
- * website retirement 302s to `/get-started` (`website-retirement.ts ›
- * retirementRedirect`: `segments.length === 1 && parseSegment(first)`). So a
- * member who clicked a join link was shown a download page that never named
- * their workspace. The handoff replaces it, and the assertion that matters most
- * is the NEGATIVE one — this card must never push an SPA path again, which is
- * pinned here as a source assertion because a `router.push` that no longer
- * exists cannot be observed by rendering (the idiom is
- * `channels/components/go-public-dialog.test.tsx`).
- *
- * `requested` / `already_pending` get no deep link on purpose: the membership
- * does not exist until an admin approves, and `POST /api/boot` is
- * membership-scoped and fail-closed, so a link handed out here would open the
- * app on a 404 card.
+ * `requested` / `already_pending` get no deep link: membership does not exist
+ * until an admin approves, and `POST /api/boot` is membership-scoped and
+ * fail-closed, so the app would open on a 404 card.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -141,9 +134,9 @@ describe("neither join card may navigate the retired website", () => {
     );
 
   it("binds no router at all — there is nothing left to push a web path with", () => {
-    // The IMPORT, not the call: a card that cannot reach `next/navigation` has
-    // no `router.push` to regress into. (Prose about the old bug is allowed to
-    // stay in the file, which a grep for the call itself would forbid.)
+    // ⚠ Asserts the IMPORT, not the call: a card that cannot reach
+    // `next/navigation` has no `router.push` to regress into, and prose about
+    // the old bug may still mention the call.
     for (const file of ["join-link-card.tsx", "accept-invite-card.tsx"]) {
       expect(read(file), file).not.toMatch(/from "next\/navigation"/);
     }

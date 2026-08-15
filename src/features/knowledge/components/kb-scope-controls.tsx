@@ -10,7 +10,7 @@ import {
 } from "@/features/members/components/team-bits";
 import type { KbScope } from "../scope";
 
-/** One drafted grant row — mirrors `KbTeamGrantSchema`. */
+/** One drafted grant row. ⚠ Mirrors `KbTeamGrantSchema`. */
 export interface TeamGrantDraft {
   teamId: string;
   level: "read" | "edit";
@@ -33,9 +33,9 @@ const SCOPE_OPTIONS: Array<{
 ];
 
 /**
- * Three-way sharing scope radio — shared by the create dialog and the
- * settings Sharing section. Token-based styling so it renders correctly
- * inside the ModalShell light scope.
+ * Three-way sharing scope radio, shared by the create dialog and the settings
+ * Sharing section. ⚠ Token-based styling only, so it renders correctly inside
+ * the ModalShell light scope.
  */
 export function ScopeSelector({
   value,
@@ -87,9 +87,9 @@ export function ScopeSelector({
 }
 
 /**
- * Per-team grant editor: every pickable team gets a None / Read / Edit
- * control. None = no grant. The caller passes only the teams the user
- * may grant (all teams for admins, own teams for members).
+ * Per-team grant editor: None / Read / Edit per team, None = no grant.
+ * ⚠ Caller passes only the teams the user may grant (all for admins, own
+ * teams for members).
  */
 export function TeamGrantEditor({
   teams,
@@ -102,8 +102,8 @@ export function TeamGrantEditor({
   grants: TeamGrantDraft[];
   onChange: (next: TeamGrantDraft[]) => void;
   disabled?: boolean;
-  /** Teams shown but not editable — e.g. an admin-granted team the
-   *  member-owner doesn't belong to (they may not add/raise it). */
+  /** Shown but not editable: e.g. an admin-granted team the member-owner
+   *  doesn't belong to. */
   lockedTeamIds?: Set<string>;
 }) {
   const byTeam = new Map(grants.map((g) => [g.teamId, g.level]));

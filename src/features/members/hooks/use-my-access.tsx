@@ -1,18 +1,12 @@
 "use client";
 
 /**
- * useMyAccess — single-fetch hook that returns the caller's effective
- * access on every resource in a workspace.
- *
- * Backed by GET /api/workspaces/[slug]/my-access via TanStack Query.
- * Look up a specific resource via the returned `resolve()` helper
- * rather than indexing the array yourself.
- *
- * Use the `MyAccessProvider` + `useMyAccessContext` flow at the
- * application shell so multiple consumers (sidebar nav, KB/skill
- * detail pages) share one cache entry. Focus revalidation comes from
- * the query layer (only when stale — the old hand-rolled listener
- * re-pulled the payload on EVERY window focus).
+ * Caller's effective access on every resource in a workspace, one fetch.
+ * Backed by GET /api/workspaces/[slug]/my-access. Look resources up via the
+ * returned `resolve()` helper, not by indexing the array.
+ * ⚠ Use `MyAccessProvider` + `useMyAccessContext` at the app shell so all
+ * consumers share one cache entry. Focus revalidation is the query layer's,
+ * and only fires when stale.
  */
 
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
@@ -30,10 +24,9 @@ interface Override<T extends string> {
   level: AccessLevel;
 }
 
-/** What the endpoint actually sends. `workflow` grants are still valid in
- *  the DB (retirement D7 kept the rows), so the route keeps emitting them;
- *  `selectAccess` drops them on arrival so nothing downstream can resolve
- *  against a retired resource. */
+/** What the endpoint actually sends. ⚠ `workflow` grants are still valid
+ *  rows in the DB and the route still emits them; `selectAccess` drops them
+ *  on arrival so nothing downstream resolves against a retired resource. */
 interface MyAccessWire {
   defaultLevel: AccessLevel;
   overrides: Array<Override<ResourceType | "workflow">>;
@@ -44,10 +37,10 @@ interface MyAccessPayload {
   overrides: Array<Override<ResourceType>>;
 }
 
-// Hand-rolled `.filter` rather than `withoutRetiredResources` because this one
-// also NARROWS the element type (dropping `"workflow"` from the union is the
-// point) — the shared helper is type-preserving. The predicate is the shared
-// one, so un-retiring is still a single edit in `teams/access-levels`.
+// Hand-rolled `.filter`, not `withoutRetiredResources`: this one NARROWS the
+// element type (drops `"workflow"` from the union) and the shared helper is
+// type-preserving. Predicate is still the shared one, so un-retiring stays a
+// single edit in `teams/access-levels`.
 const selectAccess = (body: MyAccessWire): MyAccessPayload => ({
   defaultLevel: body.defaultLevel,
   overrides: (body.overrides ?? []).filter(
@@ -73,12 +66,10 @@ function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
     { select: selectAccess }
   );
 
-  // 403 (not a member) or 404 (workspace not found) — quietly treat as
-  // "no info" so the sidebar just doesn't badge (query retry already
-  // skips 4xx; error state maps to null data here).
+  // 403 (not a member) / 404 (no workspace) → "no info", so the sidebar just
+  // doesn't badge. Query retry already skips 4xx.
   const data = query.data ?? null;
 
-  // Index overrides by `${type}:${id}` for cheap lookups.
   const overrideIndex = useMemo(() => {
     const m = new Map<string, AccessLevel>();
     if (data) {
@@ -116,14 +107,10 @@ function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
 
 const MyAccessCtx = createContext<UseMyAccessResult | null>(null);
 
-/**
- * App-shell provider — call once at the top of the chrome layout
- * (`layout-shell.tsx`). All descendants that need access info should
- * read via `useMyAccessContext()` so the request is shared. Without
- * the provider, `useMyAccessContext` returns a no-op shape (data null,
- * resolve always null, refetch a no-op) so consumers don't crash on
- * pages that don't have a workspace in scope.
- */
+/** App-shell provider — call once at the top of `layout-shell.tsx`;
+ *  descendants read via `useMyAccessContext()` so the request is shared.
+ *  Without it the context returns a no-op shape (data null, resolve null),
+ *  so consumers don't crash on pages with no workspace in scope. */
 export function MyAccessProvider({
   workspaceSegment,
   children,

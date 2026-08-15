@@ -21,9 +21,8 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
     const chat = await getChat(ctx, requireChatId(auth.params));
     return NextResponse.json({ chat });
   } catch (err) {
-    // Hidden by the free-plan retention window — return the friendly
-    // upgrade envelope (flat shape, mirroring billing's denial body)
-    // rather than the generic chat error envelope.
+    // Hidden by the free-plan retention window: return the flat upgrade envelope (mirroring
+    // billing's denial body), not the generic chat error envelope.
     if (err instanceof ChatOutsideRetentionError) {
       return NextResponse.json(chatRetentionDeniedBody(), {
         status: 403,

@@ -20,10 +20,10 @@ export class OntologyApiError extends Error {
 }
 
 /**
- * True when a create failed because the workspace is over its free object
- * cap. The route returns the flat plan-gate envelope (`{ error:
- * "over_free_cap", ... }`, 403) which `apiRequest` surfaces as the error
- * code — the UI opens the upgrade modal instead of a generic save toast.
+ * True when a create failed on the free object cap. Route returns the flat
+ * plan-gate envelope (`{ error: "over_free_cap", … }`, 403); `apiRequest`
+ * surfaces it as the code, and the UI opens the upgrade modal instead of a
+ * generic save toast.
  */
 export function isOverFreeCapError(err: unknown): boolean {
   return err instanceof OntologyApiError && err.code === OVER_FREE_CAP_CODE;

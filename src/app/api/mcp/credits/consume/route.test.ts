@@ -1,17 +1,9 @@
 /**
- * INVARIANT SUITE — POST /api/mcp/credits/consume.
- *
- * The route is the enforcement point for the whole credit system, so what is
- * pinned here is the set of decisions that are easy to reverse by accident:
- *   - the plan is the ENTITLEMENT VERDICT, so a degraded solo is charged
- *     against the FREE allowance (this is the abuse path);
- *   - the spend is refused when the RPC says so, and the counter comes back
- *     with the refusal so the caller can say how much is gone;
- *   - it FAILS OPEN on an unexpected error. A credits gate that fails closed
- *     bricks every agent in the product on a transient DB blip.
- *
- * Auth and the billing repository are mocked; the service is real, so the
- * plan → limit → period → RPC wiring is exercised end to end.
+ * INVARIANT SUITE — POST /api/mcp/credits/consume:
+ *   - the plan is the ENTITLEMENT VERDICT, so a degraded solo is charged against FREE (abuse path);
+ *   - a refused spend returns the counter with the refusal;
+ *   - it FAILS OPEN on an unexpected error.
+ * Auth + billing repo are mocked; the service is real, so plan → limit → period → RPC is end to end.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -106,8 +98,8 @@ describe("POST /api/mcp/credits/consume", () => {
   });
 
   it("charges a DEGRADED solo (2 members) against the FREE allowance", async () => {
-    // The abuse path: reading `workspace_billing.plan` directly instead of the
-    // entitlement verdict would hand this workspace 10,000 credits.
+    // ⚠ Reading `workspace_billing.plan` directly instead of the entitlement verdict hands this
+    // workspace 10,000 credits.
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "solo", status: "active" })
     );

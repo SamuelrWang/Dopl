@@ -1,15 +1,10 @@
 /**
- * `dopl_kb` folder-description / entry-excerpt surfacing (Feature C).
- *
- * Locks the two behaviors this feature added on top of the parity guard:
+ * `dopl_kb` folder-description / entry-excerpt surfacing:
  *   1. get_tree / list_dir render each row's description/excerpt inline,
- *      flattened to one line and truncated (~120 chars, ellipsis); the
- *      separator only appears when a summary exists.
- *   2. create_folder threads `description`, write_file threads `excerpt`
+ *      flattened to one line and bounded, with the separator appearing only
+ *      when a summary exists;
+ *   2. create_folder threads `description` and write_file threads `excerpt`
  *      through to the @dopl/client calls.
- *
- * The client is a hand-rolled stub — only the methods each op touches are
- * implemented, so the tests never make a network call.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -101,19 +96,14 @@ describe("get_tree renders folder descriptions + entry excerpts", () => {
 
     const out = textOf(await opGetTree(client, "my-base"));
 
-    // `descSuffix` no longer hand-rolls its own flatten-and-clip: it defers to
-    // the shared neutralizer, so the bound is INLINE_TEXT_MAX (160, "..." tail)
-    // and the row renders as a value. The behaviour this test was written to
-    // pin — bounded, one line, separator only when there is something to show —
-    // is unchanged; the numbers and the quoting moved to the shared rule.
+    // ⚠ `descSuffix` defers to the shared neutralizer, so the bound is
+    // INLINE_TEXT_MAX and the row renders as a VALUE — bounded, one line,
+    // separator only when there is something to show.
     expect(out).toContain(`📁 \`Deep\`/ — \`${"a".repeat(157)}...\``);
     expect(out).not.toContain("a".repeat(200));
-    // Newlines flattened to a single space.
     expect(out).toContain("📁 `Notes`/ — `line1 line2`");
-    // Bare folder: name only, no separator.
     expect(out).toContain("📁 `Empty`/");
     expect(out).not.toContain("Empty`/ —");
-    // Entry excerpt surfaced; bare entry has no separator.
     expect(out).toContain("📄 `Guide` — `how to X`");
     expect(out).toContain("📄 `Plain`");
     expect(out).not.toContain("Plain` —");
@@ -133,8 +123,7 @@ describe("list_dir renders folder descriptions + entry excerpts", () => {
     } as unknown as DoplClient;
 
     const out = textOf(await opListDir(client, "my-base", ""));
-    // 150 chars is under INLINE_TEXT_MAX, so this one survives whole — the old
-    // 120-char cap was the thing that clipped it.
+    // Under INLINE_TEXT_MAX, so this survives whole.
     expect(out).toContain(`📁 \`Deep\`/ — \`${"b".repeat(150)}\``);
     expect(out).toContain("📄 `Guide` — `short`");
   });

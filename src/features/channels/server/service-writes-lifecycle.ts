@@ -4,21 +4,17 @@ import { ChannelLifecycleKindForbiddenError } from "./errors";
 import type { ChannelContext } from "./service-shared";
 
 /**
- * P0-2 (2026-08-04) — WHO MAY POST A LIFECYCLE MARKER, and the server-internal
- * options that answer it. Split out of `service-writes.ts` at the §2 500-line cap
- * when the guard landed, on its own seam rather than an arbitrary one: this file
- * answers "may this caller make this STATEMENT", while `service-writes.ts` is the
- * write itself and `service-writes-metadata.ts` is what the write stores.
- *
- * See {@link ChannelLifecycleKindForbiddenError} for the incident.
+ * WHO MAY POST A LIFECYCLE MARKER, and the server-internal options that answer
+ * it. This file answers "may this caller make this STATEMENT";
+ * `service-writes.ts` is the write, `service-writes-metadata.ts` is what it
+ * stores. See {@link ChannelLifecycleKindForbiddenError}.
  */
 
 /**
- * The three kinds that STATE A RUNTIME FACT — a session started, finished, or
- * failed — and are therefore not an agent's to post. `task_progress` is absent
+ * The three kinds that STATE A RUNTIME FACT — session started / finished /
+ * failed — and are therefore not an agent's to post. ⚠ `task_progress` is absent
  * on purpose: it claims nothing about a lifecycle, its body is the one `task_*`
- * body a renderer actually shows (`splitSessionEntries`), and it is the
- * deliberate milestone lane.
+ * body a renderer shows (`splitSessionEntries`), and it is the milestone lane.
  */
 export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
   "task_started",
@@ -27,36 +23,27 @@ export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Options only a SERVER-INTERNAL caller may pass. Not part of
- * `ChannelMessageCreateInput` and not parsed from any request body, which is
- * exactly what makes it a seam: a route hands `postMessage` the caller's parsed
- * input and nothing else, so no HTTP caller can set these.
+ * Options only a SERVER-INTERNAL caller may pass. ⚠ Not part of
+ * `ChannelMessageCreateInput` and not parsed from any request body — a route
+ * hands `postMessage` the caller's parsed input and nothing else, so no HTTP
+ * caller can set these.
  */
 export interface PostMessageOptions {
   /**
    * Post a LIFECYCLE kind on behalf of the server itself. The ONE caller is the
-   * close route's echo (`service-tasks-lifecycle.closeTask`), which writes the
-   * `task_finished` / `task_failed` marker that tells the other member's card
-   * the thread ended.
+   * close route's echo (`service-tasks-lifecycle.closeTask`).
    *
-   * ⚠ **ITS ORIGINAL MOTIVATING CASE IS UNREACHABLE, AND STAYED UNREACHABLE
-   * THROUGH C-26 (re-checked 2026-08-08).** This block used to say the close echo
-   * "is raised from a request that may well carry an agent token (an MCP-initiated
-   * close on the human lane), so identity alone cannot tell it apart". That has
-   * been false since DECISION 2 the same week: `closeTask` opens with
-   * `if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError()`, ahead of
-   * every lookup, so the only caller of this flag can never hold an agent ctx and
-   * the guard below would have returned early on `ctx.source !== "agent"` anyway.
-   * **The 2026-08-08 REOPEN echo did NOT restore the lane**, and that was a
-   * deliberate choice rather than an oversight: reopen IS agent-reachable (no
-   * source check, the PATCH route is not `sessionOnly`), but its echo posts
-   * `task_progress` — not one of {@link LIFECYCLE_KINDS} — so it passes the guard
-   * on its own merits and asks for no exemption. If a future server-internal
-   * caller genuinely needs a lifecycle KIND from an agent-ctx request, this is
-   * still the seam for it; until then the flag is a NO-OP in practice and the
-   * value it carries is documentary — it states at the call site that the post is
-   * the server speaking, which is what keeps the rule from being re-derived from
-   * identity.
+   * ⚠ IN PRACTICE A NO-OP, and deliberately kept anyway. `closeTask` opens with
+   * `if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError()` ahead
+   * of every lookup, so this flag's only caller can never hold an agent ctx and
+   * the guard would return early regardless. The REOPEN echo does not restore
+   * the lane either: it posts `task_progress`, not one of
+   * {@link LIFECYCLE_KINDS}, so it passes the guard on its own merits.
+   *
+   * The value is DOCUMENTARY — it states at the CALL SITE that the post is the
+   * server speaking, which is what stops the rule being re-derived from
+   * identity. It remains the seam if a server-internal caller ever genuinely
+   * needs a lifecycle KIND from an agent-ctx request.
    */
   internalLifecycle?: boolean;
   /**

@@ -6,41 +6,29 @@ export const dynamic = "force-dynamic";
 
 const supabase = supabaseAdmin();
 
-/**
- * POST /api/user/mcp-status — Called by the MCP server on startup to signal
- * that a connection is live. Updates the user's profile with a timestamp.
- *
- * Authenticated via API key (same as all MCP calls).
- */
+/** POST /api/user/mcp-status — MCP server startup liveness ping; stamps the user's profile. */
 export const POST = withUserAuth(async (_request, { userId }) => {
   const now = new Date().toISOString();
   const is_admin = isAdmin(userId);
 
-  // Upsert into a lightweight mcp_connections table
   const { error } = await supabase
     .from("profiles")
     .update({ mcp_connected_at: now })
     .eq("id", userId);
 
   if (error) {
-    // If the column doesn't exist yet, try a raw approach — store in metadata
-    // For now just acknowledge the ping
+    // Column may not exist yet — acknowledge the ping regardless.
     return NextResponse.json({ ok: true, connected_at: now, is_admin, user_id: userId });
   }
 
-  // user_id is returned so the MCP server's startup can scope its
-  // local skill-dir cleanup to dirs it owns — see Audit B7 in
+  // `user_id` lets MCP startup scope its local skill-dir cleanup to dirs it owns — see
   // packages/mcp-server/src/orphan-skill-cleanup.ts.
   return NextResponse.json({ ok: true, connected_at: now, is_admin, user_id: userId });
-// writeScopeExempt: this liveness ping is a non-GET request that every MCP
-// connection (including read-only ones) fires — it must bypass the write-scope
-// gate so a read-only connection still lights the "MCP connected" indicator.
+// ⚠ writeScopeExempt: every MCP connection fires this non-GET ping, read-only ones included, so
+// it must bypass the write-scope gate or a read-only connection never lights the indicator.
 }, { writeScopeExempt: true });
 
-/**
- * GET /api/user/mcp-status — Polled by the frontend to detect MCP connection.
- * Returns whether the MCP server has pinged recently (within last 5 minutes).
- */
+/** GET — has the MCP server pinged within the last 5 minutes? */
 export const GET = withUserAuth(async (_request, { userId }) => {
   const { data, error } = await supabase
     .from("profiles")
@@ -57,7 +45,6 @@ export const GET = withUserAuth(async (_request, { userId }) => {
     return NextResponse.json({ connected: false, last_seen: null });
   }
 
-  // Consider connected if pinged within the last 5 minutes
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   const connected = lastSeen > fiveMinutesAgo;
 

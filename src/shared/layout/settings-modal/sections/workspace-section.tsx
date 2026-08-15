@@ -11,14 +11,9 @@ interface Props {
 }
 
 /**
- * Workspace > General — the web binding.
- *
- * The pane itself lives in `./workspace-section-core`, which takes the
- * post-write navigation as props; this file is only the `next/navigation`
- * binding plus the multipart icon uploader, so the desktop renderer reuses the
- * same pane with the SPA router. The two callbacks reproduce what
- * `WorkspaceSettingsForm` / `WorkspaceDangerZone` did when this section
- * rendered those bindings directly.
+ * Workspace > General — web binding. Pane is `./workspace-section-core`; this
+ * file is only the `next/navigation` wiring plus the multipart icon uploader,
+ * so the desktop renderer reuses the same pane on the SPA router.
  */
 export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props) {
   const router = useRouter();
@@ -27,8 +22,8 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
     <WorkspaceSectionCore
       workspaceSegment={workspaceSegment}
       onSaved={(updated, previous) => {
-        // Slug may have changed if the name changed; redirect to the new
-        // canonical settings URL so subsequent saves hit the right route.
+        // ⚠ A rename can change the slug; redirect to the new canonical URL or
+        // subsequent saves hit the wrong route.
         if (updated.slug !== previous.slug) {
           router.push(`/${canonicalSegment(updated)}/settings`);
         } else {

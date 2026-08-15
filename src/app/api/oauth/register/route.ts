@@ -4,21 +4,16 @@ import { enforceOAuthIpRateLimit } from "@/shared/auth/oauth-rate-limit";
 
 export const dynamic = "force-dynamic";
 
-// Per-IP registration ceiling. A legitimate MCP client registers ONCE per
-// onboarding (a handful of retries at most); 20/min/IP sits far above that
-// while stopping a script from minting thousands of `oauth_clients` rows a
-// minute. Behind a shared NAT this still admits ~20 distinct client onboardings
-// per minute per egress IP. Override via env.
+// Per-IP registration ceiling. A legitimate client registers ONCE per onboarding, so 20/min/IP
+// sits far above real use while capping a script minting thousands of `oauth_clients` rows.
+// Behind a shared NAT it still admits ~20 onboardings/min per egress IP. Override via env.
 const REGISTER_RPM = Number(process.env.OAUTH_REGISTER_RATE_LIMIT_RPM) || 20;
 
 /**
- * RFC 7591 Dynamic Client Registration. MCP clients (Claude Desktop/.ai,
- * Cursor) POST their `redirect_uris` + `client_name` and get back a
- * `client_id`. Public clients only — no client secret.
- *
- * Registration is intentionally light; the real security controls are at
- * /authorize (exact redirect_uri match) and /token (PKCE). We only reject
- * cleartext-http redirect URIs on non-loopback hosts so tokens can't leak.
+ * RFC 7591 Dynamic Client Registration. Public clients only — no client secret.
+ * ⚠ Registration is intentionally light: the real controls are /authorize (exact redirect_uri
+ * match) and /token (PKCE). The only rejection here is cleartext-http redirect URIs on
+ * non-loopback hosts, so tokens cannot leak.
  */
 function isAllowedRedirect(uri: string): boolean {
   try {
@@ -30,7 +25,7 @@ function isAllowedRedirect(uri: string): boolean {
         url.hostname === "[::1]"
       );
     }
-    // https or a native-app custom scheme (e.g. cursor://) — allowed.
+    // https or a native-app custom scheme (e.g. cursor://).
     return true;
   } catch {
     return false;
@@ -38,10 +33,8 @@ function isAllowedRedirect(uri: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  // Cap unauthenticated registration per source IP before doing any work — this
-  // is the bound on the table-growth primitive (an orphan-client reaper in the
-  // oauth-cleanup cron is the second half). RFC 7591 stays open: the limit is
-  // generous enough that real client onboarding is unaffected.
+  // ⚠ Cap per source IP BEFORE any work — the bound on this table-growth primitive (the
+  // oauth-cleanup cron's orphan reaper is the second half).
   const limited = await enforceOAuthIpRateLimit(request, {
     bucket: "oauth-register-ip",
     rpm: REGISTER_RPM,
@@ -69,7 +62,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  // Size caps — registration is open (public clients), so bound the inputs.
+  // Registration is open, so bound the inputs.
   if (redirectUris.length > 20) {
     return NextResponse.json(
       {

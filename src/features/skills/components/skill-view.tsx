@@ -11,10 +11,6 @@ import { useCurrentProfile } from "@/shared/auth/use-current-profile";
 import { usePresence } from "@/shared/realtime/use-presence";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { toast } from "@/shared/ui/toast";
-// Cross-feature imports: DocEditor + SourceIcon live in features/knowledge
-// today. They're generic enough to belong in shared/ — moving is a future
-// refactor (per ENGINEERING.md §3 / §16). Keeping the imports as-is for
-// now matches the existing SourceIcon precedent in this file.
 import { DocEditor, SaveStatusIndicator } from "@/shared/editor/doc-editor";
 import {
   type ResolvedSkill,
@@ -35,46 +31,31 @@ import { errMessage, primaryFile } from "./skill-view-utils";
 interface Props {
   resolved: ResolvedSkill;
   workspaceSlug: string;
-  /** Workspace being viewed. Every client call must carry it (as the
-   *  X-Workspace-Id header) so the route targets THIS workspace and not
-   *  the caller's default — see DetailPane's fetch note. */
+  /** ⚠ Every client call must carry this as the X-Workspace-Id header so
+   *  the route targets THIS workspace, not the caller's default. */
   workspaceId: string;
-  /** With `currentUserId`, gates the sharing control next to the title
-   *  (owner or workspace admin). */
+  /** With `currentUserId`, gates the sharing control (owner or admin). */
   isAdmin: boolean;
   currentUserId: string;
-  /** Duplicate landed — the browser selects the new skill. */
   onDuplicated?: (skill: Skill) => void;
-  /**
-   * The skill was permanently deleted. The browser owns what happens next
-   * (drop the row from its list, move the selection to a neighbour, re-pull)
-   * — this pane is unmounted by that reselection, so it must not also try to
-   * refresh itself.
-   */
+  /** Permanent delete landed. Browser owns what happens next; this pane is
+   *  unmounted by that reselection, so it must NOT also refresh itself. */
   onDeleted?: (skillId: string) => void;
-  /**
-   * Something that changes the PARENT's list rendering landed (rename,
-   * refolder, duplicate). Injected instead of calling a router directly so
-   * this component stays Next-free: the web app passes `router.refresh()`,
-   * the desktop SPA passes a TanStack `invalidateQueries` — neither concept
-   * exists in both apps (apps/desktop-ui/CONVENTIONS.md).
-   */
+  /** Parent list rendering changed (rename, refolder, duplicate). Injected
+   *  rather than calling a router, to stay Next-free: web passes
+   *  `router.refresh()`, desktop SPA passes TanStack `invalidateQueries`
+   *  (apps/desktop-ui/CONVENTIONS.md). */
   onListChanged?: () => void;
 }
 
 /**
- * The skill editor pane — rendered inline in the skills browser's
- * detail pane (no separate route).
- *
- * Skills are single-file: this is a single-document editor for the one
- * SKILL.md. Layout: title/share/save header, then the DocEditor for the
- * body. Body edits autosave after 1.5s of inactivity, with the same
- * optimistic-concurrency (412) conflict flow the KB editor uses. This file
- * is the orchestration and the layout; the machinery lives in three sibling
- * hooks — `use-skill-metadata` (the header bar's own CAS clock),
- * `use-skill-conflict` (the 412 record) and `use-skill-save-chain` (every
- * body write, serialized). Parent must key this component by skill id so
- * switching skills remounts fresh state.
+ * Skill editor pane, inline in the skills browser (no separate route).
+ * Single-document editor for the one SKILL.md. Body autosaves after 1.5s
+ * idle, with the KB editor's optimistic-concurrency (412) conflict flow.
+ * Orchestration + layout only; machinery in three sibling hooks —
+ * `use-skill-metadata` (header CAS clock), `use-skill-conflict` (412
+ * record), `use-skill-save-chain` (serialized body writes).
+ * ⚠ Parent must key this by skill id so switching skills remounts state.
  */
 export function SkillView({
   resolved,
@@ -88,25 +69,22 @@ export function SkillView({
 }: Props) {
   const { skill } = resolved;
 
-  // Audit A-005 / A-013: gate write affordances on the caller's
-  // effective access. Falls open to true while access is loading.
+  // Write affordances gated on effective access. Falls open to true while
+  // access is still loading.
   const access = useMyAccessContext();
   const accessLevel = access.resolve("skill", skill.id);
   const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
-  // Delete is permanent (§2b — no trash, no restore), so it takes the
-  // OWNERSHIP gate the sharing control uses (creator or workspace admin),
-  // not the broader edit gate that lets any member rewrite a shared skill.
-  // Strictly narrower than the server, which allows any member who can see
-  // the skill — so nothing we render can come back a 403.
+  // Delete is permanent (no trash/restore) → OWNERSHIP gate (creator or
+  // workspace admin), not the edit gate. Strictly narrower than the server,
+  // which allows any member who can see the skill, so nothing rendered 403s.
   const canDelete =
     canEdit && (skill.createdBy === currentUserId || isAdmin);
 
   const initialFile = useMemo(() => primaryFile(resolved.files), [resolved.files]);
   const [file, setFile] = useState<SkillFile>(initialFile);
-  // Markdown seed handed to DocEditor + explicit reload key. The editor
-  // owns its content while typing; we re-seed ONLY on user-driven reload
-  // ("Discard mine") or an at-rest server pull — never on save success,
-  // which would clobber keystrokes typed while the PUT was in flight.
+  // ⚠ Editor owns its content while typing. Re-seed ONLY on user-driven
+  // reload ("Discard mine") or an at-rest server pull — never on save
+  // success: that clobbers keystrokes typed while the PUT was in flight.
   const [editorMd, setEditorMd] = useState(initialFile.body);
   const [editorReloadKey, setEditorReloadKey] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -122,9 +100,8 @@ export function SkillView({
     adoptBaseline: adoptMetaBaseline,
   } = useSkillMetadata({ skill, workspaceId, onListChanged });
 
-  // 412 surfaced from the autosave path. While set, the editor shows a
-  // banner with explicit Save mine / Discard mine buttons; debounced
-  // autosave is paused.
+  // 412 from the autosave path. While set, autosave is paused and the
+  // banner's Save mine / Discard mine buttons are the only way forward.
   const {
     conflict,
     peek: peekConflict,
@@ -168,7 +145,6 @@ export function SkillView({
     onOverwritten,
   });
 
-  // Presence: who else has this skill open, and whether they're editing.
   const selfProfile = useCurrentProfile();
   const presencePeers = usePresence(
     `presence:skill:${skill.id}`,
@@ -179,15 +155,13 @@ export function SkillView({
     (p) => p.userId !== selfProfile?.userId
   );
 
-  // Push a server body into the editor: re-seed the Tiptap state via the
-  // explicit reload key. Callers own the safety check (user chose to
-  // discard, or the editor is at rest).
+  // Re-seeds Tiptap via the reload key. ⚠ Callers own the safety check —
+  // user chose to discard, or editor is at rest.
   const reloadEditor = useCallback((body: string) => {
     setEditorMd(body);
     setEditorReloadKey((k) => k + 1);
   }, []);
 
-  // Conflict resolution: discard local typing, reload the server body.
   const handleDiscardMine = useCallback(() => {
     const c = peekConflict();
     if (!c) return;
@@ -201,10 +175,9 @@ export function SkillView({
     clearConflict();
   }, [clearConflict, discardPending, peekConflict, reloadEditor]);
 
-  // Pull the freshest skill + body from the server and replace local
-  // state, including the editor seed. Callers MUST ensure the editor is
-  // at rest first — a reload replaces the Tiptap content, so a mid-edit
-  // pull would yank the document out from under the user.
+  // ⚠ Callers MUST ensure the editor is at rest first: this replaces the
+  // Tiptap content, so a mid-edit pull yanks the document out from under
+  // the user.
   const pullFreshSkill = useCallback(async () => {
     const fresh = await pullLatest();
     if (!fresh) return;
@@ -214,17 +187,13 @@ export function SkillView({
     reloadEditor(next.body);
   }, [adoptBodyBaseline, pullLatest, reloadEditor]);
 
-  // When the user switches back to this tab AND nothing is mid-save,
-  // pull the freshest version so changes another tab or an MCP agent
-  // saved while away show up automatically.
+  // Refocus pull: picks up saves from another tab or an MCP agent. Skipped
+  // mid-save.
   useRefetchOnFocus(pullFreshSkill, { skip: hasPendingEdit });
 
-  // Live updates (Tier 2): another user / MCP agent saving the body or
-  // skill metadata, or writing a version, pushes here. Bump the history
-  // key first (independent of the editor — the open version rail refetches
-  // whether or not the editor is mid-edit), then pull the freshest body
-  // only when the editor is fully at rest so a remote change never
-  // remounts the active editor.
+  // Realtime (Tier 2). Order matters: bump history key first — the version
+  // rail refetches regardless of editor state — then pull the body only
+  // when at rest, so a remote change never remounts the active editor.
   const onRealtimeChange = useCallback(() => {
     setHistoryRefreshKey((k) => k + 1);
     if (!isAtRest()) return;
@@ -240,10 +209,10 @@ export function SkillView({
     [scheduleSave]
   );
 
-  // Permanent delete. Rejecting keeps the ConfirmDialog open (its contract),
-  // so the user can retry or cancel after the toast.
+  // Permanent delete. Rethrow is load-bearing: ConfirmDialog stays open on
+  // rejection, so the user can retry or cancel after the toast.
   const handleDelete = useCallback(async () => {
-    // Drop any buffered autosave FIRST: the unmount flush would otherwise
+    // ⚠ Drop buffered autosave FIRST — the unmount flush would otherwise
     // PUT the body into a row that no longer exists.
     cancelPendingSave();
     try {
@@ -349,11 +318,7 @@ export function SkillView({
                 </div>
               )}
               <DocEditor
-                // resetKey bumps ONLY on explicit reloads ("Discard
-                // mine", at-rest server pulls). Save success must never
-                // re-seed the editor — the server snapshot is older than
-                // whatever the user typed while the PUT was in flight,
-                // and reseeding would clobber those keystrokes.
+                // ⚠ Bumps ONLY on explicit reloads. Never on save success.
                 resetKey={`${file.id}:${editorReloadKey}`}
                 initialMarkdown={editorMd}
                 onChange={updateBody}

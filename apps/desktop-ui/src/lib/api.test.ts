@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ApiError, decodeResponse, withQuery } from "./api";
 
 /**
- * The error envelope is load-bearing: ported pages branch on `ApiError.code`,
- * and both transports feed this one decoder. These cases mirror
- * `src/shared/api/api-client.ts`'s behavior exactly.
+ * ⚠ Error envelope is load-bearing: pages branch on `ApiError.code` and both
+ * transports feed this one decoder. Mirrors `src/shared/api/api-client.ts`.
  */
 describe("decodeResponse", () => {
   it("returns undefined for a bodiless success (204)", () => {

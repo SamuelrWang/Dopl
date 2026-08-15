@@ -1,9 +1,4 @@
-/**
- * Field-well class recipes — study-notes design language, verbatim.
- * Promoted out of ontology-bits once a second consumer appeared (same path
- * SectionBox took); today that second consumer is
- * `features/channels/components/message-composer.tsx`.
- */
+/** Field-well class recipes. `ontology-bits` re-exports these. */
 
 /** Concave input well — the global .concave-field recipe for add-row fields. */
 export const FIELD_WELL = "concave-field rounded-lg focus:outline-none";
@@ -12,10 +7,7 @@ export const FIELD_WELL = "concave-field rounded-lg focus:outline-none";
 export const CHIP =
   "rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
 
-/**
- * Raised block field sitting on an inset body — the rectangular
- * counterpart of CHIP, for inputs/textareas/code wells inside a
- * SectionBox body.
- */
+/** Raised block field on an inset body — CHIP's rectangular counterpart, for
+ *  inputs/textareas/code wells inside a SectionBox body. */
 export const RAISED_WELL =
   "rounded-lg border border-border-default bg-bg-elevated shadow-[0_1px_2px_rgba(0,0,0,0.04)]";

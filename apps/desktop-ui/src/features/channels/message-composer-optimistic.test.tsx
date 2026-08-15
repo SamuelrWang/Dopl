@@ -4,23 +4,14 @@ import { MessageComposer } from "@/features/channels/components/message-composer
 import type { ChannelMember } from "@/features/channels/types";
 
 /**
- * THE FLAGSHIP INTERACTION, exercised where it actually runs.
+ * The first frame after Enter. Pinned HERE because the root suite runs in the
+ * node environment with no DOM and cannot press a key.
  *
- * P0-1's user-visible claim is about the first frame after Enter: the operator's
- * text leaves the composer AT ONCE and the button stops pretending the only
- * thing that changed is its opacity. Neither can be pinned in the root suite —
- * it runs in the node environment with no DOM, so nothing there can press a
- * key. Same reasoning as `composer-intent-pill.test.tsx`.
- *
- * What each case is about:
- *  - the draft clears BEFORE the network settles (it has moved into the
- *    transcript as a pending row; waiting for the round trip is exactly what
- *    made the operator's own words sit in the field through two hops);
- *  - the send button MORPHS to the pause face for the length of the write — the
- *    `mode="pause"` affordance `SendButton` has carried since it was extracted
- *    and no composer ever passed;
- *  - a FAILED send puts the draft back verbatim, because the caller rolled its
- *    cache back and the message no longer exists anywhere else.
+ *  - draft clears BEFORE the network settles (it has moved into the transcript
+ *    as a pending row);
+ *  - send button MORPHS to the pause face for the length of the write;
+ *  - a FAILED send restores the draft verbatim — the caller rolled its cache
+ *    back and the message exists nowhere else.
  */
 
 const ME = "user-me";
@@ -81,7 +72,7 @@ describe("MessageComposer — the optimistic send", () => {
     press(field);
 
     expect(onSend).toHaveBeenCalledWith("morning", { intent: "chat" });
-    // The network has NOT answered and the field is already empty.
+    // Network has NOT answered and the field is already empty.
     expect(field.value).toBe("");
 
     settle();
@@ -96,8 +87,8 @@ describe("MessageComposer — the optimistic send", () => {
 
     type(field, "morning");
     press(field);
-    // The one pixel that used to change was this button's opacity. Now it is a
-    // different control for the length of the round trip.
+    // A different control for the length of the round trip, not an opacity
+    // change.
     expect(screen.getByRole("button", { name: "Sending" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Send message" })).toBeNull();
 
@@ -116,7 +107,7 @@ describe("MessageComposer — the optimistic send", () => {
 
     fail();
     await done.catch(() => undefined);
-    // One more turn of the loop for the restore that follows the rejection.
+    // One more turn of the loop for the post-rejection restore.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(field.value).toBe("morning");
   });

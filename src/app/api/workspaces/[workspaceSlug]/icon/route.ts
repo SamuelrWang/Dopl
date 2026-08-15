@@ -22,11 +22,8 @@ function errorResponse(err: unknown): NextResponse {
   return toHttpErrorResponse("api/workspaces/[workspaceSlug]/icon", err);
 }
 
-/**
- * POST /api/workspaces/[workspaceSlug]/icon — upload a workspace icon image
- * (multipart `file`). Admin+ only. Gates the role before touching storage so
- * a non-admin can't burn an upload, then persists the public URL.
- */
+/** POST — upload a workspace icon (multipart `file`). Admin+. ⚠ Role is gated BEFORE storage is
+ *  touched so a non-admin cannot burn an upload. */
 export const POST = withUserAuth(async (request: NextRequest, { userId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
@@ -53,10 +50,8 @@ export const POST = withUserAuth(async (request: NextRequest, { userId, params }
   }
 });
 
-/**
- * DELETE /api/workspaces/[workspaceSlug]/icon — clear the workspace icon.
- * Admin+ only (enforced by `updateWorkspaceIcon`), then purges storage.
- */
+/** DELETE — clear the workspace icon. Admin+ (enforced by `updateWorkspaceIcon`), then purges
+ *  storage. */
 export const DELETE = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;

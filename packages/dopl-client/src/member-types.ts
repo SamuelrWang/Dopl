@@ -1,12 +1,10 @@
 /**
- * Members / teams / access types — read-only mirrors of the workspace
- * membership API shapes (src/features/members/types.ts and
- * src/features/teams/types.ts in the app).
+ * Members / teams / access types — read-only mirrors of
+ * `src/features/members/types.ts` and `src/features/teams/types.ts`.
  *
- * `resourceType` is intentionally a plain string: the grant table both grows
- * new resource kinds and keeps retired ones (knowledge_base, skill, chat,
- * chat_folder, the long-dead `workflow`, …), and a read client should render
- * an unknown kind, not reject it.
+ * ⚠ `resourceType` is a plain string on purpose: the grant table grows new
+ * resource kinds and keeps retired ones, and a read client must render an
+ * unknown kind, not reject it.
  */
 
 import type { WorkspaceRole, WorkspaceSummary } from "./types.js";
@@ -63,7 +61,7 @@ export interface AccessMatrixResource {
   resourceType: string;
   resourceId: string;
   name: string;
-  /** 'workspace' = every member at their role default; 'teams' = granted teams only. */
+  /** 'workspace' = every member at role default; 'teams' = granted teams only. */
   accessMode: "workspace" | "teams";
   createdBy: string | null;
 }
@@ -86,7 +84,7 @@ export interface EffectiveAccessRow {
   resourceType: string;
   resourceId: string;
   resourceName: string;
-  /** null = the resource is hidden from this member. */
+  /** null = resource hidden from this member. */
   level: MemberAccessLevel | null;
   /** Team supplying the winning level; null for role-derived access. */
   viaTeam: { teamId: string; name: string; color: string | null } | null;
@@ -95,6 +93,6 @@ export interface EffectiveAccessRow {
 export interface MyMembership {
   workspace: WorkspaceSummary;
   role: WorkspaceRole;
-  /** The caller's user id — present on servers that expose it. */
+  /** Present only on servers that expose it. */
   userId: string | null;
 }

@@ -11,31 +11,27 @@ import type {
 } from "@/features/knowledge/components/knowledge-v2/routing";
 
 /**
- * The SPA binding of the knowledge controller's URL contract
+ * SPA binding of the knowledge controller's URL contract
  * (`@/features/knowledge/components/knowledge-v2/routing.ts`).
  *
- * The web app drives that contract with the raw History API on purpose: a
- * base switch must move the address bar WITHOUT unmounting the two-pane view,
- * because the controller owns every open tree, the expansion set and the
- * unsaved editor state. Under the hash router the same requirement holds, so
- * this adapter goes through `navigate()` — which keeps the router's own
- * location honest — and the route table registers `knowledge` and
- * `knowledge/:kbSlug` with the SAME page component, so react-router
- * reconciles the two matches instead of remounting between them.
+ * ⚠ A base switch must move the address bar WITHOUT unmounting the two-pane
+ * view — the controller owns every open tree, the expansion set and unsaved
+ * editor state. Hence `navigate()` (keeps the router's location honest) plus a
+ * route table registering `knowledge` and `knowledge/:kbSlug` on the SAME page
+ * component, so react-router reconciles instead of remounting.
  *
- * IDENTITY IS STABLE ACROSS LOCATION CHANGES, and that is a contract rather
- * than an optimization: the controller's write effect lists `sync` in its
- * deps, so an adapter rebuilt per location would re-run that effect on every
- * Back/Forward with the PRE-change selection still in state and write the old
- * URL straight back over the one the user just reached — corrupting history
- * and double-navigating. The live location therefore reaches `current`/`read`
- * through a ref refreshed in a LAYOUT effect: every layout effect in the tree
- * runs before any passive effect, so the value is already current when the
- * controller's effects read it one level down.
+ * ⚠ IDENTITY MUST STAY STABLE ACROSS LOCATION CHANGES — contract, not
+ * optimization. Controller's write effect lists `sync` in its deps, so an
+ * adapter rebuilt per location re-runs it on every Back/Forward with the
+ * PRE-change selection still in state and writes the old URL back over the one
+ * just reached (corrupt history + double navigation). Live location therefore
+ * reaches `current`/`read` via a ref refreshed in a LAYOUT effect: all layout
+ * effects run before any passive effect, so it is current when the controller's
+ * effects read it one level down.
  *
- * `subscribe` fires on EVERY location change, not just Back/Forward, because
- * that is also how a programmatic move (create-base, delete-base) reaches the
- * controller. The controller filters out the writes it made itself.
+ * `subscribe` fires on EVERY location change, not just Back/Forward — that is
+ * also how a programmatic move (create/delete base) reaches the controller,
+ * which filters out its own writes.
  */
 export function useKnowledgeUrlSync(workspaceSegment: string): KnowledgeUrlSync {
   const navigate = useNavigate();
@@ -44,9 +40,9 @@ export function useKnowledgeUrlSync(workspaceSegment: string): KnowledgeUrlSync 
   const navigateRef = useRef<NavigateFunction>(navigate);
   const locationRef = useRef<Location>(location);
   const handlersRef = useRef(new Set<() => void>());
-  // A `navigate()` inside an effect only reaches `location` on the next
-  // render. Without this, a controller effect that re-runs in between would
-  // read the pre-navigation URL and push the same entry twice.
+  // ⚠ `navigate()` inside an effect only reaches `location` next render.
+  // Without this a controller effect re-running in between reads the
+  // pre-navigation URL and pushes the same entry twice.
   const pendingRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
@@ -56,9 +52,9 @@ export function useKnowledgeUrlSync(workspaceSegment: string): KnowledgeUrlSync 
   }, [navigate, location]);
 
   useEffect(() => {
-    // Subscribers are the controller's, one level down, so they have already
-    // registered by the time this parent effect runs — and the layout effect
-    // above has already refreshed what they are about to read.
+    // Subscribers are the controller's, one level down: already registered when
+    // this parent effect runs, and the layout effect above already refreshed
+    // what they read.
     for (const handler of [...handlersRef.current]) handler();
   }, [location]);
 

@@ -1,26 +1,16 @@
 /**
- * THE TWO PROMISES THIS PHASE MAKES TO AN AGENT, checked through the real
- * `createServer` rather than through the registrars.
+ * TWO PROMISES, checked through the real `createServer` rather than through the
+ * registrars (which cannot see the published surface at all):
  *
- *   1. D1/D2 — the retired tool NAMES are NOT IN `tools/list` and not in the
- *      instructions. They were hidden by `HIDDEN_TOOLS` on 2026-08-07 and
- *      DELETED on 2026-08-11, so what this now guards is REGROWTH, not a gate:
- *      the names must not come back as tools and must not come back as routing
- *      prose. Registering against a mocked `McpServer` and asserting on what
- *      actually landed there is what makes that observable — `parity.test.ts`
- *      calls each registrar directly, which is the right level for schema
- *      parity and cannot see the server's published surface at all.
+ *   1. Retired tool NAMES are absent from `tools/list` AND from the
+ *      instructions. ⚠ This guards REGROWTH, not a gate — the names must not
+ *      come back as tools or as routing prose.
+ *   2. A delete op REFUSES, and refuses BEFORE it does anything. ⚠ Pinned as
+ *      BEHAVIOUR because a table cannot say WHEN the check runs: no workspace
+ *      resolved, no backend request, so a refused delete cannot half-happen.
  *
- *   2. §2b — a delete op REFUSES, and refuses BEFORE it does anything. The
- *      refusal is worth pinning as behavior and not just as a table because the
- *      table cannot say *when* the check runs: the guarantee is that no
- *      workspace is resolved and no backend request is made, so a refused
- *      delete cannot half-happen.
- *
- * The SDK mock is the same shape `server.test.ts` uses (`registerTool` only, so
- * a regression to the positional `tool()` overload is a TypeError naming the
- * method) — duplicated rather than shared because sharing it would mean
- * exporting a mock from a test file and hoisting across module boundaries.
+ * ⚠ SDK mock exposes `registerTool` only, so a regression to the positional
+ * `tool()` overload is a TypeError naming the method.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -48,8 +38,8 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 import { createServer, buildInstructions } from "./server.js";
-// The policy itself, from the module that owns both halves of it — the refusal
-// the server returns and the description the `_admin` tools advertise.
+// The policy from the module owning BOTH halves: the refusal the server
+// returns and the description the `_admin` tools advertise.
 import { isBlockedDeleteOp, DELETE_REFUSAL } from "./delete-policy.js";
 
 const WS: WorkspaceListItem = {
@@ -116,10 +106,9 @@ beforeEach(() => {
 // ── 1. The retired tools do not exist ────────────────────────────────
 
 /**
- * Names that were published, then hidden (2026-08-07), then deleted with
- * their registrars, routes and tables (2026-08-11). Nothing in the tree can
- * register one today — which is exactly why the list is worth keeping: it is
- * the regrowth guard, and it costs four strings.
+ * Names that were published, then hidden, then deleted with their registrars,
+ * routes and tables. ⚠ Kept as the REGROWTH guard — nothing in the tree can
+ * register one today, and that is the point.
  */
 const RETIRED = [
   "dopl_workflow",
@@ -162,9 +151,9 @@ describe("retired tools never register (D1/D2)", () => {
   });
 
   it("the instructions every agent reads name none of them", () => {
-    // The instructions are read ONCE, ahead of the first tool call, so a
-    // routing line pointing at a tool that is not in `tools/list` is the
-    // costliest stale sentence on the whole surface.
+    // ⚠ The instructions are read ONCE ahead of the first tool call, so a
+    // routing line naming a tool absent from `tools/list` is the costliest
+    // stale sentence on the surface.
     const text = buildInstructions([WS]);
     for (const name of RETIRED) {
       expect(text.includes(name), `buildInstructions still routes to ${name}`).toBe(false);
@@ -173,7 +162,7 @@ describe("retired tools never register (D1/D2)", () => {
   });
 
   it("the instructions still tell the agent what the product IS", () => {
-    // The negative assertions above pass on an empty string, so pin the story.
+    // ⚠ The negative assertions above pass on an empty string.
     const text = buildInstructions([WS]);
     for (const noun of ["dopl_kb", "dopl_skill", "dopl_ontology", "dopl_chats", "dopl_channel", "dopl_members"]) {
       expect(text).toContain(noun);
@@ -202,26 +191,25 @@ describe("every delete op is refused (§2b)", () => {
       const res = await tool(name)(args);
       expect(res.isError).toBe(true);
       expect(textOf(res)).toBe(DELETE_REFUSAL);
-      // The client is all-tripwires: any handler that ran would have thrown,
-      // so a passing assertion here is proof the op never reached the backend.
+      // ⚠ All-tripwire client: any handler that ran would throw, so passing
+      // here proves the op never reached the backend.
       expect(client.listWorkspaces).not.toHaveBeenCalled();
     });
   }
 
   it("the refusal says the required sentence, verbatim", () => {
-    // Copy an agent (and a user reading the transcript) acts on. Pinned so a
-    // reword cannot quietly turn "ask the user" into an unactionable "denied".
+    // ⚠ Pinned so a reword cannot turn "ask the user" into an unactionable
+    // "denied".
     expect(DELETE_REFUSAL).toContain(
       "Deletion is app-only. Ask the user to delete this in the Dopl app.",
     );
-    // And it must close the retry loop, or the agent walks the op enum.
+    // ⚠ Must close the retry loop, or the agent walks the op enum.
     expect(DELETE_REFUSAL).toContain("do not retry");
   });
 
   it("refuses BEFORE workspace resolution — a 2+-membership session gets the same answer", async () => {
-    // The ordering guarantee. If the delete check sat after the workspace
-    // gate, this call would come back "which workspace?" — an error an agent
-    // fixes by adding `workspace=` and calling the delete again.
+    // ⚠ ORDERING: a delete check after the workspace gate answers "which
+    // workspace?", which an agent fixes by adding `workspace=` and retrying.
     build({ directory: [WS, { ...WS, id: "id-2", slug: "beta", name: "Beta" }], workspace: null, role: null, workspaceSource: null });
     const res = await tool("dopl_kb_admin")({ op: "delete_base", base: "notes" });
     expect(res.isError).toBe(true);
@@ -229,7 +217,7 @@ describe("every delete op is refused (§2b)", () => {
   });
 
   it("does not touch the non-destructive ops on the same tools", async () => {
-    // `restore_*` reads as recovery, not deletion, and must not be swept up.
+    // ⚠ `restore_*` reads as recovery, not deletion — must not be swept up.
     const client = build();
     await expect(tool("dopl_kb")({ op: "list_bases" })).rejects.toThrow(
       "client.listKbBases() was called",
@@ -246,7 +234,7 @@ describe("isBlockedDeleteOp — the rule future tools inherit", () => {
   });
 
   it("FAILS CLOSED on an admin op nobody added to the table", () => {
-    // The point of the second mechanism: a tool shipped tomorrow with
+    // ⚠ The second mechanism: a tool shipped tomorrow with
     // op="delete_everything" is refused without anyone remembering this file.
     expect(isBlockedDeleteOp("dopl_future_admin", "delete_everything")).toBe(true);
     expect(isBlockedDeleteOp("dopl_future_admin", "purge")).toBe(true);
@@ -254,9 +242,9 @@ describe("isBlockedDeleteOp — the rule future tools inherit", () => {
   });
 
   it("does not block edits that merely READ as removals", () => {
-    // `remove_attribute` strips a field FROM an object; the object survives.
-    // It lives on the non-admin `dopl_ontology`, and the name-shape fallback
-    // is scoped to `_admin` precisely so this keeps working.
+    // ⚠ `remove_attribute` strips a field FROM an object and the object
+    // survives — it lives on the non-admin `dopl_ontology`, and the name-shape
+    // fallback is scoped to `_admin` precisely so this keeps working.
     expect(isBlockedDeleteOp("dopl_ontology", "remove_attribute")).toBe(false);
     expect(isBlockedDeleteOp("dopl_ontology", "remove_relationship")).toBe(false);
     expect(isBlockedDeleteOp("dopl_kb", "restore_base")).toBe(false);

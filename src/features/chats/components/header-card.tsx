@@ -22,12 +22,8 @@ import type { Chat } from "../types";
 import { FORMAT_LABELS, SOURCE_LABELS } from "../constants";
 import { formatDate } from "@/shared/lib/format-time";
 
-/**
- * The chat's header box: title, agent-written overview, and a compact
- * meta line up top (plus the owner when the chat is shared); the
- * agent-filled detail (session metadata, what was done, learnings)
- * stacked below as collapsed disclosure strips inside the same card.
- */
+/** Chat header box: title, overview, meta line (plus owner when shared), and
+ *  the agent-filled detail as collapsed disclosure strips below. */
 export function HeaderCard({
   chat,
   currentUserId,

@@ -3,11 +3,9 @@ import { describe, expect, it } from "vitest";
 import { PageLoading } from "./page-states";
 
 /**
- * `PageLoading` is the loading state of EVERY desktop page, and a cold launch
- * of Channels crosses five of them back to back (boot ×3, the shell, then the
- * page's own access gate). It used to be a single grey `<span>` reading
- * "Loading…", so that chain was four flickers of bare text in four different
- * positions. It renders a shape now.
+ * `PageLoading` is the loading state of EVERY desktop page, and a cold Channels
+ * launch crosses five back to back (boot ×3, shell, page access gate) — so it
+ * must render a SHAPE, not text.
  */
 
 function ghosts(container: HTMLElement) {
@@ -35,7 +33,6 @@ describe("PageLoading", () => {
 
   it("defaults to the generic page shape — right for overview, settings, boot", () => {
     const { container } = render(<PageLoading />);
-    // one surface, no list/detail split
     expect(container.querySelector(".border-r")).toBeNull();
   });
 
@@ -46,8 +43,8 @@ describe("PageLoading", () => {
   });
 
   it("holds ONE steady shape across a whole boot chain", () => {
-    // The five sequential pending states must not each paint something
-    // different — that is the flicker the text loader produced.
+    // ⚠ The five sequential pending states must not each paint something
+    // different — that is the flicker.
     const a = render(<PageLoading label="Starting Dopl" />).container.innerHTML;
     const b = render(<PageLoading label="Opening workspace" />).container.innerHTML;
     expect(a.replace("Starting Dopl", "")).toBe(b.replace("Opening workspace", ""));

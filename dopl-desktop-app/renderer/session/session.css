@@ -1,6 +1,5 @@
 /* Dopl session window — layout + components.
-   Built entirely on tokens.css (palette + kit). No hardcoded palette hex here;
-   surface/border/text values come from the copied design tokens. */
+   ⚠ Built entirely on tokens.css (palette + kit). NO hardcoded palette hex. */
 
 * { box-sizing: border-box; }
 
@@ -20,33 +19,27 @@ html, body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  /* D3: NO top gap — the card sits FLUSH to the native title bar. Sides + bottom
-     keep the 8px inset. */
+  /* NO top gap — the card sits FLUSH to the native title bar; sides + bottom keep 8px. */
   padding: 0 8px 8px;
   gap: 8px;
 }
-/* D3: session-scoped override of the SHARED .page-float recipe (tokens.css) — the
-   top corners square off against the title bar while the sides and the bottom keep
-   the 14px radius. Scoped to `.app.page-float` (two classes) so the shared recipe
-   itself is never edited and every other view keeps its full radius. */
+/* ⚠ Session-scoped override of the SHARED .page-float recipe (tokens.css): scoped to
+   `.app.page-float` (two classes) so the shared recipe is never edited and every other view
+   keeps its full radius. */
 .app.page-float {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
 
-/* ── #1 BUG: garbled UI + no-scroll (item 4) ───────────────────────────────
-   The stream is the ONLY flexible child (flex:1 min-height:0 overflow-y:auto,
-   below). Every fixed-chrome sibling defaulted to flex:0 1 auto (shrink 1), so
-   against the basis-0 stream (shrink-weight 0) they won the shrink competition,
-   collapsed the stream toward 0, and — because .app.page-float is overflow:hidden
-   — the overflow was CLIPPED, not scrollable. Pin all chrome to its natural
-   height so the stream keeps the remaining space and scrolls. */
+/* ⚠ ALL CHROME MUST BE `flex: 0 0 auto`. The stream is the ONLY flexible child (flex:1
+   min-height:0 overflow-y:auto). A sibling left at the default flex:0 1 auto wins the shrink
+   competition against the basis-0 stream, collapses it toward 0, and — since .app.page-float
+   is overflow:hidden — the overflow is CLIPPED, not scrollable. */
 .session-header,
 .status-strip,
 .composer { flex: 0 0 auto; }
 .app.is-ended .ended-banner { flex: 0 0 auto; }
-/* Docks that appear mid-run must not steal the stream's space: cap their own
-   height and scroll internally. */
+/* Docks appearing mid-run must not steal the stream's space: cap height, scroll internally. */
 .permission-dock.is-active { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -59,11 +52,9 @@ html, body {
 }
 .header-id { min-width: 0; }
 .header-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-/* ── Header identity (D1): ALWAYS an avatar token, the SAME recipe as the
-   counterparty avatar — the peer's photo when one has arrived, else initials (the
-   peer's, or the header title's when there is no peer at all). The old black
-   .brand-mark fallback is GONE. NEVER a remote <img> (CSP img-src 'self' data:
-   blocks remote URLs). */
+/* Header identity: ALWAYS an avatar token, the SAME recipe as the counterparty avatar — the
+   peer's photo when one has arrived, else initials.
+   ⚠ NEVER a remote <img>: CSP img-src 'self' data: blocks remote URLs. */
 .peer-avatar {
   width: 20px; height: 20px; border-radius: 50%; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
@@ -73,11 +64,11 @@ html, body {
   font-size: var(--text-micro);
   font-weight: 600;
 }
-/* When a real peer photo (bounded data: URI) is present, the token span drops
-   its border/fill and clips the round <img> that fills it (item 1/5/6). */
+/* With a real peer photo (bounded data: URI) the token span drops its border/fill and clips
+   the round <img> that fills it. */
 .peer-avatar.has-img { border: none; background: none; padding: 0; overflow: hidden; }
-/* Pre-consent windows never receive an init, so the avatar node has no content
-   yet. An empty bordered circle reads as a glitch; hide it until identity lands. */
+/* Pre-consent windows never receive an init, so the avatar node is empty. An empty bordered
+   circle reads as a glitch; hide it until identity lands. */
 .peer-avatar:empty { display: none; }
 .channel-name {
   font-size: var(--text-title);
@@ -85,26 +76,20 @@ html, body {
   color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* v3.0: wire name `task` == domain name `thread`. `.task-title` / `.consent-task` keep the
-   wire spelling because they style the `taskTitle` field (from `metadata.taskTitle`); the
-   words the operator reads say "thread". */
+/* Wire name `task` == domain name `thread`. `.task-title` / `.consent-task` keep the WIRE
+   spelling (they style the `taskTitle` field); operator-facing words say "thread". */
 .task-title {
   margin-top: 2px;
   color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 520px;
 }
-/* D2: the RESPONDER / FULL / AUTONOMOUS chip row is gone. The side, profile, and
-   mode still ride the init payload (the posture line already names the profile in
-   plain words), the header just stops printing them as badges. */
-
 .header-controls { display: flex; gap: 8px; flex: none; }
 
 /* ── Control buttons (kit-based) ──────────────────────────────────────────── */
-/* NO `border` here: the kit classes (.btn-light / .auth-btn-3d) own the border,
-   shadow, and background. session.css loads AFTER tokens.css, so a border set
-   here would clobber the kit's hairline at equal specificity (item 5). .ctl only
-   supplies the radius/padding/font/cursor the kit deliberately omits. */
+/* ⚠ NO `border` here: the kit classes (.btn-light / .auth-btn-3d) own border, shadow and
+   background, and session.css loads AFTER tokens.css, so a border set here clobbers the kit's
+   hairline at equal specificity. .ctl supplies only radius/padding/font/cursor. */
 .ctl {
   font-family: var(--font-ui);
   font-size: var(--text-small);
@@ -120,46 +105,28 @@ html, body {
 .ctl-xs { padding: 3px 8px; font-size: var(--text-micro); }
 
 /* ── Status strip + cost meter ────────────────────────────────────────────── */
-/* ── v2.9 BUG: the 550px status strip ──────────────────────────────────────
-   The session window is 520px wide AND 520px MIN wide (main/session-window.js), so
-   this row has ~478px of content box. v2.9 added the two <select> axes to it, and the
-   row's natural width went to ~800px: pill + model meta + Tools + Messages + the
-   posture line + the working-directory pill. On ONE non-wrapping line that deficit had
-   to land somewhere, and flexbox put it on the only children that could take it:
-
-     - `.perm-posture` carried `min-width: 0`, so it had NO automatic minimum and
-       absorbed nearly the whole deficit. Crushed to a few px it still had ~140
-       characters to draw, and `white-space: normal` wraps at every space, so it drew
-       ONE WORD PER LINE and the row grew to hundreds of px.
-     - `.status-meta` clamped at min-content, which for `claude-opus-5[1m]` is a
-       post-hyphen fragment, so the model line broke into THREE.
-     - Everything else (`.mode-select`, `.folder-pill`, `.perm-warn`) is `flex: none`,
-       so what was left simply ran off the right edge: the Messages select clipped at
-       the window edge and the folder pill was not reachable at all.
-   `align-items: center` was not the cause; it is why the survivors floated in the
-   middle of the tall box, which is what made it read as a stretched container.
-
-   FIX: the row WRAPS. At 520px there is no honest way to fit ~800px of controls on one
-   line, and the single-line alternatives both hide a control the operator needs (the
-   folder pill, or half the posture). Wrapping is also the idiom this stylesheet already
-   uses for exactly this failure (see `.outbound-pending .row`). Every text child then
-   gets a floor + a one-line guarantee, so no child can ever grow the row by collapsing
-   again, and nothing needs to be clipped: there IS no horizontal overflow left to hide,
-   which is why NO `overflow: hidden` goes on the strip itself. */
+/* ⚠ THE ROW MUST WRAP. The window is 520px wide AND 520px MIN (main/session-window.js), giving
+   ~478px of content box, while pill + model meta + Tools + Messages + posture + folder pill
+   want ~800px. On one non-wrapping line flexbox dumps the deficit on whichever children can
+   take it: `.perm-posture` (min-width:0, no automatic minimum) crushes to a few px and draws
+   ONE WORD PER LINE; `.status-meta` clamps at min-content and breaks a model id into three
+   lines; the `flex: none` children run off the right edge unreachable.
+   ⚠ Every text child therefore needs a FLOOR + a one-line guarantee, so no child can grow the
+   row by collapsing. With wrapping there is no horizontal overflow left, which is why NO
+   `overflow: hidden` goes on the strip itself. */
 .status-strip {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  /* row-gap column-gap: the column gap is the original 12px; the row gap only ever
-     applies once the row has actually wrapped. */
+  /* row-gap column-gap: the row gap only applies once the row has actually wrapped. */
   gap: 6px 12px;
   padding: 7px 12px;
   border-radius: 10px;
   background: var(--card-surface-subtle);
   border: 1px solid var(--border-default);
 }
-/* min-width: 0 so the label's ellipsis below can actually engage — without it the
-   pill's automatic minimum is its own min-content and the child never gets to shrink. */
+/* ⚠ min-width: 0 so the label's ellipsis can engage — without it the pill's automatic minimum
+   is its own min-content and the child never shrinks. */
 .status-pill { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .status-dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -192,9 +159,8 @@ html, body {
   min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* The model id. nowrap is the fix for the three-line `claude-opus-5[1m]`: a model id is
-   ONE token, and letting it break after its hyphens is what turned a 107px caption into
-   a three-line block. overflow/ellipsis bound a longer id to the same one line. */
+/* ⚠ nowrap: a model id is ONE token, and letting it break after its hyphens turns a 107px
+   caption into a three-line block. overflow/ellipsis bound a longer id to the same line. */
 .status-meta {
   color: var(--text-muted); font-size: var(--text-caption);
   min-width: 0;
@@ -202,42 +168,30 @@ html, body {
 }
 .status-spacer { flex: 1; }
 
-/* ── Permission posture (item 9 / v2.9): a muted caption chip in the status strip,
-   stating BOTH axes.
-
-   `min-width: 0` USED TO BE HERE and it is what let the row grow to 550px (see the
-   .status-strip note): it removed the only floor the text had. It is replaced by a
-   `flex-basis: 100%`, which takes the posture OFF the controls' line and gives it the
-   full strip width on its own.
-
-   Own line, not truncated, deliberately: the copy states BOTH axes plus the profile
-   (~140 chars), so at the 520px window there is no width where it fits beside the
-   selects, and ellipsising it would show the Tools axis while silently dropping the
-   Messages one. That is the exact failure the two-axis contract exists to prevent
-   ("one axis is never shown without the other", session-labels.js), so the posture
-   reflows inside its own full-width line instead. Its height is bounded by that width
-   and by the fixed copy table, never by a collapse.
-
-   min-width is a second floor under the basis: 200px is well inside the 478px content
-   box the 520px minWidth guarantees, so it can never itself force an overflow. */
+/* Permission posture: a muted caption chip stating BOTH axes.
+   ⚠ NEVER `min-width: 0` here — that removes the text's only floor and lets the row grow to
+   550px. `flex-basis: 100%` takes the posture OFF the controls' line instead.
+   ⚠ Own line, NOT truncated: the copy is ~140 chars (both axes + the profile), so at 520px it
+   never fits beside the selects, and ellipsising shows the Tools axis while silently dropping
+   the Messages one — the exact failure the two-axis contract forbids ("one axis is never shown
+   without the other", session-labels.js).
+   min-width 200px is a second floor, well inside the 478px content box. */
 .perm-posture {
   color: var(--text-secondary); font-size: var(--text-caption);
   flex: 1 1 100%;
   min-width: 200px;
 }
 
-/* ── v2.9 THE TWO AXES: the Tools / Messages selects. Token colours + the existing
-   concave-field border recipe, no new hex, no `content` strings (every word is in
-   session.html or arrives via textContent).
-   `flex: none` is load-bearing and stays: a permission control that has been squeezed
-   until its current value is unreadable is worse than a strip that wrapped. The strip
-   now wraps around them instead, so neither select is ever clipped. ────────── */
+/* ── THE TWO AXES: the Tools / Messages selects. Token colours, no new hex, no `content`
+   strings (every word is in session.html or arrives via textContent).
+   ⚠ `flex: none` is load-bearing: a permission control squeezed until its value is unreadable
+   is worse than a strip that wrapped. The strip wraps around them instead. ────────── */
 .mode-select {
   display: inline-flex; align-items: center; gap: 5px;
   color: var(--text-secondary); flex: none;
   cursor: pointer; user-select: none;
 }
-/* `.text-label` (tokens.css) already owns the 11px uppercase recipe; only the ink here. */
+/* `.text-label` (tokens.css) owns the 11px uppercase recipe; only the ink here. */
 .mode-select__lbl { color: var(--text-muted); }
 .mode-select__input {
   font-family: var(--font-ui);
@@ -250,8 +204,8 @@ html, body {
   cursor: pointer;
 }
 .mode-select__input:hover { background: var(--bg-inset-hover); }
-/* BYPASS is the one mode that hands over the whole machine, so it never looks like the
-   other three: the control itself carries the danger token while it is selected. */
+/* BYPASS hands over the whole machine, so it never looks like the other three: the control
+   carries the danger token while selected. */
 .mode-select__input.is-bypass {
   color: var(--danger);
   border-color: var(--danger);
@@ -260,24 +214,20 @@ html, body {
 /* The per-session bypass callout beside it (copy owned by session-labels.js). */
 .perm-warn { color: var(--danger); font-weight: 600; flex: none; }
 
-/* ── THE MODEL PICKER (2026-08-02). Its own wrapper class rather than a third `.mode-select`,
-   because it is NOT a third permission axis: it approves nothing, and the two axes beside it
-   have to stay countable as exactly two (test/session-status-strip pins that). The control
-   itself reuses `.mode-select__input`, so the strip keeps ONE select recipe and there is no
-   second copy of the chrome to drift. `flex: none` for the same reason the axes have it: a
-   squeezed control whose current value is unreadable is worse than a row that wrapped. */
+/* ── THE MODEL PICKER. ⚠ Its own wrapper class, NOT a third `.mode-select`: it is not a
+   permission axis (it approves nothing) and the axes beside it must stay countable as exactly
+   two (test/session-status-strip pins that). Reuses `.mode-select__input`, so the strip keeps
+   ONE select recipe. `flex: none` for the same reason the axes have it. */
 .model-select {
   display: inline-flex; align-items: center; gap: 5px;
   color: var(--text-secondary); flex: none;
   cursor: pointer; user-select: none;
 }
 
-/* ── THE CONTEXT METER (2026-08-02): "412k / 1M (41%)" beside the model it is measured
-   against. One unbreakable line, exactly like `.status-meta` and for the same reason — the
-   text is one token-ish quantity and letting it wrap would grow the strip. `flex: none` keeps
-   it off the shrink budget; empty content renders nothing at all, which is the pre-first-turn
-   state, so there is no chrome here to leave hanging. The two thresholds are token colours:
-   amber while there is still room to act, danger once there is not. */
+/* ── THE CONTEXT METER: "412k / 1M (41%)" beside the model it measures. ⚠ One unbreakable
+   line + `flex: none`, like `.status-meta`: wrapping grows the strip. Empty content renders
+   nothing (the pre-first-turn state). Thresholds are token colours: amber while there is room
+   to act, danger once there is not. */
 .ctx-meter {
   color: var(--text-muted);
   flex: none;
@@ -286,14 +236,11 @@ html, body {
 .ctx-meter.is-high { color: var(--warning); font-weight: 600; }
 .ctx-meter.is-full { color: var(--danger); font-weight: 600; }
 
-/* ── THE REQUEST LIFECYCLE STRIP (2026-08-02): "Request accepted" / "Reply received" beside the
-   meter. Same recipe as `.ctx-meter` and for the same reason — the copy is a closed four-word
-   table, so ONE unbreakable line plus `flex: none` keeps it off the shrink budget and it can
-   never grow the row by collapsing (test/session-status-strip pins that invariant for every
-   text child here). Empty content renders nothing at all, and the element also carries
-   `.hidden` until a status arrives, so a session that never sent a request shows no chrome.
-   The two OUTCOMES take a token colour; sent and accepted stay muted, because an in-flight
-   request is not news. */
+/* ── THE REQUEST LIFECYCLE STRIP: "Request accepted" / "Reply received" beside the meter.
+   ⚠ Same recipe as `.ctx-meter`: ONE unbreakable line + `flex: none`, so it can never grow the
+   row by collapsing (test/session-status-strip pins this for every text child here). Empty
+   content renders nothing and the element carries `.hidden` until a status arrives. Only the
+   two OUTCOMES take a colour; sent/accepted stay muted — an in-flight request is not news. */
 .request-status {
   color: var(--text-muted);
   flex: none;
@@ -302,13 +249,12 @@ html, body {
 .request-status.is-replied { color: var(--agent-on); font-weight: 600; }
 .request-status.is-declined { color: var(--warning); font-weight: 600; }
 
-/* ── Folder pill (item 5): ONE click-to-change control reading "Working
-   Directory: <label>". LABEL only — the abs path never reaches here.
-   `white-space: nowrap` closes the SAME trap the status strip had one level down: the
-   static "Working Directory:" text is an anonymous flex item, so once a long label
-   pushed the pill onto its 260px cap that text was free to break into two lines and
-   double the pill's height. It is now unbreakable and `.folder-pill__label` (already
-   ellipsised) is the one child that absorbs the cap. ───────────────────────── */
+/* ── Folder pill: ONE click-to-change control reading "Working Directory: <label>".
+   ⚠ LABEL only — the abs path never reaches here.
+   ⚠ `white-space: nowrap` closes the status-strip trap one level down: the static "Working
+   Directory:" text is an anonymous flex item, so once a long label pushes the pill to its
+   260px cap that text breaks into two lines and doubles the pill's height. `.folder-pill__
+   label` (already ellipsised) is the one child that absorbs the cap. ──────────── */
 .folder-pill {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
   max-width: 260px; min-width: 0;
@@ -340,22 +286,16 @@ html, body {
   border-radius: 12px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
 }
-/* ── item 1 BUG: tool-card clipped ─────────────────────────────────────────
-   Stream children default to flex-shrink:1, and a .tool-card is overflow:hidden
-   (flex min-height:auto → 0), so the flex algorithm SHRANK the card toward 0 and
-   the hidden overflow CLIPPED its body to a sliver. Pin every stream item to its
-   natural height; the stream itself (overflow-y:auto) scrolls. */
+/* ⚠ Pin every stream item to its natural height. Stream children default to flex-shrink:1 and
+   a .tool-card is overflow:hidden (flex min-height:auto -> 0), so the flex algorithm shrinks
+   the card toward 0 and the hidden overflow CLIPS its body to a sliver. */
 .stream > * { flex: 0 0 auto; }
 
-/* ── R2 BUG: the transcript could be read but not copied ───────────────────
-   html/body set `user-select: none` so the app chrome does not select like a web page,
-   and only seven descendants opted back in. Everything the operator actually needs to
-   quote was on the wrong side of that line: what their agent said, what the peer replied,
-   a tool result, a system notice. The sharpest tell was a PENDING outbound draft, which
-   WAS selectable and stopped being so the instant the operator approved it (the pending
-   class drops in makeOutbound.update). This hands back the stream's TEXT CONTENT and
-   nothing else: buttons, the header, the status strip and the selects stay unselectable,
-   so a drag across the window still cannot smear-select the chrome. */
+/* ⚠ html/body set `user-select: none` so the chrome does not select like a web page. These
+   selectors hand back the stream's TEXT CONTENT and nothing else — buttons, header, status
+   strip and selects stay unselectable, so a drag cannot smear-select the chrome. Without them
+   the operator cannot copy what their agent said, what the peer replied, a tool result or a
+   notice. */
 .stream .body,
 .stream .outbound__body,
 .stream .tool-result,
@@ -382,19 +322,17 @@ html, body {
   font-weight: 600; color: var(--text-muted);
   margin-bottom: 3px;
 }
-/* SURFACE only: the lane owns align-self + width (a 2-class selector would outrank it).
-   FIX F2 (v2.7): the operator's turns and the agent's turns now SHARE the right lane, so the
-   surface is the only thing that tells them apart — and --bg-elevated was too close to the
-   agent's --card-surface-elevated to read as a different speaker at a glance. The operator
-   drops to the recessed --bg-inset (what you typed sits IN the window; what the agent said
-   sits ON it). The counterparty uses the same inset surface on the LEFT lane, and that is
-   fine: the side disambiguates, and no bubble is ever ambiguous about both at once. */
+/* ⚠ SURFACE only — the lane owns align-self + width (a 2-class selector would outrank it).
+   Operator and agent turns SHARE the right lane, so the surface is the only thing telling
+   them apart: the operator takes the recessed --bg-inset (what you typed sits IN the window;
+   what the agent said sits ON it). --bg-elevated is too close to --card-surface-elevated to
+   read as a different speaker. The counterparty reuses the inset surface on the LEFT lane —
+   the side disambiguates, and no bubble is ever ambiguous about both at once. */
 .bubble.role-agent { background: var(--card-surface-elevated); }
 .bubble.role-operator { background: var(--bg-inset); border-color: var(--border-strong); }
 .bubble.role-counterparty { background: var(--bg-inset); border-color: var(--border-strong); }
 
-/* Counterparty avatar (item 1): initials on bg-inset, mirroring the web Avatar
-   fallback (light neutral, no identity colour). */
+/* Counterparty avatar: initials on bg-inset, mirroring the web Avatar fallback. */
 .cp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
 .cp-head .who { margin-bottom: 0; }
 .cp-avatar {
@@ -407,9 +345,8 @@ html, body {
   font-weight: 600;
 }
 
-/* Real per-author avatar (item 1/5/6): a round frame clipping the bounded data:
-   <img>. Same 18px footprint as the .cp-avatar fallback so a late `avatars` swap
-   does not shift the layout. */
+/* Real per-author avatar: a round frame clipping the bounded data: <img>. ⚠ Same 18px
+   footprint as the .cp-avatar fallback so a late `avatars` swap does not shift the layout. */
 .av {
   width: 18px; height: 18px; border-radius: 50%; flex: none;
   display: inline-flex; overflow: hidden;
@@ -419,10 +356,8 @@ html, body {
 .av-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .peer-avatar .av { width: 100%; height: 100%; border: none; }
 
-/* ── Outbound component (item 4): what MY agent SENT to the peer (op=post) — a
-   distinct SENT banner (self avatar + uppercase label band) over the posted body,
-   differentiated from the .bubble narration surface. It is a delivery RECORD, not
-   a conversational turn, so it spans the full stream width like a tool card. ── */
+/* ── Outbound component: what MY agent SENT to the peer (op=post). A delivery RECORD, not a
+   conversational turn, so it spans the full stream width like a tool card. ── */
 .outbound {
   align-self: stretch;
   max-width: 100%;
@@ -456,25 +391,22 @@ html, body {
   padding: 9px 12px;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-/* FIX F3: a post the operator DENIED (or that failed) never left this machine, so the
-   record must not keep reading as a delivery. The banner drops off the CTA surface and
-   the body dims: a draft that was stopped, not a message the peer received. */
+/* ⚠ A post the operator DENIED (or that failed) never left this machine, so the record must
+   not read as a delivery: banner off the CTA surface, body dimmed. */
 .outbound.is-not-sent { border-color: var(--border-strong); }
 .outbound.is-not-sent .outbound__banner { background: var(--card-surface-subtle); }
 .outbound.is-not-sent .outbound__label,
 .outbound.is-not-sent .outbound__body { color: var(--text-muted); }
 
-/* ── Outbound DECISION card (v2.7 L3) ────────────────────────────────────────
-   The message the agent wants to SEND is neither side of the conversation — it is a
-   decision — so it gets its own full-width card, a sibling of the inbound gate card
-   (.inbound-pending) in spacing and in button language, with its OWN accent so outbound
-   and inbound read differently at a glance: the delivered record's dark CTA band only
-   appears once the post has actually LEFT, and a card that is still waiting wears a
-   warning-tinted header instead.
-   It is the SAME node as the delivered record: `.outbound-pending` is additive, so the
-   decision simply drops this class and the node IS the "Sent to X" bubble (or, with
-   `.is-not-sent`, the muted stopped draft). Every descendant rule below is 2-class, so
-   it wins over the single-class .outbound recipe regardless of order. */
+/* ── Outbound DECISION card ─────────────────────────────────────────────────
+   A message the agent wants to SEND is a decision, not a side of the conversation, so it gets
+   a full-width card — sibling of .inbound-pending in spacing and button language, with its own
+   accent: the dark CTA band appears only once the post has LEFT, and a waiting card wears a
+   warning-tinted header.
+   ⚠ SAME NODE as the delivered record: `.outbound-pending` is ADDITIVE, so dropping the class
+   turns the node into the "Sent to X" bubble (or, with `.is-not-sent`, the stopped draft).
+   Every descendant rule below is 2-class, so it outranks single-class .outbound whatever the
+   order. */
 .outbound-pending { border-color: var(--warning); }
 .outbound-pending .outbound__banner {
   background: var(--bg-elevated);
@@ -483,9 +415,8 @@ html, body {
 .outbound-pending .outbound__label { color: var(--warning); }
 .outbound-pending .outbound__banner .av,
 .outbound-pending .outbound__banner .cp-avatar { border-color: var(--border-strong); }
-/* FIX #9 carried onto the card: the DESTINATION, read before the body. Own channel is
-   calm secondary text; anything else is the exfil shape the outbound gate exists to
-   catch, so it takes the danger tint + a rule (the same treatment as the dock's). */
+/* The DESTINATION, read before the body. Own channel is calm secondary text; anything else
+   is the exfil shape the outbound gate exists to catch, so it takes the danger tint + rule. */
 .outbound-pending__to {
   display: block;
   padding: 8px 12px 0;
@@ -498,25 +429,24 @@ html, body {
   padding: 0 0 0 6px;
   border-left: 2px solid var(--danger);
 }
-/* 2026-08-02: WHY the card is asking, under the destination. Quiet by design — it explains
-   the wait, it does not warn about it, so it never competes with the cross-channel tint. */
+/* WHY the card is asking, under the destination. ⚠ Quiet by design — it explains the wait
+   rather than warning about it, so it never competes with the cross-channel tint. */
 .outbound-pending__why {
   display: block;
   padding: 4px 12px 0;
   color: var(--text-tertiary, var(--text-secondary));
 }
-/* The drafted body is the thing being approved: always visible, never a disclosure, and
-   it scrolls past ~200px so a long draft cannot push the buttons out of reach. The cap
-   lifts with the pending class, so a DELIVERED record reads in full as it always has.
-   SCROLL FIX: this cap STAYS (it is what keeps Send/Deny reachable), but because the card
-   lives IN the stream, session.js forwards the wheel out of it at its edges — same helper
-   as the tool card's pre, so a decision card cannot latch the transcript either. */
+/* The drafted body is what is being approved: always visible, never a disclosure, scrolling
+   past ~200px so a long draft cannot push the buttons out of reach. The cap lifts with the
+   pending class, so a DELIVERED record reads in full.
+   ⚠ The cap STAYS (it keeps Send/Deny reachable); session.js forwards the wheel out at the
+   edges — same helper as the tool card's pre — so the card cannot latch the transcript. */
 .outbound-pending .outbound__body {
   max-height: 200px; overflow: auto;
   user-select: text;
 }
-/* Same family as .inbound-pending .row / .perm-actions: the buttons WRAP rather than
-   shrink-clip inside .outbound{overflow:hidden} on a narrow window. */
+/* ⚠ Buttons WRAP rather than shrink-clip inside .outbound{overflow:hidden} on a narrow
+   window (same family as .inbound-pending .row / .perm-actions). */
 .outbound-pending .row {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 0 12px 10px; flex-wrap: wrap;
@@ -539,29 +469,26 @@ html, body {
   border: 1px solid var(--border-default);
 }
 .notice.level-error { color: var(--danger); background: #fbecea; border-color: rgba(200, 64, 47, 0.28); }
-/* P1/P2: calm info notice (idle-park + reopen-shell system lines). */
+/* Calm info notice (idle-park + reopen-shell system lines). */
 .notice.level-info { color: var(--text-muted); background: var(--surface-sunken, transparent); }
 
-/* ── Command / tool line (v2.7 L2 — was the boxed SectionBox card) ─────────
-   A tool call is the agent's own housekeeping, not a message, so the BOX is gone: no
-   border, no radius, no fill, no card padding — just a hairline left rule and a tighter
-   type ramp, so commands recede behind the conversation instead of dominating it. It is
-   MY agent's activity, so it rides the RIGHT lane (v2.7 L1); the `align-self: stretch`
-   this recipe used to declare is therefore GONE — at single-class specificity it beat the
-   lane class and pinned every card full width (the same invariant .bubble.role-* keeps).
-   The v2.0 overflow guards STAY: min-width:0 + max-width:100% here, the ellipsised
-   summary below, and the scrolling pre / .tool-result further down. */
+/* ── Command / tool line ────────────────────────────────────────────────────
+   A tool call is the agent's housekeeping, not a message: no box, just a hairline left rule
+   and a tighter type ramp, so commands recede behind the conversation.
+   ⚠ NEVER declare `align-self` here — at single-class specificity it beats the lane class and
+   pins every card full width (same invariant .bubble.role-* keeps).
+   ⚠ Overflow guards stay: min-width:0 + max-width:100%, the ellipsised summary, and the
+   scrolling pre / .tool-result below. */
 .tool-card {
   border-left: 1px solid var(--border-strong);
   padding-left: 8px;
-  width: 100%; /* v2.x FIX 2: fill the lane (capped to 66% by .lane-me) so EVERY command line
-                  shares one left edge instead of each card sizing to its own content */
-  max-width: 100%; /* contain within the flex column (item 4) */
+  width: 100%; /* fill the lane (capped to 66% by .lane-me) so EVERY command line shares one
+                  left edge instead of each card sizing to its own content */
+  max-width: 100%; /* contain within the flex column */
   min-width: 0;
 }
-/* v2.x FIX 4: the card IS a native <details> and this head IS its <summary>, so the whole
-   command line toggles the disclosure — the arrow is a LEFT ::before here (see below), and
-   the separate "Show details" row + its right-side chevron are gone. */
+/* The card IS a native <details> and this head IS its <summary>, so the whole command line
+   toggles the disclosure; the arrow is a LEFT ::before below. */
 .tool-card__head {
   display: flex; align-items: center; gap: 6px;
   min-width: 0;
@@ -581,7 +508,7 @@ html, body {
 }
 .tool-card__name {
   font-size: var(--text-micro);
-  text-transform: lowercase; /* v2.x FIX 3: bash / list_calendars / dopl_channel, not SHOUTED */
+  text-transform: lowercase; /* bash / list_calendars / dopl_channel, not SHOUTED */
   letter-spacing: 0.06em;
   font-weight: 600;
   color: var(--text-muted);
@@ -598,25 +525,16 @@ html, body {
 .tool-status.is-pending { color: var(--text-muted); }
 .tool-status.is-ok { color: var(--agent-on); }
 .tool-status.is-error { color: var(--danger); }
-/* ── item 8 (v2.x reshape): the tool card ITSELF is the native <details>, default CLOSED,
-   and .tool-card__head is its <summary> (name + op summary + status) — always visible and
-   the whole disclosure control (arrow + summary rules live up by the head). This body is now
-   just the DISCLOSED wrapper: input + result, revealed on expand.
-
-   SCROLL FIX (stuck/sticky stream): THE STREAM OWNS THE SCROLL. The body's two blocks used
-   to be 240px;overflow:auto boxes, so a wheel gesture that happened to land on an expanded
-   card scrolled that little box instead of the transcript, and Chromium LATCHES a continuous
-   gesture to the scroller it started on — the stream simply stopped moving until the pointer
-   left the card. Fixes, one per block:
-     • .tool-result — cap GONE. Its text is main-capped at 240 chars (session-io
-       summarizeResult), so it can never be long enough to need a scroller of its own.
-     • .tool-card__body pre — this one holds `pretty(inputFull)`, i.e. an arbitrarily large
-       tool input (a Write/Edit file body), so an uncapped item could stand taller than the
-       whole scrollback. It keeps a cap, but a LARGE one (60vh, not 240px), and session.js
-       forwards the wheel to the stream whenever it cannot travel further in that direction,
-       so it never latches the gesture.
-   overscroll-behavior is deliberately NOT used here: it BLOCKS chaining, which is the
-   opposite of what a nested scroller inside a scrolling transcript wants. */
+/* The DISCLOSED wrapper (input + result) of the <details> whose <summary> is
+   .tool-card__head.
+   ⚠ THE STREAM OWNS THE SCROLL. Chromium LATCHES a continuous wheel gesture to the scroller it
+   started on, so a small `overflow:auto` box inside the transcript freezes the stream until
+   the pointer leaves the card. Hence: `.tool-result` has NO cap (main caps its text at 240
+   chars in session-io summarizeResult), and `.tool-card__body pre` — which holds an
+   arbitrarily large tool input — keeps a LARGE 60vh cap while session.js forwards the wheel
+   to the stream at its edges.
+   ⚠ overscroll-behavior is deliberately NOT used: it BLOCKS chaining, the opposite of what a
+   nested scroller inside a scrolling transcript wants. */
 .tool-card__body {
   margin-top: 6px;
 }
@@ -642,9 +560,8 @@ html, body {
   word-break: break-word;
   max-width: 100%;
   min-width: 0;
-  /* A LARGE cap (not 240px) on the one genuinely unbounded block in the card, paired with
-     the wheel forwarding in session.js so it hands the gesture back to the stream at its
-     edges. Nothing here scrolls HORIZONTALLY — pre-wrap + overflow-wrap own that. */
+  /* ⚠ A LARGE cap on the one genuinely unbounded block in the card, paired with session.js's
+     wheel forwarding. Nothing scrolls HORIZONTALLY — pre-wrap + overflow-wrap own that. */
   max-height: 60vh;
   overflow: auto;
   user-select: text;
@@ -655,32 +572,25 @@ html, body {
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  /* No max-height / overflow: main caps this string at 240 chars, so a scroller here only
-     ever stole the wheel from the stream. */
+  /* ⚠ No max-height / overflow: main caps this string at 240 chars, so a scroller here only
+     steals the wheel from the stream. */
 }
 
-/* ── Chat lanes: the stream reads like text messages ──────────────────────────
-   `.lane-me` (this machine: the operator's typed turns, HIS agent's text, and the
-   agent's tool cards) and `.lane-them` (only what the peer actually sent) are stamped
-   by the DOM factories from the pure item-KIND mapping in session-chrome.js, never by
-   matching text. Every DECISION or system item (the outbound card + delivered record,
-   pending-inbound cards, notices, the history divider) carries NO lane class and keeps
-   its own full-width recipe.
-
-   CASCADE (v2.7): these two rules deliberately sit AFTER every laned item's surface
-   recipe. .bubble and .tool-card both declare `max-width: 100%` as their item-4 garble
-   bound at the SAME single-class specificity, so while the lanes were declared first
-   that bound won and NOTHING was ever actually capped at 66% — with both sides now on
-   the right, an uncapped lane would make the two indistinguishable. Declaring the lanes
-   last lets the cap apply without touching (or !important-ing) the surface recipes.
-   Alignment is unopposed by design: no surface recipe may declare `align-self`. */
+/* ── Chat lanes ─────────────────────────────────────────────────────────────
+   `.lane-me` (operator turns, this agent's text and tool cards) and `.lane-them` (only what
+   the peer sent) are stamped by the DOM factories from the pure item-KIND mapping in
+   session-chrome.js, NEVER by matching text. Decision/system items (outbound card, delivered
+   record, pending-inbound, notices, history divider) carry NO lane class.
+   ⚠ CASCADE: these two rules MUST sit AFTER every laned item's surface recipe. .bubble and
+   .tool-card declare `max-width: 100%` at the SAME single-class specificity, so lanes declared
+   first lose and nothing is capped at 66%.
+   ⚠ No surface recipe may declare `align-self` — alignment here is unopposed by design. */
 .lane-me { align-self: flex-end; max-width: 66%; }
 .lane-them { align-self: flex-start; max-width: 66%; }
 
-/* ── Inbound gate card (v2.5 D1): a counterparty message the agent has NOT seen
-   yet, with Accept / Accept for this session / Decline. Full stream width like the
-   other decision surfaces; the buttons WRAP rather than shrink-clip on a narrow
-   window (the same family as .perm-actions). ──────────────────────────────── */
+/* ── Inbound gate card: a counterparty message the agent has NOT seen yet, with Accept /
+   Accept for this session / Decline. Full stream width like the other decision surfaces;
+   ⚠ buttons WRAP rather than shrink-clip on a narrow window. ─────────────── */
 .inbound-pending {
   align-self: stretch;
   border: 1px solid var(--border-strong);
@@ -711,14 +621,11 @@ html, body {
 .inbound-pending.is-released { opacity: 0.55; }
 .inbound-pending.is-declined { opacity: 0.55; }
 
-/* ── Read-only channel history (v2.5 D3 / v3.0 FIX Q2): an AGE CUE, nothing else.
-   This used to be a surface of its own — transparent fill, dashed 6%-alpha hairline,
-   secondary ink — which matched NO live bubble: a replayed exchange read as a ghost
-   rather than as the same conversation, earlier. The entry now carries the live
-   `.bubble.role-*` recipe (the view-model stamps the role), so the surface belongs
-   to those rules and this one only says "earlier".
-   align-self stays OUT: the lane class (single-class selector) owns alignment + the
-   66% cap, and a 2-class selector here would outrank it. ─────────────────── */
+/* ── Read-only channel history: an AGE CUE, nothing else. The entry carries the live
+   `.bubble.role-*` recipe (the view-model stamps the role) so a replayed exchange reads as the
+   same conversation, earlier — not as a ghost.
+   ⚠ align-self stays OUT: the lane class owns alignment + the 66% cap, and a 2-class selector
+   here would outrank it. ─────────────────────────────────────────────────── */
 .history-entry {
   opacity: 0.85;
 }
@@ -759,15 +666,14 @@ html, body {
   white-space: pre-wrap; overflow-wrap: anywhere;
   margin-bottom: 8px;
 }
-/* v2.5 D2: the drafted message body of a gated post. Always visible (no <details>) —
-   the operator must SEE what leaves the machine — and it scrolls past ~200px. */
+/* ⚠ The drafted body of a gated post is ALWAYS visible (no <details>) — the operator must SEE
+   what leaves the machine. Scrolls past ~200px. */
 .perm-post-label { color: var(--text-muted); margin-bottom: 4px; display: block; }
-/* FIX #9: the destination line. Own channel reads as calm secondary text; anything else
-   is the exfil shape the gate exists to catch, so it takes the danger tint + a rule. */
+/* The destination line. Own channel is calm secondary text; anything else is the exfil shape
+   the gate exists to catch, so it takes the danger tint + a rule. */
 .perm-post-to { color: var(--text-secondary); margin-bottom: 6px; display: block; }
-/* 2026-08-02: WHY the dock is asking. The same quiet recipe `.outbound-pending__why` uses on
-   the inline card, so one gate reason reads identically wherever it is shown: it explains the
-   wait, it does not warn about it, and it never competes with the cross-channel tint above. */
+/* WHY the dock is asking. ⚠ Same quiet recipe as `.outbound-pending__why`, so one gate reason
+   reads identically wherever shown and never competes with the cross-channel tint above. */
 .perm-why {
   display: block;
   margin-bottom: 6px;
@@ -806,18 +712,16 @@ html, body {
   max-height: 200px; overflow: auto;
   user-select: text;
 }
-/* item 10: wrap instead of shrink-clipping the 3rd button ("Allow for this
-   session") on a narrow dock inside .perm-card{overflow:hidden} — the same
-   shrink-clip family as item 1. Each button holds its natural width. */
+/* ⚠ Wrap instead of shrink-clipping the 3rd button ("Allow for this session") on a narrow
+   dock inside .perm-card{overflow:hidden}. Each button holds its natural width. */
 .perm-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .perm-actions .ctl { flex: 0 0 auto; }
 .perm-queue-note { margin-top: 8px; color: var(--text-muted); font-size: var(--text-micro); }
 
-/* ── v3.1: the "Thinking" chip ───────────────────────────────────────────────
-   A SIBLING of .stream-wrap, never a child of .stream: the stream owns its own scroll pin and
-   an element inside it would change the tail fingerprint every turn. Pinned to its natural
-   height like every other chrome row, so it cannot shrink the stream. The dots animate with
-   CSS keyframes only — no timer, no `content:` copy (all text is markup). */
+/* ── The "Thinking" chip ─────────────────────────────────────────────────────
+   ⚠ A SIBLING of .stream-wrap, NEVER a child of .stream: the stream owns its scroll pin and an
+   element inside it changes the tail fingerprint every turn. Pinned to natural height like
+   every chrome row. Dots animate with CSS keyframes only — no timer, no `content:` copy. */
 .thinking-chip { display: none; }
 .thinking-chip.is-active {
   display: flex;
@@ -845,10 +749,8 @@ html, body {
   .thinking-chip__dot { animation: none; opacity: 0.55; }
 }
 
-/* ── Q6: the Claude Code sign-in banner ──────────────────────────────────────
-   Hidden until main holds this session on a missing credential. It sits with the other
-   decision surfaces (above the composer, below the dock) and is pinned to its natural height
-   so it never competes with the stream for space. */
+/* ── The Claude Code sign-in banner. Hidden until main holds this session on a missing
+   credential; sits with the other decision surfaces and is pinned to natural height. */
 .auth-notice { display: none; }
 .auth-notice.is-active {
   display: flex;
@@ -876,8 +778,8 @@ html, body {
   align-items: flex-start;
   justify-content: center;
 }
-/* While awaiting consent, NO agent surface renders (§H-1). The sign-in banner and the thinking
-   chip join the list: a pre-consent window runs no query, so neither can have anything to say. */
+/* ⚠ While awaiting consent, NO agent surface renders (§H-1) — a pre-consent window runs no
+   query, so the sign-in banner and thinking chip are on the list too. */
 .app.is-consent .stream-wrap,
 .app.is-consent .composer,
 .app.is-consent .permission-dock,
@@ -918,21 +820,19 @@ html, body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
 }
 .consent-note { font-size: var(--text-caption); color: var(--text-secondary); }
-/* F-118: three controls now (Accept · Open in Claude Code · Deny), and Accept relabels to
-   "Start a Dopl session instead" after an attended handoff, so the row has to wrap rather
-   than squeeze the card's 560px. */
+/* ⚠ Three controls (Accept / Open in Claude Code / Deny), and Accept relabels to "Start a Dopl
+   session instead" after an attended handoff, so the row must WRAP rather than squeeze the
+   card's 560px. */
 .consent-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 
 /* ── Composer (steering) ─────────────────────────────────────────────────── */
-/* D4: NO horizontal padding. The 10px/side it used to carry (against .app's 8px)
-   made the field 20px narrower than the stream box above it; zeroing it lines the
-   field's outer edges up with the stream exactly. Vertical padding is unchanged. */
+/* ⚠ NO horizontal padding: any (against .app's 8px) makes the field narrower than the stream
+   box above it. Zero lines the field's outer edges up with the stream exactly. */
 .composer { padding: 10px 0; }
 .composer__field { display: flex; align-items: flex-end; gap: 8px; padding: 8px; border-radius: 12px; }
-/* D7: the field auto-grows to at most 3 line-heights, then scrolls. The cap is
-   derived from the REAL line-height (1.5em per line) + the 12px vertical padding,
-   so CSS and the growHeight() math agree. `rows="1"` + the min-height keep it one
-   line at rest; session.js sets an inline height on input. */
+/* The field auto-grows to at most 3 line-heights, then scrolls. ⚠ The cap is derived from the
+   REAL line-height (1.5em/line) + the 12px vertical padding, so CSS and growHeight() agree.
+   `rows="1"` + min-height keep it one line at rest; session.js sets an inline height. */
 .steer-input {
   flex: 1;
   min-height: calc(1.5em + 12px);
@@ -950,9 +850,8 @@ html, body {
   user-select: text;
 }
 .composer__controls { display: flex; align-items: center; gap: 8px; flex: none; }
-/* D5: ONE compact black icon button. It keeps the .auth-btn-3d black face (which
-   owns the border + shadow — NO `border` here, item 5) and swaps which inline SVG
-   glyph is visible: the up-arrow at rest, the pause bars while the agent works. */
+/* ONE compact black icon button. ⚠ .auth-btn-3d owns the border + shadow — NO `border` here.
+   Swaps which inline SVG glyph shows: up-arrow at rest, pause bars while the agent works. */
 .send-btn {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 30px; height: 30px; padding: 0;
@@ -981,18 +880,16 @@ html, body {
 }
 .ended-banner b { color: var(--text-primary); }
 
-/* ── §3.2 composer ADDRESSEE PILL: the pill, its menu, the peer_message bubble ──── */
-/* ONE appended block, replacing v2.8's `.mention-pop` block one-for-one. The `.composer` /
-   `.steer-input` / `.composer__controls` declarations above are pinned verbatim by
-   test/session-chrome.test.mjs (D4/D6/D7) and are NOT edited in place; the only thing the
-   composer itself needs is a positioning context, which is its own rule below. The menu is
-   position:absolute, so it is out of flow: it cannot enter the composer's flex-shrink
-   competition, and it is not inside .stream, so the scroll pin / wheel forwarding never see
-   it either. */
+/* ── Composer ADDRESSEE PILL: the pill, its menu, the peer_message bubble ──────
+   ⚠ The `.composer` / `.steer-input` / `.composer__controls` declarations above are pinned
+   VERBATIM by test/session-chrome.test.mjs — do not edit them in place; the composer only
+   needs a positioning context, added as its own rule below.
+   The menu is position:absolute and therefore out of flow: it cannot enter the composer's
+   flex-shrink competition, and it is not inside .stream, so the scroll pin / wheel forwarding
+   never see it. */
 .composer { position: relative; }
-/* The pill sits INSIDE the concave field, so it must read as raised ON an inset surface:
-   elevated fill + the strong hairline, the same recipe the web pill uses (DESIGN-SYSTEM
-   "Pills/chips"). Tokens only, no local shadow. */
+/* The pill sits INSIDE the concave field, so it reads as raised ON an inset surface: elevated
+   fill + strong hairline, the web pill's recipe (DESIGN-SYSTEM "Pills/chips"). Tokens only. */
 .target-pill {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
   max-width: 220px;
@@ -1029,20 +926,20 @@ html, body {
 }
 .target-opt.is-sel { background: var(--bg-inset); }
 .target-opt__label { font-size: var(--text-caption); font-weight: 600; color: var(--text-primary); }
-/* The row's CONSEQUENCE line. It WRAPS (unlike the pill's face, which ellipses): it is a
-   sentence, and a truncated statement of what a send will do is worse than none. */
+/* The row's CONSEQUENCE line. ⚠ WRAPS, unlike the pill's face: a truncated statement of what
+   a send will do is worse than none. */
 .target-opt__hint { font-size: var(--text-caption); color: var(--text-secondary); white-space: normal; }
-/* The limit line under a menu that can only offer the self row. Not an option, so it must
-   never take the .is-sel surface or a pointer. */
+/* The limit line under a menu that can only offer the self row. ⚠ Not an option — never give
+   it the .is-sel surface or a pointer. */
 .target-pop__note {
   margin-top: 4px; padding: 4px 8px 2px;
   border-top: 1px solid var(--border-subtle);
   font-size: var(--text-caption); color: var(--text-muted);
   white-space: normal; cursor: default;
 }
-/* SURFACE ONLY (like .bubble.role-operator): a 2-class selector would outrank .lane-me, so
-   this recipe must never declare align-self or a width. The dashed border is what separates
-   "I said this to the peer" from "I steered my agent" at a glance. */
+/* ⚠ SURFACE ONLY: a 2-class selector outranks .lane-me, so this must never declare align-self
+   or a width. The dashed border separates "I said this to the peer" from "I steered my
+   agent". */
 .bubble.role-peer-msg { background: var(--bg-inset); border-style: dashed; border-color: var(--border-highlight); }
 .peer-msg__status {
   margin-top: 4px;
@@ -1052,13 +949,11 @@ html, body {
 .bubble.role-peer-msg.is-failed { border-color: var(--danger); }
 .bubble.role-peer-msg.is-failed .peer-msg__status { color: var(--danger); }
 
-/* FIX F3: `is-request` (session-render.js makeRequest) had no rule ANYWHERE, so the opening
-   ask this session exists to answer looked exactly like an ordinary turn inside it. ONE quiet
-   distinction, tokens only: the opener loses its fill and keeps a hairline, so it reads as the
-   context above the conversation rather than as another speaker in it. SURFACE ONLY, like
-   .bubble.role-operator: a 2-class selector outranks .lane-me, so this recipe must never
-   declare align-self or a width. It comes AFTER the role recipes on purpose (same
-   specificity, so source order is what makes it win on the request item). */
+/* `is-request` (session-render.js makeRequest): the opening ask loses its fill and keeps a
+   hairline, so it reads as the context above the conversation rather than another speaker.
+   ⚠ SURFACE ONLY — never declare align-self or a width (a 2-class selector outranks .lane-me).
+   ⚠ Must come AFTER the role recipes: same specificity, so source order is what makes it win
+   on the request item. */
 .bubble.is-request { background: transparent; border-color: var(--border-highlight); }
 
 .hidden { display: none !important; }

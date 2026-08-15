@@ -10,30 +10,22 @@ import {
 } from "./api-envelope";
 
 /**
- * apiRequest — the single browser-side HTTP client for this app's
- * `/api/**` routes. Owns the conventions every feature previously
- * copy-pasted into its own `request<T>`:
+ * apiRequest — the single browser-side HTTP client for `/api/**`. Owns:
+ *   - `x-workspace-id` header when `workspaceId` is given;
+ *   - JSON body encoding + `content-type`;
+ *   - optional `x-updated-at` concurrency precondition (412 on mismatch);
+ *   - `undefined`-stripping query-param builder;
+ *   - 204 → `undefined`; non-JSON error bodies degrade gracefully;
+ *   - `!res.ok` → `ApiError` with the ENGINEERING §9 envelope.
  *
- *   - `x-workspace-id` header when `workspaceId` is provided.
- *   - JSON body encoding + `content-type`.
- *   - Optional `x-updated-at` concurrency precondition (412 on mismatch).
- *   - `undefined`-stripping query-param builder.
- *   - 204 → `undefined`; non-JSON error bodies degrade gracefully.
- *   - `!res.ok` → throws `ApiError` carrying the `{ error: { code,
- *     message, details } }` envelope from ENGINEERING §9.
- *
- * Everything in that list except the transport lives in `./api-envelope.ts`,
- * shared verbatim with the desktop SPA's own client (`apps/desktop-ui/src/
- * lib/api.ts`) — one `ApiError` class, one decoder, one option shape for the
- * whole bundle. This file owns only WHICH WIRE the bytes leave on.
- *
- * Feature clients that need domain-specific error subtypes (e.g. the
- * teams 409 conflict) catch/rethrow around this, they don't re-implement it.
+ * ⚠ Everything but the TRANSPORT lives in `./api-envelope.ts`, shared verbatim
+ * with `apps/desktop-ui/src/lib/api.ts`. This file owns only which wire the
+ * bytes leave on. Feature clients needing domain error subtypes catch/rethrow
+ * around this — they never re-implement it.
  */
 
-// Re-exported so the ~30 existing `@/shared/api/api-client` importers keep
-// compiling — and so `instanceof ApiError` means the same thing whichever
-// module a call site reached for.
+// Re-exported so `instanceof ApiError` means the same thing whichever module a
+// call site reached for.
 export { ApiError, withQuery, decodeResponse };
 export type { ApiRequestOpts, RawApiResponse };
 
@@ -43,26 +35,23 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const url = withQuery(path, opts.query);
 
-  // TRANSPORT SEAM (desktop migration Phase 2): inside the bundled desktop
-  // SPA the renderer never touches the network — `window.dopl.apiRequest`
-  // (the Electron IPC bridge; main attaches auth and fetches) is the
-  // transport, and every reused feature client inherits it through this one
-  // seam. On the web (no bridge) the plain fetch below runs unchanged. The
-  // bridge answer is normalized into the same {status, hasBody, body} shape
-  // so the envelope/ApiError decoding is shared verbatim by both paths.
-  // CAPABILITY-KEYED, never truthiness: the legacy wrapper exposes a
-  // partial window.dopl with no apiRequest — see spa-bridge.ts.
+  // TRANSPORT SEAM: in the bundled SPA the renderer never touches the network —
+  // `window.dopl.apiRequest` (Electron IPC; main attaches auth and fetches) is
+  // the transport, normalized into the same {status, hasBody, body} shape so
+  // envelope/ApiError decoding is shared verbatim. ⚠ CAPABILITY-KEYED, never
+  // truthiness — the legacy wrapper exposes a partial window.dopl with no
+  // apiRequest (spa-bridge.ts).
   const bridge = getSpaBridge();
 
   let raw: RawApiResponse;
   if (bridge) {
-    // NOTE: main reconstructs every header (auth, workspace, updated-at,
-    // content-type) from the structured opts. A new header added to the
-    // fetch branch below must ALSO become a bridge opt or it will silently
-    // not exist in the desktop app.
-    // The IPC call itself cannot be cancelled; racing it against the abort
-    // signal keeps TanStack's unmount/supersede semantics (the promise
-    // settles, the response is discarded).
+    // ⚠ Main reconstructs every header (auth, workspace, updated-at,
+    // content-type) from the structured opts. A new header added to the fetch
+    // branch below must ALSO become a bridge opt, or it silently will not exist
+    // in the desktop app.
+    // ⚠ The IPC call cannot be cancelled; racing it against the abort signal
+    // preserves TanStack's unmount/supersede semantics (promise settles,
+    // response discarded).
     const call = bridge.apiRequest(url, {
       method: opts.method ?? "GET",
       body: opts.body,

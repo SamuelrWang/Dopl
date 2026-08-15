@@ -51,16 +51,14 @@ const selectSkills = (body: { skills: ResourceRow[] }) => toResources(body.skill
 const selectEntries = (body: { entries: EntryRef[] }) => body.entries;
 
 /**
- * The knowledge bases and skills the caller can reference from
- * ontology attributes (ref pickers + name resolution on rendered ref
- * attributes). Knowledge attributes may hold whole-base ids OR base
- * ENTRY ids (the MCP `set_attribute kind="knowledge"` accepts both);
- * base ids resolve from the bases list, entry ids are batch-resolved
- * from the graph through `GET /api/knowledge/entries?ids=` (one query
- * for every unresolved id — no per-row waterfall). All three endpoints
- * enforce visibility server-side, so whatever arrives here is what the
- * caller may see — the pickers never filter for security themselves.
- * Query-cached: revisits render names instantly without re-pulling.
+ * Knowledge bases + skills referenceable from ontology attributes (ref pickers
+ * and name resolution). Knowledge attributes may hold whole-base ids OR base
+ * ENTRY ids (MCP `set_attribute kind="knowledge"` accepts both); base ids
+ * resolve from the bases list, entry ids batch-resolve through
+ * `GET /api/knowledge/entries?ids=` — one query, no per-row waterfall.
+ *
+ * ⚠ All three endpoints enforce visibility SERVER-side; the pickers never
+ * filter for security themselves.
  */
 export function OntologyResourcesProvider({
   workspaceId,
@@ -88,9 +86,8 @@ export function OntologyResourcesProvider({
     return m;
   }, [knowledge]);
 
-  // Knowledge-attribute ids that aren't known bases are entry ids to
-  // name-resolve. Sorted for a stable query key; capped at the endpoint
-  // limit.
+  // Knowledge-attribute ids that aren't known bases are entry ids to resolve.
+  // Sorted for a stable query key; capped at the endpoint limit.
   const entryIds = useMemo(() => {
     const ids = new Set<string>();
     for (const obj of Object.values(graph.objects)) {
@@ -104,9 +101,8 @@ export function OntologyResourcesProvider({
     return [...ids].sort().slice(0, MAX_ENTRY_IDS);
   }, [graph, baseNames]);
 
-  // The query key moves whenever a picked id-set changes;
-  // keepPreviousData holds the last resolved names in place so existing
-  // chips don't flash back to "Unavailable" while the refetch lands.
+  // ⚠ Query key moves whenever the picked id-set changes; keepPreviousData
+  // stops existing chips flashing back to "Unavailable" mid-refetch.
   const entriesQuery = useApiQuery("/api/knowledge/entries", {
     workspaceId,
     query: entryIds.length > 0 ? { ids: entryIds.join(",") } : undefined,

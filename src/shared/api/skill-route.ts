@@ -5,11 +5,8 @@ import { SkillSlugSchema } from "@/features/skills/schema";
 import { mapSkillError } from "@/features/skills/server/http-mapping";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
-/**
- * Skills route catch-block helper. Translates domain errors via
- * `mapSkillError`, falls through to HttpError, generic 500 otherwise.
- * Mirrors `toKnowledgeErrorResponse`.
- */
+/** Skills route catch-block helper: `mapSkillError`, then HttpError, then a
+ *  generic 500. Mirrors `toKnowledgeErrorResponse`. */
 export function toSkillErrorResponse(err: unknown): NextResponse {
   return toHttpErrorResponse("skill-route", err, mapSkillError);
 }

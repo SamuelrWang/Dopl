@@ -9,10 +9,8 @@ import {
   WorkspaceKeyPrivateSkillError,
 } from "./errors";
 
-/**
- * Translates skills domain errors to HttpError. Returns null for
- * unrecognized errors so the caller falls through to a generic 500.
- */
+/** Skills domain errors → HttpError. Null for unrecognized errors, so the
+ *  caller falls through to a generic 500. */
 export function mapSkillError(err: unknown): HttpError | null {
   if (err instanceof SkillNotFoundError) {
     return new HttpError(404, "SKILL_NOT_FOUND", err.message);

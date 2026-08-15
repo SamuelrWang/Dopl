@@ -15,25 +15,15 @@ import {
 } from "../lib/optimistic-cache";
 
 /**
- * INVITATION writes: revoke a pending invitation, and rotate the shareable
- * join link.
- *
- * REVOKE was the launch audit's headline dead control — "literally nothing
- * happens on click". It awaited a DELETE and then refetched, and the refetch
- * was the only thing that could remove the row, so the ✕ produced no pixel
- * change at all for two network hops. It drops the row before the request
- * leaves now; the layer's snapshot puts it back if the DELETE fails.
- *
- * RESET LINK is the honest opposite case: only the server can mint the new
- * token, so there is nothing to patch optimistically and inventing a
- * placeholder token would put a DEAD invite URL on screen for the user to copy.
- * What was wrong was showing the OLD url — a working link the admin believes
- * they have just invalidated — so the fix is `pending`, and the reconcile folds
- * the POST's own answer straight into the read's cache with no refetch.
- *
- * The two configs are exported as PURE FACTORIES so the tests can drive them
- * through TanStack's own `MutationObserver` rather than a re-implementation of
- * the onMutate → mutationFn → onError order they depend on.
+ * Invitation writes: revoke a pending invitation, rotate the shareable join
+ * link. Revoke drops the row before the request leaves; the layer's snapshot
+ * puts it back if the DELETE fails.
+ * ⚠ Reset link has NO optimistic patch: only the server can mint the token,
+ * and a placeholder would put a dead invite URL on screen to copy. It uses
+ * `pending` instead, and the reconcile folds the POST's answer into the read's
+ * cache with no refetch.
+ * Configs are exported as PURE FACTORIES so tests can drive them through
+ * TanStack's own `MutationObserver`.
  */
 
 export interface RevokeInvitationDraft {
@@ -49,15 +39,14 @@ export function revokeInvitationConfig(
       path: invitationPath(workspaceSlug, draft.invitationId),
       method: "DELETE",
     }),
-    // The PREFIX key, not the exact tuple: the pending list is read by the
-    // console's list pane and by the settings modal's members tab, which mount
+    // ⚠ PREFIX key, not the exact tuple: the pending list is read by the
+    // console's list pane AND the settings modal's members tab, which mount
     // independently and may hold separate cache entries.
     optimistic: (draft) =>
       patchCache<InvitationsCache>(invitationsKey, (cache) =>
         dropInvitation(cache, draft.invitationId)
       ),
-    // The row reappearing IS the failure state, so the toast only has to say
-    // why — same division of labour as the channels writes.
+    // The row reappearing IS the failure state; the toast only says why.
     onError: (err) =>
       toast({
         title:
@@ -73,8 +62,8 @@ export function resetJoinLinkConfig(
   return {
     request: () => ({ path: joinLinkPath(workspaceSlug), method: "POST" }),
     reconcile: (data) => patchCache<JoinLinkCache>(joinLinkKey, () => data),
-    // Keep the current link on failure — a reset that did not happen must not
-    // leave the admin believing the old URL is dead.
+    // ⚠ Keep the current link on failure — a reset that didn't happen must
+    // not leave the admin believing the old URL is dead.
     onError: (err) =>
       toast({
         title: err instanceof Error ? err.message : "Couldn't reset the link",

@@ -16,21 +16,18 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Display font — used for headings and branding (openclaw aesthetic)
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-// Mono font — used for labels, status text, code
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
 });
 
-// Serif font (Newsreader) — used for branding / serif accents.
 const playfairDisplay = Newsreader({
   variable: "--font-playfair",
   subsets: ["latin"],
@@ -38,16 +35,14 @@ const playfairDisplay = Newsreader({
   style: ["normal", "italic"],
 });
 
-// Inter — used for landing page body text
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
 });
 
-// Canonical site URL — used by metadataBase so relative image paths in
-// OpenGraph/Twitter tags resolve to absolute URLs (required for link previews
-// in iMessage, Slack, Twitter, etc.).
+// metadataBase: relative OpenGraph/Twitter image paths must resolve absolute or link previews
+// (iMessage, Slack, Twitter) break.
 const SITE_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://usedopl.com";
 
@@ -56,21 +51,12 @@ const SITE_DESCRIPTION =
   "AI-powered knowledge base of proven agent setups, automations, and integrations. Compose and ship agent stacks faster.";
 
 /**
- * The OpenGraph / Twitter card, pulled by every link-preview scrape (iMessage,
- * Slack, Twitter, LinkedIn, Discord) and by nothing else.
- *
- * IT WAS A 1.30MB PNG (P0-4, 2026-08-07) — a 1200×630 screenshot of the landing
- * page, which is photographic content in a format built for flat colour, at ~13×
- * the size a card of those dimensions should be. PNG could not be fixed by
- * recompression: `compressionLevel: 9` made it slightly LARGER, and palette
- * quantization to 128 colours (the only setting that reached the target size)
- * banded the sky gradient that is most of the frame. The source is fully opaque,
- * so JPEG loses nothing real: q86, 4:4:4 chroma, mozjpeg → **100,348 bytes, a
- * 92.3% reduction**, visually indistinguishable at card size and above.
- *
- * The extension change is the point of the rename, not an accident of it: JPEG is
- * the one lossy format every scraper in that list has always accepted (WebP was
- * 44KB and tempting, and is the thing to try when the tail of scrapers is known).
+ * OpenGraph / Twitter card — read only by link-preview scrapers.
+ * ⚠ Must stay JPEG, not PNG: the frame is photographic (a landing screenshot), so PNG cost 1.30MB
+ * and could not be recompressed — `compressionLevel: 9` grew it, and 128-colour quantization
+ * banded the sky gradient. Fully opaque source ⇒ JPEG loses nothing: q86, 4:4:4, mozjpeg →
+ * 100,348 bytes. JPEG is also the one lossy format every scraper accepts (WebP is 44KB and
+ * tempting once the scraper tail is known).
  */
 const OG_CARD = "/img/site_thumbnail.jpg";
 
@@ -116,9 +102,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        // The inline script below mutates body's class before hydration (strips
-        // mosaic-bg / adds landing-active on / and /pricing to avoid a flash), so
-        // the server/client class lists intentionally differ on first paint.
+        // ⚠ The inline script below mutates body's class before hydration (strips mosaic-bg /
+        // adds landing-active on / and /pricing), so server/client class lists differ on first paint.
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >

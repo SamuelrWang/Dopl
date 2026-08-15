@@ -9,10 +9,9 @@ export interface WorkspaceSettingsFormCoreProps {
   workspace: Workspace;
   role: Role;
   /**
-   * Fired with the saved workspace. Router-agnostic on purpose: renaming
-   * regenerates the slug, and each app decides for itself how to land on the
-   * new canonical URL (`router.push` on the web, the SPA router in the
-   * desktop renderer) and how to re-read the workspace it just changed.
+   * Fired with the saved workspace. ⚠ Router-agnostic: renaming REGENERATES the
+   * slug, and each app decides how to land on the new canonical URL and re-read
+   * the workspace it just changed.
    */
   onSaved: (updated: Workspace) => void;
 }

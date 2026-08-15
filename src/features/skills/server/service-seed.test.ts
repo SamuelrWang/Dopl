@@ -1,8 +1,5 @@
-/**
- * The skills seed's WRITE SHAPE and the slug → id map the ontology seed's
- * skill attributes resolve against. One insert per fixture, awaited, used
- * to sit in the post-signup redirect; it is one statement now.
- */
+/** The seed's WRITE SHAPE — one statement, not one insert per fixture — and
+ *  the slug → id map the ontology seed's skill attributes resolve against. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -53,8 +50,8 @@ describe("skills seed", () => {
     for (const row of vi.mocked(repo.insertSkills).mock.calls[0][0]) {
       expect(row.workspaceId).toBe(WS);
       expect(row.createdBy).toBe(USER);
-      // Starter content: visible to every member, read-only to agents
-      // (audit F-10b — set explicitly, never inherited from a default).
+      // Starter content: visible to every member, read-only to agents. ⚠ Set
+      // explicitly, never inherited from a default.
       expect(row.visibility).toBe("public");
       expect(row.agentWriteEnabled).toBe(false);
       expect(row.source).toBe("user");

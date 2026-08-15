@@ -15,10 +15,8 @@ import {
 } from "./dto";
 
 /**
- * Raw Supabase I/O for knowledge ENTRIES — reads (incl. path-resolver
- * helpers and batch id lookups), writes, and soft delete/restore. No
- * business logic, no auth checks; see `repository.ts` for the split map
- * and conventions.
+ * Raw Supabase I/O for knowledge ENTRIES. No business logic, no auth checks —
+ * see `repository.ts` for the split map and conventions.
  */
 
 export interface ListEntriesOpts {
@@ -45,11 +43,8 @@ export async function findEntryById(
   return data ? mapEntryRow(data as KnowledgeEntryRow) : null;
 }
 
-/**
- * Find an entry by (kb, folder, title) — like `findActiveFolderByName`,
- * the unique partial index from Item 4 guarantees max-1 row among
- * active entries. Used by the path resolver.
- */
+/** By (kb, folder, title). Unique partial index guarantees max-1 active row.
+ *  Used by the path resolver. */
 export async function findActiveEntryByTitle(
   baseId: string,
   folderId: string | null,
@@ -69,12 +64,8 @@ export async function findActiveEntryByTitle(
   return data ? mapEntryRow(data as KnowledgeEntryRow) : null;
 }
 
-/**
- * List every active entry directly inside (kb, folder), title only.
- * Used by the path resolver's slug-based fallback — when a strict title
- * match misses, the resolver scans this bucket and slug-matches
- * client-side. Bounded by parent folder, so the list is small.
- */
+/** Titles of active entries directly inside (kb, folder). Feeds the path
+ *  resolver's slug fallback; bounded by parent folder, so small. */
 export async function listActiveEntryTitlesIn(
   baseId: string,
   folderId: string | null
@@ -92,7 +83,7 @@ export async function listActiveEntryTitlesIn(
   return (data ?? []) as Array<{ id: string; title: string }>;
 }
 
-/** Hydrate a full entry by id. Used after the slug fallback identifies one. */
+/** Hydrate full entry by id, after the slug fallback identifies one. */
 export async function findActiveEntryById(
   entryId: string
 ): Promise<KnowledgeEntry | null> {
@@ -129,8 +120,8 @@ export async function listEntriesForBase(
   query = query
     .order("position", { ascending: true })
     .order("created_at", { ascending: true })
-    // Deterministic tiebreak so paged reads never repeat/skip rows on
-    // position/created_at ties.
+    // ⚠ Deterministic tiebreak: paged reads repeat/skip rows on
+    // position/created_at ties without it.
     .order("id", { ascending: true });
   if (opts.limit !== undefined) {
     const offset = opts.offset ?? 0;
@@ -147,11 +138,10 @@ export async function listEntriesForBase(
 }
 
 /**
- * Highest `position` among active entries in a (base, folder) bucket, or
- * -1 when the bucket is empty. Lets `insertEntry` append with `max + 1`
- * so the caller's insertion order survives in position-sorted views (F-8)
- * instead of every new row landing at 0 and collapsing to an alphabetical
- * tiebreak in get_tree.
+ * Highest `position` among active entries in a (base, folder) bucket, -1 when
+ * empty. `insertEntry` appends at `max + 1` so insertion order survives in
+ * position-sorted views (F-8) instead of every row landing at 0 and collapsing
+ * to an alphabetical tiebreak in get_tree.
  */
 export async function maxEntryPositionIn(
   baseId: string,
@@ -184,25 +174,19 @@ export async function countEntriesForBase(baseId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** One active entry's base + last-write stamp — the raw material the
- *  service folds into per-base list stats. camelCase already: no
- *  snake_case key leaves this layer. */
+/** Base + last-write stamp the service folds into per-base list stats.
+ *  camelCase: no snake_case key leaves this layer. */
 export interface EntryStamp {
   baseId: string;
   updatedAt: string;
 }
 
 /**
- * Every active entry's `(base, updated_at)` pair for a SET of bases, in
- * ONE query — the base list's "{N} entries · updated {when}" columns.
- *
- * Two columns and no bodies, because the alternative shapes are both
- * worse: `countEntriesForBase` is per-base (N round trips for a list
- * that renders in one grid), and a `count`/`max` aggregate needs a
- * grouped RPC, i.e. a migration, for a number the caller re-derives from
- * these rows for free. The service does the fold (repositories hold no
- * business logic); the id list is the caller's post-visibility base set,
- * so nothing hidden is ever counted.
+ * `(base, updated_at)` for a SET of bases in ONE query — the base list's
+ * "{N} entries · updated {when}" columns. Two columns, no bodies:
+ * `countEntriesForBase` is N round trips per grid, and a count/max aggregate
+ * needs a grouped RPC for numbers the caller re-derives free. ⚠ `baseIds` is
+ * the caller's POST-visibility set, so nothing hidden is counted.
  */
 export async function listEntryStampsForBases(
   workspaceId: string,
@@ -226,10 +210,9 @@ export async function listEntryStampsForBases(
 }
 
 /**
- * Batch id lookup for active entries — name resolution for ontology
- * knowledge-attribute refs (`GET /api/knowledge/entries?ids=`). Meta
- * only (bodies stripped) and workspace-filtered because callers pass
- * untrusted ids; base-visibility gating happens in the service.
+ * Batch id lookup for active entries (`GET /api/knowledge/entries?ids=`).
+ * ⚠ Meta only and workspace-filtered because callers pass UNTRUSTED ids;
+ * base-visibility gating happens in the service.
  */
 export async function listEntriesByIds(
   workspaceId: string,
@@ -266,10 +249,9 @@ export async function insertEntry(
   args: InsertEntryArgs
 ): Promise<KnowledgeEntry> {
   const db = supabaseAdmin();
-  // F-8: append after the current siblings when the caller didn't pin a
-  // position, so insertion order is preserved. Concurrent inserts can
-  // race to the same value — acceptable, since position is a display
-  // hint and the (created_at, id) tiebreak keeps ordering deterministic.
+  // F-8: append after siblings when position unpinned, preserving insertion
+  // order. Concurrent inserts may race to the same value — fine, position is a
+  // display hint and the (created_at, id) tiebreak stays deterministic.
   const position =
     args.position ??
     (await maxEntryPositionIn(args.knowledgeBaseId, args.folderId ?? null)) + 1;
@@ -295,15 +277,10 @@ export async function insertEntry(
 }
 
 /**
- * Batch form of `InsertEntryArgs`. Two deliberate differences:
- *   - `position` is REQUIRED. The single-row form falls back to a
- *     `maxEntryPositionIn` read per insert; doing that inside a batch would
- *     put back the very round-trips the batch exists to remove, and every
- *     batch caller (the seed) already knows the order it wants.
- *   - `id` may be supplied. The caller then knows each row's uuid before
- *     the insert resolves, so dependent structures (the seed's
- *     `entryIdByKey` cross-reference map) need no second pass and no
- *     assumption about `RETURNING` order.
+ * Batch form of `InsertEntryArgs`. `position` is REQUIRED — the single-row
+ * `maxEntryPositionIn` fallback would restore the per-row round trips the batch
+ * exists to remove. `id` MAY be supplied so callers know each uuid before the
+ * insert resolves — no second pass, no assumption about `RETURNING` order.
  */
 export interface InsertEntriesArgs extends Omit<InsertEntryArgs, "position"> {
   id?: string;
@@ -377,7 +354,7 @@ export async function updateEntryRow(
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
-  // Optimistic concurrency CAS (see updateBaseRow).
+  // Optimistic-concurrency CAS (see updateBaseRow).
   let query = db.from("knowledge_entries").update(update).eq("id", id);
   if (expectedUpdatedAt !== undefined) {
     query = query.eq("updated_at", expectedUpdatedAt);
@@ -391,11 +368,8 @@ export async function updateEntryRow(
   return mapEntryRow(data as KnowledgeEntryRow);
 }
 
-/**
- * PERMANENTLY delete a single entry. Deletion is immediate and
- * irreversible — there is no trash (2026-08-07). Workspace-scoped as
- * defense-in-depth; embedding chunks cascade via FK.
- */
+/** PERMANENT delete — no trash. Workspace-scoped as defense-in-depth;
+ *  embedding chunks cascade via FK. */
 export async function hardDeleteEntry(
   workspaceId: string,
   id: string

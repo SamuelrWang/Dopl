@@ -31,10 +31,10 @@ import {
 } from "./service-shared";
 
 /**
- * Read-side channels service: the visibility-filtered list, single-channel
- * header, roster, and cursor-based message reads. All funnel through the
- * shared visibility gate in `service-shared`. A member's message read
- * doubles as the read-watermark update (last_read_at) — see `readMessages`.
+ * Read-side channels service: visibility-filtered list, single-channel header,
+ * roster, cursor-based message reads. All funnel through `service-shared`'s
+ * visibility gate. A member's message read doubles as the read-watermark update
+ * — see `readMessages`.
  */
 
 interface ChannelExtras {
@@ -65,10 +65,9 @@ function toChannelDto(
 }
 
 /**
- * Resolve the rendered peer for every direct channel in `rows` — the OTHER
- * member (not the caller), hydrated with display name + avatar from the roster.
- * The peer is resolved LIVE (never stored as truth): a display name / avatar
- * can change. One profile fetch for the whole page.
+ * Resolve the rendered peer for every direct channel in `rows`, hydrated from
+ * the roster. ⚠ Resolved LIVE, never stored as truth — a display name/avatar
+ * changes. One profile fetch for the whole page.
  */
 async function buildDirectPeers(
   rows: ChannelRow[],
@@ -174,9 +173,9 @@ export async function listChannelMembers(
     profilesById(rows.map((r) => r.user_id)),
     collab.presenceForWorkspace(ctx.workspaceId),
   ]);
-  // The private-preference scrub (notify_scope + agent_tool_profile are shown
-  // only on the caller's own row) is enforced inside `mapMemberRow` — pass the
-  // viewer and it holds for every roster read.
+  // ⚠ Private-preference scrub (notify_scope + agent_tool_profile only on the
+  // caller's own row) is enforced inside `mapMemberRow` — pass the viewer and it
+  // holds for every roster read.
   return rows.map((row) =>
     mapMemberRow(row, profiles.get(row.user_id), {
       viewerUserId: ctx.userId,
@@ -199,19 +198,13 @@ async function hydrateMessages(
 
 /**
  * Cursor-based message read (`seq > since`, ascending, capped at `limit`),
- * optionally scoped to ONE thread (`query.thread` -> `metadata.taskId`).
- * A member's read advances their `last_read_at` watermark as a
- * best-effort side-effect (the chosen read-tracking mechanism), so viewing
- * the thread — including a realtime-triggered refetch — clears its unread
- * state. Non-members reading a public channel don't have a watermark to
- * move.
+ * optionally scoped to ONE thread (`query.thread` → `metadata.taskId`). A
+ * member's read advances `last_read_at` best-effort. Non-members reading a
+ * public channel have no watermark to move.
  *
- * A THREAD-SCOPED read moves NO watermark. The watermark is content-derived
- * (the newest message SHOWN) and monotonic, so a filtered read would jump it
- * over every unrelated message older than the thread's latest post and mark
- * those read without anyone having seen them. Reading one exchange is not
- * viewing the channel; the unfiltered read is still the only thing that
- * clears the channel's unread state.
+ * ⚠ A THREAD-SCOPED read moves NO watermark. The watermark is content-derived
+ * (newest message SHOWN) and monotonic, so a filtered read would jump it over
+ * every unrelated older message and mark those read unseen.
  */
 export async function readMessages(
   ctx: ChannelContext,
@@ -226,12 +219,11 @@ export async function readMessages(
   });
   const messages = await hydrateMessages(rows);
   if (membership && query.thread === undefined && messages.length > 0) {
-    // Watermark = newest message SHOWN, written only when it advances.
-    // Writing now() on every read made each realtime-triggered refetch emit
-    // a channel_members UPDATE, which is itself a subscribed realtime event:
-    // every open tab re-fired every other tab in a permanent refetch loop
-    // (the 2026-07-27 CPU incident). Content-derived + monotonic = a refetch
-    // that shows nothing new writes nothing and the cycle terminates.
+    // ⚠ Watermark = newest message SHOWN, written only when it ADVANCES.
+    // Writing now() on every read makes each realtime-triggered refetch emit a
+    // `channel_members` UPDATE, itself a subscribed realtime event — every tab
+    // re-fires every other tab in a permanent refetch loop. Content-derived +
+    // monotonic means a refetch showing nothing new writes nothing.
     const newest = messages.reduce(
       (max, m) => (Date.parse(m.createdAt) > Date.parse(max) ? m.createdAt : max),
       messages[0].createdAt
@@ -241,7 +233,7 @@ export async function readMessages(
       try {
         await repo.updateLastRead(channel.id, ctx.userId, newest);
       } catch {
-        // Best-effort — a failed watermark bump must not fail the read.
+        // ⚠ Best-effort — a failed watermark bump must not fail the read.
       }
     }
   }
@@ -249,12 +241,10 @@ export async function readMessages(
 }
 
 /**
- * Resolve a channel ref to its id after validating the caller may read it.
- * The await hold calls this once to resolve the ref — it is a FULL access
- * check, so the hold's tick-0 read is already covered — then re-checks
- * periodically via `revalidateAwaitAccess` (a long poll must not keep
- * streaming a channel that was deleted or a membership that was revoked
- * mid-poll).
+ * Resolve a channel ref to its id after validating read access. ⚠ A FULL access
+ * check, so the await hold's tick-0 read is already covered; the hold then
+ * re-checks via `revalidateAwaitAccess`, since a long poll must not keep
+ * streaming a channel deleted or a membership revoked mid-poll.
  */
 export async function resolveReadableChannelId(
   ctx: ChannelContext,
@@ -265,18 +255,15 @@ export async function resolveReadableChannelId(
 }
 
 /**
- * Access recheck for the await long-poll. The channel must still exist (a
- * soft-delete stamps `deleted_at`, which the lookup filters out) and, for a
- * PRIVATE channel, the caller must still be a member. Either loss throws
- * `ChannelNotFoundError` (-> 404) so the hold ends instead of leaking a
- * channel the caller can no longer see.
+ * Access recheck for the await long-poll. Channel must still exist (soft-delete
+ * stamps `deleted_at`, which the lookup filters) and, for a PRIVATE channel, the
+ * caller must still be a member. Either loss throws `ChannelNotFoundError` so
+ * the hold ends rather than leaking a channel the caller cannot see.
  *
- * Two indexed lookups, both projected to the columns the decision actually
- * reads (`findChannelAccess` / `hasMembership`, ~120 bytes total instead of
- * ~840): this is the hold's dominant egress line item, so it never pulls a
- * row it will not look at. WHEN it runs is the caller's business — see
- * `awaitNewMessages` (first held tick, every `AWAIT_REVALIDATE_EVERY_TICKS`
- * after, and unconditionally before any message is returned).
+ * ⚠ Two indexed lookups projected to the columns the decision reads
+ * (`findChannelAccess` / `hasMembership`) — this is the hold's dominant egress
+ * line item, so it never pulls a row it will not look at. WHEN it runs is
+ * `awaitNewMessages`'s business.
  */
 export async function revalidateAwaitAccess(
   ctx: ChannelContext,
@@ -291,9 +278,9 @@ export async function revalidateAwaitAccess(
 }
 
 /**
- * Existence probe behind one await tick: is anything past `since`? The hold
- * runs this instead of a row read for every tick after the first, and only
- * calls `pollChannelMessages` once it hits (Q8).
+ * Existence probe behind one await tick: is anything past `since`? The hold runs
+ * this instead of a row read on every tick after the first, and only calls
+ * `pollChannelMessages` once it hits.
  */
 export async function hasNewMessages(
   channelId: string,
@@ -304,11 +291,9 @@ export async function hasNewMessages(
 }
 
 /**
- * One await poll on an already-validated channel id: the messages with
- * `seq > since` (ascending). Unlike `readMessages` this does NOT move the
- * read watermark — an agent's background long-poll is a listener, not a
- * human viewing the thread. The bounded sleep-loop lives in the route
- * (`maxDuration`/`runtime`).
+ * One await poll on an already-validated channel id. ⚠ Unlike `readMessages`
+ * this does NOT move the read watermark — a background long-poll is a listener,
+ * not a human viewing the thread. Bounded sleep-loop lives in the route.
  */
 export async function pollChannelMessages(
   channelId: string,
@@ -325,14 +310,8 @@ export async function pollChannelMessages(
 
 /**
  * Every task in a channel the caller may read, newest first. Feeds the web's
- * `Map<taskId, overlay>` that layers authoritative status / title / mode onto
- * the message thread. Read access is gated by the same visibility rule as the
- * transcript (public channel, or the caller is a member).
- *
- * A thread used to carry a PARTICIPANT SET here — a breakout room's membership,
- * hydrated in one grouped query for the page. Breakout rooms are gone (rollback
- * §1), so the read is the thread rows and nothing else, and the extra query per
- * page goes with them.
+ * `Map<taskId, overlay>` layering authoritative status / title / mode onto the
+ * message thread. Gated by the transcript's visibility rule.
  */
 export async function listChannelTasks(
   ctx: ChannelContext,
@@ -345,22 +324,14 @@ export async function listChannelTasks(
 
 /**
  * THE ATTRIBUTION ROSTER — every named agent that ever existed in this channel.
+ * All that is left of the named-agent surface: stored messages carry
+ * `metadata.author_agent_id` and the transcript must turn that id into the
+ * handle it rendered on the day it was posted, or an old agent message silently
+ * loses its name.
  *
- * The one thing left of the named-agent surface (rollback §1). Summoning, the
- * lifecycle, engagement and addressing are all gone, and no write touches
- * `channel_agents` any more; what remains is that stored messages carry
- * `metadata.author_agent_id`, and the transcript has to turn that id into the
- * handle it rendered on the day it was posted. Without this read an agent
- * message from last week silently loses its name.
- *
- * Visibility is the CHANNEL's read gate, unchanged — a private channel reads as
- * not-found to a non-member, so an outsider cannot enumerate a room's history
- * through it. Dismissed rows are INCLUDED: they are the ones most likely to own
- * old messages.
- *
- * It lives here, in the read lane, rather than in the `service-agents.ts` this
- * replaces, because it is no longer a lifecycle question — there is no lifecycle
- * left to ask about.
+ * Visibility is the CHANNEL's read gate, so an outsider cannot enumerate a
+ * room's history. ⚠ Dismissed rows are INCLUDED — they are the ones most likely
+ * to own old messages.
  */
 export async function listAgents(
   ctx: ChannelContext,
@@ -372,10 +343,9 @@ export async function listAgents(
 }
 
 /**
- * One task by id, scoped to a channel the caller may read. Read access is the
- * same visibility rule as the transcript (public channel, or the caller is a
- * member). A task id that does not resolve to a task IN THIS channel is a
- * `TaskNotFoundError` (→ 404) — the id can't be probed across channels.
+ * One task by id, scoped to a channel the caller may read. ⚠ A task id not
+ * resolving to a task IN THIS channel is a `TaskNotFoundError` — ids cannot be
+ * probed across channels.
  */
 export async function getChannelTask(
   ctx: ChannelContext,

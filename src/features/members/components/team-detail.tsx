@@ -23,12 +23,8 @@ interface Props {
   onDeleted: () => void;
 }
 
-/**
- * Team detail — the right pane of the members console: crumb top bar,
- * identity header box (name/description editable inline for admins),
- * then Members and per-resource access section boxes. Replaces the old
- * slide-out drawer.
- */
+/** Team detail, right pane of the members console: crumb bar, identity
+ *  header (inline-editable for admins), Members + per-resource access. */
 export function TeamDetail({
   workspaceSlug,
   team,
@@ -49,16 +45,11 @@ export function TeamDetail({
     useState<WorkspaceMemberView | null>(null);
 
   /**
-   * NO PROP-SYNC EFFECT. There used to be one, mirroring `team.name` /
-   * `team.description` back into these two inputs on every change of either.
-   * It existed because the write did not update the cached team until a
-   * refetch landed, so the pane needed to catch up afterwards — and it is
-   * exactly the cascading-render shape `react-hooks/set-state-in-effect`
-   * rejects. Two things replace it: `members-view` renders this pane with
-   * `key={team.id}`, so switching teams REMOUNTS and the `useState`
-   * initialisers are the sync; and the rename now patches the teams cache in
-   * `onMutate`, so the crumb and the list row follow the input rather than the
-   * input having to be corrected back to them.
+   * ⚠ NO PROP-SYNC EFFECT — it would be the cascading-render shape
+   * `react-hooks/set-state-in-effect` rejects. Two things stand in:
+   * `members-view` renders this pane with `key={team.id}` so a team switch
+   * REMOUNTS and the `useState` initialisers are the sync; and rename patches
+   * the teams cache in `onMutate`, so crumb and list row follow the input.
    */
 
   const teamMembers = useMemo(
@@ -80,11 +71,8 @@ export function TeamDetail({
   const failed = (err: unknown) =>
     setError(err instanceof Error ? err.message : "Something went wrong");
 
-  /**
-   * A grant flips the segment on the click — the teams cache carries the
-   * level, so the pane repaints before the PUT leaves and the layer rolls the
-   * patch back if it is refused.
-   */
+  /** Teams cache carries the level, so the segment flips before the PUT
+   *  leaves; the layer rolls the patch back on refusal. */
   function changeGrant(type: TeamResourceType, id: string, level: AccessLevel | null) {
     setError(null);
     void accessWrites.setGrant
@@ -98,12 +86,8 @@ export function TeamDetail({
       .catch(failed);
   }
 
-  /**
-   * Rename commits on blur, and the name is read back by the crumb, the left
-   * list row and this input's own reset effect — all three off the teams cache,
-   * which the mutation patches before the PATCH leaves. It used to revert to
-   * the old name for the whole round trip.
-   */
+  /** Rename commits on blur. Crumb, list row and this input's reset all read
+   *  the teams cache, which the mutation patches before the PATCH leaves. */
   async function commitName() {
     if (!canManage) return;
     const next = name.trim();
@@ -112,18 +96,15 @@ export function TeamDetail({
       return;
     }
     setError(null);
-    // Normalise the field to what was actually sent, so the input and the
-    // crumb it now drives cannot disagree by a trimmed space.
+    // Normalise to what was sent, so input and crumb can't disagree by a
+    // trimmed space.
     setName(next);
     await teamWrites.update
       .mutateAsync({ teamId: team.id, patch: { name: next } })
       .catch((err: unknown) => {
-        // THE INPUT FOLLOWS THE ROLLBACK. The layer restores the cached team
-        // verbatim on a refusal, so the crumb and the list row go back to the
-        // old name — but this field is local state and there is no prop-sync
-        // effect to correct it (see above), and the pane only remounts on a
-        // team switch. Left alone it would keep showing the rejected text as
-        // if it had been saved.
+        // ⚠ The input must follow the rollback by hand: it is local state,
+        // there is no prop-sync effect (see above) and the pane only remounts
+        // on a team switch, so it would keep showing rejected text as saved.
         setName(team.name);
         failed(err);
       });
@@ -322,8 +303,7 @@ export function TeamDetail({
           if (!m) return;
           setError(null);
           // Failures land in the pane's error line rather than throwing, so
-          // the dialog closes either way — same contract as the delete-team
-          // dialog below.
+          // the dialog closes either way.
           await teamWrites.removeMembers
             .mutateAsync({ team, userIds: [m.userId] })
             .catch(failed);

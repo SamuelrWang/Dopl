@@ -1,13 +1,9 @@
 import "server-only";
 
 /**
- * Feature-specific error classes thrown by the knowledge service.
- *
- * Per docs/ENGINEERING.md §12, the service throws domain errors, and
- * the route boundary (Item 2) translates them to `HttpError` for the
- * client. MCP tool handlers (Item 4) do their own translation. Keeping
- * these distinct from `HttpError` lets the same service feed both
- * surfaces without leaking HTTP semantics into the domain layer.
+ * Domain errors thrown by the knowledge service. ⚠ Deliberately NOT `HttpError`
+ * — the route boundary and MCP tool handlers each translate separately, so the
+ * same service feeds both without HTTP semantics leaking into the domain.
  */
 
 export class KnowledgeBaseNotFoundError extends Error {
@@ -34,11 +30,7 @@ export class EntryNotFoundError extends Error {
   }
 }
 
-/**
- * Thrown when a `source: "agent"` caller tries to mutate a base whose
- * `agent_write_enabled` flag is off. Maps to HTTP 403 at the route
- * boundary.
- */
+/** `source: "agent"` mutating a base with `agent_write_enabled` off. → 403. */
 export class AgentWriteDisabledError extends Error {
   readonly code = "AGENT_WRITE_DISABLED";
   constructor(baseId: string, message?: string) {
@@ -51,11 +43,8 @@ export class AgentWriteDisabledError extends Error {
   }
 }
 
-/**
- * Thrown when a caller who is neither the KB owner nor a workspace
- * admin tries to change sharing scope (visibility / access mode /
- * team grants). Maps to 403.
- */
+/** Non-owner, non-admin changing sharing scope (visibility / access mode /
+ *  team grants). → 403. */
 export class ScopeChangeForbiddenError extends Error {
   readonly code = "SCOPE_CHANGE_FORBIDDEN";
   constructor() {
@@ -67,12 +56,10 @@ export class ScopeChangeForbiddenError extends Error {
 }
 
 /**
- * Thrown when a workspace-scoped API key (`api_keys.workspace_id IS
- * NOT NULL`) tries to create a private resource. Workspace keys may be
- * shared between humans (CI runners, service accounts) — letting them
- * create private resources would either leak between humans (if RLS
- * exposed them) or strand the resource (the same key can't read it
- * back via `canSeeBase`'s key-scope filter). Audit B6.
+ * Workspace-scoped API key (`api_keys.workspace_id IS NOT NULL`) creating a
+ * private resource. Such keys are shared between humans, so a private resource
+ * would either leak or be STRANDED — the same key can't read it back through
+ * `canSeeBase`'s key-scope filter.
  */
 export class WorkspaceKeyPrivateVisibilityError extends Error {
   readonly code = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
@@ -85,10 +72,7 @@ export class WorkspaceKeyPrivateVisibilityError extends Error {
   }
 }
 
-/**
- * Thrown when a non-admin tries to grant a team they don't belong to
- * (KB create or sharing update). Maps to 403.
- */
+/** Non-admin granting a team they don't belong to. → 403. */
 export class TeamScopeForbiddenError extends Error {
   readonly code = "TEAM_SCOPE_FORBIDDEN";
   constructor() {
@@ -98,10 +82,9 @@ export class TeamScopeForbiddenError extends Error {
 }
 
 /**
- * Thrown when a folder move would create an A→B→…→A cycle. The DB
- * trigger `prevent_knowledge_folder_cycle` is the safety net; the
- * service pre-checks via `listFolderAncestors` so the user gets this
- * clean error rather than a Postgres `23514`.
+ * Folder move creating an A→B→…→A cycle. DB trigger
+ * `prevent_knowledge_folder_cycle` is the safety net; service pre-checks via
+ * `listFolderAncestors` so users get this instead of a Postgres `23514`.
  */
 export class FolderCycleError extends Error {
   readonly code = "KNOWLEDGE_FOLDER_CYCLE";
@@ -114,12 +97,8 @@ export class FolderCycleError extends Error {
   }
 }
 
-/**
- * Thrown when an entry/folder being read or moved doesn't belong to
- * the knowledge base its parent claims. Defensive — should never fire
- * if RLS and FK constraints are intact, but guards against mis-routed
- * service calls.
- */
+/** Entry/folder not in the base its parent claims. Defensive — unreachable
+ *  while RLS + FKs hold; guards mis-routed service calls. */
 export class KnowledgeBaseMismatchError extends Error {
   readonly code = "KNOWLEDGE_BASE_MISMATCH";
   constructor(message: string) {
@@ -128,11 +107,8 @@ export class KnowledgeBaseMismatchError extends Error {
   }
 }
 
-/**
- * Thrown when a base create or update would collide with an existing
- * (or recently soft-deleted) slug in the same workspace. Surfaces as
- * 409 at the HTTP layer.
- */
+/** Base slug collides with an existing (or recently soft-deleted) slug in the
+ *  workspace. → 409. */
 export class KnowledgeBaseSlugConflictError extends Error {
   readonly code = "KNOWLEDGE_BASE_SLUG_CONFLICT";
   constructor(slug: string) {
@@ -141,11 +117,8 @@ export class KnowledgeBaseSlugConflictError extends Error {
   }
 }
 
-/**
- * Thrown by the path resolver when a non-final segment doesn't resolve
- * to an active folder (e.g. the user asked for `a/b/c.md` but folder
- * `a/b` doesn't exist). Maps to 404 at the HTTP layer.
- */
+/** Non-final path segment doesn't resolve to an active folder (asked
+ *  `a/b/c.md`, no folder `a/b`). → 404. */
 export class PathTraversalError extends Error {
   readonly code = "KNOWLEDGE_PATH_NOT_FOUND";
   readonly missingSegment: string;
@@ -158,11 +131,8 @@ export class PathTraversalError extends Error {
   }
 }
 
-/**
- * Thrown when a name/title collides with the unique partial index
- * (folders by (kb, parent, name) or entries by (kb, folder, title)
- * among active rows). Maps to 409.
- */
+/** Collision with the unique partial index — folders (kb, parent, name),
+ *  entries (kb, folder, title), active rows only. → 409. */
 export class KnowledgePathConflictError extends Error {
   readonly code = "KNOWLEDGE_PATH_CONFLICT";
   constructor(path: string) {
@@ -172,19 +142,16 @@ export class KnowledgePathConflictError extends Error {
 }
 
 /**
- * Thrown when a write would push a knowledge base past its plan's per-base
- * storage cap. A PLAN GATE, not a validation error — it does NOT go through
- * `mapKnowledgeError`/the nested envelope. `toKnowledgeErrorResponse` catches
- * it and emits the flat `{ error, message, upgrade_url }` plan-gate envelope at
- * 403, the same shape and status the ontology object cap uses
- * (`api/ontology/objects/route.ts`), because API-first clients — `@dopl/client`
- * and every MCP agent behind it — already parse exactly that.
+ * Write pushing a base past its plan's per-base storage cap.
  *
- * FREEZE, NEVER DELETE: only GROWTH throws this. Reads, deletes, moves,
- * renames and shrinking edits are untouched even while the base is over cap.
+ * ⚠ PLAN GATE, not a validation error — does NOT go through `mapKnowledgeError`
+ * / the nested envelope. `toKnowledgeErrorResponse` emits the flat
+ * `{ error, message, upgrade_url }` envelope at 403, matching the ontology
+ * object cap (`api/ontology/objects/route.ts`) because `@dopl/client` and every
+ * MCP agent behind it already parse exactly that.
  *
- * Carries the three numbers a caller needs to explain itself without a second
- * request: what is stored, what the cap is, and how much this write wanted.
+ * FREEZE, NEVER DELETE: only GROWTH throws. Reads, deletes, moves, renames and
+ * shrinking edits stay allowed while over cap.
  */
 export class KnowledgeStorageLimitError extends Error {
   readonly code = "kb_storage_full";
@@ -208,12 +175,8 @@ export class KnowledgeStorageLimitError extends Error {
   }
 }
 
-/**
- * Thrown when a PATCH carries an `expectedUpdatedAt` precondition that
- * doesn't match the row's current `updated_at`. Maps to 412 — the
- * client should refetch and retry. Item 5.A.3 added this to prevent
- * silent two-tab overwrites.
- */
+/** `expectedUpdatedAt` precondition ≠ row's `updated_at`. → 412; client
+ *  refetches and retries. Prevents silent two-tab overwrites. */
 export class KnowledgeStaleVersionError extends Error {
   readonly code = "KNOWLEDGE_STALE_VERSION";
   readonly expected: string;

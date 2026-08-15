@@ -28,14 +28,13 @@ interface SearchFieldProps {
   onFocus?: () => void;
   /** Renders a clear (×) affordance while there's a value. */
   onClear?: () => void;
-  /** Layout-only additions (margins, width) — recipes stay in the kit. */
+  /** Layout-only (margins, width) — recipes stay in the kit. */
   className?: string;
 }
 
 /**
- * Concave search well — the `.concave-field` + leading Search icon
- * recipe every pane's filter input composes (chats / skills /
- * knowledge / members) instead of hand-rolling the icon + inset input.
+ * Concave search well — THE `.concave-field` + leading-icon recipe every pane's
+ * filter input composes. Never hand-roll the icon + inset input.
  */
 export function SearchField({
   value,

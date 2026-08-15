@@ -1,20 +1,14 @@
 /**
- * `removeMember` — THE WIRING, which is the half C-20 was missing.
+ * `removeMember` — THE WIRING.
  *
- * The channels sweep is deliberately NOT mocked here. Mocking
- * `removeWorkspaceDepartedMember` would assert that this file calls a name,
- * which is worth almost nothing: the failure this suite has to catch is a sweep
- * that runs and does nothing. So the real service runs against a mocked
- * `channels/server/repository`, and the assertion is on the DELETE that reaches
- * the database. Neuter the sweep — return early, drop the loop — and these
- * cases fail.
+ * ⚠ The channels sweep is deliberately NOT mocked: mocking
+ * `removeWorkspaceDepartedMember` would only assert this file calls a name,
+ * while the failure to catch is a sweep that RUNS AND DOES NOTHING. So the real
+ * service runs against a mocked `channels/server/repository` and the assertion
+ * is on the DELETE reaching the database.
  *
- * Also pinned: the two properties that make "best-effort, immediately after"
- * the right shape rather than a shortcut. The sweep runs AFTER the
- * `workspace_members` delete (running it first and then failing the delete
- * would evict a still-active member from every room), and a sweep that throws
- * must not strand the workspace removal itself — the same precedent
- * `syncSeatQuantity` and the workspace seed already set.
+ * Also pinned: the sweep runs AFTER the `workspace_members` delete, and a sweep
+ * that throws must not strand the removal itself.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -42,7 +36,7 @@ const DM = "chan-dm";
 /** Every write the handler made, in order, across BOTH lanes. */
 let trace: string[];
 
-/** Chainable, thenable Supabase-builder stub (repository-messages.test idiom). */
+/** Chainable thenable Supabase-builder stub (repository-messages.test idiom). */
 function primeSupabase() {
   const builder: Record<string, unknown> = {};
   let table = "";

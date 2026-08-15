@@ -4,14 +4,15 @@ import { getWorkspaceBilling } from "./workspace-billing";
 import { summarizeCredits, type CreditsSummary } from "./credits-service";
 
 /**
- * The `GET /api/billing/status` payload, assembled in one place so the route
- * stays a thin handler (§2) and so the shape has ONE definition on the server
- * side of the wire. Its client mirror is
- * `features/billing/components/use-workspace-entitlements.ts ›
- * WorkspaceEntitlementsStatus` — the two must be edited together.
+ * `GET /api/billing/status` payload, assembled here so the route stays thin
+ * (§2) and the shape has ONE server-side definition.
  *
- * `subscription_period_end` / `has_stripe_customer` keep their snake/flat
- * legacy names: they are already on the wire and read by shipped clients.
+ * ⚠ MUST STAY IN SYNC with its client mirror
+ * `features/billing/components/use-workspace-entitlements.ts ›
+ * WorkspaceEntitlementsStatus` — edit both together.
+ *
+ * ⚠ `subscription_period_end` / `has_stripe_customer` keep their snake/flat
+ * legacy names: already on the wire, read by shipped clients.
  */
 export interface WorkspaceBillingStatusPayload {
   plan: string;
@@ -37,9 +38,8 @@ export async function getWorkspaceBillingStatus(
     getWorkspaceEntitlements(workspaceId),
     getWorkspaceBilling(workspaceId),
   ]);
-  // Credits read the ENTITLED plan and the same period helpers the consume
-  // path uses, so the meter can never disagree with what enforcement charges.
-  // A workspace with no usage row has used 0 (see `getWorkspaceCreditsUsed`).
+  // ⚠ Credits read the ENTITLED plan and the same period helpers the consume
+  // path uses, so the meter cannot disagree with what enforcement charges.
   const credits = await summarizeCredits(
     workspaceId,
     entitlements.plan,

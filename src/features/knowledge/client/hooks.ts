@@ -1,16 +1,11 @@
 "use client";
 
 /**
- * Client data hooks for the knowledge API, backed by TanStack Query
- * (ENGINEERING §7). The old hand-rolled `useFetch` + module-level
- * memoryCache are gone — the query cache supplies warm-start on
- * remount, request dedupe, and stale-while-revalidate.
+ * Knowledge API client hooks, on TanStack Query.
  *
- * Return shape is the original `Result<T>` contract (the frozen canvas
- * panels consume `{ data, status, error, refetch }` — keep it stable):
- * status `idle | loading | success | error`, error typed as
- * `KnowledgeApiError`, `data` kept while a same-key refetch is in
- * flight (no flicker), cleared on key change (no cross-workspace leak).
+ * ⚠ `Result<T>` shape is a contract — frozen canvas panels consume
+ * `{ data, status, error, refetch }`; keep stable. `data` held during same-key
+ * refetch (no flicker), cleared on key change (no cross-workspace leak).
  */
 import { useCallback } from "react";
 import {
@@ -42,12 +37,8 @@ interface Result<T> {
   refetch: () => void;
 }
 
-/**
- * Optional SSR seed. When the parent has already loaded the data on the
- * server (e.g. a Next.js server component fetched the first entry), it
- * can pass it in to skip the initial client-side fetch. Applied only
- * when the seed's key matches the hook's current key.
- */
+/** SSR seed skipping initial client fetch. Applied ONLY when seed key matches
+ *  hook's current key. */
 interface UseFetchOptions<T> {
   initialData?: T;
   initialKey?: string;
@@ -77,9 +68,8 @@ function useKnowledgeQuery<T>(
         : undefined,
   });
 
-  // Data wins over error: a failed BACKGROUND refetch (focus/reconnect)
-  // must not blank already-rendered content into an error card. "error"
-  // is only reachable while there is nothing to show.
+  // ⚠ Data wins over error: failed BACKGROUND refetch (focus/reconnect) must
+  // not blank rendered content. "error" only when nothing to show.
   const status: FetchStatus =
     key === null
       ? "idle"
@@ -89,9 +79,8 @@ function useKnowledgeQuery<T>(
           ? "error"
           : "loading";
 
-  // v5 refetch() ignores `enabled` — a null-key hook would fire a real
-  // request at a garbage URL (e.g. /api/knowledge/entries/null from the
-  // controller's unconditional realtime refetch). No-op while idle.
+  // ⚠ v5 refetch() ignores `enabled` — null-key hook would request a garbage
+  // URL (/api/knowledge/entries/null). No-op while idle.
   const rawRefetch = query.refetch;
   const refetch = useCallback(() => {
     if (key !== null) void rawRefetch();
@@ -107,24 +96,15 @@ function useKnowledgeQuery<T>(
 
 // ─── Hooks ──────────────────────────────────────────────────────────
 
-/**
- * The base list AND the owner-name map, in one cache entry.
- *
- * `GET /api/knowledge/bases` answers both halves in a single response, so
- * they share one key: a page that needs `ownerNames` (the desktop SPA's
- * knowledge page, which has no RSC to compute them) and the two-pane
- * controller ride the same request instead of hitting the route twice.
- */
+/** Base list AND owner-name map in ONE cache entry: the route answers both in
+ *  one response, so consumers share a request instead of hitting it twice. */
 export function useKnowledgeBaseList(
   workspaceId?: string,
   options?: { initialData?: KnowledgeBaseList }
 ): Result<KnowledgeBaseList> {
-  // Use the workspace id as the cache key so switching workspaces
-  // re-fetches. Fall back to a sentinel so the hook still fires when
-  // no id is provided (a sole-workspace caller auto-targets; a
-  // multi-workspace one fails closed as WORKSPACE_REQUIRED). An optional
-  // SSR seed avoids a skeleton flash when the page already loaded the
-  // list on the server (mirrors useKnowledgeEntry's initialData).
+  // Workspace id in the key so switching workspaces re-fetches. Sentinel
+  // fallback keeps the hook firing with no id (sole-workspace caller
+  // auto-targets; multi-workspace fails closed as WORKSPACE_REQUIRED).
   const key = `bases:${workspaceId ?? "default"}`;
   return useKnowledgeQuery<KnowledgeBaseList>(
     key,
@@ -135,7 +115,7 @@ export function useKnowledgeBaseList(
   );
 }
 
-/** The cache key every reader and writer of the base list shares. */
+/** Cache key shared by every reader and writer of the base list. */
 export function knowledgeBasesQueryKey(workspaceId?: string) {
   return ["knowledge", `bases:${workspaceId ?? "default"}`] as const;
 }
@@ -143,10 +123,8 @@ export function knowledgeBasesQueryKey(workspaceId?: string) {
 /**
  * Upsert one base into the cached list, synchronously.
  *
- * Call this BEFORE navigating to a base the caller just created or renamed.
- * The URL is the only channel that carries a selection between the dialogs
- * and the two-pane controller, and the controller resolves a URL segment
- * against this list — so navigating first and refetching after leaves a
+ * ⚠ Call BEFORE navigating to a just-created/renamed base. The controller
+ * resolves the URL segment against this list; navigate-then-refetch leaves a
  * window where the segment matches nothing and the move is silently dropped.
  */
 export function seedKnowledgeBase(
@@ -169,45 +147,19 @@ export function seedKnowledgeBase(
   );
 }
 
-/*
- * `useKnowledgeBases` — the bases-only projection of the list — was DELETED
- * 2026-08-12 when the controller started needing `starredBaseIds` off the same
- * entry and moved onto `useKnowledgeBaseList` directly. It had one caller. A
- * projection hook that drops four of the five keys is a trap on a response
- * that keeps growing folds: every new key needs a second reader, and the
- * second reader is a second render behind the first.
- */
-
 /**
- * Toggle the caller's star on one base, OPTIMISTICALLY.
+ * Toggle caller's star, OPTIMISTICALLY. Star rides `starredBaseIds` on the
+ * base-list cache entry, so the write patches one key and the grid reorders on
+ * click, not on the round trip.
  *
- * The star rides the base-list cache entry (`starredBaseIds`), so the whole
- * write is a patch of that one key — which is what makes the grid reorder on
- * the click rather than on the round trip.
- *
- * WHY THIS IS HAND-ROLLED AND NOT `useApiMutation`. INVARIANTS §8 rule 6: a
- * feature's READS must be on `useApiQuery` before its WRITES adopt that layer,
- * and knowledge reads are not — they are on `useKnowledgeQuery` above, under
- * `["knowledge", key]` keys that `apiQueryKey` does not mint. Adopting the
- * write layer here would patch a key nothing is subscribed to and fail
- * SILENTLY: the toggle would look wired and the grid would never move. The
- * layer's RULES still apply and are followed one at a time below; only its
- * plumbing is unavailable.
- *
- *   - Rule 2 — cancel BEFORE patching, and only an entry that HAS data. A
- *     first-load query cancelled here would strand the grid empty.
- *   - Rule 5 — MERGE, never replace: the patch rewrites `starredBaseIds` and
- *     leaves `bases` / `baseStats` / `ownerNames` / `kbStorageLimit` alone.
- *   - Rule 1 — NO invalidation. The write's own end state is the whole answer;
- *     re-downloading the list would only re-fetch what we just computed. There
- *     is no cold-cache case to cover either (`coldKeys`): the only way to
- *     reach this control is a rendered card, which means the entry is warm.
- *   - Rule 4 — keyed by the id captured AT SUBMIT, in the mutation variables.
- *
- * ROLLBACK IS THE SNAPSHOT, NOT THE INVERSE OPERATION. On failure the previous
- * entry is restored wholesale rather than the id being toggled back — an
- * inverse would be wrong if a refetch landed in between, and it is the one
- * case where being exactly right costs nothing.
+ * ⚠ HAND-ROLLED, not `useApiMutation`. INVARIANTS §8 rule 6: reads must be on
+ * `useApiQuery` first, and knowledge reads sit under `["knowledge", key]` keys
+ * `apiQueryKey` never mints — the write layer would patch an unsubscribed key
+ * and fail SILENTLY. Its rules still apply, followed below: cancel before
+ * patching and only with data (2); MERGE, leaving `bases` / `baseStats` /
+ * `ownerNames` / `kbStorageLimit` (5); NO invalidation, cache always warm here
+ * (1); key from the id captured AT SUBMIT (4). Rollback restores the SNAPSHOT,
+ * not the inverse toggle — an inverse is wrong if a refetch landed between.
  */
 export function useToggleBaseStar(workspaceId?: string) {
   const queryClient = useQueryClient();
@@ -217,9 +169,8 @@ export function useToggleBaseStar(workspaceId?: string) {
       setBaseStar(baseId, starred, workspaceId),
     onMutate: async ({ baseId, starred }) => {
       const previous = queryClient.getQueryData<KnowledgeBaseList>(key);
-      // Declines on a cold entry — there is nothing to patch and nothing to
-      // roll back to, and cancelling a first load would leave the surface
-      // empty with no request scheduled to fill it.
+      // Decline on cold entry: nothing to patch or roll back to, and
+      // cancelling a first load strands the surface empty.
       if (!previous) return { previous: undefined };
       await queryClient.cancelQueries({ queryKey: key });
       queryClient.setQueryData<KnowledgeBaseList>(key, (prev) =>
@@ -274,18 +225,13 @@ export function useKnowledgeEntry(
 }
 
 /**
- * Drop every cached read of a base that no longer exists.
+ * Drop every cached read of a deleted base.
  *
- * Deletes are permanent (ENGINEERING §7, 2026-08-07) and `useKnowledgeQuery`
- * prefers `data` over `error` on purpose — so an invalidated entry still
- * RENDERS the deleted base's content rather than surfacing its 404, and the
- * cache is IndexedDB-persisted with a 24h `gcTime`, so it survives relaunch.
- * Invalidating the base LIST is therefore not enough: the tree and every entry
- * body under it have to leave the cache outright.
- *
- * Entry ids come from the cached tree because that is the only place the
- * base→entry mapping exists client-side; a base whose tree was never opened
- * has no entry bodies cached either, so nothing is missed.
+ * ⚠ Invalidating the base LIST is NOT enough: `useKnowledgeQuery` prefers
+ * `data` over `error`, so an invalidated entry still RENDERS deleted content
+ * instead of its 404, and IndexedDB persistence with 24h `gcTime` survives
+ * relaunch. Tree + every entry body must be REMOVED. Entry ids come from the
+ * cached tree — the only client-side base→entry mapping.
  */
 export function evictDeletedBase(
   queryClient: QueryClient,

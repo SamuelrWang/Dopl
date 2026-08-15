@@ -1,25 +1,11 @@
 /**
- * `GET /api/knowledge/bases` — the base list, plus the two maps folded onto it.
- *
- * THE PROPERTY THIS FILE EXISTS FOR: `ownerNames` was RSC-only
- * (`knowledge/page.tsx:51`), so the SPA's list pane had no attribution for
- * bases shared by other members. It was folded into this response rather than
- * given its own endpoint, and `baseStats` (entry counts + newest content
- * write, for the home grid's cards) later joined it on the same terms —
- * which makes two things load-bearing:
- *
- *   1. **The fold is additive.** `bases` must keep its exact shape and stay
- *      the first-class key; existing readers (`features/knowledge/client/api.ts`,
- *      the ontology pick menus, and `@dopl/client`'s `kb_list_bases`)
- *      destructure `data.bases` and must not notice the change.
- *   2. **Both maps are scoped to the bases actually returned.** Each lookup
- *      takes the post-visibility list as its input, so a base filtered out by
- *      the private/teams-mode gate can never leak its owner's display name —
- *      or its entry count — through these keys. Feeding either one anything
- *      other than the output of `listBases` would break that.
- *
- * Auth is mocked at the wrapper (mirroring `api/ontology/objects/route.test.ts`)
- * — what is under test is the composition, not `withWorkspaceAuth`.
+ * `GET /api/knowledge/bases` — the base list plus the maps folded onto it. Two properties:
+ *   1. THE FOLD IS ADDITIVE. `bases` keeps its exact shape and stays first-class; existing
+ *      readers (`features/knowledge/client/api.ts`, ontology pick menus, `@dopl/client`'s
+ *      `kb_list_bases`) destructure `data.bases` and must not notice.
+ *   2. EVERY MAP IS SCOPED TO THE BASES RETURNED — each takes the post-visibility list as input,
+ *      so a base hidden by the private/teams gate cannot leak its owner or count through them.
+ * Auth is mocked at the wrapper: what is under test is the composition, not `withWorkspaceAuth`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -113,16 +99,15 @@ describe("GET /api/knowledge/bases", () => {
   });
 
   it("carries the per-base storage cap ONCE, not per card", async () => {
-    // The grid draws N bars against ONE limit. Resolving it here is what keeps
-    // a grid of N bases at one request; asking per card would be N+1.
+    // N bars against ONE limit — asking per card would be N+1.
     await GET(getReq());
     expect(mockStorageLimit).toHaveBeenCalledTimes(1);
     expect(mockStorageLimit).toHaveBeenCalledWith("ws-1");
   });
 
   it("degrades an unresolvable cap to null — never to a guessed limit", async () => {
-    // `null` reads as UNKNOWN at the client and suppresses every bar. A
-    // fallback number here would draw bars against a cap nobody enforces.
+    // `null` reads as UNKNOWN and suppresses every bar; a fallback would draw bars against a
+    // cap nobody enforces.
     mockStorageLimit.mockRejectedValue(new Error("billing down"));
 
     const res = await GET(getReq());
@@ -133,20 +118,17 @@ describe("GET /api/knowledge/bases", () => {
   });
 
   it("looks both maps up for exactly the bases it is about to return", async () => {
-    // Not the unfiltered set: a base hidden by the private/teams-mode gate
-    // must not leak its owner — or its entry count — through these keys.
+    // ⚠ Not the unfiltered set: a base hidden by the private/teams gate must not leak.
     await GET(getReq());
     const ctx = { workspaceId: "ws-1", userId: "user-1" };
     expect(mockOwnerNames).toHaveBeenCalledWith(ctx, VISIBLE);
     expect(mockBaseStats).toHaveBeenCalledWith(ctx, VISIBLE);
-    // The stars ride the same fence, and the context is where the USER comes
-    // from — nothing about this request names whose stars to read.
+    // Same fence; the USER comes from the context, never the request.
     expect(mockStarred).toHaveBeenCalledWith(ctx, VISIBLE);
   });
 
   it("degrades a stats failure to an empty map instead of 500ing the list", async () => {
-    // The counters are cosmetic; the list is not. `kb_list_bases` over MCP
-    // rides this same route and must not lose the bases to a count query.
+    // Counters cosmetic, list is not — `kb_list_bases` over MCP rides this route.
     mockBaseStats.mockRejectedValue(new Error("entries table down"));
 
     const res = await GET(getReq());
@@ -168,9 +150,7 @@ describe("GET /api/knowledge/bases", () => {
     const body = (await (await GET(getReq())).json()) as Record<string, unknown>;
     expect(body.ownerNames).toEqual({});
     expect("ownerNames" in body).toBe(true);
-    // A base with no entries is a ZEROED entry, never a missing key — the
-    // card renders "0 entries" and an empty bar, and a missing key means
-    // "unknown".
+    // A base with no entries is a ZEROED entry, never a missing key (which means "unknown").
     expect(body.baseStats).toEqual({
       "kb-1": { entryCount: 0, lastEntryUpdatedAt: null, storageBytes: 0 },
     });
@@ -195,9 +175,7 @@ describe("GET /api/knowledge/bases", () => {
   });
 
   it("degrades a star failure to [] instead of 500ing the list", async () => {
-    // Same rule as the two maps, and here the degraded value is a REAL one:
-    // an unknown star and no star render identically, so there is nothing an
-    // "unknown" sentinel could change. The grid falls back to list order.
+    // Degraded value is REAL here: unknown and unstarred render identically.
     mockStarred.mockRejectedValue(new Error("stars table down"));
 
     const res = await GET(getReq());
@@ -208,10 +186,8 @@ describe("GET /api/knowledge/bases", () => {
   });
 
   it("keeps the stars OFF the base rows — the SDK type must not widen", async () => {
-    // `starredBaseIds` is a sibling key for the same reason `baseStats` is:
-    // pushing a per-user, display-only fact onto `KnowledgeBase` would put it
-    // on every MCP `kb_*` payload and break
-    // `scripts/check-knowledge-type-drift.ts`.
+    // ⚠ Sibling key: a per-user fact on `KnowledgeBase` would ride every MCP `kb_*` payload and
+    // break `scripts/check-knowledge-type-drift.ts`.
     const body = (await (await GET(getReq())).json()) as {
       bases: Array<Record<string, unknown>>;
       starredBaseIds: string[];
@@ -230,7 +206,6 @@ describe("GET /api/knowledge/bases", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBeTruthy();
-    // The raw error never reaches the client (ENGINEERING §9).
     expect(body.error.message).not.toContain("db down");
   });
 });

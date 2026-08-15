@@ -1,26 +1,15 @@
 /**
- * THE RESULT-SIDE HALF of the completeness sweep: a filtered listing must say
- * so ON THE RESULT, not only in a description the calling agent may never have
- * read closely.
+ * RESULT-SIDE half of the completeness sweep: a filtered listing must say so ON
+ * THE RESULT. `tool-scope-claims.test.ts` pins the descriptions — read once at
+ * connection time — while a RESULT is read at the moment the agent forms the
+ * belief, which is where the harm happens.
  *
- * WHY BOTH HALVES. `tool-scope-claims.test.ts` pins the descriptions. A
- * description is read once, at connection time, ahead of every tool in the set;
- * a RESULT is read at the moment the agent forms the belief. The incident this
- * sweep exists for happened in the second place: two agents compared "6 skills"
- * against "1 skill" and neither output carried a word about why they could
- * differ. The footers below are what they would have hit.
- *
- * THE RULE EVERY LINE HERE OBEYS — and it is what the tests actually check:
- * a footer states the FILTER, never a count it would need a second query to
- * obtain. "Drafts are not listed" is free. "4 skills were hidden from you" is a
- * round trip on every list call, which is a worse tool than the one it fixes.
- * So `dopl_ontology(op="resolve")` and `dopl_search` DO print "showing N of M"
- * — both numbers are already in memory, the cap is applied locally — while
- * `dopl_skill(op="list")` and `dopl_kb(op="list_bases")` name the filter only.
- *
- * Driven through the real registrars with the shared harness from
- * `narration-fixtures.ts`; the @dopl/client is hand-stubbed and nothing
- * transports.
+ * ⚠ THE RULE: a footer states the FILTER, never a count needing a second query.
+ * "Drafts are not listed" is free; "4 skills were hidden from you" is a round
+ * trip on every list call. So `dopl_ontology(op="resolve")` and `dopl_search`
+ * DO print "showing N of M" (both numbers already in memory, cap applied
+ * locally) while `dopl_skill(op="list")` / `dopl_kb(op="list_bases")` name the
+ * filter only.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -86,10 +75,9 @@ describe("dopl_skill(op='list') carries its own scope", () => {
 
     expect(text).toContain("Showing 1 skill: active, and visible to you.");
     expect(text).toContain("Drafts and other members' private or team-scoped skills are not listed");
-    // Naming the alternative is half the fix. Without it an agent that reads
-    // "this is not the total" still has nowhere to go for the total, and the
-    // most likely next move is to conclude the server is wrong — which is
-    // precisely what happened.
+    // ⚠ Naming the alternative is half the fix — without it an agent that
+    // reads "this is not the total" has nowhere to go, and concludes the
+    // server is wrong.
     expect(text).toContain('dopl_members(op="access_matrix")');
   });
 
@@ -100,10 +88,10 @@ describe("dopl_skill(op='list') carries its own scope", () => {
       "dopl_skill",
       { op: "list" },
     );
-    // One draft was filtered here and the footer must not quantify it: the
-    // count is only knowable for the rows the SERVER already sent, never for
-    // the ones its own visibility filter withheld, so a number here would be
-    // right by accident and wrong the moment a private skill exists.
+    // ⚠ The footer must not QUANTIFY the filter: a count is knowable only for
+    // rows the server already sent, never for ones its visibility filter
+    // withheld, so a number is right by accident and wrong as soon as a private
+    // skill exists.
     expect(text).not.toMatch(/\d+\s+(hidden|skills? (are|is) hidden|more skills)/i);
     expect(text).toContain("Showing 1 skill");
   });
@@ -138,11 +126,9 @@ describe("dopl_map carries its own scope", () => {
 
     expect(text).toContain("these counts are not workspace totals");
     expect(text).toContain('dopl_members(op="access_matrix")');
-    // The fail-silent catch WAS the other half an agent could not see: a domain
-    // whose read threw rendered as `_None._`, identical to a genuinely empty
-    // one. Now it is named (see `partial-read.test.ts`), and the footer's job
-    // here is the healthy half of that promise — no notice means every section
-    // was really read, which is only worth saying if it is stated.
+    // ⚠ A domain whose read THREW renders as `_None._`, identical to a
+    // genuinely empty one — so it is named (`partial-read.test.ts`), and this
+    // pins the healthy half: no notice means every section was really read.
     expect(text).toContain("a domain that could not be read is named in a PARTIAL READ notice");
     expect(text).toContain("with no such notice every section above was read");
   });
@@ -179,8 +165,8 @@ describe("dopl_kb listings carry their own scope", () => {
       "dopl_kb",
       { op: "get_tree", base: "notes" },
     );
-    // The pre-existing paging notice only fired when there WAS a next page, so
-    // the complete case was the silent one.
+    // ⚠ The paging notice fires only when there IS a next page, so the complete
+    // case is the silent one.
     expect(text).toContain("Folders complete");
     expect(text).toContain("entries complete for this base");
   });
@@ -264,9 +250,9 @@ describe("dopl_search carries its own scope", () => {
     expect(text).toContain("Showing 8 of 12 matching skills");
     expect(text).toContain("Scope: max 8 per group");
     expect(text).toContain("CHAT ARCHIVE is not searched at all");
-    // The fail-silent catch: a broken group still shows "No matches" (failing
-    // the whole search over one dead domain is the worse tool), but it is named
-    // now — so the footer can say a group NOT named there was really searched.
+    // ⚠ A broken group still shows "No matches" (failing the whole search over
+    // one dead domain is worse), but it must be NAMED — that is what lets the
+    // footer say a group not named there was really searched.
     expect(text).toContain('A group whose read failed still shows "No matches"');
     expect(text).toContain("named in a PARTIAL READ notice opening this line");
   });

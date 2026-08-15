@@ -1,13 +1,11 @@
 /**
- * Unit tests for the channels write service — `postMessage` metadata handling.
- * The repository is mocked (no Supabase); `service-shared` / `service-reads`
- * run for real against the mocked repo.
+ * `postMessage` metadata handling. Repository mocked; `service-shared` /
+ * `service-reads` run for real against it.
  *
- * Focus: the reserved-key strip is a SECURITY boundary. `to_user_id` and
- * `summary` inside caller-supplied `metadata` must be dropped and are settable
- * ONLY via the validated top-level `toUserId` / `summary` fields — a raw
- * metadata copy would bypass both the addressee-membership check and the
- * schema's summary length cap (consent-prompt spoofing on non-members).
+ * ⚠ The reserved-key strip is a SECURITY boundary. `to_user_id` / `summary`
+ * inside caller metadata must be DROPPED and settable only via the validated
+ * top-level fields — a raw metadata copy bypasses both the addressee-membership
+ * check and the schema's summary cap (consent-prompt spoofing on non-members).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -93,12 +91,9 @@ function insertedRow(row: Parameters<typeof repoMessages.insertMessage>[0]): Cha
 }
 
 /**
- * Membership resolver: `USER` is a member; `ADDRESSEE` membership is per-test.
- * C-20: addressing now also asserts ACTIVE WORKSPACE membership, so the two
- * predicates are wired together here — a normal addressee is both a channel
- * member and an active workspace member. The departed-member case (channel
- * member but NOT active workspace member) overrides `isActiveWorkspaceMember`
- * in its own test.
+ * Membership resolver: `USER` is a member, `ADDRESSEE` is per-test. Addressing
+ * also asserts ACTIVE WORKSPACE membership, so both predicates are wired
+ * together here; the departed-member case overrides `isActiveWorkspaceMember`.
  */
 function wireMembership(addresseeIsMember: boolean) {
   vi.mocked(repo.findMembership).mockImplementation(async (_channelId, userId) => {
@@ -132,7 +127,6 @@ describe("postMessage — reserved metadata keys", () => {
   it("strips caller `to_user_id`/`summary` from metadata, preserves other keys", async () => {
     await postMessage(ctx, "general", {
       body: "hello",
-      // No validated top-level toUserId/summary → nothing re-added.
       metadata: { to_user_id: "evil", summary: "spoofed prompt", foo: "bar" },
     });
 
@@ -151,17 +145,14 @@ describe("postMessage — reserved metadata keys", () => {
     });
 
     const meta = capturedMetadata();
-    // Reserved keys reflect ONLY the validated top-level values.
     expect(meta.to_user_id).toBe(ADDRESSEE);
     expect(meta.summary).toBe("real intent");
     expect(meta.keep).toBe(1);
   });
 
   it("SECURITY: a metadata-only to_user_id at a NON-member neither throws nor is stored (anti-spoof)", async () => {
-    // A raw metadata `to_user_id` must never reach the stored row: it bypasses
-    // the addressee-membership check (which only runs on the top-level field),
-    // so a message would falsely read as "addressed" to a listener. The strip
-    // means the stored message carries no `to_user_id` at all — no spoof.
+    // ⚠ A raw metadata `to_user_id` bypasses the addressee-membership check
+    // (top-level field only), so the message would falsely read as "addressed".
     wireMembership(false); // ADDRESSEE is NOT a channel member
 
     const msg = await postMessage(ctx, "general", {
@@ -169,7 +160,6 @@ describe("postMessage — reserved metadata keys", () => {
       metadata: { to_user_id: ADDRESSEE, other: "x" },
     });
 
-    // No ChannelAddresseeNotMemberError — the top-level addressee is absent.
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
     const meta = capturedMetadata();
     expect(Object.prototype.hasOwnProperty.call(meta, "to_user_id")).toBe(false);
@@ -178,7 +168,7 @@ describe("postMessage — reserved metadata keys", () => {
   });
 
   it("adversarial JSON `__proto__` does not pollute or reintroduce a reserved key", async () => {
-    // Simulate a JSON-origin payload where `__proto__` is an OWN key.
+    // JSON-origin payload where `__proto__` is an OWN key.
     const metadata = JSON.parse(
       '{"__proto__":{"polluted":true},"to_user_id":"evil","keep":1}'
     ) as Record<string, unknown>;
@@ -188,7 +178,7 @@ describe("postMessage — reserved metadata keys", () => {
     const meta = capturedMetadata();
     expect(Object.prototype.hasOwnProperty.call(meta, "to_user_id")).toBe(false);
     expect(meta.keep).toBe(1);
-    // No global prototype pollution leaked out of the strip/spread.
+    // ⚠ No global prototype pollution leaked out of the strip/spread.
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });
@@ -205,8 +195,7 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
       status: "open",
       outcome: null,
       mode: "autonomous",
-      // The poster is the thread's creator — the legitimate case. A caller who
-      // is neither creator nor target is refused outright (see the B3 test).
+      // Poster is the thread's creator — the legitimate case.
       created_by: USER,
       target_user_id: null,
       created_at: "2026-07-20T00:00:00Z",
@@ -230,9 +219,7 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     });
 
     const meta = capturedMetadata();
-    // taskId itself stays caller-settable (a responder replies within a task).
     expect(meta.taskId).toBe(TASK_ID);
-    // Server stamp wins over the caller's spoofed reserved keys.
     expect(meta.taskMode).toBe("autonomous");
     expect(meta.taskCreatedBy).toBe(USER);
     expect(meta.taskTitle).toBe("Real title");
@@ -240,8 +227,8 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
   });
 
   it("SECURITY: a UUID taskId that resolves to no task in the channel is rejected (400), not silently un-threaded", async () => {
-    // v1.7 server-validated threading: a bogus first-class id can no longer
-    // fabricate a threaded group — the post is rejected outright.
+    // Server-validated threading: a bogus first-class id cannot fabricate a
+    // threaded group — rejected outright.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
 
     await expect(
@@ -252,16 +239,14 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     ).rejects.toBeInstanceOf(ChannelTaskNotInChannelError);
 
     expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
-    // Rejected before insert — nothing lands.
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("a non-UUID taskId never hits the TASK table, and an unowned one is stripped", async () => {
-    // Q10 / F-083 bullet 3: a legacy `task-<channelId>-<seq>` id resolves no
-    // task row (so none of the four task keys are stamped) and is now checked
-    // against its opening request's pair instead — unresolvable here, so the
-    // tag is stripped and the post lands untagged. The kept/stripped matrix is
-    // pinned in `service-writes-metadata-thread.test.ts`.
+    // A legacy `task-<channelId>-<seq>` id resolves no task row and is checked
+    // against its opening request's pair — unresolvable here, so the tag is
+    // stripped and the post lands untagged. Full matrix in
+    // `service-writes-metadata-thread.test.ts`.
     await postMessage(ctx, "general", {
       body: "reply",
       metadata: { taskId: "task-chan-1-7", taskMode: "interactive" },
@@ -275,10 +260,10 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
   });
 
   it("SECURITY (B3): a member who is neither creator nor target cannot post into the thread", async () => {
-    // Channel membership is not thread membership: in a 3+ member channel every
-    // member can read every thread id, and a stamped taskId is what lands the
-    // message inside that thread's card and routes it to the responder's
-    // session window. Refused outright rather than silently un-threaded.
+    // ⚠ Channel membership is NOT thread membership. Every member can read
+    // every thread id, and a stamped taskId lands the message inside that
+    // thread's card and routes it to the responder's session window. Refused
+    // outright, never silently un-threaded.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
       taskRowFor({ created_by: "creator-x", target_user_id: "responder-y" })
     );
@@ -317,8 +302,8 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     });
 
     const meta = capturedMetadata();
-    // The server stamp (the real responder) wins over the caller's spoof — this
-    // is what binds the desktop's task-reply suppression to the true responder.
+    // ⚠ Server stamp (the real responder) wins over the caller's spoof — this
+    // binds the desktop's task-reply suppression to the true responder.
     expect(meta.taskTarget).toBe("responder-y");
   });
 
@@ -347,10 +332,9 @@ describe("postMessage — addressing + author derivation", () => {
   });
 
   it("C-20: refuses a toUserId who is a channel member but a DEPARTED workspace member", async () => {
-    // The C-20 case: nothing sweeps `channel_members` on workspace-leave, so the
-    // addressee is still a channel member (findMembership → row) but no longer an
-    // active workspace member. The post must fail closed rather than arm an await
-    // nothing will ever answer.
+    // ⚠ Nothing sweeps `channel_members` on workspace-leave, so the addressee is
+    // still a channel member but no longer an active workspace member. Must fail
+    // CLOSED rather than arm an await nothing will answer.
     wireMembership(true); // still a channel member
     vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false); // left the workspace
     await expect(
@@ -360,10 +344,8 @@ describe("postMessage — addressing + author derivation", () => {
   });
 
   it("refuses a non-member posting to a PUBLIC channel (forbidden, not not-found)", async () => {
-    // A public channel is readable to any workspace member but only members may
-    // post. (A PRIVATE channel non-member gets ChannelNotFoundError instead —
-    // its existence must not leak — so the forbidden-post branch needs a public
-    // channel with a non-member caller.)
+    // ⚠ A PRIVATE channel non-member gets ChannelNotFoundError (existence must
+    // not leak), so the forbidden-post branch needs a PUBLIC channel.
     vi.mocked(repo.findChannelBySlug).mockResolvedValue(
       channelRow({ visibility: "public" })
     );
@@ -391,19 +373,16 @@ describe("postMessage — addressing + author derivation", () => {
   });
 
   it("an explicit authorKind wins in BOTH directions (it is a claim, not a derivation)", async () => {
-    // The mirror of the case above. ENGINEERING.md §8 documented `authorKind` as
-    // DERIVED from the credential until 2026-07-30; it never was, and the
-    // desktop peer-post path depends on the caller's value winning. Pinning both
-    // directions stops a future "harden this" edit from turning the `??` into a
-    // hard derive and silently breaking that path (F-082).
+    // ⚠ `authorKind` is NOT derived from the credential — the desktop peer-post
+    // path depends on the caller's value winning. Both directions pinned so a
+    // "harden this" edit cannot turn the `??` into a hard derive (F-082).
     await postMessage(agentCtx, "general", { body: "hi", authorKind: "user" });
     expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("user");
   });
 
   it("never lets the caller move authorship off ctx.userId", async () => {
-    // Only the KIND label is assertable. The identity is not: `author_user_id`
-    // is always the acting user, so an `agent` claim can never impersonate a
-    // different member.
+    // Only the KIND label is assertable — `author_user_id` is always the acting
+    // user, so an `agent` claim can never impersonate a different member.
     await postMessage(ctx, "general", { body: "hi", authorKind: "agent" });
     const row = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
     expect(row.author_user_id).toBe(ctx.userId);

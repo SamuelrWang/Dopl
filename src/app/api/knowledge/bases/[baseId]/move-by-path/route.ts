@@ -9,13 +9,8 @@ import {
   moveByPath,
 } from "@/features/knowledge/server/service";
 
-/**
- * Path-based move + rename. Used by `kb_move_file` / `kb_move_folder`.
- *
- * `fromPath` resolves to the source folder or entry. `toPath`'s parent
- * folders are mkdir-p'd. The leaf segment of `toPath` becomes the new
- * name. Atomic — both rename and reparent in a single repo update.
- */
+/** Path-based move + rename (`kb_move_file` / `kb_move_folder`). `toPath`'s parents are
+ *  mkdir-p'd and its leaf becomes the new name. Atomic: rename + reparent in one repo update. */
 
 const MoveSchema = z.object({
   fromPath: z.string().min(1),

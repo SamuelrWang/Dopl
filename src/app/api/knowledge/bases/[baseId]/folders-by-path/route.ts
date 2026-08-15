@@ -13,10 +13,8 @@ import {
 } from "@/features/knowledge/server/service";
 
 /**
- * Path-based folder operations:
- *   - POST { path }      → mkdir -p; idempotent
- *   - GET  ?path=…       → list immediate children of folder at path
- *   - DELETE ?path=…     → soft-delete folder OR entry at path (whichever the path resolves to)
+ * Path-based folder ops: POST `{path}` → mkdir -p (idempotent); GET `?path=` → immediate
+ * children; DELETE `?path=` → soft-delete the folder OR entry the path resolves to.
  */
 
 function requireBaseId(auth: WorkspaceAuthContext): string {
@@ -27,8 +25,7 @@ function requireBaseId(auth: WorkspaceAuthContext): string {
 
 const CreateFolderSchema = z.object({
   path: z.string().min(1),
-  // Optional agent-facing folder summary. mkdir -p is idempotent, so a
-  // re-call with a description updates the leaf folder's summary.
+  // mkdir -p is idempotent, so a re-call with a description updates the leaf folder's summary.
   description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
 });
 

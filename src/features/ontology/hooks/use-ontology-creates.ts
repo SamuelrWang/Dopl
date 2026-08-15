@@ -12,25 +12,23 @@ import {
 import type { OntologyCluster, OntologyObject } from "../types";
 
 /**
- * The create half of the ontology store, split out of `use-ontology.ts` — it
- * owns the pending-id set and the sink that `optimistic-create.ts`'s sequences
- * write through. The sequences themselves are deliberately NOT hooks: the
- * ordering they encode (dispatch, then POST) is the thing under test, and it is
- * testable without React only if it lives outside one.
+ * Create half of the ontology store: owns the pending-id set and the sink
+ * `optimistic-create.ts`'s sequences write through. ⚠ Those sequences are NOT
+ * hooks — the ordering they encode (dispatch, then POST) is the thing under
+ * test, and is only testable outside React.
  */
 
 /** The caller's create-side callbacks, held by ref by the store. */
 export interface OntologyCreateCallbacks {
   /** A create was denied by the free object cap (`over_free_cap`). */
   onOverCap?: () => void;
-  /** A row now exists SERVER-side — the object cap is a server-side count,
-   *  so the caller re-reads its entitlements here (mirror of `onDeleted`). */
+  /** A row now exists SERVER-side; object cap is a server-side count, so the
+   *  caller re-reads entitlements here (mirror of `onDeleted`). */
   onCreated?: () => void;
   /**
-   * Provisional ids were swapped for real ones. Anything holding an ontology
-   * id in ITS OWN state — the views' selected cluster and object — maps
-   * through this, or a selection made on an optimistic row goes dangling the
-   * moment the server answers.
+   * Provisional ids swapped for real ones. ⚠ Anything holding an ontology id in
+   * ITS OWN state (the views' selected cluster/object) must map through this,
+   * else a selection on an optimistic row dangles when the server answers.
    */
   onIdsResolved?: (map: Readonly<Record<string, string>>) => void;
 }
@@ -108,7 +106,7 @@ export function useOntologyCreates({
       markPending,
       clearPending,
       resolve: (map, slugs) => {
-        // Reducer first, then the views: both land in one React batch, so a
+        // ⚠ Reducer first, then views: both land in one React batch, so a
         // selection never renders a frame pointed at an id that just moved.
         dispatch(slugs ? { type: "CREATE_RESOLVE", map, slugs } : { type: "CREATE_RESOLVE", map });
         callbacks.current.onIdsResolved?.(map);
@@ -126,9 +124,8 @@ export function useOntologyCreates({
 
   const createCluster = useCallback((): OntologyCluster => {
     markDirty();
-    // Fire-and-forget by design: every outcome is already handled through the
-    // sink (resolve / rollback / toast), and the caller wants the row, not the
-    // round trip. The store's write gate — not this promise — is what holds a
+    // Fire-and-forget: every outcome is handled through the sink (resolve /
+    // rollback / toast). The store's write gate — not this promise — holds the
     // realtime re-seed off until the POSTs settle.
     const { row } = createClusterOptimistic(boundApi, sink);
     return row;

@@ -11,25 +11,15 @@ import {
 } from "./dto";
 
 /**
- * NARROW READS for the ontology feature — the same rows `repository.ts`
- * returns, minus columns or rows the caller was never going to look at.
- *
- * It is a separate module for two reasons. `repository.ts` sits at 483 lines
- * against a hard 500 cap with its lint exemption removed (§2), so it has no
- * room; and these four queries share a single reason to exist that the wide
- * ones do not — each one replaces a read whose cost was set by the size of the
- * workspace rather than by the size of the answer. Same layer, same rules as
- * `repository.ts`: raw Supabase I/O, no business logic, every query filtered by
- * `workspace_id` because the service-role client bypasses RLS.
+ * NARROW READS — the rows `repository.ts` returns, minus columns/rows the
+ * caller was never going to look at. Each exists because its wide sibling let
+ * the cost of a read be set by the size of the WORKSPACE, not of the answer.
+ * Same layer, same rules as `repository.ts`: raw Supabase I/O, no business
+ * logic, every query filtered by `workspace_id` (service-role bypasses RLS).
  */
 
-/**
- * Clusters for a map-shaped read: no `layout`.
- *
- * `layout` is one `{x, y}` per node in the cluster, written by dragging cards
- * on the graph view. It is meaningless to anything that is not drawing that
- * canvas, and on a busy board it is the largest field on the row.
- */
+/** Clusters for a map-shaped read: no `layout`. `layout` is one `{x,y}` per
+ *  node — the largest field on a busy row, and useless off the canvas. */
 export async function listClusterSummaries(
   workspaceId: string
 ): Promise<OntologyClusterSummaryRow[]> {
@@ -46,11 +36,8 @@ export async function listClusterSummaries(
   return (data ?? []) as OntologyClusterSummaryRow[];
 }
 
-/**
- * Objects for a map-shaped read: id, name, subtitle. No `attributes`, no
- * `methods`, no `template` — the three JSONB columns that carry essentially all
- * of an ontology's bytes and none of its routing information.
- */
+/** Objects for a map-shaped read: id, name, subtitle. No `attributes`/
+ *  `methods`/`template` — all of an ontology's bytes, none of its routing. */
 export async function listObjectSummaries(
   workspaceId: string
 ): Promise<OntologyObjectSummaryRow[]> {
@@ -65,13 +52,8 @@ export async function listObjectSummaries(
   return (data ?? []) as OntologyObjectSummaryRow[];
 }
 
-/**
- * Just the slugs, for `createCluster`'s uniqueness check.
- *
- * That call site used `listClusters`, which meant every cluster's `layout`
- * crossed the wire so `slugify` could compare strings — the whole board's node
- * positions loaded to name one new cluster.
- */
+/** Just the slugs, for `createCluster`'s uniqueness check. ⚠ Not `listClusters`
+ *  — that drags every cluster's `layout` over the wire to compare strings. */
 export async function listClusterSlugs(workspaceId: string): Promise<string[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -84,15 +66,8 @@ export async function listClusterSlugs(workspaceId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.slug as string);
 }
 
-/**
- * One object's outbound edges, filtered in Postgres.
- *
- * The service used to answer this by loading EVERY relationship row in the
- * workspace and scanning for a matching `source_object_id` in JavaScript, on
- * four hot paths (create-with-inheritance, update, claim_anchor, get_anchor).
- * The predicate is indexed; there was never a reason for those rows to leave
- * the database.
- */
+/** One object's outbound edges, filtered in Postgres. ⚠ `source_object_id` is
+ *  indexed — never scan `listRelationships` in JS for this. */
 export async function listRelationshipsForSource(
   workspaceId: string,
   sourceObjectId: string

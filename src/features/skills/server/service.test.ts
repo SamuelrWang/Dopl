@@ -1,24 +1,7 @@
 /**
- * INVARIANT SUITE — skills visibility (canSeeSkill) + CAS write semantics.
- *
- * Two invariants, both through public exports with the repository (and the
- * history writer) mocked — no Supabase, no network:
- *
- *   (2) canSeeSkill matrix, exercised via `listSkills`: owner sees own
- *       private; non-owner does NOT see someone else's private; public
- *       workspace skills are visible; a workspace-scoped API key sees no
- *       private; a teams-mode skill is invisible without a grant and
- *       visible with one.
- *
- *   (3) writeBody optimistic-concurrency: version mismatch surfaces the
- *       conflict with no history write; a successful write records exactly
- *       one history version; "force" (no expected version) still records
- *       history; an identical-body save is a no-op; a lost CAS race
- *       (repo returns null) surfaces the conflict.
- *
- *   (5) deleteSkill is a PERMANENT hard delete (2026-08-07) and narrowing a
- *       skill's sharing is blocked by nothing — no attachment check remains
- *       on the write path.
+ * Invariant suite — skills visibility (canSeeSkill), CAS write semantics,
+ * permanent delete. Through public exports with the repository and history
+ * writer mocked: no Supabase, no network.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -122,7 +105,7 @@ beforeEach(() => {
   mockTeams.listTeamIdsForUser.mockResolvedValue([]);
 });
 
-// ── (2) canSeeSkill via listSkills ───────────────────────────────────
+// ── canSeeSkill via listSkills ───────────────────────────────────────
 
 describe("listSkills visibility (canSeeSkill)", () => {
   async function visibleSlugs(c: SkillContext, rows: Skill[]): Promise<string[]> {
@@ -137,9 +120,7 @@ describe("listSkills visibility (canSeeSkill)", () => {
       skill({ id: "s-otherpriv", slug: "other-private", visibility: "private", createdBy: OTHER }),
       skill({ id: "s-public", slug: "public-one", visibility: "public", accessMode: "workspace", createdBy: OTHER }),
     ];
-    // Owner: sees own private + public, not the other's private.
     expect(await visibleSlugs(ctx({ userId: OWNER }), rows)).toEqual(["own-private", "public-one"]);
-    // A different member: sees only public.
     expect(await visibleSlugs(ctx({ userId: "user-third" }), rows)).toEqual(["public-one"]);
   });
 
@@ -163,12 +144,10 @@ describe("listSkills visibility (canSeeSkill)", () => {
     ];
     const member = ctx({ userId: "user-member", role: "member" });
 
-    // No grant → invisible.
     mockTeams.listGrantsForResources.mockResolvedValue([]);
     mockTeams.listTeamIdsForUser.mockResolvedValue([]);
     expect(await visibleSlugs(member, rows)).toEqual([]);
 
-    // Granted to team-A and the member is on team-A → visible.
     mockTeams.listGrantsForResources.mockResolvedValue([
       { resourceId: "s-team", teamId: "team-A" } as never,
     ]);
@@ -177,11 +156,10 @@ describe("listSkills visibility (canSeeSkill)", () => {
   });
 });
 
-// ── (3) writeBody CAS semantics ──────────────────────────────────────
+// ── writeBody CAS semantics ──────────────────────────────────────────
 
 describe("writeBody optimistic concurrency", () => {
   beforeEach(() => {
-    // getSkillBySlug funnels through findSkillBySlug (non-uuid ref).
     mockRepo.findSkillBySlug.mockResolvedValue(skill({}));
   });
 
@@ -199,9 +177,8 @@ describe("writeBody optimistic concurrency", () => {
   it("successful write records one history version and returns the fresh metadata clock", async () => {
     mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
     mockRepo.updateSkillBody.mockResolvedValue(file({ id: "file-x", updatedAt: "v2", body: "new body" }));
-    // The body write bumped the row's updated_at (touch trigger); writeBody
-    // re-reads it so the client can keep its metadata precondition current
-    // (F-038 D10). body clock (v2) and metadata clock (meta-v2) are distinct.
+    // Touch trigger bumped updated_at, so writeBody re-reads the row: body
+    // clock (v2) and metadata clock (meta-v2) are distinct.
     mockRepo.findSkillById.mockResolvedValue(skill({ updatedAt: "meta-v2" }));
 
     const { file: saved, skillUpdatedAt } = await writeBody(
@@ -222,8 +199,6 @@ describe("writeBody optimistic concurrency", () => {
 
     const { skillUpdatedAt } = await writeBody(ctx(), "skill-x", { body: "same body" }, "v1");
 
-    // No write happened, so updated_at is unchanged (the pre-read skill's) and
-    // no extra findSkillById round-trip is issued.
     expect(skillUpdatedAt).toBe("2026-01-01T00:00:00Z");
     expect(mockRepo.findSkillById).not.toHaveBeenCalled();
   });
@@ -234,7 +209,7 @@ describe("writeBody optimistic concurrency", () => {
 
     await writeBody(ctx(), "skill-x", { body: "new body" }, undefined);
 
-    // Third arg (expectedUpdatedAt) forwarded as undefined = no DB-level CAS.
+    // expectedUpdatedAt undefined = no DB-level CAS.
     expect(mockRepo.updateSkillBody).toHaveBeenCalledTimes(1);
     expect(mockRepo.updateSkillBody.mock.calls[0][2]).toBeUndefined();
     expect(mockHistory.recordVersion).toHaveBeenCalledTimes(1);
@@ -264,7 +239,7 @@ describe("writeBody optimistic concurrency", () => {
   });
 });
 
-// ── (4) updateSkill metadata CAS (F-038 D9) ──────────────────────────
+// ── updateSkill metadata CAS ─────────────────────────────────────────
 
 describe("updateSkill metadata optimistic concurrency", () => {
   it("rejects a stale metadata precondition with SkillStaleVersionError", async () => {
@@ -274,8 +249,7 @@ describe("updateSkill metadata optimistic concurrency", () => {
       updateSkill(ctx(), "skill-x", { name: "Renamed" }, "v0"),
     ).rejects.toBeInstanceOf(SkillStaleVersionError);
 
-    // A stale precondition must never reach the row write (last-write-wins was
-    // the D9 bug — the web client now threads this token).
+    // A stale precondition must never reach the row write.
     expect(mockRepo.updateSkillRow).not.toHaveBeenCalled();
   });
 
@@ -287,16 +261,12 @@ describe("updateSkill metadata optimistic concurrency", () => {
 
     expect(saved.name).toBe("Renamed");
     expect(mockRepo.updateSkillRow).toHaveBeenCalledTimes(1);
-    // The precondition is forwarded to the repo for the atomic CAS re-check.
     expect(mockRepo.updateSkillRow.mock.calls[0][2]).toBe("v1");
   });
 });
 
-// ── (5) deleteSkill — PERMANENT delete (soft-delete removal, 2026-08-07) ──
-//
-// Trash is gone as product behaviour (RETIREMENT-UNWIRING-PLAN §2b / D6):
-// `deleteSkill` removes the row immediately. There is no restore and no purge,
-// and the `deleted_at` stamp is never written.
+// ── deleteSkill — PERMANENT delete ───────────────────────────────────
+// Row removed immediately; no restore, no purge, `deleted_at` never written.
 
 describe("deleteSkill — permanent delete", () => {
   it("HARD-deletes the row and writes no tombstone", async () => {
@@ -304,16 +274,12 @@ describe("deleteSkill — permanent delete", () => {
 
     await deleteSkill(ctx(), "skill-x");
 
-    // A real DELETE, not a `deleted_at` stamp — `markSkillDeleted` is gone
-    // from the repository, so the factory mock above no longer declares it and
-    // any attempt to reintroduce the soft-delete call fails to resolve.
     expect(mockRepo.hardDeleteSkill).toHaveBeenCalledWith("ws-1", "s-1");
   });
 
   it("records NO history event — skill_events cascades with the row", async () => {
-    // The old soft-delete wrote a `skill.trashed` event. A hard delete cannot:
-    // `skill_events.skill_id` FKs to `skills` ON DELETE CASCADE, so the insert
-    // would violate the FK against a row that no longer exists.
+    // `skill_events.skill_id` FKs ON DELETE CASCADE, so an event insert would
+    // violate the FK against a row that no longer exists.
     mockRepo.findSkillBySlug.mockResolvedValue(skill({ id: "s-1" }));
 
     await deleteSkill(ctx(), "skill-x");
@@ -333,13 +299,7 @@ describe("deleteSkill — permanent delete", () => {
   });
 });
 
-// ── (5b) Narrowing is blocked by nothing ────────────────────────────
-//
-// `updateSkill` used to 409 SKILL_ATTACHED_TO_WORKFLOWS when a narrowing
-// (public→private, or public→teams) hit a skill an attached resource depended
-// on. That check was short-circuited on 2026-08-07 and its whole subject was
-// deleted on 2026-08-11. The assertion that survives is the one that matters
-// to a user: a privacy narrowing APPLIES, and it does so in one write.
+// ── Narrowing is blocked by nothing ──────────────────────────────────
 
 describe("updateSkill sharing narrowing — nothing blocks it", () => {
   it("narrows a workspace-public skill to private in one write", async () => {

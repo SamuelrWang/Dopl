@@ -1,85 +1,56 @@
 // session-effects.js — the reducer's EFFECT BUILDERS (pure).
 //
-// Extracted from session-reducer.js to hold that AT-CAP file (§2, 500 lines) under the cap
-// while H1 adds the auth-hold state. Everything here is a pure function from state to a
-// side-effect-FREE effect descriptor ({ type, ... }) — never a callback, never a live handle;
-// session-engine.js is what EXECUTES them. Nothing here reads or writes anything.
-//
-// SOURCE EXTRACTION: no electron / SDK / fs / require references inside the sentinel block, so
-// test/_reducer-block.mjs slices this block, PREPENDS it to the session-reducer block, and
-// evaluates the pair verbatim in a plain Node context. session-reducer.js requires these names
-// at module scope (above its own sentinel), so inside its block they are free vars — the same
-// arrangement session-park.js uses for its injected deps, and the reason the split costs the
-// reducer's own truth-table tests nothing.
+// ⚠ Every function returns a side-effect-FREE effect descriptor ({ type, ... }) — never a
+// callback, never a live handle. session-engine.js EXECUTES them; nothing here reads or writes.
+// ⚠ NO electron / SDK / fs / require references inside the sentinel block: test/_reducer-block
+// .mjs slices it, PREPENDS it to the session-reducer block and evaluates the pair verbatim in
+// plain Node. session-reducer.js requires these names ABOVE its own sentinel, so inside its
+// block they are free vars.
 
 // ─── BEGIN SESSION-EFFECTS (pure; unit-tested via source extraction) ─────────
 
-// FIX #6 — a PENDING inbound card WINS the displayed status: `phase` carries the gate (nothing below
-// clobbers it while a card waits, so the pill keeps reading "Message waiting") while `activity` tells
-// the truth, so the send button still morphs to Pause on a mid-flight turn.
+// ⚠ A PENDING inbound card WINS the displayed status: `phase` carries the gate (nothing may
+// clobber it while a card waits, so the pill keeps reading "Message waiting") while `activity`
+// tells the truth, so the send button still morphs to Pause on a mid-flight turn.
 function gatePhase(state, phase) {
   return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
 }
 
-// The effect set shared by every non-close_task end (operator End, turn/cost cap): abort the query, tell the
-// renderer, settle the record. These leave the channel TASK open (resumable) — no task_finished. P3: a real end
-// ALSO posts a CALM lifecycle so the web card stops pulsing "Working…". Idle never reaches here; it PARKS instead.
+// The effect set shared by every non-close_task end (operator End, turn/cost cap): abort the
+// query, tell the renderer, settle the record. ⚠ Leaves the channel TASK open (resumable) — no
+// task_finished. A real end ALSO posts a CALM lifecycle so the web card stops pulsing
+// "Working…". ⚠ Idle never reaches here; it PARKS instead.
 function endedEmit(state, outcome, reason, summary) {
   const payload = { type: 'ended', outcome: outcome, totalCostUsd: state.costUsd, reason: reason };
   if (summary !== undefined) payload.summary = summary;
   return { type: 'emit', payload: payload };
 }
 
-// P3: the calm lifecycle a real end posts. turn/cost caps ride extra:{capped:true} (the web renders
-// "Limit reached", task stays open). Both ride metadata like `interrupted` — no server-stamped keys,
-// no closeTask. Any other reason posts nothing.
+// The calm lifecycle a real end posts. All ride metadata like `interrupted` — no server-stamped
+// keys, no closeTask. Any other reason posts nothing.
 //
-// P1-7 (Samuel's decision 3, 2026-08-04) — A LOCAL SESSION ENDING IS NOT A THREAD FAILURE.
-// The operator End used to post `task_failed` + { ended: true }. The flag kept the CHIP calm, but
-// the KIND is terminal: group-thread.ts folds a task_failed into `endEvent` and computeStatus reads
-// a terminal marker as the exchange's OUTCOME, so one member parking their own window painted the
-// SHARED thread as failed on the peer's card. Nothing had failed — the thread was open, still
-// routing, and the other member could still be working it. One machine's session had stopped.
+// ⚠ A LOCAL SESSION ENDING IS NOT A THREAD FAILURE. `task_failed` is TERMINAL whatever metadata
+// rides it: group-thread.ts folds it into `endEvent` and computeStatus reads a terminal marker
+// as the exchange's OUTCOME, so one member parking their own window paints the SHARED thread as
+// failed on the peer's card. The operator End therefore posts a NON-TERMINAL `session_ended`:
+// kind `task_progress`, which group-thread treats as an ENTRY and never as an endEvent, while
+// still reaching `calmEndStatus` so the card stops saying "Working…".
+// ⚠ A METADATA MARKER, NOT A NEW KIND: `channel_messages.kind` carries a CHECK constraint, so a
+// first-class `session_ended` kind is a schema change deployed ahead of every desktop that
+// would write it, for a render hint. The marker is reserved server-side like the calm flags.
+// ⚠ THE CAPS STAY TERMINAL: a turn/cost cap is this machine refusing to continue, not a window
+// being tidied away, and the peer is owed that as an outcome.
 //
-// So the End posts a NON-TERMINAL `session_ended`: kind `task_progress`, which group-thread treats
-// as an ENTRY and never as an endEvent, so there is no path by which it can become an outcome. The
-// card still stops saying "Working…" — `groupThread` reads the marker into `calmEndStatus` — which
-// was the only thing the terminal kind was ever buying.
-//
-// WHY A METADATA MARKER AND NOT A NEW KIND: `channel_messages.kind` carries a CHECK constraint
-// (verified against the live database), so a first-class `session_ended` kind is a schema change
-// deployed ahead of every desktop that would write it, for a render hint. The marker is reserved
-// server-side on the same terms as the five calm flags, so it is no more forgeable than they are.
-//
-// THE CAPS STAY TERMINAL, deliberately. A turn/cost cap is this machine refusing to continue, not a
-// window being tidied away, and the peer is owed that as an outcome.
-//
-// C-5 (2026-08-08, Samuel's call) — THE THREE TERMINALS THAT SAID NOTHING NOW SAY THIS.
-//
-// The audit's C-5: `endLifecycle('abandoned')` returned null, so the 12h abandonment posted
-// NOTHING — and the abandonment is the COMMON path (request -> task_started -> 15min idle ->
-// silent park -> 12h -> silent end). The same hole existed for the Q6 auth-preflight hold
-// (`launch()` answers with a sessionId, so trigger.js takes the success branch and no query
-// is ever run) and for the window-budget EVICTION (`settle()` bypasses the reducer). Every
-// OTHER terminal posted. So the requester's card pulsed "Working…" indefinitely on exactly
-// the endings nobody chose.
-//
-// THE MESSAGE THE WAITING PERSON GETS is a STATUS NOTE, not an error: none of these three is
-// anybody's fault, and none of them is an outcome for the SHARED thread. So they ride the
-// same non-terminal `task_progress` + reserved `session_ended` marker the operator End uses
-// (P1-7 above) — `group-thread.ts` treats that as an ENTRY and never as an `endEvent`, so it
-// can only ever reach `calmEndStatus` on the card that is pulsing. It stops the card
-// claiming work is in progress and it cannot rewrite the exchange's outcome.
-//
-// ONE WORDING FOR ALL THREE, deliberately. "Went inactive" is the whole of what the peer can
-// honestly be told: which of the three it was is a fact about the OTHER machine (nobody came
-// back; there is no Claude Code credential on it; a window budget was reclaimed), and two of
-// those three would be reporting the operator's circumstances to a counterparty. No blame,
-// no cause, no em dash.
-//
-// A REAL TERMINAL ARRIVING LATER CANNOT DOUBLE-POST: `session-window.onEnded` drops a repeat
-// of the same (thread, cycle) session_ended marker, and the deterministic clientMsgId means
-// the server dedupes it a second time.
+// ⚠ THE THREE SILENT TERMINALS MUST POST. `abandoned` (the COMMON path: request ->
+// task_started -> 15min idle -> silent park -> 12h -> end), the auth-preflight hold (`launch()`
+// answers with a sessionId, so trigger.js takes the success branch and no query ever runs) and
+// the window-budget EVICTION (`settle()` bypasses the reducer) each used to post NOTHING, so
+// the requester's card pulsed "Working…" indefinitely on exactly the endings nobody chose.
+// ⚠ ONE WORDING FOR ALL THREE: which of the three it was is a fact about the OTHER machine
+// (nobody came back; no Claude Code credential; a window budget reclaimed), and two of those
+// would report the operator's circumstances to a counterparty. No blame, no cause, no em dash.
+// A real terminal arriving later cannot double-post: `session-window.onEnded` drops a repeat of
+// the same (thread, cycle) marker, and the deterministic clientMsgId dedupes it server-side.
 const INACTIVE_NOTE = 'This session went inactive.';
 
 function endLifecycle(reason) {
@@ -93,16 +64,12 @@ function endLifecycle(reason) {
   return null;
 }
 
-// M2b (2026-08-05, Samuel's call) — AN ABANDONMENT KEEPS ITS WINDOW.
-// Every other end is something the operator watched happen: they clicked End, or a cap fired
-// while they were there, so tidying the window away is the tail of an action they took. An
-// abandonment fires hours later with nobody present, and destroying the window makes a
-// transcript disappear from the desktop of someone who only stepped away — indistinguishable
-// from a crash, and the one end where the operator has no idea it happened.
-// It costs NOTHING that mattered: the window is UI. `phase: 'ended'` is what stops a peer
-// reply, a stale dock click or a drained SDK tail from waking the session, and `settle` still
-// denies every pending permission, closes the iterator, aborts the query and drops the map
-// entry. What survives is a painted, inert transcript the operator can read and close.
+// ⚠ AN ABANDONMENT KEEPS ITS WINDOW. Every other end is something the operator watched happen;
+// an abandonment fires hours later with nobody present, and destroying the window makes a
+// transcript vanish from the desktop of someone who stepped away — indistinguishable from a
+// crash. Costs nothing: `phase: 'ended'` is what stops a peer reply, a stale dock click or a
+// drained SDK tail from waking the session, and `settle` still denies every pending permission,
+// closes the iterator, aborts the query and drops the map entry.
 function endEffects(state, outcome, reason, summary) {
   const lc = endLifecycle(reason);
   return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
@@ -110,60 +77,46 @@ function endEffects(state, outcome, reason, summary) {
       { type: 'settle', outcome: outcome, keepWindow: reason === 'abandoned' }]);
 }
 
-// v2.9 — the header posture echo: ONE shape for BOTH axes, so the renderer never sees half a one.
+// The header posture echo: ⚠ ONE shape for BOTH axes, so the renderer never sees half a one.
 function modesEmit(state) {
   return { type: 'emit', payload: { type: 'modes', tool: state.toolMode, message: state.messageMode } };
 }
 
-// FIX 3 (2026-08-02) — A PARK THAT TAKES THE POSTURE AWAY MUST SAY SO.
-// The park resets both axes and modesEmit drags the selects back to Manual / Ask, but nothing
-// ever STATED that the posture the operator chose had been revoked: the controls just moved.
-// So the reported experience was "I set Bypass and it keeps turning itself off" with no event
-// anywhere in the window to attach that to. The line is emitted ONLY when there was really
-// something to reset, so it can never claim a change that did not happen — a session already
-// sitting at manual/ask parks exactly as quietly as it does today.
-// M2 (2026-08-05): saying it was never the whole answer, and the IDLE park no longer resets at
-// all. This copy now belongs to the ONE park that still does — the AUTH HOLD, where the reset is
-// about a session with no credential rather than about an operator who might be away.
-// Copy lives here rather than in the renderer because main is what knows whether the reset
-// happened; it goes out as an ordinary `notice`, which the view-model already renders via
-// textContent. No em dash, and it names the two controls it is talking about.
+// ⚠ A PARK THAT TAKES THE POSTURE AWAY MUST SAY SO — otherwise the selects just move and the
+// experience is "I set Bypass and it keeps turning itself off" with no event to attach it to.
+// ⚠ Emitted ONLY when there was really something to reset, so it can never claim a change that
+// did not happen. Belongs to the ONE park that still resets: the AUTH HOLD.
+// Copy lives in main because main knows whether the reset happened; it goes out as an ordinary
+// `notice`, which the view-model renders via textContent. No em dash.
 const POSTURE_RESET_NOTE = 'Paused. Tools and Messages reset to Manual / Ask.';
 function postureWasReset(state) {
   return !!state && (state.toolMode !== 'manual' || state.messageMode !== 'ask');
 }
 
-// P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise fail-closed, tear down
-// the live query, clear the idle timer, persist phase 'parked', tell the renderer. NOT settled: no
-// `settle`, no `win.destroy`, no registry removal, and sdkSessionId is retained, so a lazy wake can resume it.
+// Idle PARKS the session, never ends it: deny any awaited canUseTool promise fail-closed, tear
+// down the live query, clear the idle timer, persist phase 'parked', tell the renderer.
+// ⚠ NOT settled: no `settle`, no `win.destroy`, no registry removal, and sdkSessionId is
+// RETAINED so a lazy wake can resume it.
 //
-// M2 (2026-08-05) — TWO PARKS, TWO POSTURE ANSWERS, so the option is explicit at both call sites.
-//   `resetPosture: true`  (the default, and what AUTH_HOLD passes) — the v2.9 FIX #3 behaviour,
-//                         byte-for-byte: disarm both axes and SAY SO. A hold is a session whose
-//                         credential is gone; it relaunches through startQuery when the operator
-//                         signs in, and H1's reasoning for disarming it is untouched here.
-//   `resetPosture: false` (the IDLE park) — the operator's posture is theirs for the session.
-//                         No modes echo and no note, because nothing was taken away; the
-//                         renderer's selects move ONLY on a `modes` event, so they go on showing
-//                         what the operator set, which is now the truth.
-//   `lifecycle: true`     C-5 — POST THE STATUS NOTE. Only the AUTH HOLD passes it, because the
-//                         hold is the one park the peer can never learn about any other way:
-//                         a preflight hold answers `launch()` with a live-looking sessionId,
-//                         so trigger.js takes its success branch and NOTHING is posted — no
-//                         task_started, no reply, no end — while the requester's card pulses.
-//                         The idle park deliberately does NOT pass it: an idle park is a
-//                         fifteen-minute pause the operator is expected back from, and its
-//                         abandonment bound already posts if they are not (endLifecycle).
-//                         It is IDEMPOTENT for free: the reducer's auth_hold branch returns
-//                         no effects at all once `authHeld` is set, so a converging second
-//                         hold cannot post twice.
-//   `armAbandon: true`    RE-ARMS the timer instead of clearing it. session-engine's scheduleIdle
-//                         reads `parked` off the state the reducer just stored, so what that arms
-//                         is the hours-scale ABANDONMENT bound firing `abandon_timeout`, never
-//                         another 15-minute idle TTL — one handle, one teardown path, and a wake's
-//                         own scheduleIdle overwrites it. Only the idle park asks for it: an
-//                         auth-held session is waiting on a human clicking "Sign in", and ending
-//                         it would destroy the window carrying that button.
+// TWO PARKS, TWO POSTURE ANSWERS, explicit at both call sites:
+//   `resetPosture: true`  (default; AUTH_HOLD) — disarm both axes and SAY SO. A hold is a
+//                         session whose credential is gone; it relaunches through startQuery.
+//   `resetPosture: false` (IDLE park) — ⚠ the operator's posture is theirs for the session. No
+//                         modes echo, no note: the renderer's selects move ONLY on a `modes`
+//                         event, so they go on showing what the operator set.
+//   `lifecycle: true`     ⚠ AUTH HOLD ONLY. A preflight hold answers `launch()` with a
+//                         live-looking sessionId, so trigger.js takes its success branch and
+//                         NOTHING is posted — no task_started, no reply, no end — while the
+//                         requester's card pulses. The IDLE park must NOT pass it: it is a
+//                         15-minute pause the operator is expected back from, and its
+//                         abandonment bound already posts if they are not. Idempotent for
+//                         free — the reducer's auth_hold branch returns no effects once
+//                         `authHeld` is set.
+//   `armAbandon: true`    RE-ARMS the timer instead of clearing it. session-engine's
+//                         scheduleIdle reads `parked` off the state just stored, so this arms
+//                         the hours-scale ABANDONMENT bound (`abandon_timeout`), never another
+//                         15-minute idle TTL. ⚠ IDLE park only: an auth-held session waits on a
+//                         human clicking "Sign in", and ending it destroys that button.
 function parkEffects(state, opts) {
   const o = opts || {};
   const resetPosture = o.resetPosture !== false;
@@ -173,23 +126,23 @@ function parkEffects(state, opts) {
     o.armAbandon === true ? { type: 'scheduleIdle' } : { type: 'clearIdle' },
     { type: 'persist', phase: 'parked' },
   ];
-  if (o.lifecycle === true) effects.push(endLifecycle('inactive')); // C-5: the peer is told, once
+  if (o.lifecycle === true) effects.push(endLifecycle('inactive')); // the peer is told, once
   if (resetPosture) {
-    // FIX #3 (v2.9): a park that DISARMS both axes says so. The old toggle reset was silent and
-    // the checkbox went on reading "on" over a session that would ask again.
+    // ⚠ A park that DISARMS both axes says so — a silent reset leaves the control reading "on"
+    // over a session that will ask again.
     effects.push(modesEmit({ toolMode: 'manual', messageMode: 'ask' }));
   }
   effects.push({ type: 'emit', payload: { type: 'status', phase: gatePhase(state, 'parked') } });
-  // `paused` drops the one-line inline note (renderer owns the copy), distinct from the P2
-  // reopen shell's `notice`. FIX #17: a park that happens while a message is HELD says so —
-  // "wait for a reply" is wrong when the reply is already here, waiting.
+  // `paused` drops the one-line inline note (renderer owns the copy), distinct from the reopen
+  // shell's `notice`. ⚠ A park while a message is HELD says so — "wait for a reply" is wrong
+  // when the reply is already here.
   effects.push({ type: 'emit', payload: state && state.hasPendingInbound === true ? { type: 'paused', gated: true } : { type: 'paused' } });
   if (resetPosture && postureWasReset(state)) {
     effects.push({ type: 'emit', payload: { type: 'notice', level: 'info', text: POSTURE_RESET_NOTE } });
   }
-  // FIX #6 (v2.3): clear the renderer's permission dock for anything awaiting a button. Main
-  // denies each fail-closed (denyPending) before the abort, so a parked, query-less session must
-  // not keep showing a live-looking prompt. Renderer drops each on resolve.
+  // ⚠ Clear the renderer's permission dock for anything awaiting a button: main denies each
+  // fail-closed (denyPending) before the abort, so a parked, query-less session must not keep
+  // showing a live-looking prompt.
   for (const id of (state && state.pendingPermissions) || []) {
     effects.push({ type: 'emit', payload: { type: 'permission_resolved', requestId: id, decision: 'deny' } });
   }
@@ -205,7 +158,7 @@ module.exports = {
   endEffects,
   modesEmit,
   parkEffects,
-  postureWasReset, // FIX 3: did this park actually take a posture away?
+  postureWasReset, // did this park actually take a posture away?
   POSTURE_RESET_NOTE,
-  INACTIVE_NOTE, // C-5: the one wording all three silent terminals now use
+  INACTIVE_NOTE, // the one wording all three silent terminals use
 };

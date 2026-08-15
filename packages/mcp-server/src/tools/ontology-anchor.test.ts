@@ -1,17 +1,10 @@
 /**
- * `dopl_ontology(op="anchor")` — the strongest identity claim in the product,
- * and previously the least checkable one.
- *
- * The MCP `instructions` block tells every agent to call this for any "my/me"
- * request. It answered `You are anchored to this object.` above a heading built
- * from `ontology_objects.name` — member-typed text — with no caller id, no
- * framing header, and no test. An agent that read a name out of it and reported
- * that name as its own identity was doing exactly what the surface invited, and
- * `op="claim_anchor"` means any agent on the connection can re-point the link
- * it reads from.
- *
- * The op is CONTEXT now, and says so, over an identity line the reader can
- * check against the footer and against `whoami`.
+ * `dopl_ontology(op="anchor")` — ⚠ the strongest identity claim in the product,
+ * and the least checkable. The `instructions` block sends every agent here for
+ * any "my/me" request, the heading is built from member-typed
+ * `ontology_objects.name`, and `op="claim_anchor"` lets any agent on the
+ * connection re-point the link it reads from. So the op is CONTEXT, says so,
+ * and sits over an identity line checkable against the footer and `whoami`.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -55,16 +48,15 @@ describe("op=anchor states WHO you are before what you are linked to", () => {
   it("leads with the caller's immutable user id", async () => {
     const text = await textOf(client(OBJECT), CALLER);
     expect(text).toContain("You are user `u-me`.");
-    // …and it comes before the object's member-typed name.
+    // ⚠ …and it comes BEFORE the object's member-typed name.
     expect(text.indexOf("u-me")).toBeLessThan(text.indexOf("Anthony Davids"));
   });
 
   /**
-   * THE CORRECTION. The object name reads exactly like a person's identity —
-   * this fixture is the shape of the real incident — so the result has to say
-   * out loud that the name is workspace data and the link is agent-rewritable,
-   * rather than leaving an agent to infer that a heading with a person's name
-   * in it is who it is.
+   * ⚠ An object name can read exactly like a person's identity, so the result
+   * must SAY OUT LOUD that the name is workspace data and the link is
+   * agent-rewritable — never leave an agent to infer that a heading with a
+   * person's name in it is who it is.
    */
   it("frames the object as CONTEXT, re-pointable by any agent, not as proof", async () => {
     const text = await textOf(client(OBJECT), CALLER);

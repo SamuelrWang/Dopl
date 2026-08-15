@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createPersistGate } from "./persist-gate";
 
-/** A promise plus its resolver, so a test can hold a run "in flight". */
+/** Promise + resolver, so a test can hold a run "in flight". */
 function deferred(): { promise: Promise<void>; resolve: () => void; reject: (e: unknown) => void } {
   let resolve!: () => void;
   let reject!: (e: unknown) => void;

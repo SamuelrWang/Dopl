@@ -1,10 +1,7 @@
 "use client";
 
-/**
- * Client-side fetch wrappers for the skills REST endpoints. Mirrors
- * the knowledge `client/api.ts` shape — error envelope, X-Workspace-Id
- * header passthrough, JSON-only request/response.
- */
+/** Client fetch wrappers for the skills REST endpoints. Mirrors knowledge's
+ *  `client/api.ts`: error envelope, X-Workspace-Id passthrough, JSON only. */
 
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
@@ -30,11 +27,8 @@ interface RequestOpts {
   workspaceId?: string;
   body?: unknown;
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-  /**
-   * Optimistic-concurrency precondition. When set, the server
-   * compares against the row's current `updated_at` and returns 412
-   * `SKILL_STALE_VERSION` on mismatch. Mirrors the knowledge feature.
-   */
+  /** CAS precondition: server compares against the row's `updated_at` and
+   *  412s `SKILL_STALE_VERSION` on mismatch. */
   expectedUpdatedAt?: string;
 }
 
@@ -43,8 +37,8 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     return await apiRequest<T>(path, opts);
   } catch (err) {
     if (err instanceof ApiError) {
-      // Re-type onto the feature error — skill-view branches on
-      // SkillApiError instances (e.g. 412 SKILL_STALE_VERSION).
+      // ⚠ Re-type onto the feature error: skill-view branches on
+      // SkillApiError instances (412 SKILL_STALE_VERSION).
       throw new SkillApiError(err.status, err.code, err.message);
     }
     throw err;
@@ -98,12 +92,12 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
-  /** Organizing folder label. Empty → unfiled (null). */
+  /** Empty → unfiled (null). */
   folder?: string | null;
-  /** Full three-way sharing — owner or workspace admin only. */
+  /** Owner or workspace admin only. */
   visibility?: "public" | "private";
   accessMode?: "workspace" | "teams";
-  /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
+  /** Only meaningful with visibility 'public' + accessMode 'teams'. */
   teamIds?: string[];
 }
 
@@ -137,12 +131,9 @@ export async function readSkillBody(
 
 export interface WriteSkillBodyResult {
   file: SkillFile;
-  /**
-   * The skill row's `updated_at` after the write — the metadata-CAS clock,
-   * distinct from `file.updatedAt` (the body clock). A body save bumps it
-   * (touch trigger), so thread it as the precondition for the next metadata
-   * (name/folder/sharing) PATCH or that PATCH would false-412 (F-038 D10).
-   */
+  /** ⚠ Metadata-CAS clock (the skill row's post-write `updated_at`), distinct
+   *  from `file.updatedAt` (body clock). A body save bumps it, so thread this
+   *  as the next metadata PATCH's precondition or that PATCH false-412s. */
   skillUpdatedAt: string;
 }
 
@@ -200,11 +191,8 @@ export async function restoreSkillVersion(
 
 // ─── Delete ─────────────────────────────────────────────────────────
 
-/**
- * PERMANENT delete — the soft-delete removal (§2b) turned the server route
- * into a hard delete, so there is no trash and no restore behind this. Every
- * call site must be gated by a `ConfirmDialog` first.
- */
+/** ⚠ PERMANENT delete: no trash, no restore. Every call site must be gated
+ *  by a `ConfirmDialog`. */
 export async function deleteSkill(
   slug: string,
   workspaceId?: string

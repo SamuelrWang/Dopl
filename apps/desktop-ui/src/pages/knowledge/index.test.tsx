@@ -11,12 +11,12 @@ import {
 } from "./test-fixtures";
 
 /**
- * BASE DETAIL — the `/knowledge/:kbSlug` mode, plus every way a URL resolves
- * into it: deep links, legacy slugs, the canonical-segment replace, and the
- * create/rename/delete moves that change which base the URL names.
+ * BASE DETAIL — `/knowledge/:kbSlug`, plus every way a URL resolves into it:
+ * deep links, legacy slugs, the canonical-segment replace, and create / rename
+ * / delete moves that change which base the URL names.
  *
- * The card grid's own behaviour lives in `./home.test.tsx`; the fake server
- * both suites drive is `./test-fixtures.tsx`.
+ * Card grid behaviour: `./home.test.tsx`. Shared fake server:
+ * `./test-fixtures.tsx`.
  */
 
 describe("knowledge base detail", () => {
@@ -26,14 +26,11 @@ describe("knowledge base detail", () => {
     renderAt(`/${SEGMENT}/knowledge/${BASE_B_SEG}`);
     await screen.findByDisplayValue("Cold outreach");
 
-    // The opened base's tree, expanded, and nothing of the other base.
     expect(screen.getByText("Discovery call")).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: "Product specs" })).toBeNull();
-    // The base-LIST controls have no job here.
     expect(screen.queryByPlaceholderText("Search")).toBeNull();
     expect(screen.queryByRole("tablist")).toBeNull();
 
-    // "Knowledge › Sales playbook", with the first crumb navigating out.
     const crumbs = screen.getByLabelText("Knowledge base breadcrumb");
     expect(crumbs.textContent).toContain("Knowledge");
     expect(crumbs.textContent).toContain("Sales playbook");
@@ -45,23 +42,21 @@ describe("knowledge base detail", () => {
     await screen.findByRole("article", { name: "Sales playbook" });
 
     fireEvent.click(screen.getByLabelText("New knowledge base"));
-    // ModalShell mounts a frame later (rAF-driven enter transition).
+    // ⚠ ModalShell mounts a frame later (rAF-driven enter transition).
     fireEvent.change(await screen.findByPlaceholderText("e.g. Product specs"), {
       target: { value: "Onboarding" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
-    // The created base is seeded into the cached list before the URL moves,
-    // so the controller can resolve the segment it is handed.
+    // ⚠ Created base is seeded into the cached list BEFORE the URL moves, so
+    // the controller can resolve the segment it is handed.
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(
         `/${SEGMENT}/knowledge/${NEW_BASE_SEG}`
       );
     });
-    // Selected, not merely listed. Selecting a base loads its tree, so that
-    // request is the unambiguous proof: without the pre-navigation cache seed
-    // the controller cannot resolve the segment it was handed and silently
-    // drops the move, while the list row still appears via the refetch.
+    // Tree request is the proof of SELECTED, not merely listed: without the
+    // seed the controller drops the move while the row still appears.
     await waitFor(() => {
       expect(paths()).toContain("/api/knowledge/bases/base-c/tree");
     });
@@ -69,9 +64,9 @@ describe("knowledge base detail", () => {
   });
 
   it("keeps the renamed slug in the URL when the selection next changes", async () => {
-    // A rename reaches this tree as a fresh `bases` row, never as a new
-    // selection — so a URL built from the RAW selection keeps the old slug in
-    // hand and re-asserts it the next time anything is selected.
+    // ⚠ A rename reaches this tree as a fresh `bases` row, never as a new
+    // selection — a URL built from the RAW selection keeps the old slug and
+    // re-asserts it the next time anything is selected.
     const router = renderAt(`/${SEGMENT}/knowledge/${BASE_B_SEG}`);
     await screen.findByDisplayValue("Cold outreach");
 
@@ -88,7 +83,6 @@ describe("knowledge base detail", () => {
       );
     });
 
-    // Now move the selection. The URL must follow the RENAMED base.
     fireEvent.click(screen.getByText("Discovery call"));
 
     await waitFor(() => {
@@ -100,9 +94,9 @@ describe("knowledge base detail", () => {
   });
 
   it("resolves a legacy slug arriving over history, not just on a cold load", async () => {
-    // The controller's URL→selection handler and the page's deep-link
-    // resolver must speak ONE grammar: a legacy slug-only URL pushed into
-    // history has to select its base here exactly as it does on first paint.
+    // ⚠ Controller's URL→selection handler and the page's deep-link resolver
+    // must speak ONE grammar: a legacy slug-only URL pushed into history has to
+    // select its base exactly as on first paint.
     const router = renderAt(`/${SEGMENT}/knowledge`);
     await screen.findByRole("article", { name: "Sales playbook" });
 
@@ -137,8 +131,8 @@ describe("knowledge base detail", () => {
         `/${SEGMENT}/knowledge/${BASE_B_SEG}`
       );
     });
-    // The page's 301 preserved the query string; so must the replace that
-    // stands in for it, or the deep link silently demotes to the base.
+    // ⚠ The replace must preserve the query string, or the deep link silently
+    // demotes to the base.
     expect(router.state.location.search).toBe("?entryId=entry-2");
     expect(await screen.findByDisplayValue("Discovery call")).toBeInTheDocument();
   });
@@ -152,11 +146,10 @@ describe("knowledge base detail", () => {
   });
 
   it("falls back to the knowledge root when the deep-linked base is DELETED", async () => {
-    // The deep link is frozen at mount and this component never remounts, so
-    // it outlives its own target. Deletes are permanent now, which makes this
-    // the ordinary way a resolved deep link loses its base — and treating it
-    // like the unknown-segment 404 above turns the whole page into an error
-    // card that only a reload clears.
+    // ⚠ Deep link is frozen at mount and this component never remounts, so it
+    // outlives its target. Deletes are permanent, so this is the ORDINARY way a
+    // resolved deep link loses its base; treating it like the unknown-segment
+    // 404 above turns the page into an error card only a reload clears.
     const router = renderAt(`/${SEGMENT}/knowledge/${BASE_B_SEG}`);
     await screen.findByDisplayValue("Cold outreach");
 
@@ -172,11 +165,10 @@ describe("knowledge base detail", () => {
       await screen.findByRole("article", { name: "Product specs" })
     ).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
-    // waitFor, not a bare expect: the deep-linked ENTRY selection clears on a
-    // later tick than the route change (list refetch → selection recompute →
-    // breadcrumb unmount), so a synchronous assertion here passes only on a
-    // fast machine and fails under full-suite load. The breadcrumb is the
-    // last thing to go, which is exactly why it is the thing worth pinning.
+    // ⚠ waitFor, not bare expect: the deep-linked ENTRY selection clears a tick
+    // after the route change (list refetch → selection recompute → breadcrumb
+    // unmount), so a sync assertion passes only on a fast machine. The
+    // breadcrumb goes last, which is why it is what to pin.
     await waitFor(() =>
       expect(
         screen.queryByRole("article", { name: "Sales playbook" })

@@ -76,13 +76,13 @@ function ok(body: unknown) {
 
 /** Routes every path this page reads; unknown paths fail loudly. */
 function defaultTransport(req: TransportRequest) {
-  // ONE read for workspace + role + caller id (P0-2): `/api/workspaces/me` is
-  // no longer a hop the page waits on — `bootBody` carries what it answered.
+  // ONE read for workspace + role + caller id: `bootBody` carries what
+  // `/api/workspaces/me` used to answer.
   if (req.path === "/api/boot") return Promise.resolve(ok(bootBody()));
   if (req.path === "/api/skills") return Promise.resolve(ok({ skills: SKILLS }));
   const detail = SKILLS.find((s) => req.path === `/api/skills/${s.slug}`);
   if (detail) {
-    // The hard delete answers 204 with no body (§2b — no trash, no restore).
+    // Hard delete answers 204 with no body — no trash, no restore.
     return req.method === "DELETE"
       ? Promise.resolve({ status: 204, statusText: "No Content", hasBody: false })
       : Promise.resolve(ok(resolved(detail)));
@@ -98,8 +98,8 @@ function renderPage() {
   return render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
-      {/* The shell mounts this in the real app; the delete confirmation is a
-          toast, so the page's own tree has to carry one here. */}
+      {/* Shell mounts this in the real app; delete confirmation is a toast, so
+          this tree has to carry one. */}
       <ToastHost />
     </QueryClientProvider>
   );
@@ -107,13 +107,12 @@ function renderPage() {
 
 describe("skills index page", () => {
   beforeEach(() => {
-    // SPA runtime marker: the shared web tree's SPA-mode guards (presence
+    // ⚠ SPA runtime marker: the shared web tree's SPA-mode guards (presence
     // no-op, realtime no-op, bridge identity) key off window.dopl. Without it
-    // this suite would exercise the WEB paths and hide renderer crashes — the
-    // exact failure a stubbed supabase module hid before. The bridge's
-    // apiRequest funnels into the SAME sendRequest mock as the SPA transport,
-    // so one mock serves both clients (exactly the packaged topology, where
-    // both funnel into main). `installBridge` also arms the fetch tripwire.
+    // this suite exercises the WEB paths and hides renderer crashes. The
+    // bridge's apiRequest funnels into the SAME sendRequest mock as the SPA
+    // transport, so one mock serves both clients — the packaged topology.
+    // `installBridge` also arms the fetch tripwire.
     installBridge({
       apiRequest: (path: string, opts: Record<string, unknown> = {}) =>
         sendRequest({ path, ...opts }),
@@ -130,19 +129,18 @@ describe("skills index page", () => {
     expect(await screen.findByRole("heading", { name: "Skills" })).toBeInTheDocument();
     expect(screen.getByText("Draft outreach")).toBeInTheDocument();
     expect(screen.getByText("Summarize call")).toBeInTheDocument();
-    // Grouped by folder, unfiled last. Scoped to the <p> group headings —
-    // the open skill's header also carries a "Sales" folder button.
+    // Grouped by folder, unfiled last. ⚠ Scoped to the <p> group headings: the
+    // open skill's header also carries a "Sales" folder button.
     expect(screen.getByText("Sales", { selector: "p" })).toBeInTheDocument();
     expect(screen.getByText("Unfiled", { selector: "p" })).toBeInTheDocument();
 
     const paths = transportCalls().map((req) => req.path);
     expect(paths).toContain("/api/boot");
-    // The `me` hop is gone — its answer rides on the boot response.
     expect(paths).not.toContain("/api/workspaces/me");
     expect(paths).toContain("/api/skills");
 
-    // Every workspace-scoped read carries the RESOLVED id, not the caller's
-    // default workspace — the header the web DetailPane comment calls out.
+    // ⚠ Every workspace-scoped read carries the RESOLVED id, not the caller's
+    // default workspace.
     const skillsCall = transportCalls().find((req) => req.path === "/api/skills");
     expect(skillsCall?.workspaceId).toBe(WORKSPACE_ID);
   });
@@ -164,9 +162,8 @@ describe("skills index page", () => {
 
     fireEvent.click(await screen.findByText("Summarize call"));
 
-    // The detail pane reads through the WEB api-client, whose SPA seam
-    // routes over the bridge — one transport for both clients. Raw fetch
-    // must never fire in SPA mode (the packaged CSP is connect-src 'none').
+    // Detail pane reads through the WEB api-client, whose SPA seam routes over
+    // the bridge. ⚠ Raw fetch must never fire in SPA mode (connect-src 'none').
     await waitFor(() => {
       expect(sendRequest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -178,17 +175,16 @@ describe("skills index page", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  // ── Permanent delete (§2b — trash and restore are gone) ────────────
+  // ── Permanent delete (no trash, no restore) ────────────
 
   it("deletes the open skill behind a confirm dialog, then selects its neighbour", async () => {
     renderPage();
 
-    // Open the MIDDLE row so "next" and "first" are different skills — the
-    // whole point of the neighbour rule.
+    // ⚠ Open the MIDDLE row so "next" and "first" differ — the point of the
+    // neighbour rule.
     fireEvent.click(await screen.findByText("Summarize call"));
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
 
-    // Nothing is sent until the dialog is confirmed.
     expect(
       await screen.findByText(
         "This permanently deletes the skill. This can't be undone."
@@ -210,14 +206,13 @@ describe("skills index page", () => {
       );
     });
 
-    // The row leaves the list on the spot — note the mocked re-pull still
-    // returns it, so this is the local hide, not the refetch.
+    // ⚠ Row leaves on the spot; the mocked re-pull still returns it, so this
+    // asserts the local hide, not the refetch.
     await waitFor(() => {
       expect(
         screen.queryByRole("button", { name: /^Summarize call/ })
       ).not.toBeInTheDocument();
     });
-    // Selection moves to the NEXT row, not back to the top of the list.
     await waitFor(() => {
       expect(transportCalls().map((req) => req.path)).toContain(
         "/api/skills/triage-inbox"
@@ -246,7 +241,6 @@ describe("skills index page", () => {
     );
 
     expect(await screen.findByText("Couldn't delete")).toBeInTheDocument();
-    // Row still there, dialog still open to retry or cancel.
     expect(
       screen.getByRole("button", { name: /^Summarize call/ })
     ).toBeInTheDocument();
@@ -265,8 +259,7 @@ describe("skills index page", () => {
     renderPage();
     fireEvent.click(await screen.findByText("Summarize call"));
 
-    // Editing affordances stay (the server lets any member edit a shared
-    // skill); the permanent delete is owner/admin only.
+    // Any member may edit a shared skill; permanent delete is owner/admin only.
     expect(await screen.findByRole("button", { name: "Duplicate" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   });

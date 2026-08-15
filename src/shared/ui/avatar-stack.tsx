@@ -20,8 +20,8 @@ function initials(name: string): string {
 }
 
 function Avatar({ user }: { user: AvatarStackUser }) {
-  // Same proxy as `@/shared/ui/avatar`: a provider-CDN avatar is unrenderable
-  // in the packaged SPA until main hands it back as a `data:` URI.
+  // ⚠ Same proxy as `@/shared/ui/avatar`: provider-CDN avatars are unrenderable
+  // in the packaged SPA until main hands them back as a `data:` URI.
   const src = useBridgedImageSrc(user.avatarUrl);
   const title = user.editing
     ? `${user.displayName} (editing)`
@@ -31,8 +31,7 @@ function Avatar({ user }: { user: AvatarStackUser }) {
       <div
         className={cn(
           "flex h-6 w-6 items-center justify-center rounded-full ring-2 overflow-hidden",
-          // Online members get a success presence ring; the ring otherwise
-          // doubles as the overlap separator against the surface behind.
+          // Ring is presence when online, overlap separator otherwise.
           user.online ? "ring-success" : "ring-bg-elevated",
           "bg-surface-raised-4 text-micro font-semibold uppercase tracking-wide text-text-secondary"
         )}
@@ -58,10 +57,7 @@ function Avatar({ user }: { user: AvatarStackUser }) {
   );
 }
 
-/**
- * Overlapping avatar stack for presence ("who's here"). Renders nothing
- * when empty. Dedupe + ordering are the caller's responsibility.
- */
+/** Overlapping presence stack. Dedupe + ordering are the caller's job. */
 export function AvatarStack({
   users,
   max = 4,

@@ -2,19 +2,10 @@ import { describe, expect, it } from "vitest";
 import { SkillCreateSchema } from "@/features/skills/schema";
 
 /**
- * The create dialog collects exactly THREE fields — name, description, when
- * to use — because those are the three `SkillCreateSchema` requires and the
- * three `SkillView` cannot edit afterwards (it edits the title, folder,
- * sharing and the SKILL.md body). That coupling is invisible from either
- * file, so it is pinned here:
- *
- *  - a NEW required field in the schema would make every dialog submission a
- *    silent 400;
- *  - dropping one of these to "optional" would leave the dialog asking for
- *    something the product no longer needs.
- *
- * Either way the dialog's field set has to move with the schema, and this
- * test fails until it does.
+ * ⚠ Pins a coupling invisible from either file: the dialog collects exactly
+ * the three fields `SkillCreateSchema` requires that `SkillView` cannot edit
+ * afterwards. A new required field makes every submission a silent 400;
+ * relaxing one leaves the dialog asking for something unneeded.
  */
 
 const FIELDS_THE_DIALOG_COLLECTS = ["description", "name", "whenToUse"];
@@ -43,9 +34,8 @@ describe("create-skill dialog ↔ SkillCreateSchema", () => {
   });
 
   it("would reject the placeholder-free shortcut of creating an empty skill", () => {
-    // Why the dialog exists at all: `POST /api/skills` cannot mint a blank
-    // skill, so "click + and open the editor" is not on the table without
-    // inventing description/whenToUse text the user could never fix in-app.
+    // `POST /api/skills` cannot mint a blank skill, so "click + and open the
+    // editor" would require inventing text the user can't fix in-app.
     const parsed = SkillCreateSchema.safeParse({ name: "Untitled skill" });
     expect(parsed.success).toBe(false);
   });

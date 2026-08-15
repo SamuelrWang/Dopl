@@ -34,56 +34,31 @@ import type { Chat, ChatFolder } from "../types";
 import type { ChatScope } from "../scope";
 
 /**
- * THE FIVE CHAT WRITES, moved off `setBusy(true); await api(); setState(…)`.
- *
- * Every one of them used to patch AFTER the await — the star filled a network
- * hop after the click, the folder appeared after a round trip, and the deleted
- * row lingered until the DELETE answered. Worse, each wrote its result into
- * `ChatsView`'s `useState` copy of the list, which the query cache underneath
- * never learned about: two sources of truth, the second one authoritative for
- * exactly as long as the component stayed mounted.
- *
- * Now each write is one config, and the cache IS the state.
- *
- * WHAT EACH ONE MAY AND MAY NOT INVALIDATE (rule 1 — invalidation is
- * explicit, and re-downloading what you just reconciled undoes the point):
- *
- *  - `share` / `pin` — nothing on a warm cache. The PATCH answers with the
- *    whole updated `Chat`; the list row IS that answer, and ordering does not
- *    change. The COLD CACHE is the only exception: `optimistic` and `reconcile`
- *    both DECLINE on an entry with no data — there is no list to patch a row
- *    into, no folder array to insert one — so during a cold start or the
- *    IndexedDB restore window the write lands SERVER-SIDE and never reaches the
- *    screen, invisibly (`chats-view` falls back to `initialChats`, so the
- *    surface renders fully, showing the pre-write truth). Every write below
- *    therefore names its keys through `coldKeys` (`@/shared/hooks/
- *    use-api-mutation`, shared with the channels send since F-178), which drops
- *    the keys that are already warm.
- *  - `remove` — the LIST only, and only for `hiddenCount`: the free-plan
- *    retention window is a server computation over the rows that survive, so
- *    deleting one can reveal an older chat this client cannot name. The
- *    transcript is not invalidated but EVICTED (see below).
- *  - `createFolder` — nothing on a warm cache. The POST answers with the
- *    created folder.
- *  - `folderScope` — the LIST, because the propagation is a per-chat server
- *    fan-out (one grant rewrite per filed chat, unbounded N) that can partly
- *    apply or time out. The mirrored rows here are a good guess, not an
- *    answer, and only the server knows which chats actually moved.
- *
- * EVERY PATCH IS KEYED BY THE ID CAPTURED AT SUBMIT (rule 4). The ids ride in
- * the draft and the per-chat keys embed them in their path, so a write cannot
- * land in the cache of whatever the user selected while it was in flight.
+ * The five chat writes. The query cache IS the state — no second copy.
+ * Invalidation is explicit; re-downloading what you just reconciled undoes
+ * the point. What each may invalidate:
+ *  - `share` / `pin` / `createFolder` — nothing while warm; the response IS
+ *    the row. ⚠ COLD CACHE exception: `optimistic` and `reconcile` both
+ *    DECLINE on an entry with no data, so during cold start / IndexedDB
+ *    restore the write lands server-side and never reaches the screen. Hence
+ *    `coldKeys` (`@/shared/hooks/use-api-mutation`), which drops warm keys.
+ *  - `remove` — LIST only, for `hiddenCount`: the retention window is computed
+ *    server-side over surviving rows, so a delete can reveal an older chat
+ *    this client cannot name. Transcript is EVICTED, not invalidated.
+ *  - `folderScope` — the LIST: propagation is a per-chat server fan-out
+ *    (unbounded N) that can partly apply or time out, and only the server
+ *    knows which chats moved.
+ * ⚠ Every patch is keyed by the id captured AT SUBMIT — ids ride in the draft
+ * and per-chat keys embed them — so an in-flight write cannot land in the
+ * cache of whatever the user selected meanwhile.
  */
 
 export interface ChatWritesParams {
   workspaceId: string;
   gate: MutationGate;
-  /**
-   * Put the selection back on a chat whose DELETE was refused. The caller
-   * moves the selection AT SUBMIT — the row leaves the list on the click, so
-   * a selection that waited for the response would spend the round trip
-   * pointing at a chat the user can no longer see.
-   */
+  /** Restore selection when a DELETE is refused. Caller moves selection AT
+   *  SUBMIT — the row leaves the list on click, so waiting for the response
+   *  would point the selection at a chat the user can't see. */
   onDeleteFailed: (chatId: string) => void;
 }
 
@@ -160,13 +135,10 @@ export function useChatWrites({
   );
 
   /**
-   * Pin is a PURE TOGGLE, and the reason it needs an optimistic patch is not
-   * latency alone: the button used to render the server's value, so two quick
-   * clicks read the same stale `pinned` and sent the SAME PATCH twice. The
-   * star now flips in the cache the button reads from, so the second click
-   * computes from the first click's result — and `pending` makes the control
-   * inert for the round trip, which is what actually stops two conflicting
-   * PATCHes from racing to decide the row.
+   * ⚠ Pin is a pure toggle, so the optimistic patch is correctness, not
+   * latency: the button reads `pinned` from the cache this patches, so a
+   * second click computes from the first click's result instead of resending
+   * the same PATCH. `pending` keeps the control inert for the round trip.
    */
   const pin = useApiMutationWith<PinDraft, { chat: Chat }>(chatRequest, {
     request: (draft) => ({
@@ -198,16 +170,13 @@ export function useChatWrites({
   });
 
   /**
-   * DELETE IS A CACHE EVICTION, not an invalidation. The chat is permanently
-   * gone (no trash, no restore since 2026-08-07), so no refetch can ever make
-   * the transcript entry valid again — an invalidated one would re-request a
-   * 404, and `useChatDetail` prefers cached data over its own error, so the
-   * dead chat would render in full if the row were ever re-selected.
-   *
-   * The eviction runs in `onSuccess`, never in `optimistic`: a rejected DELETE
-   * restores the list row from the snapshot, and the transcript beside it has
-   * to still be there when it does. `removeQueries` is outside the snapshot
-   * mechanism entirely and cannot be rolled back.
+   * ⚠ DELETE is a cache EVICTION, not an invalidation. Chat is permanently
+   * gone, so no refetch makes the transcript valid again — an invalidated
+   * entry re-requests a 404, and `useChatDetail` prefers cached data over its
+   * own error, so a re-selected dead chat would render in full.
+   * ⚠ Eviction runs in `onSuccess`, never `optimistic`: a rejected DELETE
+   * restores the list row from the snapshot and needs the transcript still
+   * there. `removeQueries` is outside the snapshot and cannot be rolled back.
    */
   const remove = useApiMutationWith<DeleteDraft, void>(chatRequest, {
     request: (draft) => ({
@@ -231,11 +200,10 @@ export function useChatWrites({
   });
 
   /**
-   * The duplicate-POST fix has two halves and needs both. The input clears on
-   * submit rather than after the await (`list-pane.tsx`), so a repeated Enter
-   * has no draft left to re-fire; and the folder appears in the list AS a
-   * pending row, so the user has the feedback that used to only arrive with
-   * the response — which is what made the second Enter feel necessary.
+   * ⚠ Duplicate-POST guard needs both halves: `list-pane.tsx` clears the
+   * input AT submit so a repeated Enter has no draft to re-fire, and the
+   * pending row here gives the feedback that made the second Enter feel
+   * necessary.
    */
   const createFolder = useApiMutationWith<
     CreateFolderDraft,
@@ -287,8 +255,8 @@ export function useChatWrites({
         patchCache<ChatFoldersCache>(foldersKey, (cache) =>
           upsertFolderRow(cache, data.folder)
         ),
-      // The list unconditionally (the fan-out above); the folders cache only
-      // when its own reconcile had nowhere to land — same cold window.
+      // List unconditionally (fan-out); folders only when its reconcile had
+      // nowhere to land — same cold window.
       invalidate: () => [listKey, ...coldKeys(qc, [foldersKey])],
       settleWith: gate,
       onError: (err) => failed(err, "Couldn't update folder"),

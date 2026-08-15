@@ -16,19 +16,16 @@ import {
 import { seedWorkspace } from "./service-seed";
 
 /**
- * Knowledge base reads. Single-base gates (`getBaseById` / `getBaseBySlug`)
- * are the foundational visibility-checked lookups the rest of the service
- * modules build on.
+ * Knowledge base reads. `getBaseById` / `getBaseBySlug` are the foundational
+ * visibility-checked lookups the other service modules build on.
  */
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Returns active knowledge bases for the workspace. Triggers a lazy
- * seed when the workspace has zero bases AND was created within the
- * last 24 hours — keeps the empty-state nice for fresh workspaces
- * without re-seeding mature workspaces that intentionally cleared
- * everything.
+ * Active bases for the workspace. Lazy-seeds only when the workspace has zero
+ * bases AND is <24h old, so a mature workspace that intentionally cleared
+ * everything is never re-seeded.
  */
 export async function listBases(
   ctx: KnowledgeContext
@@ -39,19 +36,14 @@ export async function listBases(
     all.filter((b) => canSeeBase(ctx, b))
   );
   if (visible.length > 0) return visible;
-  // CRITICAL: seed only when the workspace has NO bases at all, not
-  // when the *caller* sees zero — otherwise a member who joins a
-  // workspace whose only bases are someone else's private items would
-  // re-trigger seed on every list call. (seedWorkspace's own guard
-  // would early-return, but we shouldn't even try.)
+  // ⚠ CRITICAL: gate on the UNFILTERED count, not what the caller sees —
+  // else a member joining a workspace whose only bases are someone else's
+  // private items re-triggers seed on every list call.
   if (all.length > 0) return visible;
-  // DEMO BYPASS: auto-seed disabled. New workspaces start empty;
-  // populate explicitly via the agent or the UI. Flip
-  // DEMO_DISABLE_AUTO_SEED to false (or delete the guard) to restore
-  // the original onboarding-seed behavior below. `seedWorkspace` is
-  // preserved as a callable function for explicit invocation paths.
-  // Typed as `boolean` (not the literal `true`) so TypeScript keeps
-  // the gating code below reachable for narrowing.
+  // DEMO BYPASS: auto-seed off; new workspaces start empty. Flip to false to
+  // restore onboarding seeding. `seedWorkspace` stays callable for explicit
+  // paths. ⚠ Typed `boolean`, not literal `true`, so TS keeps the code below
+  // reachable.
   const DEMO_DISABLE_AUTO_SEED: boolean = true;
   if (DEMO_DISABLE_AUTO_SEED) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
@@ -66,11 +58,8 @@ export async function listBases(
   return visible;
 }
 
-/**
- * Owner display names for a set of bases, keyed by user id — list-pane
- * attribution for bases shared by other members. Skips the query when
- * every base is the caller's own (the common solo case).
- */
+/** Owner display names keyed by user id — list-pane attribution. Skips the
+ *  query when every base is the caller's own (common solo case). */
 export async function listBaseOwnerNames(
   ctx: KnowledgeContext,
   bases: KnowledgeBase[]
@@ -88,22 +77,14 @@ export async function listBaseOwnerNames(
 }
 
 /**
- * Entry count + newest content write + stored bytes per base, keyed by base id
- * — the "{N} entries · updated {when}" line and the usage bar on the knowledge
- * home cards.
- *
- * Takes the POST-visibility base list for the same reason
- * `listBaseOwnerNames` does: the id set is the fence, so a base hidden by
- * the private/teams gate can never contribute a count through this key.
- * Every id in `bases` gets an entry — an empty base is `0`, never a
- * missing key the client has to guess at.
- *
- * TWO QUERIES, BOTH BATCHED, and the second one is allowed to fail on its own.
- * `storageBytes` reads a column that exists only after
- * `20260812120000_knowledge_base_storage_bytes.sql` is applied, so a build that
- * ships ahead of its migration must lose the BAR and keep the COUNTS — hence
- * the local catch and `null` (= unknown) rather than letting the whole stats
- * map degrade to `{}` at the route.
+ * Entry count + newest content write + stored bytes per base — the
+ * "{N} entries · updated {when}" line and usage bar.
+ * ⚠ Takes the POST-visibility base list: the id set IS the fence. Every id
+ * gets an entry — empty base is `0`, never a missing key.
+ * ⚠ `storageBytes` reads a column existing only after
+ * `20260812120000_knowledge_base_storage_bytes.sql`, so a build ahead of its
+ * migration loses the BAR and keeps the COUNTS — hence the local catch and
+ * `null` (unknown) rather than degrading the whole map to `{}`.
  */
 export async function listBaseStats(
   ctx: KnowledgeContext,
@@ -131,13 +112,12 @@ export async function listBaseStats(
   }
   for (const { baseId, updatedAt } of stamps) {
     const stat = stats[baseId];
-    // A row for a base outside the visible set can only mean the query
-    // ignored its `in` filter; drop it rather than inventing a key.
+    // Row outside the visible set = the `in` filter was ignored. Drop it
+    // rather than inventing a key.
     if (!stat) continue;
     stat.entryCount += 1;
-    // Parsed, not lexicographic: Postgres timestamps reach us with a
-    // variable fractional-second tail, and string ordering on those is
-    // only accidentally right.
+    // ⚠ Parsed, not lexicographic: Postgres timestamps arrive with a variable
+    // fractional-second tail, so string ordering is only accidentally right.
     if (
       stat.lastEntryUpdatedAt === null ||
       Date.parse(updatedAt) > Date.parse(stat.lastEntryUpdatedAt)
@@ -155,9 +135,7 @@ export async function getBaseById(
   const base = await repo.findBaseById(id, false);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
-  // Hide private items from non-owners and workspace-scoped keys, and
-  // teams-mode bases from non-granted members — 404 is the right shape
-  // so visibility itself isn't an oracle.
+  // ⚠ 404, not 403, so visibility itself isn't an oracle.
   await assertBaseVisible(ctx, base);
   return base;
 }

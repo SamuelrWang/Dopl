@@ -16,36 +16,23 @@ interface Props {
 }
 
 /**
- * One object in a lane: name, description, a hairline, then its counts.
- * The whole card selects (opening the editor panel), and hovering shows the
- * cursor-following quick view.
+ * One object in a lane: name, description, hairline, counts. Whole card
+ * selects; hover shows the cursor-following quick view. No inline expand —
+ * attributes already render in the hover card and the panel.
  *
- * ── FIXED HEIGHT, near-square but deliberately short of it. 216px against a
- *    264px inner width (the 288px lane less its 2 × 12px padding), so
- *    0.82 : 1. Written as `h-[216px]` rather than a scale step because the
- *    number is the board's arithmetic — 18 × the 12px dot pitch — and the
- *    scale has nothing at 216. The card is `base-card`'s structure in
- *    utilities: a head row, a description that FLEXES into whatever the fixed
- *    height leaves, and a meta row pinned to the bottom edge.
+ * ⚠ FIXED HEIGHT is board arithmetic: `h-[216px]` = 18 × the 12px dot pitch
+ * (the scale has no 216), against a 264px inner width.
  *
- *    The eight-line clamp is arithmetic, not taste. 216 − the meta row (1px
- *    hairline + 16px `py-2` + a 14.7px micro line ≈ 32) − 20px of body
- *    padding − an 18.75px name line − the 2px gap leaves ≈ 143px, and
- *    `text-caption` is 11.5px × 1.4 = 16.1px per line: eight lines (128.8px)
- *    is the last one that fits with its ellipsis inside the box (nine would
- *    need 144.9). Re-do the sum if the height, the paddings, the lane padding
- *    or the type scale move.
+ * ⚠ The eight-line clamp is arithmetic, not taste: 216 − meta row (1px
+ * hairline + 16px `py-2` + 14.7px micro line ≈ 32) − 20px body padding −
+ * 18.75px name line − 2px gap ≈ 143px; `text-caption` is 11.5px × 1.4 =
+ * 16.1px/line, so 8 lines (128.8px) is the last that fits with its ellipsis
+ * (9 needs 144.9). Re-do the sum if height, paddings, lane padding or the type
+ * scale move.
  *
- * There is no inline expand any more (2026-08-12). The chevron dropped the
- * card open on an attribute preview that BOTH the hover card and the panel
- * already show — a third rendering of the same rows, and the one control on
- * the card that did not do what the card does.
- *
- * The card is a `<div>` with an `onClick`, not a `<button>` wrapping
- * everything: the title button is the accessible control (it carries the
- * object's name), and the container's handler is the mouse convenience that
- * lets the meta row be part of the same target. Same reasoning, at length, in
- * `knowledge-v2/home/base-card`.
+ * ⚠ `<div>` + `onClick`, not a wrapping `<button>`: the title button is the
+ * accessible control, the container handler is mouse convenience so the meta
+ * row shares the target (see `knowledge-v2/home/base-card`).
  */
 export function KanbanCard({
   objectId,
@@ -81,12 +68,10 @@ export function KanbanCard({
         <span className="block w-full truncate text-body font-semibold tracking-tight text-text-primary">
           {object.name}
         </span>
-        {/* The flexible middle, `base-card`'s `.cardDesc` in utilities: it
-            takes the space the fixed height leaves and clamps with an
-            ellipsis at the last line that fits. No `block` next to the clamp
-            — the clamp IS a display rule (-webkit-box), and whichever of the
-            two the stylesheet emitted last would win. An absent description
-            leaves the space empty, exactly like an empty knowledge card. */}
+        {/* Flexible middle: takes the space the fixed height leaves, clamps
+            with ellipsis at the last fitting line. ⚠ No `block` beside the
+            clamp — the clamp IS a display rule (-webkit-box) and whichever the
+            stylesheet emitted last wins. */}
         {object.subtitle && (
           <span className="mt-0.5 line-clamp-[8] w-full min-h-0 flex-1 text-caption text-text-secondary">
             {object.subtitle}

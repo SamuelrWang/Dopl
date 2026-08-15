@@ -23,11 +23,10 @@ interface Props {
 }
 
 /**
- * Knowledge ref picker with base→entry drill-in. Top level is the base
- * list (clicking a base name picks the whole base — the original
- * behavior); the chevron expands a base to list its entries (fetched
- * lazily on expand), and clicking an entry picks that entry id. Same
- * Popover + row recipe as the sibling `PickMenu`.
+ * Knowledge ref picker with base→entry drill-in. Top level = base list
+ * (clicking a base picks the whole base); chevron expands to its entries
+ * (fetched lazily), clicking one picks that entry id. Same Popover + row recipe
+ * as the sibling `PickMenu`.
  */
 export function KnowledgePickMenu({
   workspaceId,

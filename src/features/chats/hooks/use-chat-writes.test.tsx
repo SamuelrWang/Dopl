@@ -1,20 +1,12 @@
 // @vitest-environment jsdom
 /**
- * The chat writes against a REAL `QueryClient`, seeded at the exact keys
- * `useApiQuery` registers.
- *
- * Why the cache is real and only `fetch` is faked: the failure this whole
- * change exists to prevent is a patch that lands in an entry nobody is
- * subscribed to. A key that differs by one element is a silent no-op — the
- * write "succeeds", the screen does not move, and nothing throws. So every
- * assertion below reads the cache back through `apiQueryKey(...)`, the same
- * factory the read side builds from. Point a patch at the wrong resource and
- * these tests fail; assert against a hand-typed array instead and they would
- * happily agree with the bug.
- *
+ * Chat writes against a REAL `QueryClient`, seeded at the exact keys
+ * `useApiQuery` registers. ⚠ Assertions must read the cache back through
+ * `apiQueryKey(...)`, not a hand-typed array: a key off by one element is a
+ * silent no-op (write "succeeds", screen never moves, nothing throws) and a
+ * hand-typed array would agree with the bug.
  * `fetch` is deferred by hand so the cache can be inspected AT THE MOMENT THE
- * REQUEST LEAVES — the deterministic proof that the row is on screen before
- * the network has been spoken to, not merely before it answers.
+ * REQUEST LEAVES, not merely before it answers.
  */
 
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -84,7 +76,7 @@ const listKey = apiQueryKey(CHATS_PATH, { workspaceId: WS });
 const foldersKey = apiQueryKey(CHAT_FOLDERS_PATH, { workspaceId: WS });
 const detailKey = (id: string) => apiQueryKey(chatPath(id), { workspaceId: WS });
 
-/** A fetch whose answer the test releases by hand. */
+/** Fetch whose answer the test releases by hand. */
 function deferredFetch() {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   let release!: (value: Response) => void;
@@ -122,8 +114,7 @@ function deferredFetch() {
 }
 
 let client: QueryClient;
-/** Plain counters rather than spies: the gate contract is "exactly once on
- *  both paths", which is a number, and `MutationGate` is two nullary calls. */
+/** Counters, not spies: the gate contract is "exactly once on both paths". */
 let gate: MutationGate;
 let gateCalls: { begin: number; end: number };
 let deleteFailed: string[];
@@ -188,7 +179,6 @@ describe("pin", () => {
     expect(net.calls[0].body).toEqual({ pinned: true });
     expect(readList()?.chats[0].pinned).toBe(true);
     expect(readDetail("c-1")?.chat.pinned).toBe(true);
-    // ...and the transcript is still a transcript.
     expect(readDetail("c-1")?.chat.messages).toHaveLength(2);
     expect(readList()?.chats[1].pinned).toBe(false);
 
@@ -197,7 +187,7 @@ describe("pin", () => {
     });
     await waitFor(() => expect(result.current.pin.pending).toBe(false));
     expect(readList()?.chats[0].updatedAt).toBe("2026-08-09T00:00:00.000Z");
-    // Reconciled from the answer, so nothing is scheduled to re-download it.
+    // Reconciled from the answer — no re-download scheduled.
     expect(client.getQueryState(listKey)?.isInvalidated).toBeFalsy();
   });
 
@@ -253,7 +243,7 @@ describe("share", () => {
     });
     await waitFor(() => expect(result.current.share.pending).toBe(false));
     expect(readList()?.chats[0].accessMode).toBe("teams");
-    // Reconciled from the answer: neither key is scheduled to re-download.
+    // Reconciled from the answer — neither key re-downloads.
     expect(client.getQueryState(listKey)?.isInvalidated).toBe(false);
     expect(client.getQueryState(detailKey("c-1"))?.isInvalidated).toBe(false);
   });

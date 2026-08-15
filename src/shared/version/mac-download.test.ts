@@ -1,13 +1,8 @@
 /**
- * THE DOWNLOAD BUTTON'S TARGET, as a failure table.
- *
- * The bug this module replaced was not a crash — it was a link that had 404'd
- * since the day it was written, on the one page whose entire job is that link.
- * Nothing in the repo noticed, because a hardcoded URL has no failure mode a
- * test can observe. So the properties pinned here are the two that would have
- * caught it, plus the ones that keep the fix from becoming a new hazard:
- *
- *   • the asset name is READ from the release feed, never guessed
+ * THE DOWNLOAD BUTTON'S TARGET, as a failure table. ⚠ A hardcoded URL has no
+ * failure mode a test can observe, which is how the old link 404'd from the day
+ * it was written. Pinned:
+ *   • asset name is READ from the release feed, never guessed
  *   • every bad day still yields a github.com URL a human can use
  *   • nothing the feed says can point the button off GitHub
  */
@@ -71,17 +66,14 @@ describe("parseChannelDmgAsset", () => {
   });
 
   it("does NOT return the zip, the blockmap or the `path:` line", () => {
-    // `path:` names the zip and sits at column 0; the `files:` entries are
-    // indented list items. Only a `.dmg` may come back, or the button hands a
-    // visitor an auto-update archive to open by hand.
+    // ⚠ Only a `.dmg` may come back, or the button hands a visitor an
+    // auto-update archive to open by hand.
     const asset = parseChannelDmgAsset(REAL_CHANNEL_FILE);
     expect(asset).not.toContain(".zip");
     expect(asset).not.toContain(".blockmap");
   });
 
   it("survives the name the artifacts would have if they were ever renamed", () => {
-    // The whole point: this keeps working whatever electron-builder's
-    // `artifactName` becomes, because it never assumed one.
     expect(parseChannelDmgAsset("files:\n  - url: Dopl-arm64.dmg\n")).toBe("Dopl-arm64.dmg");
     expect(parseChannelDmgAsset("files:\n  - url: Dopl-2.0.0-universal.dmg\n")).toBe(
       "Dopl-2.0.0-universal.dmg"
@@ -98,9 +90,8 @@ describe("parseChannelDmgAsset", () => {
   });
 
   it("refuses anything that could re-point the URL off the release", () => {
-    // The capture is interpolated into a github.com URL. A name carrying a
-    // slash, a scheme, an encoded byte, a query or whitespace is not an asset
-    // name — it is an attempt to make this function write a different URL.
+    // ⚠ The capture is interpolated into a github.com URL: a slash, scheme,
+    // encoded byte, query or whitespace is an attempt to rewrite that URL.
     const hostile = [
       "  - url: ../../../../etc/passwd.dmg",
       "  - url: https://evil.example/x.dmg",
@@ -122,7 +113,6 @@ describe("parseChannelDmgAsset", () => {
   });
 
   it("reads only the head of the body", () => {
-    // A response that is not the channel file must not be scanned in full.
     const buried = `${"# padding\n".repeat(2000)}files:\n  - url: Dopl-9.9.9-arm64.dmg\n`;
     expect(parseChannelDmgAsset(buried)).toBeNull();
   });
@@ -132,12 +122,10 @@ describe("parseChannelDmgAsset", () => {
 
 describe("macDownloadUrlFor", () => {
   it("pins the URL to the tag the channel file named (F-131)", () => {
-    // `latest` is resolved by GitHub at CLICK time while the name was read up
-    // to a TTL earlier — after every release the pair disagreed for ten
-    // minutes, and the disagreement is a 404, not an old build. Tag-pinning
-    // makes name and release one fact. Nothing here may reach for
-    // api.github.com (rate-limited per IP on a shared lambda egress; see
-    // latest-release.ts).
+    // ⚠ `latest` resolves at CLICK time while the name was read up to a TTL
+    // earlier; the disagreement is a 404, not an old build. Tag-pinning makes
+    // name and release one fact. ⚠ Never api.github.com (per-IP rate limit on a
+    // shared lambda egress).
     expect(macDownloadUrlFor("Dopl-1.7.24-arm64.dmg", "1.7.24")).toBe(
       `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}` +
         "/releases/download/v1.7.24/Dopl-1.7.24-arm64.dmg"
@@ -147,8 +135,7 @@ describe("macDownloadUrlFor", () => {
   });
 
   it("falls back to the /releases/latest/download form when no version parsed", () => {
-    // Same ten-minute window the constant had — never worse — and reachable
-    // only when the channel file names a dmg but no parseable version.
+    // Reachable only when the channel file names a dmg but no parseable version.
     expect(macDownloadUrlFor("Dopl-1.7.24-arm64.dmg")).toBe(
       `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}` +
         "/releases/latest/download/Dopl-1.7.24-arm64.dmg"
@@ -168,9 +155,8 @@ describe("resolveMacDownloadUrl", () => {
     serve(REAL_CHANNEL_FILE);
     const url = await resolveMacDownloadUrl();
     expect(url).toBe(macDownloadUrlFor("Dopl-1.7.24-arm64.dmg", "1.7.24"));
-    // The F-131 regression pin: a resolved URL must never route through
-    // GitHub's live `latest` pointer, which is what let a cached name pair
-    // with a newer release and 404 for the length of the TTL.
+    // ⚠ F-131 pin: a resolved URL must never route through GitHub's live
+    // `latest` pointer, which pairs a cached name with a newer release.
     expect(url).not.toContain("/latest/");
   });
 
@@ -184,8 +170,6 @@ describe("resolveMacDownloadUrl", () => {
   it("asks for the feed once per TTL rather than once per click", async () => {
     const spy = serve(REAL_CHANNEL_FILE);
     await resolveMacDownloadUrl();
-    // `fetch`'s second argument, reached without typing the stub's params —
-    // an unused-parameter warning is not worth carrying for one assertion.
     const init = (spy.mock.calls[0] as unknown as unknown[])[1] as {
       next?: { revalidate?: number };
     };
@@ -211,7 +195,7 @@ describe("resolveMacDownloadUrl", () => {
   });
 
   it("never resolves to anything but a github.com release URL", async () => {
-    // The one invariant a Download button cannot lose, whatever the feed says.
+    // ⚠ The one invariant a Download button cannot lose.
     for (const body of [null, "", "<html>", "files:\n  - url: https://evil.example/x.dmg\n"]) {
       __resetMacDownloadForTests();
       serve(body);
@@ -235,8 +219,8 @@ describe("resolveMacDownloadUrl", () => {
 
 describe("resolveMacDownloadAsset", () => {
   it("is the file name a user will actually find in Downloads", async () => {
-    // `/get-started` prints this in step 2. It is the same read as the URL, so
-    // the page cannot name one build while the button serves another.
+    // ⚠ Same read as the URL, so the page cannot name one build while the
+    // button serves another.
     serve(REAL_CHANNEL_FILE);
     await expect(resolveMacDownloadAsset()).resolves.toBe("Dopl-1.7.24-arm64.dmg");
   });
@@ -261,16 +245,13 @@ describe("resolveMacDownloadAsset", () => {
     body,
     status
   ) => {
-    // Null, NOT the releases page: this value goes into a sentence, and a
-    // sentence telling somebody to double-click a URL is nonsense. The button
-    // beside it still degrades to the releases page on the same failure.
+    // ⚠ Null, NOT the releases page: this value goes into a sentence.
     serve(body, status);
     await expect(resolveMacDownloadAsset()).resolves.toBeNull();
   });
 
   it("refuses a hostile name for the same reason the URL does", async () => {
-    // The name is rendered into the page. It gets the parser's full guarantee,
-    // not a softer one — nothing here may become a link or a path.
+    // ⚠ Rendered into the page: full parser guarantee, never a link or path.
     serve("files:\n  - url: https://evil.example/x.dmg\n");
     await expect(resolveMacDownloadAsset()).resolves.toBeNull();
   });

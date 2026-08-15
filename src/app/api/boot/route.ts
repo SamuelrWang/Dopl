@@ -8,31 +8,21 @@ import { getBootState } from "@/features/workspaces/server/segment";
 export const dynamic = "force-dynamic";
 
 const BootRequestSchema = z.object({
-  /** Omit for a cold launch at `/`; pass the routed `{workspaceSlug}` to
-   *  resolve a specific workspace (the shell, a deep link). */
+  /** Omit for a cold launch at `/`; pass the routed `{workspaceSlug}` for a specific workspace. */
   segment: z.string().trim().min(1).max(256).optional(),
 });
 
 /**
- * POST /api/boot — the ONE round trip a launch costs (launch-blocker P0-2c).
+ * POST /api/boot — the ONE round trip a launch costs. Answers `{ isOnboarded, surveyCompleted,
+ * userId, workspace, segment, needsRedirect, role, myAccess }`, collapsing four serial hops
+ * (`user/onboarding-state` → `workspaces/ensure-default` → `workspaces/resolve` →
+ * `workspaces/me`, plus `my-access`) into one `getBootState`. Additive: all four stay live.
  *
- * Answers `{ isOnboarded, surveyCompleted, userId, workspace, segment,
- * needsRedirect, role, myAccess }`, collapsing four strictly serial hops
- * (`user/onboarding-state` → `workspaces/ensure-default` →
- * `workspaces/resolve` → `workspaces/me`, plus the shell's `my-access`) into
- * one composition (`getBootState`). Each of those endpoints stays live and
- * unchanged — the web app, `@dopl/client`'s MCP handshake and deep links keep
- * using them; this route is additive, not a replacement.
+ * POST because the no-segment mode may PROVISION. Idempotent by contract ⇒ 200, never 201.
  *
- * POST because the no-segment mode may PROVISION (it is the same
- * `ensureDefaultWorkspace` the SPA already called). Idempotent by contract,
- * so it answers **200, never 201**, and the SPA models it as a query.
- *
- * FAIL-CLOSED (ENGINEERING §9 "Workspace resolution"): with a `segment` this
- * resolves that segment or 404s — membership-scoped, so "not a member" and
- * "does not exist" are indistinguishable — and never falls back to a default.
- * Without one it takes the documented provisioning path and nothing else.
- * Membership is proven server-side before `role`/`myAccess` are computed.
+ * ⚠ FAIL-CLOSED (ENGINEERING §9 "Workspace resolution"): with a `segment` it resolves that
+ * segment or 404s (membership-scoped, so non-member and nonexistent are indistinguishable) and
+ * NEVER falls back to a default. Membership is proven server-side before `role`/`myAccess`.
  */
 export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
   try {
@@ -44,8 +34,7 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
         { status: 404 }
       );
     }
-    // Audit A-010: per-user payload (role + effective access). Never let a
-    // CDN cache it by URL alone.
+    // ⚠ Per-user payload (role + effective access) — never CDN-cacheable by URL alone.
     return NextResponse.json(state, {
       headers: { "Cache-Control": "private, no-store" },
     });
@@ -54,10 +43,7 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
   }
 });
 
-/**
- * The body is OPTIONAL — a cold launch posts nothing. An absent or empty body
- * is the no-segment mode, not a 400; anything present is still validated.
- */
+/** ⚠ Body is OPTIONAL: absent/empty is the no-segment mode, not a 400. Present bodies validate. */
 async function readBody(request: NextRequest): Promise<z.infer<typeof BootRequestSchema>> {
   let raw: unknown;
   try {

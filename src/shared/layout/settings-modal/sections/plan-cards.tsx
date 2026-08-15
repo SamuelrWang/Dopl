@@ -8,9 +8,8 @@ import { cn } from "@/shared/lib/utils";
 /** The two paid plans checkout can sell. */
 export type CheckoutPlan = "solo" | "team";
 
-/** Everything a plan affordance needs: the workspace's entitlements, whether
- *  the caller may act, and the three actions (two of which the app binding
- *  owns — see `./plans-billing-core`). */
+/** Entitlements + whether the caller may act + the three actions (two owned by
+ *  the app binding — see `./plans-billing-core`). */
 export interface PlanActions {
   ent: WorkspaceEntitlements;
   canManage: boolean;
@@ -27,9 +26,8 @@ function isCurrentPlan(plan: PlanDef, ent: WorkspaceEntitlements): boolean {
   return !ent.isPaid;
 }
 
-/** One plan column: name, price, feature list, and the CTA for this
- *  workspace's current state. Split out of `plans-billing-core` to keep both
- *  files under the 500-line cap. */
+/** One plan column: name, price, features, state-appropriate CTA. Split out of
+ *  `plans-billing-core` to keep both files under the 500-line cap. */
 export function PlanColumn({
   plan,
   ent,
@@ -123,7 +121,6 @@ function PlanCta({
   const muted =
     "flex h-8 w-full items-center justify-center text-small font-medium text-text-muted";
 
-  // Current paid plan → manage; current free → static label.
   if (isCurrent && (plan.id === "solo" || plan.id === "team")) {
     return canManage ? (
       <button type="button" className={ghost} disabled={portalLoading} onClick={onManage}>
@@ -138,8 +135,8 @@ function PlanCta({
   }
 
   if (plan.id === "solo") {
-    // Solo is only sellable to free single-member workspaces; there is
-    // no Team → Solo downgrade path in-product (portal handles cancels).
+    // Solo sells only to free single-member workspaces; no in-product
+    // Team → Solo downgrade (the portal handles cancels).
     if (ent.isPaid || ent.memberCount >= 2) {
       return <div className={muted}>Single-member workspaces only</div>;
     }

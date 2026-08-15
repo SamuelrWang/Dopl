@@ -1,14 +1,6 @@
 import { GET_STARTED_URL, HERO } from "../constants";
 import { ArrowUpRight } from "./icons";
 
-/**
- * Centered headline + subhead + the page's single CTA — the top of the landing.
- *
- * This row held a dark "Login" primary beside a light "Download" secondary, then
- * one Download in the primary surface. It is now "Get Started" — the SAME button,
- * same classes, same place, pointed at `/login`, which hands off to
- * `/get-started` and the dmg the moment an account exists. See ../constants.ts.
- */
 export function HeroIntro() {
   return (
     <>
@@ -23,7 +15,7 @@ export function HeroIntro() {
       <p className="lp-subhead">{HERO.subhead}</p>
 
       <div className="lp-cta-row">
-        {/* No `download` attribute: this is a page now, not a file. */}
+        {/* No `download` attr — target is a page, not a file. */}
         <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
           {HERO.primaryCta}
           <ArrowUpRight size={14} />

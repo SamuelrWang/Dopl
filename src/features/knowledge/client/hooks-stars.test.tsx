@@ -1,18 +1,10 @@
 // @vitest-environment jsdom
 /**
- * `useToggleBaseStar` — the optimistic write behind the home grid's star.
- *
- * It is hand-rolled rather than built on `use-api-mutation.ts`, because
- * knowledge READS are not on `useApiQuery` (INVARIANTS §8 rule 6) — so the
- * rules that layer would have enforced are enforced here instead, and this
- * file is where they are pinned:
- *
- *   - the patch lands BEFORE the request settles (that is the whole feature),
- *   - it MERGES: every other fold on the same cache entry survives it,
- *   - a failure restores the SNAPSHOT, not the inverse toggle,
- *   - a cold entry is DECLINED rather than invented,
- *   - and nothing is invalidated, because the write's own end state is the
- *     entire answer.
+ * `useToggleBaseStar`. Hand-rolled, not `use-api-mutation.ts`, because
+ * knowledge reads aren't on `useApiQuery` (INVARIANTS §8 rule 6) — so this
+ * file pins the rules that layer would have enforced: patch lands BEFORE the
+ * request settles; MERGES (other folds survive); failure restores the
+ * SNAPSHOT, not the inverse toggle; cold entry DECLINED; no invalidation.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -36,8 +28,7 @@ const mockSetStar = vi.mocked(setBaseStar);
 const WS = "ws-1";
 const KEY = knowledgeBasesQueryKey(WS);
 
-/** The whole cache entry, not just the stars — the merge assertions read the
- *  siblings back out of it. */
+/** Whole cache entry, not just stars — merge assertions read the siblings. */
 function entry(starredBaseIds: string[]): KnowledgeBaseList {
   return {
     bases: [{ id: "kb-1" }, { id: "kb-2" }] as KnowledgeBaseList["bases"],
@@ -60,8 +51,8 @@ function stars(): string[] | undefined {
   return client.getQueryData<KnowledgeBaseList>(KEY)?.starredBaseIds;
 }
 
-/** A request the test releases by hand — an optimistic patch is only
- *  observably optimistic while its write is still in flight. */
+/** Hand-released request: the patch is only observably optimistic while its
+ *  write is in flight. */
 function heldWrite() {
   let settle!: (fail?: boolean) => void;
   mockSetStar.mockImplementation(
@@ -92,11 +83,11 @@ describe("useToggleBaseStar", () => {
     act(() => result.current.mutate({ baseId: "kb-1", starred: true }));
 
     await waitFor(() => expect(stars()).toEqual(["kb-1"]));
-    // The write has not answered yet — this is the optimistic window.
+    // Optimistic window: the write has not answered yet.
     expect(mockSetStar).toHaveBeenCalledWith("kb-1", true, WS);
 
-    // MERGE, never replace: the response is narrower than the entry, and
-    // assigning over it would silently drop four folds the toggle never saw.
+    // MERGE, never replace: the response is narrower than the entry, so
+    // assigning over it drops four folds the toggle never saw.
     const cached = client.getQueryData<KnowledgeBaseList>(KEY);
     expect(cached?.bases).toHaveLength(2);
     expect(cached?.ownerNames).toEqual({ "u-other": "Dana Reed" });
@@ -130,16 +121,15 @@ describe("useToggleBaseStar", () => {
     act(() => release()(true));
 
     await waitFor(() => expect(stars()).toEqual(["kb-2"]));
-    // The SNAPSHOT, not the inverse operation: everything else on the entry
-    // comes back with it.
+    // SNAPSHOT, not the inverse op — everything else comes back with it.
     const cached = client.getQueryData<KnowledgeBaseList>(KEY);
     expect(cached?.bases).toHaveLength(2);
     expect(cached?.kbStorageLimit).toBe(5_000_000);
   });
 
   it("does not re-star an id it already holds", async () => {
-    // The optimistic patch has to be idempotent too — a double click before
-    // the first write settles must not leave a duplicate the sort trips over.
+    // Patch must be idempotent: a double click before the first write settles
+    // must not leave a duplicate the sort trips over.
     client.setQueryData(KEY, entry(["kb-1"]));
     mockSetStar.mockResolvedValue(undefined);
     const { result } = renderHook(() => useToggleBaseStar(WS), { wrapper });
@@ -151,9 +141,8 @@ describe("useToggleBaseStar", () => {
   });
 
   it("DECLINES a cold cache instead of inventing an entry", async () => {
-    // No data means no patch and no snapshot — and, critically, no cancel: a
-    // first-load query cancelled here would strand the grid empty with nothing
-    // scheduled to fill it (§8 rule 2).
+    // No data ⇒ no patch, no snapshot, and critically NO cancel — cancelling
+    // a first load strands the grid empty with nothing to fill it (§8 rule 2).
     mockSetStar.mockResolvedValue(undefined);
     const { result } = renderHook(() => useToggleBaseStar(WS), { wrapper });
 
@@ -161,8 +150,7 @@ describe("useToggleBaseStar", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(client.getQueryData(KEY)).toBeUndefined();
-    // The write still went out — the server is the point, the patch is the
-    // optimisation.
+    // Write still goes out: server is the point, patch is the optimisation.
     expect(mockSetStar).toHaveBeenCalledWith("kb-1", true, WS);
   });
 
@@ -174,8 +162,7 @@ describe("useToggleBaseStar", () => {
     act(() => result.current.mutate({ baseId: "kb-1", starred: true }));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    // Re-downloading the list would re-fetch exactly what the patch produced,
-    // and would do it on the response the user is already looking at.
+    // Re-downloading would re-fetch exactly what the patch produced.
     expect(client.getQueryState(KEY)?.isInvalidated).toBe(false);
   });
 });

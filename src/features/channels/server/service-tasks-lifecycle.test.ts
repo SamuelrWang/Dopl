@@ -1,11 +1,8 @@
 /**
- * Unit tests for the CLOSE half of `service-tasks-lifecycle.ts` — authorization,
- * the `task_finished` / `task_failed` echo, the SEQ that marker rides back out
- * on, the already-closed guard (C-30) and the echo's idempotency key. The REOPEN
- * half is `service-tasks-reopen.test.ts` (§2 cap; the two halves are also two
- * distinct contracts).
- *
- * The repositories are mocked; `service-shared` runs for real.
+ * CLOSE half of `service-tasks-lifecycle.ts` — authorization, the
+ * `task_finished` / `task_failed` echo, the SEQ it rides back on, the
+ * already-closed guard, and the echo's idempotency key. REOPEN half is
+ * `service-tasks-reopen.test.ts`. Repositories mocked; `service-shared` real.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -126,7 +123,6 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  // Resolves for BOTH the closeTask authz lookup and postMessage's re-stamp.
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
   vi.mocked(repoTasks.updateTaskIfStatus).mockImplementation(
     async (_id, _status, patch) => closableTask({ ...patch, status: "closed" })
@@ -199,11 +195,9 @@ describe("closeTask — outcome summary (v1.7)", () => {
 });
 
 /**
- * The close's counterpart to `createTask`'s `openingSeq`. A close WRITES to the
- * transcript, so it moves the cursor; a requester that then arms `await` has to
- * know where the channel now ends. Guessing it (last known seq + 1) put the
- * cursor past a peer's already-delivered reply and the hold waited forever —
- * the seq is only knowable here, so it rides back out.
+ * Counterpart to `createTask`'s `openingSeq`. ⚠ A close WRITES to the transcript
+ * and moves the cursor; guessing it (last known seq + 1) puts the cursor past a
+ * peer's already-delivered reply and the hold waits forever.
  */
 describe("closeTask — lifecycle echo seq", () => {
   it("returns the echo's seq alongside the closed thread", async () => {
@@ -225,9 +219,9 @@ describe("closeTask — lifecycle echo seq", () => {
   });
 
   it("still closes — with a NULL seq — when only the echo post fails", async () => {
-    // The row is already closed by the time the marker is written. Throwing
-    // here would report a close that did happen as a failure, and the caller's
-    // retry would re-close. "Closed, no echo" is what `echoSeq: null` says.
+    // ⚠ Row is already closed by the time the marker is written — throwing
+    // reports a close that DID happen as a failure and sends the caller to
+    // re-close. "Closed, no echo" is `echoSeq: null`.
     vi.mocked(repoMessages.insertMessage).mockRejectedValue(
       new Error("transient insert failure")
     );
@@ -242,7 +236,6 @@ describe("closeTask — lifecycle echo seq", () => {
 
     expect(echoSeq).toBeNull();
     expect(thread.status).toBe("closed");
-    // The close itself still landed on the row, summary and all.
     expect(closePatch()).toMatchObject({
       status: "closed",
       outcome: "failed",
@@ -251,8 +244,7 @@ describe("closeTask — lifecycle echo seq", () => {
   });
 
   it("does not swallow the close's OWN errors (authz is unchanged)", async () => {
-    // Only the echo is tolerated. A caller who may not close still gets 403,
-    // and nothing is written.
+    // ⚠ Only the ECHO is tolerated — a caller who may not close still 403s.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
       closableTask({ created_by: "someone-else", target_user_id: "another" })
     );
@@ -266,12 +258,10 @@ describe("closeTask — lifecycle echo seq", () => {
 });
 
 /**
- * C-30 — THE ALREADY-CLOSED GUARD, both halves of it.
- *
- * The update is conditional (`WHERE status = 'open'`), so the transition itself
- * picks the winner and a second close writes nothing; and the echo carries a
- * `client_msg_id` keyed on the close it describes, so even two racers that both
- * reached `postMessage` would leave ONE entry in the transcript.
+ * The already-closed guard, both halves: the update is conditional
+ * (`WHERE status = 'open'`) so the transition picks the winner, and the echo's
+ * `client_msg_id` is keyed on the close it describes so two racers that both
+ * reach `postMessage` still leave ONE transcript entry.
  */
 describe("closeTask — a second close is a no-op success (C-30)", () => {
   it("keys the echo on (thread, closed_at) and NOT on the outcome", async () => {
@@ -282,14 +272,13 @@ describe("closeTask — a second close is a no-op success (C-30)", () => {
     expect(echoInsert().client_msg_id).toBe(
       closeEchoClientMsgId(CLOSE_TASK_ID, closedAt)
     );
-    // THE OUTCOME IS ABSENT ON PURPOSE: the case being deduplicated is the one
-    // where the two closers DISAGREE, so a key that varied with the outcome
-    // would let both echoes through — the bug restated, not fixed.
+    // ⚠ Outcome absent ON PURPOSE — the deduplicated case is the one where the
+    // closers DISAGREE, so a key varying with outcome lets both echoes through.
     expect(echoInsert().client_msg_id).not.toContain("completed");
   });
 
   it("reports the STORED outcome instead of overwriting it, and writes nothing", async () => {
-    // The conditional update matched no row: somebody closed it first.
+    // Conditional update matched no row — somebody closed it first.
     vi.mocked(repoTasks.updateTaskIfStatus).mockResolvedValue(null);
     vi.mocked(repoTasks.findTaskByChannelAndId)
       // 1. the authz read still sees the row as open
@@ -308,7 +297,7 @@ describe("closeTask — a second close is a no-op success (C-30)", () => {
       ctx,
       "general",
       CLOSE_TASK_ID,
-      // This caller wanted `failed`. The stored `completed` stands.
+      // Caller wanted `failed`; the stored `completed` stands.
       "failed",
       "I think it broke"
     );
@@ -317,8 +306,7 @@ describe("closeTask — a second close is a no-op success (C-30)", () => {
     expect(thread.outcome).toBe("completed");
     expect(thread.outcomeSummary).toBe("They shipped it");
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    // No echo was found for the winner's key in this fixture, so no cursor is
-    // fabricated. Never a guess — that is the whole `echoSeq` contract.
+    // ⚠ No echo found for the winner's key → no cursor fabricated. Never a guess.
     expect(echoSeq).toBeNull();
   });
 
@@ -361,9 +349,9 @@ describe("closeTask — a second close is a no-op success (C-30)", () => {
   });
 
   it("guards the transition in the STATEMENT, not in a preceding read", async () => {
-    // The whole point of C-30's fix: `WHERE status = 'open'` is what makes
-    // first-write-wins true under concurrency. A read-then-write guard would
-    // pass this assertion's sibling (the read) and still lose the race.
+    // ⚠ `WHERE status = 'open'` is what makes first-write-wins true under
+    // concurrency — a read-then-write guard passes the sibling read and still
+    // loses the race.
     await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
     expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][1]).toBe("open");
     expect(repoTasks.updateTask).not.toHaveBeenCalled();

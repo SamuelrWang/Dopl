@@ -1,29 +1,17 @@
 /**
- * CHAT vs. REQUEST — driven through `postMessage`, because the whole point is
- * what the SERVER does to a post the caller did not address.
- *
- * The operator's report was that a message they meant as talk was poking the
- * peer's agent. It was: v2.6 auto-addresses every DM post to the peer, which is
- * what makes an agent REPLY deliverable and what made two humans unable to say
- * "sounds good" without raising a consent prompt on each other's machines.
- *
- * What this file pins:
- *  - **The default is byte-for-byte the old behaviour.** No `intent` on the
- *    input ⇒ the DM auto-address still fires and no `intent` key is stored. This
- *    is the regression risk of the whole change and is asserted on the WHOLE
- *    metadata object, not on one key.
- *  - **`chat` reaches nobody.** The peer is not resolved AT ALL, so
- *    there is nothing for any later fold to fall back to: no `to_user_id`, and
- *    no DM thread inheritance either (that path is part of the same
- *    auto-addressing machinery).
- *  - **`chat` + an address is a 400, not a silently-resolved contradiction** —
- *    and it 400s BEFORE the idempotency short-circuit, so a retry cannot be
- *    answered with a stored message instead of the error.
- *  - **`intent` is a RESERVED key.** A caller copy in `metadata` is stripped and
- *    is NOT re-added from anything but the validated top-level field — so
- *    spoofing it can neither stamp the key nor suppress the auto-address.
- *  - A chat post is otherwise an ORDINARY message: it still threads when the
- *    caller passes a thread tag it is entitled to.
+ * CHAT vs REQUEST, driven through `postMessage` — the point is what the SERVER
+ * does to a post the caller did not address. Pinned:
+ *  - ⚠ Default is byte-for-byte the old behaviour: no `intent` ⇒ DM
+ *    auto-address still fires and NO `intent` key is stored. Asserted on the
+ *    WHOLE metadata object, since a per-key assertion would miss a new key.
+ *  - `chat` reaches nobody: the peer is not resolved AT ALL, so no later fold
+ *    can fall back to it — no `to_user_id`, no DM thread inheritance.
+ *  - `chat` + an address is a 400, BEFORE the idempotency short-circuit, so a
+ *    retry cannot be answered with a stored message instead of the error.
+ *  - ⚠ `intent` is RESERVED: a caller copy in `metadata` is stripped and never
+ *    re-added except from the validated top-level field, so spoofing can
+ *    neither stamp the key nor suppress the auto-address.
+ *  - A chat post otherwise threads normally when entitled to the tag.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -157,11 +145,8 @@ beforeEach(() => {
 });
 
 describe("postMessage — the DEFAULT intent is unchanged", () => {
-  /**
-   * THE REGRESSION TEST. Asserted on the WHOLE metadata object: a new key
-   * stamped by default would change what every existing caller writes, and a
-   * per-key assertion would not notice.
-   */
+  /** ⚠ Whole-object assertion: a new default-stamped key changes what every
+   *  existing caller writes, and a per-key assertion would not notice. */
   it("stamps EXACTLY what it stamped before when no intent is supplied", async () => {
     await postMessage(ctx, "dm", { body: "here is the result" });
 
@@ -211,9 +196,8 @@ describe("postMessage — intent:chat reaches nobody's agent", () => {
   });
 
   it("does NOT inherit the open DM thread", async () => {
-    // Inheritance is part of the auto-addressing machinery: it fires only for a
-    // message addressed to the peer. A chat post is addressed to nobody, so a
-    // thread tag would be manufactured out of a message that is not a turn.
+    // Inheritance is part of the auto-addressing machinery and fires only for a
+    // message addressed to the peer — a chat post is addressed to nobody.
     vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
 
     await postMessage(ctx, "dm", { body: "unrelated aside", intent: "chat" });
@@ -233,8 +217,7 @@ describe("postMessage — intent:chat reaches nobody's agent", () => {
     });
 
     const meta = capturedMetadata();
-    // A thread tag the caller PASSED is honoured (the caller is the thread's
-    // creator), with the thread keys stamped from the row as always.
+    // A tag the caller PASSED is honoured (caller is the thread's creator).
     expect(meta.taskId).toBe(TASK_ID);
     expect(meta.taskTitle).toBe("Ship the thing");
     expect(has(meta, "to_user_id")).toBe(false);
@@ -263,10 +246,7 @@ describe("postMessage — chat + a HUMAN addressee is still a contradiction", ()
   });
 
   it("treats an @handle in the BODY as prose, not as an address", async () => {
-    // "@quartz work on X" used to resolve against the channel's named agents
-    // and travel as `toAgents`, which was the primary way an agent got work.
-    // Nothing resolves it now (rollback §1): the body is text and the post
-    // addresses nobody.
+    // Nothing resolves an `@` — the body is text and the post addresses nobody.
     await postMessage(ctx, "dm", {
       body: "@quartz work on X",
       intent: "chat",
@@ -275,12 +255,8 @@ describe("postMessage — chat + a HUMAN addressee is still a contradiction", ()
     expect(capturedMetadata()).toEqual({ intent: "chat" });
   });
 
-  /**
-   * The guard sits beside the addressee-membership check, i.e. BEFORE the
-   * idempotency short-circuit, for the same reason that one does: a
-   * contradictory request must fail on the retry too, not be answered with the
-   * stored message of a request that never carried the contradiction.
-   */
+  /** ⚠ Guard sits BEFORE the idempotency short-circuit: a contradictory request
+   *  must fail on the retry too, not be answered with a stored message. */
   it("400s even when the clientMsgId already has a stored message", async () => {
     vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
       insertedRow({
@@ -314,17 +290,14 @@ describe("postMessage — intent is a RESERVED metadata key", () => {
     });
 
     const meta = capturedMetadata();
-    // Stripped — and NOT re-added, because nothing validated said "chat".
+    // Stripped and NOT re-added — nothing validated said "chat".
     expect(has(meta, "intent")).toBe(false);
     expect(meta.keep).toBe(1);
   });
 
-  /**
-   * The strip has to be load-bearing, not cosmetic: if the fold read
-   * `metadata.intent` the caller could suppress the auto-address (or, worse,
-   * dress a request up as chat on the receiver's screen) without ever passing
-   * the validated field.
-   */
+  /** ⚠ The strip is load-bearing, not cosmetic: a fold reading `metadata.intent`
+   *  lets a caller suppress the auto-address — or dress a request up as chat on
+   *  the receiver's screen — without passing the validated field. */
   it("SECURITY: a spoofed copy does not suppress the DM auto-address", async () => {
     await postMessage(ctx, "dm", {
       body: "hi",
@@ -346,19 +319,11 @@ describe("postMessage — intent is a RESERVED metadata key", () => {
 });
 
 /**
- * F-145 — WHAT THE REFUSAL TELLS THE CALLER TO DO INSTEAD.
- *
- * `ChannelChatAddressedError`'s message read "Mention an agent with toAgents to
- * have it act", which was correct for exactly the four days between the
- * 2026-07-31 narrowing and rollback §1. After §1, `toAgents` is a `z.never()`
- * in `schema.ts#removedParam`: a caller who follows this instruction gets a
- * SECOND 400, from a different layer, naming a param the first error just
- * recommended. Nothing pinned the sentence, so nothing noticed — the MCP twin
- * (`channel-post-notes.ts#CHAT_ADDRESSED_REFUSAL`) was rewritten at the time and
- * this HTTP one was missed.
- *
- * The message is the whole product surface of this error (the route returns it
- * verbatim in the envelope), so it is pinned like any other shipped string.
+ * What the refusal tells the caller to do instead. ⚠ The message must not
+ * recommend a param that is a `z.never()` in `schema.ts#removedParam` — a caller
+ * following it gets a SECOND 400 from a different layer. The route returns this
+ * verbatim in the envelope, so it is pinned like any shipped string. MCP twin:
+ * `channel-post-notes.ts#CHAT_ADDRESSED_REFUSAL`.
  */
 describe("the chat+addressed refusal names a route that still EXISTS", () => {
   const message = () => new ChannelChatAddressedError("toUserId").message;
@@ -369,8 +334,7 @@ describe("the chat+addressed refusal names a route that still EXISTS", () => {
   });
 
   it("offers the two things a caller can actually do", () => {
-    // Both halves, because the refusal exists precisely so the CALLER picks
-    // which one they meant rather than the server guessing.
+    // Both halves — the refusal exists so the CALLER picks, not the server.
     expect(message()).toContain("Drop the address to send it as chat");
     expect(message()).toContain('intent "request"');
   });
@@ -383,9 +347,8 @@ describe("the chat+addressed refusal names a route that still EXISTS", () => {
   });
 
   it("says the same thing the MCP twin says, so the two lanes cannot drift again", () => {
-    // Not a string comparison — the two surfaces phrase it for different
-    // callers (a field name here, a tool argument there). What must match is
-    // the DECISION offered: drop the address, or send it as a request.
+    // ⚠ Not a string comparison — the two surfaces phrase it for different
+    // callers. What must match is the DECISION offered.
     const mcp =
       'A message with `intent`="chat" cannot be addressed — nothing was sent. "chat" means the people in the room and reaches nobody\'s machine; `to` means the opposite, and the server refuses the pair rather than guessing which half you meant. Send it as CHAT by dropping `to`, or as a REQUEST by dropping `intent` (a request is the default).';
     for (const text of [message(), mcp]) {

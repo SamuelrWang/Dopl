@@ -1,35 +1,25 @@
 /**
- * THE FLAGSHIP SEND, driven through TanStack's own framework-free
- * `MutationObserver` — the same runner `use-channel-lifecycle-writes.test.ts`
- * uses, and for the same reason: onMutate → mutationFn → onSuccess/onError →
- * onSettled IS the contract, and a hand-rolled runner would pin a
- * re-implementation of it. `npm test` has no DOM, which is why the three
- * configs are exported apart from the hook that wires them.
+ * The flagship send, driven through TanStack's own `MutationObserver` — onMutate
+ * → mutationFn → onSuccess/onError → onSettled IS the contract, and a
+ * hand-rolled runner pins a re-implementation of it. `npm test` has no DOM,
+ * which is why the three configs are exported apart from the hook.
  *
- * WHAT THE COLD-CACHE CASE IS ABOUT. The optimistic patch and the reconcile
- * BOTH decline on an undefined cache, deliberately (`optimistic-cache.ts`:
- * seeding a one-message list into a query that never loaded renders a
- * transcript of exactly that message and then flips). So on a channel whose
- * transcript has not loaded, neither of the two paths that normally put a sent
- * message on screen does anything — and that state is reachable in one gesture,
- * because all three per-channel reads are `keepPreviousData` and a switch keeps
- * showing the PREVIOUS channel's transcript while the new one is still in
- * flight. The settle-time invalidation of the messages key is the only thing
- * left that recovers it, and in the bundled SPA (realtime is a no-op there)
- * there is no doorbell to do it later. `send` did not name that key at all;
- * `openThread` and `threadOp` always did.
+ * ⚠ THE COLD-CACHE CASE. The optimistic patch and the reconcile BOTH decline on
+ * an undefined cache, deliberately (`optimistic-cache.ts`). So on a channel
+ * whose transcript has not loaded, neither path that normally puts a sent
+ * message on screen does anything — reachable in one gesture, since all three
+ * per-channel reads are `keepPreviousData`. Settle-time invalidation of the
+ * messages key is the only recovery, and the bundled SPA has no realtime
+ * doorbell to do it later.
  *
- * BOTH HALVES ARE PINNED, because the fix has a wrong version that looks right.
+ * ⚠ Both halves pinned, because the fix has a wrong version that looks right:
  * `invalidateQueries` defaults to `refetchType: "active"` and the transcript
- * query is active, so naming the messages key UNCONDITIONALLY would re-download
- * the 200-message page on every send — the exact cost this write exists to
- * remove. `coldKeys` (§7 rule 1's one exception, now in
- * `@/shared/hooks/use-api-mutation` and shared with the chats writes) is what
- * makes it cold-only.
+ * query is active, so naming the messages key UNCONDITIONALLY re-downloads the
+ * 200-message page on every send. `coldKeys` is what makes it cold-only.
  *
- * The assertions check that the entry EXISTS before checking what it says —
- * never `entry?.state.isInvalidated).toBeFalsy()`, which passes just as
- * happily when the write invalidated some other key entirely.
+ * ⚠ Assertions check the entry EXISTS before checking what it says — a bare
+ * `entry?.state.isInvalidated).toBeFalsy()` passes when the write invalidated
+ * some other key entirely.
  */
 
 import { describe, expect, it } from "vitest";
@@ -56,9 +46,9 @@ const CHANNEL = "c-1";
 const ME = "u-me";
 const CLIENT_MSG_ID = "cmid-1";
 
-/** The EXACT entry `useChannelMessages` reads under — path and params both from
- *  `client/query-keys.ts`, so this is the read's key by construction and not a
- *  third hand-typed copy of it. */
+/** ⚠ The EXACT entry `useChannelMessages` reads under — path and params from
+ *  `client/query-keys.ts`, so it is the read's key by construction, not a third
+ *  hand-typed copy. */
 const MESSAGES_ENTRY = apiQueryKey(channelMessagesPath(CHANNEL), {
   workspaceId: WORKSPACE,
   query: channelMessagesParams(),
@@ -101,8 +91,8 @@ function thread(): ChannelThread {
   };
 }
 
-/** A transport the test settles by hand, so "before the network answers" is a
- *  real assertion rather than a timing hope. */
+/** Transport settled by hand, so "before the network answers" is a real
+ *  assertion rather than a timing hope. */
 function deferredRequest() {
   let settle!: (value: unknown) => void;
   let fail!: (error: unknown) => void;
@@ -157,10 +147,9 @@ function harness(): Harness {
 }
 
 /**
- * REGISTER a query with no data — which is what a mounted `useChannelMessages`
- * on a channel whose first read has not landed actually is. `setQueryData` can
- * not express it (writing `undefined` creates nothing), and it is precisely the
- * state in which every cache patch declines.
+ * Register a query with NO data — a mounted `useChannelMessages` whose first
+ * read has not landed. ⚠ `setQueryData` cannot express it (writing `undefined`
+ * creates nothing), and it is exactly the state in which every patch declines.
  */
 function mountEmptyQuery(client: QueryClient, queryKey: QueryKey) {
   client
@@ -196,26 +185,23 @@ function messagesEntry(h: Harness) {
 describe("send — the transcript key is invalidated on settle (H1)", () => {
   it("recovers a COLD transcript: neither patch can write it, so the settle-time invalidation is the only thing that puts the message on screen", async () => {
     const h = harness();
-    // No seeded transcript — the channel is mounted and its first read has not
-    // landed (a switch under `keepPreviousData` shows the last channel's).
+    // No seeded transcript — mounted, first read not landed.
     mountEmptyQuery(h.client, MESSAGES_ENTRY);
     mountEmptyQuery(h.client, LIST_ENTRY);
 
     const { inFlight, settle } = run(h, sendConfig(h.deps), DRAFT);
     await flush();
 
-    // Both cache paths decline on an undefined entry, on purpose.
+    // ⚠ Both cache paths decline on an undefined entry, on purpose.
     expect(h.client.getQueryData<MessagesCache>(MESSAGES_ENTRY)).toBeUndefined();
     expect(messagesEntry(h)?.state.isInvalidated).toBe(false);
 
     settle({ message: saved() });
     await inFlight;
 
-    // Still nothing reconciled in…
     expect(h.client.getQueryData<MessagesCache>(MESSAGES_ENTRY)).toBeUndefined();
-    // …so this is the whole recovery. Assert the entry EXISTS before asserting
-    // what it says: `find()?.state.isInvalidated` is undefined for a key nobody
-    // invalidated, and `toBeFalsy()` on that reads as a pass.
+    // ⚠ Assert the entry EXISTS first — `find()?.state.isInvalidated` is
+    // undefined for a key nobody invalidated, and `toBeFalsy()` reads as a pass.
     const entry = messagesEntry(h);
     expect(entry).toBeDefined();
     expect(entry?.state.isInvalidated).toBe(true);
@@ -257,7 +243,6 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
       workspaceId: WORKSPACE,
       body: { body: "hello", intent: "chat", clientMsgId: CLIENT_MSG_ID },
     });
-    // The pending row is on screen before the network answers.
     expect(
       h.client.getQueryData<MessagesCache>(MESSAGES_ENTRY)?.messages.map((m) => m.id)
     ).toEqual(["srv-0", `pending:${CLIENT_MSG_ID}`]);
@@ -265,24 +250,20 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
     settle({ message: saved() });
     await inFlight;
 
-    // The saved row replaced its pending twin IN PLACE — one message, not two.
+    // Saved row replaced its pending twin IN PLACE — one message, not two.
     expect(
       h.client.getQueryData<MessagesCache>(MESSAGES_ENTRY)?.messages.map((m) => m.id)
     ).toEqual(["srv-0", "srv-1"]);
-    // …and the transcript is NOT marked stale, so the mounted (active) query
-    // does not refetch the 200-message page behind an already-correct screen.
+    // ⚠ Transcript NOT marked stale, so the active query does not refetch the
+    // 200-message page behind an already-correct screen.
     const entry = messagesEntry(h);
     expect(entry).toBeDefined();
     expect(entry?.state.isInvalidated).toBe(false);
   });
 
-  /**
-   * The two writes the send was out of step with. They ALREADY named the
-   * transcript key, and they have to keep doing it for the same cold-cache
-   * reason — `openThread`'s opening message is written server-side under a
-   * derived key and `threadOp`'s lifecycle echo is server-rendered, so neither
-   * one can be reconciled from the response at all.
-   */
+  /** ⚠ These must keep naming the transcript key: `openThread`'s opening message
+   *  is written server-side under a derived key and `threadOp`'s lifecycle echo
+   *  is server-rendered, so neither can be reconciled from the response. */
   it("openThread names the same transcript key — the send now matches it, not the other way round", async () => {
     const h = harness();
     mountEmptyQuery(h.client, MESSAGES_ENTRY);
@@ -335,7 +316,7 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
     const entry = messagesEntry(h);
     expect(entry).toBeDefined();
     expect(entry?.state.isInvalidated).toBe(true);
-    // A write that THREW still released the gate.
+    // ⚠ A write that THREW still released the gate.
     expect(h.gate.ended).toBe(1);
   });
 });

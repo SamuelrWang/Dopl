@@ -1,17 +1,12 @@
 /**
- * Thread grouping — THE DRAFT, AND WHAT A FINISHED ONE MEANS.
+ * Thread grouping — THE DRAFT, AND WHAT A FINISHED ONE MEANS. `groupThread`
+ * accumulates a {@link Draft} per session; these two functions read a COMPLETE
+ * draft and answer the header's questions.
  *
- * `groupThread` accumulates a {@link Draft} per session as it walks the
- * transcript; these two functions read a COMPLETE draft and answer the header's
- * questions — what state is this exchange in, and what one line describes it.
- *
- * Split out of `group-thread.ts` (§2, 819 lines). The seam is real rather than
- * arithmetic: `computeStatus` / `computeSummary` are pure functions OF a draft
- * and touch neither the message walk, the fallback window, nor the pair-join.
- * They change when the card's precedence rules change (and both have, twice —
- * see the P0-4 note below); the walk changes when the transcript's shape does.
- * The accumulator itself travels with them because they are its only readers
- * besides the finalize loop.
+ * ⚠ `computeStatus` / `computeSummary` are pure functions OF a draft and touch
+ * neither the message walk, the fallback window, nor the pair-join. They change
+ * when the card's precedence rules change; the walk changes when the
+ * transcript's shape does.
  */
 
 import type { ChannelMessage } from "../types";
@@ -27,26 +22,17 @@ export interface Draft {
   startedEvent: ChannelMessage | null;
   endEvent: ChannelMessage | null;
   createdAt: string;
-  /**
-   * The responder — the `task_started` author (the operator whose agent runs
-   * the task). Anchors the {requester, responder} pair for the pair-join.
-   */
+  /** The `task_started` author (the operator whose agent runs the task).
+   *  Anchors the {requester, responder} pair for the pair-join. */
   responder: string | null;
-  /**
-   * The requester — the human who opened the exchange: the author of the legacy
-   * seq-N message addressed to the responder. Set when the `task_started` fires
-   * (from the seq-N opener), or during the seq-N backfill. Drives the pair-join.
-   */
+  /** The human who opened the exchange — author of the legacy seq-N message
+   *  addressed to the responder. Set on `task_started` or during backfill. */
   requester: string | null;
   /** The `N` in a legacy `task-{channelId}-{N}` id, for the seq-N backfill. */
   legacySeq: number | null;
-  /**
-   * P1-7 — the latest NON-TERMINAL session-end marker (`task_progress` +
-   * `session_ended`). Deliberately NOT `endEvent`: it must never become the
-   * exchange's outcome. It only feeds `SessionGroup.calmEndStatus`, so the card
-   * can stop saying "Working…" for a session that stopped without claiming the
-   * shared thread ended.
-   */
+  /** Latest NON-TERMINAL session-end marker (`task_progress` + `session_ended`).
+   *  ⚠ Deliberately NOT `endEvent` — it must never become the exchange's
+   *  outcome. Feeds `SessionGroup.calmEndStatus` only. */
   sessionEndedEvent: ChannelMessage | null;
 }
 
@@ -59,26 +45,23 @@ function readSummary(metadata: Record<string, unknown>): string | null {
 export function computeStatus(draft: Draft): SessionStatus {
   // Precedence, most authoritative first:
   // 1. An explicit terminal marker always wins. A `task_failed` is a genuine
-  //    failure UNLESS it carries an operator-chosen calm-terminal flag
-  //    (declined/dropped/interrupted), in which case it takes that calm state.
+  //    failure UNLESS it carries an operator-chosen calm flag.
   if (draft.endEvent) {
     if (draft.endEvent.kind === "task_failed") {
       return calmTerminalStatus(draft.endEvent) ?? "failed";
     }
     return "done";
   }
-  // 2. A delivered AGENT reply implies the work completed, even with no
-  //    `task_finished` — a terminal-mode session self-posts its reply and then
-  //    falls silent, and a dropped finish still leaves a real answer on screen.
-  //    Either way the session is Done, not a perpetual "Active" pulse. Only an
-  //    agent reply counts: a session can now also carry the requester's own
-  //    (human) messages (seq-N backfill / pair-join), which must not, on their
-  //    own, mark an unanswered started task as Done.
+  // 2. A delivered AGENT reply implies completion even with no `task_finished` —
+  //    terminal mode self-posts its reply and falls silent, and a dropped finish
+  //    still leaves a real answer on screen. ⚠ Only an AGENT reply counts: a
+  //    session can carry the requester's own human messages (backfill /
+  //    pair-join), which must not mark an unanswered started task Done.
   if (draft.entries.some((e) => e.kind === "message" && e.authorKind === "agent"))
     return "done";
   // 3. Started, but nothing delivered yet — genuinely in flight.
   if (draft.startedEvent) return "active";
-  // 4. No markers and no reply (only stray progress lines): nothing is live.
+  // 4. No markers, no reply (only stray progress lines): nothing is live.
   return "done";
 }
 

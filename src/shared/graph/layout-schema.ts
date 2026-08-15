@@ -1,20 +1,17 @@
 import { z } from "zod";
 
 /**
- * Zod validation for a persisted graph `layout` (the draggable-node
- * positions the ontology cluster PATCH
- * accept). Shape: `{ [nodeId]: { x, y } }` with finite, bounded
- * coordinates. Shared so both routes validate identically.
- *
- * The bounds and node cap keep an over-large or malformed blob (NaN,
- * Infinity, strings, a runaway id set) from ever reaching the JSONB
- * column — a layout is display state, not a place to smuggle payloads.
+ * Zod validation for a persisted graph `layout` (draggable-node positions on
+ * the ontology cluster PATCH). Shape `{ [nodeId]: { x, y } }`, finite +
+ * bounded. ⚠ Security gate: bounds + node cap keep a malformed or oversized
+ * blob (NaN, Infinity, strings, runaway id set) out of the JSONB column —
+ * layout is display state, not a payload channel.
  */
 
-/** Max nodes in one layout blob — comfortably above any real graph. */
+/** Max nodes per layout blob — well above any real graph. */
 export const MAX_LAYOUT_NODES = 2000;
 
-/** Coordinate clamp — world space is only ever a few thousand px. */
+/** Coordinate clamp — world space is only ever a few thousand px wide. */
 const COORD_LIMIT = 1_000_000;
 
 const finiteCoord = z

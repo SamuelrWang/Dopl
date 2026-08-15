@@ -16,13 +16,10 @@ interface ProfileData {
 const PROFILE_PATH = "/api/user/profile";
 
 /**
- * Account section — edit display name, view the signed-in email/avatar.
- * Backed by `/api/user/profile`.
- *
- * Next-free core. Everything below the profile form is platform-specific
- * (the web deletes the account in place through Supabase + `next/navigation`;
- * the desktop renderer signs out over the bridge and links deletion out to
- * the browser), so it arrives as the `dangerZone` slot.
+ * Account section (`/api/user/profile`) — edit display name, view signed-in
+ * email/avatar. Next-free core: everything below the form is platform-specific
+ * (web deletes in place via Supabase + `next/navigation`; desktop signs out
+ * over the bridge and links out), so it arrives as the `dangerZone` slot.
  */
 export function AccountSectionCore({ dangerZone }: { dangerZone?: React.ReactNode }) {
   const queryClient = useQueryClient();
@@ -33,12 +30,12 @@ export function AccountSectionCore({ dangerZone }: { dangerZone?: React.ReactNod
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // `profile.avatar_url` is the raw OAuth-provider URL — proxied through main
-  // in the packaged SPA, passed through verbatim on the web.
+  // Raw OAuth-provider URL — proxied through main in the packaged SPA, verbatim
+  // on the web.
   const avatarSrc = useBridgedImageSrc(profile?.avatar_url);
 
-  // Seed the input once when the profile first arrives; after that the
-  // field is user-owned (a background refetch must not overwrite typing).
+  // ⚠ Seed ONCE on first arrival; after that the field is user-owned and a
+  // background refetch must not overwrite typing.
   const seededRef = useRef(false);
   useEffect(() => {
     if (seededRef.current || !query.data) return;

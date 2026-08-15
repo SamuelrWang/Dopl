@@ -1,40 +1,14 @@
-/* ─────────────────────────────────────────────────────────────────────
-   The install, drawn — the illustration that fills `/get-started`'s right
-   field. Split out of `get-started.css` when the page was rebuilt to the
-   reference layout: that file is the page's two fields and its copy, this
-   one is the drawing's COMPOSITION, and `install-animation-motion.css` is
-   its timeline. Three purposes, three files, all imported by the page.
+/* `/get-started` install illustration — COMPOSITION only. Page shell + copy:
+   `get-started.css`. Timeline: `install-animation-motion.css`. ⚠ Positions
+   here and keyframes there share one coordinate space — edit in sync.
 
-   THE COMPOSITION HAS TWO ANCHORS, NOT ONE CENTRED BOX.
-     · A browser-window FRAGMENT pinned to the top of the field, cropped by
-       the field's top edge and bleeding past its left edge. Only the
-       toolbar row and a sliver of page are ever on screen; the download
-       chip hangs out of it, under the downloads button.
-     · A macOS window mock in the lower right, holding the app icon and the
-       Applications folder.
-   The cursor travels between them. That is the whole picture: the browser
-   the file came from, and the window it has to be dragged in.
+   ⚠ ONE FIXED COORDINATE SPACE: 640×660, scaled whole by `--gs-k`. Every
+   position is a literal px pair; a percentage layout puts the cursor beside
+   the folder at one width and inside it at another. `--gs-k` derives from the
+   FIELD (container units — hence `container-type: size` next door), not the
+   viewport, so one factor is correct in the stacked layout too.
 
-   ONE FIXED COORDINATE SPACE, SCALED AS A WHOLE — 640×660, scaled by
-   `--gs-k`. Every position below is a literal px pair in that space, which
-   is the only way ten keyframe tracks can agree on where "the Applications
-   folder" is; a percentage layout would put the cursor beside the folder at
-   one width and inside it at another. `--gs-k` is derived from the FIELD
-   (container units, hence `container-type: size` next door), not from the
-   viewport, so the same one factor is correct in the stacked layout too.
-
-   Everything is drawn from `--gs-*` below plus `--gs-accent`, which is
-   declared on `.gs` in `get-started.css` because the status dot in the copy
-   column is the same colour by design. The greys here are this drawing's
-   own palette — macOS chrome, a mounted volume, a folder tile — and they
-   are the only values either file invents.
-
-   WHY DIVS AND KEYFRAMES AND NOT A VIDEO, A GIF OR LOTTIE: as markup it is
-   a few kilobytes that ship with the HTML, stay crisp at any density,
-   inherit the page's own hairlines, and have a reduced-motion state that is
-   one media query rather than a second asset. There is no JS driving it, so
-   it costs nothing on the main thread while the download is starting.
-   ───────────────────────────────────────────────────────────────────── */
+   `--gs-accent` declared on `.gs` in `get-started.css`; greys here are local. */
 
 .gs-field {
   --gs-chrome: #f6f6f7; /* window/toolbar fill */
@@ -46,17 +20,14 @@
   --gs-label: #6a6a72; /* icon labels, toolbar glyphs, window title */
   --gs-radius: 12px;
 
-  /* One clock for the whole illustration. Every keyframe below is a
-     percentage of THIS, which is what keeps ten independent animations in
-     step without a single animation-delay to drift. */
+  /* ⚠ One clock: every keyframe is a percentage of THIS, which is what keeps
+     ten independent animations in step with no animation-delay to drift. */
   --gs-dur: 11s;
 }
 
-/* `--gs-k` reads the FIELD and takes the smaller of the two fits: width, so
-   the composition always spans the field and the browser fragment always
-   bleeds past its left edge; height, so the window mock's bottom (stage y
-   618) can never fall past the fold on a short, wide field. Length ÷ length
-   is a plain number, which is what `scale()` wants. */
+/* Smaller of two fits: width keeps the browser fragment bleeding past the left
+   edge, height keeps the window mock's bottom (stage y 618) above the fold on a
+   short wide field. Length ÷ length = the plain number `scale()` wants. */
 .gs-stage-frame {
   --gs-k: min(calc(100cqw / 640px), calc(100cqh / 636px));
   position: absolute;
@@ -75,10 +46,8 @@
 
 /* ── The browser fragment ────────────────────────────────────────────── */
 
-/* Negative left AND top: the field's own `overflow: hidden` does the
-   cropping, so the fragment reads as a window that continues past the
-   corner of the screen rather than as a small picture of one. Only the
-   right-hand corners can ever be seen, so only they are rounded. */
+/* Negative left AND top — field's `overflow: hidden` crops it into a window
+   past the screen corner. Only right corners visible, so only they round. */
 .gs-browser {
   position: absolute;
   left: -72px;
@@ -93,8 +62,6 @@
   animation: gs-browser var(--gs-dur) linear infinite;
 }
 
-/* The bottom of one tab, most of it above the crop — the cheapest way to
-   say "browser" when the tab strip is off-screen. */
 .gs-tab {
   position: absolute;
   left: 96px;
@@ -115,9 +82,8 @@
   border-bottom: 1px solid var(--gs-chrome-line);
 }
 
-/* Toolbar contents are absolutely placed rather than flexed: the cursor's
-   click target is a literal coordinate in the stage, so the downloads
-   button may not be allowed to move when a sibling's width changes. */
+/* ⚠ Absolute, not flex: cursor click target is a literal stage coordinate,
+   so the downloads button must not move when a sibling's width changes. */
 .gs-tool {
   position: absolute;
   top: 14px;
@@ -142,7 +108,6 @@
   left: 576px;
 }
 
-/* Starts off the left edge of the field, so it is a PARTIAL URL bar. */
 .gs-urlbar {
   position: absolute;
   left: 54px;
@@ -154,8 +119,7 @@
   border: 1px solid var(--gs-chrome-line);
 }
 
-/* The downloads button — highlighted at REST, the way the reference draws
-   it (the file has just arrived), and pressed on the click beat. */
+/* Downloads button: highlighted at REST (file just arrived), pressed on the beat. */
 .gs-tray {
   position: absolute;
   left: 468px;
@@ -183,10 +147,9 @@
 
 /* ── The download chip that drops out of the toolbar ─────────────────── */
 
-/* A stage-level sibling, not a child of the fragment: it hangs BELOW the
-   fragment's bottom edge, and it must not inherit the fragment's own
-   recede. Its left is chosen so the tray button's centre (stage x 409)
-   falls inside it, the way a real download bubble hangs off its button. */
+/* ⚠ Stage-level sibling, not a child of the fragment: hangs BELOW the
+   fragment's bottom edge and must not inherit its recede. `left` is chosen
+   so the tray button's centre (stage x 409) falls inside it. */
 .gs-chip {
   position: absolute;
   left: 236px;
@@ -294,7 +257,7 @@
   height: calc(100% - 40px);
 }
 
-/* Both tiles sit in the same coordinate space as the cursor track. */
+/* ⚠ Both tiles share the cursor track's coordinate space. */
 .gs-tile {
   position: absolute;
   top: 58px;
@@ -318,9 +281,6 @@
   animation: gs-folder var(--gs-dur) linear infinite;
 }
 
-/* The real app icon, the same mark the login screen and the dock show — a
-   drawing of an install that shows a placeholder is a drawing of somebody
-   else's install. */
 .gs-app-icon {
   width: 96px;
   height: 96px;
@@ -343,9 +303,8 @@
   color: var(--gs-label);
 }
 
-/* The label leaves with the icon it names — it just doesn't travel, because
-   a sliding word reads as a bug rather than as a drag. Opacity only, on the
-   icon's own track. */
+/* Label fades with its icon but must NOT travel — a sliding word reads as a
+   bug, not a drag. Opacity only, on the icon's own track. */
 .gs-tile-label--app {
   left: 62px;
   animation: gs-drag-label var(--gs-dur) linear infinite;
@@ -381,8 +340,8 @@
 
 /* ── The cursor ──────────────────────────────────────────────────────── */
 
-/* The negative margin puts the arrow's TIP on the translate coordinate, so
-   every keyframe in the motion file can be read as "where it is pointing". */
+/* ⚠ Negative margin puts the arrow's TIP on the translate coordinate — every
+   keyframe in the motion file reads as "where it points". */
 .gs-cursor {
   position: absolute;
   left: 0;

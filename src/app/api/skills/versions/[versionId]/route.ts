@@ -3,11 +3,8 @@ import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { requireVersionId, toSkillErrorResponse } from "@/shared/api/skill-route";
 import { buildSkillContext, getFileVersion } from "@/features/skills/server/service";
 
-/**
- * GET /api/skills/versions/[versionId] — one snapshot with its full
- * body, for the diff view. Workspace-scoped; 404s when the caller
- * can't see the parent skill.
- */
+/** GET — one snapshot with its full body, for the diff view. Workspace-scoped; 404s when the
+ *  caller cannot see the parent skill. */
 export const GET = withWorkspaceAuth(async (_request, auth) => {
   try {
     const ctx = buildSkillContext(auth);

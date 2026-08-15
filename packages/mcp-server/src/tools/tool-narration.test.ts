@@ -1,31 +1,17 @@
 /**
- * THE SWEEP INTO THE REST OF THE MCP SURFACE — part 2 of 3: the two tools whose
- * reads are CROSS-USER BY DESIGN. Siblings: `narration.test.ts` (the shared
- * helper + the workspace name) and `tool-narration-graph.test.ts` (the
- * workspace's shared authored content). Split three ways at the §2 500-line cap.
+ * NARRATION SAFETY — part 2 of 3: the two tools whose reads are CROSS-USER BY
+ * DESIGN. Siblings: `narration.test.ts` (shared helper + workspace name) and
+ * `tool-narration-graph.test.ts` (shared authored content).
  *
- * Two earlier passes hardened `dopl_channel` — its read ops, then its write ops
- * and its member resolver — and both stopped at the channel files. Every other
- * tool splices the same kind of string into the same kind of line.
- *
- * REACH, established rather than assumed:
- *
- *   dopl_chats   — a chat is private by default, but `visibility: "public"`
- *                  shares it workspace-wide and `op="list"` returns those
- *                  alongside your own, on a row that literally read `shared by
- *                  <someone else's display name>`. `op="get"` then rendered that
- *                  chat's 200-char title as `# ${chat.title}` — a real H1, with
- *                  no framing anywhere in the result. This is the site the last
- *                  sweep flagged by file and line.
- *   dopl_members — `profiles.display_name`, the column the channel pass found
- *                  has no validation anywhere in the product and which any
- *                  signed-in user can PATCH straight through PostgREST, plus
- *                  `teams.name` / `.description` and the NAME of every shareable
- *                  resource. `op="get"` built a `## ` heading out of the first
- *                  and `op="teams"` a `### ` out of the second; `op="list"`
- *                  printed a name with no user id beside it at all.
- *
- * The @dopl/client is hand-stubbed throughout; nothing transports.
+ * ⚠ REACH, established rather than assumed:
+ *   dopl_chats   — private by default, but `visibility: "public"` shares a chat
+ *                  workspace-wide and `op="list"` returns those alongside your
+ *                  own, on a row naming someone else's display name. `op="get"`
+ *                  renders a 200-char title into a real H1.
+ *   dopl_members — `profiles.display_name` has NO validation anywhere and any
+ *                  signed-in user can PATCH it straight through PostgREST, plus
+ *                  `teams.name`/`.description` and the NAME of every shareable
+ *                  resource — all spliced into `##`/`###` headings and rows.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -76,11 +62,11 @@ describe("dopl_chats — a shared chat's title, owner, and deliverable labels", 
     expectContained(text);
     expectNoForgedStructure(text);
     expectOnlyOurHeadings(text, /^(# Chat |## What was done|## Learnings|## Transcript)/);
-    // The framing is a HEADER on a SHARED chat: read before the content.
+    // ⚠ HEADER on a SHARED chat — read before the content.
     expect(text).toContain("chats OTHER members shared");
     expect(text.indexOf("chats OTHER members shared")).toBeLessThan(text.indexOf(MARKER));
-    // The transcript and overview are NOT neutralized — they are the payload
-    // the archive exists to hand a future session.
+    // ⚠ Transcript and overview are NOT neutralized — they are the payload the
+    // archive exists to hand a future session.
     expect(text).toContain("We fixed the listener.");
     expect(text).toContain("Listeners need cookies.");
   });
@@ -129,7 +115,7 @@ describe("dopl_chats — a shared chat's title, owner, and deliverable labels", 
     expectContained(text);
     expectNoForgedStructure(text);
     expect(text).toContain("chats OTHER members shared");
-    // "never a peer-typed name without the id" — the owner carries theirs.
+    // ⚠ Never a peer-typed name without the id.
     expect(text).toContain("shared by `Dana` (`u-other`)");
   });
 });
@@ -195,8 +181,7 @@ describe("dopl_members — the same display_name column the channel pass flagged
       "dopl_members",
       { op: "list" },
     );
-    // Two members can share a display name; only one can have the id. The old
-    // row printed `**Alice** (a@example.com)` and no id at all.
+    // ⚠ Two members can share a display name; only one can have the id.
     expect(text).toContain("`Alice` `a@example.com` (`u-1`)");
   });
 

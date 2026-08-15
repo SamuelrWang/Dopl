@@ -1,30 +1,22 @@
 /* ─────────────────────────────────────────────────────────────────────
-   The install animation's TIMELINE — the sibling half of
-   `install-animation.css`, which owns the composition. That file says
-   where everything is; this one says when it moves, and nothing else.
+   Install animation TIMELINE — sibling half of `install-animation.css`
+   (composition). That file says where; this one says when, nothing else.
 
-   ONE 11s CLOCK (`--gs-dur`, declared on `.gs-field` next door). Ten
-   independent tracks are written as percentages of that single duration
-   rather than as durations of their own with `animation-delay` offsets:
-   delays drift the moment any one of them is retimed, percentages of a
-   shared clock cannot. Read the whole thing top to bottom as one storyboard
-   and the phases line up — the click at 23% is the same instant as the
-   chip's drop at 23–28% because both numbers mean the same 2.6s.
+   ⚠ ONE 11s CLOCK (`--gs-dur`, declared on `.gs-field` next door). Ten tracks
+   written as PERCENTAGES of it, never own-durations + `animation-delay`:
+   delays drift the moment one track is retimed, percentages cannot. Read top
+   to bottom as one storyboard — click at 23% and chip drop at 23–28% are both
+   the same 2.6s.
 
-   THE COORDINATES ARE THE COMPOSITION'S, in its fixed 640×660 space: the
-   downloads button's centre is (409, 44), the app tile's is (294, 476), the
-   Applications tile's is (478, 476). Move one of those in the sibling file
-   and the cursor track here has to move with it — that is the price of a
-   cursor that lands on things, and it is cheaper than the alternative,
-   which is a cursor that lands beside them at half the window widths.
+   ⚠ Coordinates are the COMPOSITION's, in its fixed 640×660 space: downloads
+   button centre (409, 44), app tile (294, 476), Applications tile (478, 476).
+   Move one there and the cursor track here must move with it.
    ───────────────────────────────────────────────────────────────────── */
 
 /* ── Keyframes — one 11s timeline, read top to bottom ─────────────────── */
 
-/* 0–2.2s approach · 2.6s click · 4.4s the browser recedes · 5.2s the volume
-   mounts · 6.6–8.2s the drag · 8.8s dropped · 10.2s rest. Percentages are
-   unchanged from the version this replaced — only the coordinates moved,
-   because only the composition did. */
+/* 0–2.2s approach · 2.6s click · 4.4s browser recedes · 5.2s volume mounts ·
+   6.6–8.2s drag · 8.8s dropped · 10.2s rest. */
 @keyframes gs-cursor {
   0% {
     opacity: 0;
@@ -117,9 +109,8 @@
   }
 }
 
-/* OPACITY ONLY. The fragment is cropped by two edges of the field, so the
-   scale-down this beat used to carry would have walked its hidden corners
-   back into view — the recede has to happen without the geometry moving. */
+/* ⚠ OPACITY ONLY — fragment is cropped by two field edges, so a scale-down
+   walks its hidden corners back into view. Recede without moving geometry. */
 @keyframes gs-browser {
   0%,
   40% {
@@ -153,7 +144,7 @@
   }
 }
 
-/* The drag itself: lift, travel 184px (tile centre to tile centre), drop. */
+/* The drag: lift, travel 184px (tile centre to tile centre), drop. */
 @keyframes gs-drag {
   0%,
   61% {
@@ -235,8 +226,8 @@
 
 /* ── Reduced motion ──────────────────────────────────────────────────── */
 
-/* Not "no animation" — the LAST FRAME, which is the one that carries the
-   instruction: the volume is open and the app is in the folder. */
+/* ⚠ Not "no animation" — the LAST FRAME, which carries the instruction:
+   volume open, app in the folder. */
 @media (prefers-reduced-motion: reduce) {
   .gs-cursor,
   .gs-chip,

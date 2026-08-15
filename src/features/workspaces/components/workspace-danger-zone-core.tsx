@@ -11,17 +11,15 @@ import { workspaceSegment } from "../url";
 export interface WorkspaceDangerZoneCoreProps {
   workspace: Workspace;
   /**
-   * Fired after the workspace is gone, with the workspace to land on (the
-   * first one left) or `null` when none remain. Router-agnostic: the web app
-   * pushes, the desktop SPA navigates its hash router.
+   * Fired after the workspace is gone, with the workspace to land on (first one
+   * left) or `null` when none remain. Router-agnostic.
    */
   onDeleted: (next: Workspace | null) => void;
 }
 
 /**
- * Owner-only workspace deletion's Next-free core (see
- * `./workspace-danger-zone` for the web binding): the danger-zone section box
- * + confirm dialog. Both writes go through `apiRequest`, the transport seam
+ * Owner-only workspace deletion's Next-free core (`./workspace-danger-zone` is
+ * the web binding). Both writes go through `apiRequest` — the transport seam
  * the desktop renderer rides over IPC.
  */
 export function WorkspaceDangerZoneCore({
@@ -33,15 +31,13 @@ export function WorkspaceDangerZoneCore({
 
   const segment = workspaceSegment(workspace);
 
-  // Errors surface inline in the section below (not a toast), and the
-  // dialog closes on failure — so we swallow here rather than rethrow,
-  // which lets ConfirmDialog run its close-on-resolve path.
+  // ⚠ Swallow rather than rethrow so ConfirmDialog runs its close-on-resolve
+  // path; errors surface inline in the section below, not a toast.
   async function handleDelete() {
     setError(null);
     try {
       await apiRequest<void>(`/api/workspaces/${segment}`, { method: "DELETE" });
-      // Workspace is gone — land on the first remaining one (the caller
-      // routes on through onboarding when none are left).
+      // Land on the first remaining one; caller routes to onboarding if none.
       const next = await apiRequest<{ workspaces?: Workspace[] }>("/api/workspaces")
         .then((body) => body.workspaces?.[0] ?? null)
         .catch(() => null);

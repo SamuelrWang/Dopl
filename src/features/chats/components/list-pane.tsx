@@ -67,14 +67,10 @@ interface Props {
   hiddenCount: number;
 }
 
-/**
- * Left list pane: header with count, concave search well, the
- * All/Private/Team/Shared scope filter, and the chat list —
- * folder-grouped on the Private and All filters (All appends a
- * "Shared with me" group), flat (with owners) elsewhere. Folder
- * headers carry the folder's share control: the folder's scope is
- * authoritative for the chats inside it.
- */
+/** Left list pane: count header, search well, All/Private/Team/Shared
+ *  filter, chat list — folder-grouped on Private and All (All appends
+ *  "Shared with me"), flat elsewhere. ⚠ Folder headers carry the folder's
+ *  share control: its scope is authoritative for the chats inside. */
 export function ListPane({
   groups,
   filter,
@@ -98,15 +94,11 @@ export function ListPane({
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
 
   /**
-   * CLEAR THE DRAFT ON SUBMIT, NEVER AFTER THE AWAIT. This used to hold the
-   * input open across the round trip and close it only on success, so a
-   * second Enter — a key repeat, an impatient user, a slow POST — submitted
-   * the same name again and created two folders. The input is gone on the
-   * first keystroke's own render, so there is no second Enter to catch; the
-   * folder is already in the list (as a pending row) to say so.
-   *
-   * The draft still comes back on failure (e.g. the duplicate-name 409), so
-   * the typed name isn't lost under the error toast.
+   * ⚠ CLEAR THE DRAFT ON SUBMIT, NEVER AFTER THE AWAIT. Holding the input
+   * open across the round trip lets a second Enter (key repeat, impatience,
+   * slow POST) submit the same name and create two folders. The pending row
+   * is the feedback instead. Draft comes back on failure (duplicate-name
+   * 409) so the typed name isn't lost under the toast.
    */
   const submitFolder = () => {
     const name = folderDraft?.trim();
@@ -204,9 +196,8 @@ export function ListPane({
               group.kind === "shared"
                 ? SHARED_WITH_ME_LABEL
                 : (group.folder?.name ?? UNFILED_LABEL);
-            // A folder the server has not named yet: real content, dimmed and
-            // inert, so nothing offers to collapse or re-share a row whose id
-            // does not exist on the server.
+            // Server hasn't named this folder yet: dimmed and inert, so
+            // nothing offers to collapse or re-share a nonexistent id.
             const folderPending =
               group.folder !== null && isPendingId(group.folder.id);
             return (
@@ -235,10 +226,9 @@ export function ListPane({
                     </span>
                   </button>
                   {group.folder && !query.trim() && (
-                    // Hidden during search: a filtered folder shows only
-                    // matching chats, so the share popover's "applies to
-                    // all N" would understate the real blast radius (the
-                    // server re-scopes every chat in the folder).
+                    // ⚠ Hidden during search: a filtered folder shows only
+                    // matching chats, so "applies to all N" would understate
+                    // the blast radius — the server re-scopes every chat.
                     <FolderShareControl
                       folder={group.folder}
                       chatCount={group.chats.length}
@@ -281,14 +271,10 @@ export function ListPane({
   );
 }
 
-/**
- * Quiet upgrade affordance pinned at the bottom of the list: free
- * workspaces hide chats older than the retention window (never deleted).
- * Role-aware — admins/owners open the in-app upgrade checkout (the
- * shared modal, scoped to this workspace); everyone else gets a quiet
- * "ask an admin" note with no broken CTA (the /pricing checkout would
- * 403 for them). Label-strip styling on design tokens — not a nag banner.
- */
+/** Upgrade affordance pinned at the list bottom: free workspaces hide chats
+ *  older than the retention window (never deleted). ⚠ Role-aware — non-admins
+ *  get an "ask an admin" note, not a CTA, because /pricing checkout 403s for
+ *  them. */
 function RetentionStrip({
   hiddenCount,
   workspaceId,
@@ -335,11 +321,8 @@ function RetentionStrip({
   );
 }
 
-/**
- * The folder's share control — a scope icon on the folder header. A
- * folder's scope is authoritative: applying a change here re-scopes
- * every chat filed in the folder.
- */
+/** Scope icon on the folder header. ⚠ Applying a change here re-scopes every
+ *  chat filed in the folder. */
 function FolderShareControl({
   folder,
   chatCount,

@@ -8,11 +8,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * DELETE /api/workspaces/[workspaceSlug]/invitations/[id] — revoke a pending
- * invitation. Admin+ only (enforced inside `revokeInvitation` via the
- * workspace membership lookup it does for the invitation's workspace_id).
- */
+/** DELETE — revoke a pending invitation. Admin+, enforced inside `revokeInvitation`. */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -26,6 +22,6 @@ export const DELETE = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/invitations/[id]", err);
     }
   },
-  // sessionOnly: revoking an invitation is an admin action, not an agent one.
+  // sessionOnly: admin action, not an agent one.
   { sessionOnly: true }
 );

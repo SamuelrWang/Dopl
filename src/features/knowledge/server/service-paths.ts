@@ -25,32 +25,24 @@ import { getBaseById } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
 /**
- * Path-based reads + writes — the agent-friendly addressing layer.
- * Path syntax: `/`-separated names (folder.name + entry.title). The
- * unique partial index from the Item 4 migration prevents path ambiguity.
+ * Path-based reads + writes. Paths = `/`-separated folder.name + entry.title.
+ * Unique partial index prevents path ambiguity.
  */
 
 export interface WriteFileByPathInput {
   body?: string;
   title?: string;
-  /** Optional agent-facing short summary (≤300 chars). Surfaced in
-   *  get_tree / list_dir so agents can navigate without opening the
-   *  entry. `undefined` leaves the existing excerpt untouched on an
-   *  update; `null` clears it. */
+  /** ≤300 chars. `undefined` leaves existing excerpt; `null` clears it. */
   excerpt?: string | null;
-  /** Optional optimistic-concurrency precondition (the entry's
-   *  `updated_at` the caller last read). Only applies when the path
-   *  resolves to an existing entry; a stale value → 412. */
+  /** Optimistic-concurrency precondition. Only applies when path resolves to
+   *  an existing entry; stale value → 412. */
   expectedUpdatedAt?: string;
 }
 
 /**
- * Returns the entry at `path` with full body.
- *
- * Errors:
- *   - `PathTraversalError` if a non-final segment doesn't resolve.
- *   - `EntryNotFoundError` if only the final segment is missing OR
- *     the path resolves to a folder / the root.
+ * Entry at `path`, full body.
+ * Throws PathTraversalError on non-final segment miss; EntryNotFoundError when
+ * only final segment missing OR path resolves to folder/root.
  */
 export async function readFileByPath(
   ctx: KnowledgeContext,
@@ -69,23 +61,16 @@ export async function readFileByPath(
   return resolved.entry;
 }
 
-/**
- * Helper: when a not_found result is for a non-final segment, throw
- * PathTraversalError; otherwise no-op (caller decides whether the
- * leaf miss is fatal).
- */
+/** Throws PathTraversalError only for non-final-segment misses; leaf miss no-ops
+ *  (caller decides if fatal). */
 function throwIfIntermediateMissing(
   path: string,
   resolved: Extract<ResolvedPath, { kind: "not_found" }>
 ): void {
   const segments = parsePath(path);
-  // The miss is on the final segment iff lastFolder + 1 == segments.length
-  // (lastFolder is null when the very first segment missed).
   const resolvedDepth = resolved.lastFolder
-    ? // We can't get the lastFolder's depth without walking parents —
-      // but we know the missingSegment matches one of the segments.
-      // Find the *first* index of segments that matches missingSegment;
-      // if it's anywhere except the last, the miss is intermediate.
+    ? // lastFolder depth needs a parent walk; instead take first index matching
+      // missingSegment — anywhere but last ⇒ intermediate miss.
       segments.indexOf(resolved.missingSegment)
     : 0;
   if (resolvedDepth !== -1 && resolvedDepth < segments.length - 1) {
@@ -93,19 +78,9 @@ function throwIfIntermediateMissing(
   }
 }
 
-/**
- * Upsert an entry by path. If the path resolves to an existing entry,
- * update body (and title if changed). If the path doesn't exist, mkdir
- * -p any missing parent folders and create a fresh entry. The entry's
- * title defaults to the last path segment unless overridden.
- *
- * Errors:
- *   - `KnowledgePathConflictError` if the path resolves to a FOLDER.
- *     Writing to a folder path is ambiguous — caller must use a path
- *     ending in a fresh leaf name.
- *   - `AgentWriteDisabledError` if `ctx.source === "agent"` and the
- *     base's toggle is off.
- */
+/** Upsert entry by path, mkdir -p'ing parents on create; title defaults to the
+ *  last segment. Throws KnowledgePathConflictError on a FOLDER path
+ *  (ambiguous), AgentWriteDisabledError on an agent with the toggle off. */
 export async function writeFileByPath(
   ctx: KnowledgeContext,
   baseId: string,
@@ -129,9 +104,8 @@ export async function writeFileByPath(
   const parentSegments = segments.slice(0, -1);
 
   if (resolved.kind === "entry") {
-    // Update existing. Only override title/body when explicitly
-    // provided — undefined preserves the existing value. (On CREATE
-    // below we default title to leafName because we need a value.)
+    // undefined preserves existing title/body (CREATE below must default
+    // title to leafName instead).
     if (
       input.expectedUpdatedAt &&
       resolved.entry.updatedAt !== input.expectedUpdatedAt
@@ -141,9 +115,8 @@ export async function writeFileByPath(
         resolved.entry.updatedAt
       );
     }
-    // Storage gate on the NET delta, before the write. `body === undefined`
-    // preserves the column, so a title/excerpt-only upsert has no delta; a
-    // shrink is negative and always allowed.
+    // Storage gate on NET delta, before write. `body === undefined` preserves
+    // column ⇒ no delta; shrink is negative and always allowed.
     if (input.body !== undefined) {
       await assertStorageHeadroom(
         ctx,
@@ -158,7 +131,7 @@ export async function writeFileByPath(
         {
           title: input.title,
           body: input.body,
-          // Pass through as-is: undefined skips the column, null clears it.
+          // As-is: undefined skips column, null clears.
           excerpt: input.excerpt,
           lastEditedBy: ctx.userId,
           lastEditedSource: ctx.source,
@@ -166,8 +139,8 @@ export async function writeFileByPath(
         input.expectedUpdatedAt
       );
     } catch (err) {
-      // Renaming onto a sibling's title trips the unique (kb, folder,
-      // title) index — surface a clean 409 conflict, not a raw 500.
+      // Rename onto sibling title trips unique (kb, folder, title) index —
+      // surface 409, not raw 500.
       if (errorCode(err) === "23505") {
         throw new KnowledgePathConflictError(
           [...parentSegments, input.title ?? leafName].join("/")
@@ -188,18 +161,16 @@ export async function writeFileByPath(
     return { entry: saved, base };
   }
 
-  // Not found — but if the caller passed a precondition it expected to
-  // overwrite an existing entry that has since vanished (deleted/renamed
-  // concurrently). Refuse rather than silently creating a duplicate.
+  // Not found + precondition ⇒ target vanished concurrently. Refuse rather
+  // than silently creating a duplicate.
   if (input.expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(input.expectedUpdatedAt, "deleted");
   }
 
-  // Storage gate BEFORE the mkdir -p: refusing after creating the parent
-  // folders would leave empty scaffolding behind for a write that never landed.
+  // ⚠ Storage gate BEFORE mkdir -p: refusing after creating parents leaves
+  // empty scaffolding for a write that never landed.
   await assertStorageHeadroom(ctx, base, bodyBytes(input.body));
 
-  // mkdir -p parents, then create.
   const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);
   let created;
   try {
@@ -214,9 +185,8 @@ export async function writeFileByPath(
       source: ctx.source,
     });
   } catch (err) {
-    // An explicit `title` (or a leaf) that already names an active entry
-    // in this folder violates the unique (kb, folder, title) index. Map
-    // the raw 23505 to the clean 409 the move ops already return.
+    // Title/leaf already names an active entry here ⇒ unique (kb, folder,
+    // title) violation. Map 23505 to the 409 move ops return.
     if (errorCode(err) === "23505") {
       throw new KnowledgePathConflictError(
         [...parentSegments, input.title ?? leafName].join("/")
@@ -229,17 +199,11 @@ export async function writeFileByPath(
 }
 
 /**
- * Create a folder at `path`, mkdir -p style. If every segment is
- * already a folder, no-op + return the existing leaf. If the path's
- * leaf segment is currently an entry, throws `KnowledgePathConflictError`.
- *
- * `description` is the folder's agent-facing summary (≤300 chars,
- * surfaced in get_tree / list_dir). It applies to the LEAF folder only
- * (intermediate parents mkdir-p'd along the way stay description-less).
- * Because create-folder is mkdir-p idempotent, passing `description` on
- * a re-call against an already-existing folder UPDATES that folder's
- * description — the sanctioned "set/update a folder summary without
- * touching its contents" path. `undefined` leaves the description as-is.
+ * mkdir -p a folder. Leaf already an entry ⇒ KnowledgePathConflictError.
+ * `description` (≤300 chars) applies to the LEAF only; mkdir-p'd parents stay
+ * description-less. Re-calling on an existing folder UPDATES its description —
+ * the sanctioned "set folder summary without touching contents" path;
+ * `undefined` leaves it as-is.
  */
 export async function createFolderByPath(
   ctx: KnowledgeContext,
@@ -255,7 +219,6 @@ export async function createFolderByPath(
     throw new KnowledgePathConflictError(path);
   }
 
-  // Pre-check: if path resolves to an entry, refuse.
   const resolved = await resolvePath(ctx, base.id, path);
   if (resolved.kind === "entry") {
     throw new KnowledgePathConflictError(path);
@@ -263,8 +226,7 @@ export async function createFolderByPath(
 
   const folder = await ensureFolderPath(ctx, base.id, segments);
   if (!folder) throw new KnowledgePathConflictError(path);
-  // Set/refresh the leaf's description only when the caller supplied one,
-  // so a plain mkdir-p re-call never clobbers an existing description.
+  // Only when supplied, so plain mkdir-p re-call never clobbers a description.
   if (description !== undefined) {
     return repo.updateFolderRow(folder.id, { description });
   }
@@ -272,10 +234,9 @@ export async function createFolderByPath(
 }
 
 /**
- * PERMANENTLY delete the folder (and its subtree) or entry at `path`.
- * Throws when path is root, doesn't exist, or `ctx.source === "agent"`
- * with the base's `agent_write_enabled` toggle off (F-10). There is no
- * trash — the delete is immediate and irreversible (2026-08-07).
+ * PERMANENTLY delete folder (+ subtree) or entry at `path`. No trash —
+ * immediate and irreversible. Throws on root, missing, or `ctx.source ===
+ * "agent"` with base `agent_write_enabled` off (F-10).
  */
 export async function deleteByPath(
   ctx: KnowledgeContext,
@@ -283,7 +244,7 @@ export async function deleteByPath(
   path: string
 ): Promise<{ kind: "folder" | "entry"; id: string }> {
   const base = await getBaseById(ctx, baseId);
-  // F-10: block agent deletes inside a base flagged read-only to agents.
+  // F-10: block agent deletes in a base read-only to agents.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   const resolved = await resolvePath(ctx, base.id, path);
@@ -301,16 +262,8 @@ export async function deleteByPath(
   return { kind: "entry", id: resolved.entry.id };
 }
 
-/**
- * Move + rename in one operation. Resolves `fromPath`, computes the
- * target parent + leaf name from `toPath`, mkdir -p the target's
- * parents, then updates the row in a single repo call so the move +
- * rename is atomic.
- *
- * Cycle prevention is delegated to the underlying service `moveFolder`
- * (which calls `listFolderAncestors`) when the parent changes; for
- * pure-rename moves we skip the walk.
- */
+/** Move + rename atomically — one repo call after mkdir -p of target parents.
+ *  Cycle check only when the parent changes; pure renames skip the walk. */
 export async function moveByPath(
   ctx: KnowledgeContext,
   baseId: string,
@@ -338,8 +291,7 @@ export async function moveByPath(
   const toParentId = toParent?.id ?? null;
 
   if (fromResolved.kind === "folder") {
-    // Cycle pre-check: walking the destination's ancestors must not
-    // include the folder being moved.
+    // Destination ancestors must not include the folder being moved.
     if (toParentId) {
       const ancestors = await repo.listFolderAncestors(toParentId);
       if (ancestors.some((a) => a.id === fromResolved.folder.id)) {
@@ -353,7 +305,7 @@ export async function moveByPath(
       });
       return { kind: "folder", id: updated.id };
     } catch (err) {
-      // Unique partial index collision on (kb, parent, name).
+      // Unique partial index collision (kb, parent, name).
       if (errorCode(err) === "23505") {
         throw new KnowledgePathConflictError(toPath);
       }
@@ -370,7 +322,7 @@ export async function moveByPath(
     });
     return { kind: "entry", id: updated.id };
   } catch (err) {
-    // Unique partial index collision on (kb, folder, title).
+    // Unique partial index collision (kb, folder, title).
     if (errorCode(err) === "23505") {
       throw new KnowledgePathConflictError(toPath);
     }
@@ -378,10 +330,8 @@ export async function moveByPath(
   }
 }
 
-/**
- * List the immediate children (folders + entries) of the folder at
- * `path`, or of the base root when path is empty. Used by `kb_list_dir`.
- */
+/** Immediate children of folder at `path`, or base root when empty. Used by
+ *  `kb_list_dir`. */
 export async function listDirByPath(
   ctx: KnowledgeContext,
   baseId: string,

@@ -8,12 +8,9 @@ import { useTeams } from "@/features/members/hooks/use-teams";
 import { chatScope, type ChatScope } from "../scope";
 import type { Chat } from "../types";
 
-/**
- * Owner-facing chat sharing control — thin wrapper over the shared
- * ScopeSharePopover. Non-owners get a read-only scope pill. A chat
- * filed in a folder inherits the folder's scope, so its pill is locked
- * with an explanation instead of a menu.
- */
+/** Owner-facing sharing control over the shared ScopeSharePopover. Non-owners
+ *  get a read-only pill. ⚠ A filed chat inherits its folder's scope, so its
+ *  pill locks with an explanation instead of a menu. */
 export function ShareControl({
   chat,
   folderName,
@@ -72,11 +69,9 @@ export function ShareControl({
   );
 }
 
-/**
- * Chat scope picker — supplies the teams fetch to the shared menu.
- * Also used by the folder share control (folders pass `warning` to
- * flag that the scope propagates to every chat inside).
- */
+/** Scope picker; supplies the teams fetch to the shared menu. Also used by
+ *  the folder share control, which passes `warning` because the scope
+ *  propagates to every chat inside. */
 export function ShareMenu({
   scope,
   grantedTeamIds,

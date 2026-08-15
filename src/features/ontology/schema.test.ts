@@ -1,10 +1,8 @@
 /**
- * INVARIANT SUITE — ontology zod schema contracts.
- *
- * Locks the attribute-value shapes the MCP `dopl_ontology` set_attribute op
- * and the REST layer both depend on: knowledge/skill attributes accept
- * arbitrary string arrays (slugs, ids, or entry refs), while ref attributes
- * require UUIDs. Plus the array/length caps on object updates.
+ * INVARIANT SUITE — ontology zod schema contracts. Locks the attribute-value
+ * shapes MCP `dopl_ontology` set_attribute and REST both depend on:
+ * knowledge/skill accept arbitrary string arrays (slugs, ids, entry refs), ref
+ * requires UUIDs. Plus array/length caps on object updates.
  */
 
 import { describe, it, expect } from "vitest";
@@ -58,9 +56,7 @@ describe("object/cluster caps", () => {
   it("object create requires exactly one of clusterId / parentObjectId", () => {
     expect(OntologyObjectCreateSchema.safeParse({ name: "Col", clusterId: UUID }).success).toBe(true);
     expect(OntologyObjectCreateSchema.safeParse({ name: "Card", parentObjectId: UUID }).success).toBe(true);
-    // Neither → rejected.
     expect(OntologyObjectCreateSchema.safeParse({ name: "X" }).success).toBe(false);
-    // Both → rejected.
     expect(
       OntologyObjectCreateSchema.safeParse({ name: "X", clusterId: UUID, parentObjectId: UUID }).success,
     ).toBe(false);

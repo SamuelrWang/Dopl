@@ -4,15 +4,13 @@ import { GUIDE_ENTRY_KEYS } from "@/features/knowledge/server/seed";
 import { SEED_SKILL_SLUGS } from "@/features/skills/server/seed";
 
 /**
- * Seed ontology for a brand-new workspace: the "Dopl Playbook" cluster.
- * Two columns model the workspace itself — its Surfaces and its Rituals —
- * as objects whose attributes point at the seeded Skills and Knowledge
- * entries. The cross-references are the point: a fresh workspace shows a
- * connected graph, not flat cards.
+ * Seed ontology for a new workspace: the "Dopl Playbook" cluster. Two columns
+ * (Surfaces, Rituals) whose attributes point at the seeded Skills and Knowledge
+ * entries — the cross-references are the point, a fresh workspace shows a
+ * connected graph.
  *
- * Pure content — no I/O, no ids. Attributes reference other seeded rows
- * by stable key/slug; `service-seed.ts` resolves those to real uuids at
- * insert time.
+ * Pure content — no I/O, no ids. Attributes reference seeded rows by stable
+ * key/slug; `service-seed.ts` resolves them to uuids at insert time.
  */
 
 export const DOPL_PLAYBOOK_SLUG = "dopl-playbook";

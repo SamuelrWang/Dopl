@@ -43,30 +43,21 @@ export interface SettingsModalCoreProps {
   workspaceId: string;
   currentUserId: string;
   role: Role;
-  /** Workspace > General. Both apps build it from `WorkspaceSectionCore`;
-   *  the web adds the multipart icon uploader, which the desktop's
-   *  JSON-only IPC bridge cannot carry. */
+  /** From `WorkspaceSectionCore` in both apps; web adds the multipart icon
+   *  uploader, which the desktop's JSON-only IPC bridge cannot carry. */
   workspacePane: React.ReactNode;
-  /** Account. Both apps build it from `AccountSectionCore`; the danger
-   *  zone differs (web deletes in place, desktop links out). */
+  /** From `AccountSectionCore` in both apps; danger zone differs (web deletes
+   *  in place, desktop links out). */
   accountPane: React.ReactNode;
-  /** Plans & Billing. Stripe Elements on the web; a read-only status pane
-   *  plus an open-in-browser handoff in the desktop renderer, whose CSP
-   *  refuses the Stripe script and every network origin. */
+  /** Stripe Elements on the web; read-only status + open-in-browser handoff on
+   *  desktop, whose CSP refuses the Stripe script and every network origin. */
   billingPane: React.ReactNode;
 }
 
 /**
- * Settings modal in the study-notes popup language: darkened scrim, a
- * floating card, a left nav of kit `.nav-chip` rows on the shell's gray
- * surface (the active one raised, identical to the app sidebar), and a
- * scrolling right pane. All section content styles with the global
- * tokens + kit classes.
- *
- * This core is Next-free: the chrome, the section list, and the members
- * pane are identical in both apps, and the three panes whose platform
- * capabilities diverge arrive as slots. `./settings-modal` is the web
- * binding; the desktop renderer's is
+ * Next-free settings-modal core: chrome, section list and members pane are
+ * shared; the three platform-divergent panes arrive as slots.
+ * `./settings-modal` = web binding, desktop's is
  * `apps/desktop-ui/src/components/settings-modal`.
  */
 export function SettingsModalCore({
@@ -94,8 +85,8 @@ export function SettingsModalCore({
                 type="button"
                 onClick={() => onSectionChange(item.id)}
                 className={cn(
-                  // The SAME kit chip the app-shell sidebar renders — one
-                  // recipe, two nav rails. `.navGroup` supplies column layout.
+                  // SAME kit chip as the app-shell sidebar — one recipe, two
+                  // nav rails. `.navGroup` supplies column layout.
                   "nav-chip",
                   section === item.id && "nav-chip-active raised-tab"
                 )}

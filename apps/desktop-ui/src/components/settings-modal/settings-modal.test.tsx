@@ -8,16 +8,11 @@ import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
 import { AppShellLayout } from "#/components/app-shell";
 
 /**
- * Smoke test for the restored settings MODAL, driven through the real shell —
- * the regression it fixes was the shell navigating to `/settings` instead of
- * opening the modal, so both entry points (the sidebar's gear and the
- * switcher's "Workspace settings") are exercised where they actually live.
+ * Settings MODAL driven through the real shell. Pins: gear + switcher open the
+ * modal, never navigate to `/settings`.
  *
- * Mocked at `window.dopl.apiRequest`, the Electron bridge: the modal reads over
- * BOTH clients (the SPA transport for `/api/workspaces/me`, the WEB
- * `apiRequest` for every reused core), and both funnel into that one bridge in
- * the packaged app. `fetch` is a never-resolving tripwire — nothing in this
- * tree may reach the network (`connect-src 'none'`).
+ * Mocked at `window.dopl.apiRequest` because the modal reads over BOTH clients
+ * (SPA transport, reused WEB cores) and both funnel into that one bridge.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -66,8 +61,7 @@ function ok(body: unknown): BridgeResponse {
 
 /** Routes every path the shell + modal read; anything else fails loudly. */
 function defaultBridge(path: string): Promise<BridgeResponse> {
-  // The shell's single boot read (P0-2). `me` stays in the table below: the
-  // modal still reads it directly, off the entry boot seeded.
+  // Shell's single boot read. `me` stays below: the modal reads it directly.
   if (path === "/api/boot") {
     return Promise.resolve(
       ok({
@@ -107,7 +101,6 @@ function defaultBridge(path: string): Promise<BridgeResponse> {
     return Promise.resolve(ok({ defaultLevel: "edit", overrides: [] }));
   }
   if (path.startsWith(`/api/workspaces/${SEGMENT}/`)) {
-    // Members pane fan-out: roster, invitations, teams, access matrix…
     return Promise.resolve(
       ok({ members: [], invitations: [], teams: [], resources: [], requests: [] })
     );
@@ -143,7 +136,7 @@ function renderShell() {
   return router;
 }
 
-/** The sidebar's gear — the entry point the port had turned into a navigate. */
+/** The sidebar's gear. */
 const gear = () => screen.getByRole("button", { name: "Settings" });
 
 describe("settings modal", () => {
@@ -162,7 +155,7 @@ describe("settings modal", () => {
     expect(
       await screen.findByRole("heading", { name: "Account" })
     ).toBeInTheDocument();
-    // The modal is an overlay, not a route: the page underneath stays put.
+    // Overlay, not a route: the page underneath stays put.
     expect(screen.getByText("page body")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
     expect(fetch).not.toHaveBeenCalled();
@@ -214,14 +207,12 @@ describe("settings modal", () => {
   it("renders the whole billing pane — status, plan cards, feature lists", async () => {
     await openBilling();
 
-    // Current state summary.
     expect(await screen.findByText("Starter plan")).toBeInTheDocument();
     expect(screen.getByText("3 members")).toBeInTheDocument();
     expect(screen.getByText("Ontology objects")).toBeInTheDocument();
     expect(screen.getByText("40 / 100")).toBeInTheDocument();
 
-    // All three plan cards, with prices and feature lists. Scoped to the
-    // dialog: the sidebar behind it also advertises "Pro".
+    // Scoped to the dialog: the sidebar behind it also advertises "Pro".
     const pane = within(screen.getByRole("dialog", { name: "Settings" }));
     for (const name of ["Starter", "Pro", "Team"]) {
       expect(pane.getByText(name)).toBeInTheDocument();
@@ -232,7 +223,7 @@ describe("settings modal", () => {
     expect(
       screen.getByText("Seats sync automatically as members join or leave")
     ).toBeInTheDocument();
-    // 3 members → Solo is not sellable, exactly as on the web.
+    // 3 members → Solo not sellable, as on the web.
     expect(screen.getByText("Single-member workspaces only")).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -242,11 +233,11 @@ describe("settings modal", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade — $7.99/seat" }));
 
-    // The standalone billing page, plan included — see `lib/open-in-browser.ts`.
+    // Standalone billing page, plan included (`lib/open-in-browser.ts`).
     expect(openExternal).toHaveBeenCalledWith(
       `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=team`
     );
-    // No checkout mounted inside the app — the CSP refuses Stripe outright.
+    // No checkout inside the app — CSP refuses Stripe outright.
     expect(screen.queryByText("Subscribe to Team")).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -270,7 +261,7 @@ describe("settings modal", () => {
         "https://billing.stripe.com/p/session_123"
       )
     );
-    // The portal URL was fetched over the bridge, never navigated to here.
+    // Portal URL fetched over the bridge, never navigated to here.
     expect(window.location.href).not.toContain("stripe.com");
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -289,9 +280,8 @@ describe("settings modal", () => {
   });
 
   it("sends deletion to the standalone billing/account page, not the retiring canvas", async () => {
-    // The web page that carries the account danger zone after the website
-    // retirement (plan decision D4). This string is minted inside a shipped
-    // desktop build, so a wrong one cannot be fixed by a deploy.
+    // ⚠ This string is minted inside a shipped desktop build — a wrong one
+    // cannot be fixed by a deploy.
     renderShell();
     await screen.findByText("page body");
 

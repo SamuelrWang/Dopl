@@ -34,13 +34,9 @@ export async function createSkill(
   ctx: SkillContext,
   input: SkillCreateInput
 ): Promise<{ skill: Skill; primaryFile: SkillFile }> {
-  // Since F-029 the SKILL.md body is a column on the skill row, so the
-  // skill and its body are one atomic insert (no more two-phase insert +
-  // rollback). Slug collisions still retry.
-
-  // Audit B6 + B15: visibility default depends on the caller. Same
-  // rules as createBase — workspace-scoped keys default to public and
-  // can't create private; everyone else defaults to private.
+  // Visibility default depends on the caller, same rules as createBase:
+  // workspace-scoped keys default public and can't create private;
+  // everyone else defaults private.
   const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
   let resolvedVisibility = input.visibility;
   if (fromWorkspaceKey) {
@@ -73,10 +69,9 @@ export async function createSkill(
         whenToUse: stripNullBytes(input.whenToUse),
         whenNotToUse: stripNullBytes(input.whenNotToUse ?? null),
         status: input.status ?? "active",
-        // Default true to mirror knowledge_bases — creator's agent gets
-        // write by default. Real enforcement is the access matrix in
-        // `requireResourceAccess`; this column just keeps UI/MCP
-        // messaging in sync with reality.
+        // Mirrors knowledge_bases. ⚠ Real enforcement is the access matrix
+        // in `requireResourceAccess`; this column only keeps UI/MCP
+        // messaging in sync.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         folder: normalizeFolder(input.folder),
@@ -113,10 +108,9 @@ export async function updateSkill(
   expectedUpdatedAt?: string
 ): Promise<Skill> {
   const skill = await getSkillBySlug(ctx, slug);
-  // `agentWriteEnabled` is a human-controlled per-skill protection flag.
-  // Silently dropping it for agent callers (the old behavior) returned a
-  // success envelope while the DB value never moved — a false "Updated…"
-  // (F-14). Reject loudly instead. Human callers may still set it.
+  // ⚠ `agentWriteEnabled` is a human-controlled protection flag: reject the
+  // agent's attempt loudly rather than dropping it, which would return a
+  // success envelope while the DB value never moved.
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
     throw new HttpError(
       403,
@@ -125,11 +119,10 @@ export async function updateSkill(
     );
   }
   const nextAgentWriteEnabled = patch.agentWriteEnabled;
-  // Sharing scope (full three-way model). Changing it is owner-or-
-  // workspace-admin only; agents may re-scope skills THEY created.
-  // Going team-scoped replaces the grant set wholesale; any other scope
-  // drops all grants. Non-admin owners may only grant teams they belong
-  // to (plus already-granted teams) — the KB/chat rule.
+  // Sharing scope: owner-or-workspace-admin only (agents may re-scope skills
+  // THEY created). Team-scoped replaces the grant set wholesale; any other
+  // scope drops all grants. Non-admin owners may grant only teams they belong
+  // to, plus already-granted teams. Same as the KB/chat rule.
   const isAdmin = ctx.role !== null && meetsMinRole(ctx.role, "admin");
   let sharingPatch: {
     visibility?: "public" | "private";
@@ -150,11 +143,7 @@ export async function updateSkill(
       visibility: patch.visibility,
       accessMode: wantsTeams ? "teams" : "workspace",
     };
-    // NARROWING IS NOT BLOCKED BY ATTACHMENTS, and there is nothing left that
-    // could block it: the one attachment check that ever guarded this path
-    // (409 `SKILL_ATTACHED_TO_WORKFLOWS`, protecting the invariant that a
-    // workflow-attached skill stays workspace-public) was short-circuited when
-    // workflows were hidden on 2026-08-07 and deleted with them on 2026-08-11.
+    // Narrowing is never blocked — nothing guards this path.
     if (wantsTeams) {
       grantTeamIds = [...new Set(patch.teamIds ?? [])];
       if (!isAdmin && grantTeamIds.length > 0) {
@@ -211,7 +200,7 @@ export async function updateSkill(
       throw new SkillStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
     }
     if (patch.visibility !== undefined) {
-      // Replace-set semantics: clear, then re-insert the new grant set.
+      // Replace-set: clear, then re-insert.
       await deleteGrantsForResource(ctx.workspaceId, "skill", skill.id);
       if (grantTeamIds && grantTeamIds.length > 0) {
         await insertReadGrantsIfMissing(
@@ -246,9 +235,8 @@ export async function updateSkill(
         detail: { fields: changed },
       });
     }
-    // Keep the returned grant set honest for the caller's UI — but only
-    // owners/admins get to see it (no team-composition leak), and the
-    // fetch is skipped entirely for everyone else.
+    // ⚠ Only owners/admins may see the grant set — team composition is a
+    // leak otherwise. Fetch skipped entirely for everyone else.
     const seesGrants = saved.createdBy === ctx.userId || isAdmin;
     const teamIds =
       saved.accessMode === "teams" && seesGrants
@@ -274,14 +262,9 @@ async function currentGrantIds(
 }
 
 /**
- * PERMANENTLY delete a skill. Deletion is immediate and irreversible —
- * there is no trash and no restore (2026-08-07). Gates are unchanged from
- * the old soft-delete path.
- *
- * No history event is recorded: `skill_events` FKs to `skills` with ON
- * DELETE CASCADE, so this skill's audit trail is gone by the time the
- * insert would run and the write would violate the FK. The trail dies
- * with the skill by design (same reasoning the old purge path carried).
+ * ⚠ PERMANENT delete — no trash, no restore. No history event: `skill_events`
+ * FKs to `skills` ON DELETE CASCADE, so the trail is already gone and the
+ * insert would violate the FK. Trail dies with the skill by design.
  */
 export async function deleteSkill(
   ctx: SkillContext,
@@ -289,11 +272,9 @@ export async function deleteSkill(
 ): Promise<void> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
-  // F-10: the access-matrix check above can pass an agent with 'edit', but a
-  // skill flagged read-only to agents (agent_write_enabled=false) must not be
-  // deletable via MCP — the destructive path honors the per-skill protection
-  // toggle just like content writes. Human (web-UI) deletes are unaffected.
-  // 403 SKILL_AGENT_WRITE_DISABLED, mirroring SKILL_AGENT_WRITE_TOGGLE_FORBIDDEN.
+  // ⚠ The access-matrix check above can pass an agent with 'edit', but
+  // agent_write_enabled=false must still block MCP delete — the destructive
+  // path honors the per-skill toggle like content writes. Web-UI unaffected.
   if (ctx.source === "agent" && !skill.agentWriteEnabled) {
     throw new SkillAgentWriteDisabledError(
       skill.slug,
@@ -303,11 +284,8 @@ export async function deleteSkill(
   await repo.hardDeleteSkill(ctx.workspaceId, skill.id);
 }
 
-/**
- * Fork a skill: copies metadata + the single SKILL.md into a new
- * private draft ("<name> (copy)"). Composed from createSkill so history
- * records the fork like any other authored skill.
- */
+/** Fork: metadata + SKILL.md into a new private draft ("<name> (copy)").
+ *  Composed from createSkill so history records it like any authored skill. */
 export async function duplicateSkill(
   ctx: SkillContext,
   slug: string
@@ -324,9 +302,8 @@ export async function duplicateSkill(
     folder: source.folder,
     body: primary?.body ?? "",
   });
-  // createSkill's input has no connectors field (they're display
-  // metadata, not caller-authored) — copy them onto the fork directly
-  // so the duplicate keeps its connector chips.
+  // createSkill takes no connectors (display metadata, not caller-authored),
+  // so copy them onto the fork directly to keep its connector chips.
   let skill = created.skill;
   if (source.connectors.length > 0) {
     skill = await repo.updateSkillRow(skill.id, {
@@ -340,7 +317,7 @@ function deriveSlug(input: string, taken: string[]): string {
   return slugify(input, "skill", taken);
 }
 
-/** Trim a folder label; empty (or whitespace-only) becomes unfiled (null). */
+/** Empty / whitespace-only becomes unfiled (null). */
 function normalizeFolder(folder: string | null | undefined): string | null {
   if (folder == null) return null;
   const trimmed = folder.trim();

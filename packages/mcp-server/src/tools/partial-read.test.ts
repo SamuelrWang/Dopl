@@ -1,22 +1,13 @@
 /**
- * "RETURNED NOTHING" vs "COULD NOT ASK" — the two facts `dopl_map` and
- * `dopl_search` used to render identically.
+ * "RETURNED NOTHING" vs "COULD NOT ASK" — two facts `dopl_map` and
+ * `dopl_search` can render identically under `.catch(() => [])`.
  *
- * Both tools fan out across every domain and caught each read with
- * `.catch(() => [])`. A knowledge service returning 500 therefore produced
- * `## Knowledge bases (0)` / `_None._`, and an agent reported the workspace as
- * empty. Two agents drew exactly that conclusion off this surface.
- *
- * The two halves this suite pins, and they only work as a pair:
- *   1. A failing domain is NAMED, with a short cause, and the result does not
+ * ⚠ Two halves that only work as a PAIR:
+ *   1. A failing domain is NAMED with a short cause, and the result does not
  *      read as an empty workspace.
  *   2. The all-healthy result is BYTE-IDENTICAL to the one without any of this
  *      — no notice, no extra line, no changed spacing. A warning that also
- *      fires on the happy path teaches agents to skip it, which is how the
- *      original silence got installed.
- *
- * Driven through the real registrars with the shared harness; the @dopl/client
- * is hand-stubbed and nothing transports.
+ *      fires on the happy path teaches agents to skip it.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -86,10 +77,8 @@ describe("dopl_map names the domains it could not read", () => {
     expect(text).toContain("PARTIAL READ");
     expect(text).toContain("Knowledge bases (`HTTP 500`)");
     expect(text).toContain("1 of 3 domains could NOT be read");
-    // The claim that matters: the reader must not come away believing the
-    // workspace has no knowledge bases.
+    // ⚠ The reader must not come away believing the workspace has none.
     expect(text).toContain("not absent from the workspace");
-    // And the sections that DID answer are untouched.
     expect(text).toContain("`ship-it`");
   });
 
@@ -141,17 +130,14 @@ describe("dopl_map names the domains it could not read", () => {
         "",
         '_Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
         "",
-        // The STATIC routing line (see `CHANNELS_ROUTING` in map.ts). It is not
-        // a domain and it costs no read, which is why it is below the scope
-        // note rather than a sixth section above it — the note's "every section
-        // above was read" speaks only for the domains actually fanned out. Its
-        // presence here, in the byte pin, is what stops it from quietly growing
-        // into a fetched section. See `channel-discovery.test.ts` for what it
-        // has to say.
+        // ⚠ STATIC routing line (`CHANNELS_ROUTING` in map.ts): not a domain,
+        // costs no read, and sits BELOW the scope note because that note's
+        // "every section above was read" speaks only for fanned-out domains.
+        // Its presence in this byte pin stops it growing into a fetched section.
         '**Reaching a member or their agent: dopl_channel.** Channels are this workspace\'s live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="list") for the channels and DMs this account can post into.',
       ].join("\n"),
     );
-    // Said twice on purpose: the substring check is what fails loudly if the
+    // ⚠ Said twice on purpose — the substring check fails loudly if the byte
     // pin above is ever "fixed" by pasting in whatever the code now emits.
     expect(text).not.toContain("PARTIAL READ —");
   });
@@ -163,8 +149,8 @@ describe("dopl_map names the domains it could not read", () => {
       "dopl_map",
       {},
     );
-    // Genuinely empty is a legitimate answer and must stay distinguishable
-    // from the failing case in the OTHER direction too.
+    // ⚠ Genuinely empty must stay distinguishable from the failing case in the
+    // OTHER direction too.
     expect(text).toContain("## Knowledge bases (0)");
     expect(text).not.toContain("PARTIAL READ —");
   });
@@ -185,7 +171,6 @@ describe("dopl_search names the groups it could not read", () => {
     expect(text).toContain("Knowledge entries (`HTTP 500`)");
     expect(text).toContain("1 of 3 groups could NOT be read");
     expect(text).toContain("not absent from the workspace");
-    // The group still renders, and the hits from the healthy groups survive.
     expect(text).toContain("## Knowledge entries");
     expect(text).toContain("`ship-it`");
   });
@@ -230,9 +215,9 @@ describe("causeOf says enough to act on and nothing about our internals", () => 
   });
 
   it("never echoes the error's message — that is where the SQL lives", async () => {
-    // A Postgres error surfaced through a 500 body: column names, a table, a
-    // fragment of the statement. An agent cannot use any of it, and it must not
-    // end up in a result the model will repeat back to a user.
+    // ⚠ A Postgres error through a 500 body carries column names, a table, a
+    // statement fragment — useless to an agent, and it must not end up in a
+    // result the model repeats back to a user.
     const leak = Object.assign(
       new Error('DB_ERROR: select "secret_col" from "internal_audit" — permission denied for relation internal_audit'),
       { name: "DoplApiError", status: 500 },
@@ -251,8 +236,7 @@ describe("causeOf says enough to act on and nothing about our internals", () => 
   });
 
   it("the notice is one line and carries its cause inside a code span", async () => {
-    // Same rule the rest of this surface obeys: anything spliced into our
-    // narration renders as a value, and nothing in it can open structure.
+    // ⚠ Anything spliced into our narration renders as a VALUE.
     const text = await callTool(
       registerMapTool,
       healthyMap({ listSkills: vi.fn(async () => { throw apiError(500); }) }),

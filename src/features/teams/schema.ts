@@ -4,33 +4,22 @@ import { safeLabel } from "@/shared/lib/safe-label";
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 /**
- * A team name renders into `dopl_members` narration (`get_team`,
- * `access_matrix`, every membership line), so it is a label an agent reads as
- * the server speaking. `teams_admin_write` is a `FOR ALL` policy for `public`
- * and `authenticated` holds UPDATE, so any workspace ADMIN can rename a team
- * straight through PostgREST without passing this schema — which is why the
- * matching DB CHECK, not this line, is the load-bearing half. Description is
- * left prose: it is a paragraph about what the team does, and it renders only
- * in the web UI.
+ * Team name renders into `dopl_members` narration, so it is a label an agent
+ * reads as the server speaking. ⚠ `teams_admin_write` is `FOR ALL` for
+ * `public` and `authenticated` holds UPDATE, so an admin can rename straight
+ * through PostgREST without passing this schema — the matching DB CHECK is
+ * the load-bearing half. Description stays prose; it renders only in the UI.
  */
 const TeamNameSchema = safeLabel("Team name", 80);
 
 /**
- * The resource types the MEMBERS CONSOLE may address — exactly what
+ * Resource types the MEMBERS CONSOLE may address — exactly what
  * `getAccessMatrix` puts in its `resources` array.
- *
- * `skill` belongs here and was missing: the matrix has emitted skill rows since
- * team sharing landed for them (20260708150000), `use-workspace-resources`
- * keeps them, `member-bits` draws them, and the Access tab renders a scope
- * toggle and per-team grant controls on each one. The enum was the only thing
- * making all of that 400 — so a skill's controls looked live and did nothing.
- *
- * `chat` and `chat_folder` are DELIBERATELY absent. They are valid values of
- * `TeamResourceType` and real rows in `team_resource_access`, but the access
- * matrix never emits them and their scope is not independently settable — a
- * folder's scope is authoritative for its chats and is propagated to them
- * (migration 20260708120000). Chat sharing belongs to the chats surface, which
- * enforces that; a grant written from here would sidestep it.
+ * ⚠ `chat` and `chat_folder` are DELIBERATELY absent. They are valid
+ * `TeamResourceType` values and real `team_resource_access` rows, but the
+ * matrix never emits them and their scope is not independently settable: a
+ * folder's scope is authoritative for its chats and propagates to them. Chat
+ * sharing belongs to the chats surface; a grant written here sidesteps it.
  */
 const CONSOLE_RESOURCE_TYPES = ["knowledge_base", "skill"] as const;
 

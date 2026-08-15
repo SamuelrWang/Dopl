@@ -9,11 +9,8 @@ import {
 
 const MAX_ENTRY_LIMIT = 1000;
 
-/**
- * Optional entry paging: `?entryLimit=` turns it on (folders always ship
- * in full); `?entryCursor=` is the opaque cursor from a prior page's
- * `nextEntryCursor`. Absent params = the legacy full snapshot.
- */
+/** Optional entry paging: `?entryLimit=` turns it on (folders always ship in full);
+ *  `?entryCursor=` is the opaque cursor from a prior `nextEntryCursor`. Absent = full snapshot. */
 function parseTreeOpts(
   url: URL
 ): { entryLimit: number; entryOffset: number } | undefined {

@@ -1,9 +1,7 @@
 /**
- * `dopl_skill` WRITE op handlers (write / create / update / set_visibility) plus
- * `dopl_skill_admin`'s delete. Every one of them can come back 403
- * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
- * `failureDetail` in `skills-shared.ts` rather than in either half. Routed from
- * the registrar in `skills.ts`.
+ * `dopl_skill` WRITE op handlers plus `dopl_skill_admin`'s delete. ⚠ Every one
+ * can come back 403 `SKILL_AGENT_WRITE_DISABLED`, which is why
+ * `agentWriteDenied` lives beside `failureDetail` in `skills-shared.ts`.
  */
 
 import type { DoplClient } from "@dopl/client";
@@ -33,7 +31,7 @@ export async function opWrite(
         `SKILL.md in \`${slug}\` changed since you last read it. Call dopl_skill(op="read", slug) to get the current body + version, reconcile your changes, then retry write with that expected_version (or pass force=true to overwrite).`
       );
     }
-    // F-10b: skill flagged read-only to agents — clean message, not a raw code.
+    // Skill flagged read-only to agents — clean message, not a raw code.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     return err(`Couldn't write SKILL.md in \`${slug}\`: ${failureDetail(e)}`);
@@ -70,8 +68,8 @@ export async function opCreate(
       skill.visibility === "private"
         ? "Private to you — only you and your agent can see it."
         : "Visible to the whole workspace.";
-    // A draft, or a private skill, is invisible to op="list" — the caller's
-    // own next listing will not show what it just made unless it is told why.
+    // ⚠ A draft or private skill is invisible to op="list" — say why, or the
+    // caller's next listing silently omits what it just made.
     const listNote =
       skill.status !== "active"
         ? ` It is a ${skill.status}, so dopl_skill(op="list") will NOT show it until status="active".`
@@ -103,9 +101,9 @@ export async function opUpdate(
   },
 ): Promise<ToolResponse> {
   const slug = params.slug as string;
-  // `agent_write_enabled` is a human-controlled per-skill protection flag.
-  // An agent flipping it via MCP used to be silently dropped while the tool
-  // still reported success (F-14) — reject loudly instead of swallowing it.
+  // ⚠ `agent_write_enabled` is a HUMAN-controlled per-skill protection flag: an
+  // agent flipping it via MCP is silently dropped server-side, so reject loudly
+  // rather than reporting a success that did not happen.
   if (params.agent_write_enabled !== undefined) {
     return err(
       "agent_write_enabled can't be changed by an agent — set it from the Dopl web UI."
@@ -129,7 +127,7 @@ export async function opUpdate(
         (updated.folder ? ` Folder: ${inlineOr(updated.folder, "`(unnamed folder)`")}.` : "")
     );
   } catch (e) {
-    // F-10b: skill flagged read-only to agents — clean message, not a raw code.
+    // Skill flagged read-only to agents — clean message, not a raw code.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     return err(`Couldn't update skill \`${slug}\`: ${failureDetail(e)}`);
@@ -161,7 +159,7 @@ export async function opDelete(client: DoplClient, slug: string): Promise<ToolRe
     await client.deleteSkill(slug);
     return ok(`Deleted skill \`${slug}\`.`);
   } catch (e) {
-    // F-10: a skill flagged read-only to agents rejects agent deletes.
+    // A skill flagged read-only to agents rejects agent deletes.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     return err(`Couldn't delete skill \`${slug}\`: ${failureDetail(e)}`);

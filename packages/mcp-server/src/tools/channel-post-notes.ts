@@ -1,48 +1,30 @@
 /**
  * WHAT A POST'S ADDRESSING ACTUALLY DID — the result line that answers it, plus
- * the one refusal that fires when a post's addressing contradicts itself.
+ * the refusal that fires when a post's addressing contradicts itself. A post
+ * addresses a PERSON or nobody. ⚠ `channel-` filename prefix required by the
+ * parity split-scan (parity.test.ts).
  *
- * It was THREE lines. Two of them described named-agent addressing — the
- * to-vs-agent conflict note and the multi-address / thread-open handshake note
- * — and went with it (channels rollback §1), along with the agent clauses of
- * the confirmation line. A post addresses a PERSON or nobody.
- *
- * Split out of `channel-ops-write.ts` at the §2 500-line cap (SHOULD-FIX-6),
- * along the seam that file had already drawn twice and then stopped drawing:
- * every OTHER line of a post's result lives in its own module already —
- * `channel-post-linkage.ts` answers "did it thread?", `channel-addressing.ts`
- * owns the unaddressed rule, `channel-wake-guidance.ts` owns what may be
- * claimed about waiting. These three were the residue, and they are the same
- * kind of thing: narration ABOUT an address, assembled from a resolved post and
- * the message the server wrote back. `opPost` is left as what it should be —
- * resolve, call, map the failures, hand the outcome here.
- *
- * The `channel-` filename prefix is required by the parity split-scan
- * (parity.test.ts).
- *
- * THE TEXT DISCIPLINE IS INHERITED, NOT RESTATED. Every string below is server
- * NARRATION with no untrusted-content framing around it. Two peer-authored
- * values reach it and both arrive ALREADY render-safe: `safeChannelName` is
- * neutralized by its caller, and a member `label` is neutralized at its source
- * (`resolveMemberOr`). Neither may be neutralized again — double-wrapping
- * strips the span's own backticks and hands back the bare name, i.e. the bug.
+ * ⚠ Every string below is server NARRATION with no untrusted framing. The two
+ * peer-authored values reaching it arrive ALREADY render-safe:
+ * `safeChannelName` is neutralized by its caller and a member `label` at its
+ * source (`resolveMemberOr`). Neither may be neutralized AGAIN — double-wrapping
+ * strips the span's own backticks and hands back the bare name.
  */
 
 import type { MessageIntent } from "@dopl/client";
 import { unaddressedPostNote } from "./channel-addressing";
 
 /**
- * THE ONE SENTENCE for `intent:"chat"` + an address, said in both places it can
- * be reached: `opPost`'s local guard (which catches it before anything is sent)
- * and the route's `CHANNEL_CHAT_ADDRESSED` 400 (which catches it if the two ever
- * disagree). One constant, because two statements of one rule is how the copy in
- * this tool drifted from the code three times already.
+ * ⚠ ONE constant for `intent:"chat"` + an address, used by BOTH places it can
+ * be reached: `opPost`'s local guard (before anything is sent) and the route's
+ * `CHANNEL_CHAT_ADDRESSED` 400. Two statements of one rule is how this tool's
+ * copy drifted from the code repeatedly.
  *
- * The rule is not a validation nicety. `chat` means "reach nobody's agent" and
- * an address means "reach exactly this one"; honouring either half would deliver
- * a message whose sender and whose recipient's machine disagree about what it
- * is, which is the silent-delivery failure the whole addressing contract exists
- * to prevent. So it is refused and the CALLER chooses.
+ * ⚠ Not a validation nicety: `chat` means "reach nobody's agent" and an address
+ * means "reach exactly this one". Honouring either half delivers a message
+ * whose sender and whose recipient's machine disagree about what it is — the
+ * silent-delivery failure the addressing contract exists to prevent. Refuse,
+ * and let the CALLER choose.
  */
 export const CHAT_ADDRESSED_REFUSAL =
   'A message with `intent`="chat" cannot be addressed — nothing was sent. "chat" means the people in the room and reaches nobody\'s machine; `to` means the opposite, and the server refuses the pair rather than guessing which half you meant. Send it as CHAT by dropping `to`, or as a REQUEST by dropping `intent` (a request is the default).';
@@ -64,25 +46,21 @@ export interface PostAddressFacts {
 }
 
 /**
- * The address lines for one successful post.
- *
- * Empty is a legitimate answer: an ordinary addressed post in a live thread has
- * nothing to warn about and says nothing.
+ * Address lines for one successful post. Empty is legitimate — an ordinary
+ * addressed post in a live thread has nothing to warn about.
  */
 export function postAddressLines(f: PostAddressFacts): string[] {
   return addressingNoteLines(f);
 }
 
 /**
- * The "who was this put in front of" line — or nothing, when the post named
- * somebody and there is nothing to warn about.
+ * "Who was this put in front of" — or nothing when the post named somebody.
  *
- * CHAT IS UNADDRESSED ON PURPOSE, so it must not get the warning written for an
- * address the caller FORGOT. `unaddressedPostNote`'s remedy is "re-post it with
- * to=<one member>", which is precisely the thing an `intent:"chat"` caller
- * decided against; rendering it here would talk every deliberate chat message
- * into becoming a request. The chat line says the same fact (nothing was put in
- * front of an agent) with the opposite advice.
+ * ⚠ CHAT IS UNADDRESSED ON PURPOSE and must NOT get the warning written for a
+ * FORGOTTEN address: `unaddressedPostNote`'s remedy is "re-post it with
+ * to=<one member>", exactly what an `intent:"chat"` caller decided against, so
+ * rendering it talks every deliberate chat message into becoming a request. The
+ * chat line states the same fact with the opposite advice.
  */
 function addressingNoteLines(f: PostAddressFacts): string[] {
   if (f.intent === "chat") {

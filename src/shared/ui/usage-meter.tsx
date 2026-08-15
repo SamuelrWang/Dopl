@@ -3,86 +3,41 @@
 import { cn } from "@/shared/lib/utils";
 
 /**
- * THE usage meter — a labelled "used / limit" bar.
+ * THE usage meter — the only "used / limit" bar recipe.
  *
- * Extracted verbatim from the module-private `UsageMeter` in
- * `settings-modal/sections/plans-billing-core.tsx` when a SECOND meter (MCP
- * credits) was added beside the ontology-object one. `docs/DESIGN-SYSTEM.md`
- * records that no progress-bar primitive existed and that this recipe was the
- * sanctioned one; there were already two divergent hand-rolled bars elsewhere,
- * so the second copy became the primitive instead.
- *
- * THE RECIPE IS THE CONTRACT, and it is unchanged: `.concave-track` (a
- * recessed well with its own padding and deliberately NO `overflow:hidden`)
- * wrapping a bare `h-1.5 rounded-full transition-[width]` fill with an inline
- * width percentage. Tokens only — `text-caption` / `text-micro`,
- * `text-text-secondary` / `text-text-primary`, `bg-surface-cta`,
- * `text-warning` / `bg-warning` for the over state, and the
- * `bg-success`/`bg-caution`/`bg-warning`/`bg-danger` status ramp under
- * `tone="ramp"`. No hex, no raw px.
+ * THE RECIPE IS THE CONTRACT: `.concave-track` (recessed well, own padding,
+ * deliberately NO `overflow:hidden`) wrapping a bare
+ * `h-1.5 rounded-full transition-[width]` fill with an inline width %.
+ * Tokens only — no hex, no raw px.
  */
 export interface UsageMeterProps {
-  /** Left-hand caption, e.g. "Ontology objects" or "MCP credits". */
   label: string;
   used: number;
   limit: number;
-  /** Whether the meter reads as exceeded. The CALLER decides — "over" is an
-   *  entitlement verdict (the free-cap gate), not `used >= limit` arithmetic. */
+  /** ⚠ CALLER decides. "over" is an entitlement verdict (free-cap gate), NOT
+   *  `used >= limit` arithmetic. */
   over?: boolean;
-  /** One line under the bar, shown only while `over`. Says what stopped and
-   *  what did not — every gate in this product freezes, it never deletes. */
+  /** One line under the bar, only while `over`. Says what stopped and what did
+   *  not — every gate in this product freezes, never deletes. */
   overNote?: string;
-  /** Spacing against whatever sits above. The default is what the original
-   *  in-place meter used; pass a different one only with a reason. */
   className?: string;
   /**
-   * How the FILL is coloured.
-   *
-   *   `"cta"`   (default) — the flat `bg-surface-cta` ink. The bar says how
-   *             much, and only the header's `over` verdict says how bad.
-   *   `"ramp"`  — the fill takes a status colour off HOW FULL it is:
-   *             success → caution → warning → danger. For a meter the reader
-   *             glances at rather than reads (a storage bar on a grid of
-   *             cards), where the number is small and the colour is the whole
-   *             message.
-   *
-   * `ramp` OWNS the fill outright, `over` included: at the top band it is
-   * already `bg-danger`, which is the truer read of a full bar than the
-   * `over` state's amber. `over` keeps the header and the note either way.
+   * `"cta"` (default) = flat `bg-surface-cta`; only `over` says how bad.
+   * `"ramp"` = status colour off HOW FULL, for meters GLANCED at not read.
+   * ⚠ `ramp` OWNS the fill outright, `over` included — at the top band it is
+   * already `bg-danger`. `over` keeps the header and the note either way.
    */
   tone?: "cta" | "ramp";
-  /**
-   * How the two numbers are written. Defaults to `toLocaleString()`, which is
-   * right for counts and wrong for bytes — a storage bar reading
-   * "4,231,000 / 5,000,000" is not a sentence anyone parses. Pass
-   * `shared/lib/format-bytes.ts › formatBytes` for a byte meter.
-   *
-   * A PROP RATHER THAN A THIRD HAND-ROLLED BAR: this component's own header
-   * records that a second copy is how the recipe last fragmented.
-   */
+  /** Defaults to `toLocaleString()` — right for counts, wrong for bytes. Pass
+   *  `shared/lib/format-bytes.ts › formatBytes` for a byte meter. */
   formatValue?: (value: number) => string;
 }
 
-/*
- * `inline` — a `<span>`/`<div>` swap for a caller whose surface was itself a
- * `<button>` — was DELETED 2026-08-12. It existed for exactly one caller, the
- * knowledge home card, and that card stopped being a single `<button>` when it
- * grew a second control (a star) that could not legally nest inside one. With
- * the block elements valid again there is no caller left, and a phrasing-only
- * variant kept "for the next one" is a second rendering of the same recipe
- * waiting to drift from the first. Restore it from git if a genuinely
- * button-shaped surface ever needs a meter.
- */
-
 /**
- * Fill colour for `tone="ramp"`, by percentage full. Four bands rather than a
- * smooth interpolation: the thresholds are the thing a reader is meant to
- * take away ("comfortable / getting on / nearly out / out"), and an
- * interpolated hue reads as a gradient nobody can name a point on.
- *
- * MODULE-PRIVATE: `tone="ramp"` is the whole public surface. A caller that
- * could reach the bands could paint them somewhere the meter is not, and the
- * ramp would fork the way the bar recipe already did once.
+ * `tone="ramp"` fill, by percent full. Four bands, not interpolation: the
+ * thresholds are the takeaway, and an interpolated hue names no point.
+ * MODULE-PRIVATE — a caller reaching the bands could paint them where the meter
+ * is not, forking the ramp.
  */
 function usageBandClass(pct: number): string {
   if (pct < 50) return "bg-success";
@@ -102,8 +57,7 @@ export function UsageMeter({
   formatValue,
 }: UsageMeterProps) {
   const fmt = formatValue ?? ((value: number) => value.toLocaleString());
-  // A zero/negative limit has no meaningful fill — render an empty track
-  // rather than dividing by it.
+  // Zero/negative limit: empty track rather than dividing by it.
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   return (
     <div className={className}>

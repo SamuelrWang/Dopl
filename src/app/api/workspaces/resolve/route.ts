@@ -6,20 +6,13 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/workspaces/resolve?segment=... — turn a `{workspaceSlug}` URL
- * segment into a workspace, accepting both the canonical
- * `{slug}-{publicId}` form and legacy slug-only URLs. The HTTP face of
- * `resolveWorkspaceSegmentForUser` (`features/workspaces/server/segment.ts`),
- * which the SPA router needs to mirror client-side — slug-vs-publicId
- * disambiguation and the legacy-slug fallback live only server-side.
- *
- * Returns `{ workspace, canonical, needsRedirect }`. `needsRedirect` is
- * the caller's cue to rewrite the URL to `canonical` — the SPA replaces
- * history at that point.
- *
- * 404 when nothing resolves. Lookup is membership-scoped, so a
- * non-member gets the same 404 as a nonexistent workspace — visibility
- * must not be an oracle.
+ * GET ?segment=… — the HTTP face of `resolveWorkspaceSegmentForUser`
+ * (`features/workspaces/server/segment.ts`), which the SPA router mirrors client-side. Accepts
+ * canonical `{slug}-{publicId}` and legacy slug-only URLs.
+ * Returns `{ workspace, canonical, needsRedirect }`; `needsRedirect` cues the caller to rewrite
+ * to `canonical`.
+ * ⚠ 404 when nothing resolves — membership-scoped, so a non-member gets the same 404 as a
+ * nonexistent workspace. Visibility must not be an oracle.
  */
 export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
   try {

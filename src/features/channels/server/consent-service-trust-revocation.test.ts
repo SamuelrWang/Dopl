@@ -1,23 +1,15 @@
 /**
- * CONSUME-TIME TRUST RE-VERIFICATION (CHANNELS-AUDIT C-19 / F-174).
+ * CONSUME-TIME TRUST RE-VERIFICATION. Not "was this allowed?" but "is the
+ * authority that allowed it still there?".
  *
- * Split out of `consent-service.test.ts` (§2 cap) because it is its own lane
- * with its own failure mode: not "was this allowed?" but "is the authority
- * that allowed it still there?".
+ * ⚠ An `auto_allowed` row is born with `expires_at: null` and nothing sweeps it,
+ * so trust checked once at create lets a revoked rule (or a departed teammate)
+ * still hand the desktop watcher an allow to spawn on.
  *
- * The hole this pins: an `auto_allowed` row is born with `expires_at: null`
- * and nothing sweeps it, so trust used to be checked exactly once, at create.
- * The operator could revoke the rule (or the teammate could leave the
- * workspace) and the stored row still came back as an allow the desktop's
- * watcher spawned on.
- *
- * The seam is the SERVER read path, deliberately: the desktop polls
+ * ⚠ The seam is the SERVER read path deliberately: the desktop polls
  * `GET /consent/[id]` and spawns the moment it reads an allow, and the row is
  * retired to `expired` — the watcher's existing terminal status — so an OLD
- * desktop build fails closed too, with no client change.
- *
- * Repos are mocked; `service-shared` (loadVisibleChannel + resolvers) runs for
- * real.
+ * desktop build fails closed with no client change.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -126,9 +118,8 @@ function trustIsLive() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // `clearAllMocks` clears calls but NOT a queued `mockResolvedValueOnce`, and
-  // the CAS case queues two reads on this one — an unconsumed queue entry would
-  // leak into the next test.
+  // ⚠ `clearAllMocks` clears calls but NOT a queued `mockResolvedValueOnce`,
+  // and the CAS case queues two reads here.
   vi.mocked(collab.findConsentById).mockReset();
   vi.mocked(repo.findChannelById).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow());
@@ -148,10 +139,6 @@ beforeEach(() => {
 });
 
 describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
-  // The desktop watcher polls GET /consent/[id] and spawns the moment it reads
-  // an allow, so that read is the seam where a revoked rule has to bite. The
-  // row is retired to 'expired', which is the watcher's existing terminal path
-  // — so an OLD desktop build fails closed too, with no client change.
 
   it("revoked trust: the stored auto_allowed row no longer authorizes", async () => {
     vi.mocked(collab.findConsentById).mockResolvedValue(autoAllowedRow());
@@ -171,8 +158,8 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
   });
 
   it("the teammate LEAVING the workspace retires it too — no rule delete needed", async () => {
-    // The case no revocation hook could ever catch: the rule row survives, but
-    // trust is a statement about a current teammate (trust-service.ts:37-48).
+    // ⚠ No revocation hook catches this — the rule row survives, but trust is a
+    // statement about a CURRENT teammate (`trust-service.ts`).
     vi.mocked(collab.findConsentById).mockResolvedValue(autoAllowedRow());
     vi.mocked(collab.findTrustRule).mockResolvedValue(trustRow());
     vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false);
@@ -181,7 +168,7 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
   });
 
   it("a deleted requester account (null requester) fails closed", async () => {
-    // ON DELETE SET NULL leaves nobody to re-verify against.
+    // ⚠ ON DELETE SET NULL leaves nobody to re-verify against.
     vi.mocked(collab.findConsentById).mockResolvedValue(
       autoAllowedRow({ requester_user_id: null })
     );
@@ -192,8 +179,8 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
   });
 
   it("re-reads instead of returning the stale allow when the CAS loses", async () => {
-    // Another writer moved the row between our read and the sweep. Returning
-    // the copy we already refused to honor would be a fail-OPEN.
+    // ⚠ Another writer moved the row between read and sweep — returning the copy
+    // we already refused to honor is a fail-OPEN.
     vi.mocked(collab.findConsentById)
       .mockResolvedValueOnce(autoAllowedRow()) // requireOperatorRow
       .mockResolvedValueOnce(consentRow({ id: "auto-1", status: "denied" }));
@@ -204,12 +191,10 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
   });
 
   it("a lost CAS whose re-read STILL says auto_allowed is refused anyway", async () => {
-    // The fail-open this closes. The lost-CAS branch used to return whatever
-    // the re-read found, which was only safe because `insertConsentRequest` is
-    // the sole writer of `auto_allowed` — an invariant of a DIFFERENT file. If
-    // the re-read comes back as an allow (a second writer, a replayed insert,
-    // a future path that revives the status), returning it would hand the
-    // desktop the exact allow this function refused one line earlier.
+    // ⚠ The lost-CAS branch must NOT return whatever the re-read found — that is
+    // only safe while `insertConsentRequest` is the sole writer of
+    // `auto_allowed`, an invariant of a DIFFERENT file. A re-read coming back as
+    // an allow hands the desktop the allow this function just refused.
     vi.mocked(collab.findConsentById)
       .mockResolvedValueOnce(autoAllowedRow()) // requireOperatorRow
       .mockResolvedValueOnce(autoAllowedRow()); // …and the re-read agrees
@@ -217,14 +202,13 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
     vi.mocked(collab.expireRevokedAutoAllow).mockResolvedValue(null); // CAS lost
     const out = await getConsentRequest(ctx, "auto-1");
     expect(out.status).toBe("expired");
-    // Still the same row — this refuses the ALLOW, it does not invent a 404.
+    // Same row — this refuses the ALLOW, it does not invent a 404.
     expect(out.id).toBe("auto-1");
   });
 
   it("the crash-recovery create replay re-verifies the de-duped row", async () => {
-    // The desktop replays creates on restart; the de-dupe hands back the
-    // stored row. Without this it would hand back a live auto-allow written
-    // under a rule the operator has since revoked.
+    // ⚠ Desktop replays creates on restart and the de-dupe hands back the stored
+    // row — without this, a live auto-allow written under a since-revoked rule.
     vi.mocked(collab.findConsentByTrigger).mockResolvedValue(autoAllowedRow());
     vi.mocked(collab.findTrustRule).mockResolvedValue(null);
     const out = await createConsentRequest(ctx, {
@@ -235,7 +219,7 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
       bodyPreview: "b",
     });
     expect(out.status).toBe("expired");
-    // IDEMPOTENCY IS PRESERVED: still one row, still the same id, no insert.
+    // Idempotency preserved: one row, same id, no insert.
     expect(out.id).toBe("auto-1");
     expect(collab.insertConsentRequest).not.toHaveBeenCalled();
   });
@@ -275,9 +259,9 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
   });
 
   it("never touches a row that is not auto_allowed", async () => {
-    // Only the trust-born status is re-derivable. A human's allow/deny and a
-    // pending prompt are decisions this must not rewrite — de-dupe-at-any-
-    // status depends on them coming back exactly as stored.
+    // ⚠ Only the trust-born status is re-derivable. A human's allow/deny and a
+    // pending prompt must come back exactly as stored — de-dupe-at-any-status
+    // depends on it.
     for (const status of ["pending", "allowed", "denied", "expired"]) {
       vi.mocked(collab.findConsentById).mockResolvedValue(consentRow({ status }));
       const out = await getConsentRequest(ctx, "consent-1");
@@ -288,9 +272,8 @@ describe("auto_allowed rows are re-verified at CONSUMPTION (C-19)", () => {
   });
 
   it("the audit list is NOT swept — history stays as recorded", async () => {
-    // `decided`/`all` is the "your agent ran N times without asking you"
-    // trail. Nothing authorizes from it (decide CASes on 'pending'), so a
-    // revocation must not retroactively relabel work that really ran.
+    // ⚠ `decided`/`all` is the audit trail; nothing authorizes from it (decide
+    // CASes on 'pending'), so a revocation must not relabel work that ran.
     vi.mocked(collab.listConsentRequests).mockResolvedValue([autoAllowedRow()]);
     vi.mocked(collab.findTrustRule).mockResolvedValue(null);
     const out = await listConsentRequests(ctx, { status: "decided" });

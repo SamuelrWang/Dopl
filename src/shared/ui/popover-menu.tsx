@@ -1,37 +1,17 @@
 "use client";
 
 /**
- * Popover + MenuItem — the shared dropdown primitive (design-system kit).
- * Replaces the hand-rolled fixed-backdrop menus that were copy-pasted
- * across members/teams components.
+ * Popover + MenuItem — shared dropdown primitive (kit).
  *
- * The SURFACE is the landing page's Menu dropdown, ported into the global
- * kit as `.menu-card` / `.menu-row` / `.menu-divider` (src/app/globals.css,
- * mirrored in apps/desktop-ui/src/styles/kit.css). Source of the design:
- * `src/features/marketing/marketing.css › .lp-nav-menu-card` driven by
- * `src/features/marketing/components/site-nav.tsx`. marketing.css is a
- * page-scoped sheet the app never loads, so the recipe was replicated in the
- * global layer rather than imported — edit them together.
+ * ⚠ Surface `.menu-card` / `.menu-row` / `.menu-divider` is hand-copied in THREE
+ * places — src/app/globals.css, apps/desktop-ui/src/styles/kit.css, and its
+ * source `src/features/marketing/marketing.css › .lp-nav-menu-card`.
+ * marketing.css is page-scoped and never loaded by the app, hence the replica.
+ * Edit them together.
  *
- * Two positioning modes:
- *
- * Trigger-anchored (default) — render inside a `relative` wrapper next
- * to the trigger; opens below it, closes on backdrop click and Escape:
- *
- *   <div className="relative">
- *     <button onClick={() => setOpen(v => !v)}>…</button>
- *     <Popover open={open} onClose={() => setOpen(false)}>
- *       <MenuItem active onSelect={…}>Label</MenuItem>
- *     </Popover>
- *   </div>
- *
- * Coordinate (`at={{ x, y }}`) — portals to <body> at fixed viewport
- * coords, clamped fully on-screen (context menus, cursor-anchored
- * pickers); closes on backdrop click and Escape. The backdrop swallows
- * the dismiss-click so it can't fall through to whatever sits under
- * the cursor (nav links, row selects):
- *
- *   <Popover open={!!anchor} at={anchor ?? undefined} onClose={close}>…</Popover>
+ * Trigger-anchored (default) needs a `relative` wrapper. Coordinate
+ * (`at={{x,y}}`) portals to <body>, viewport-clamped. Backdrop swallows the
+ * dismiss-click so it can't fall through to whatever sits under the cursor.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -45,7 +25,7 @@ const EXIT_MS = 140;
 
 const SURFACE = "menu-card min-w-[160px]";
 
-/** The bits of the panel element that differ between open and closing. */
+/** Panel attrs that differ between open and closing. */
 type PanelChrome = {
   role?: "menu";
   inert?: boolean;
@@ -53,9 +33,8 @@ type PanelChrome = {
   "data-origin": "left" | "right";
 };
 
-/** Read at event time rather than subscribed to: all it gates is whether a
- *  close waits for an animation, and the OS setting flipping mid-interaction
- *  is not a case worth a listener. (Same call as site-nav.tsx.) */
+/** Read at event time, not subscribed: only gates whether a close waits on an
+ *  animation. OS setting flipping mid-interaction isn't worth a listener. */
 function prefersReducedMotion() {
   return (
     typeof window !== "undefined" &&
@@ -81,31 +60,26 @@ export function Popover({
   children: ReactNode;
 }) {
   /**
-   * The card outlives `open` by EXIT_MS so `menuCardOut` can run. While it
-   * plays, the card carries no `role` and is `inert`: it is a picture of a
-   * menu, not a menu — a dismissed dropdown must leave the a11y tree and the
-   * tab order at once, not 140ms later. The backdrop goes with it.
+   * Card outlives `open` by EXIT_MS for `menuCardOut`. While it plays it carries
+   * no `role` and is `inert` — a dismissed dropdown must leave the a11y tree and
+   * tab order at once, not 140ms later. Backdrop goes with it.
    *
-   * Derived from the `open` TRANSITION during render rather than in an
-   * effect: an effect would paint one frame of the closed card before the
-   * exit started, and a synchronous `setState` in an effect body is a
-   * cascading render (react-hooks/set-state-in-effect).
+   * ⚠ Derived from the `open` TRANSITION during render, not an effect: an effect
+   * paints one frame of the closed card first, and setState in an effect body is
+   * a cascading render (react-hooks/set-state-in-effect).
    */
   const [wasOpen, setWasOpen] = useState(open);
   const [closing, setClosing] = useState(false);
   if (open !== wasOpen) {
     setWasOpen(open);
-    // Reduced motion skips the phase entirely, so nothing waits on an
-    // animation the stylesheet has turned off.
+    // Reduced motion skips the phase — nothing waits on a disabled animation.
     setClosing(!open && !prefersReducedMotion());
   }
 
   /**
-   * The anchor held through the exit. Every coordinate-mode caller closes by
-   * clearing its anchor state, so `at` goes undefined in the same commit that
-   * flips `open` — and the card still has an animation's worth of screen time
-   * to be positioned for. Compared BY VALUE, not identity: `tree-context-menu`
-   * passes an object literal, and an identity check would re-render forever.
+   * Anchor held through the exit: callers clear `at` in the same commit that
+   * flips `open`, but the card still needs positioning. ⚠ Compared BY VALUE —
+   * `tree-context-menu` passes an object literal; identity re-renders forever.
    */
   const [lastAt, setLastAt] = useState(at);
   if (at && (at.x !== lastAt?.x || at.y !== lastAt?.y)) setLastAt(at);
@@ -153,8 +127,8 @@ export function Popover({
 
   return (
     <>
-      {/* Dismissed the moment `open` flips — the exit animation must never
-          leave an invisible click-eater over the page. */}
+      {/* Dismissed the moment `open` flips — exit animation must never leave an
+          invisible click-eater over the page. */}
       {!closing && <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />}
       <div
         {...panelProps}
@@ -171,11 +145,8 @@ export function Popover({
   );
 }
 
-/**
- * Mounted only while the card is on screen (open OR playing its exit), so
- * useClampedFixedPosition's measure-and-clamp layout effect runs on every
- * open, not just on coordinate changes.
- */
+/** Mounted only while on screen, so useClampedFixedPosition's measure-and-clamp
+ *  effect runs on every open, not just on coordinate changes. */
 function CoordinatePanel({
   at,
   onClose,
@@ -213,12 +184,8 @@ function CoordinatePanel({
   );
 }
 
-/**
- * Section rule between groups of rows inside a Popover — the kit's
- * `.menu-divider`, inset from the card's padding so it stops short of the
- * rounded corners. Use instead of a `border-t` on the group wrapper, which
- * on a padded card runs into the corner radius.
- */
+/** Kit `.menu-divider` — use instead of a `border-t` on the group wrapper,
+ *  which on a padded card runs into the corner radius. */
 export function MenuDivider() {
   return <div className="menu-divider" role="separator" />;
 }
@@ -235,11 +202,9 @@ export function MenuItem({
   active?: boolean;
   onSelect: () => void;
   children: ReactNode;
-  /** Optional muted second line. */
   description?: string;
   /** Reserve a leading check column (option-list style menus). */
   showCheck?: boolean;
-  /** Optional leading icon (inherits the row's text color). */
   icon?: ReactNode;
   /** Danger-token styling for irreversible actions. */
   destructive?: boolean;
@@ -250,9 +215,8 @@ export function MenuItem({
       role="menuitem"
       onClick={onSelect}
       className={cn(
-        // `.menu-row` owns radius + the hover lift / press; only colour and
-        // density are set here. `bg-none` kills the row's hover GRADIENT so a
-        // destructive tint is not painted over by it.
+        // `.menu-row` owns radius + hover lift/press; only colour + density here.
+        // `bg-none` kills the row's hover GRADIENT so a destructive tint survives.
         "menu-row flex w-full cursor-pointer items-start gap-2 px-2.5 py-1.5 text-left text-small",
         destructive
           ? "text-danger hover:bg-danger/10 hover:bg-none focus-visible:bg-danger/10 focus-visible:bg-none"

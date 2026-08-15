@@ -6,10 +6,9 @@ import { cn } from "@/shared/lib/utils";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-// v3.0 vocabulary: `ChannelThread` (imported below) is the TYPE for one exchange
-// inside a channel. This file's component is the whole channel detail pane, so it
-// is named ChannelPane — it was called ChannelThread before the vocabulary round,
-// which made one name mean two different things.
+// ⚠ `ChannelThread` (imported below) is the TYPE for one exchange inside a
+// channel. This component is the whole channel detail pane, hence ChannelPane —
+// do not rename it back to ChannelThread; that made one name mean two things.
 import type {
   AgentToolProfile,
   Channel,
@@ -42,21 +41,21 @@ interface Props {
   messages: ChannelMessage[];
   /** The channel's threads — the transcript's status / title overlay. */
   threads: ChannelThread[];
-  /** True while the thread overlay is still loading — suppresses the status
-   *  flicker (a UUID thread without its overlay yet holds at neutral "active"). */
+  /** ⚠ Suppresses status flicker — a UUID thread with no overlay yet holds at
+   *  neutral "active". */
   threadsLoading: boolean;
   loading: boolean;
   members: ChannelMember[];
-  /** True while `members` is still the PREVIOUS channel's (`keepPreviousData`).
-   *  Only the composer needs it — a request resolves its addressee from this
-   *  roster, so it must not send one built from another channel's. */
+  /** ⚠ True while `members` is still the PREVIOUS channel's
+   *  (`keepPreviousData`). A request resolves its addressee from this roster, so
+   *  it must never send one built from another channel's. */
   membersStale: boolean;
   currentUserId: string;
   /** Pending consent requests (inbound + outbound) for THIS channel. */
   consentRequests: ChannelConsentRequest[];
   trustedIds: ReadonlySet<string>;
-  /** Trust toggles with a write in flight (per-user, so one can't re-enable
-   *  another mid-flight). */
+  /** Trust toggles with a write in flight — per-user, so one cannot re-enable
+   *  another mid-flight. */
   trustBusyIds: ReadonlySet<string>;
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
@@ -72,12 +71,12 @@ interface Props {
     outcome: "completed" | "failed",
     summary?: string
   ) => Promise<void>;
-  /** Reopen a closed thread — the thread panel's control; session cards never reopen. */
+  /** ⚠ Thread panel's control only — session cards never reopen. */
   onReopenThread: (threadId: string) => Promise<void>;
   onInvite: () => void;
   onSetToolProfile: (profile: AgentToolProfile) => void;
-  /** True while the tool-profile write is in flight — the Tools panel goes
-   *  inert, exactly as the permission arm's two panels already do. */
+  /** Tool-profile write in flight — the Tools panel goes inert, like the
+   *  permission arm's two panels. */
   toolProfileBusy: boolean;
   onToggleTrust: (userId: string, trusted: boolean) => void;
   onDecideConsent: (id: string, decision: "allow" | "deny") => void;
@@ -89,17 +88,13 @@ interface Props {
 }
 
 /**
- * Channel detail pane (ChannelPane): a crumb bar (name, visibility, topic, and
- * the presence strip — EVERY member in a stable order, ringed when their agent
- * is online, so a channel never renders as a pair) with the settings / invite /
- * manage actions, a scrolling transcript that auto-sticks
- * to the bottom, and the pinned composer (or a read-only / join affordance when
- * the caller isn't a member).
+ * Channel detail pane: crumb bar (name, visibility, topic, presence strip) with
+ * settings / invite / manage actions, a transcript that auto-sticks to the
+ * bottom, and the pinned composer (or a read-only / join affordance).
  *
- * Pending consent decisions for this channel (inbound approvals + outbound
- * reviews) ride at the END of that transcript, after the last message, so a new
- * request reads as the newest thing in the chain and scrolls with the history
- * instead of pinning a band above it.
+ * ⚠ Pending consent decisions ride at the END of the transcript, after the last
+ * message, so a new request reads as the newest thing in the chain and scrolls
+ * with history rather than pinning a band above it.
  */
 export function ChannelPane({
   channel,
@@ -136,25 +131,20 @@ export function ChannelPane({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManage = channel.role === "owner";
-  // The HISTORICAL agent roster, fetched HERE rather than threaded down from
-  // `channels-view`: it is scoped to exactly this channel and the view file is
-  // already over the §2 cap. It used to feed three children (the chips bar, the
-  // composer's mention list, the transcript's attribution); the first two are
-  // gone with named agents (rollback §1) and only ATTRIBUTION is left — an old
-  // message stamped `author_agent_id` still renders its handle. Skipped for a
-  // non-member (the route would refuse, and there is nothing to draw).
+  // Historical agent roster, scoped to this channel. Its only remaining consumer
+  // is ATTRIBUTION — an old message stamped `author_agent_id` still renders its
+  // handle. Skipped for a non-member (the route would refuse).
   const agents = useChannelAgents(channel.id, channel.workspaceId, {
     enabled: channel.isMember,
   });
-  // Direct-channel rendering: the header + composer speak to the resolved peer
-  // (name / avatar live from the roster), never the stored channel name/slug.
-  // Resolve defensively so an unresolved `directPeer` still shows a real name +
-  // avatar (from the roster) rather than a bare "Direct message" placeholder.
+  // ⚠ Header + composer speak to the resolved peer (name/avatar LIVE from the
+  // roster), never the stored channel name/slug. Resolved defensively so an
+  // unresolved `directPeer` still shows a real name rather than a placeholder.
   const displayName = channelDisplayName(channel, members, currentUserId);
   const peerPerson = channelDisplayPeerPerson(channel, members, currentUserId);
   const peerName = displayName === "Direct message" ? "your teammate" : displayName;
-  // A DM always renders an avatar; when the peer is unresolved, fall back to a
-  // display-name-seeded person so the Avatar's initials fallback covers it.
+  // A DM always renders an avatar; unresolved peers fall back to a
+  // display-name-seeded person so Avatar's initials fallback covers it.
   const dmAvatarPerson: AvatarPerson = peerPerson ?? {
     userId: channel.id,
     email: null,
@@ -167,10 +157,8 @@ export function ChannelPane({
       new Map(members.map((m) => [m.userId, m.displayName || m.email || "teammate"])),
     [members]
   );
-  // The latest `task_progress` milestone per thread, keyed by its `metadata.taskId`
-  // — a pure derivation over already-loaded messages (seq-ascending), so the
-  // thread panel can show each thread's most recent accomplishment with no extra
-  // fetch or write (F-072-safe).
+  // Latest `task_progress` per thread, keyed by `metadata.taskId`. ⚠ A pure
+  // derivation over already-loaded messages — no extra fetch or write.
   const latestMilestone = useMemo(() => {
     const map = new Map<string, ChannelMessage>();
     for (const m of messages) {
@@ -190,9 +178,9 @@ export function ChannelPane({
     () => members.filter((m) => m.agentOnline),
     [members]
   );
-  // The presence strip shows EVERY member in a STABLE order (join time, then
-  // userId) — never reordered by who is online, so avatars don't jump as agents
-  // come and go. The online flag drives the success ring per avatar.
+  // ⚠ EVERY member in a STABLE order (join time, then userId) — never reordered
+  // by who is online, or avatars jump as agents come and go. The online flag
+  // drives the per-avatar ring.
   const orderedMembers = useMemo(
     () =>
       [...members].sort((a, b) => {
@@ -203,9 +191,8 @@ export function ChannelPane({
     [members]
   );
 
-  // Stick to the bottom when the transcript grows or the channel changes. A
-  // newly arrived pending request is the transcript's new last row, so its
-  // count is a dependency too — an inbound ask scrolls itself into view.
+  // Stick to the bottom as the transcript grows or the channel changes. ⚠ A new
+  // pending request is the last row, so its count is a dependency too.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -219,10 +206,9 @@ export function ChannelPane({
     []
   );
 
-  // Thread navigation (from the header popover OR the rooms sidebar): ring the
-  // thread's grouped card and scroll it into view. An open thread with no
-  // grouped card has no element, so the scroll is a no-op while the highlight
-  // still arms (harmless).
+  // Thread navigation: ring the thread's grouped card and scroll it into view.
+  // An open thread with no grouped card has no element, so the scroll no-ops
+  // while the highlight still arms.
   function handleSelectThread(threadId: string) {
     setHighlightedThreadId(threadId);
     document

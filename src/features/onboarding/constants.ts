@@ -1,10 +1,9 @@
 /**
- * Survey question data + MCP server constants for the post-signup onboarding
- * flow. Pure data — no React, no server code. The paste-in bootstrap prompt +
- * card template live in `./bootstrap-prompt.ts`.
+ * Survey question data + MCP server constants. Pure data — no React, no server
+ * code. Bootstrap prompt + card template: `./bootstrap-prompt.ts`.
  *
- * Copy here must stay MODEL-AGNOSTIC: no "Claude", "Codex", "Cursor", etc. The
- * MCP connect step addresses "your AI agent" only.
+ * ⚠ Copy must stay MODEL-AGNOSTIC: no "Claude"/"Codex"/"Cursor". Connect step
+ * addresses "your AI agent" only.
  */
 
 export interface SurveyOption {
@@ -14,8 +13,8 @@ export interface SurveyOption {
 
 export type EntityType = "solo" | "team" | "company";
 
-/** Top-level identity selector (single choice) — drives the descriptor
- *  question + whether the size slider shows. */
+/** Identity selector (single choice) — drives descriptor question + whether
+ *  the size slider shows. */
 export const ENTITY_OPTIONS: { value: EntityType; label: string }[] = [
   { value: "solo", label: "Just me" },
   { value: "team", label: "A team" },
@@ -29,7 +28,7 @@ export const DESCRIPTOR_QUESTION: Record<EntityType, string> = {
   company: "What industry are you in?",
 };
 
-/** Multi-select descriptor options per identity (3 rows worth). */
+/** Multi-select descriptor options per identity. */
 export const DESCRIPTOR_OPTIONS: Record<EntityType, SurveyOption[]> = {
   solo: [
     { value: "founder", label: "Founder" },
@@ -75,11 +74,11 @@ export const DESCRIPTOR_OPTIONS: Record<EntityType, SurveyOption[]> = {
   ],
 };
 
-/** Company / team size buckets for the slider (in order). */
+/** Size buckets for the slider, in order. */
 export const SIZE_BUCKETS = ["1-2", "2-10", "10-50", "50-100", "100-1000", "1000+"] as const;
 export type SizeBucket = (typeof SIZE_BUCKETS)[number];
 
-/** Size slider label per identity (solo never shows it). */
+/** Slider label per identity — solo never shows it. */
 export const SIZE_LABEL: Record<Exclude<EntityType, "solo">, string> = {
   team: "How big is your team?",
   company: "How large is your company?",

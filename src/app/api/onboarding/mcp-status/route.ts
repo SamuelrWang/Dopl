@@ -5,12 +5,9 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/onboarding/mcp-status — has the caller's agent completed the
- * MCP OAuth dance? Polled by the onboarding connect step (~3.5s). Reads
- * mcp_tokens (active grants), NOT the legacy profiles.mcp_connected_at
- * heartbeat.
- */
+/** GET — has the caller's agent completed the MCP OAuth dance? Polled by the onboarding connect
+ *  step (~3.5s). ⚠ Reads `mcp_tokens` (active grants), NOT the legacy
+ *  `profiles.mcp_connected_at` heartbeat. */
 export const GET = withUserAuth(async (_request, { userId }) => {
   try {
     const connected = await isMcpConnected(userId);

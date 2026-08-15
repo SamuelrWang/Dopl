@@ -17,10 +17,9 @@ type AttrKind = "text" | "pill" | "ref" | "knowledge" | "skill";
 type Attribute = OntologyObject["attributes"][number];
 
 /**
- * Attributes section — fully editable key/value rows. Labels edit in
- * place. Value kinds: text, tag, object refs (cascade picker), and
- * access-gated knowledge / skills (click-driven PickMenu — only
- * resources the caller can see are offered).
+ * Attributes section — editable key/value rows, labels edit in place. Value
+ * kinds: text, tag, object refs (cascade picker), and access-gated knowledge /
+ * skills (PickMenu offers only resources the caller can see).
  */
 export function AttributesEditor({
   object,

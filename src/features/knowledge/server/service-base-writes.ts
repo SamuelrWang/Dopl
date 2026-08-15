@@ -31,9 +31,8 @@ import {
 import { getBaseById } from "./service-bases";
 
 /**
- * Knowledge base writes — create / update (incl. sharing-scope
- * transitions) / delete. Delete is PERMANENT (2026-08-07): there is no
- * trash and no restore.
+ * Knowledge base writes — create / update (incl. sharing-scope transitions) /
+ * delete. Delete is PERMANENT: no trash, no restore.
  */
 
 const SLUG_RETRY_MAX = 3;
@@ -42,22 +41,14 @@ export async function createBase(
   ctx: KnowledgeContext,
   input: KnowledgeBaseCreateInput
 ): Promise<KnowledgeBase> {
-  // Agent gate: creating a base is a workspace-level action, but the
-  // toggle is per-base — it doesn't apply to creation. (You can't have
-  // a base with the toggle off until that base exists.) Agent-origin
-  // creates are allowed by default; tighten in Item 4 if needed.
+  // No agent gate on CREATE — the toggle is per-base and the base doesn't
+  // exist yet. Slug unique per workspace keeps MCP `kb_*` slug addressing
+  // unambiguous; publicId is the URL routing key.
   //
-  // Slug uniqueness within workspace is preserved here so MCP `kb_*`
-  // tools that address bases by slug stay unambiguous. PublicId is
-  // the URL routing key; slug stays the agent-facing handle.
-  // Audit B6 + B15: visibility default depends on the caller.
-  //   • Workspace-scoped API key  → must be 'public'. Workspace keys
-  //     may be shared among humans, and `canSeeBase` blocks them from
-  //     reading their own private rows back, so creating a private one
-  //     would strand the resource. Reject explicit 'private' loudly
-  //     and default to 'public'.
-  //   • Session caller / personal key  → default 'private'. The owner
-  //     opts to publish via the "Make public" button when ready.
+  // Visibility default by caller: workspace-scoped API key must be 'public'
+  // (⚠ `canSeeBase` blocks such keys from reading their own private rows back,
+  // so a private one is stranded — explicit 'private' rejected loudly);
+  // session caller / personal key → 'private', owner publishes later.
   const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
   let resolvedVisibility = input.visibility;
   if (fromWorkspaceKey) {
@@ -69,9 +60,8 @@ export async function createBase(
     resolvedVisibility = resolvedVisibility ?? "private";
   }
 
-  // Three-way scope: teams mode is a human-only decision (mirrors the
-  // agent restrictions on visibility), and non-admin creators may only
-  // grant teams they belong to.
+  // Teams mode is human-only; non-admin creators may only grant teams they
+  // belong to.
   const wantsTeams = input.accessMode === "teams";
   const teamGrants = wantsTeams ? (input.teamGrants ?? []) : [];
   if (wantsTeams) {
@@ -89,7 +79,7 @@ export async function createBase(
         throw new TeamScopeForbiddenError();
       }
     }
-    // Teams scope implies shared — schema already rejects private+teams.
+    // Teams implies shared — schema already rejects private+teams.
     resolvedVisibility = "public";
   }
 
@@ -104,12 +94,9 @@ export async function createBase(
         name: input.name,
         slug: baseSlug,
         description: input.description ?? null,
-        // Default true: a brand-new base belongs to its creator (visibility
-        // defaults to private above), and the creator's agent should be
-        // able to write to it without an extra opt-in step. Actual write
-        // enforcement is the team grant check in `requireEffectiveAccess`,
-        // not this column — keeping the column TRUE here just stops the
-        // UI/MCP messaging from misrepresenting the access state.
+        // Default true so the creator's agent can write without an opt-in
+        // step. ⚠ Real enforcement is `requireEffectiveAccess`'s grant check,
+        // NOT this column — TRUE here only keeps UI/MCP messaging honest.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         accessMode: wantsTeams ? "teams" : "workspace",
@@ -130,8 +117,8 @@ export async function createBase(
     }
   }
 
-  // Initial grants. Roll the base back on failure so a retry doesn't trip
-  // the slug uniqueness constraint with an orphan.
+  // Roll the base back on grant failure, else a retry trips slug uniqueness
+  // against the orphan.
   if (teamGrants.length > 0) {
     try {
       for (const grant of teamGrants) {
@@ -158,15 +145,13 @@ export async function updateBase(
   expectedUpdatedAt?: string
 ): Promise<KnowledgeBase> {
   const base = await getBaseById(ctx, id);
-  // Updating the toggle itself is a settings change — agents can't
-  // flip it, regardless of the toggle's current state. Other writes
-  // (name, description, slug) honor the toggle if it's off.
+  // Agents can never flip the toggle itself, whatever its current state.
+  // Other writes (name, description, slug) honor it when off.
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
     throw new AgentWriteDisabledError(base.id);
   }
-  // Sharing scope (visibility / accessMode / teamGrants) is fully
-  // changeable, but only by the owner or a workspace admin, and never
-  // by agents — same human-only rule as the agent-write toggle.
+  // Sharing scope (visibility / accessMode / teamGrants): owner or workspace
+  // admin only, never agents — same human-only rule as the write toggle.
   const sharingRequested =
     patch.visibility !== undefined ||
     patch.accessMode !== undefined ||
@@ -177,10 +162,9 @@ export async function updateBase(
   let dropAllGrants = false;
 
   if (sharingRequested) {
-    // Agents MAY publish (private→public) a base they created. A "pure
-    // publish" is visibility:'public' with no accessMode/team change.
-    // Everything else about sharing scope (accessMode, team grants,
-    // un-publishing) stays human-only.
+    // Carve-out: agents MAY publish a base they created. "Pure publish" =
+    // visibility:'public' with no accessMode/teamGrants change. Un-publishing,
+    // accessMode and grants stay human-only.
     const agentPurePublish =
       ctx.source === "agent" &&
       patch.visibility === "public" &&
@@ -194,8 +178,8 @@ export async function updateBase(
     }
     const isAdmin = meetsMinRole(ctx.role, "admin");
     const isCreator = base.createdBy === ctx.userId;
-    // Agent publish is creator-only (no admin override — an agent acts only
-    // on its own resources). Human path keeps the creator-or-admin rule.
+    // Agent publish is creator-only — no admin override, an agent acts only
+    // on its own resources. Human path keeps creator-or-admin.
     if (agentPurePublish ? !isCreator : !isCreator && !isAdmin) {
       throw new ScopeChangeForbiddenError();
     }
@@ -207,15 +191,14 @@ export async function updateBase(
         : (patch.accessMode ?? base.accessMode);
 
     if (targetVisibility === "private") {
-      // → private. Workspace-scoped keys can never read private rows
-      // back, so they may not create this state either.
+      // Workspace-scoped keys can't read private rows back, so they may not
+      // create this state either.
       if (ctx.apiKeyWorkspaceId != null) {
         throw new WorkspaceKeyPrivateVisibilityError();
       }
       dropAllGrants = true;
     } else if (targetMode === "teams") {
-      // → teams (or grant edits within teams mode). `teamGrants` is the
-      // declarative full set; diff against current rows.
+      // `teamGrants` is the declarative FULL set; diff against current rows.
       const current = await listGrantsForResource(
         ctx.workspaceId,
         "knowledge_base",
@@ -233,8 +216,7 @@ export async function updateBase(
         (teamId) => !desiredByTeam.has(teamId)
       );
 
-      // Non-admin owners may add/change grants only for their own teams;
-      // removing any team from their own KB is always allowed.
+      // Non-admins may add/raise only their own teams; removal always OK.
       if (!isAdmin && addedOrRaised.length > 0) {
         const myTeams = new Set(
           await listTeamIdsForUser(ctx.workspaceId, ctx.userId)
@@ -253,17 +235,15 @@ export async function updateBase(
           level
         );
       }
-      // NARROWING IS UNCHECKED, DELIBERATELY. The only cross-resource
-      // dependency a KB ever had was the workflow↔KB invariant, and
-      // workflows were deleted on 2026-08-11; a base narrowing its audience
-      // can no longer strand a dependent resource's readers.
+      // NARROWING IS UNCHECKED, DELIBERATELY: no cross-resource dependency
+      // survives that a narrowed base could strand.
     }
-    // → workspace is pure widening: grants stay as inert rows (the mode
-    // remembers them if re-narrowed), matching `setResourceAccessMode`.
+    // → workspace is pure widening: grants stay as inert rows, remembered if
+    // re-narrowed, matching `setResourceAccessMode`.
 
-    // Always write both columns when sharing was touched: keeps the row
-    // update non-empty for grant-only edits and bumps `updated_at` so
-    // CAS clients refresh their snapshot.
+    // ⚠ Write BOTH columns whenever sharing was touched: keeps the row update
+    // non-empty for grant-only edits and bumps `updated_at` so CAS clients
+    // refresh their snapshot.
     resolvedVisibility = targetVisibility;
     resolvedAccessMode = targetMode;
   }
@@ -291,8 +271,8 @@ export async function updateBase(
       },
       expectedUpdatedAt
     );
-    // Grant-row deletions land only after the row update succeeded, so a
-    // stale-version rejection can't half-apply the scope change.
+    // ⚠ Grant deletions only AFTER the row update succeeds, else a
+    // stale-version rejection half-applies the scope change.
     if (saved !== null) {
       if (dropAllGrants) {
         await deleteGrantsForResource(ctx.workspaceId, "knowledge_base", base.id);
@@ -316,27 +296,22 @@ export async function updateBase(
 }
 
 /**
- * PERMANENTLY delete a base and every folder/entry inside it. There is no
- * trash and no restore — the delete lands immediately (2026-08-07). The
- * gates are unchanged from the old soft-delete path: the caller must be
- * able to SEE the base (`getBaseById`), an agent may not delete a base
- * flagged `agent_write_enabled=false` (F-10), and the caller needs `edit`.
+ * PERMANENT delete of a base and everything in it. Gates: caller must SEE the
+ * base (`getBaseById`), agents can't delete an `agent_write_enabled=false` base
+ * (F-10), caller needs `edit`.
  *
- * Team grants are NOT cleared here on purpose: `team_resource_access` has a
- * polymorphic `resource_id` with no FK, so the cleanup is an AFTER DELETE
- * trigger on `knowledge_bases` (`knowledge_base_grants_cleanup`, migration
- * 20260807130000) — the same shape chats, chat folders and skills
- * already use. The trigger also covers the delete paths this function isn't
- * (workspace cascade, admin SQL), which a DELETE statement here would miss.
+ * ⚠ Team grants NOT cleared here on purpose — `team_resource_access` has a
+ * polymorphic `resource_id` with no FK, so cleanup is the AFTER DELETE trigger
+ * `knowledge_base_grants_cleanup`, which also covers paths this function isn't
+ * (workspace cascade, admin SQL).
  */
 export async function deleteBase(
   ctx: KnowledgeContext,
   id: string
 ): Promise<void> {
   const base = await getBaseById(ctx, id);
-  // F-10: a base flagged read-only to agents must not be deletable by an
-  // agent, even though it's the base's own creator — the destructive path
-  // honors `agent_write_enabled` the same way content writes do.
+  // F-10: agent-read-only base is undeletable by an agent even its own
+  // creator — destructive path honors `agent_write_enabled` like writes do.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.hardDeleteBase(ctx.workspaceId, id);

@@ -1,12 +1,6 @@
-/**
- * The members console's cache rules, with no React, no DOM and no network.
- *
- * These are the rules that decide whether a revoked invitation actually leaves
- * the screen, whether a role chip shows the role that was just picked, and
- * whether a team's "N members" caption agrees with the list underneath it. Each
- * one is reached by a mutation config in `hooks/use-*-writes.ts`; proving them
- * here is what lets those configs stay declarative.
- */
+/** Members console cache rules — no React, DOM or network. Each is reached by
+ *  a mutation config in `hooks/use-*-writes.ts`; proving them here is what
+ *  lets those configs stay declarative. */
 
 import { describe, expect, it } from "vitest";
 import type { TeamView } from "@/features/teams/types";
@@ -86,9 +80,8 @@ function invitation(
 }
 
 describe("an unloaded cache is never seeded", () => {
-  // Writing a one-row list into a query that has never answered renders that
-  // one row and then flips to the full list — which is the bug the mutation
-  // layer's cancel rule also declines to create.
+  // ⚠ Writing a one-row list into a never-answered query renders that row and
+  // then flips to the full list.
   it("returns undefined from every patch", () => {
     expect(setMemberRole(undefined, "u-1", "admin")).toBeUndefined();
     expect(dropMember(undefined, "u-1")).toBeUndefined();
@@ -113,9 +106,9 @@ describe("roster patches", () => {
   it("moves only the targeted member's role, and leaves the rest identical", () => {
     const next = setMemberRole(cache, "u-2", "admin");
     expect(next?.members.map((m) => m.role)).toEqual(["member", "admin"]);
-    // Untouched rows keep their identity, so nothing else re-renders.
+    // Untouched rows keep identity, so nothing else re-renders.
     expect(next?.members[0]).toBe(cache.members[0]);
-    // And the input is not mutated — the layer's rollback depends on it.
+    // ⚠ Input not mutated — the layer's rollback depends on it.
     expect(cache.members[1].role).toBe("viewer");
   });
 
@@ -168,8 +161,8 @@ describe("invitation + join-request queues", () => {
       ],
     };
     expect(dropJoinRequest(cache, "j-1")?.requests).toEqual([]);
-    // A decision on a row that is already gone is a no-op, not a throw: the
-    // queue may have been refetched between the click and the settle.
+    // Deciding an already-gone row is a no-op, not a throw: the queue may
+    // refetch between click and settle.
     expect(dropJoinRequest(cache, "nope")?.requests).toHaveLength(1);
   });
 });
@@ -215,7 +208,7 @@ describe("team patches", () => {
     };
     const next = dropMemberFromTeams(cache, "u-1");
     expect(next?.teams.map((t) => t.memberCount)).toEqual([1, 0, 1]);
-    // The team that never had them is the same object — no wasted render.
+    // Team that never had them is the same object — no wasted render.
     expect(next?.teams[2]).toBe(cache.teams[2]);
   });
 });

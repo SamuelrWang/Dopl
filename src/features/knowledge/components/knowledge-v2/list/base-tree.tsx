@@ -17,10 +17,10 @@ interface Props {
 }
 
 /**
- * The folder/file tree for one expanded base. Binds the controller's per-base
- * mutation handlers to this base. The rows use the v2 token palette directly
- * (near-black, small); the lightScope wrapper only affects the context menu +
- * inline-rename input, which render off semantic tokens.
+ * Folder/file tree for one expanded base; binds the controller's per-base
+ * mutation handlers. Rows read the v2 palette directly — the lightScope
+ * wrapper only reaches the context menu + inline-rename input, which render
+ * off semantic tokens.
  */
 export function BaseTree({
   base,

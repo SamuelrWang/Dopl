@@ -2,8 +2,7 @@
 
 /**
  * Avatar — profile picture with a neutral initials fallback (kit).
- * Deterministic and quiet: initials on the inset gray, no gradients —
- * identity color in this app belongs to teams, not people.
+ * No gradients: identity colour in this app belongs to teams, not people.
  */
 
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
@@ -36,10 +35,9 @@ export function Avatar({
   size?: keyof typeof SIZE;
   className?: string;
 }) {
-  // OAuth avatars live on provider CDNs the packaged desktop CSP cannot name,
-  // so in that renderer the bytes arrive from main as a `data:` URI instead.
-  // Undefined (pending, or refused) falls through to the initials below —
-  // which is what this component already did for a member with no picture.
+  // ⚠ OAuth avatars sit on provider CDNs the packaged desktop CSP cannot name;
+  // that renderer gets the bytes from main as a `data:` URI. Undefined (pending
+  // or refused) falls through to initials.
   const src = useBridgedImageSrc(person.avatarUrl);
 
   if (src) {

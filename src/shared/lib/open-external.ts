@@ -4,19 +4,12 @@ import { getSpaBridge } from "./spa-bridge";
 import { getAppOrigin } from "./app-origin";
 
 /**
- * THE one "open this somewhere outside the app" helper, for the web tree and
- * the bundled SPA alike.
+ * ⚠ THE ONE "open this outside the app" helper, web tree and bundled SPA alike —
+ * a hardening (e.g. scheme validation before the OS opener) must have one home.
  *
- * Inside the packaged renderer `window.open` is denied by the shell, so an
- * external link is dead unless it goes through `window.dopl.openExternal` →
- * main → the user's real browser. Off the bridge (web, browser dev mode) the
- * "external" browser is this one and a normal `window.open` is correct.
- *
- * It existed three times — the settings modal's helper, the signed-out
- * screen's private re-implementation, and an inline bridge cast in the
- * channels onboarding card — so a future hardening (e.g. validating the scheme
- * before handing a URL to the OS opener) would have landed in one of three
- * places (2026-08-03 fleet audit, duplication-quality).
+ * In the packaged renderer `window.open` is denied by the shell, so an external
+ * link is dead unless it goes through `window.dopl.openExternal` → main → the
+ * real browser. Off the bridge, a normal `window.open` is correct.
  */
 
 /** Hand an ABSOLUTE url to the user's real browser. */
@@ -28,11 +21,10 @@ export function openExternalUrl(url: string): Promise<void> {
 }
 
 /**
- * Hand an APP PATH to the user's real browser.
- *
- * The origin comes from `getAppOrigin()` (the preload constant), never from
- * `window.location` — the packaged renderer is a `file://` document, where a
- * relative URL builds `file:///…`.
+ * Hand an APP PATH to the user's real browser. ⚠ Origin comes from
+ * `getAppOrigin()` (the preload constant), NEVER `window.location` — the
+ * packaged renderer is a `file://` document, where a relative URL builds
+ * `file:///…`.
  */
 export function openExternalPath(path: string): Promise<void> {
   return openExternalUrl(`${getAppOrigin()}${path}`);

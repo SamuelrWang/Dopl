@@ -13,18 +13,16 @@ import {
 import MembersPage from "./index";
 
 /**
- * Smoke test for the ported members page.
+ * Members page smoke test.
  *
- * The data layer is mocked at `window.dopl.apiRequest` — the Electron bridge —
- * rather than at `#/lib/api-transport`, because this page reads over BOTH
- * clients: the seam's `useWorkspaceAccess` goes through the SPA's transport
- * while every reused feature hook (`useMembers`, `useTeams`, the access matrix,
- * `MemberDetail`) goes through the WEB `apiRequest`. Both funnel into the same
- * bridge in the packaged app, so stubbing it exercises the real path once and
- * proves the "web api-client transports over IPC" claim for this page.
+ * ⚠ Mocked at `window.dopl.apiRequest` (the Electron bridge), NOT
+ * `#/lib/api-transport`: this page reads over BOTH clients — `useWorkspaceAccess`
+ * via the SPA transport, every reused feature hook (`useMembers`, `useTeams`,
+ * access matrix, `MemberDetail`) via the WEB `apiRequest`. Both funnel into the
+ * same bridge in the packaged app, so stubbing it exercises the real path once.
  *
- * `fetch` is stubbed as a never-resolving spy purely as a tripwire: nothing on
- * this page may reach it (`connect-src 'none'` in the packaged renderer).
+ * `fetch` is a never-resolving tripwire: nothing here may reach it
+ * (`connect-src 'none'` in the packaged renderer).
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -146,7 +144,6 @@ describe("members page", () => {
   it("resolves the workspace, then renders the roster off the bridge", async () => {
     renderPage();
 
-    // Roster row + the detail pane the page auto-selects onto the first member.
     expect(await screen.findAllByText("Ada Lovelace")).not.toHaveLength(0);
     expect(
       await screen.findByRole("heading", { name: /Ada Lovelace/ })
@@ -154,16 +151,15 @@ describe("members page", () => {
     expect(screen.getByText("Grace Hopper")).toBeInTheDocument();
 
     const paths = calls().map((c) => c.path);
-    // ONE read for workspace + role + caller id (P0-2), not three.
+    // ONE read for workspace + role + caller id, not three.
     expect(paths).toContain("/api/boot");
     expect(paths).not.toContain("/api/workspaces/me");
     expect(paths).toContain(ws("/members"));
     expect(paths).toContain(ws("/teams"));
     expect(paths).toContain(ws("/access-matrix"));
-    // Admin-only queues are enabled because `me` reports owner.
     expect(paths).toContain(ws("/invitations"));
     expect(paths).toContain(ws("/join-requests"));
-    // Nothing on this page may reach the network directly.
+    // ⚠ Nothing on this page may reach the network directly.
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -192,7 +188,6 @@ describe("members page", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Teams/ }));
 
     expect(await screen.findAllByText("Revenue")).not.toHaveLength(0);
-    // The list pane swapped: the roster is gone and the search retargeted.
     expect(screen.queryByText("grace@acme.test · never active")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("Search teams")).toBeInTheDocument();
   });

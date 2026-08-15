@@ -8,11 +8,8 @@ export interface SeedChatResult {
   chatId: string | null;
 }
 
-/**
- * Seeds the sample "Getting started with Dopl" chat through the ordinary
- * `exportChat` path. `clientSessionId` makes it idempotent — a second run
- * updates the same row instead of duplicating.
- */
+/** Seeds the sample chat through the ordinary `exportChat` path.
+ *  `clientSessionId` makes it idempotent — a second run updates the row. */
 export async function seedWorkspace(
   workspaceId: string,
   userId: string

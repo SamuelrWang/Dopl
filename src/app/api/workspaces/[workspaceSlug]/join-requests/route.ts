@@ -9,7 +9,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** GET /api/workspaces/[workspaceSlug]/join-requests — pending approval queue. Admin+. */
+/** GET — pending approval queue. Admin+. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {

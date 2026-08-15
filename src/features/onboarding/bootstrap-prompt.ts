@@ -1,27 +1,18 @@
 /**
- * The paste-into-your-agent BOOTSTRAP prompt + the static HTML card
- * template the agent fills and renders. Pure data — no React, no server
- * code, no AI keys. Dopl never generates the card itself: it hands the
- * agent this template; the agent fills it and renders it inline.
+ * Paste-into-your-agent BOOTSTRAP prompt + the HTML card template the agent
+ * fills and renders itself. Pure data — no React, no server code, no AI keys.
  *
- * The card carried a "view in Dopl" link until the write routes stopped
- * returning `webUrl` — every such URL pointed into the retired website
- * and 302'd to `/get-started`, so the link was worse than no link.
- *
- * Copy here must stay MODEL-AGNOSTIC: no "Claude", "Codex", "Cursor",
- * etc. Address "your AI agent" / "your environment" only.
+ * ⚠ Copy must stay MODEL-AGNOSTIC: no "Claude"/"Codex"/"Cursor". Address
+ * "your AI agent" / "your environment" only.
  */
 
 import { MCP_SERVER_NAME } from "./constants";
 
 /**
- * Self-contained HTML card (inline styles only, no external deps) so it
- * renders in any agent's HTML/artifact surface. The agent replaces the
- * `{{SLOT}}` placeholders with the content it just wrote:
- *   {{TITLE}}     entry/skill name
- *   {{TYPE}}      "Knowledge" | "Skill"
- *   {{SCOPE}}     the knowledge base or skill it belongs to
- *   {{BODY_HTML}} the entry/skill body, converted to HTML by the agent
+ * ⚠ Self-contained: inline styles only, no external deps — must render in any
+ * agent's HTML/artifact surface. Agent fills the slots:
+ *   {{TITLE}} entry/skill name · {{TYPE}} "Knowledge" | "Skill"
+ *   {{SCOPE}} owning KB/skill · {{BODY_HTML}} body, HTML-converted by agent
  */
 export const DOPL_CARD_TEMPLATE = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;border:1px solid #e6e6e6;border-radius:12px;overflow:hidden;background:#fff;color:#1a1a1a">
   <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f0f0f0">
@@ -36,20 +27,14 @@ export const DOPL_CARD_TEMPLATE = `<div style="font-family:system-ui,-apple-syst
   </div>
 </div>`;
 
-/**
- * Concise connect prompt (onboarding step 2). Just gets the agent talking
- * to the MCP server; the richer seeding prompt comes on the next step.
- */
+/** Connect prompt (onboarding step 2) — MCP handshake only; the seeding
+ *  prompt comes on the next step. */
 export function buildConnectPrompt(url: string): string {
   return `Connect to the Dopl MCP server using HTTP (streamable) at ${url}. If your environment can't add MCP servers via CLI or command, walk me through adding it manually using the server name and URL above and authenticating via OAuth.`;
 }
 
-/**
- * The bootstrap prompt. Drives an agent-led interview that fills the
- * user's workspace with genuinely useful, durable knowledge — and shows
- * each write as a rendered card. The agent supplies all content and does
- * all rendering; Dopl supplies the tools, the template, and the URLs.
- */
+/** Agent-led interview that seeds the workspace. Agent supplies all content
+ *  and rendering; Dopl supplies tools, template, URLs. */
 export function buildBootstrapPrompt(url: string): string {
   return `You are connected (or about to connect) to my Dopl workspace over MCP. Dopl stores two things my future agents read and write: KNOWLEDGE BASES (durable facts) and SKILLS (repeatable procedures). Your job right now is to help me build out genuinely useful, durable knowledge — by interviewing me, not by guessing.
 

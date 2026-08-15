@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { isSpaRenderer } from "@/shared/lib/spa-bridge";
-// The Next-free half — this hook is reached from `skill-view` and other
-// components the desktop SPA reuses, so it must not pull `next/navigation`.
+// ⚠ Next-free: reached from `skill-view` and other components the desktop SPA
+// reuses, so it must not pull `next/navigation`.
 import { useAuthUserState } from "./use-auth-user-core";
 
 export interface CurrentProfile {
@@ -14,11 +14,10 @@ export interface CurrentProfile {
 }
 
 /**
- * The current user's presentable identity (id + display name + avatar),
- * resolving `profiles.display_name`/`avatar_url` with a metadata/email
- * fallback. Shared because multiple surfaces (editor presence headers)
- * need it. Returns a stable object reference while the values are
- * unchanged so callers can safely use it in effect deps.
+ * Current user's presentable identity (id + display name + avatar), resolving
+ * `profiles.display_name`/`avatar_url` with a metadata/email fallback.
+ * ⚠ Returns a STABLE object reference while values are unchanged, so callers can
+ * use it in effect deps.
  */
 export function useCurrentProfile(): CurrentProfile | null {
   const user = useAuthUserState();
@@ -28,14 +27,13 @@ export function useCurrentProfile(): CurrentProfile | null {
   } | null>(null);
 
   useEffect(() => {
-    // No synchronous reset here (stale profile is never shown — the
-    // memo below returns null whenever there's no user).
+    // No synchronous reset: the memo below returns null whenever there is no
+    // user, so a stale profile is never shown.
     if (!user) return;
     let cancelled = false;
-    // SPA renderer: the profile came in through useAuthUserState's bridge
-    // fetch (user_metadata) — no Supabase client exists here. Deferred a
-    // tick (sanctioned queueMicrotask pattern) so the set isn't a
-    // synchronous cascading render inside the effect body.
+    // SPA renderer: profile arrived via useAuthUserState's bridge fetch; no
+    // Supabase client here. ⚠ Deferred a tick so the set is not a synchronous
+    // cascading render inside the effect body.
     if (isSpaRenderer()) {
       const meta = (user.user_metadata ?? {}) as {
         full_name?: string;

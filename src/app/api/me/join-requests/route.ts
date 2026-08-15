@@ -7,11 +7,8 @@ interface Ctx {
   userId: string;
 }
 
-/**
- * GET /api/me/join-requests — the caller's unacknowledged join-request
- * notices (awaiting-approval + approved/declined outcomes). Drives the
- * one-time popups mounted in the app layout.
- */
+/** GET — the caller's unacknowledged join-request notices (awaiting + approved/declined),
+ *  driving the one-time popups in the app layout. */
 export const GET = withUserAuth(async (_request: NextRequest, { userId }: Ctx) => {
   try {
     const notices = await listMyJoinNotices(userId);

@@ -1,15 +1,10 @@
 /**
- * `POST /api/oauth/register` — RFC 7591 dynamic client registration.
- *
- * This endpoint is UNAUTHENTICATED by spec (public MCP clients self-register)
- * and INSERTs an `oauth_clients` row per call, so it was an unbounded
- * table-growth primitive. These tests pin the per-IP ceiling that now bounds it
- * WITHOUT closing the legitimate onboarding path: a real registration still
- * returns its `client_id`, and the limit is checked before any row is written.
- *
- * The real `enforceOAuthIpRateLimit` runs (only its underlying
- * `check_and_record_rate_limit_subject` RPC is stubbed), so IP extraction and
- * the 429 shape are the shipping ones.
+ * `POST /api/oauth/register` — UNAUTHENTICATED by spec and INSERTs a row per call, so it is a
+ * table-growth primitive. Pins the per-IP ceiling that bounds it WITHOUT closing legitimate
+ * onboarding: a real registration still returns its `client_id`, and the limit is checked before
+ * any row is written.
+ * The real `enforceOAuthIpRateLimit` runs (only its RPC is stubbed), so IP extraction and the 429
+ * shape are the shipping ones.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -95,7 +90,7 @@ describe("RFC 7591 onboarding path stays open", () => {
     const res = await POST(req({ client_name: "x" }, { "x-forwarded-for": "203.0.113.7" }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("invalid_redirect_uri");
-    // The limiter was consulted (and passed) before validation ran.
+    // Limiter consulted (and passed) before validation ran.
     expect(state.calls).toHaveLength(1);
     expect(registerClient).not.toHaveBeenCalled();
   });

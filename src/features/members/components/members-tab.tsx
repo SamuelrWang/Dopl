@@ -23,8 +23,8 @@ type RoleFilter = MemberRole | "all";
 
 interface Props {
   workspaceSlug: string;
-  /** Scopes the Solo member-limit upgrade modal in the join-request
-   *  queue; the 402 degrades to inline text when absent. */
+  /** Scopes the Solo member-limit upgrade modal; the 402 degrades to inline
+   *  text when absent. */
   workspaceId?: string;
   currentUserId: string;
   myRole: MemberRole;
@@ -32,16 +32,13 @@ interface Props {
   invitations: WorkspaceInvitationView[];
   teams: TeamView[];
   loading: boolean;
-  /** Row-click detail hook — omit to render rows non-clickable (the
-   *  settings modal has no detail surface; the full page does). */
+  /** Omit to render rows non-clickable — the settings modal has no detail
+   *  surface, the full page does. */
   onSelectMember?: (userId: string) => void;
 }
 
-/**
- * Members tab: search + role/team filters, pending-invitations banner,
- * and the boxed member table (column headers on a rounded card, like the
- * reference mock). Row click opens the member drawer via `onSelectMember`.
- */
+/** Members tab: search + role/team filters, pending-invitations banner, boxed
+ *  member table. Row click opens the detail via `onSelectMember`. */
 export function MembersTab({
   workspaceSlug,
   workspaceId,
@@ -90,12 +87,8 @@ export function MembersTab({
       .map((x) => x.m);
   }, [members, search, roleFilter, teamFilter]);
 
-  /**
-   * Both writes patch the roster cache in `onMutate`, and the roster is the
-   * same cache entry this tab renders from — so the role chip moves on the
-   * click and the removed row leaves at once, with no `onChanged` refetch to
-   * wait for. That is why this tab no longer takes one.
-   */
+  /** Both writes patch the roster cache in `onMutate`, and this tab renders
+   *  from that same entry — which is why it takes no `onChanged`. */
   function changeRole(target: WorkspaceMemberView, role: AssignableRole) {
     if (!canManage) return;
     setError(null);
@@ -156,7 +149,7 @@ export function MembersTab({
         />
       )}
 
-      {/* Boxed table — column headers on a rounded card, like the mock. */}
+      {/* Boxed table */}
       <div className="rounded-xl border border-border-default bg-[var(--card-surface)] overflow-hidden">
         <div
           className={`${MEMBER_ROW_GRID} border-b border-border-default bg-surface-raised-1 !py-2.5`}
@@ -189,8 +182,8 @@ export function MembersTab({
             {visibleMembers.map((m) => {
               const isSelf = m.userId === currentUserId;
               const canEditTarget = canShowMemberControls(myRole, m.role, isSelf);
-              // Regular members only open their own detail view; no
-              // handler at all means rows render non-clickable.
+              // Regular members open only their own detail; no handler at all
+              // means non-clickable rows.
               const clickable =
                 onSelectMember !== undefined && (canManage || isSelf);
               return (
@@ -231,9 +224,8 @@ export function MembersTab({
           try {
             await memberWrites.remove.mutateAsync({ userId: removeTarget.userId });
           } catch (err) {
-            // Surface the server's reason ("Admins cannot remove owners,
-            // admins, or themselves", last-owner protection, …) —
-            // ConfirmDialog swallows the throw and only keeps itself open.
+            // Surface the server's reason (last-owner protection, admin
+            // restrictions). ConfirmDialog swallows the throw and stays open.
             setError(err instanceof Error ? err.message : "Failed to remove");
           }
         }}

@@ -1,11 +1,7 @@
 /**
- * NET-NEW (MCP-2) — the fail-closed workspace resolver.
- *
- * `resolveActiveWorkspace` replaced the silent default-workspace fallback
- * (oldest-owned / auto-create) with explicit targeting. This suite pins the
- * resolution matrix and the flat error envelope that `withWorkspaceAuth` and
- * `GET /api/workspaces/me` surface verbatim:
- *
+ * The fail-closed workspace resolver. Pins the resolution matrix and the flat
+ * error envelope `withWorkspaceAuth` / `GET /api/workspaces/me` surface
+ * verbatim:
  *   - header UUID → membership check (404 for non-member / nonexistent);
  *   - blank / non-UUID header → 400 WORKSPACE_INVALID (never a 500, never a
  *     silent fall-through to auto-targeting);
@@ -204,10 +200,10 @@ describe("resolveActiveWorkspace — no-header path (active memberships)", () =>
 });
 
 /**
- * Launch-blocker P0-2a. `resolveMembershipOrThrow` is the hot path of all 82
- * `withWorkspaceAuth` routes, and its two reads key only on `workspaceId` —
- * neither is an input to the other. Awaiting them in series added a whole DB
- * round trip to every authenticated request in the product.
+ * ⚠ `resolveMembershipOrThrow` is the hot path of every `withWorkspaceAuth`
+ * route; its two reads key only on `workspaceId` and neither feeds the other,
+ * so they MUST stay parallel — series adds a DB round trip to every
+ * authenticated request.
  */
 describe("resolveMembershipOrThrow — the two reads are PARALLEL", () => {
   it("dispatches the membership read before the workspace read resolves", async () => {
@@ -220,8 +216,8 @@ describe("resolveMembershipOrThrow — the two reads are PARALLEL", () => {
     });
     mockRepo.findMembership.mockImplementation(async () => {
       membershipStarted = true;
-      // A SERIAL implementation could only reach this line after the
-      // workspace read had already settled.
+      // A SERIAL implementation reaches this only after the workspace read
+      // has settled.
       expect(workspaceResolved).toBe(false);
       return membership(UUID_A, "member");
     });
@@ -238,7 +234,7 @@ describe("resolveMembershipOrThrow — the two reads are PARALLEL", () => {
     const err = (await catchErr(
       resolveMembershipOrThrow(UUID_A, USER)
     )) as HttpError;
-    // Existence must not become an oracle: same 404 either way.
+    // ⚠ Existence must not become an oracle: same 404 either way.
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(404);
     expect(err.code).toBe("WORKSPACE_NOT_FOUND");

@@ -6,13 +6,10 @@ import type { TreeHandlers } from "../use-knowledge-v2-controller";
 import { ListPanel } from "./list-panel";
 
 /**
- * The base-detail list pane, after the home grid took the base LIST away.
- *
- * What this file pins is an absence as much as a presence: the pane is scoped
- * to ONE base, so the controls that only make sense across several — the base
- * rows, the search field that filtered them, the scope pills — must not come
- * back here. It also still carries P0-6's rule that a visible control does
- * something: the crumb is the pane's only button and it navigates.
+ * Base-detail list pane. Pins an ABSENCE: the pane is scoped to ONE base, so
+ * base rows, the base-list search field and the scope pills must not come
+ * back. Plus P0-6 (a visible control does something): the crumb is the pane's
+ * only button and it navigates.
  */
 
 const noopTreeHandlers = {} as TreeHandlers;
@@ -59,24 +56,23 @@ describe("knowledge base-detail list pane", () => {
     expect(html).toContain('aria-label="Knowledge base breadcrumb"');
     expect(html).toContain("Knowledge");
     expect(html).toContain("Product specs");
-    // A title would make the pane read as a page of its own; the base name
-    // already heads the DETAIL pane.
+    // A title makes the pane read as its own page; the base name already
+    // heads the DETAIL pane.
     expect(html).not.toContain("<h1");
   });
 
   it("shows the opened base's tree expanded, with no base rows around it", () => {
     const html = render();
     expect(html).toContain("Cold outreach");
-    // The disclosure chevron that folded a base row away has no meaning when
-    // the pane holds exactly one base.
+    // A disclosure chevron is meaningless with exactly one base.
     expect(html).not.toContain('aria-label="Collapse"');
     expect(html).not.toContain('aria-label="Expand"');
   });
 
   it("drops the base-list search and the scope pills", () => {
     const html = render();
-    // The search field filtered the BASE LIST — there is no list here. Content
-    // search within the base lives in the detail pane's top bar.
+    // That field filtered the BASE LIST; content search lives in the detail
+    // pane's top bar.
     expect(html).not.toContain('placeholder="Search"');
     expect(html).not.toContain('role="tablist"');
   });
@@ -85,7 +81,7 @@ describe("knowledge base-detail list pane", () => {
     const html = render(null);
     expect(html).toContain('role="status"');
     expect(html).toContain("Loading knowledge base");
-    // …and NOT a visible text loader (docs/DESIGN-SYSTEM.md).
+    // …and NOT a text loader (docs/DESIGN-SYSTEM.md).
     expect(html).toContain("sr-only");
   });
 });

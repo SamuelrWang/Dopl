@@ -1,28 +1,21 @@
 import { isUuid } from "@/shared/lib/id/uuid";
 
 /**
- * Generic slug generator.
- * Output matches ^[a-z0-9-]+$ so it's safe for URLs and MCP prompt names.
- *
- * - NFKD-normalizes input then strips combining marks, so visually-
- *   equivalent variants ("ｆｏｏ" full-width, "①" circled-1) produce the
- *   same slug as their ASCII analogs (audit fix S-16) AND accented
- *   letters transliterate to their base form ("café" → "cafe" instead
- *   of "caf" — audit fix for the accent-drop). NFKD decomposes é into
- *   e + U+0301; the combining-mark strip drops the U+0301.
- * - Lowercases, replaces any non-alphanumeric run with a single hyphen
- *   — implicitly strips control chars, zero-width characters, and
- *   emoji, all of which are non-alphanumeric.
- * - Strips leading/trailing hyphens.
- * - Falls back to `fallback` if the input produces an empty slug.
- * - Resolves collisions against `existingSlugs` with numeric suffixes
- *   (`base-2`, `base-3`, ...).
- *
- * Note on Unicode safety: NFKC + the [^a-z0-9] whitelist makes the
- * output deterministic and visually-unambiguous. Two inputs that look
- * identical to a human (or to a confusable-attack screening tool)
- * produce the same slug — important for /e/<slug> URLs and MCP
+ * Generic slug generator. Output matches ^[a-z0-9-]+$ — safe for URLs and MCP
  * prompt names.
+ *
+ * - ⚠ NFKD-normalize THEN strip combining marks, so full-width/circled variants
+ *   fold to their ASCII analogs and accents transliterate to a base form
+ *   ("café" → "cafe", not "caf"): NFKD decomposes é into e + U+0301, and the
+ *   combining-mark strip drops the U+0301.
+ * - Lowercase; any non-alphanumeric run → one hyphen (implicitly stripping
+ *   control chars, zero-width chars and emoji).
+ * - Strip leading/trailing hyphens; fall back to `fallback` on empty.
+ * - Resolve collisions against `existingSlugs` with `base-2`, `base-3`, …
+ *
+ * ⚠ Unicode safety: normalization + the [a-z0-9] whitelist makes output
+ * deterministic and visually unambiguous — two inputs that look identical to a
+ * human (or a confusable screener) produce the same slug.
  */
 export function slugify(
   name: string,
@@ -36,9 +29,9 @@ export function slugify(
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   if (!base) base = fallback;
-  // Slug-space and id-space must stay disjoint: services route
-  // UUID-shaped refs to the id column (stable-handle acceptance), so a
-  // verbatim-UUID slug would make the row unreachable by its own slug.
+  // ⚠ Slug-space and id-space must stay DISJOINT: services route UUID-shaped
+  // refs to the id column, so a verbatim-UUID slug makes the row unreachable by
+  // its own slug.
   if (isUuid(base)) base = `${base}-x`;
   const existing = new Set(existingSlugs);
   let slug = base;

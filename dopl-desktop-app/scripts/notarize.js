@@ -29,8 +29,8 @@ module.exports = async function (context) {
     return;
   }
 
-  // L6: prefer a keychain profile when DOPL_NOTARY_PROFILE is set (no password on
-  // the command line at all); otherwise fall back to Apple ID + app password.
+  // ⚠ Prefer a keychain profile when DOPL_NOTARY_PROFILE is set — no password on the command
+  // line at all. Otherwise fall back to Apple ID + app password.
   const profile = process.env.DOPL_NOTARY_PROFILE;
   const appleId = process.env.APPLE_ID;
   const password = process.env.APPLE_APP_SPECIFIC_PASSWORD;
@@ -57,7 +57,7 @@ module.exports = async function (context) {
   // Create a zip for notarization submission.
   const zipPath = path.join(context.appOutDir, 'notarize.zip');
   console.log(`  • Zipping ${appPath} for notarization...`);
-  // L6: no shell — args are passed as an array (nothing interpolated into a shell string).
+  // ⚠ No shell: args are passed as an ARRAY, nothing interpolated into a shell string.
   execFileSync('ditto', ['-c', '-k', '--keepParent', appPath, zipPath], { stdio: 'inherit' });
 
   console.log('  • Submitting to Apple notarization service...');

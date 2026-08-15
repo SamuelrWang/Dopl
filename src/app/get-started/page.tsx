@@ -1,28 +1,15 @@
 /**
- * `/get-started` — where a web sign-in ends and the desktop app begins.
+ * `/get-started` — where a web sign-in ends and the desktop app begins. Funnel: landing "Get
+ * Started" → `/login` → here. The dmg downloads on mount; the last step sends the user into the
+ * app for the browser-OAuth handoff (`/auth/desktop-start` → `dopl://auth`). Capturing the
+ * account BEFORE the download is the point: install drop-off becomes countable.
  *
- * THE FUNNEL. Landing page "Get Started" → `/login` (which is also the signup
- * surface) → here. The dmg starts downloading on mount, the install steps name
- * the real file, and the last step sends the user into the app to sign in again
- * — the browser-OAuth handoff (`/auth/desktop-start` → `dopl://auth`) that has
- * always been there. Capturing the account BEFORE the download is the whole
- * point: install drop-off becomes recoverable and countable instead of invisible.
- * `src/features/marketing/constants.ts` carries the argument.
+ * ⚠ AUTH-REQUIRED TWICE: deliberately absent from `proxy.ts` PUBLIC_ROUTES, and the `getUser()`
+ * below is the second lock — the middleware decides from LOCALLY verified claims and this from
+ * GoTrue; the stricter wins.
  *
- * AUTH-REQUIRED, VIA THE MIDDLEWARE AND AGAIN HERE. `/get-started` is
- * deliberately absent from `proxy.ts` PUBLIC_ROUTES, so a signed-out visitor is
- * bounced to `/login?redirectTo=/get-started` and returns here the moment they
- * have an account. The `getUser()` check below is the second lock, the same one
- * every other page keeps: the middleware decides from LOCALLY verified claims and
- * this decides from GoTrue, and where they disagree the stricter one wins.
- *
- * IT IS ALSO THE RETIREMENT PLAN'S LANDING SPOT.
- * `docs/migration-research/website-retirement-plan.md` §2.2 specifies a page for
- * signed-in users whose app route has been retired ("Dopl now lives in the
- * desktop app… your data is intact") behind the Stage B `WEBSITE_RETIRED` flag.
- * That is this page — same audience state (signed in), same message, same
- * download — so Stage B's redirect map should point at `/get-started` rather
- * than mint a second `/retired` that would drift from it.
+ * Also the retirement plan's landing spot (§2.2): same audience, message and download, so Stage
+ * B's redirect map points here rather than minting a `/retired` that would drift.
  */
 
 import { redirect } from "next/navigation";
@@ -41,19 +28,16 @@ export const metadata = {
   description: "Download the Dopl desktop app and finish setting up your account.",
 };
 
-/** The asset name is read per request (behind the resolver's own 10-minute
- *  revalidate), so a release published five minutes ago is named correctly. */
+/** Asset name read per request (behind the resolver's 10-minute revalidate). */
 export const dynamic = "force-dynamic";
 
 export default async function GetStartedPage() {
   const user = await getUser();
-  // Carry the destination so the bounce is a round trip, not a dead end — the
-  // middleware's own bounce does the same, and `post-auth-landing.ts` honours it.
+  // Carry the destination so the bounce is a round trip; `post-auth-landing.ts` honours it.
   if (!user) redirect(`/login?redirectTo=${encodeURIComponent(WEB_POST_AUTH_LANDING)}`);
 
-  // Never throws, and `null` is a normal answer: the copy drops the file name
-  // rather than printing a version that might not be the one on disk. The
-  // download button beside it degrades to the releases page on the same failure.
+  // Never throws; `null` is normal — the copy drops the file name rather than printing a version
+  // that might not be the one on disk. The button degrades to the releases page.
   const asset = await resolveMacDownloadAsset();
 
   return <GetStartedScreen asset={asset} />;

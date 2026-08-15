@@ -19,9 +19,9 @@ interface Props {
 }
 
 /**
- * Members section — member list (admins can re-role/remove), invite
- * button, and pending invitations. Team management and per-member
- * detail (teams, effective access) live on the full Members page.
+ * Members section — roster (admins re-role/remove), invite button, pending
+ * invitations. Team management and per-member detail live on the full Members
+ * page.
  */
 export function MembersSection({
   workspaceSegment,
@@ -31,10 +31,9 @@ export function MembersSection({
 }: Props) {
   const canManage = meetsMinRole(role, "admin");
   const [inviteOpen, setInviteOpen] = useState(false);
-  // No post-write refresh for the roster or the teams: `MembersTab`'s writes
-  // are on the mutation layer and patch the very caches these reads render
-  // from, so the refetch they used to trigger is the round trip that layer
-  // exists to remove. `InviteDialog` is not converted yet and keeps its own.
+  // ⚠ No post-write refresh for roster/teams on purpose: `MembersTab`'s writes
+  // go through the mutation layer, which patches the very caches these reads
+  // render from. `InviteDialog` isn't converted yet and keeps its own refresh.
   const { members, loading } = useMembers(workspaceSegment);
   const { invitations, refresh: refreshInvitations } = useInvitations(
     workspaceSegment,

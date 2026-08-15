@@ -8,32 +8,24 @@ import {
 import { stripNullBytes } from "./repository";
 
 /**
- * BULK write I/O for the ontology feature — the set-at-a-time forms of the
- * single-row writes in `./repository.ts`.
+ * BULK write I/O — set-at-a-time forms of the single-row writes in
+ * `./repository.ts`. Separate module because they serve a different caller:
+ * `repository.ts` is the API/MCP create-update surface (one gesture, one row);
+ * these serve the new-workspace seed, which materialises a whole authored graph
+ * in front of the post-signup redirect.
  *
- * They live in their own module rather than beside their single-row
- * counterparts because they answer a different question. `repository.ts`
- * serves the API and MCP create/update surfaces, where a write is one user
- * gesture on one row; these serve the new-workspace seed, which materialises
- * a whole authored graph at once and used to do it ~34 awaited round-trips at
- * a time, in front of the post-signup redirect.
- *
- * Same conventions as `repository.ts`: no business logic, no auth checks, and
- * the service-role client bypasses RLS so every row carries its
- * `workspace_id` explicitly.
+ * Same conventions as `repository.ts`: no business logic, no auth checks, every
+ * row carries `workspace_id` explicitly (service-role bypasses RLS).
  */
 
 /**
- * Insert many objects in ONE statement, with every column set at insert
- * time. The seed used to `insertObject` then `updateObject` the SAME row
- * to add `subtitle`/`template` — two round-trips per object, ×9 objects,
- * all in front of the post-signup redirect. `insertObject` stays narrow
- * (name + attributes/methods) because that IS the create surface the API
- * and MCP expose; this is the seed's bulk form.
+ * Insert many objects in ONE statement, every column set at insert time.
+ * `insertObject` stays narrow (name + attributes/methods) because that IS the
+ * API/MCP create surface; this is the seed's bulk form.
  *
- * `id` is caller-supplied so the memberships and relationships that
- * reference these objects can be built before the insert resolves — no
- * dependence on `RETURNING` order, and no second pass.
+ * `id` is caller-supplied so memberships/relationships referencing these
+ * objects can be built before the insert resolves — no dependence on
+ * `RETURNING` order, no second pass.
  */
 export async function insertObjects(
   inputs: Array<{
@@ -97,13 +89,10 @@ export async function insertMemberships(
 
 
 /**
- * Insert many relationships in ONE statement. Distinct from
- * `replaceRelationshipsForSource`, which is a replace-set (delete + insert)
- * per source object: this is the ADD form, for a caller that knows nothing
- * exists yet — the new-workspace seed, whose objects were created moments
- * earlier in the same call. Using the replace form there meant a delete +
- * an insert per source object, all serial, to clear rows that could not
- * exist.
+ * Insert many relationships in ONE statement. ⚠ Not
+ * `replaceRelationshipsForSource` — that is a replace-set (delete + insert per
+ * source object). This is the ADD form, for a caller that knows nothing exists
+ * yet (the seed's objects were created moments earlier in the same call).
  */
 export async function insertRelationships(
   workspaceId: string,

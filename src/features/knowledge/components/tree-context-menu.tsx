@@ -17,23 +17,20 @@ interface Props {
   onRename: (item: ContextMenuItem) => void;
   onMove: (item: ContextMenuItem) => void;
   onDelete: (item: ContextMenuItem) => void;
-  /** Download this row — a folder zips its subtree, an entry exports a
-   *  single `.md`. Always available (read action), independent of
-   *  `canEdit`. */
+  /** Folder zips its subtree, entry exports one `.md`. Always available —
+   *  read action, independent of `canEdit`. */
   onDownload: (item: ContextMenuItem) => void;
   onClose: () => void;
-  /** When false, hide write actions (Rename / Move / Delete) entirely
-   *  — the user is read-only on this resource and the server would
-   *  reject the call anyway. (Audit A-013.) When the access fetch is
-   *  still pending, treat as `true` so admins/owners don't see a
-   *  flash of an actions-less menu. */
+  /** False hides Rename / Move / Delete entirely: caller is read-only and the
+   *  server would reject anyway (Audit A-013). ⚠ While the access fetch is
+   *  pending pass `true`, or admins/owners flash an actions-less menu. */
   canEdit?: boolean;
 }
 
 /**
- * Cursor-anchored context menu for tree rows — the shared Popover in
- * coordinate mode, so it clamps to the viewport and closes on
- * click-outside, Escape, or a menu-item click.
+ * Cursor-anchored context menu for tree rows: shared Popover in coordinate
+ * mode, so it clamps to the viewport and closes on click-outside, Escape, or
+ * a menu-item click.
  */
 export function TreeContextMenu({
   x,

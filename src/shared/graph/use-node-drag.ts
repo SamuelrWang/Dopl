@@ -12,7 +12,7 @@ import {
 } from "./drag-math";
 import type { NodeLayout, Point } from "./types";
 
-/** Live drag offset in world space (dx/dy from the node's start position). */
+/** Live drag offset in world space (dx/dy from the node's start pos). */
 export interface NodeDragState {
   nodeId: string;
   dx: number;
@@ -20,7 +20,7 @@ export interface NodeDragState {
 }
 
 export interface UseNodeDragParams {
-  /** Current effective positions (id → {x,y,width}); the drag start basis. */
+  /** Effective positions (id → {x,y,width}) — the drag-start basis. */
   positions: Record<string, NodeLayout>;
   /** Fires ONCE on release with the node's final (snapped) position. */
   onDragEnd: (nodeId: string, position: Point) => void;
@@ -37,7 +37,7 @@ export interface UseNodeDragParams {
 export interface UseNodeDrag {
   /** Null unless a drag is in progress (past the threshold). */
   drag: NodeDragState | null;
-  /** True while dragging — guard a node's onClick to swallow the post-drag click. */
+  /** ⚠ Guard a node's onClick with this to swallow the post-drag click. */
   isDragging: boolean;
   /** Attach to a node card's `onPointerDown`. */
   onNodePointerDown: (nodeId: string, e: ReactPointerEvent) => void;
@@ -59,13 +59,11 @@ interface Session {
 }
 
 /**
- * Pointer-based dragging for absolutely-positioned node cards in a
- * scrollable world. A press only becomes a drag past a small threshold
- * (so clicks still select); once dragging it captures the pointer, tracks
- * the world delta (accounting for mid-drag scroll), gently auto-scrolls at
- * the container edges, snaps to a grid, and cancels on Escape. Fires
- * `onDragEnd` exactly once on release — persistence is debounced upstream
- * (see `useGraphPositions`). Touch-safe via pointer events.
+ * Pointer dragging for absolutely-positioned node cards in a scrollable
+ * world. Press → drag only past a threshold (clicks still select); then
+ * pointer capture, world delta (accounting for mid-drag scroll), edge
+ * auto-scroll, grid snap, Escape cancels. `onDragEnd` fires exactly once on
+ * release — persistence debounced upstream (`useGraphPositions`).
  */
 export function useNodeDrag({
   positions,
@@ -79,8 +77,8 @@ export function useNodeDrag({
   const sessionRef = useRef<Session | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Latest props read through refs so the window listeners bound for one
-  // drag session never see stale positions / callbacks.
+  // ⚠ Latest props via refs: window listeners bound for one drag session
+  // would otherwise see stale positions / callbacks.
   const onDragEndRef = useRef(onDragEnd);
   const positionsRef = useRef(positions);
   const gridRef = useRef(grid);
@@ -160,8 +158,7 @@ export function useNodeDrag({
     [scrollRef, stopAutoScroll]
   );
 
-  // The window handlers are stable identities kept in refs so add/remove
-  // pair up regardless of render.
+  // ⚠ Stable handler identities in refs so add/remove pair up across renders.
   const handlersRef = useRef<{
     move: (e: PointerEvent) => void;
     up: (e: PointerEvent) => void;
@@ -191,8 +188,8 @@ export function useNodeDrag({
     if (s.moved) e.preventDefault();
   };
   handlersRef.current.up = () => finish(true);
-  // A cancelled pointer (OS gesture takeover, touch interruption) never lands
-  // the drag — abandon it like Escape rather than committing a partial move.
+  // Cancelled pointer (OS gesture, touch interruption) → abandon like Escape;
+  // never commit a partial move.
   handlersRef.current.cancel = () => finish(false);
   handlersRef.current.key = (e: KeyboardEvent) => {
     if (e.key === "Escape") finish(false);
@@ -208,7 +205,7 @@ export function useNodeDrag({
       try {
         el.setPointerCapture(e.pointerId);
       } catch {
-        // Capture is best-effort; window listeners still track the drag.
+        // Best-effort; window listeners still track the drag.
       }
       sessionRef.current = {
         nodeId,

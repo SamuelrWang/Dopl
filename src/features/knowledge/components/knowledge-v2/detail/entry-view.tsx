@@ -19,19 +19,18 @@ interface Props {
   /** Pull the latest body when the tab refocuses and the editor is clean. */
   onFocusRefetch: () => void;
   /** Surfaces the live editor so the detail-panel header band can host the
-   *  formatting toolbar (the built-in floating pill is suppressed here). */
+   *  toolbar; the built-in floating pill is suppressed here. */
   onEditor?: (editor: Editor | null) => void;
 }
 
 /**
- * File view — the real rich-text editor with full v1 robustness (conflict-safe
- * autosave, focus-refetch, presence, agent-facing description).
+ * File view: rich-text editor with conflict-safe autosave, focus-refetch,
+ * presence, agent-facing description.
  *
- * DocPane mounts ONLY once the full entry (body + fresh `updated_at`) is in
- * hand — never the body-stripped tree entry. Mounting on tree metadata let a
- * title edit during the load window autosave `body: ""` over the whole
- * document, and seeded the concurrency token from possibly-stale tree data
- * (phantom "edited elsewhere" conflicts).
+ * ⚠ DocPane mounts ONLY once the FULL entry (body + fresh `updated_at`) is in
+ * hand, never the body-stripped tree entry. On tree metadata, a title edit
+ * during the load window autosaves `body: ""` over the whole document, and the
+ * concurrency token seeds from stale data (phantom "edited elsewhere").
  */
 export function EntryView({
   base,

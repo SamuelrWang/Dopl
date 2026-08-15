@@ -19,11 +19,8 @@ interface McpConnectStepProps {
 
 type Client = "claude" | "codex";
 
-/**
- * Onboarding step 2 — connect an AI agent over MCP. Light theme to match the
- * login surface. Leads with the paste-to-connect prompt + a live status;
- * manual setup (server name/URL + per-client steps) is tucked behind a toggle.
- */
+/** Onboarding step 2 — connect an agent over MCP. Light theme matching login.
+ *  Paste-to-connect prompt + live status; manual setup behind a toggle. */
 export function McpConnectStep({ connected, finishing, onContinue, onSkip, showSkip = true }: McpConnectStepProps) {
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   useEffect(() => {

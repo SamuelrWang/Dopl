@@ -1,15 +1,12 @@
 /**
- * Tracks in-flight async persists so a caller can tell whether a write is
- * still landing. Needed because the merge-scheduler deletes a pending key
- * BEFORE awaiting its runner, so `pendingKeys()` reads empty during the
- * actual network PATCH — leaving an "adopt when idle" guard blind to a write
- * still in flight (it could revert a just-dragged card mid-PATCH).
+ * Tracks in-flight async persists. ⚠ Needed because the merge-scheduler deletes a
+ * pending key BEFORE awaiting its runner, so `pendingKeys()` reads empty during
+ * the actual network PATCH — leaving an "adopt when idle" guard blind to a write
+ * still in flight.
  *
- * `busy()` stays true from the moment a run starts until its promise settles;
- * `idle()` resolves once every in-flight run has settled — used to serialize
- * a reset write strictly AFTER any drag write already in flight (so the
- * empty-`{}` reset can't be overtaken by a late drag PATCH). Framework-
- * agnostic and synchronously testable.
+ * `busy()` is true from run start until the promise settles; `idle()` resolves
+ * once every in-flight run has settled, which serializes a reset write strictly
+ * AFTER any drag write already in flight.
  */
 export interface PersistGate {
   /** Run `fn`, counting it as in-flight until its promise settles. */

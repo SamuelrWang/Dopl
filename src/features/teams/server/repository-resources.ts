@@ -3,13 +3,11 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { AccessMode, TeamResourceType } from "../access-levels";
 
 /**
- * THE GRANTABLE RESOURCES THEMSELVES — the only part of the teams repository
- * that reads or writes another feature's table, split out of `repository.ts`
- * (2026-08-08, §2 cap). A grant row says WHICH resource; these functions are
- * what knows where that resource lives, what its name column is called and who
- * counts as its creator. `repository-grants.ts` owns the rows that point here.
- *
- * Raw Supabase I/O, every query filtered by `workspace_id` (§8).
+ * The grantable resources themselves — the only part of the teams repository
+ * that touches another feature's table. A grant row says WHICH resource;
+ * this file knows where it lives, its name column and its creator column.
+ * `repository-grants.ts` owns the rows pointing here.
+ * ⚠ Raw Supabase I/O: every query filtered by `workspace_id`.
  */
 
 export interface TeamsModeResourceRow {
@@ -64,20 +62,13 @@ export interface ResourceAccessMeta {
 }
 
 /**
- * WHERE EACH GRANTABLE RESOURCE TYPE ACTUALLY LIVES.
- *
- * `team_resource_access.resource_id` is polymorphic across FOUR tables, and
- * every one of them spells "the name" and "the creator" differently. The two
- * functions below used to decide the table with an inline ternary each —
- * `knowledge_base ? … : workflows` — which silently routed `skill`, `chat` and
- * `chat_folder` into the (since deleted) `workflows` table. A Supabase
- * `.update()` that matches zero rows returns `{ error: null }`, so the miss did
- * not throw, did not 500, and did not change anything: a skill's scope toggle
- * "succeeded" and reverted on the next refetch.
- *
- * `satisfies Record<TeamResourceType, …>` is the load-bearing part — adding a
- * fifth resource type now fails to compile here instead of quietly resolving to
- * the wrong table.
+ * Where each grantable resource type lives.
+ * `team_resource_access.resource_id` is polymorphic across FOUR tables, each
+ * spelling "name" and "creator" differently.
+ * ⚠ `satisfies Record<TeamResourceType, …>` is load-bearing: a fifth resource
+ * type must fail to compile here rather than resolve to the wrong table. A
+ * Supabase `.update()` matching zero rows returns `{ error: null }`, so a
+ * mis-routed write "succeeds" silently and reverts on the next refetch.
  */
 const RESOURCE_TABLES = {
   knowledge_base: { table: "knowledge_bases", nameCol: "name", creatorCol: "created_by" },
@@ -89,12 +80,9 @@ const RESOURCE_TABLES = {
   { table: string; nameCol: string; creatorCol: string }
 >;
 
-/**
- * access_mode + creator + name for one resource; null if missing.
- * Soft-deleted KBs are INCLUDED on purpose: access checks must still
- * resolve for trash restore (existence gating for reads happens in the
- * knowledge service's own lookups, which already exclude deleted rows).
- */
+/** access_mode + creator + name for one resource; null if missing.
+ *  ⚠ Soft-deleted KBs INCLUDED on purpose — access checks must resolve for
+ *  trash restore; read gating happens in the knowledge service's lookups. */
 export async function getResourceAccessMeta(
   workspaceId: string,
   resourceType: TeamResourceType,
@@ -110,9 +98,8 @@ export async function getResourceAccessMeta(
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  // Double cast: the projection is a template literal, which supabase-js's
-  // select-string parser can't resolve to a row type (it yields a ParserError).
-  // The columns come from RESOURCE_TABLES, so the shape is known here.
+  // Double cast: template-literal projection yields a ParserError from
+  // supabase-js's select-string parser. Columns come from RESOURCE_TABLES.
   const row = data as unknown as Record<string, unknown>;
   return {
     name: row[spec.nameCol] as string,
@@ -123,15 +110,11 @@ export async function getResourceAccessMeta(
 
 /**
  * Flip one resource row between `workspace` and `teams` scope.
- *
- * CHATS AND CHAT FOLDERS ARE REFUSED, not routed. Their scope is not a column
- * you may set in isolation: a folder's scope is authoritative for every chat
- * filed in it and is PROPAGATED to those rows (migration 20260708120000), and
- * a filed chat may not be scoped directly at all. Writing `chats.access_mode`
- * from here would desync the folder from its contents — quietly, since the
- * write itself succeeds. The chats service owns those transitions. Throwing
- * beats the old behavior (a no-op UPDATE against the wrong table) and beats a
- * correct-looking write that breaks an invariant.
+ * ⚠ CHATS AND CHAT FOLDERS ARE REFUSED, not routed: a folder's scope is
+ * authoritative for every chat filed in it and PROPAGATES to those rows, and
+ * a filed chat may not be scoped directly. Writing `chats.access_mode` here
+ * would desync folder from contents — silently, since the write succeeds.
+ * The chats service owns those transitions.
  */
 export async function setResourceAccessModeRow(
   workspaceId: string,

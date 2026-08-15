@@ -4,34 +4,24 @@ import { useEffect } from "react";
 import { workspaceDeepLink } from "../url";
 
 /**
- * WHERE A WEB JOIN ENDS.
+ * Where a web join ends. `/join/{token}` and `/invite/{token}` survive
+ * retirement because an emailed link opens in a BROWSER; everything after
+ * belongs in the app. ⚠ The web tree cannot render a workspace — Stage D
+ * deleted `src/app/[workspaceSlug]/**` and `/{slug}-{publicId}` 302s to
+ * `/get-started`.
  *
- * `/join/{token}` and `/invite/{token}` survive the website retirement because
- * a link in an email or a Slack message opens in a BROWSER — there is no way to
- * make the first hop land in the app. Everything after it, though, belongs in
- * the app: the web tree cannot render a workspace any more (Stage D deleted
- * `src/app/[workspaceSlug]/**`; `/{slug}-{publicId}` 302s to `/get-started`),
- * so the two cards used to finish a successful join by pushing a URL that
- * bounced the new member onto a download page with no explanation.
+ * ⚠ THE BUTTON IS THE CONTRACT, auto-open is the enhancement: browsers refuse
+ * protocol launches with no user gesture, silently and per-engagement-state.
+ * Same shape as `src/app/auth/desktop-handoff/page.tsx`.
  *
- * THE BUTTON IS THE CONTRACT, THE AUTO-OPEN IS THE ENHANCEMENT. A browser may
- * refuse a protocol launch that no user gesture asked for — silently, and
- * differently per browser and per engagement state — so the anchor is what this
- * component promises and the effect is a best-effort head start. Same shape as
- * `src/app/auth/desktop-handoff/page.tsx`, which is the other producer of
- * `dopl://` links and has run this pattern since the desktop OAuth handoff
- * shipped.
- *
- * AND A DOWNLOAD LINK, ALWAYS. Half the audience for a join link is someone who
- * has never installed Dopl, for whom the deep link cannot resolve to anything;
- * `/download` is on the retirement KEEP list precisely because it is how the app
- * is obtained.
+ * A download link ALWAYS: half the audience never installed Dopl, and
+ * `/download` is on the retirement KEEP list.
  */
 
 interface Props {
   /** The workspace the caller is now a member of. */
   workspace: { slug: string; publicId: string };
-  /** What just happened — the one thing that differs between the two cards. */
+  /** What just happened — the one difference between the two cards. */
   heading: string;
 }
 
@@ -39,8 +29,8 @@ export function DesktopHandoffPanel({ workspace, heading }: Props) {
   const deepLink = workspaceDeepLink(workspace);
 
   useEffect(() => {
-    // Assigning a custom scheme does NOT unload the document, so the card (and
-    // its button) stays on screen whether or not the OS had a handler.
+    // Assigning a custom scheme does NOT unload the document, so the card
+    // stays on screen whether or not the OS had a handler.
     window.location.href = deepLink;
   }, [deepLink]);
 
@@ -69,18 +59,14 @@ export function DesktopHandoffPanel({ workspace, heading }: Props) {
 }
 
 /**
- * THE PENDING STATE, WHICH GETS NO LINK.
+ * ⚠ Pending state gets NO deep link. A join request is approval-gated
+ * (`join-links.ts › resolveJoinRequest`), so there is no membership yet and
+ * `POST /api/boot` is membership-scoped and fail-closed — the app would land on
+ * a 404 card.
  *
- * A join request is approval-gated (`join-links.ts › resolveJoinRequest`), so
- * at this moment there is no membership and `dopl://open/{segment}` would
- * resolve to a workspace the caller cannot boot — `POST /api/boot` is
- * membership-scoped and fail-closed, so the app would land on a 404 card. The
- * honest answer is copy, and copy only.
- *
- * There is deliberately NO "we'll let you know" here. Nothing on the web side
- * watches for the approval, and the approved requester's notice is the DESKTOP
- * app's (`JoinRequestNoticesCore`, mounted in the SPA shell) — so what this says
- * is exactly what is true: open the app, and it will tell you.
+ * Deliberately no "we'll let you know": nothing web-side watches for approval;
+ * the approved requester's notice is the DESKTOP app's
+ * (`JoinRequestNoticesCore`, mounted in the SPA shell).
  */
 export function JoinPendingPanel({ heading }: { heading: string }) {
   return (

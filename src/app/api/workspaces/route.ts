@@ -9,12 +9,8 @@ import {
   listMyWorkspacesWithRole,
 } from "@/features/workspaces/server/service";
 
-/**
- * GET /api/workspaces — list every workspace the caller is an active
- * member of, with the caller's role on each. Response shape is a
- * superset of the pre-role version (existing clients ignore the new
- * field), and the MCP `list_workspaces` tool reads it directly.
- */
+/** GET — every workspace the caller actively belongs to, with their role. The MCP
+ *  `list_workspaces` tool reads this directly. */
 export const GET = withUserAuth(async (_request, { userId }) => {
   try {
     const workspaces = await listMyWorkspacesWithRole(userId);
@@ -24,9 +20,7 @@ export const GET = withUserAuth(async (_request, { userId }) => {
   }
 });
 
-/**
- * POST /api/workspaces — create a new workspace owned by the caller.
- */
+/** POST — create a workspace owned by the caller. */
 export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
   try {
     const input = await parseJson(request, WorkspaceCreateSchema);

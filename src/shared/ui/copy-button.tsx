@@ -5,9 +5,8 @@ import { cn } from "@/shared/lib/utils";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 
 /**
- * Icon-only copy affordance — quiet Copy→Check swap for snippet rows
- * and code wells. Surfaces with their own chrome (labeled CTAs, toasts)
- * compose `useCopyToClipboard` directly instead.
+ * Icon-only copy affordance (Copy→Check swap). Surfaces with their own chrome
+ * (labelled CTAs, toasts) compose `useCopyToClipboard` directly instead.
  */
 export function CopyButton({
   text,
@@ -16,11 +15,9 @@ export function CopyButton({
   className,
 }: {
   text: string;
-  /** Icon size in px. */
   size?: number;
   /** Tooltip + accessible name. */
   label?: string;
-  /** Layout/color additions on the button element. */
   className?: string;
 }) {
   const { copied, copy } = useCopyToClipboard();

@@ -1,20 +1,11 @@
 /**
- * `GET /api/workspaces/[workspaceSlug]/overview-counts` — the overview
- * page's header, in one round trip.
- *
- * THE PROPERTY THIS FILE EXISTS FOR: the counts are workspace-wide numbers
- * read through the service-role client (RLS bypassed), so membership is the
- * ONLY thing standing between a stranger and a headcount of someone else's
- * workspace. `resolveApiWorkspace` is membership-scoped and returns null for
- * a non-member — this file pins that a null resolution 404s BEFORE any count
- * query runs. A route that counted first and checked after would leak the
- * numbers through timing, and a 403 would confirm the workspace exists; the
- * 404 keeps existence itself unobservable.
- *
- * It also pins the two degradation rules the RSC page had, since the SPA now
- * depends on them: a failed MCP-status read degrades to `false` (the badge is
- * cosmetic; a 500 on the workspace home is not), while a failed COUNT read is
- * the service's business — the route does not invent its own zeroes.
+ * `GET /api/workspaces/[workspaceSlug]/overview-counts`.
+ * ⚠ The counts bypass RLS (service-role client), so membership is the ONLY thing between a
+ * stranger and a headcount of someone else's workspace. A null `resolveApiWorkspace` must 404
+ * BEFORE any count query runs — counting first leaks through timing, and a 403 would confirm the
+ * workspace exists.
+ * Also pins two degradation rules: a failed MCP-status read → `false` (cosmetic badge), while a
+ * failed COUNT read is the service's business — the route invents no zeroes.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -111,8 +102,7 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-counts", () => {
   });
 
   it("404s a non-member WITHOUT running a single count query", async () => {
-    // `resolveApiWorkspace` returning null IS the membership denial — the
-    // counts bypass RLS, so a leak here is a real one.
+    // A null resolution IS the membership denial; the counts bypass RLS.
     mockResolve.mockResolvedValue(null);
 
     const res = await GET(getReq(), routeCtx());
@@ -146,12 +136,8 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-counts", () => {
   });
 
   it("does not echo the raw exception text in that 500", async () => {
-    // The tail used to put `err.message` straight into `error.message`. A count
-    // read goes through the service-role client, so what lands in `message` is
-    // whatever Postgres/PostgREST said — relation and RPC names (ENGINEERING §9
-    // "Never return raw error strings"; LAUNCH-READINESS-ROADMAP §4). The code
-    // is what agents parse and is unchanged; the human text is what is
-    // sanitized.
+    // ⚠ Raw `err.message` from a service-role read carries relation and RPC names
+    // (ENGINEERING §9). The `code` agents parse is unchanged; the human text is sanitized.
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockCounts.mockRejectedValue(
       new Error('relation "workspace_counts_v2" does not exist')

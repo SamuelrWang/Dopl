@@ -5,13 +5,12 @@ import type { TeamGrant } from "../types";
 import { mapTeamGrantRow, type TeamGrantDbRow } from "./dto";
 
 /**
- * THE GRANT ROWS — every read and write of `team_resource_access`, split out of
- * `repository.ts` (2026-08-08, §2 cap). Nothing here touches the resource's own
- * table: what a grant POINTS AT lives in `repository-resources.ts`, and a grant
- * row is only ever (team, resource_type, resource_id, level).
- *
- * Raw Supabase I/O, and every query that is not pinned to a single `team_id`
- * is filtered by `workspace_id` (§8).
+ * Every read and write of `team_resource_access`. Nothing here touches the
+ * resource's own table — what a grant POINTS AT lives in
+ * `repository-resources.ts`. A grant row is only ever
+ * (team, resource_type, resource_id, level).
+ * ⚠ Raw Supabase I/O: every query not pinned to a single `team_id` is
+ * filtered by `workspace_id`.
  */
 
 const GRANT_COLS = "team_id, resource_type, resource_id, level";
@@ -81,7 +80,7 @@ export async function upsertGrant(
   if (error) throw error;
 }
 
-/** Insert read grants only where no grant exists yet (autoGrant never downgrades). */
+/** ⚠ Insert only where no grant exists yet — never downgrades. */
 export async function insertReadGrantsIfMissing(
   workspaceId: string,
   resourceType: TeamResourceType,
@@ -104,14 +103,12 @@ export async function insertReadGrantsIfMissing(
 }
 
 /**
- * How many resource ids one batched grant statement addresses.
- *
- * The bound is the REQUEST, not the database: a PostgREST `.in()` filter is
- * serialised into the URL, and 36-char uuids run ~40 bytes each, so an
- * unchunked delete over a big folder would push past the gateway's URL limit
- * and 414 instead of erroring usefully. 100 ids ≈ 4KB of query string, half of
- * the smallest limit in the path. The upsert chunk is measured in ROWS because
- * its payload is the body: resourceIds × teamIds.
+ * Resource ids per batched grant statement.
+ * ⚠ The bound is the REQUEST, not the DB: PostgREST `.in()` serialises into
+ * the URL and uuids run ~40 bytes each, so an unchunked delete over a big
+ * folder 414s at the gateway. 100 ids ≈ 4KB, half the smallest limit in the
+ * path. The upsert chunk is in ROWS because its payload is the body
+ * (resourceIds × teamIds).
  */
 const GRANT_ID_CHUNK = 100;
 const GRANT_ROW_CHUNK = 500;
@@ -122,12 +119,9 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/**
- * Drop every team grant on MANY resources of one type — the set form of
- * `deleteGrantsForResource`, for replace-set propagation (a chat folder
- * re-scoping rewrites the grants of every chat filed in it). One statement
- * per chunk instead of one per resource.
- */
+/** Set form of `deleteGrantsForResource`, for replace-set propagation (a
+ *  folder re-scope rewrites every filed chat's grants). One statement per
+ *  chunk, not per resource. */
 export async function deleteGrantsForResources(
   workspaceId: string,
   resourceType: TeamResourceType,
@@ -146,11 +140,8 @@ export async function deleteGrantsForResources(
   }
 }
 
-/**
- * `insertReadGrantsIfMissing` over the cross product of many resources and
- * many teams, in one upsert per chunk. Same never-downgrade semantics:
- * existing grants (which may be `write`) are left alone.
- */
+/** `insertReadGrantsIfMissing` over resources × teams, one upsert per chunk.
+ *  ⚠ Same never-downgrade rule: existing (possibly `write`) grants stand. */
 export async function insertReadGrantsForResources(
   workspaceId: string,
   resourceType: TeamResourceType,

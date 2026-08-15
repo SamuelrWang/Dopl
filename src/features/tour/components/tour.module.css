@@ -1,7 +1,6 @@
-/* Layout-only geometry for the tour popover. Colors, type, borders, and
-   shadows come from kit classes (.bento, .concave-field) + design tokens on
-   the elements — this file holds only position, size, spacing, and motion,
-   per the design system's "CSS modules welcome for layout" rule. */
+/* ⚠ Layout-only, per design system's "CSS modules welcome for layout" rule:
+   position, size, spacing, motion. Colors/type/borders/shadows come from kit
+   classes (.bento, .concave-field) + tokens on the elements. */
 
 .popover {
   position: fixed;

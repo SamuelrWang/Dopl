@@ -2,11 +2,10 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Throttled last-active tracking. `resolveMembershipOrThrow` calls this on
- * every authenticated workspace request; the write fires at most once per
- * THROTTLE_MS per (workspace, user) and is never awaited, so the hot path
- * pays zero added reads or latency. The per-instance Map resets on cold
- * start — the freshly-selected row value caps redundant writes anyway.
+ * Throttled last-active tracking. ⚠ `resolveMembershipOrThrow` calls this on
+ * EVERY authenticated workspace request: the write fires at most once per
+ * THROTTLE_MS per (workspace, user) and is never awaited, so the hot path pays
+ * zero added reads or latency. Per-instance Map resets on cold start.
  */
 const THROTTLE_MS = 5 * 60 * 1000;
 const lastBump = new Map<string, number>();

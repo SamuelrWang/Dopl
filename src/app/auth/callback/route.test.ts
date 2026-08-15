@@ -1,27 +1,14 @@
 /**
- * WHERE `/auth/callback` SENDS PEOPLE, as a matrix.
- *
- * This one handler is the end of four different journeys, and only ONE of them
- * moved when the landing page became auth-first: a plain web sign-in now ends on
- * `/get-started` (the download page) instead of `/canvas` or `/onboarding`. The
- * other three are pinned here because their failure modes are not cosmetic —
- *
- *   • DESKTOP (`?desktop=1`) must end at `/auth/desktop-handoff`, carrying the
- *     app's `state` nonce, or the desktop app can never sign in at all. It must
- *     also never take the onboarding detour (it never did — onboarding happens
- *     in the app) and never see the new landing.
- *   • A DEEP LINK (`?redirectTo=`) must come back to itself: an OAuth consent
- *     screen that loses its query is an authorization that silently fails, and
- *     an invite that loses its token is a person who joined nothing.
- *   • A FIRST-RUN deep link is now the SAME journey. It used to detour through
- *     `/onboarding` carrying the link; F-136 removed that detour, because
- *     `/onboarding` is retired and the retirement hop replaces the query, so the
- *     detour deleted the very link it existed to carry. The walk that proves it
- *     end to end is `src/first-run-deep-link.test.ts`.
- *
- * Only Supabase and the workspace provisioner are mocked; the onboarding mock
- * survives to assert it is never READ. The routing decision under test is the
- * shipping one.
+ * WHERE `/auth/callback` SENDS PEOPLE, as a matrix. Four journeys end at this one handler:
+ *   • DESKTOP (`?desktop=1`) → `/auth/desktop-handoff` carrying the app's `state` nonce, or the
+ *     desktop app can never sign in at all.
+ *   • A DEEP LINK (`?redirectTo=`) must come back to itself — a consent screen that loses its
+ *     query is an authorization that silently fails.
+ *   • A FIRST-RUN deep link is the SAME journey (no `/onboarding` detour). End-to-end walk:
+ *     `src/first-run-deep-link.test.ts`.
+ *   • A plain web sign-in ends on `/get-started`.
+ * Only Supabase and the workspace provisioner are mocked; the onboarding mock survives to assert
+ * it is never READ.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -76,21 +63,14 @@ describe("a plain web sign-in", () => {
   });
 
   it("lands there for a FIRST-RUN user too — onboarding happens in the app", async () => {
-    // The change with the sharpest edge: a brand-new account used to be pushed
-    // through the web survey on its way to installing the app that asks the same
-    // questions. `/onboarding` is on the retirement plan's RETIRE list and the
-    // SPA carries its own.
     state.onboarded = false;
     expect(await destinationOf("?code=abc")).toBe("/get-started");
   });
 
   it("is not diverted by a hostile redirectTo", async () => {
     state.onboarded = false;
-    // Rejected values must not merely fail to redirect off-origin — they must
-    // not count as "this sign-in came from somewhere" either. The branch a
-    // crafted value could once flip is gone (F-136), but the property is what
-    // makes the remaining `explicitPostAuthTarget` callers safe, so it stays
-    // pinned at the surface a real attacker would aim at.
+    // A rejected value must not merely fail to redirect off-origin — it must also not count as
+    // "this sign-in came from somewhere".
     expect(await destinationOf("?code=abc&redirectTo=https%3A%2F%2Fevil.example")).toBe(
       "/get-started"
     );
@@ -118,7 +98,6 @@ describe("the DESKTOP flow is untouched", () => {
   });
 
   it("ignores a redirectTo riding alongside desktop=1", async () => {
-    // The desktop marker wins outright: the session has to reach the app.
     expect(await destinationOf("?code=abc&desktop=1&state=n&redirectTo=%2Fcanvas")).toBe(
       "/auth/desktop-handoff?state=n"
     );
@@ -142,15 +121,8 @@ describe("an explicit deep link comes back to itself", () => {
     ["a join link", "/join/tok_123"],
     ["a password reset", "/auth/reset-password"],
   ])("%s does, for a FIRST-RUN user too (F-136)", async (_label, target) => {
-    // THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACES, deliberately. It
-    // used to read `/onboarding?redirectTo=%2Finvite%2Ftok_123` — the detour
-    // that let the web survey finish an interrupted journey. Web onboarding is
-    // retired: `/onboarding` 302s to `/get-started` and that hop REPLACES the
-    // query, so the detour was deleting the destination it was carrying, and
-    // the retry failed the same way because `onboarded_at` is only stamped
-    // inside the desktop app now. Every target here is on the retirement KEEP
-    // list and none of them reads onboarding state, so the detour had nothing
-    // left to protect. See `src/first-run-deep-link.test.ts` for the walk.
+    // ⚠ No `/onboarding?redirectTo=` detour: that hop REPLACES the query, deleting the
+    // destination it carries. See `src/first-run-deep-link.test.ts`.
     state.onboarded = false;
     expect(await destinationOf(`?code=abc&redirectTo=${encodeURIComponent(target)}`)).toBe(target);
   });

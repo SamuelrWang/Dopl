@@ -1,18 +1,9 @@
 /**
- * Domain types for the knowledge feature.
+ * Domain types (camelCase). snake_case row types + row→domain mappers live in
+ * `server/dto.ts`, server-only so the row schema stays out of client bundles.
  *
- * These are the camelCase shapes the rest of the app sees. The
- * snake_case row types and the row→domain mappers live in `server/dto.ts`
- * (kept server-only so the row schema doesn't leak into client bundles).
- *
- * Knowledge bases are workspace-scoped folder/file trees:
- *   - `KnowledgeBase`    — top-level container, has the agent-write toggle.
- *   - `KnowledgeFolder`  — nestable folder (parent_id self-FK).
- *   - `KnowledgeEntry`   — leaf file. `body` is markdown; tables and
- *                          quotations are markdown syntax, not separate
- *                          entities.
- *
- * Soft-delete: every type carries `deletedAt`. `null` = active.
+ * Bases are workspace-scoped folder/file trees; `KnowledgeEntry.body` is
+ * markdown. Soft-delete: `deletedAt` on every type, `null` = active.
  */
 
 import type { Role } from "@/features/workspaces/types";
@@ -20,25 +11,21 @@ import type { Role } from "@/features/workspaces/types";
 export type KnowledgeEntryType = "note" | "doc" | "transcript" | "imported";
 
 /**
- * Origin of a write call. Set at the route boundary from the auth
- * context (API key → "agent", session cookie → "user"). The service
- * checks this against `KnowledgeBase.agentWriteEnabled` before any
+ * Write origin, set at route boundary: API key → "agent", session cookie →
+ * "user". Checked against `KnowledgeBase.agentWriteEnabled` before any
  * agent-origin mutation.
  */
 export type WriteSource = "user" | "agent";
 
 /**
- * Per-resource visibility (M-10). `public` rows are visible to every
- * workspace member at their role's default access level; `private`
- * rows are owner-only — invisible in lists, search, and the canvas
- * for non-owners (RLS enforces, service layer is belt-and-suspenders).
+ * Per-resource visibility (M-10). `public` = every member at role default
+ * level; `private` = owner-only, invisible in lists/search/canvas to others
+ * (RLS enforces; service layer belt-and-suspenders).
  *
- * For knowledge bases visibility is two-way: the owner or a workspace
- * admin can flip scope via the Sharing settings (narrowing transitions
- * are unchecked). Skills keep the original one-way
- * private → public rule. New items default to `'private'` from the
- * app code (DB column default is `'public'` so existing rows stay
- * visible, but `createBase` / `createSkill` override).
+ * KBs are two-way (owner or admin flips via Sharing settings, narrowing
+ * unchecked); skills stay one-way private → public.
+ * ⚠ DB column default is `'public'` so existing rows stay visible;
+ * `createBase` / `createSkill` override to `'private'` for new items.
  */
 export type Visibility = "public" | "private";
 
@@ -60,32 +47,26 @@ export interface KnowledgeBase {
 }
 
 /**
- * Per-base list-view counters, computed rather than stored — deliberately
- * a SIBLING of `KnowledgeBase` rather than fields on it.
+ * Per-base list-view counters, computed not stored. ⚠ SIBLING of
+ * `KnowledgeBase`, never fields on it: `KnowledgeBase` is hand-mirrored
+ * into `packages/dopl-client/src/knowledge-types.ts` and pinned
+ * field-for-field by `scripts/check-knowledge-type-drift.ts`, so widening
+ * it pushes display-only numbers onto every MCP `kb_*` payload. Keyed by
+ * base id alongside `bases` in the list response, like `ownerNames`.
  *
- * `KnowledgeBase` is one of the four interfaces hand-mirrored into
- * `packages/dopl-client/src/knowledge-types.ts` and pinned field-for-field
- * by `scripts/check-knowledge-type-drift.ts`; widening it would push a
- * display-only number onto every MCP `kb_*` payload. Keyed by base id and
- * carried alongside `bases` in the list response, exactly as `ownerNames`
- * is.
- *
- * `lastEntryUpdatedAt` is CONTENT freshness (newest active entry write),
- * not `KnowledgeBase.updatedAt` — that one moves when the base's own
- * name/description/sharing row is written and stands still while an agent
- * fills the base with files.
+ * `lastEntryUpdatedAt` = CONTENT freshness (newest active entry write),
+ * NOT `KnowledgeBase.updatedAt` (moves on name/description/sharing writes,
+ * stands still while an agent fills the base).
  */
 export interface KnowledgeBaseStats {
   entryCount: number;
   lastEntryUpdatedAt: string | null;
   /**
-   * Summed `octet_length(body)` of the base's live entries — the stored
-   * `knowledge_bases.storage_bytes` counter, NOT a re-sum per request.
-   *
-   * `null` = UNKNOWN, and the distinction is the contract: an EMPTY base is
-   * `0`, while `null` means the counter could not be read (most likely because
-   * this build deployed ahead of its migration). A meter is rendered for `0`
-   * and suppressed for `null` — never drawn empty on a guess.
+   * Stored `knowledge_bases.storage_bytes` counter (summed
+   * `octet_length(body)` of live entries), NOT a re-sum per request.
+   * ⚠ `0` = empty base, `null` = UNKNOWN (counter unreadable, e.g. build
+   * deployed ahead of migration). Meter renders for `0`, suppressed for
+   * `null` — never drawn on a guess.
    */
   storageBytes: number | null;
 }
@@ -96,10 +77,8 @@ export interface KnowledgeFolder {
   knowledgeBaseId: string;
   parentId: string | null;
   name: string;
-  /** Agent-facing summary of the folder's contents (≤300 chars).
-   *  Surfaced in MCP get_tree / list_dir so agents can navigate
-   *  without opening every file. Entries use `excerpt` for the same
-   *  purpose; bases use `description`. */
+  /** Agent-facing summary (≤300 chars), surfaced in MCP get_tree / list_dir.
+   *  Entries use `excerpt`, bases use `description`, same purpose. */
   description: string | null;
   position: number;
   createdBy: string | null;
@@ -126,32 +105,25 @@ export interface KnowledgeEntry {
   deletedAt: string | null;
 }
 
-/**
- * Request-scoped context that every service method takes.
- * Built at the route boundary in `server/service.ts#buildKnowledgeContext`.
- */
+/** Request-scoped context every service method takes. Built at route boundary
+ *  in `server/service.ts#buildKnowledgeContext`. */
 export interface KnowledgeContext {
   workspaceId: string;
   userId: string;
   source: WriteSource;
-  /** Caller's workspace role — used for team-access resolution without refetching membership. */
+  /** Caller's workspace role — team-access resolution without refetching membership. */
   role: Role;
   /**
-   * If the request is authenticated via a workspace-scoped API key,
-   * this is the workspace it's locked to. `null` for session callers
-   * and personal API keys. Service layer reads this to enforce M-10:
-   * workspace-scoped keys must NOT see private items, even ones
-   * owned by the calling user — those keys may be shared between
-   * humans and we don't want a teammate's draft leaking.
+   * Workspace a workspace-scoped API key is locked to; `null` for session
+   * callers and personal API keys. ⚠ M-10 gate: workspace-scoped keys must
+   * NOT see private items even ones owned by the calling user — such keys
+   * may be shared between humans, so a teammate's draft would leak.
    */
   apiKeyWorkspaceId?: string | null;
 }
 
-/**
- * Snapshot of a base's contents, useful for tree views and trash queries.
- * Folders and entries are flat arrays; the UI builds the hierarchy from
- * `parentId` / `folderId`.
- */
+/** Snapshot of a base's contents. Folders and entries are FLAT arrays; UI
+ *  builds hierarchy from `parentId`/`folderId`. */
 export interface KnowledgeTreeSnapshot {
   base: KnowledgeBase;
   folders: KnowledgeFolder[];
@@ -163,9 +135,8 @@ export interface KnowledgeTreeSnapshot {
 }
 
 // ─── Source provider types ──────────────────────────────────────────
-// Canonical home is @/shared/lib/source-types (cross-feature: shared
-// SourceIcon, skills connector chips, canvas panels). Re-exported here
-// for knowledge-internal consumers.
+// Canonical home: @/shared/lib/source-types. Re-exported for
+// knowledge-internal consumers.
 
 export type {
   SourceConnection,

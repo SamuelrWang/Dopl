@@ -8,27 +8,18 @@ import { KnowledgePathConflictError } from "./errors";
 import * as repo from "./repository";
 
 /**
- * Path-based addressing for knowledge bases.
+ * Path addressing. `/`-separated, leading/trailing slashes tolerated, `""` and
+ * `"/"` = base root. Segments match folder `name` or entry `title`,
+ * CASE-SENSITIVE.
  *
- * Path syntax: `/`-separated segments. Leading/trailing slashes are
- * tolerated. `""` and `"/"` both refer to the base root. Segments
- * match by `name` (folders) or `title` (entries) — case-sensitive.
+ * Unique partial indexes make the resolver deterministic — within one
+ * (knowledge_base_id, parent_id) bucket no two active folders share a name and
+ * no two active entries share a title. No fuzzy matching, no "first one wins".
  *
- * The unique partial indexes added in the Item 4 migration guarantee
- * that within a single (knowledge_base_id, parent_id) bucket, no two
- * active folders share a name and no two active entries share a title.
- * That makes the resolver deterministic — no fuzzy matching, no
- * "first one wins" semantics.
- *
- * Resolution rules:
- *   - All non-final segments must resolve to an active folder, else
- *     `PathTraversalError`.
- *   - The final segment may resolve to either a folder or an entry.
- *   - Folder match is tried first at the final segment (matches
- *     filesystem semantics — paths without a trailing-extension can
- *     legitimately reference a folder).
- *   - When neither matches, we return `not_found` rather than throwing
- *     so callers can decide (write-file uses this to mkdir-p).
+ * Rules: non-final segments must resolve to an active folder else
+ * `PathTraversalError`; the final segment may be folder or entry, folder tried
+ * FIRST (extensionless paths can legitimately name a folder); neither match ⇒
+ * `not_found` returned, not thrown, so write-file can mkdir -p on it.
  */
 
 export type ResolvedPath =
@@ -44,11 +35,9 @@ export type ResolvedPath =
 // ─── Path parsing ───────────────────────────────────────────────────
 
 /**
- * Splits a path into clean segments. `"/foo//bar/"` → `["foo", "bar"]`.
- * Empty string returns `[]`. Relative-path sentinels `.` and `..` are
- * dropped (this is a flat name tree, not a filesystem — they have no
- * meaning), so `"../escape"` → `["escape"]` instead of creating a folder
- * literally named `..`.
+ * `"/foo//bar/"` → `["foo", "bar"]`; `""` → `[]`. `.` and `..` DROPPED — flat
+ * name tree, not a filesystem — so `"../escape"` → `["escape"]` rather than a
+ * folder literally named `..`.
  */
 export function parsePath(path: string): string[] {
   return path
@@ -63,21 +52,11 @@ export function pathToString(segments: string[]): string {
 // ─── Resolution ─────────────────────────────────────────────────────
 
 /**
- * Walks a path through the folder tree. Does not traverse into
- * soft-deleted folders. Pure resolver — never throws for missing
- * segments. Returns:
- *   - `{kind:"root"}` when path has no segments.
- *   - `{kind:"folder", folder}` when every segment resolved to a folder.
- *   - `{kind:"entry", folder, entry}` when the final segment matched
- *     an active entry. `folder` is the parent (null = base root).
- *   - `{kind:"not_found", lastFolder, missingSegment}` when ANY
- *     segment didn't resolve. `lastFolder` is the deepest folder
- *     that did resolve (null if even the first segment missed).
- *
- * Callers that want strict resolution (read/delete/move) check
- * `kind === "not_found"` and throw the appropriate error themselves.
- * Callers that mkdir -p (write/create-folder) consume the not_found
- * result directly.
+ * Walks a path through the folder tree, skipping soft-deleted folders. Pure —
+ * NEVER throws on missing segments; strict callers (read/delete/move) check
+ * `kind === "not_found"` themselves, mkdir -p callers consume it directly.
+ * `not_found.lastFolder` = deepest folder that DID resolve; `entry.folder` =
+ * parent (null = base root).
  */
 export async function resolvePath(
   ctx: KnowledgeContext,
@@ -87,7 +66,6 @@ export async function resolvePath(
   const segments = parsePath(path);
   if (segments.length === 0) return { kind: "root" };
 
-  // Walk all-but-last segments as folders. Bail at the first miss.
   let currentFolder: KnowledgeFolder | null = null;
   for (let i = 0; i < segments.length - 1; i++) {
     const next = await repo.findActiveFolderByName(
@@ -106,7 +84,7 @@ export async function resolvePath(
     currentFolder = next;
   }
 
-  // Final segment: try folder first, then entry.
+  // Final segment: folder first, then entry.
   const lastSegment = segments[segments.length - 1];
   const folderMatch = await repo.findActiveFolderByName(
     baseId,
@@ -128,19 +106,11 @@ export async function resolvePath(
     return { kind: "entry", folder: currentFolder, entry: entryMatch };
   }
 
-  // Slug-based fallback. The strict matcher above requires exact-string
-  // title equality; this catches the common write-with-title-then-read-
-  // with-sluggy-path footgun (write `title: "LinkedIn Job Alerts"`,
-  // read `path: "linkedin-job-alerts.md"`). Implementation:
-  //   1. Slug the lookup segment with the same rules as `slugify` —
-  //      NFKC, lowercase, non-alphanumeric runs collapse to a hyphen,
-  //      trailing extension stripped.
-  //   2. List active entries in this (base, parent) bucket and find
-  //      the one whose slugified title matches.
-  //   3. Refuse to guess on slug collisions (return not_found) — titles
-  //      in a bucket are unique, but two distinct titles can collide
-  //      after slugification (e.g. "Foo Bar" vs "Foo-Bar"). Strict
-  //      lookup of the exact title remains the deterministic answer.
+  // Slug fallback for the write-with-title-then-read-with-sluggy-path footgun
+  // (write `title: "LinkedIn Job Alerts"`, read `path:
+  // "linkedin-job-alerts.md"`). ⚠ Refuses to guess on slug collisions —
+  // titles in a bucket are unique but can collide after slugification ("Foo
+  // Bar" vs "Foo-Bar"); exact-title lookup stays the deterministic answer.
   const querySlug = slugForPathSegment(lastSegment);
   if (querySlug) {
     const candidates = await repo.listActiveEntryTitlesIn(
@@ -167,12 +137,10 @@ export async function resolvePath(
 }
 
 /**
- * Canonical slug form for path-segment matching. Mirrors `slugify`'s
- * normalization (NFKC + lowercase + collapse non-alphanumerics to '-')
- * but additionally strips a trailing file-extension-shaped tail
- * (`.md`, `.txt`, ...) so callers passing `linkedin-jobs.md` resolve to
- * an entry titled `LinkedIn Jobs`. Returns "" for inputs that produce
- * an empty slug — caller treats that as "no fallback possible".
+ * ⚠ Must mirror `slugify` normalization (NFKC + lowercase + non-alphanumeric
+ * runs → '-'), PLUS strips a trailing extension (`.md`, `.txt`, ...) so
+ * `linkedin-jobs.md` resolves to an entry titled `LinkedIn Jobs`. Returns ""
+ * when the slug is empty = "no fallback possible".
  */
 function slugForPathSegment(segment: string): string {
   const stripped = segment.replace(/\.(md|markdown|txt)$/i, "");
@@ -184,21 +152,13 @@ function slugForPathSegment(segment: string): string {
 }
 
 /**
- * mkdir -p semantics. Walks segments, creating any missing folder
- * along the way. Returns the leaf folder (or null when called with
- * an empty segment list — meaning "the root").
- *
- * Workspace + agent-write enforcement is the caller's responsibility
- * (typically the service method that wraps this). This helper just
- * does the tree walk + insertion, on the assumption that the caller
- * has already validated the base + agent permission.
- *
- * Cross-type collision: the unique partial indexes only prevent
- * folder-folder and entry-entry collisions. If a segment matches an
- * existing entry of the same name (e.g. the user has an entry "foo"
- * at root and we're asked to mkdir -p "foo/bar"), throw
- * `KnowledgePathConflictError` rather than silently creating a folder
- * that shadows the entry.
+ * mkdir -p. Returns leaf folder, null for an empty segment list (= root).
+ * ⚠ Does NOT enforce workspace or agent-write — caller must validate base +
+ * agent permission first.
+ * ⚠ Unique partial indexes only cover folder-folder and entry-entry, so a
+ * segment matching an existing ENTRY of the same name (entry "foo" at root,
+ * mkdir -p "foo/bar") throws `KnowledgePathConflictError` rather than creating
+ * a folder that shadows it.
  */
 export async function ensureFolderPath(
   ctx: KnowledgeContext,
@@ -217,8 +177,7 @@ export async function ensureFolderPath(
       current = found;
       continue;
     }
-    // Defensive: an entry with the same name in the same parent would
-    // produce an ambiguous path. Refuse to create.
+    // Same-name entry in same parent ⇒ ambiguous path. Refuse to create.
     const conflictingEntry = await repo.findActiveEntryByTitle(
       baseId,
       current?.id ?? null,
@@ -236,8 +195,8 @@ export async function ensureFolderPath(
         createdBy: ctx.userId,
       });
     } catch (err) {
-      // 23505 = a parallel call inserted the same folder first. Re-find
-      // and continue. Idempotency under contention.
+      // 23505 = parallel call inserted this folder first. Re-find, continue —
+      // idempotency under contention.
       if (
         err &&
         typeof err === "object" &&

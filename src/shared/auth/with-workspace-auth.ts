@@ -20,13 +20,11 @@ export interface WorkspaceAuthContext {
   userId: string;
   agentTokenId?: string;
   /**
-   * If the request is authenticated via a workspace-scoped API key
-   * (`api_keys.workspace_id IS NOT NULL`), this is the workspace it's
-   * locked to. `null` for session callers and user-scoped (personal)
-   * API keys. Service layer reads this to enforce M-10's "private
-   * items are hidden from workspace-scoped keys" rule — those keys
-   * may be shared across humans (CI runners, service accounts), so
-   * leaking a teammate's private content through them is unsafe.
+   * Workspace a workspace-scoped API key (`api_keys.workspace_id IS NOT NULL`)
+   * is locked to. `null` for session callers and user-scoped keys. ⚠ Service
+   * layer reads this to enforce "private items are hidden from workspace-scoped
+   * keys" (M-10) — such keys may be shared across humans (CI runners, service
+   * accounts), so a teammate's private content must not leak through them.
    */
   apiKeyWorkspaceId?: string | null;
   workspaceId: string;
@@ -34,102 +32,68 @@ export interface WorkspaceAuthContext {
   workspacePublicId: string;
   role: Role;
   /**
-   * The recognized `X-Dopl-Runtime` this request carried (`desktop-session` or
-   * `desktop-ui`), or undefined for every other caller. Reaches handlers the
-   * same way `X-Workspace-Id` does — read once here, never off the raw request
-   * in a feature — so the channels write path has ONE trusted source for the
-   * reserved `metadata.runtime` stamp. A routing hint, never an authz signal
-   * (see `runtime-header.ts`).
+   * Recognized `X-Dopl-Runtime` (`desktop-session` | `desktop-ui`), else
+   * undefined. ⚠ Read once HERE, never off the raw request in a feature — ONE
+   * trusted source for the reserved `metadata.runtime` stamp. Routing hint,
+   * NEVER an authz signal (`runtime-header.ts`).
    *
-   * ALREADY BOUNDED BY THE CREDENTIAL. `desktop-ui` claims a person typing in
-   * the desktop app's own UI, so it is refused for an agent (`dopl_at_*`) token
-   * here — one narrowing, applied for every consumer of this context, not just
-   * channels. `desktop-session` is credential-agnostic on purpose: it IS an
-   * agent-token caller. See `narrowRuntime`.
+   * ⚠ Already bounded by the credential: `desktop-ui` is refused for an agent
+   * (`dopl_at_*`) token; `desktop-session` is credential-agnostic on purpose —
+   * it IS an agent-token caller. See `narrowRuntime`.
    */
   runtime?: DoplRuntime;
   /**
-   * The `X-Dopl-App-Version` this request carried (a desktop build like
-   * `1.7.15`), or undefined for every other caller. Read once here — never off
-   * the raw request in a feature — so the channels write path has ONE source
-   * for the reserved `metadata.appVersion` stamp. A diagnostic hint, never an
-   * authz signal (see `app-version-header.ts`).
+   * `X-Dopl-App-Version` (a desktop build like `1.7.15`), else undefined. ⚠ Read
+   * once here, never off the raw request in a feature — ONE source for the
+   * reserved `metadata.appVersion` stamp. Diagnostic hint, NEVER an authz signal
+   * (`app-version-header.ts`).
    */
   appVersion?: string;
   /**
-   * The `X-Dopl-Session-Id` this request carried (the desktop's slot key for the
-   * session making the call), or undefined for every other caller. Read once
-   * here — never off the raw request in a feature — so the channels write path
-   * has ONE source for the reserved `metadata.session_id` stamp. An ATTRIBUTION
-   * hint, never an authz signal (see `session-header.ts`).
+   * `X-Dopl-Session-Id` (the desktop's slot key for the calling session), else
+   * undefined. ⚠ Read once here, never off the raw request in a feature — ONE
+   * source for the reserved `metadata.session_id` stamp. ATTRIBUTION hint,
+   * NEVER an authz signal (`session-header.ts`).
    */
   sessionId?: string;
   params?: Record<string, string>;
 }
 
 interface Options {
-  /**
-   * Minimum membership role required to call this route. Defaults to
-   * "viewer" — any active member can access. Use "member" for writes,
-   * "admin" for invitations / settings, "owner" for delete.
-   */
+  /** Min membership role. Default "viewer". "member" for writes, "admin" for
+   *  invitations/settings, "owner" for delete. */
   minRole?: Role;
   /**
    * Opt-in for GET download routes (`<a download>` can't send headers): let
-   * the `?workspaceId=` query param participate in workspace resolution at
-   * the SAME priority as the `X-Workspace-Id` header. The key lock still
-   * wins over both; the header wins over the query param when both are
-   * present. Used by the export routes so a fail-closed resolution doesn't
-   * 400 a header-less download before the param is read.
+   * `?workspaceId=` participate in resolution at the SAME priority as the
+   * `X-Workspace-Id` header. Key lock still wins over both; header wins over the
+   * query param.
    */
   workspaceIdFromQuery?: boolean;
-  /**
-   * H-3 — forwarded verbatim into the inner `withUserAuth`. `writeScopeExempt`
-   * exempts a non-content-write, non-GET route from the OAuth write-scope gate
-   * (only the MCP liveness ping). `sessionOnly` refuses ALL OAuth agent tokens
-   * (any scope) on the destructive admin surface — billing mutations set this.
-   * Both affect OAuth-bearer callers only; session (cookie) callers are never
-   * gated. See `UserAuthOptions`.
-   */
+  /** Forwarded verbatim into the inner `withUserAuth` — see `UserAuthOptions`. */
   writeScopeExempt?: boolean;
   sessionOnly?: boolean;
 }
 
 /**
- * Composes `withUserAuth` to additionally resolve the active workspace
- * and verify the caller's membership + role. Injects `{ workspaceId,
- * workspaceSlug, role }` alongside the standard `{ userId, agentTokenId }`.
+ * Composes `withUserAuth`, additionally resolving the active workspace and
+ * verifying membership + role.
  *
- * Workspace resolution priority (MCP-2 — fail-closed, no default fallback):
- *   1. If the API key has a `workspace_id` (workspace-scoped key), use it.
- *      The requested target MUST agree with it or we 403 — prevents a
- *      single key from being used cross-workspace by accident or design.
+ * ⚠ Resolution priority is FAIL-CLOSED, no default fallback:
+ *   1. Workspace-scoped API key's `workspace_id`. A contradicting requested
+ *      target 403s — one key must never be used cross-workspace.
  *   2. Else `X-Workspace-Id` header (UUID only; blank/non-UUID → 400
- *      WORKSPACE_INVALID). With `workspaceIdFromQuery`, a `?workspaceId=`
- *      param slots in at the same priority (header wins if both present).
- *   3. Else the caller's active memberships decide: exactly one auto-targets;
- *      zero or 2+ → 400 WORKSPACE_REQUIRED (see `resolveActiveWorkspace`).
+ *      WORKSPACE_INVALID). With `workspaceIdFromQuery`, `?workspaceId=` slots in
+ *      at the same priority (header wins).
+ *   3. Else active memberships: exactly one auto-targets; zero or 2+ → 400
+ *      WORKSPACE_REQUIRED (`resolveActiveWorkspace`).
  *
- * Routes that scope per-workspace should use this in place of
- * `withUserAuth`. Routes that operate user-globally (settings, billing,
- * the global entry KB, admin) keep `withUserAuth`.
+ * Per-workspace routes use this; user-global routes (settings, billing, global
+ * entry KB, admin) keep `withUserAuth`.
  *
- * MCP / paid-gating policy (audit decision #8) — withWorkspaceAuth
- * intentionally does NOT call `withMcpAccess`. The reasoning:
- *   - The user's OWN workspace + knowledge bases are first-class data
- *     the user creates — gating them behind a paywall would hold their
- *     content hostage.
- *   - The agent-write toggle (`agent_write_enabled` per knowledge base)
- *     is the per-resource gate that protects against unwanted MCP
- *     mutations. Read access for an agent stays free; writes require
- *     the user to flip the toggle in settings.
- *   - Rate-limit + analytics for MCP traffic still happen at the
- *     `withUserAuth` layer (the wrapper inside `withWorkspaceAuth`),
- *     so we don't lose observability.
- *
- * If a future product decision requires gating user-data MCP calls,
- * compose `withMcpAccess` inside the handler signature instead of
- * altering this default.
+ * ⚠ Deliberately does NOT call `withMcpAccess`: a user's own workspace + KBs are
+ * their content and must not be paywalled. The per-resource gate is
+ * `agent_write_enabled`; rate-limit + analytics still happen in `withUserAuth`.
  */
 export function withWorkspaceAuth(
   handler: (
@@ -144,18 +108,16 @@ export function withWorkspaceAuth(
     const queryWorkspaceId = options.workspaceIdFromQuery
       ? request.nextUrl.searchParams.get("workspaceId")
       : null;
-    // The header wins over the query param when both are present; the key
-    // lock (below) wins over both. `??` keeps a present-but-blank header
-    // authoritative so it still fails closed as WORKSPACE_INVALID.
+    // ⚠ `??` (not `||`) keeps a present-but-blank header authoritative so it
+    // still fails closed as WORKSPACE_INVALID.
     const requestedWorkspaceId = headerWorkspaceId ?? queryWorkspaceId;
     const keyWorkspaceId = ctx.apiKeyWorkspaceId ?? null;
 
-    // Workspace-scoped API key: enforce the lock. Reject if the requested
-    // target contradicts. Use the key's workspace as the active one.
+    // Workspace-scoped API key: enforce the lock.
     let effectiveWorkspaceId = requestedWorkspaceId;
     if (keyWorkspaceId) {
-      // Trim before the lock compare so a header/query value padded with
-      // whitespace doesn't read as a spurious cross-workspace mismatch.
+      // ⚠ Trim before the compare, else a whitespace-padded value reads as a
+      // spurious cross-workspace mismatch.
       const requestedTrimmed = requestedWorkspaceId?.trim();
       if (requestedTrimmed && requestedTrimmed !== keyWorkspaceId) {
         return NextResponse.json(
@@ -185,21 +147,16 @@ export function withWorkspaceAuth(
           { status: 403 }
         );
       }
-      // Per-op MCP usage instrumentation. Agent (OAuth-token) callers only —
-      // the loopback sends a granular `X-MCP-Tool` header ("kb_write_file",
-      // "ontology_create_object", ...). Split on the first "_" into tool +
-      // op; is_write is the reliable HTTP-method signal. Fire-and-forget.
+      // Per-op MCP usage instrumentation, agent callers only. Loopback sends a
+      // granular `X-MCP-Tool` ("kb_write_file", …); split on first "_" into
+      // tool + op. Fire-and-forget.
       if (ctx.agentTokenId) {
         const mcpTool = request.headers.get("x-mcp-tool");
-        // A LEADING UNDERSCORE MEANS INTERNAL — the MCP layer calling our own
-        // infrastructure routes, not an agent calling a tool. Those calls keep
-        // the header (it is worth having in a server log) but are NOT
-        // analytics: `_mcp_credits_consume` fires on EVERY tool call, so
-        // logging it would add one `mcp_tool_calls` insert per call and put a
-        // synthetic "tool" at the top of every usage query. The convention was
-        // already de facto — the only two `_`-prefixed names @dopl/client
-        // sends are `_mcp_credits_consume` and `_mcp_status_ping`, and no real
-        // tool name starts with `_`; this makes it binding.
+        // ⚠ LEADING UNDERSCORE = INTERNAL (MCP layer calling our own
+        // infrastructure routes), NOT analytics: `_mcp_credits_consume` fires
+        // on EVERY tool call, so logging it adds an `mcp_tool_calls` insert per
+        // call and puts a synthetic "tool" atop every usage query. No real tool
+        // name starts with `_`.
         if (mcpTool && !mcpTool.startsWith("_")) {
           const sep = mcpTool.indexOf("_");
           void logMcpToolCall({
@@ -219,8 +176,8 @@ export function withWorkspaceAuth(
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,
         role: membership.role,
-        // The header's CLAIM, bounded by the credential that presented it: an
-        // agent token can never buy the `desktop-ui` stamp (runtime-header.ts).
+        // ⚠ Header CLAIM bounded by the presenting credential: an agent token
+        // can never buy the `desktop-ui` stamp (runtime-header.ts).
         runtime: narrowRuntime(readRuntimeHeader(request), {
           agentCredential: !!ctx.agentTokenId,
         }),

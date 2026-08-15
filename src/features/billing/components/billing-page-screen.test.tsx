@@ -1,18 +1,8 @@
 /**
- * WHAT THE BILLING PAGE IS, AND WHAT IT MUST NEVER BECOME.
- *
- * The page exists so the `src/app/[workspaceSlug]` tree can be deleted. That
- * makes its import graph, not its markup, the load-bearing property: one
- * `AppShell` import and the page drags the rail, the sidebar, the workspaces
- * fetch, the tour and the graph engine back into the KEEP set, and Stage D
- * stops being a deletion. So this file pins both halves — the two panes are
- * really there, and the app shell really is not.
- *
- * SINCE THE USAGE/BILLING SPLIT it also pins the tab contract: which pane a
- * URL opens on, and that each tab carries what it claims. The default is not
- * cosmetic — a 402 upgrade envelope and a Stripe checkout return both land
- * here, and a visitor mid-transaction who is shown a usage meter has been
- * dropped by the flow that sent them.
+ * Billing page: pins the IMPORT GRAPH (one `AppShell` import drags the rail,
+ * sidebar, workspaces fetch, tour and graph engine back into the KEEP set and
+ * Stage D stops being a deletion) plus the tab contract — which pane a URL
+ * opens on, and that each tab carries what it claims.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -47,8 +37,8 @@ const FREE: WorkspaceEntitlementsStatus = {
     limit: 500,
     remaining: 380,
     periodStart: "2026-08-01T00:00:00.000Z",
-    // Midday UTC on purpose: `formatDate` renders in the RUNNER's timezone, and
-    // a midnight instant flips to the previous day for anyone west of UTC.
+    // ⚠ Midday UTC: `formatDate` renders in the RUNNER's timezone; a midnight
+    // instant flips a day west of UTC.
     periodEnd: "2026-09-01T12:00:00.000Z",
   },
   cancelAtPeriodEnd: false,
@@ -68,8 +58,7 @@ const TEAM: WorkspaceEntitlementsStatus = {
   has_stripe_customer: true,
 };
 
-/** Seeds the billing-status cache so the panes render their LOADED state —
- *  `useApiQuery`'s key is `[path, workspaceId, query]`, built by the hook. */
+/** Seeds billing-status cache; `useApiQuery` key = `[path, workspaceId, query]`. */
 function paint(node: ReactElement, status: WorkspaceEntitlementsStatus): string {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -104,9 +93,6 @@ describe("which tab a URL opens on", () => {
   });
 
   it("opens on Billing when the visitor arrived with a ?billing= intent", () => {
-    // The 402 upgrade envelopes, the Stripe checkout return and the portal
-    // return all carry one. They are mid-transaction; the plan cards are what
-    // they were sent for.
     expect(resolveBillingTab(null, true)).toBe("billing");
   });
 
@@ -116,10 +102,8 @@ describe("which tab a URL opens on", () => {
   });
 
   it("puts the INTENT above ?tab=, because only Billing polls", () => {
-    // `?billing=success&tab=usage` is a URL the shell itself produces — it
-    // writes `?tab=` on every click — so honouring `?tab=` here would strand a
-    // reloading payer on Usage, where the post-payment poll never mounts and
-    // their plan stays Starter forever.
+    // Shell produces `?billing=success&tab=usage` itself; honouring `?tab=`
+    // would strand a reloading payer on Usage where the poll never mounts.
     expect(resolveBillingTab("usage", true)).toBe("billing");
   });
 
@@ -136,7 +120,6 @@ describe("which tab a URL opens on", () => {
   });
 
   it("renders ONE pane — the tabs are exclusive, not a stacked page", () => {
-    // Usage carries the meters; Billing carries the plan cards + danger zone.
     const usage = screen({ initialTab: "usage" });
     expect(usage).toContain("MCP credits");
     expect(usage).not.toContain("Plans and Billing");
@@ -166,8 +149,6 @@ describe("the Usage tab", () => {
 
   it("meters ontology objects against the cap only while capped", () => {
     expect(usage(FREE)).toContain("12 / 100");
-    // Uncapped: the count, and the word for no cap. Never an empty track
-    // against a limit that does not exist.
     const paid = usage(TEAM);
     expect(paid).toContain("Unlimited");
     expect(paid).not.toContain("12 / 100");
@@ -190,17 +171,17 @@ describe("the Billing tab", () => {
   });
 
   it("carries the account danger zone the desktop app links out to", () => {
-    // `apps/desktop-ui/.../account-actions.tsx` opens this page for deletion
-    // (plan decision D4): the flow it runs — API delete, Supabase sign-out,
-    // redirect — is not reproducible in the packaged renderer.
+    // `apps/desktop-ui/.../account-actions.tsx` links here for deletion (D4):
+    // API delete + Supabase sign-out + redirect is not reproducible in the
+    // packaged renderer.
     const markup = screen();
     expect(markup).toContain("Danger zone");
     expect(markup).toContain("Delete account");
   });
 
   it("shows card, invoices and cancel ONLY for a paying workspace", () => {
-    // A Starter workspace has no Stripe customer, so an empty card and an
-    // empty invoice table would be inventing an account it does not have.
+    // Starter has no Stripe customer — an empty card/invoice table would
+    // invent an account.
     const free = screen();
     expect(free).not.toContain("Payment method");
     expect(free).not.toContain("Invoices");
@@ -220,8 +201,6 @@ describe("the Billing tab", () => {
   });
 
   it("quotes the end date on the cancel section, not just a warning", () => {
-    // The date IS the consequence: nothing stops today, and a cancel dialog
-    // that does not say when access ends is asking for a decision blind.
     expect(screen({}, TEAM)).toContain("Sep 4, 2026");
   });
 
@@ -271,8 +250,7 @@ describe("what the page deliberately leaves out", () => {
     const markup = screen();
     expect(markup).not.toContain("role=\"dialog\"");
     expect(markup).not.toContain("Workspace switcher");
-    // The settings modal's own nav — if this ever appears, the page has
-    // re-absorbed the shell it was built to replace.
+    // Settings-modal nav: appearing means the page re-absorbed the shell.
     expect(markup).not.toContain("Plans &amp; Billing");
   });
 

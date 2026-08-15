@@ -4,12 +4,9 @@ const ACTIVE_NOW_MS = 5 * 60 * 1000;
 
 export type ActivityDot = "active" | "idle" | "invited" | "deactivated";
 
-/**
- * Postgres DATE columns arrive as bare "YYYY-MM-DD" strings. Parsing
- * those with `new Date(iso)` lands on UTC midnight, which renders as
- * the PREVIOUS day for anyone west of UTC — so date-only strings are
- * constructed as local dates instead. Full ISO datetimes parse as-is.
- */
+/** ⚠ Postgres DATE columns arrive as bare "YYYY-MM-DD"; `new Date(iso)` lands
+ *  on UTC midnight, which renders as the PREVIOUS day west of UTC. Date-only
+ *  strings are constructed as LOCAL dates; full ISO datetimes parse as-is. */
 function parseDate(iso: string): Date {
   if (DATE_ONLY.test(iso)) {
     const [y, m, d] = iso.split("-").map(Number);
@@ -52,13 +49,10 @@ export function formatRelativeTime(iso: string | null | undefined): string {
 }
 
 /**
- * Absolute channel timestamp: the wall-clock time ("2:34 PM") for something
- * that happened today, else the calendar date plus time ("Jul 26, 2:34 PM"; the
- * year is appended when it is not the current year). Unlike
- * {@link formatRelativeTime}, it never drifts as the clock advances, so a
- * transcript entry keeps a stable, scannable time. Locale-safe via
- * `toLocaleTimeString` / `toLocaleDateString`; null / invalid input renders the
- * em-dash placeholder.
+ * Absolute channel timestamp: wall-clock ("2:34 PM") for today, else calendar
+ * date + time ("Jul 26, 2:34 PM"), with the year appended off the current year.
+ * Unlike {@link formatRelativeTime} it never drifts as the clock advances, so a
+ * transcript entry keeps a stable time. Null/invalid renders an em dash.
  */
 export function formatChannelTimestamp(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -82,10 +76,8 @@ export function formatChannelTimestamp(iso: string | null | undefined): string {
   return `${datePart}, ${time}`;
 }
 
-/**
- * Last-active label + status dot from a throttled `lastSeenAt`
- * timestamp. Pending members show their invite age instead.
- */
+/** Last-active label + status dot from a throttled `lastSeenAt`. Pending members
+ *  show their invite age instead. */
 export function formatLastActive(
   lastSeenAt: string | null,
   status: "active" | "pending" | "revoked",

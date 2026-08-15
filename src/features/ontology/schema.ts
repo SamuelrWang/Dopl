@@ -3,20 +3,16 @@ import { graphLayoutSchema } from "@/shared/graph/layout-schema";
 import { safeLabel } from "@/shared/lib/safe-label";
 
 /**
- * Cluster and object names are the ontology's short labels: `dopl_map` prints
- * every cluster name at session start and `dopl_ontology` prints object names
- * as the spine of every read. Both are real columns on editor-writable tables,
- * so both get the charset rule and a matching DB CHECK.
+ * Cluster/object names are the ontology's short labels (`dopl_map` and
+ * `dopl_ontology` print them). Real columns on editor-writable tables → both
+ * get the charset rule and a matching DB CHECK.
  *
- * The labels NESTED IN JSONB — `attributes[].label`, `template[].label`,
- * `relationships[].label`, `methods[].name` — are deliberately left alone
- * here. They render into narration too, but they are not columns: a CHECK on
- * them means walking a jsonb array on every write, and `ontology_objects`
- * carries an editor-scoped UPDATE policy for `public`, so a zod-only bound on
- * them would be exactly the fence-beside-an-open-gate this work exists to
- * avoid. Bounding them properly is its own change. `purpose`, `subtitle`,
- * the method descriptions and the text attribute values are prose and stay
- * prose.
+ * ⚠ Labels NESTED IN JSONB (`attributes[].label`, `template[].label`,
+ * `relationships[].label`, `methods[].name`) are deliberately left alone: a
+ * CHECK means walking a jsonb array on every write, and `ontology_objects` has
+ * an editor-scoped UPDATE policy for `public`, so a zod-only bound would be a
+ * fence beside an open gate. `purpose`, `subtitle`, method descriptions and
+ * text attribute values are prose and stay prose.
  */
 const OntologyClusterNameSchema = safeLabel("Cluster name", 200);
 const OntologyObjectNameSchema = safeLabel("Object name", 300);
@@ -45,8 +41,8 @@ const methodSchema = z.object({
   name: z.string().max(300),
   description: z.string().max(2000),
   outcome: z.string().max(2000),
-  // Default, not required: methods stored before the field existed
-  // sync back without it.
+  // ⚠ Default, not required: methods stored before this field existed sync
+  // back without it.
   tools: z.string().max(2000).default(""),
 });
 

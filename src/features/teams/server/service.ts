@@ -67,8 +67,8 @@ export async function createTeam(
       );
     }
   } catch (err) {
-    // Roll back the half-created team so a conflict-then-retry doesn't
-    // trip the unique name constraint (or leave an orphan).
+    // Roll back the half-created team so a retry doesn't trip the unique name
+    // constraint or leave an orphan.
     await deleteTeamRow(team.id).catch(() => {});
     throw err;
   }
@@ -164,15 +164,7 @@ export async function removeTeamMember(
 
 /* ----------------------------- grants ----------------------------- */
 
-/**
- * Set or update a team's grant on a resource.
- *
- * There is NO cross-resource check left here. The one that used to live on
- * this path was the workflow↔KB invariant (every team that could read a
- * workflow had to be able to read every KB attached to it); workflows are
- * deleted (2026-08-11) and it went with them, along with the `autoGrant`
- * escape hatch that existed only to resolve it.
- */
+/** Set or update a team's grant on a resource. No cross-resource check. */
 export async function setTeamGrant(
   workspaceId: string,
   callerId: string,
@@ -210,14 +202,8 @@ export async function removeTeamGrant(
 
 /* --------------------------- access mode -------------------------- */
 
-/**
- * Flip a resource between workspace-wide and teams-scoped access.
- *
- * Both directions are a pure widening/narrowing of the resource itself.
- * The cross-resource checks that used to guard this (a KB narrowing under
- * an attached workflow, a workflow widening to the whole workspace over a
- * teams-mode KB) went with workflows on 2026-08-11.
- */
+/** Flip a resource between workspace-wide and teams-scoped. Both directions
+ *  are a pure widening/narrowing of the resource itself. */
 export async function setResourceAccessMode(
   workspaceId: string,
   callerId: string,
@@ -288,9 +274,9 @@ export async function getAccessMatrix(
     })),
   ];
 
-  // Non-admins must not learn the names of teams-mode resources they have
-  // no grant on — the per-resource gates 404 those on purpose, so the
-  // matrix payload can't be the side channel that leaks them.
+  // ⚠ Non-admins must not learn the names of teams-mode resources they hold
+  // no grant on: the per-resource gates 404 those, so this payload must not
+  // become the side channel.
   if (!meetsMinRole(callerRole, "admin")) {
     const access = await listEffectiveAccess(workspaceId, callerId, {
       role: callerRole,

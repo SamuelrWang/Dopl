@@ -4,14 +4,11 @@ import type { MemberTeamRef, TeamMemberRow } from "../types";
 import { mapTeamMemberRow, type TeamMemberDbRow } from "./dto";
 
 /**
- * WHO BELONGS TO A TEAM — the two membership tables, split out of
- * `repository.ts` (2026-08-08, §2 cap).
- *
- * `team_members` is membership NOW; `workspace_invitation_teams` is membership
- * ON ACCEPT — the teams an invitee is dropped into the moment they join, which
- * `workspaces/server/invitations.ts` replays through `insertTeamMembers` here.
- * Same reason to change, so they share a file. Raw Supabase I/O only, and every
- * workspace-wide query is filtered by `workspace_id` (§8).
+ * The two membership tables. `team_members` is membership NOW;
+ * `workspace_invitation_teams` is membership ON ACCEPT — the teams an invitee
+ * joins, replayed by `workspaces/server/invitations.ts` through
+ * `insertTeamMembers` here.
+ * ⚠ Raw Supabase I/O: every workspace-wide query filters by `workspace_id`.
  */
 
 const TEAM_MEMBER_COLS = "team_id, user_id, added_by, added_at";
@@ -29,7 +26,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   return ((data ?? []) as TeamMemberDbRow[]).map(mapTeamMemberRow);
 }
 
-/** All membership rows in the workspace, for hydrating list views in one query. */
+/** All membership rows in the workspace — hydrates list views in one query. */
 export async function listTeamMembersForWorkspace(
   workspaceId: string
 ): Promise<TeamMemberRow[]> {
@@ -89,7 +86,7 @@ export async function listTeamIdsForUser(
   return ((data ?? []) as Array<{ team_id: string }>).map((r) => r.team_id);
 }
 
-/** userId -> team chip refs, for the members-list hydration (one query + team join). */
+/** userId → team chip refs for members-list hydration; one query + join. */
 export async function listTeamRefsByUser(
   workspaceId: string
 ): Promise<Map<string, MemberTeamRef[]>> {

@@ -12,19 +12,12 @@ import {
 import { ArrowUpRight } from "./icons";
 
 /**
- * "Framework" — the four-stage tour between the Multiplayer row and the folder
- * deck. Eyebrow + a large light-weight heading, then a wide photo banner with a
- * single white product window centred on it, a row of four tab options beneath
- * it, and the page's CTA pair.
- *
- * The window content IS the tab: selecting a tab swaps the vignette (a 200ms
- * fade, keyed on the tab id so React remounts and the animation replays). Add or
- * reorder stages by editing STAGES; the vignettes live in ./framework-windows.
+ * "Framework" — four-stage tab tour. Window content IS the tab; vignettes live
+ * in ./framework-windows. Add/reorder stages via STAGES.
  *
  * ⚠ THE `key` IS LOAD-BEARING, not a fade detail. "Define Objects" is a ~4.7s
- * CSS sequence with no state of its own, and remounting on tab change is the
- * ONLY thing that restarts it — drop the key and the animation plays once per
- * page load and never again.
+ * CSS sequence with no state of its own, and remount on tab change is the ONLY
+ * thing that restarts it — drop the key and it plays once per page load.
  */
 type Stage = {
   id: string;
@@ -90,10 +83,9 @@ export function FrameworkSection() {
         </h2>
 
         <div className="lp-fw-banner">
-          {/* Decorative; the window on top carries the meaning. Plain <img>: a
-              static public/ file in a box the CSS already sizes — same call as
-              the hero banner. The source is PORTRAIT, so `object-position` in
-              marketing.css is what keeps the peak in frame. */}
+          {/* Decorative; the window on top carries the meaning. Plain <img>:
+              static public/ file in a CSS-sized box. ⚠ Source is PORTRAIT —
+              `object-position` in marketing.css keeps the peak in frame. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/img/framework-banner.jpg"
@@ -102,10 +94,8 @@ export function FrameworkSection() {
             draggable={false}
           />
 
-          {/* The window rides a liquid-glass panel (same component as the
-              hero's notification glass) — static here, so backdrop-filter is
-              safe: nothing animates the glass's box. The white window keeps a
-              uniform gap to the glass edge on all four sides. */}
+          {/* Glass is static here, so backdrop-filter is safe — nothing
+              animates its box. */}
           <div className="lp-fw-glass">
             <LiquidGlass radius={20} className="lp-fw-glass-card">
               <div

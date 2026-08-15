@@ -1,20 +1,16 @@
 /**
- * THE SHARED HARNESS FOR THE INVARIANT SUITES — capture every registered tool,
- * and parse the REAL gating tables out of the source that owns each one.
+ * SHARED HARNESS FOR THE INVARIANT SUITES — captures every registered tool and
+ * parses the REAL gating tables out of the source that owns each.
  *
- * Test-only, like `tool-group-files.ts` and `narration-fixtures.ts`: nothing in
- * the server imports it, and it is excluded from `tsconfig.json` so it never
- * emits to `dist`. It lived inside `parity.test.ts` until that file crossed the
- * §2 500-line cap and split into `parity.test.ts` + `delete-block.test.ts`;
- * both read the same capture, so it has to be ONE definition — two suites
- * building their own tool list is exactly the parallel-declaration drift these
- * suites exist to catch.
+ * ⚠ Test-only: nothing in the server imports it, and it is excluded from
+ * `tsconfig.json` so it never emits to `dist`. ⚠ ONE definition shared by
+ * `parity.test.ts` and `delete-block.test.ts` — two suites building their own
+ * tool list is the parallel-declaration drift these suites exist to catch.
  *
- * Mechanism: every domain tool is captured by calling its registrar with a
- * recording `register` and a stub client (registration is all we need — the
- * client never runs). The gating tables are parsed out of source text rather
- * than imported, so the tests check the REAL tables and a parse that stops
- * matching fails loudly instead of vacuously passing.
+ * Tools are captured by calling each registrar with a recording `register` and
+ * a stub client. ⚠ Gating tables are PARSED from source text, not imported, so
+ * the tests check the real tables and a parse that stops matching fails loudly
+ * instead of passing vacuously.
  */
 
 import { readFileSync } from "node:fs";
@@ -71,15 +67,13 @@ export function captureTools(): CapturedTool[] {
 export const TOOLS = captureTools();
 export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
-// Vitest runs with cwd = the package root (this package's vitest.config.ts),
-// so source files are addressed relative to it. This avoids both
-// `import.meta` (disallowed in the package's CommonJS tsc target) and
-// `__dirname` (not guaranteed under the ESM-transformed test).
+// ⚠ Paths are relative to the package root (vitest cwd): `import.meta` is
+// disallowed by the CommonJS tsc target and `__dirname` is not guaranteed under
+// the ESM-transformed test.
 //
-// The param-drift scans in `parity.test.ts` MUST read a tool's WHOLE file set,
-// not just its registrar, or a handler that reads an undeclared arg (the
-// get_tree `entry_limit` bug class) inside a split-out module slips past the
-// guard. `toolGroupSource` is that scan — see `tool-group-files.ts`.
+// ⚠ The param-drift scans MUST read a tool's WHOLE file set, not just its
+// registrar, or a handler reading an undeclared arg inside a split-out module
+// slips past the guard. `toolGroupSource` is that scan.
 export const SRC_DIR = path.resolve(process.cwd(), "src");
 
 export function opEnum(t: CapturedTool): string[] | null {
@@ -109,14 +103,12 @@ function parseOpTable(src: string, name: string, where: string): Record<string, 
 }
 
 /**
- * A bare tool-name table: `NAME = new Set([...])` in source, with or without
- * an explicit type argument (`new Set<string>([])` is what an EMPTY table has
- * to be written as, because `new Set([])` infers `Set<never>`).
+ * A bare tool-name table: `NAME = new Set([...])` in source, with or without an
+ * explicit type argument (an EMPTY table must be `new Set<string>([])`, since
+ * `new Set([])` infers `Set<never>`).
  *
- * NOT FOUND THROWS; EMPTY DOES NOT. The two are different answers and the
- * caller must be able to tell them apart — "the table is gone or renamed" is a
- * broken guard, "the table is empty" is a legitimate state (`HIDDEN_TOOLS` has
- * been empty since workflows and clusters were deleted on 2026-08-11).
+ * ⚠ NOT FOUND THROWS; EMPTY DOES NOT. "The table is gone or renamed" is a
+ * broken guard; "the table is empty" is a legitimate state.
  */
 function parseToolSet(src: string, name: string, where: string): Set<string> {
   const decl = new RegExp(`${name}\\s*=\\s*new Set(?:<[^>]*>)?\\(\\[`).exec(src);
@@ -129,20 +121,12 @@ function parseToolSet(src: string, name: string, where: string): Set<string> {
 }
 
 /**
- * THE PARSE FOLLOWS THE CONSTANT, NOT THE FILENAME — stated once for
- * `delete-policy.ts` and now true twice over.
- *
- * §2b's table moved OUT of `server.ts` into its own module first: `server.ts`
- * imports the four `_admin` registrars, and those registrars build their
- * descriptions from the same policy, so keeping it in `server.ts` would have
- * been an import cycle.
- *
- * The three GATING tables followed on 2026-08-08, when `server.ts` (1045 lines)
- * was split under the §2 cap: `HIDDEN_TOOLS`, `READ_ONLY_BLOCKED_TOOLS` and
- * `WRITE_OPS` now live in `gating.ts` beside the gates that read them. Nothing
- * about the tables changed — same names, same shapes, same parse — so if one of
- * these throws "not found", a table was RENAMED or reshaped, which is exactly
- * the loud failure this source-text parse exists to produce.
+ * ⚠ THE PARSE FOLLOWS THE CONSTANT, NOT THE FILENAME. `HIDDEN_TOOLS`,
+ * `READ_ONLY_BLOCKED_TOOLS` and `WRITE_OPS` live in `gating.ts`; the delete
+ * table lives in `delete-policy.ts` (keeping it in `server.ts` would be an
+ * import cycle through the four `_admin` registrars). A "not found" throw here
+ * means a table was RENAMED or reshaped — the loud failure this parse exists
+ * to produce.
  */
 export const GATING_SOURCE = readFileSync(path.join(SRC_DIR, "gating.ts"), "utf8");
 export const DELETE_POLICY_SOURCE = readFileSync(
@@ -156,10 +140,7 @@ export const READ_ONLY_BLOCKED_TOOLS = parseToolSet(
   "READ_ONLY_BLOCKED_TOOLS",
   "gating.ts",
 );
-/**
- * The hide-before-delete guard (D2) — tools whose registrar runs but never
- * registers. EMPTY since 2026-08-11; see `gating.ts › HIDDEN_TOOLS`.
- */
+/** Hide-before-delete guard — see `gating.ts › HIDDEN_TOOLS`. */
 export const HIDDEN_TOOLS = parseToolSet(GATING_SOURCE, "HIDDEN_TOOLS", "gating.ts");
 /** The §2b app-only-deletion table, same shape as WRITE_OPS. */
 export const DELETE_BLOCKED_OPS = parseOpTable(
@@ -169,16 +150,13 @@ export const DELETE_BLOCKED_OPS = parseOpTable(
 );
 
 /**
- * The tools an AGENT actually sees. `captureTools` calls the registrars
- * directly, which is the right level for schema/description parity — a hidden
- * tool's schema must stay honest while it sits dormant — but it is NOT the
- * `tools/list` an agent receives, because it never passes through the
- * `HIDDEN_TOOLS` guard in `registerTool`. Everything about the live surface is
- * asserted against this, not against `TOOLS`.
+ * The tools an AGENT actually sees. ⚠ `TOOLS` is the registrar-level capture
+ * (right for schema/description parity, since a hidden tool's schema must stay
+ * honest) but is NOT the `tools/list` an agent receives — it never passes the
+ * `HIDDEN_TOOLS` guard. Assert live-surface claims against THIS.
  *
- * Identical to `TOOLS` while `HIDDEN_TOOLS` is empty. Keep the distinction:
- * collapsing the two would delete the only place the guard is expressed, and
- * the next retirement would then ship a "hidden" tool that every parity
- * assertion still treats as live.
+ * ⚠ Identical to `TOOLS` while `HIDDEN_TOOLS` is empty; do NOT collapse them —
+ * that deletes the only place the guard is expressed, and the next retirement
+ * ships a "hidden" tool every parity assertion treats as live.
  */
 export const VISIBLE_TOOLS = TOOLS.filter((t) => !HIDDEN_TOOLS.has(t.name));

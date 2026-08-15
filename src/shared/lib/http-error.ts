@@ -1,12 +1,7 @@
 /**
- * Typed error for route handlers. Thrown from service/route code and caught
- * by `withErrorHandler` (or converted inline by the caller) into a
- * consistently-shaped JSON response.
- *
- * Response body shape:
- *   { error: { code, message, details? } }
- *
- * See docs/ENGINEERING.md §9 for usage.
+ * Typed error for route handlers. Thrown from service/route code and converted
+ * by the caller's catch helper (`toHttpErrorResponse` and its feature wrappers)
+ * into the ENGINEERING §9 body shape `{ error: { code, message, details? } }`.
  */
 export class HttpError extends Error {
   readonly status: number;

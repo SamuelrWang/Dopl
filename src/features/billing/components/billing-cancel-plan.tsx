@@ -6,32 +6,20 @@ import { formatDate } from "@/shared/lib/format-time";
 import { useCancelPlan } from "./use-billing-account";
 
 /**
- * CANCEL — and, when it is already canceled, RESUME. One switch, two faces.
+ * CANCEL — and, when already canceled, RESUME. One switch, two faces.
  *
- * NOTHING ENDS TODAY, and the copy says so in both states: cancelling sets
- * Stripe's `cancel_at_period_end`, so the workspace keeps every paid feature
- * until the date quoted here and then reverts to Starter. That is why the
- * confirm dialog names the date rather than asking "are you sure?" — the date
- * IS the consequence, and it is the only thing the person is deciding about.
+ * Cancelling sets Stripe's `cancel_at_period_end`: nothing ends today, paid
+ * features stay until the quoted date, then revert to Starter. Confirm dialog
+ * names the DATE because the date is the whole decision.
  *
- * DESTRUCTIVE-SUBTLE, not a danger zone. Deleting an account is irreversible
- * and gets the red block at the bottom of the page; cancelling a subscription
- * is reversible from this same section for the rest of the period, so it is a
- * quiet text button rather than a wall.
+ * ⚠ Dialog closes on confirm, failure lands IN THE SECTION
+ * (`pending-invitations.tsx` pattern). `ConfirmDialog` swallows a throw and
+ * stays open, so a reason rendered under it sits behind the scrim — in the DOM,
+ * unreadable.
  *
- * THE DIALOG CLOSES ON CONFIRM, AND THE FAILURE LANDS IN THE SECTION. This is
- * the `pending-invitations.tsx` pattern, and it is the pattern because of what
- * `ConfirmDialog` does with a throw: it SWALLOWS it and keeps itself open,
- * expecting the caller to surface the reason somewhere. A caller that renders
- * that reason underneath the dialog renders it behind the scrim — the message
- * exists, is in the DOM, and is unreadable, while the only thing on screen is
- * a dialog that did nothing and did not say why. So the confirm dismisses
- * first and the section owns the outcome, where nothing covers it.
- *
- * THE BUTTON STAYS DISABLED PAST THE POST. `useCancelPlan().pending` spans the
- * awaited status invalidation, not just the round trip — see the hook. Between
- * the two, this section is still rendering "Cancel plan" from the OLD status,
- * so a live button is a second cancel of an already-cancelled plan.
+ * ⚠ Button stays disabled past the POST: `useCancelPlan().pending` spans the
+ * awaited status invalidation, during which this section still renders "Cancel
+ * plan" off the OLD status — a live button there is a second cancel.
  */
 export function BillingCancelPlan({
   workspaceId,
@@ -49,11 +37,7 @@ export function BillingCancelPlan({
 
   const endsOn = currentPeriodEnd ? formatDate(currentPeriodEnd) : null;
 
-  /**
-   * NEVER RETHROWS. The throw was what kept the dialog open on top of the
-   * message this sets, so the failure is captured here and rendered by the
-   * section; both callers can therefore treat the click as finished.
-   */
+  /** ⚠ NEVER RETHROWS — a throw keeps the dialog open over this message. */
   async function run(resume: boolean) {
     setError(null);
     try {
@@ -69,8 +53,7 @@ export function BillingCancelPlan({
     }
   }
 
-  /** The section's own failure banner — bordered, not a stray red line, because
-   *  it is the only report a dismissed dialog leaves behind. */
+  /** Section's failure banner — the only report a dismissed dialog leaves. */
   const banner = error ? (
     <p
       role="alert"

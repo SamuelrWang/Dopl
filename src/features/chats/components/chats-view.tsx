@@ -15,8 +15,8 @@ import { ListPane } from "./list-pane";
 import { DetailPane } from "./detail-pane";
 
 export type FolderGroup = {
-  /** 'folder'/'unfiled' hold the caller's own chats; 'shared' holds
-   *  other members' chats surfaced on the All filter. */
+  /** 'folder'/'unfiled' hold the caller's own chats; 'shared' holds others'
+   *  chats surfaced on the All filter. */
   kind: "folder" | "unfiled" | "shared";
   folder: ChatFolder | null;
   chats: Chat[];
@@ -39,32 +39,20 @@ interface Props {
   workspaceSlug: string;
   currentUserId: string;
   role: Role;
-  /** First-paint seed only. The cache is the source of truth the moment the
-   *  page's own `/api/chats` read lands — which, since the page renders this
-   *  view only once it has, is the very first render. */
+  /** First-paint seed only — cache is source of truth from first render. */
   initialChats: Chat[];
   initialFolders: ChatFolder[];
-  /** Chats hidden by the free-plan retention window (0 on Pro) — drives the
-   *  list's upgrade strip. Server-computed; the cache carries the live value. */
+  /** Retention-hidden chats (0 on full-history plans). Server-computed; the
+   *  cache carries the live value. Drives the upgrade strip. */
   hiddenCount: number;
 }
 
 /**
- * Chats page root — the agent-exported conversation archive. Two-pane
- * .page-float surface: the scope-filtered list on the left (All / Private /
- * Team / Shared, mirroring the knowledge-base scopes), the selected chat's
- * document on the right.
- *
- * ONE SOURCE OF TRUTH, and it is the query cache. This view used to copy the
- * page's already-cached list into `useState` and then keep the two apart by
- * hand: the realtime handler re-fetched through the raw client and `setState`
- * with the answer (leaving the cache the page reads from stale), and every
- * write patched the local copy only. A remount inside the cache window —
- * navigating away and back — rebuilt the whole view from the untouched cache
- * entry, so a pin, a share or a delete could simply come back. Now the reads
- * ARE `useApiQuery` on the same keys the page mounted (same entries, no extra
- * request), the writes patch those entries optimistically, and the props
- * survive only as the first-paint seed.
+ * Chats page root — agent-exported conversation archive. Two-pane
+ * .page-float: scope-filtered list left, selected chat's document right.
+ * ⚠ ONE SOURCE OF TRUTH = the query cache. Never mirror the list into
+ * `useState`: a remount inside the cache window rebuilds from the untouched
+ * entry, so a pin/share/delete comes back.
  */
 export function ChatsView({
   workspaceId,
@@ -89,15 +77,11 @@ export function ChatsView({
   const hidden = listQuery.data?.hiddenCount ?? hiddenCount;
   const folders = foldersQuery.data ?? initialFolders;
 
-  // Live updates from MCP/CLI agents and other tabs: an exported chat, a new
-  // message, a share/folder change, or a retention shift. Invalidation is
-  // EXPLICIT and names three caches — the list and the folders (both
-  // server-authoritative: retention and grant fan-out are computed there), and
-  // the ONE transcript currently on screen. It used to name
-  // `["chat-detail", workspaceId]`, a prefix over every transcript the user
-  // had opened all session, so a single agent export re-downloaded all of
-  // them. `useRefetchGate` holds the whole signal open while a local write is
-  // in flight, so a realtime event mid-write cannot refetch over it.
+  // ⚠ Invalidation stays EXPLICIT, naming three caches: list + folders
+  // (server-authoritative — retention and grant fan-out live there) and the
+  // ONE on-screen transcript. A broader prefix re-downloads every transcript
+  // opened this session. `useRefetchGate` holds the signal while a local write
+  // is in flight, so a realtime event mid-write can't refetch over it.
   const { signal, gate } = useRefetchGate(() => {
     void qc.invalidateQueries({ queryKey: chatKeys.list().all });
     void qc.invalidateQueries({ queryKey: chatKeys.folders().all });
@@ -124,9 +108,8 @@ export function ChatsView({
     return c;
   }, [chats, currentUserId]);
 
-  // Folder grouping covers the caller's own archive — the Private and
-  // All filters. Team/Shared render a flat, owner-labeled list. On All,
-  // other members' chats sit in a trailing "Shared with me" group.
+  // Folder grouping = caller's own archive (Private + All). Team/Shared are
+  // flat + owner-labeled; on All, others' chats trail in "Shared with me".
   const showFolders = filter === "private" || filter === "all";
 
   const groups = useMemo<FolderGroup[]>(() => {
@@ -173,8 +156,8 @@ export function ChatsView({
         chats: pinnedFirst(chats.filter((c) => !mine(c) && matches(c))),
       });
     }
-    // Empty folders stay visible (outside a search) so their sharing
-    // and future contents remain reachable; empty pseudo-groups don't.
+    // Empty folders stay visible outside a search so sharing stays reachable;
+    // empty pseudo-groups don't.
     return grouped.filter(
       (g) => g.chats.length > 0 || (g.kind === "folder" && q === "")
     );
@@ -203,12 +186,9 @@ export function ChatsView({
     });
   };
 
-  // EVERY HANDLER BELOW COMMITS AT SUBMIT, not on the response. The cache
-  // patch lands in `onMutate`, so any local follow-up that has to agree with
-  // it — which filter the chat is now on, which row is selected — has to be
-  // decided here too. Deferring one to `onSuccess` would leave the list and
-  // the selection disagreeing for the length of a round trip, which is the
-  // failure the optimistic patch exists to remove.
+  // ⚠ EVERY HANDLER BELOW COMMITS AT SUBMIT, not on the response. Cache patch
+  // lands in `onMutate`, so local follow-up (filter, selection) decides here
+  // too. Deferring to `onSuccess` desyncs list vs selection for a round trip.
 
   const handleShareChange = async (
     id: string,
@@ -217,7 +197,7 @@ export function ChatsView({
   ): Promise<void> => {
     const chat = chats.find((c) => c.id === id);
     writes.share.mutate({ chatId: id, scope, teamIds });
-    // Follow the chat onto its new filter so it never vanishes mid-action.
+    // Follow the chat onto its new filter so it can't vanish mid-action.
     const next = chat ? { ...chat, ...scopeFields(scope, teamIds) } : null;
     if (next && filter !== "all" && !chatOnFilter(next, filter, currentUserId)) {
       setFilter(scope);

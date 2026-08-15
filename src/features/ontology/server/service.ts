@@ -49,12 +49,8 @@ function mapClusterRow(row: OntologyClusterRow): OntologyCluster {
   };
 }
 
-/**
- * The whole workspace ontology, assembled into the store shape the UI
- * and MCP layers share: clusters with ordered columnIds, objects with
- * ordered childIds and grouped relationships. Memberships or edges
- * pointing at soft-deleted objects are dropped here.
- */
+/** Whole-workspace ontology in the store shape UI and MCP share. Memberships
+ *  and edges pointing at soft-deleted objects are dropped here. */
 export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapshot> {
   const [clusterRows, objectRows, membershipRows, relationshipRows] = await Promise.all([
     repo.listClusters(ctx.workspaceId),
@@ -90,28 +86,16 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
 }
 
 /**
- * THE MAP-SHAPED READ (P0-3). The same graph structure as `getSnapshot` —
- * clusters with ordered `columnIds`, objects with ordered `childIds` — with
- * every JSONB column and the whole relationships table left behind.
+ * Map-shaped read: `getSnapshot`'s structure minus every JSONB column and the
+ * relationships table. Backs `dopl_map`. `truncated` = clipped by
+ * `ONTOLOGY_READ_LIMITS`.
  *
- * WHY THIS EXISTS AS A SECOND PROJECTION RATHER THAN A THINNER SNAPSHOT. The
- * ontology board renders `attributes`, `methods` and `template` off the
- * snapshot (`kanban-card.tsx`, `template-editor.tsx`), and `cluster.layout`
- * round-trips through the reducer and `updateCluster` — so the full
- * projection has real consumers and cannot be thinned. What it did NOT have is a right to be the only projection: the four
- * whole-table pulls it costs were also being paid by `dopl_map`, which the
- * server instructions mandate before every agent's first substantive reply and
- * which renders cluster names and column names. On a 366-object workspace that
- * is ~634 KB fetched to print ~82 KB worth of structure, of which the render
- * reads the names.
+ * ⚠ THREE reads, not four — relationships deliberately unfetched (nothing
+ * map-shaped draws an edge; that table grows quadratically). Per-object edges
+ * stay reachable via `op="get"`.
  *
- * THREE READS, NOT FOUR. Relationships are not fetched at all: nothing
- * map-shaped draws an edge, and the edge table is the one that grows
- * quadratically with the graph rather than linearly. An object's edges are
- * still reachable per-object through the detail path (`op="get"`).
- *
- * `truncated` is the honest half of the new `ONTOLOGY_READ_LIMITS` ceilings: a
- * clipped view says so rather than presenting itself as the whole graph.
+ * ⚠ Not a `getSnapshot` replacement: the board renders `attributes`/`methods`/
+ * `template` and `cluster.layout` round-trips through `updateCluster`.
  */
 export async function getSummary(ctx: OntologyContext): Promise<OntologySummary> {
   const [clusterRows, objectRows, membershipRows] = await Promise.all([
@@ -148,8 +132,7 @@ export async function getSummary(ctx: OntologyContext): Promise<OntologySummary>
     }
   }
 
-  // A read that came back exactly at its ceiling is the one case we cannot
-  // distinguish from an exhausted one, so it counts as clipped.
+  // At-ceiling is indistinguishable from exhausted → counts as clipped.
   const truncated =
     clusterRows.length >= ONTOLOGY_READ_LIMITS.clusters ||
     objectRows.length >= ONTOLOGY_READ_LIMITS.objects ||
@@ -186,18 +169,10 @@ export async function updateCluster(
 }
 
 /**
- * Cascade HARD-delete a cluster: the cluster AND every object it owns — its
- * columns plus all nested cards — are removed inside a single atomic RPC.
- * Deletion is permanent and immediate; there is no trash, no restore and no
- * purge (2026-08-07, RETIREMENT-UNWIRING-PLAN §2b). Memberships and
- * relationships cascade via FK. Because both DELETEs ride one transaction they
- * can't desync — a two-write sequence could delete the objects while leaving
- * the cluster behind, which is the failure this RPC's soft-delete predecessor
- * was written to close.
- *
- * Returns the count of objects the delete cascaded. A ref that matches no live
- * cluster 404s (the RPC returns null, distinguishing "nothing matched" from
- * "deleted a cluster that owned 0 objects").
+ * Cascade HARD-delete cluster + every object it owns, one atomic RPC.
+ * Permanent: no trash/restore/purge. ⚠ Must stay one transaction — two writes
+ * can delete the objects and leave the cluster behind. Returns objects
+ * cascaded; RPC null = no live cluster → 404 (≠ a cluster that owned 0).
  */
 export async function deleteCluster(ctx: OntologyContext, clusterId: string): Promise<number> {
   const count = await repo.cascadeHardDeleteCluster(ctx.workspaceId, clusterId);
@@ -209,10 +184,9 @@ export async function createObject(
   ctx: OntologyContext,
   input: OntologyObjectCreateInput
 ): Promise<OntologyObject> {
-  // Single create-time choke point for the free-plan object cap. Columns
-  // and nested cards both land here (createCluster inserts no object row,
-  // so it isn't gated). Freeze-don't-delete: only creation is blocked —
-  // updates / deletes / reads never call this.
+  // Sole create-time choke point for free-plan object cap. Columns + nested
+  // cards land here; createCluster inserts no object row so it isn't gated.
+  // Freeze-don't-delete: only creation blocked, never updates/deletes/reads.
   await assertCanCreateObject(ctx.workspaceId);
 
   let attributes: OntologyObject["attributes"] | undefined;
@@ -224,9 +198,8 @@ export async function createObject(
   } else if (input.parentObjectId) {
     const parent = await repo.findObjectById(ctx.workspaceId, input.parentObjectId);
     if (!parent) throw HttpError.notFound("Parent object not found");
-    // Columns act as templates: a new card is born with the column's
-    // default fields as empty attributes ready to fill, and copies the
-    // column's relationships and actions as its starting set.
+    // Columns act as templates: new card born with column's default fields as
+    // empty attributes, plus a copy of its relationships and actions.
     attributes = (parent.template ?? []).map((f) => ({
       key: f.key,
       label: f.label,
@@ -267,11 +240,9 @@ export async function createObject(
   return object;
 }
 
-/**
- * 412 for an optimistic-concurrency miss — mirrors the KB/skills
- * `*_STALE_VERSION` contract so the MCP layer's conflict handling (re-get,
- * reconcile, retry) fires uniformly across tools.
- */
+/** 412 on optimistic-concurrency miss. ⚠ Must mirror KB/skills
+ *  `*_STALE_VERSION` contract so MCP conflict handling (re-get, reconcile,
+ *  retry) fires uniformly across tools. */
 function staleVersionError(expected: string, actual: string): HttpError {
   return new HttpError(
     412,
@@ -293,8 +264,8 @@ export async function updateObject(
 
   let row;
   if (hasFieldPatch) {
-    // Field patches touch the object row, so the CAS rides on the atomic
-    // `updated_at` filter (0 rows = stale-or-gone; disambiguate below).
+    // Field patch touches the row → CAS rides the atomic `updated_at` filter
+    // (0 rows = stale-or-gone; disambiguated below).
     row = await repo.updateObject(ctx.workspaceId, objectId, rest, expectedUpdatedAt);
     if (!row) {
       if (expectedUpdatedAt !== undefined) {
@@ -304,9 +275,8 @@ export async function updateObject(
       throw HttpError.notFound("Object not found");
     }
   } else {
-    // Relationship-only (or no-op) writes don't update the object row, so
-    // the `updated_at` clock wouldn't move — enforce the precondition by
-    // hand against the current row instead.
+    // Relationship-only (or no-op) writes never touch the object row, so
+    // `updated_at` wouldn't move — enforce the precondition by hand.
     row = await repo.findObjectById(ctx.workspaceId, objectId);
     if (!row) throw HttpError.notFound("Object not found");
     if (expectedUpdatedAt !== undefined && row.updated_at !== expectedUpdatedAt) {
@@ -318,10 +288,9 @@ export async function updateObject(
   if (relationships) {
     cleanEdges = await sanitizeEdges(ctx, objectId, relationships);
     await repo.replaceRelationshipsForSource(ctx.workspaceId, objectId, cleanEdges);
-    // Writing edges bumps the source object's `updated_at` via the
-    // ontology_relationships trigger (H-4), so re-read the row to return the
-    // post-bump version token; otherwise the caller's next CAS write with the
-    // stale token would spuriously 412.
+    // Edge write bumps source `updated_at` via the ontology_relationships
+    // trigger (H-4) → re-read for the post-bump version token, else caller's
+    // next CAS write spuriously 412s.
     const refreshed = await repo.findObjectById(ctx.workspaceId, objectId);
     if (refreshed) row = refreshed;
   }
@@ -332,11 +301,9 @@ export async function updateObject(
 }
 
 /**
- * Make a relationship payload safe to persist: merge same-label edges
- * (a rename can collide labels — merging beats a unique-index 500),
- * dedupe targets, and silently drop self-references and targets that
- * aren't live objects in this workspace (clients can hold stale ids
- * after a delete; sync must stay resilient).
+ * Make a relationship payload safe to persist: merge same-label edges (a rename
+ * can collide labels — merging beats a unique-index 500), dedupe targets, drop
+ * self-refs and non-live targets (clients hold stale ids after a delete).
  */
 async function sanitizeEdges(
   ctx: OntologyContext,
@@ -365,10 +332,9 @@ async function sanitizeEdges(
 }
 
 /**
- * One object's outbound edges. Scoped in Postgres, not in JS: this used to call
- * `listRelationships` (every edge in the workspace) and filter the array, on
- * four hot paths — inherited-edge copy at create, every update, claim_anchor
- * and get_anchor. The `source_object_id` predicate is indexed.
+ * One object's outbound edges. ⚠ Scope in Postgres, not JS — `source_object_id`
+ * is indexed, and this sits on four hot paths (inherited-edge copy at create,
+ * every update, claim_anchor, get_anchor). Never filter `listRelationships`.
  */
 async function currentRelationships(
   ctx: OntologyContext,
@@ -384,10 +350,8 @@ async function currentRelationships(
   return edges;
 }
 
-/**
- * PERMANENTLY delete one object. Immediate and irreversible — there is no
- * trash (2026-08-07). Memberships and relationships cascade via FK.
- */
+/** PERMANENTLY delete one object. Irreversible, no trash. Memberships and
+ *  relationships cascade via FK. */
 export async function deleteObject(ctx: OntologyContext, objectId: string): Promise<void> {
   const row = await repo.findObjectById(ctx.workspaceId, objectId);
   if (!row) throw HttpError.notFound("Object not found");
@@ -406,10 +370,8 @@ export async function claimAnchor(
   return object;
 }
 
-/**
- * The caller's identity anchor — the ontology object linked to their
- * user account (ontology_objects.user_id), or null when none is linked.
- */
+/** Caller's identity anchor — object linked via `ontology_objects.user_id`,
+ *  or null. */
 export async function getAnchor(ctx: OntologyContext): Promise<OntologyObject | null> {
   const row = await repo.findAnchorObject(ctx.workspaceId, ctx.userId);
   if (!row) return null;

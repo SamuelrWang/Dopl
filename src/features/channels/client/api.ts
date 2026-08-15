@@ -34,24 +34,20 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 /**
  * The feature's transport, as `useApiMutationWith` consumes it.
- *
- * The mutation layer is transport-injected precisely so a feature can hand it
- * the client it already had: every write driven through this one still throws
- * {@link ChannelApiError}, so the `err instanceof ChannelApiError` branch that
- * puts the server's own wording in the toast survives the move off
- * hand-rolled awaits. A mutation wired straight to `apiRequest` would quietly
- * degrade every channels error to its fallback string.
+ * ⚠ Every write driven through this still throws {@link ChannelApiError}, so the
+ * `err instanceof ChannelApiError` branch that puts the server's own wording in
+ * the toast keeps working. A mutation wired straight to `apiRequest` silently
+ * degrades every channels error to its fallback string.
  */
 export const channelRequest: ApiMutationRequestFn = request;
 
-// Paths live in `./query-keys.ts` beside the cache keys built from them, so a
+// ⚠ Paths live in `./query-keys.ts` beside the cache keys built from them, so a
 // write and the read it patches cannot disagree about the URL.
 export { channelPath };
 
 /**
- * Create-channel body: a normal channel (`name`, ...) OR a direct channel
- * (`direct: true` + `memberUserId`). The server dedups a repeat DM to the same
- * peer and returns the existing channel.
+ * Create-channel body: normal (`name`, …) OR direct (`direct: true` +
+ * `memberUserId`). The server dedups a repeat DM and returns the existing one.
  */
 export type ChannelCreateBody =
   | {
@@ -105,11 +101,11 @@ export async function deleteChannel(
   });
 }
 
-// NO `postMessage` WRAPPER, AND NO `PostMessageBody`. `POST /messages` is driven by the SEND
-// MUTATION (`hooks/use-thread-writes.ts`), which owns the request shape because it also owns
-// the cache patch the same draft produces — a wrapper beside it would be a second place the
-// body could be built and a second thing to keep in step with `clientMsgId`. Same reasoning
-// the reads above give for having no wrapper: whoever owns the cache owns the call.
+// ⚠ NO `postMessage` wrapper and no `PostMessageBody`. `POST /messages` is driven
+// by the SEND MUTATION (`hooks/use-thread-writes.ts`), which owns the request
+// shape because it owns the cache patch the same draft produces. A wrapper is a
+// second place to build the body and a second thing to keep in step with
+// `clientMsgId`. Whoever owns the cache owns the call.
 
 export async function addChannelMember(
   channelId: string,

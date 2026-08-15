@@ -1,28 +1,18 @@
 /**
- * Seed fixture data — the canonical knowledge-base content used to
- * populate brand-new workspaces (and the original Phase-1 UI mocks
- * before Item 3 wired the real DB-backed UI).
+ * Seed fixture data — canonical knowledge-base content for brand-new
+ * workspaces.
  *
- * Item 5.A.4 moved this file from `src/features/knowledge/data.ts` to
- * its current location, dropped the now-unused `SourceProvider` /
- * `SourceConnection` types (those moved to `../source-types.ts`), and
- * removed the `findKnowledgeBase` lookup helper (no consumers — the
- * UI uses `service.getBaseBySlug` and skills uses a stub).
- *
- * The legacy `KnowledgeBase` shape here (with embedded `entries`,
- * `pending`, `sources` arrays) is purely the seed-input shape — it
- * differs from the live domain `KnowledgeBase` in `../types.ts`. The
- * adapter at `./seed-fixtures.ts` reshapes this into the seed inputs
- * the service consumes.
+ * ⚠ The legacy `KnowledgeBase` shape here (embedded `entries` / `pending` /
+ * `sources` arrays) is the SEED-INPUT shape only; it differs from the live
+ * domain `KnowledgeBase` in `../types.ts`. `./seed-fixtures.ts` reshapes it
+ * into what the service consumes.
  */
 
-// Audit fix #19 (partial): no `import "server-only"`. This file is
-// pure data — string literals + types — with no server APIs, no env
-// access, no secrets. The directive forced
-// scripts/smoke-knowledge-md-roundtrip.ts to run with
-// NODE_OPTIONS='--conditions=react-server' even though the script is
-// pure-Node. Removing the directive matches ENGINEERING.md §10:
-// "Shared code (types, pure utilities) has no directive."
+// ⚠ NO `import "server-only"`, deliberately. Pure data — string literals and
+// types, no server APIs, env access or secrets. The directive forced
+// scripts/smoke-knowledge-md-roundtrip.ts to run under
+// NODE_OPTIONS='--conditions=react-server' though the script is pure-Node.
+// ENGINEERING.md §10: "Shared code (types, pure utilities) has no directive."
 
 type LegacyKnowledgeEntryType =
   | "note"

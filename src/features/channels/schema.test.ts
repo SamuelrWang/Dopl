@@ -1,14 +1,12 @@
 /**
- * INVARIANT SUITE — channels zod schemas.
- *
- * Locks the caller-input validation contract that both the REST handlers and
- * the MCP channel tools parse against. The security-load-bearing invariants:
- *   - `kind` / `authorKind` REJECT the server-reserved `system` value (a caller
- *     must never be able to post an anonymized system-styled message).
- *   - `summary` is length-capped (it rides into a receiver's consent prompt —
- *     an uncapped value is a spoofing surface).
+ * INVARIANT SUITE — channels zod schemas. Locks the caller-input contract both
+ * REST handlers and MCP channel tools parse against. Security-load-bearing:
+ *   - `kind` / `authorKind` REJECT server-reserved `system` (no caller may post
+ *     an anonymized system-styled message);
+ *   - `summary` length-capped — it rides into a receiver's consent prompt, so an
+ *     uncapped value is a spoofing surface;
  *   - `toUserId` must be a UUID; `agentToolProfile` is a closed enum.
- * A cap / enum change here is a contract change and must be deliberate.
+ * ⚠ A cap / enum change here is a contract change.
  */
 
 import { describe, it, expect } from "vitest";
@@ -53,15 +51,12 @@ describe("ChannelCreateSchema", () => {
   });
 
   /**
-   * Q1 (write-op sweep) — the CHARSET rule, which did not exist before this
-   * change: `name` and `topic` were length-bounded and nothing else, so both
-   * could carry the newline that forges a line inside `dopl_channel` server
-   * narration. A channel NAME reaches an UNINVITED agent (`resolveChannelOr`
-   * resolves public channels the caller was never invited to) and a TOPIC
-   * reaches every workspace member through `op="list"`.
+   * ⚠ CHARSET rule. Length bounds alone let `name` / `topic` carry the newline
+   * that forges a line inside `dopl_channel` server narration — a NAME reaches
+   * an UNINVITED agent (`resolveChannelOr` resolves public channels) and a TOPIC
+   * reaches every workspace member via `op="list"`.
    *
-   * Mirrors DISPLAY_NAME_RE in src/app/api/user/profile/route.ts, and is
-   * backed (not yet applied) by
+   * Mirrors DISPLAY_NAME_RE in src/app/api/user/profile/route.ts; backed by
    * supabase/migrations/20260731100000_channels_name_topic_bounds.sql.
    */
   it("name: rejects control, zero-width and line-separator characters", () => {
@@ -82,12 +77,10 @@ describe("ChannelCreateSchema", () => {
   });
 
   it("a LEADING zero-width space is trimmed away, not rejected", () => {
-    // `.trim()` runs BEFORE `.regex()`, and JS trims U+FEFF (it is WhiteSpace
-    // per spec) though it does NOT trim U+200B. So a leading BOM is stripped
-    // and the stored value is already clean — accepting it is correct, and it
-    // is also what keeps the route compatible with the DB CHECK, whose btrim()
-    // strips only ASCII spaces. The route is the stricter trimmer; a value it
-    // stores can never be refused by the constraint.
+    // ⚠ `.trim()` runs BEFORE `.regex()`, and JS trims U+FEFF (WhiteSpace per
+    // spec) but NOT U+200B. So a leading BOM is stripped and the stored value is
+    // already clean. Route is the stricter trimmer than the DB CHECK's btrim()
+    // (ASCII only), so a value it stores can never be refused by the constraint.
     const parsed = ChannelCreateSchema.safeParse({ name: "\uFEFFSync" });
     expect(parsed.success).toBe(true);
     expect(parsed.success && "name" in parsed.data && parsed.data.name).toBe("Sync");
@@ -123,7 +116,6 @@ describe("ChannelCreateSchema", () => {
     expect(
       ChannelCreateSchema.safeParse({ direct: true, memberUserId: UUID }).success
     ).toBe(true);
-    // direct requires a UUID member and no name.
     expect(ChannelCreateSchema.safeParse({ direct: true }).success).toBe(false);
     expect(
       ChannelCreateSchema.safeParse({ direct: true, memberUserId: "nope" }).success
@@ -178,8 +170,8 @@ describe("ChannelMessageCreateSchema", () => {
   });
 
   it("kind: REJECTS the server-reserved `system` value", () => {
-    // `system` (joins / topic changes) is emitted only by the service; a
-    // caller posting a system-styled message would spoof an anonymized event.
+    // `system` is service-emitted only — a caller posting one spoofs an
+    // anonymized event.
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", kind: "system" }).success).toBe(false);
   });
 
@@ -191,7 +183,6 @@ describe("ChannelMessageCreateSchema", () => {
 
   it("summary: trimmed, 1..200 chars (consent-prompt cap)", () => {
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", summary: "" }).success).toBe(false);
-    // Whitespace-only trims to empty and fails the min(1).
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", summary: "   " }).success).toBe(false);
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", summary: "a".repeat(200) }).success).toBe(true);
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", summary: "a".repeat(201) }).success).toBe(false);
@@ -211,22 +202,20 @@ describe("ChannelMessageCreateSchema", () => {
   it("metadata: must be an object, not a scalar/array", () => {
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", metadata: { a: 1 } }).success).toBe(true);
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", metadata: "nope" }).success).toBe(false);
-    // A record is object-keyed; an array is not an accepted shape.
     expect(ChannelMessageCreateSchema.safeParse({ body: "x", metadata: [1, 2] }).success).toBe(false);
   });
 
   it("F-060: metadata is rejected once its serialized size exceeds the cap", () => {
-    // `JSON.stringify({ blob })` is `{"blob":"<value>"}` = 11 + value length: a
-    // value landing the total exactly on the 16384-byte cap parses, one more not.
+    // `JSON.stringify({ blob })` = 11 + value length; exactly 16384 parses.
     const meta = (n: number) => ({ body: "x", metadata: { blob: "a".repeat(n) } });
     expect(ChannelMessageCreateSchema.safeParse(meta(16384 - 11)).success).toBe(true);
     expect(ChannelMessageCreateSchema.safeParse(meta(16384 - 11 + 1)).success).toBe(false);
   });
 
   /**
-   * `intent` is OPTIONAL and stays optional: the schema must not manufacture a
-   * default, because "the caller said request" and "the caller said nothing"
-   * are different facts on the wire — only the first stamps a key.
+   * ⚠ `intent` stays OPTIONAL — the schema must not manufacture a default:
+   * "caller said request" and "caller said nothing" are different wire facts,
+   * and only the first stamps a key.
    */
   it("intent: optional, and only chat|request", () => {
     const bare = ChannelMessageCreateSchema.safeParse({ body: "x" });
@@ -238,14 +227,9 @@ describe("ChannelMessageCreateSchema", () => {
   });
 
   /**
-   * THE REMOVED PARAMS ARE REFUSED, NOT DROPPED (rollback §1).
-   *
-   * `toAgent` / `toAgents` / `authorAgentId` used to be the agent-addressing
-   * surface. Simply deleting the fields would have been SILENT — zod strips
-   * unknown keys — so an old client's `to_agent` would post successfully and
-   * address nobody, which is exactly the invisible-delivery failure the
-   * addressing contract existed to prevent. They are declared `z.never()`, so
-   * a caller that sends one gets a 400 naming the field.
+   * ⚠ Removed params are REFUSED, not dropped. Deleting the fields is SILENT
+   * (zod strips unknown keys), so an old client's `to_agent` would post
+   * successfully and address nobody. `z.never()` → 400 naming the field.
    */
   it("REFUSES toAgent / toAgents / authorAgentId with a message, not silence", () => {
     for (const key of ["toAgent", "toAgents", "authorAgentId"]) {
@@ -261,8 +245,7 @@ describe("ChannelMessageCreateSchema", () => {
   });
 
   it("stamps nothing for the removed keys when they are ABSENT", () => {
-    // The whole point of the `.optional()`: an ordinary post's parsed shape is
-    // byte-for-byte what it was.
+    // Point of the `.optional()`: an ordinary post's parsed shape is unchanged.
     const parsed = ChannelMessageCreateSchema.safeParse({ body: "x" });
     expect(parsed.success).toBe(true);
     expect(parsed.success && Object.keys(parsed.data)).toEqual(["body"]);
@@ -276,11 +259,9 @@ describe("ChannelMemberSelfUpdateSchema", () => {
     ).toBe(true);
   });
 
-  // F-170 (2026-08-08) — notify scope was removed from the product. It used to
-  // ride this same patch, so a stale client is the case that matters, and zod
-  // STRIPS unknown keys rather than rejecting them: a notifyScope-only body is
-  // an empty patch and the `.refine` rejects it, while a combined body parses
-  // and the field is DROPPED. Both halves are pinned so the drop can never be
+  // ⚠ notifyScope (F-170) is now an unknown key and zod STRIPS it: a
+  // notifyScope-only body is an empty patch the `.refine` rejects, a combined
+  // body parses with the field DROPPED. Both pinned so the drop is never
   // mistaken for a write that landed.
   it("drops notifyScope — the preference is gone (F-170)", () => {
     expect(ChannelMemberSelfUpdateSchema.safeParse({ notifyScope: "none" }).success).toBe(false);
@@ -344,9 +325,8 @@ describe("ConsentCreateSchema", () => {
   it("messageSeq: a real positive integer — NOT coerced (L-1)", () => {
     const parsed = ConsentCreateSchema.parse({ channelId: UUID, kind: "inbound", messageSeq: 42 });
     expect(parsed.messageSeq).toBe(42);
-    // This is a JSON body, not a query string. `z.coerce.number()` would turn
-    // every one of these into a valid-looking seq (null/""/[] -> 0, true -> 1)
-    // and a de-dupe key must never be manufactured out of junk.
+    // ⚠ JSON body, not a query string: `z.coerce.number()` turns all of these
+    // into valid-looking seqs (null/""/[] → 0, true → 1).
     for (const junk of [null, "", [], true, "42", 0, -1, 1.5]) {
       expect(
         ConsentCreateSchema.safeParse({ channelId: UUID, kind: "inbound", messageSeq: junk }).success,
@@ -363,8 +343,8 @@ describe("ConsentCreateSchema", () => {
       proposedReply: "here you go",
     });
     expect(outbound.kind === "outbound" && outbound.proposedReply).toBe("here you go");
-    // An inbound row is a request to RUN, not a drafted reply: the field is
-    // dropped rather than carried into proposed_reply.
+    // Inbound is a request to RUN, not a drafted reply — field dropped, never
+    // carried into proposed_reply.
     const inbound = ConsentCreateSchema.parse({
       channelId: UUID,
       kind: "inbound",
@@ -394,7 +374,7 @@ describe("ConsentDecisionSchema", () => {
     expect(
       ConsentDecisionSchema.parse({ decision: "allow", decidedBy: "desktop" }).decidedBy
     ).toBe("desktop");
-    // A standing trust rule is not a surface a caller can claim to be.
+    // ⚠ A standing trust rule is not a surface a caller can claim to be.
     expect(
       ConsentDecisionSchema.safeParse({ decision: "allow", decidedBy: "trust" }).success
     ).toBe(false);
@@ -427,11 +407,9 @@ describe("TaskCreateSchema", () => {
   });
 
   /**
-   * `participants` seeded a BREAKOUT ROOM — a thread whose set, rather than its
-   * creator/target pair, decided who may post. Removed (rollback §1) and
-   * REFUSED rather than dropped, for the same reason the agent-address params
-   * are: a silently-ignored participant list is a room the caller believes is
-   * wider than it is.
+   * ⚠ `participants` (breakout rooms) REFUSED rather than dropped: a
+   * silently-ignored participant list is a room the caller believes is wider
+   * than it is.
    */
   it("REFUSES participants with a message, not silence", () => {
     const parsed = TaskCreateSchema.safeParse({
@@ -459,8 +437,7 @@ describe("TaskUpdateSchema", () => {
 
   it("reopen: bare op, no payload required (extra keys stripped)", () => {
     expect(TaskUpdateSchema.safeParse({ op: "reopen" }).success).toBe(true);
-    // A reopen carrying another op's field still parses — the extra key is
-    // stripped by the object schema, never reaching the reopen service.
+    // Extra key stripped by the object schema, never reaching the service.
     const parsed = TaskUpdateSchema.safeParse({ op: "reopen", outcome: "completed" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -469,8 +446,7 @@ describe("TaskUpdateSchema", () => {
   });
 
   it("discriminated union: fields can't bleed across ops", () => {
-    // A close carrying a `mode` (wrong op's field) still parses (extra keys
-    // stripped) but a set_mode without `mode` fails, and vice versa.
+    // Wrong op's field is stripped; a set_mode without `mode` still fails.
     expect(TaskUpdateSchema.safeParse({ op: "set_mode", outcome: "completed" }).success).toBe(false);
     expect(TaskUpdateSchema.safeParse({ op: "bogus", mode: "interactive" }).success).toBe(false);
   });
@@ -490,8 +466,8 @@ describe("PresenceHeartbeatSchema", () => {
     expect(PresenceHeartbeatSchema.safeParse({ status: "listening" }).success).toBe(true);
     expect(PresenceHeartbeatSchema.safeParse({ status: "offline" }).success).toBe(true);
     expect(PresenceHeartbeatSchema.safeParse({ status: "" }).success).toBe(false);
-    // No longer free text: an arbitrary caller-controlled label can't be
-    // parked in a column a later UI renders.
+    // ⚠ Not free text — an arbitrary caller label must not park in a column a
+    // later UI renders.
     expect(PresenceHeartbeatSchema.safeParse({ status: "whatever" }).success).toBe(false);
     expect(PresenceHeartbeatSchema.safeParse({ status: "a".repeat(41) }).success).toBe(false);
   });

@@ -1,31 +1,23 @@
 /**
- * INVARIANT SUITE — the channels SCHEMA, read out of supabase/migrations.
+ * INVARIANT SUITE — the channels SCHEMA, read out of supabase/migrations. These
+ * are database facts no application test can reach:
  *
- * These are database facts no application test can reach: an RLS policy, a
- * one-time DELETE, and a column grant. They are load-bearing enough that the
- * repo already pins SQL this way elsewhere (`dopl-desktop-app/test/ui-sync-tables.test.mjs`
- * parses the same directory for the realtime publication), and each invariant
- * below is one somebody has already gotten wrong once:
- *
- *   1. NO CHANNEL-SCOPED SELECT POLICY MAY FORGET `deleted_at` (C-15). The
- *      original policies omitted it deliberately, and the result was that a
- *      "permanently deleted" channel served its whole transcript to its former
+ *   1. ⚠ NO CHANNEL-SCOPED SELECT POLICY MAY FORGET `deleted_at` — without it a
+ *      "permanently deleted" channel serves its whole transcript to its former
  *      members over direct PostgREST.
- *   2. NOTHING MAY EVER HARD-DELETE A DIRECT CHANNEL (C-16 / ENGINEERING §7).
- *      A tombstoned DM is the CLOSE half of close/reopen — LIVE PRODUCT STATE.
- *      Every `DELETE FROM channels` in the whole migration set must carry the
- *      `is_direct = false` guard, and `20260807110000` must keep excluding
- *      channels entirely.
- *   3. THE CASCADE THE PURGE RELIES ON MUST STAY A CASCADE. One `DELETE`
- *      statement is only atomic-and-complete because all six child FKs into
- *      `channels` are `ON DELETE CASCADE`.
- *   4. `role` IS PUBLIC, `agent_tool_profile` IS NOT (Samuel, 2026-08-10). The
- *      column grant is the only thing enforcing that for PostgREST *and* CDC;
- *      a future `GRANT SELECT ON channel_members` would silently undo it.
+ *   2. ⚠ NOTHING MAY HARD-DELETE A DIRECT CHANNEL. A tombstoned DM is the CLOSE
+ *      half of close/reopen — live product state. Every `DELETE FROM channels`
+ *      must carry the `is_direct = false` guard, and `20260807110000` must keep
+ *      excluding channels entirely.
+ *   3. The purge's one `DELETE` is atomic-and-complete only because all six
+ *      child FKs into `channels` are `ON DELETE CASCADE`.
+ *   4. ⚠ `role` is PUBLIC, `agent_tool_profile` is NOT. The column grant is the
+ *      only thing enforcing that for PostgREST *and* CDC; a future
+ *      `GRANT SELECT ON channel_members` silently undoes it.
  *
- * Parsing note: comments are STRIPPED before matching. Migration headers in
- * this repo quote SQL at length — rollback blocks, verification SELECTs — and
- * a naive scan would happily pin a comment.
+ * ⚠ Comments are STRIPPED before matching — migration headers quote SQL at
+ * length (rollback blocks, verification SELECTs) and a naive scan pins a
+ * comment.
  */
 
 import { describe, it, expect } from "vitest";
@@ -43,9 +35,9 @@ const MIGRATIONS = join(
 );
 
 /**
- * Strip `--` line comments without eating a `--` that lives inside a string
- * literal or a `$$…$$` body. Cheap hand scanner; the alternative (a regex) is
- * exactly how a header's quoted rollback SQL gets mistaken for a statement.
+ * Strip `--` line comments without eating one inside a string literal or a
+ * `$$…$$` body. ⚠ Hand scanner, not a regex — a regex is how a header's quoted
+ * rollback SQL gets mistaken for a statement.
  */
 function stripComments(sql: string): string {
   let out = "";
@@ -137,12 +129,10 @@ function finalPolicy(name: string): string {
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
- * The five policies whose rule is "you may read this because you are in
- * channel X, or because X is public". Each must also require the channel to be
- * alive, or a tombstone keeps serving its rows.
- *
- * `channel_consent_requests` / `channel_sessions` are deliberately absent —
- * they are OWNER-scoped (the caller's own rows), not a shared transcript.
+ * The five policies meaning "you may read this because you are in channel X, or
+ * X is public". ⚠ Each must also require the channel ALIVE, or a tombstone keeps
+ * serving its rows. `channel_consent_requests` / `channel_sessions` are
+ * deliberately absent — OWNER-scoped, not a shared transcript.
  */
 const CHANNEL_TRANSPARENT_SELECT_POLICIES = [
   "channels_member_select",
@@ -169,11 +159,10 @@ describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
   });
 
   it("uses no policy helper beyond is_channel_member (a new one owes anon EXECUTE)", () => {
-    // 20260730052410: any NEW function referenced by a SELECT policy on a
-    // PUBLISHED table must also be GRANTed to anon, or an expired-JWT
-    // subscriber joining as anon raises 42501 inside realtime.apply_rls and
-    // kills CDC for every subscriber in the project. Inline EXISTS has no such
-    // footgun; this pins that nothing crept in.
+    // ⚠ Any NEW function referenced by a SELECT policy on a PUBLISHED table must
+    // also be GRANTed to anon, or an expired-JWT subscriber joining as anon
+    // raises 42501 inside realtime.apply_rls and kills CDC for the whole
+    // project. Inline EXISTS has no such footgun.
     const KNOWN = new Set(["is_current_workspace_member", "is_channel_member"]);
     for (const policy of CHANNEL_TRANSPARENT_SELECT_POLICIES) {
       const sql = finalPolicy(policy);
@@ -183,9 +172,9 @@ describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
   });
 
   it("channel_task_participants inherits the guard through channel_tasks", () => {
-    // Not given its own deleted_at conjunct on purpose: its EXISTS is on
-    // channel_tasks, which is itself RLS-filtered for the same caller. If that
-    // reference ever goes away the inheritance argument goes with it.
+    // ⚠ No own deleted_at conjunct on purpose — its EXISTS is on channel_tasks,
+    // itself RLS-filtered for the same caller. Lose that reference and the
+    // inheritance argument goes with it.
     const sql = finalPolicy("channel_task_participants_member_select");
     expect(sql).toMatch(/FROM\s+public\.channel_tasks/i);
   });
@@ -286,7 +275,7 @@ describe("channel_members column privileges (Samuel 2026-08-10: role yes, permis
     const last = revokes[revokes.length - 1];
     expect(last).toMatch(/\banon\b/);
     expect(last).toMatch(/\bauthenticated\b/);
-    // A bare `REVOKE SELECT (cols)` would be the opposite change.
+    // ⚠ A bare `REVOKE SELECT (cols)` is the opposite change.
     expect(last).not.toMatch(/REVOKE\s+SELECT\s*\(/i);
   });
 
@@ -302,9 +291,9 @@ describe("channel_members column privileges (Samuel 2026-08-10: role yes, permis
   });
 
   it("the columns RLS and the realtime filter depend on are granted", () => {
-    // workspace_id is the `workspace_id=eq.<id>` subscription filter on both
-    // subscribers AND the policy's outer fence; channel_id is the policy's
-    // other input. Revoking either breaks the feed, not just a payload field.
+    // ⚠ workspace_id is the subscription filter on both subscribers AND the
+    // policy's outer fence; channel_id is the policy's other input. Revoking
+    // either breaks the FEED, not just a payload field.
     const cols = grantedColumns(grants[grants.length - 1]);
     for (const c of ["channel_id", "user_id", "workspace_id"]) {
       expect(cols, `${c} must stay readable`).toContain(c);
@@ -312,9 +301,9 @@ describe("channel_members column privileges (Samuel 2026-08-10: role yes, permis
   });
 
   it("nothing later hands the whole table back", () => {
-    // The rollback in the migration header is exactly `GRANT SELECT ON
-    // public.channel_members TO anon, authenticated` — if it ever lands as a
-    // statement, this invariant is gone and the DTO scrub is alone again.
+    // ⚠ If the header's rollback (`GRANT SELECT ON public.channel_members TO
+    // anon, authenticated`) ever lands as a statement, this invariant is gone
+    // and the DTO scrub is alone.
     const tableWide = statementsMatching(
       /GRANT\s+SELECT\s+ON\s+public\.channel_members\b/gi
     );

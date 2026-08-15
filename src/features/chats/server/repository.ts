@@ -16,12 +16,9 @@ export function countOf(row: ChatRowWithCount): number {
 
 // ─── Retention window ───────────────────────────────────────────────
 
-/**
- * Free-plan retention cutoff as a `YYYY-MM-DD` DATE string, computed on
- * the DB clock (`now() - interval`). Callers feed it to `.gte`/`.lt`
- * `session_date` filters so the window boundary lives in Postgres, not in
- * JS date math. See migration `chats_retention_cutoff`.
- */
+/** Free-plan retention cutoff, `YYYY-MM-DD`, computed on the DB clock so the
+ *  window boundary lives in Postgres, not JS date math. Feed to `.gte`/`.lt`
+ *  on `session_date`. Migration: `chats_retention_cutoff`. */
 export async function retentionCutoff(windowDays: number): Promise<string> {
   const db = supabaseAdmin();
   const { data, error } = await db.rpc("chats_retention_cutoff", {
@@ -33,12 +30,9 @@ export async function retentionCutoff(windowDays: number): Promise<string> {
 
 // ─── Chats ──────────────────────────────────────────────────────────
 
-/**
- * Everything the caller may read: their own chats + workspace-public
- * ones. When `since` is set (free-plan retention window), rows whose
- * `session_date` is older than the cutoff are excluded in the query —
- * hidden, never deleted. `null` = full history.
- */
+/** Own chats + workspace-public ones. `since` (retention cutoff) excludes
+ *  older `session_date` rows in the query — hidden, never deleted. `null` =
+ *  full history. */
 export async function listVisibleChats(
   workspaceId: string,
   userId: string,
@@ -49,10 +43,9 @@ export async function listVisibleChats(
     .from("chats")
     .select(CHAT_SELECT)
     .eq("workspace_id", workspaceId)
-    // Soft-deleted chats are hidden from every active read (F-11). Passed as
-    // a raw `.or()` string because `deleted_at` is not yet in the generated
-    // column types (added by migration 20260718000002); a separate top-level
-    // `.or(...)` AND-combines with the owner/public predicate above.
+    // ⚠ Raw `.or()` string because `deleted_at` is not in the generated
+    // column types. A separate top-level `.or()` AND-combines with the
+    // owner/public predicate below.
     .or("deleted_at.is.null")
     .or(`owner_id.eq.${userId},visibility.eq.public`);
   if (since) query = query.gte("session_date", since);
@@ -61,12 +54,9 @@ export async function listVisibleChats(
   return (data ?? []) as ChatRowWithCount[];
 }
 
-/**
- * Count of chats the caller could otherwise read (same owner-or-public
- * predicate as `listVisibleChats`) that fall OUTSIDE the retention window
- * (`session_date < since`). Head-count only — no rows fetched. Drives the
- * "N older chats hidden" upgrade affordance.
- */
+/** Readable chats OUTSIDE the retention window. Same owner-or-public
+ *  predicate as `listVisibleChats`; head-count only. Drives the "N older
+ *  chats hidden" upgrade affordance. */
 export async function countHiddenChats(
   workspaceId: string,
   userId: string,
@@ -77,7 +67,7 @@ export async function countHiddenChats(
     .from("chats")
     .select("*", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
-    // Trashed chats are neither shown nor counted as "hidden by retention".
+    // Trashed chats are neither shown nor counted as retention-hidden.
     .or("deleted_at.is.null")
     .or(`owner_id.eq.${userId},visibility.eq.public`)
     .lt("session_date", since);
@@ -95,18 +85,16 @@ export async function findChatById(
     .select(CHAT_SELECT)
     .eq("workspace_id", workspaceId)
     .eq("id", chatId)
-    // Active reads (get / append / update / delete ownership + the
-    // post-write echo) never resolve a trashed chat — it reads as missing.
+    // Active reads never resolve a trashed chat — it reads as missing.
     .or("deleted_at.is.null")
     .maybeSingle();
   if (error) throw error;
   return data as ChatRowWithCount | null;
 }
 
-// The idempotency lookup deliberately does NOT filter `deleted_at`: the
-// (workspace_id, owner_id, client_session_id) unique index spans trashed
-// rows, so a re-export must find a soft-deleted match and revive it
-// (exportChat clears `deleted_at`) rather than collide on the index.
+// ⚠ Deliberately does NOT filter `deleted_at`: the (workspace_id, owner_id,
+// client_session_id) unique index spans trashed rows, so a re-export must
+// find a soft-deleted match and revive it rather than collide.
 export async function findChatByClientSession(
   workspaceId: string,
   ownerId: string,
@@ -124,10 +112,8 @@ export async function findChatByClientSession(
   return data;
 }
 
-// `deleted_at` is added by migration 20260718000002 and not yet in the
-// generated `ChatUpdate` type (regenerated after the migration applies), so
-// the soft-delete/revive writes widen the patch here and cast on the way to
-// Supabase.
+// `deleted_at` is not in the generated `ChatUpdate` type, so revive writes
+// widen the patch here and cast on the way to Supabase.
 type ChatUpdatePatch = ChatUpdate & { deleted_at?: string | null };
 
 export async function updateChat(
@@ -146,12 +132,10 @@ export async function updateChat(
 }
 
 /**
- * PERMANENT delete of ONE chat, workspace-scoped. Deletion is immediate and
- * irreversible — there is no trash (2026-08-07). `chat_messages` cascade via
- * FK; the `chat_grants_cleanup` trigger drops team grants. The `workspace_id`
- * predicate is defense-in-depth on the destructive path — the caller already
- * resolves the chat in-workspace, but it makes a cross-workspace mutation
- * structurally impossible.
+ * ⚠ PERMANENT delete of ONE chat — no trash, no restore. `chat_messages`
+ * cascade via FK; `chat_grants_cleanup` trigger drops team grants. The
+ * `workspace_id` predicate is redundant with the caller but makes a
+ * cross-workspace mutation structurally impossible.
  */
 export async function hardDeleteChat(workspaceId: string, chatId: string): Promise<void> {
   const db = supabaseAdmin();
@@ -210,20 +194,15 @@ type ChatCreateHeader = {
   exported_at?: string;
 };
 
-/**
- * Atomic export create (F-12): header INSERT + messages INSERT in ONE
- * Postgres transaction (chat_create_with_messages). A failed transcript
- * write rolls the header back, so a broken export never leaves a
- * 0-message orphan. Re-export (the row already exists) uses
- * `mergeMessages` instead.
- */
+/** Header INSERT + messages INSERT in ONE transaction
+ *  (chat_create_with_messages): a failed transcript write rolls the header
+ *  back, so no 0-message orphan. Re-export uses `mergeMessages` instead. */
 export async function createChatWithMessages(
   header: ChatCreateHeader,
   messages: MessagePayload
 ): Promise<ChatRow> {
   const db = supabaseAdmin();
-  // RPC added by migration 20260718000002; not yet in the generated
-  // Database types (regenerated after the migration applies).
+  // RPC not in the generated Database types — hence the `as never` casts.
   const { data, error } = await db.rpc(
     "chat_create_with_messages" as never,
     { p_chat: header, p_messages: messages } as never
@@ -232,13 +211,9 @@ export async function createChatWithMessages(
   return data as unknown as ChatRow;
 }
 
-/**
- * Non-destructive re-export merge (F-8): upsert the re-sent messages by
- * position and KEEP any existing rows beyond them, so a transcript
- * extended via op="append" survives a re-export instead of being wiped.
- * A single upsert statement is atomic; the returned length reflects the
- * reconciled transcript (re-sent ∪ preserved).
- */
+/** Non-destructive re-export merge: upsert re-sent messages by position and
+ *  KEEP existing rows beyond them, so an op="append"-extended transcript
+ *  survives. Returned length = re-sent ∪ preserved. */
 export async function mergeMessages(
   chatId: string,
   workspaceId: string,
@@ -260,11 +235,9 @@ export async function mergeMessages(
   return countMessages(chatId);
 }
 
-/**
- * Positions are computed inside the transaction (chat_append_messages,
- * FOR UPDATE on the chat row), so concurrent appends serialize instead
- * of racing to a unique violation. Returns the new transcript length.
- */
+/** Positions computed inside the transaction (chat_append_messages, FOR
+ *  UPDATE on the chat row), so concurrent appends serialize instead of
+ *  racing to a unique violation. Returns new transcript length. */
 export async function appendMessagesTx(
   chatId: string,
   workspaceId: string,
@@ -320,10 +293,9 @@ export async function findFolderByName(
   name: string
 ): Promise<ChatFolderRow | null> {
   const db = supabaseAdmin();
-  // ilike is a PATTERN match — escape %, _ and \ so a folder named
-  // "100%" can't match "100x" (and stray metacharacters can't make
-  // maybeSingle() see multiple rows). The ci-unique index on
-  // lower(name) guarantees at most one match for the escaped literal.
+  // ⚠ ilike is a PATTERN match — escape %, _ and \ so "100%" can't match
+  // "100x" and stray metacharacters can't make maybeSingle() see multiple
+  // rows. ci-unique index on lower(name) → at most one match once escaped.
   const literal = name.replace(/[\\%_]/g, "\\$&");
   const { data, error } = await db
     .from("chat_folders")

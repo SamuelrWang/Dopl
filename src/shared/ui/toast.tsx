@@ -1,21 +1,12 @@
 "use client";
 
 /**
- * Minimal toast primitive — no external dependency.
+ * Minimal toast primitive — no external dependency. ONE active toast at a time,
+ * bottom-right, auto-dismiss after 4s. Call shape matches sonner/radix-toast so
+ * either can be swapped in without touching call sites.
  *
- * Single active toast at a time, fixed bottom-right, auto-dismisses
- * after 4s, supports a title, optional description, and optional
- * action button. Designed to be easy to swap for sonner / radix-toast
- * later — the call site (`toast({ title, description, action })`) is
- * the same shape both libraries accept.
- *
- * Usage:
- *   // Mount once at the root
- *   <ToastHost />
- *
- *   // Fire from anywhere (client component)
- *   import { toast } from "@/shared/ui/toast";
- *   toast({ title: "Share link copied", description: url, action: { label: "Open", onClick: () => {} } });
+ * Mount `<ToastHost />` once at the root; fire `toast({title, description,
+ * action})` from any client component.
  */
 
 import { useEffect, useState } from "react";
@@ -72,13 +63,12 @@ export function ToastHost() {
     };
   }, []);
 
-  // Auto-dismiss timer — restarts whenever a new toast replaces the
-  // previous one (keyed on `.id`).
+  // Auto-dismiss; restarts when a new toast replaces the previous one (by `.id`).
   useEffect(() => {
     if (!active) return;
     const t = setTimeout(() => {
-      // Only clear if this specific toast is still current — avoids
-      // wiping a newer toast that arrived during the timeout.
+      // ⚠ Only clear if THIS toast is still current, or a newer one arriving
+      // mid-timeout gets wiped.
       if (currentToast?.id === active.id) setCurrent(null);
     }, active.durationMs);
     return () => clearTimeout(t);

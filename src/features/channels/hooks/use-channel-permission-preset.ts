@@ -4,33 +4,25 @@ import { useCallback, useEffect, useState } from "react";
 
 /**
  * Per-channel PERMISSION ARM over the desktop bridge
- * (`window.dopl.channels.get/setPermissionPreset`).
+ * (`window.dopl.channels.get/setPermissionPreset`). Picked BEFORE Allow and
+ * stored on the DESKTOP, per channel, so the launched session starts on exactly
+ * the posture that was approved.
  *
- * The operator used to be able to set a session's two permission axes only after
- * the session window opened — i.e. after the agent had already spawned. This pair
- * is picked BEFORE Allow and stored on the DESKTOP, per channel, so the launched
- * session starts on exactly the posture that was approved.
- *
- * IT IS AN ARM, NOT A SETTING — say it that way in every surface that shows it.
- * `main/channel-prefs.js` (H2, 2026-07-31) makes the stored pair SINGLE USE
+ * ⚠ IT IS AN ARM, NOT A SETTING — say it that way in every surface that shows
+ * it. `main/channel-prefs.js` makes the stored pair SINGLE USE
  * (`consumePermissionPreset` returns and deletes in one call), EXPIRING
- * ({@link PERMISSION_ARM_TTL_MS}), and consumable by ONE caller — the
- * consent-APPROVED launch path, and only when a human actually clicked Allow. It
- * used to be a durable channel-wide preference, and that is precisely the defect
- * H2 fixed: one card's `bypass`/`auto_both` silently re-armed every later session
- * on the channel. So a UI may NEVER present this pair as a standing preference
- * that persists across sessions — it applies to the next request the operator
- * allows, then it is gone.
+ * ({@link PERMISSION_ARM_TTL_MS}), and consumable by ONE caller: the
+ * consent-APPROVED launch path, only when a human clicked Allow. As a durable
+ * preference, one card's `bypass`/`auto_both` silently re-armed every later
+ * session on the channel. ⚠ A UI may NEVER present it as a standing preference.
  *
- * It mirrors {@link useChannelFolder} deliberately: the bridge is feature-detected
- * AFTER mount (window-only) so SSR and the first client render agree
- * (hydration-safe), it is null forever in a plain browser, and every consumer
- * renders NOTHING when it is null — a permission posture is a local-machine
- * concept and there is nothing to set from a browser.
+ * ⚠ Bridge feature-detected AFTER mount (window-only) so SSR and first client
+ * render agree; null forever in a plain browser, and every consumer renders
+ * NOTHING when null.
  *
- * The values are the desktop's REAL enums (main/session-profiles.js). Main
- * re-validates every write against them, so this module's job is to keep the web
- * from ever offering a value main would reject.
+ * ⚠ The values are the desktop's REAL enums (`main/session-profiles.js`), which
+ * re-validates every write — this module's job is to keep the web from offering
+ * a value main would reject.
  */
 
 /** AXIS A — what this machine's agent may DO. */
@@ -58,28 +50,24 @@ export const DEFAULT_PERMISSION_PRESET: PermissionPreset = {
 };
 
 /**
- * How long an arm stays consumable — `ARM_TTL_MS` in `main/channel-prefs.js`,
- * restated here ONLY because the UI has to say it out loud ("expires after 30
- * minutes"). The desktop is the authority; nothing on the web enforces it.
- * `channel-settings-popover.test.tsx` pins this against the desktop source so the
- * copy cannot drift away from the clock it describes.
+ * ⚠ Hand-copied from `ARM_TTL_MS` in `main/channel-prefs.js` — restated ONLY so
+ * the UI can say it out loud. The desktop is the authority; nothing on the web
+ * enforces it. `channel-settings-popover.test.tsx` pins it against the desktop
+ * source so the copy cannot drift from the clock it describes.
  */
 export const PERMISSION_ARM_TTL_MS = 30 * 60_000;
 
 /**
  * Every mounted reader of one channel's arm, keyed by channel id.
  *
- * There is more than one surface showing this pair at a time — the request card
- * and the channel settings popover, and there can be two request cards — and each
- * used to hold a PRIVATE snapshot taken at its own mount, then write
- * `{...snapshot, ...patch}`. So the second surface to write reverted the axis the
- * first one had just changed, while the first went on displaying the value it no
- * longer had. That is the one thing this control may never do: the card's whole
- * contract is that Allow launches what the card SHOWS.
+ * ⚠ Several surfaces show this pair at once (request card, settings popover, and
+ * there can be two request cards). With a PRIVATE mount snapshot each writing
+ * `{...snapshot, ...patch}`, the second writer reverts the axis the first just
+ * changed while the first keeps displaying a value it no longer has — and the
+ * card's whole contract is that Allow launches what it SHOWS.
  *
- * A write therefore (a) merges onto what is STORED, not onto a mount snapshot,
- * and (b) broadcasts the result here, so every mounted reader of that channel
- * adopts the same pair in the same frame.
+ * ⚠ So a write (a) merges onto what is STORED, never a mount snapshot, and
+ * (b) broadcasts here so every mounted reader adopts the pair in the same frame.
  */
 const armReaders = new Map<string, Set<(next: PermissionPreset) => void>>();
 
@@ -95,7 +83,7 @@ function broadcastArm(channelId: string, next: PermissionPreset) {
 export interface DoplPermissionPresetBridge {
   /** The channel's stored pair, or null when nothing is stored. */
   getPermissionPreset: (channelId: string) => Promise<PermissionPreset | null>;
-  /** Store a pair. `ok: false` when main rejected a value (never trust the web). */
+  /** Store a pair. `ok: false` when main rejected a value. */
   setPermissionPreset: (
     channelId: string,
     preset: PermissionPreset
@@ -103,10 +91,9 @@ export interface DoplPermissionPresetBridge {
 }
 
 /**
- * Coerce an arbitrary bridge reply into a preset, or null. Both axes must be
- * known: a half-valid pair is rejected whole, exactly like the main-process
- * validator, so a version-skewed desktop can never render as a posture the web
- * cannot name.
+ * Coerce a bridge reply into a preset, or null. ⚠ Both axes must be known — a
+ * half-valid pair is rejected WHOLE, like the main-process validator, so a
+ * version-skewed desktop can never render as a posture the web cannot name.
  */
 export function normalizePermissionPreset(raw: unknown): PermissionPreset | null {
   if (!raw || typeof raw !== "object") return null;
@@ -117,15 +104,13 @@ export function normalizePermissionPreset(raw: unknown): PermissionPreset | null
 }
 
 /**
- * The bridge when running inside the desktop shell AND the preset API is present,
- * else null. Feature-detected on `setPermissionPreset` so a plain browser (no
- * bridge) and an older desktop build (marker + folder API but no preset API) both
- * cleanly yield null — the caller renders nothing.
+ * The bridge inside the desktop shell with the preset API present, else null.
+ * Feature-detected on `setPermissionPreset`, so a plain browser and an older
+ * desktop build (marker + folder API, no preset API) both yield null.
  */
 export function getDesktopPermissionPresets(): DoplPermissionPresetBridge | null {
   if (typeof window === "undefined") return null;
-  // Read through a local cast, not a `Window` augmentation — `@/shared/lib/desktop`
-  // explains why the bridge has no single global type.
+  // ⚠ Local cast, not a `Window` augmentation — see `@/shared/lib/desktop`.
   const channels = (window as unknown as { dopl?: { channels?: unknown } }).dopl
     ?.channels as Partial<DoplPermissionPresetBridge> | undefined;
   if (!channels) return null;
@@ -155,15 +140,14 @@ export function useChannelPermissionPreset(
   );
   const [busy, setBusy] = useState(false);
 
-  // Feature-detect after mount (window-only) so SSR and first client render agree.
+  // ⚠ Feature-detect after mount so SSR and first client render agree.
   useEffect(() => {
     setBridge(getDesktopPermissionPresets());
   }, []);
 
-  // Load the stored pair on mount and whenever the channel changes. Nothing
-  // stored (or anything unrecognized) shows the restrictive defaults — and an arm
-  // that EXPIRED reads as nothing stored, so the control correcting itself back to
-  // manual/ask is the truth, not a glitch.
+  // Nothing stored (or unrecognized) shows the restrictive defaults. ⚠ An EXPIRED
+  // arm reads as nothing stored, so the control snapping back to manual/ask is
+  // the truth, not a glitch.
   useEffect(() => {
     if (!bridge) return;
     let alive = true;
@@ -180,9 +164,9 @@ export function useChannelPermissionPreset(
     };
   }, [bridge, channelId]);
 
-  // Join the channel's reader set so a write from ANOTHER surface lands here too
-  // (see `armReaders`). `setPreset` is a stable setState function, so this
-  // subscribes once per channel rather than on every render.
+  // Join the channel's reader set so a write from ANOTHER surface lands here
+  // (`armReaders`). `setPreset` is a stable setState function, so this
+  // subscribes once per channel rather than every render.
   useEffect(() => {
     if (!bridge) return;
     const readers = armReaders.get(channelId) ?? new Set<(n: PermissionPreset) => void>();
@@ -194,9 +178,8 @@ export function useChannelPermissionPreset(
     };
   }, [bridge, channelId]);
 
-  // Optimistic: the control shows the new posture immediately, and REVERTS if the
-  // desktop refused it. Never leave the card claiming a posture that was not
-  // stored — the whole point is that Allow launches what the card shows.
+  // ⚠ Optimistic, and REVERTS if the desktop refused: never leave the card
+  // claiming a posture that was not stored.
   const update = useCallback(
     async (patch: Partial<PermissionPreset>) => {
       if (!bridge || busy) return;
@@ -212,10 +195,8 @@ export function useChannelPermissionPreset(
       broadcastArm(channelId, optimistic);
       setBusy(true);
       try {
-        // Merge the patch onto what is STORED RIGHT NOW, not onto this
-        // component's mount snapshot: another surface may have moved the OTHER
-        // axis since, and writing a whole pair from a stale snapshot is what
-        // silently reverted it.
+        // ⚠ Merge onto what is STORED RIGHT NOW, never this component's mount
+        // snapshot — another surface may have moved the OTHER axis since.
         const stored = await bridge
           .getPermissionPreset(channelId)
           .then(normalizePermissionPreset)

@@ -1,17 +1,12 @@
 /**
- * `withUserAuth` — the OAuth-bearer RATE LIMIT (P1 2026-08-08).
+ * `withUserAuth` — the OAuth-bearer RATE LIMIT. A `dopl_at_*` bearer is accepted
+ * directly on every REST route, so without a limiter here the transport's
+ * per-token ceiling (`with-mcp-transport-auth.ts`, subject `mcp:<tokenId>`) is
+ * bypassed by pointing the same token at `/api/knowledge/…`.
  *
- * A `dopl_at_*` bearer is accepted directly on every REST route, so without a
- * limiter in this branch the per-token ceiling the `/api/mcp` transport enforces
- * (`with-mcp-transport-auth.ts`, keyed `mcp:<tokenId>`) is trivially bypassed by
- * pointing the same token straight at `/api/knowledge/…`. These pin that the
- * limiter is enforced on the SAME subject the transport uses, at the same 600/min
- * default, BEFORE the scope/session gates — and, the load-bearing property, that
- * cookie and Supabase-JWT SESSION callers are never limited by it.
- *
- * Split out of `with-auth.test.ts` (§2 500-line cap) on a real seam: the rate
- * limit is a coherent subject. Drives the REAL `withUserAuth` with the same
- * stubs as its sibling, so the discriminator exercised is the shipping one.
+ * Pins: SAME subject as the transport, same 600/min default, enforced BEFORE the
+ * scope/session gates — and ⚠ cookie / Supabase-JWT SESSION callers are never
+ * limited. Drives the REAL `withUserAuth` with the same stubs as its sibling.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -21,8 +16,7 @@ const state = vi.hoisted(() => ({
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
   sessionUser: null as { id: string } | null,
   jwtUser: null as { id: string } | null,
-  /** Whether the caller is within its ceiling, and every (subject, rpm,
-   *  endpoint) the wrapper checked. */
+  /** Within-ceiling flag + every (subject, rpm, endpoint) checked. */
   rateLimitWithin: true as boolean,
   rateLimitCalls: [] as { subject: string; rpm: number; endpoint: string }[],
 }));

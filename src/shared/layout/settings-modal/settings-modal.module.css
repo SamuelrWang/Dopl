@@ -1,16 +1,11 @@
-/*
- * Settings modal — study-notes popup language on the global design tokens.
- *
- * Chrome only (overlay, card, nav, pane). Section content is styled with
- * the token utilities + kit classes (concave-field, nav-chip, btn-light,
- * SECTION_BOX_INSET) in the TSX. Values come from :root — no palette fork.
- */
+/* Settings modal CHROME ONLY (overlay, card, nav, pane). Section content is
+   styled with token utilities + kit classes in the TSX. ⚠ Values come from
+   :root — no palette fork here. */
 
 .scope {
   color-scheme: light;
 }
 
-/* ---------- Overlay + card (fade / pop in) ---------- */
 .overlay {
   position: fixed;
   inset: 0;
@@ -46,8 +41,7 @@
 .cardVisible { opacity: 1; transform: none; }
 .card *, .card *::before, .card *::after { box-sizing: border-box; }
 
-/* Narrow variant — single-pane dialog (e.g. per-KB settings) instead of
-   the full settings page card. Block layout, content-sized height. */
+/* Narrow variant — single-pane dialog (e.g. per-KB settings). */
 .cardNarrow {
   display: block;
   width: min(92vw, 640px);
@@ -59,8 +53,7 @@
 .cardNarrow::-webkit-scrollbar { width: 8px; }
 .cardNarrow::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 8px; }
 
-/* Compact variant — small confirm dialog. Settings-popup card language:
-   14px radius, border-border-strong hairline, elevated surface. */
+/* Compact variant — small confirm dialog. */
 .cardCompact {
   display: block;
   width: min(92vw, 420px);
@@ -95,10 +88,8 @@
   gap: 8px;
 }
 
-/* Shared confirm/cancel/danger buttons — kit button recipes so every
-   ModalShell consumer stays on-system. btnCancel = .btn-light,
-   btnConfirm = .auth-btn-3d raised primary, btnDanger = bg-danger token
-   fill (matches the settings delete-account / danger-zone treatment). */
+/* ⚠ Kit button recipes copied by value, keep in sync with globals.css:
+   btnCancel = `.btn-light`, btnConfirm = `.auth-btn-3d`, btnDanger = --danger. */
 .btnCancel,
 .btnConfirm,
 .btnDanger {
@@ -114,7 +105,6 @@
   white-space: nowrap;
 }
 
-/* Cancel — .btn-light recipe */
 .btnCancel {
   font-weight: 500;
   color: var(--text-primary);
@@ -136,7 +126,6 @@
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12);
 }
 
-/* Confirm (default) — .auth-btn-3d raised black primary */
 .btnConfirm {
   font-weight: 600;
   color: #fff;
@@ -167,7 +156,6 @@
     0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Confirm (destructive) — danger token fill */
 .btnDanger {
   font-weight: 500;
   color: #fff;
@@ -200,7 +188,7 @@
   overflow-wrap: anywhere;
 }
 
-/* X button — used by the narrow/compact dialog variants. */
+/* X button — narrow/compact variants only. */
 .close {
   position: absolute;
   top: 16px;
@@ -220,9 +208,8 @@
 }
 .close:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-secondary); }
 
-/* ---------- Left nav (the app-shell sidebar's chip rail) ----------
-   Same gray surface as the shell sidebar (`--shell-surface`, not the inset
-   well) so the chips sit on the identical background in both places. */
+/* Left nav = the app-shell sidebar's chip rail. Same `--shell-surface` (NOT the
+   inset well) so chips sit on an identical background in both places. */
 .nav {
   width: 192px;
   flex: 0 0 192px;
@@ -233,10 +220,9 @@
   flex-direction: column;
   overflow-y: auto;
 }
-/* LAYOUT ONLY — a left-aligned column of hug-width chips, exactly like the
-   shell sidebar's `.nav`. The rows are the global kit's `.nav-chip` /
-   `.nav-chip-active` (+ `.raised-tab` when selected); there is deliberately
-   no local nav-item recipe to drift from it. */
+/* LAYOUT ONLY, like the shell sidebar's `.nav`. Rows are the kit's `.nav-chip` /
+   `.nav-chip-active` (+ `.raised-tab` when selected). ⚠ No local nav-item
+   recipe, deliberately — nothing to drift. */
 .navGroup {
   margin-bottom: 14px;
   display: flex;
@@ -255,7 +241,6 @@
 
 .navFoot { margin-top: auto; padding-top: 12px; }
 
-/* ---------- Right pane ---------- */
 .pane {
   flex: 1;
   min-width: 0;

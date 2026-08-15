@@ -1,9 +1,8 @@
 import type { Point } from "./types";
 
 /**
- * Pure math for node dragging — the reducer-y parts of `useNodeDrag`,
- * extracted so they test without a DOM. Covers the movement threshold
- * (clicks stay clicks), grid snapping, and edge-of-container auto-scroll.
+ * Pure math for `useNodeDrag` (DOM-free tests): movement threshold (clicks
+ * stay clicks), grid snapping, edge-of-container auto-scroll.
  */
 
 export const DEFAULT_THRESHOLD = 4;
@@ -22,16 +21,15 @@ export function snapPoint(p: Point, grid: number): Point {
   return { x: snap(p.x, grid), y: snap(p.y, grid) };
 }
 
-/** Has the pointer moved far enough from the press origin to be a drag? */
+/** Moved far enough from the press origin to be a drag? */
 export function exceededThreshold(dx: number, dy: number, threshold: number): boolean {
   return Math.hypot(dx, dy) >= threshold;
 }
 
 /**
- * Gentle auto-scroll velocity when the pointer nears a container edge.
- * Returns per-frame {x, y} scroll deltas — 0 when the pointer is comfortably
- * inside. Speed ramps linearly from the margin edge to the container edge,
- * capped at `maxSpeed`.
+ * Per-frame {x, y} scroll deltas when the pointer nears a container edge; 0
+ * when comfortably inside. Ramps linearly across the margin, capped at
+ * `maxSpeed`.
  */
 export function autoScrollDelta(
   pointer: Point,

@@ -2,25 +2,15 @@ import { apiResource, type ApiResourceKeys } from "@/shared/api/query-keys";
 import type { TeamResourceType } from "@/features/teams/access-levels";
 
 /**
- * The members console's URLs and the cache keys built from them, in one place —
- * so a write and the read it patches can never disagree about either.
- *
- * Before this, six read hooks and `teams-client.ts` each rebuilt
- * `/api/workspaces/${encodeURIComponent(slug)}/…` by hand, and the one cache
- * write that existed (`use-join-requests`) re-typed the tuple `[path,
- * undefined, undefined]` at the call site. That is the exact silent-no-op shape
- * `shared/api/query-keys.ts` exists to prevent: a key that drifts by one
- * character lands in an entry no observer is subscribed to, the screen does not
- * change, and nothing fails.
- *
- * WRITES PATCH BY THE PREFIX (`.all`). TanStack matches keys per array element,
- * and a writer does not know which workspace scope / query-param variants a
- * reader mounted — the roster is read by the full console AND by the settings
- * modal's members tab, which mount independently.
- *
- * SCOPED BY WORKSPACE SLUG BY CONSTRUCTION: every key embeds the slug in its
- * path, so a write that captured the slug at submit time cannot land in another
- * workspace's cache after a switch.
+ * Members console URLs and the cache keys built from them, in one place, so a
+ * write and the read it patches can't disagree. ⚠ Never hand-type a key: one
+ * character of drift lands in an entry no observer is subscribed to — the
+ * screen doesn't change and nothing fails.
+ * ⚠ WRITES PATCH BY THE PREFIX (`.all`): TanStack matches per array element,
+ * and a writer can't know which scope/param variants a reader mounted — the
+ * roster is read by the console AND the settings modal's members tab.
+ * Every key embeds the workspace slug, so a write that captured the slug at
+ * submit can't land in another workspace's cache after a switch.
  */
 
 export function workspacePath(slug: string, tail = ""): string {
@@ -35,7 +25,7 @@ export function memberPath(slug: string, userId: string): string {
   return `${membersPath(slug)}/${encodeURIComponent(userId)}`;
 }
 
-/** Server-resolved effective access for one member — its own cache entry. */
+/** Server-resolved effective access for one member; its own cache entry. */
 export function memberAccessPath(slug: string, userId: string): string {
   return `${memberPath(slug, userId)}/access`;
 }

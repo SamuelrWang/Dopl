@@ -1,22 +1,14 @@
 /**
- * THE STORAGE GATE'S WIRING — every entry write path, and the DELTA each one
- * hands it.
+ * Storage-gate WIRING: which entry write paths consult the gate, and with what
+ * DELTA. The gate itself is proved in `service-storage.test.ts`; an update
+ * that forgot to subtract the old body would stay green there and refuse
+ * shrinking edits in production.
  *
- * The gate itself is proved in `service-storage.test.ts`. What this file pins
- * is the part a refactor loses silently: WHICH writes consult it, and with
- * WHAT NUMBER. A create that passed its body length as a total, or an update
- * that forgot to subtract the old body, would both stay green against a gate
- * test and both be wrong in production — the second one would refuse a
- * shrinking edit, which is the exact behaviour "gates freeze, never delete"
- * forbids.
- *
- * THE COUNTER IS NOT UNDER TEST HERE and cannot be: `knowledge_bases.
- * storage_bytes` is maintained by a row trigger on `knowledge_entries`
- * (`20260812120000_knowledge_base_storage_bytes.sql` §3), in the same
- * transaction as the write, which is what lets a FOLDER or BASE delete — pure
- * FK cascade, no TypeScript involved — be counted at all. Its verification is
- * the reconciliation SELECT in that migration's footer, run against a real
- * database.
+ * ⚠ THE COUNTER IS NOT UNDER TEST and cannot be — `knowledge_bases
+ * .storage_bytes` is maintained by a row trigger
+ * (`20260812120000_knowledge_base_storage_bytes.sql` §3), which is what counts
+ * pure-FK folder/base cascades. Verified by that migration's reconciliation
+ * SELECT against a real database.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -38,9 +30,8 @@ vi.mock("./service-shared", () => ({
 }));
 vi.mock("./service-storage", () => ({
   assertStorageHeadroom: vi.fn(),
-  // The real one — the delta arithmetic under test has to be measured in the
-  // same unit the counter uses, and stubbing it would make every assertion
-  // below vacuous.
+  // ⚠ The real one: delta arithmetic must use the counter's unit; stubbing
+  // makes every assertion below vacuous.
   bodyBytes: (body?: string | null) => (body ? Buffer.byteLength(body, "utf8") : 0),
 }));
 vi.mock("./embeddings", () => ({ scheduleEntryEmbedding: vi.fn() }));
@@ -75,7 +66,7 @@ function entry(body: string): KnowledgeEntry {
   } as KnowledgeEntry;
 }
 
-/** The delta the gate was called with on its Nth (default first) call. */
+/** Delta the gate was called with on its Nth (default first) call. */
 function deltaAt(call = 0): number {
   return mockGate.mock.calls[call][2];
 }
@@ -123,16 +114,15 @@ describe("updateEntry", () => {
   });
 
   it("passes a NEGATIVE delta for a shrink, so the gate can wave it through", async () => {
-    // The over-cap escape hatch. If this arrived as a positive number (or as
-    // the new length), a user over their cap could never shrink their way out.
+    // Over-cap escape hatch: a positive number (or the new length) here means
+    // a user over cap can never shrink their way out.
     mockRepo.findEntryById.mockResolvedValue(entry("aaaaaaaaaa"));
     await updateEntry(CTX, "e-1", { body: "aa" } as never);
     expect(deltaAt()).toBe(-8);
   });
 
   it("never consults the gate for a title-only patch", async () => {
-    // `body: undefined` leaves the column alone, so there is no delta and no
-    // reason to pay for the read.
+    // `body: undefined` leaves the column alone — no delta, no read.
     mockRepo.findEntryById.mockResolvedValue(entry("aaa"));
     await updateEntry(CTX, "e-1", { title: "Renamed" } as never);
     expect(mockGate).not.toHaveBeenCalled();

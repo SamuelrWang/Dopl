@@ -5,10 +5,7 @@ import { SurveySubmissionSchema } from "@/features/onboarding/schema";
 import { submitSurvey } from "@/features/onboarding/server/service";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
-/**
- * POST /api/onboarding/survey — record the onboarding survey answers as
- * a conversion event. Idempotent per user (first submission wins).
- */
+/** POST — record survey answers as a conversion event. Idempotent per user (first wins). */
 export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
   try {
     const input = await parseJson(request, SurveySubmissionSchema);

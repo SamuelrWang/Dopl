@@ -7,22 +7,14 @@ import { createQueryClient } from "#/lib/query-client";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 
 /**
- * THE bridge stub, the canonical workspace fixtures, and the render harness for
- * this renderer's tests.
+ * THE bridge stub, canonical workspace fixtures, and render harness for this
+ * renderer's tests. One module, one set of fixtures — do not re-declare the
+ * resolve/me wire shapes per suite.
  *
- * Every SPA suite mounts a page the same way — install a `window.dopl` whose
- * `apiRequest` answers a path-dispatch table, trip-wire `fetch`, and render
- * under a QueryClientProvider + memory router. That was hand-rolled in a dozen
- * files, each re-declaring the resolve/me wire shapes the whole app rests on;
- * a change to either payload needed a dozen coordinated edits and a missed one
- * left a suite passing against a stale contract (2026-08-03 fleet audit,
- * duplication-quality). One module, one set of fixtures.
- *
- * Stubbing at `window.dopl.apiRequest` rather than at `#/lib/api-transport` is
- * deliberate and load-bearing: workspace-scoped pages read over BOTH clients
- * (the SPA's own `apiRequest` and the reused WEB feature clients), and both
- * funnel into this one bridge in the packaged app. Stubbing here exercises the
- * real topology once.
+ * ⚠ Stub at `window.dopl.apiRequest`, NOT at `#/lib/api-transport`:
+ * workspace-scoped pages read over BOTH clients (the SPA's `apiRequest` and
+ * reused WEB feature clients), and both funnel into this one bridge in the
+ * packaged app. Stubbing here exercises the real topology once.
  */
 
 export const WORKSPACE_ID = "11111111-2222-3333-4444-555555555555";
@@ -53,8 +45,8 @@ export function failure(status: number, code: string, message: string): BridgeRe
   return { status, statusText: message, hasBody: true, body: { error: { code, message } } };
 }
 
-/** `POST /api/boot` — the shell's and every page's ONE first read (P0-2).
- *  Carries what `resolve`, `me` and `my-access` used to answer separately. */
+/** `POST /api/boot` — the shell's and every page's ONE first read. Carries
+ *  what `resolve`, `me` and `my-access` answer separately. */
 export function bootBody(over: Record<string, unknown> = {}) {
   return {
     isOnboarded: true,
@@ -69,8 +61,8 @@ export function bootBody(over: Record<string, unknown> = {}) {
   };
 }
 
-/** `GET /api/workspaces/resolve?segment=` — still live for the web app and the
- *  chats page; the SPA seeds this from the boot answer instead of fetching. */
+/** `GET /api/workspaces/resolve?segment=` — live for the web app and the chats
+ *  page; the SPA seeds this from the boot answer instead of fetching. */
 export function resolveBody(over: Record<string, unknown> = {}) {
   return { workspace: WORKSPACE, canonical: SEGMENT, needsRedirect: false, ...over };
 }
@@ -82,14 +74,13 @@ export function meBody(over: Record<string, unknown> = {}) {
 
 /**
  * The reads every workspace-scoped page opens with. Returns `null` for any
- * other path so a suite can chain its own table after it:
+ * other path so a suite can chain its own table:
  *
  *     workspaceRoutes(path) ?? myPageRoutes(path)
  *
- * `resolve` and `me` stay in the table even though the shell no longer calls
- * them: they are seeded from the boot answer, so a suite that renders a page
- * in isolation (or one of the two components that still read them directly)
- * must still be answerable.
+ * `resolve` and `me` stay in the table though the shell no longer calls them —
+ * a suite rendering a page in isolation (or the components still reading them
+ * directly) must still be answerable.
  */
 export function workspaceRoutes(path: string): Promise<BridgeResponse> | null {
   if (path === "/api/boot") return Promise.resolve(ok(bootBody()));
@@ -106,10 +97,10 @@ export function workspaceRoutes(path: string): Promise<BridgeResponse> | null {
 /**
  * Install `window.dopl` and arm the `fetch` tripwire.
  *
- * `fetch` is stubbed as a never-resolving spy on purpose: nothing in this
- * renderer may reach the network directly (`connect-src 'none'` in the
- * packaged page), so a suite asserts `expect(fetch).not.toHaveBeenCalled()`
- * and a regression hangs rather than silently succeeding.
+ * ⚠ `fetch` is a NEVER-RESOLVING spy on purpose: nothing in this renderer may
+ * reach the network directly (`connect-src 'none'` in the packaged page), so a
+ * suite asserts `expect(fetch).not.toHaveBeenCalled()` and a regression hangs
+ * rather than silently succeeding.
  */
 export function installBridge(surface: Record<string, unknown>): void {
   Object.defineProperty(window, "dopl", {

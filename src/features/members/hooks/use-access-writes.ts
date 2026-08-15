@@ -20,16 +20,9 @@ import { teamsRequest } from "../teams-client";
 /**
  * The two ACCESS writes — one team's grant on one resource, and a resource's
  * workspace/teams scope — on the shared mutation layer.
- *
- * Both go through the FEATURE-INJECTED transport (`teamsRequest`), the same
- * composition channels uses for `channelRequest`, so a refusal reaches the
- * caller as an `Error` carrying the server's message. (This is also where the
- * `TEAM_KB_ACCESS_CONFLICT` 409 used to be translated into a retryable typed
- * error — that status had one producer, the workflow↔KB invariant, and it went
- * with workflows on 2026-08-11.)
- *
- * The scope toggle is the launch audit's "segmented control doesn't move":
- * `SegmentedControl` is driven straight off the cached `accessMode`, so
+ * Both go through the feature-injected transport (`teamsRequest`), so a
+ * refusal reaches the caller as an `Error` carrying the server's message.
+ * `SegmentedControl` renders straight off the cached `accessMode`, so
  * patching the access-matrix cache IS the thumb moving on the click.
  */
 
@@ -39,13 +32,10 @@ export interface GrantDraft {
   resourceId: string;
   /** `null` removes the grant. */
   level: AccessLevel | null;
-  /**
-   * The team's roster CAPTURED AT SUBMIT (rule 4). A grant is the thing
-   * `memberAccessPath` resolves through, so changing one changes what every
-   * member of this team is told they can reach — and those panes are per-member
-   * cache entries this write cannot compute. Read from the team row at the
-   * click, never from the selection while the PUT is in flight.
-   */
+  /** ⚠ Roster CAPTURED AT SUBMIT. A grant is what `memberAccessPath` resolves
+   *  through, so changing one changes what every member of this team may
+   *  reach — per-member cache entries this write cannot compute. Read from the
+   *  team row at click time, never from the selection mid-PUT. */
   memberIds: string[];
 }
 
@@ -69,10 +59,9 @@ export function setGrantConfig(
         level: draft.level,
       },
     }),
-    // Grants live on the TEAM row, so this one patch moves both surfaces that
-    // render a level: the team detail's grant boxes and the resource detail's
-    // per-team list. The Access tab's "N team grants" caption is derived from
-    // the same array and follows without a second patch.
+    // Grants live on the TEAM row, so one patch moves the team detail's grant
+    // boxes, the resource detail's per-team list and the "N team grants"
+    // caption.
     optimistic: (draft) =>
       patchCache<TeamsCache>(teamsKey, (cache) =>
         setTeamGrant(
@@ -83,18 +72,14 @@ export function setGrantConfig(
           draft.level
         )
       ),
-    // The TEAMS cache is NOT invalidated: the grant is fully computed above and
-    // invalidating it would re-download the cache this write just reconciled.
-    // (It used to be, on the `autoGrant` retry, because that asked the SERVER
-    // to write grants on OTHER teams — that path went with workflows.)
+    // ⚠ TEAMS cache is NOT invalidated — the grant is fully computed above,
+    // and invalidating re-downloads what this write just reconciled.
     invalidate: (draft) => [
-      // Every member of the team, always. `member-detail` reads a per-member
-      // `…/members/<id>/access` entry that ONLY the server computes and nothing
-      // else refreshes — the pane does not unmount — so a grant changed here
-      // would otherwise leave "Reports KB · via Growth" sitting under a level
-      // that no longer exists. Per-member because these keys are whole paths:
-      // TanStack matches per array element, so `[…/members]` reaches no
-      // `[…/members/<id>/access]` entry and there is no prefix that could.
+      // ⚠ Every member of the team, always: `member-detail` reads a
+      // per-member `…/members/<id>/access` entry only the server computes and
+      // nothing else refreshes (the pane never unmounts). Per-member because
+      // these keys are whole paths — TanStack matches per array element, so
+      // `[…/members]` reaches no `[…/members/<id>/access]` entry.
       ...draft.memberIds.map(
         (userId) => memberKeys.memberAccess(workspaceSlug, userId).all
       ),
@@ -126,9 +111,8 @@ export function setResourceScopeConfig(
             draft.accessMode
           )
       ),
-    // Flipping a resource between scopes changes which grants still apply, and
-    // that is not computable here — the teams cache is the one this write may
-    // not reconcile itself.
+    // Which grants still apply after a scope flip is not computable here — the
+    // teams cache is the one this write cannot reconcile itself.
     invalidate: () => [memberKeys.teams(workspaceSlug).all],
   };
 }

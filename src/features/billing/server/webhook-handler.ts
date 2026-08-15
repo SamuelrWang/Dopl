@@ -19,33 +19,22 @@ import {
 } from "./workspace-billing";
 
 /**
- * Stripe webhook business logic. The route stays thin: verify the
- * signature, then hand the event here. This owns idempotency (atomic claim
- * via `webhook_events`) and the event → `workspace_billing` mapping.
+ * Stripe webhook business logic; route only verifies the signature. Owns
+ * idempotency (atomic claim via `webhook_events`) and the
+ * event → `workspace_billing` mapping.
  *
- * Event map:
- *   checkout.session.completed     -> upsert derived plan/active (seat_count = qty), re-sync seats
- *   customer.subscription.updated  -> upsert derived plan + status + seats + period end
- *   customer.subscription.deleted  -> status canceled, plan back to free
- *   invoice.payment_failed         -> status past_due (paid only, sub must match)
- *   invoice.payment_succeeded      -> recover to active only if sub matches
+ * Plan derivation: item price → plan (Solo price → 'solo', per-seat Team price
+ * → 'team'). Unknown/legacy price falls back to subscription metadata,
+ * then 'team'.
  *
- * Plan derivation: the subscription's item price maps to a plan — the Solo
- * price -> 'solo', the per-seat Team price -> 'team'. An unknown/legacy
- * price (the grandfathered $20 sub) is inconclusive, so we fall back to the
- * plan stamped in subscription metadata, then default to 'team'.
+ * ⚠ ORDERING: Stripe delivers at-least-once, unordered. Every applied event
+ * stamps `event.created` as a freshness watermark; `created` <= the stored
+ * watermark is skipped. This is what stops a late `subscription.updated`
+ * (active) resurrecting a workspace `subscription.deleted` already canceled.
  *
- * Ordering: Stripe delivers at-least-once and without ordering guarantees.
- * Every applied subscription/payment event stamps `event.created` as a
- * freshness watermark; an incoming event whose `created` is <= the stored
- * watermark is stale (a redelivery or out-of-order replay) and is skipped —
- * this is what stops a late `subscription.updated` (active) from resurrecting
- * a workspace that a `subscription.deleted` already canceled.
- *
- * Grandfathering: any subscription lacking a workspace mapping (the one
- * legacy $20 per-user sub) is routed via customer id -> profile ->
- * that user's primary owned workspace, then stamped with its derived plan
- * (an unknown legacy price with no metadata defaults to team).
+ * Grandfathering: a subscription with no workspace mapping (the one legacy $20
+ * per-user sub) routes customer id → profile → that user's primary owned
+ * workspace.
  */
 
 export interface ProcessResult {
@@ -61,9 +50,8 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): WorkspaceBillingSt
       return "active";
     case "past_due":
       return "past_due";
-    // Never-paid / lapsed states are NON-entitled: folding them into past_due
-    // would hand out full Pro entitlements to a sub that never cleared a
-    // payment. They revert to free rules.
+    // ⚠ Never-paid / lapsed states are NON-entitled — folding them into
+    // past_due hands full Pro entitlements to a sub that never cleared.
     case "incomplete":
     case "incomplete_expired":
     case "unpaid":
@@ -75,12 +63,8 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): WorkspaceBillingSt
   }
 }
 
-/** Derive the workspace plan from a live subscription. The item price is
- *  authoritative (Solo price -> 'solo', per-seat Team price -> 'team');
- *  when it is inconclusive (unknown/legacy price, or the price envs are
- *  unset in this environment) fall back to the plan stamped in the
- *  subscription metadata, then default to 'team' (the grandfathered $20
- *  per-user sub and any unknown price bill per-seat). */
+/** Item price is authoritative; inconclusive (unknown/legacy price, or price
+ *  envs unset here) falls back to subscription metadata, then 'team'. */
 function derivePlan(subscription: Stripe.Subscription): "solo" | "team" {
   const soloPriceId = getSoloPriceId();
   const seatPriceId = getSeatPriceId();
@@ -96,9 +80,8 @@ function derivePlan(subscription: Stripe.Subscription): "solo" | "team" {
   return "team";
 }
 
-/** Resolve (and, when missing, backfill) the workspace behind a Stripe
- *  customer. Falls back to the grandfather path: customer -> user ->
- *  primary owned workspace. */
+/** Resolve (and backfill) the workspace behind a Stripe customer. Grandfather
+ *  fallback: customer → user → primary owned workspace. */
 async function resolveWorkspaceIdForCustomer(
   customerId: string | null
 ): Promise<string | null> {
@@ -108,9 +91,7 @@ async function resolveWorkspaceIdForCustomer(
   const userId = await getUserByStripeCustomer(customerId);
   if (!userId) return null;
 
-  // Grandfather path: no workspace_billing row maps this customer, so the
-  // legacy per-user subscription is routed to the user's default owned
-  // workspace. Warn on the two ambiguous shapes so a mis-mapping is visible.
+  // Grandfather path: warn on ambiguous shapes.
   const [workspace, ownedCount] = await Promise.all([
     findDefaultWorkspaceForUser(userId),
     countWorkspacesOwnedBy(userId),
@@ -139,10 +120,9 @@ async function resolveWorkspaceIdForSubscription(
   return resolveWorkspaceIdForCustomer(subscription.customer as string);
 }
 
-/** Extract the subscription id an invoice belongs to. Stripe's Basil API
- *  moved this under `parent.subscription_details.subscription`; older
- *  payloads carried a top-level `subscription`. Handles both, string or
- *  expanded object. */
+/** ⚠ Stripe's Basil API moved this to
+ *  `parent.subscription_details.subscription`; older payloads carried a
+ *  top-level `subscription`. Handles both, string or expanded object. */
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const parentSub = invoice.parent?.subscription_details?.subscription;
   if (parentSub) return typeof parentSub === "string" ? parentSub : parentSub.id;
@@ -155,12 +135,10 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 
 function subscriptionFields(subscription: Stripe.Subscription) {
   const item = selectSeatItem(subscription);
-  // Stripe's Basil API exposes current_period_start/end on the item; older
-  // payloads carried them at the subscription level. Prefer the sub-level
-  // value when present, else fall back to the item. Same rule for both
-  // bounds — the START is what anchors the MCP credit window to the
-  // workspace's own billing date (`features/billing/credits.ts ›
-  // resolveCreditPeriod`) instead of the calendar month.
+  // ⚠ Basil exposes current_period_start/end on the ITEM; older payloads at
+  // the subscription level. Prefer sub-level, else item — same rule for both
+  // bounds. The START anchors the MCP credit window to the workspace's own
+  // billing date (`features/billing/credits.ts › resolveCreditPeriod`).
   const subLevel = subscription as unknown as {
     current_period_start?: number | null;
     current_period_end?: number | null;
@@ -170,9 +148,8 @@ function subscriptionFields(subscription: Stripe.Subscription) {
   return {
     seatCount: item?.quantity ?? 1,
     stripePriceId: item?.price?.id ?? null,
-    // Live now, will not renew. Always written (never left undefined): a
-    // subscription that was set to cancel and then RESUMED must clear the
-    // flag, and an omitted key would leave the old `true` standing.
+    // ⚠ ALWAYS written, never undefined: a resumed subscription must clear the
+    // flag, and an omitted key leaves the old `true` standing.
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
     currentPeriodStart: periodStart
       ? new Date(periodStart * 1000).toISOString()
@@ -184,17 +161,13 @@ function subscriptionFields(subscription: Stripe.Subscription) {
 }
 
 /**
- * Apply a billing patch only when the event is fresh. Compares the incoming
- * `event.created` (epoch seconds) against the workspace's watermark; a
- * stale (older-or-equal) event is skipped. Every applied event stamps the
- * watermark so subsequent stale replays no-op.
+ * Apply a billing patch only when the event is fresh; every applied event
+ * stamps the watermark.
  *
- * `<=` is deliberate: Stripe stamps `created` at 1s granularity, so `<`
- * would let a distinct `updated(active)` sharing a `deleted` event's second
- * durably resurrect a canceled sub. The cost of `<=` — dropping a second
- * legitimate update in the same second — is transient (seat quantity
- * re-syncs on the next membership change; a price swap is re-confirmed by
- * its own later events), so we keep the conservative bound.
+ * ⚠ `<=` is deliberate. Stripe stamps `created` at 1s granularity, so `<` lets
+ * an `updated(active)` sharing a `deleted` event's second durably resurrect a
+ * canceled sub. The cost — dropping a second legitimate update in the same
+ * second — is transient.
  */
 async function applyStripeEvent(
   workspaceId: string,
@@ -223,11 +196,10 @@ async function handleSubscriptionUpsert(
   if (!workspaceId) return;
   const status = mapStatus(subscription.status);
 
-  // Any canceled write must null the subscription pointers, exactly like
-  // `subscription.deleted`. Retaining the sub id here lets a later
-  // `invoice.payment_succeeded` match it and restore status=active without
-  // restoring the plan — stranding a paying workspace at free/active and
-  // blocking re-checkout (the 409 guard sees a live-looking sub).
+  // ⚠ Any canceled write must null the subscription pointers, like
+  // `subscription.deleted`. A retained sub id lets a later
+  // `invoice.payment_succeeded` match it and restore status=active WITHOUT the
+  // plan — stranding a payer at free/active and 409-blocking re-checkout.
   if (status === "canceled") {
     await applyStripeEvent(workspaceId, eventCreated, {
       plan: "free",
@@ -236,15 +208,13 @@ async function handleSubscriptionUpsert(
       stripeSubscriptionId: null,
       stripePriceId: null,
       seatCount: null,
-      // The sub is gone; a leftover `true` would render "ends on <date>" on a
-      // workspace that has already ended.
+      // Sub is gone; leftover `true` renders "ends on <date>" after the end.
       cancelAtPeriodEnd: false,
-      // AND THE PERIOD ANCHOR GOES WITH IT. A retained future anchor keeps the
-      // MCP credit window on the key the PAID plan was spending against, so
-      // the first free-plan call is charged to a counter already past the free
-      // limit and the workspace is locked out of MCP until that dead period
-      // would have ended. (`credits.ts › resolveCreditPeriod` also ignores the
-      // anchor on a free verdict — that half heals rows no webhook reaches.)
+      // ⚠ Period anchor goes with it. A retained future anchor keeps the MCP
+      // credit window on the key the PAID plan spent against, so the first
+      // free-plan call is charged past the free limit and MCP locks out until
+      // the dead period ends. (`credits.ts › resolveCreditPeriod` also ignores
+      // the anchor on a free verdict — that half heals unreached rows.)
       currentPeriodStart: null,
       currentPeriodEnd: null,
     });
@@ -276,25 +246,21 @@ async function handleCheckoutCompleted(
   const workspaceId = session.metadata?.workspace_id;
   const customerId = session.customer as string;
   const subscriptionId = session.subscription as string;
-  // Prefer explicit metadata; fall back to customer-based resolution so a
-  // session that somehow lost its metadata still lands on a workspace.
+  // Metadata first; customer fallback for a session that lost its metadata.
   const targetWorkspaceId =
     workspaceId ?? (await resolveWorkspaceIdForCustomer(customerId));
   if (!targetWorkspaceId || !subscriptionId) return;
 
-  // NB: the webhook does NOT touch the checkout claim. The route already
-  // released it when its create-session critical section ended (see
-  // checkout/route.ts `finally`), so the claim is gone long before this event
-  // lands. A prior version released it here too — redundant, and it released
-  // BEFORE persisting the subscription id below. From here the persisted
-  // `stripeSubscriptionId` is the durable 409 guard for re-checkout.
+  // ⚠ The webhook does NOT touch the checkout claim — the route released it in
+  // its `finally` (checkout/route.ts) long before this event lands. Releasing
+  // it here would happen BEFORE the subscription id is persisted below, and
+  // that persisted id is the durable 409 guard for re-checkout.
   const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const status = mapStatus(subscription.status);
   const fields = subscriptionFields(subscription);
-  // Watermark-guarded like every other billing write: a checkout event whose
-  // first delivery failed can be retried by Stripe AFTER the sub was already
-  // canceled — writing directly here would resurrect a non-null sub id on a
-  // canceled row and overwrite newer state.
+  // ⚠ Watermark-guarded like every other billing write: Stripe can retry a
+  // failed checkout delivery AFTER the sub was canceled, resurrecting a
+  // non-null sub id on a canceled row.
   const applied = await applyStripeEvent(targetWorkspaceId, eventCreated, {
     plan: status === "canceled" ? "free" : derivePlan(subscription),
     status,
@@ -303,11 +269,10 @@ async function handleCheckoutCompleted(
     stripePriceId: status === "canceled" ? null : fields.stripePriceId,
     seatCount: status === "canceled" ? null : fields.seatCount,
     cancelAtPeriodEnd: status === "canceled" ? false : fields.cancelAtPeriodEnd,
-    // Conditioned on `canceled` LIKE EVERY OTHER PAID FIELD ABOVE. They were
-    // not, so a checkout retried after the sub was canceled wrote a live
-    // future anchor onto a free row — the same MCP-credit lockout the cancel
-    // paths null the anchor to prevent, by a path neither of them covers.
-    // `undefined` (no period on the payload) leaves the stored value alone —
+    // ⚠ Conditioned on `canceled` like every other paid field above —
+    // otherwise a checkout retried after cancellation writes a live future
+    // anchor onto a free row (the MCP-credit lockout, by a path neither cancel
+    // handler covers). `undefined` leaves the stored value alone —
     // `upsertWorkspaceBilling` only writes keys that are not `undefined`.
     currentPeriodStart: status === "canceled" ? null : fields.currentPeriodStart,
     currentPeriodEnd: status === "canceled" ? null : fields.currentPeriodEnd,

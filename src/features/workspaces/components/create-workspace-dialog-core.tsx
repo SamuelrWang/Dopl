@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { apiRequest } from "@/shared/api/api-client";
-// Deep import, never the `settings-modal` barrel: the barrel re-exports
-// SettingsModal, whose account pane pulls `next/navigation` in and would drag
-// Next into the desktop renderer's import graph.
+// ⚠ Deep import, never the `settings-modal` barrel: the barrel re-exports
+// SettingsModal, whose account pane pulls `next/navigation` into the desktop
+// renderer's import graph.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Workspace } from "../types";
@@ -18,10 +18,8 @@ export interface CreateWorkspaceDialogCoreProps {
 }
 
 /**
- * The create-workspace dialog's Next-free core (see
- * `./create-workspace-dialog` for the web binding): the shared ModalShell in
- * its narrow size — same chrome as `CreateBaseDialog`. Keeps the field set
- * minimal (name + description) and lets the server pick the slug.
+ * Create-workspace dialog's Next-free core (`./create-workspace-dialog` is the
+ * web binding). Fields stay minimal (name + description); server picks the slug.
  */
 export function CreateWorkspaceDialogCore({
   open,

@@ -1,22 +1,17 @@
 /**
- * Message receipt — a client-side status line for MY own outgoing human
- * message, derived purely from the thread events that follow it. There are NO
- * writes, NO acks, and deliberately NO "Received"/"Read" status: the desktop
- * does not ack a delivery, so claiming one would be a lie. The receipt reports
- * only what the transcript already proves — that a linked task started, a reply
- * landed, or the request reached a terminal outcome.
+ * Client-side status line for MY own outgoing human message, derived purely from
+ * the thread events that follow it. ⚠ NO writes, NO acks, and deliberately NO
+ * "Received"/"Read": the desktop does not ack a delivery, so claiming one is a
+ * lie. Reports only what the transcript proves.
  *
  * A message with an explicit `metadata.taskId` groups into a {@link SessionCard}
- * and is never rendered as a standalone bubble, so in practice the receipt is
- * only shown for an ADDRESSED no-task message; the function still handles the
- * task-linked shape so it can be unit-tested in isolation.
+ * and never renders standalone, so in practice this shows only for an ADDRESSED
+ * no-task message; the task-linked shape is handled so it can be unit-tested.
  *
- * Pure + deterministic. Mirrors the terminal-wins precedence of
- * `group-thread.computeStatus`, and reuses {@link calmTerminalStatus} for the
- * strict (`=== true`) calm-flag checks so a truthy-not-true flag can never
- * disguise a real failure as a calm outcome. Linkage by the DERIVABLE legacy
- * `task-{channelId}-{seq}` id is additionally party-scoped, so only the two
- * people actually in the exchange can move my receipt (see step 3).
+ * Pure + deterministic. Mirrors `group-thread.computeStatus`'s terminal-wins
+ * precedence and reuses {@link calmTerminalStatus} for the strict `=== true`
+ * checks. ⚠ Linkage by the DERIVABLE legacy `task-{channelId}-{seq}` id is
+ * party-scoped (step 3) so only the two people in the exchange move my receipt.
  */
 
 import type { ChannelMessage } from "../types";
@@ -44,9 +39,8 @@ function metaTaskId(message: ChannelMessage): string | null {
 }
 
 /**
- * Client-side receipt for MY outgoing human message, derived from later thread
- * events. No writes, no acks. Returns null when no receipt should show (not my
- * message, or an unaddressed broadcast that never routed to anyone).
+ * Receipt for MY outgoing human message, derived from later thread events.
+ * Null when none should show (not my message, or an unaddressed broadcast).
  */
 export function deriveMessageReceipt(
   message: ChannelMessage,
@@ -58,37 +52,30 @@ export function deriveMessageReceipt(
     return null;
   }
 
-  // 2. An unaddressed broadcast (no recipient, no task) never routed to anyone,
-  //    so there is nothing to report a receipt against.
+  // 2. An unaddressed broadcast never routed to anyone — nothing to report.
   const toUser = metaToUserId(message);
   const taskId = metaTaskId(message);
   if (toUser === null && taskId === null) return null;
 
   // 3. The deterministic legacy id the desktop spawner would mint for a task
-  //    opened by THIS message (`task-{channelId}-{seq}`), plus the check of who
-  //    is entitled to speak on it.
+  //    opened by THIS message, plus who is entitled to speak on it.
   //
-  //    That id is DERIVABLE by any channel member — the message DTO exposes
-  //    `seq` — and the server does NOT gate a non-UUID `taskId` on participation
-  //    (F-083; closing it server-side is product decision P2). So matching on
-  //    string equality alone let any third member stamp a red "Failed", or a
-  //    fake "Replied"/"Accepted, agent working", onto someone else's request.
-  //    A legacy exchange has exactly two parties: me, and the addressee whose
-  //    desktop mints the id (`trigger.js:129`). Anyone else claiming it is not
-  //    in this exchange and is ignored here. Client-side render defense only —
-  //    the row is still stored, and the server-side gate is still P2.
+  //    ⚠ That id is DERIVABLE by any channel member (the DTO exposes `seq`) and
+  //    the server does NOT gate a non-UUID `taskId` on participation, so string
+  //    equality alone lets a third member stamp a red "Failed" or a fake
+  //    "Replied" onto someone else's request. A legacy exchange has exactly two
+  //    parties: me, and the addressee whose desktop mints the id. ⚠ Client-side
+  //    render defence only — the row is still stored.
   const legacyId = `task-${message.channelId}-${message.seq}`;
   const isExchangeParty = (m: ChannelMessage): boolean =>
     m.authorUserId !== null &&
     (m.authorUserId === currentUserId || m.authorUserId === toUser);
 
-  // 4. Later events linked to this message: by shared explicit task id, by the
-  //    legacy deterministic id, or as an addressed agent reply back to me (the
-  //    pair-reply a terminal-mode session self-posts without a task id).
-  //    The no-taskId pair-reply binds to the NEAREST PRECEDING ask: if I sent
-  //    the same peer another ask between this message and the reply, the reply
-  //    answers that later ask, not this one — without this scoping, one reply
-  //    would light up "Replied" on every stacked ask before it.
+  // 4. Later events linked to this message: shared explicit task id, the legacy
+  //    deterministic id, or an addressed agent reply back to me (the pair-reply
+  //    a terminal-mode session self-posts without a task id).
+  //    ⚠ The no-taskId pair-reply binds to the NEAREST PRECEDING ask — without
+  //    that scoping one reply lights up "Replied" on every stacked ask before it.
   const linked = messages.filter((m) => {
     if (m.seq <= message.seq) return false;
     const mTask = metaTaskId(m);
@@ -112,9 +99,8 @@ export function deriveMessageReceipt(
     );
   });
 
-  // 5. Terminal-wins precedence over the linked events, mirroring
-  //    `computeStatus`: a calm operator-chosen ending or a real failure beats a
-  //    delivered reply, which beats a bare "started".
+  // 5. Terminal-wins precedence, mirroring `computeStatus`: a calm ending or a
+  //    real failure beats a delivered reply, which beats a bare "started".
   if (linked.some((m) => calmTerminalStatus(m) === "declined")) return "declined";
   if (linked.some((m) => calmTerminalStatus(m) === "dropped")) return "dropped";
   if (linked.some((m) => calmTerminalStatus(m) === "interrupted")) {
@@ -136,7 +122,7 @@ export function deriveMessageReceipt(
   return "sent";
 }
 
-/** Human-readable label for a receipt status. No em dashes, no fabricated acks. */
+/** Label for a receipt status. ⚠ No fabricated acks. */
 export const RECEIPT_LABEL: Record<ReceiptStatus, string> = {
   sent: "Sent",
   working: "Accepted, agent working",
@@ -147,10 +133,8 @@ export const RECEIPT_LABEL: Record<ReceiptStatus, string> = {
   dropped: "Reply not sent",
 };
 
-/**
- * The calm receipt terminals — operator-chosen endings that keep the muted chip
- * treatment (never the alarm ink of a real `failed`).
- */
+/** Calm receipt terminals — operator-chosen endings keeping the muted chip
+ *  treatment, ⚠ never the alarm ink of a real `failed`. */
 const CALM_RECEIPT_STATUSES: ReadonlySet<ReceiptStatus> = new Set([
   "declined",
   "dropped",

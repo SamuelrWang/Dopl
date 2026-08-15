@@ -1,18 +1,12 @@
 /**
- * Unit tests for the REOPEN half of `service-tasks-lifecycle.ts` (C-26,
- * 2026-08-08) — the echo that makes a reopen VISIBLE to the other member, its
- * marker, its idempotency key, its degrade-don't-throw contract, and the
- * already-open no-op. Split from the close half at the §2 cap; they are also two
- * different contracts and should fail separately.
+ * REOPEN half of `service-tasks-lifecycle.ts` — the echo that makes a reopen
+ * VISIBLE to the other member, its marker, idempotency key,
+ * degrade-don't-throw contract, and the already-open no-op.
  *
- * WHY THERE IS AN ECHO TO TEST AT ALL. `channel_tasks` is in NEITHER realtime
- * table set (`constants.ts` `CHANNEL_TABLES`, `main/ui-sync.js` `SYNC_TABLES`), so
- * a status change reaches no peer surface by itself. Close got away with it by
- * posting; reopen posted nothing, so the peer's ThreadPanel row, session-card chip
- * and sidebar dot went on reading "closed". Samuel's decision was to give reopen
- * an echo rather than publish the table.
- *
- * The repositories are mocked; `service-shared` runs for real.
+ * ⚠ Why an echo exists: `channel_tasks` is in NEITHER realtime table set
+ * (`constants.ts` `CHANNEL_TABLES`, `main/ui-sync.js` `SYNC_TABLES`), so a
+ * status change reaches no peer surface by itself. The fix is the echo, not
+ * publishing the table.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -43,12 +37,8 @@ const ctx: ChannelContext = {
   role: "member",
 };
 
-/**
- * The AGENT lane. Reopen has no `source` check and the PATCH route is not
- * `sessionOnly`, so an agent token reaches it; Samuel's decision (2026-08-08) is
- * that this stays. The echo therefore has to be correct here, not merely
- * tolerated.
- */
+/** The AGENT lane. Reopen has no `source` check and the PATCH route is not
+ *  `sessionOnly`, so an agent token reaches it — by design. */
 const agentCtx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
@@ -142,8 +132,8 @@ beforeEach(() => {
     insertedRow(row)
   );
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closedTask());
-  // The reopen's conditional update, and then the row `postMessage` re-resolves
-  // for the thread stamp — both come back OPEN.
+  // The conditional update, then the row `postMessage` re-resolves for the
+  // thread stamp — both come back OPEN.
   vi.mocked(repoTasks.updateTaskIfStatus).mockImplementation(
     async (_id, _status, patch) => closedTask({ ...patch } as Partial<ChannelTaskRow>)
   );
@@ -172,16 +162,15 @@ describe("reopenTask — authorization", () => {
   it("creator reopen clears the closed state in one CHECK-satisfying update", async () => {
     const { thread } = await reopenTask(ctx, "general", TASK_ID);
 
-    // status back to open with outcome / closed_at / outcome_summary nulled —
-    // keeps (status='closed') = (outcome IS NOT NULL) satisfied.
+    // ⚠ outcome / closed_at / outcome_summary all nulled, keeping
+    // (status='closed') = (outcome IS NOT NULL) satisfied.
     expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][2]).toEqual({
       status: "open",
       outcome: null,
       closed_at: null,
       outcome_summary: null,
     });
-    // ...and the transition is guarded in the STATEMENT (C-30's shape, applied
-    // to the other direction), not by a preceding read.
+    // ⚠ Transition guarded in the STATEMENT, not by a preceding read.
     expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][1]).toBe("closed");
     expect(thread.status).toBe("open");
     expect(thread.outcome).toBeNull();
@@ -196,29 +185,25 @@ describe("reopenTask — authorization", () => {
   });
 });
 
-/**
- * THE ECHO ITSELF — the whole of C-26. Every assertion here is a property the
- * peer's screen depends on, so each one is stated rather than implied.
- */
+/** The echo itself. Every assertion is a property the peer's screen depends
+ *  on, so each is stated rather than implied. */
 describe("reopenTask — the lifecycle echo (C-26)", () => {
   it("posts a NON-TERMINAL task_progress carrying the reopen marker", async () => {
     const { echoSeq } = await reopenTask(ctx, "general", TASK_ID);
 
     const echo = echoInsert();
-    // NOT a lifecycle kind. `groupThread` folds task_finished/task_failed into
-    // `draft.endEvent` and reads that as the exchange's OUTCOME — a reopen is the
-    // opposite of an outcome and must never reach that slot. `task_progress` is
-    // an entry by construction, and its body renders in the milestones lane on a
-    // client that knows nothing about the new marker.
+    // ⚠ NOT a lifecycle kind: `groupThread` folds task_finished/task_failed into
+    // `draft.endEvent` and reads that as the OUTCOME. `task_progress` is an entry
+    // by construction and renders in the milestones lane on any client.
     expect(echo.kind).toBe("task_progress");
-    // NOT task_started either: that would take over the card's header identity
-    // (`draft.head`) and open groupThread's fallback window.
+    // ⚠ NOT task_started either — it takes over the card's header identity
+    // (`draft.head`) and opens groupThread's fallback window.
     expect(echo.kind).not.toBe("task_started");
     expect(echo.metadata).toMatchObject({
       taskId: TASK_ID,
       [REOPEN_MARKER_KEY]: true,
     });
-    // A marker, not an outcome: none of the close/proposal keys ride along.
+    // A marker, not an outcome — no close/proposal keys ride along.
     expect(echo.metadata).not.toHaveProperty("closeProposed");
     expect(echoSeq).toBe(55);
   });
@@ -242,9 +227,8 @@ describe("reopenTask — the lifecycle echo (C-26)", () => {
   });
 
   it("the MARKER IS RESERVED — a caller cannot forge it on an ordinary post", async () => {
-    // Belt AND braces: `resolvePostMetadata` strips the key unconditionally and
-    // re-stamps it only from the server-internal option. Proven here through the
-    // real fold rather than by reading the strip list.
+    // `resolvePostMetadata` strips the key unconditionally and re-stamps only
+    // from the server-internal option. Proven through the real fold.
     const { postMessage } = await import("./service-writes");
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
       closedTask({ status: "open", outcome: null, closed_at: null })
@@ -259,11 +243,8 @@ describe("reopenTask — the lifecycle echo (C-26)", () => {
   });
 });
 
-/**
- * THE ECHO'S FAILURE IS NOT THE REOPEN'S FAILURE — the contract `closeTask`
- * states and this one had to match exactly. The state change has already
- * committed by the time the marker is written.
- */
+/** ⚠ The echo's failure is NOT the reopen's failure — the state change has
+ *  already committed by the time the marker is written. */
 describe("reopenTask — an echo failure degrades, never throws", () => {
   it("still reopens, with a NULL seq, when only the echo post fails", async () => {
     vi.mocked(repoMessages.insertMessage).mockRejectedValue(
@@ -274,7 +255,6 @@ describe("reopenTask — an echo failure degrades, never throws", () => {
 
     expect(echoSeq).toBeNull();
     expect(thread.status).toBe("open");
-    // The reopen itself still landed on the row.
     expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][2]).toMatchObject({
       status: "open",
       outcome: null,
@@ -292,10 +272,9 @@ describe("reopenTask — an echo failure degrades, never throws", () => {
 });
 
 /**
- * IDEMPOTENCY. The close proposal's key was `(thread, outcome, activity anchor)`;
- * a reopen has a better anchor available — the `closed_at` of the close it
- * reverses — so it uses that. A message-seq anchor would MOVE the moment the echo
- * landed, which is precisely how a retry would post a second one.
+ * Idempotency. A reopen keys on the `closed_at` of the close it reverses. ⚠ A
+ * message-seq anchor MOVES the moment the echo lands, which is exactly how a
+ * retry posts a second one.
  */
 describe("reopenTask — the echo cannot post twice", () => {
   it("keys the echo on the closed_at it is undoing", async () => {
@@ -315,8 +294,8 @@ describe("reopenTask — the echo cannot post twice", () => {
     expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
     expect(thread.status).toBe("open");
-    // Honest: this call wrote nothing, and the anchor naming the original echo
-    // was erased from the row by the reopen that already succeeded.
+    // This call wrote nothing, and the anchor naming the original echo was
+    // erased by the reopen that already succeeded.
     expect(echoSeq).toBeNull();
   });
 
@@ -342,9 +321,9 @@ describe("reopenTask — the echo cannot post twice", () => {
   });
 
   it("a LATER reopen of a DIFFERENT close gets a different key", async () => {
-    // close -> reopen -> work -> close -> reopen. The second close stamped a new
-    // `closed_at`, so the second reopen is a new statement, not a replay. This is
-    // the half a "one-shot forever" key would have broken (C-6's regression).
+    // close → reopen → work → close → reopen. The second close stamped a new
+    // `closed_at`, so the second reopen is a new statement, not a replay — the
+    // half a "one-shot forever" key breaks.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
       closedTask({ closed_at: "2026-08-09T18:30:00Z", outcome: "failed" })
     );
@@ -361,12 +340,9 @@ describe("reopenTask — the echo cannot post twice", () => {
   });
 });
 
-/**
- * C-14 — reopen is agent-reachable and stays that way. What matters is that the
- * echo is CORRECT on that lane: `task_progress` is not one of `LIFECYCLE_KINDS`,
- * so the P0-2 guard passes it on its own merits with no `internalLifecycle`
- * exemption, and the transcript attributes it to the agent that did it.
- */
+/** Reopen is agent-reachable by design. `task_progress` is not in
+ *  `LIFECYCLE_KINDS`, so the guard passes it with NO `internalLifecycle`
+ *  exemption and the transcript attributes it to the agent. */
 describe("reopenTask — an AGENT-triggered reopen echoes correctly", () => {
   it("posts the same marker, attributed to the agent, with no exemption asked for", async () => {
     const { echoSeq } = await reopenTask(agentCtx, "general", TASK_ID);

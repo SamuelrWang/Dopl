@@ -19,10 +19,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * PATCH /api/workspaces/[workspaceSlug]/join-requests/[requestId] —
- * approve (with role) or decline a pending join request. Admin+.
- */
+/** PATCH — approve (with role) or decline a pending join request. Admin+. */
 export const PATCH = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -45,6 +42,6 @@ export const PATCH = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/join-requests/[requestId]", err);
     }
   },
-  // sessionOnly: approving/declining a join request is an admin action.
+  // sessionOnly: an admin action.
   { sessionOnly: true }
 );

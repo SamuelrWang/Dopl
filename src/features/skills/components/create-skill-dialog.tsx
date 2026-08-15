@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
-// The shared 2000-char budget `SkillCreateSchema` bounds `description` and
-// `whenToUse` at. KB-named but explicitly documented in `@/config` as "the
-// same budget as workspace/skill descriptions — keep every editor on this
-// constant so the layers can't drift again".
+// ⚠ Shared 2000-char budget `SkillCreateSchema` bounds `description` and
+// `whenToUse` at. KB-named, but every editor must stay on this one constant.
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
-// Deep import, not the `settings-modal` barrel — the barrel re-exports
-// SettingsModal, which is Next-coupled, and this tree must stay Next-free
-// (the desktop SPA renders `SkillsBrowserCore` directly).
+// ⚠ Deep import, not the `settings-modal` barrel: the barrel re-exports the
+// Next-coupled SettingsModal and this tree must stay Next-free (the desktop
+// SPA renders `SkillsBrowserCore` directly).
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Skill } from "@/features/skills/types";
@@ -29,18 +27,12 @@ interface Props {
 }
 
 /**
- * Create-skill dialog — the same ModalShell chrome as `CreateBaseDialog`.
- *
- * It asks for the THREE fields `SkillCreateSchema` requires and the skill
- * editor cannot edit: name, description, and when to use. Those last two are
- * how an agent decides whether to invoke the skill at all, and `SkillView`
- * only edits the title, folder, sharing and the SKILL.md body — so creating
- * with placeholder text would leave a skill nobody could fix without going
- * back out to MCP, which is the hole this whole affordance exists to close.
- * The procedure itself is written in the editor that opens behind this.
- *
- * Created as a `draft` (like `duplicateSkill`) and private (the service's
- * default for a user-authored skill) — start drafty, publish deliberately.
+ * Create-skill dialog, same ModalShell chrome as `CreateBaseDialog`.
+ * ⚠ Asks for the three fields `SkillCreateSchema` requires that `SkillView`
+ * CANNOT edit — name, description, whenToUse. The last two decide whether an
+ * agent invokes the skill at all, so placeholder text here leaves a skill only
+ * MCP can fix. The procedure is written in the editor behind this.
+ * Created `draft` + private (the service default for user-authored skills).
  */
 export function CreateSkillDialog({
   open,

@@ -1,11 +1,9 @@
 /**
- * factory.ts — side-effect-free entry for constructing a Dopl MCP server.
- *
- * Importable by BOTH the stdio binary (`index.ts`) and the remote HTTP
- * route in the web app, WITHOUT triggering `main()`, `process.argv`
- * parsing, or a stdio transport. The stdio-specific bits (arg parsing,
- * config-file workspace resolution, orphan-skill cleanup) stay in
- * `index.ts`; everything transport-agnostic lives here.
+ * factory.ts — ⚠ side-effect-free entry for constructing a Dopl MCP server.
+ * Importable by BOTH the stdio binary (`index.ts`) and the web app's HTTP route
+ * WITHOUT triggering `main()`, `process.argv` parsing, or a stdio transport.
+ * Keep stdio-specific bits (arg parsing, config-file workspace resolution,
+ * orphan-skill cleanup) in `index.ts`.
  */
 
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
@@ -27,25 +25,22 @@ export interface BootOptions {
    */
   scopes?: string[];
   /**
-   * Retry attempts for the initial status ping. Default 0 (single attempt —
-   * fast for per-request HTTP). The stdio binary passes a few retries because
-   * it boots once and tolerates a cold backend.
+   * Retry attempts for the initial status ping. Default 0 — fast for per-request
+   * HTTP; the stdio binary passes retries because it boots once.
    */
   pingRetries?: number;
   /**
-   * Sink for boot diagnostics (status-ping / canvas-handshake failures).
-   * The stdio binary passes `console.error` so a bad key or unreachable
-   * backend surfaces at boot; the per-request HTTP route can omit it (or
-   * route to its own logger) to avoid log spam on every request. Default: no-op.
+   * Boot-diagnostics sink. The stdio binary passes `console.error` so a bad key
+   * surfaces at boot; the per-request HTTP route omits it to avoid per-request
+   * log spam. Default: no-op.
    */
   onDiag?: (message: string) => void;
   /**
-   * Who is calling and through what, as resolved by the TRANSPORT (the only
-   * layer that ever sees the credential and the request headers). The status
-   * ping below can also produce a user id, but it is a second round-trip
-   * against a second code path and it can fail on its own; when the transport
-   * supplies one it WINS, because it comes from the credential that is
-   * actually authorizing this request.
+   * Who is calling and through what, resolved by the TRANSPORT — the only layer
+   * that sees the credential and the request headers. ⚠ When the transport
+   * supplies a user id it WINS over the status ping's: it comes from the
+   * credential actually authorizing this request, not a second round-trip
+   * against a second code path that fails on its own.
    */
   caller?: Partial<CallerIdentity>;
 }
@@ -60,10 +55,9 @@ export interface BootResult {
   userId: string | null;
   isAdmin: boolean;
   /**
-   * The session default workspace resolved at boot from the caller's
-   * membership directory — a request X-Workspace-Id pin, else the sole
-   * membership. Null when the caller has 0 or 2+ memberships and sent no
-   * pin (each tool call must then pass `workspace=`).
+   * Session default workspace resolved at boot: a request X-Workspace-Id pin,
+   * else the sole membership. Null on 0 or 2+ memberships with no pin — each
+   * tool call must then pass `workspace=`.
    */
   activeWorkspace: {
     id: string;
@@ -72,19 +66,17 @@ export interface BootResult {
     role: string;
   } | null;
   /**
-   * True when the boot `listWorkspaces()` call FAILED (transient backend /
-   * network error), as distinct from a genuine 0-membership directory. Lets
-   * the refusal copy say "couldn't load your workspaces (retry)" instead of
-   * "you have no workspaces".
+   * ⚠ True when the boot `listWorkspaces()` FAILED, as distinct from a genuine
+   * 0-membership directory — the refusal copy must say "couldn't load, retry",
+   * not "you have no workspaces".
    */
   directoryLoadFailed: boolean;
 }
 
 /**
- * Build a fully-registered MCP server for `client`: run the status-ping
- * handshake (admin flag + liveness), resolve the session default workspace
- * from the caller's membership directory, and register all tools.
- * Transport-agnostic — the caller attaches stdio or HTTP afterward.
+ * Build a fully-registered MCP server for `client`: status-ping handshake
+ * (admin flag + liveness), resolve the session default workspace, register all
+ * tools. Transport-agnostic — the caller attaches stdio or HTTP afterward.
  */
 export async function bootServer(
   client: DoplClient,
@@ -92,8 +84,7 @@ export async function bootServer(
 ): Promise<BootResult> {
   const diag = opts.onDiag ?? (() => {});
 
-  // Status ping → admin flag + user id. Safe default on failure: non-admin.
-  // (No tools are admin-gated currently; the flag is retained for future use.)
+  // Status ping → admin flag + user id. ⚠ Safe default on failure: non-admin.
   let isAdmin = false;
   let userId: string | null = null;
   try {
@@ -104,11 +95,9 @@ export async function bootServer(
     diag(`[dopl-mcp] status ping failed (continuing as non-admin): ${errText(err)}`);
   }
 
-  // Workspace directory (M-1): the caller's ACTIVE memberships in one call.
-  // Replaces the old getActiveWorkspace handshake, so boot never hits the
-  // header-less `resolveActiveWorkspace` path. The result seeds the server's
-  // workspace cache (createServer), so no re-fetch is needed — HTTP boots
-  // once per request; do NOT add loopbacks, the net count must not increase.
+  // Caller's ACTIVE memberships in ONE call, so boot never hits the header-less
+  // `resolveActiveWorkspace` path. Seeds the server's workspace cache, so no
+  // re-fetch. ⚠ HTTP boots once per request — do NOT add loopbacks here.
   let directory: WorkspaceListItem[] = [];
   let directoryLoadFailed = false;
   try {
@@ -120,12 +109,9 @@ export async function bootServer(
     directoryLoadFailed = true;
   }
 
-  // Resolve the session default from the directory:
-  //   - a request-level X-Workspace-Id pin (the client's constructor
-  //     workspaceId) that names a membership wins → treat like single;
-  //   - else exactly one membership auto-targets;
-  //   - else (0 or 2+ with no pin) NO transport default — the wrapper
-  //     demands `workspace=` per call, so no header-less loopback can fire.
+  // Session default: an X-Workspace-Id pin naming a membership wins; else
+  // exactly one membership auto-targets; else ⚠ NO transport default — the
+  // wrapper demands `workspace=` per call, so no header-less loopback fires.
   const pin = client.getWorkspaceId();
   let active: WorkspaceListItem | null = null;
   let source: "header pin" | "sole membership" | null = null;
@@ -134,9 +120,8 @@ export async function bootServer(
     if (active) {
       source = "header pin";
     } else {
-      // Keep the fallback (the stale pin is cleared below), but make the
-      // silent drop observable: a request X-Workspace-Id that names no
-      // active membership is otherwise invisible in logs.
+      // ⚠ Make the drop observable — an X-Workspace-Id naming no active
+      // membership is otherwise invisible in logs.
       diag(
         `[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${
           directoryLoadFailed ? " (directory load had failed)" : ""
@@ -148,16 +133,14 @@ export async function bootServer(
     active = directory[0];
     source = "sole membership";
   }
-  // Clear a stale/garbage constructor pin that didn't resolve so loopback
-  // calls never carry a bogus X-Workspace-Id.
+  // ⚠ Clear an unresolved constructor pin so loopback calls never carry a bogus
+  // X-Workspace-Id.
   client.setWorkspaceId(active ? active.id : null);
 
-  // ONE identity for the whole session. The transport's user id wins over the
-  // ping's — same fact, but that one is read off the credential doing the work
-  // rather than off a second loopback that fails independently. Until this
-  // existed, `dopl_channel` used the ping's id and `dopl_members(op="whoami")`
-  // used a third (`GET /api/workspaces/me`), so two tools on ONE connection
-  // could disagree about who was calling.
+  // ⚠ ONE identity for the whole session, and the TRANSPORT's user id wins —
+  // it is read off the credential doing the work, not a second loopback that
+  // fails independently. Three sources let two tools on ONE connection disagree
+  // about who is calling.
   const caller: CallerIdentity = {
     ...UNKNOWN_CALLER,
     ...opts.caller,
@@ -167,9 +150,8 @@ export async function bootServer(
   const server = createServer(client, {
     isAdmin,
     caller,
-    // The ping's user id is not just diagnostic: `dopl_channel` needs it to tell
-    // a reader that a message is addressed to IT rather than to some other
-    // member. It was already resolved here and thrown away.
+    // ⚠ Not just diagnostic — `dopl_channel` needs this id to tell a reader a
+    // message is addressed to IT rather than to some other member.
     userId: caller.userId,
     directory,
     directoryLoadFailed,

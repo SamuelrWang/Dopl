@@ -4,24 +4,18 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 
 interface Props {
-  /**
-   * Title to display. When a string, rendered with the standard
-   * truncated heading style. When a ReactNode, rendered verbatim —
-   * use this for inline-editable titles (e.g. EditableTitle below).
-   */
+  /** String → standard truncated heading style. ReactNode → verbatim (use for
+   *  inline-editable titles, e.g. `EditableTitle`). */
   title: string | ReactNode;
-  /** Optional inline icon shown to the left of the title. */
   leading?: ReactNode;
-  /** Optional content (buttons, status) on the right side. */
   trailing?: ReactNode;
   className?: string;
 }
 
 /**
- * Slim 52px header bar at the top of a page's content panel. In-flow
- * (NOT fixed): every page now renders inside the AppShell's white
- * panel, so the bar sits at the top of the panel and scrolling content
- * passes beneath its border.
+ * Slim 52px header at the top of a page's content panel. In-flow, NOT fixed:
+ * pages render inside the AppShell's white panel, so scrolling content passes
+ * beneath its border.
  */
 export function PageTopBar({ title, leading, trailing, className }: Props) {
   return (

@@ -11,10 +11,8 @@ import {
 } from "./service-shared";
 import { getSkillBySlug } from "./service-reads";
 
-/**
- * History reads + version restore (the versions + audit timeline). All
- * mutations funnel through the single `./history` choke-point.
- */
+/** History reads + version restore. All mutations funnel through the single
+ *  `./history` choke-point. */
 
 /** Version metadata + events for the history panel, newest first. */
 export async function getSkillHistory(
@@ -32,8 +30,7 @@ export async function getFileVersion(ctx: SkillContext, versionId: string) {
   if (!version) {
     throw new SkillFileNotFoundError("(version)", versionId);
   }
-  // Visibility check rides on the parent skill: if the caller can't see
-  // the skill, the version doesn't exist for them either.
+  // Visibility rides on the parent skill: no skill, no version.
   const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
   if (!skill || !canSeeSkill(ctx, skill, await grantsForSkills(ctx, [skill]))) {
     throw new SkillFileNotFoundError("(version)", versionId);
@@ -41,13 +38,10 @@ export async function getFileVersion(ctx: SkillContext, versionId: string) {
   return version;
 }
 
-/**
- * Roll the SKILL.md body back to a snapshot. Restore never rewrites
- * history: it writes the old body as a NEW save (minting a fresh
- * version that shows up in the timeline). No-ops when the body already
- * matches. No structural event is logged — the app stopped emitting
- * `file.*` events at F-029, and the new version snapshot is the record.
- */
+/** Roll the body back to a snapshot. ⚠ Restore never rewrites history — it
+ *  writes the old body as a NEW save, minting a fresh version. No-ops when the
+ *  body already matches. No structural event: the version snapshot is the
+ *  record. */
 export async function restoreFileVersion(
   ctx: SkillContext,
   versionId: string
@@ -56,8 +50,7 @@ export async function restoreFileVersion(
   const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
   if (!skill) throw new SkillNotFoundError(version.skillId);
   await assertAgentWriteAllowed(ctx, skill);
-  // readSkillBody excludes trashed skills — rolling back a trashed skill
-  // 404s (restore it from trash first).
+  // readSkillBody excludes trashed skills, so rolling one back 404s.
   const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
   if (!file) throw new SkillFileNotFoundError(skill.slug, PRIMARY_SKILL_FILE_NAME);
   if (file.body === version.body) return file;

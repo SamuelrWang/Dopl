@@ -23,10 +23,8 @@ import { ComposerIntentPill } from "./composer-intent-pill";
 /** Placeholder + accessible name for the request's title (wire field: `title`). */
 const SUBJECT_LABEL = "Subject";
 
-/**
- * Re-exported from the pill that now owns it, so the one accessible name has one
- * definition and this module's consumers keep the import they had.
- */
+/** ⚠ Re-exported from the pill that owns it, so the one accessible name has ONE
+ *  definition and existing consumers keep their import. */
 export { COMPOSER_MODE_LABEL } from "./composer-intent-pill";
 
 export type { SendOptions } from "../lib/composer-mode";
@@ -47,40 +45,29 @@ interface Props {
   placeholder?: string;
   /** Channel roster (with presence) for the addressing picker. */
   members: ChannelMember[];
-  /**
-   * True while `members` still belongs to the PREVIOUS channel
-   * (`useChannelMembers`' `stale` / `isPlaceholderData`). REQUEST mode turns
-   * this roster into the `toUserId` on the wire, so while it is true a request
-   * would address someone who is not in this channel — Send is disabled and
-   * says why, rather than posting and rolling back on a 400.
-   */
+  /** ⚠ True while `members` still belongs to the PREVIOUS channel. REQUEST mode
+   *  turns this roster into the wire `toUserId`, so a request built now
+   *  addresses a non-member — Send is disabled and says why, rather than posting
+   *  and rolling back on a 400. */
   membersStale?: boolean;
   currentUserId: string;
-  /**
-   * True in a direct (1:1) channel. A DM has exactly one peer, so there is no
-   * one to pick: request mode auto-targets that peer and the picker is hidden.
-   */
+  /** Direct channel: one peer, so request mode auto-targets it and the picker
+   *  is hidden. */
   isDirect?: boolean;
 }
 
 /**
  * Message composer pinned to the bottom of the channel. One unified input: a
  * concave-field well with an auto-submitting textarea (Enter sends, Shift+Enter
- * adds a newline) that AUTO-GROWS to three lines and then scrolls, exactly like
- * the desktop thread window's composer, plus the shared `SendButton`.
+ * newlines) that AUTO-GROWS to three lines then scrolls, matching the desktop
+ * thread window's composer, plus the shared `SendButton`.
  *
- * TWO MODES, chosen on a PILL INSIDE THE INPUT (rollback §3.2), because sending
- * used to mean exactly one thing and that thing woke someone's machine:
- *
- * - MESSAGE (default; `intent: "chat"` on the wire): a plain channel message.
- *   No subject, no thread, no addressee. It reaches nobody's machine, and the
- *   line under the composer says so. It used to have a second consequence — an
- *   `@handle` resolved against the channel's named agents and travelled as
- *   `toAgents`, so those agents acted — and that went with them (rollback §1),
- *   taking the `@` picker, the `/new-agent` command and the moving help line.
- * - REQUEST: the subject field comes back and an addressee is required. Sending
- *   opens a THREAD through the create-thread path (title = subject, body =
- *   message, to = the picked member), which posts the opening message and
+ * Two modes, chosen on a PILL INSIDE THE INPUT:
+ * - MESSAGE (default; `intent: "chat"` on the wire) — plain channel message. No
+ *   subject, thread or addressee; reaches nobody's machine, and the line under
+ *   the composer says so. ⚠ `@` resolves to nothing: no picker, no command lane.
+ * - REQUEST — subject field returns and an addressee is required. Sending opens
+ *   a THREAD through the create-thread path (title = subject, body =
  *   starts that member's agent.
  *
  * WHERE THE CHROME SITS, and why it moved. The mode control is now `ComposerIntentPill`,

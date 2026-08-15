@@ -1,22 +1,13 @@
 /**
- * H-3 REGRESSION TRIPWIRE — the load-bearing guard.
+ * WRITE-GATE REGRESSION TRIPWIRE. Every `route.ts` under `src/app/api` exporting
+ * a non-GET handler must either route through `withUserAuth` /
+ * `withWorkspaceAuth` / `withMcpAccess` (auto-gated by the method gate) or
+ * appear on the EXEMPT allowlist with a reason — so no write route silently
+ * escapes and a new exemption is a reviewed choice.
  *
- * The OAuth write-scope gate lives in `withUserAuth` and classifies writes by
- * HTTP method, so a NEW write route is covered automatically *as long as it
- * funnels through one of the auth wrappers*. This test enforces that invariant
- * statically: every route.ts under `src/app/api` that exports a non-GET handler
- * must either
- *   (a) route through `withUserAuth` / `withWorkspaceAuth` / `withMcpAccess`
- *       (auto-gated by the method gate), or
- *   (b) appear on the explicit EXEMPT allowlist below, with a reason.
- *
- * So a new write route can't silently escape the gate, and a new exemption is
- * a conscious, reviewed choice. It mirrors the MCP-side parity tripwire
- * (packages/mcp-server/src/tools/parity.test.ts): the two gates — MCP
- * `WRITE_OPS` and the REST method gate — are independent and both must hold.
- *
- * It also pins the `writeScopeExempt` set to exactly the MCP liveness ping, so
- * a stray exemption on a real content-write route trips the build.
+ * Mirrors the MCP-side parity tripwire
+ * (packages/mcp-server/src/tools/parity.test.ts): MCP `WRITE_OPS` and the REST
+ * method gate are independent and both must hold.
  */
 
 import { describe, it, expect } from "vitest";
@@ -45,17 +36,14 @@ const NON_GET_EXPORT =
 const USES_WRAPPER = /\b(withUserAuth|withWorkspaceAuth|withMcpAccess)\b/;
 
 /**
- * Source with block and line comments removed.
+ * Source with comments removed.
  *
- * ⚠ THE THREE SET PINS BELOW ARE REGEXES OVER TEXT, so a route whose DOCBLOCK
- * quotes `sessionOnly: true` stays on the list after the real option is
- * deleted. Caught 2026-08-11 while `billing/cancel` was written: its header
- * explained the gate in those exact words, the gate was removed as a mutation
- * check, and this suite stayed green. Stripping comments first makes the pin
- * read the CODE, which is the only thing that gates anything.
+ * ⚠ THE SET PINS BELOW ARE REGEXES OVER TEXT: a route whose DOCBLOCK quotes
+ * `sessionOnly: true` stays on the list after the real option is deleted, and
+ * the suite stays green. Stripping comments first makes the pin read the CODE.
  *
- * Deliberately naive (no string/regex-literal awareness) — it runs over route
- * files, where an option name inside a string literal would itself be the bug.
+ * Deliberately naive (no string/regex-literal awareness) — over route files, an
+ * option name inside a string literal would itself be the bug.
  */
 function withoutComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
@@ -65,10 +53,8 @@ function code(file: string): string {
   return withoutComments(readFileSync(file, "utf8"));
 }
 
-/**
- * Non-GET routes that legitimately bypass the `withUserAuth` method gate.
- * Each carries its own auth model — keep this list minimal and reasoned.
- */
+/** Non-GET routes that legitimately bypass the method gate — each carries its
+ *  own auth model. ⚠ Keep minimal and reasoned. */
 const EXEMPT: Record<string, string> = {
   "mcp/route.ts":
     "MCP JSON-RPC transport (authenticateMcpRequest). A read op arrives as a POST envelope; writes are scope-gated per-op by WRITE_OPS in the mcp-server. Must NOT be method-gated.",
@@ -111,16 +97,9 @@ describe("H-3 write-gate coverage", () => {
     }
   });
 
-  /**
-   * TWO routes, and both are MCP PLUMBING rather than content writes — that is
-   * the property this pin protects. A `writeScopeExempt` on a route that
-   * writes user data would let a `dopl.read`-only token mutate the workspace.
-   *
-   * The credit spend earns it for the reason the ping does: it is a POST whose
-   * subject is the SESSION, not the workspace's content, and a READ-ONLY agent
-   * still costs a credit per tool call — gating it on `dopl.write` would make
-   * read-only sessions free and leave the meter lying.
-   */
+  /** ⚠ Both entries are MCP PLUMBING, not content writes — the property this
+   *  pin protects. `writeScopeExempt` on a user-data write would let a
+   *  `dopl.read`-only token mutate the workspace. */
   it("the `writeScopeExempt` set is EXACTLY the MCP liveness ping + the credit spend", () => {
     const exemptRoutes = files
       .filter((f) => /writeScopeExempt:\s*true/.test(code(f)))
@@ -139,39 +118,22 @@ describe("H-3 write-gate coverage", () => {
       .sort();
     expect(sessionOnlyRoutes).toEqual(
       [
-        // POST mints a long-lived device token — a background agent must never
-        // be able to bootstrap a fresh 90-day credential for itself (Channels
-        // v1.1 section E). DELETE revokes one (F-085), gated for the mirror
-        // reason: a bearer that could revoke device tokens could kill the
-        // credential its sibling agents (or the operator's other machines)
-        // depend on, and could delete the token whose last_used_at records it.
-        // Both methods are cookie-session only.
+        // POST mints a 90-day device token, DELETE revokes one — an agent must
+        // never bootstrap a fresh credential for itself, nor kill the one its
+        // siblings depend on.
         "auth/mcp-device-token/route.ts",
-        // Added 2026-08-11 with the in-app cancel flow. Ending the
-        // subscription is the most expensive thing an agent could do on this
-        // surface, and unlike the portal handoff it does NOT bounce through a
-        // Stripe-hosted page a human has to click through — the write happens
-        // on our own route. Same reasoning as the other three billing writes.
+        // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
         "billing/checkout/route.ts",
-        // Channels v1.2 H-1. The consent gate exists to keep a HUMAN in the
-        // loop on a spawned agent that is processing an untrusted teammate's
-        // message with Bash and a device token on disk. If that agent could
-        // reach these, it could self-approve its own outbound review
-        // (PATCH /consent/[id]) or grant itself permanent standing consent
-        // (POST /trust) and never be asked again. Cookie sessions — the web
-        // UI and the desktop app — are unaffected.
+        // The consent gate keeps a HUMAN in the loop on a spawned agent. Reachable
+        // by an agent = it self-approves its own outbound review or grants itself
+        // permanent standing consent.
         "channels/consent/[id]/route.ts",
         "channels/trust/route.ts",
-        // C-12 (Samuel 2026-08-10). `PATCH /channels/[channelId]/members`
-        // writes `agentToolProfile` and, since F-170 removed notify scope,
-        // NOTHING ELSE — so the whole method is gated. The profile is a
-        // CONTAINMENT control, not a preference: a spawned agent holding the
-        // desktop's device token and a `full` (Bash-capable) session could
-        // otherwise read its own bearer off disk and durably re-widen its own
-        // profile after the operator tightened it. Same threat model as the two
-        // routes above; the GET and the member add/remove on that file stay
-        // ungated (reads decide nothing, and invites are a separate decision).
+        // PATCH writes `agentToolProfile` and nothing else. The profile is a
+        // CONTAINMENT control: a Bash-capable session could otherwise read its
+        // own bearer off disk and durably re-widen its own profile. GET and
+        // member add/remove on that file stay ungated.
         "channels/[channelId]/members/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
@@ -187,28 +149,18 @@ describe("H-3 write-gate coverage", () => {
         "workspaces/[workspaceSlug]/teams/[teamId]/access/route.ts",
         "workspaces/[workspaceSlug]/teams/[teamId]/members/[userId]/route.ts",
         "workspaces/[workspaceSlug]/teams/[teamId]/members/route.ts",
-        // DELETE drops the team, cascading its members and every resource grant
-        // it carried. Added 2026-08-07: it was the one access-control write
-        // without the gate, so a write-scoped bearer that could not remove a
-        // single member could still delete the team wholesale. Deletes are
-        // permanent now, and an agent token has no dialog to gate it — the same
-        // invariant the MCP delete block holds on its own surface.
+        // DELETE drops the team, cascading members and every resource grant.
+        // Permanent, and an agent token has no dialog to gate it.
         "workspaces/[workspaceSlug]/teams/[teamId]/route.ts",
       ].sort()
     );
   });
 
   /**
-   * THE SECOND GRANULARITY, PINNED THE SAME WAY (C-13, 2026-08-10).
-   *
-   * `sessionOnly` is a wrapper option and therefore per-METHOD. A route whose
-   * one method carries several writes — only some of which an agent may
-   * legitimately make — gates the FIELD instead, in the handler, via a
-   * `SESSION_ONLY_FIELDS` constant. That gate is invisible to the pin above
-   * (there is no `sessionOnly: true` in the file), so it gets its own, or the
-   * tripwire would report a shrinking set as healthy.
-   *
-   * ONE route qualifies today. Adding a second is a conscious edit here.
+   * ⚠ `sessionOnly` is a wrapper option, therefore per-METHOD. A route whose one
+   * method carries several writes gates the FIELD instead, in the handler, via
+   * `SESSION_ONLY_FIELDS` — invisible to the pin above (no `sessionOnly: true`
+   * in the file), so it needs its own pin or a shrinking set reads as healthy.
    */
   it("the FIELD-level session gate is exactly the channel visibility write", () => {
     const fieldGated = files
@@ -217,9 +169,8 @@ describe("H-3 write-gate coverage", () => {
       .sort();
     expect(fieldGated).toEqual(["channels/[channelId]/route.ts"]);
 
-    // The constant names `visibility` and the refusal actually consults the
-    // caller type — a `SESSION_ONLY_FIELDS` that nothing reads would satisfy
-    // the file list above while gating nothing.
+    // ⚠ A `SESSION_ONLY_FIELDS` that nothing reads would satisfy the file list
+    // above while gating nothing.
     const src = readFileSync(
       path.join(API_ROOT, "channels/[channelId]/route.ts"),
       "utf8"

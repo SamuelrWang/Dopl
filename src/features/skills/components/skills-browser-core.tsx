@@ -30,7 +30,7 @@ const EMPTY_COPY: Record<SkillFilter, string> = {
   workspace: "No skills are public to the workspace yet.",
 };
 
-/** Postgres timestamps are full ISO strings; render "Jul 8". */
+/** ISO timestamp → "Jul 8". */
 function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
@@ -44,25 +44,19 @@ export interface SkillsBrowserCoreProps {
   currentUserId: string;
   isAdmin: boolean;
   skills: Skill[];
-  /**
-   * The `skills` list is stale — re-pull it. Injected because the two apps
-   * have no shared refresh concept: the web app passes `router.refresh()`
-   * (the list is RSC props), the desktop SPA passes a TanStack
-   * `invalidateQueries(["/api/skills"])`.
-   */
+  /** Re-pull the stale `skills` list. Injected — the two apps share no
+   *  refresh concept: web passes `router.refresh()` (list is RSC props),
+   *  desktop SPA passes `invalidateQueries(["/api/skills"])`. */
   onListChanged: () => void;
 }
 
 /**
- * Skills index — two-pane .page-float browser matching the chats /
- * knowledge pattern: the scope-filtered list on the left (All / Private
- * / Team / Public), the selected skill's FULL tabbed editor on the right. No
- * separate detail route — selecting a row loads the editor in place.
- *
- * Next-free by construction: `./skills-browser.tsx` is the web app's thin
- * wrapper that supplies `onListChanged` from `next/navigation`, and the
- * desktop SPA renders this component directly
- * (apps/desktop-ui/src/pages/skills/index.tsx).
+ * Skills index — two-pane .page-float browser (chats / knowledge pattern):
+ * scope-filtered list left, selected skill's full editor right. No detail
+ * route; selecting a row loads the editor in place.
+ * ⚠ Next-free by construction: `./skills-browser.tsx` is the web wrapper
+ * supplying `onListChanged` from `next/navigation`; the desktop SPA renders
+ * this component directly (apps/desktop-ui/src/pages/skills/index.tsx).
  */
 export function SkillsBrowserCore({
   workspaceSlug,
@@ -77,21 +71,16 @@ export function SkillsBrowserCore({
   const [selectedId, setSelectedId] = useState<string | null>(
     skills[0]?.id ?? null
   );
-  // Skills deleted in this session. `onListChanged` re-pulls the list, but
-  // that round-trip is async and the `skills` prop keeps the dead row until
-  // it lands — long enough for the detail pane to fetch a 404 and for the
-  // row to still be clickable. Hiding them here makes the delete take effect
-  // on the same frame; a hard-deleted id can never come back, so the set is
-  // never stale in the other direction.
+  // Deleted this session. `onListChanged` re-pulls async, so the `skills`
+  // prop keeps the dead row — long enough for the detail pane to 404 and the
+  // row to stay clickable. Hiding here makes delete land on the same frame;
+  // a hard-deleted id never comes back, so the set can't go stale.
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
   const [createOpen, setCreateOpen] = useState(false);
-  // Skills created (or duplicated) in this session, mirroring `deletedIds` on
-  // the other side. `onListChanged` re-pulls, but the `skills` prop keeps the
-  // OLD list until that lands — long enough for `selected`'s
-  // `?? visible[0]` fallback to land on some unrelated skill and read as the
-  // app jumping on its own the instant you create something.
+  // Mirror of `deletedIds` for creates/duplicates: until the re-pull lands,
+  // `selected`'s `?? visible[0]` fallback would jump to an unrelated skill.
   const [createdSkills, setCreatedSkills] = useState<readonly Skill[]>([]);
 
   const live = useMemo(() => {
@@ -107,13 +96,10 @@ export function SkillsBrowserCore({
       : merged.filter((s) => !deletedIds.has(s.id));
   }, [skills, createdSkills, deletedIds]);
 
-  /**
-   * A skill arrived (created here, or duplicated from the detail pane): show
-   * it and select it on the SAME frame. Deliberately does not re-pull —
-   * `SkillHeaderActions` already calls `onListChanged` after duplicating, and
-   * the create dialog's caller does it below; folding it in here would fire
-   * two refetches per duplicate.
-   */
+  /** Show + select a new skill on the SAME frame. ⚠ Deliberately does not
+   *  re-pull: `SkillHeaderActions` already calls `onListChanged` after
+   *  duplicate and the create dialog's caller does it below — folding it in
+   *  here fires two refetches per duplicate. */
   const handleCreated = useCallback((skill: Skill) => {
     setCreatedSkills((prev) => [skill, ...prev]);
     setSelectedId(skill.id);
@@ -132,8 +118,7 @@ export function SkillsBrowserCore({
     });
   }, [live, query, filter]);
 
-  // Group the visible list by folder; unfiled last. The direction is
-  // many small skills, so folders are the primary organizing axis.
+  // Group by folder; unfiled last.
   const groups = useMemo(() => {
     const byFolder = new Map<string, Skill[]>();
     for (const s of visible) {
@@ -147,8 +132,7 @@ export function SkillsBrowserCore({
     });
   }, [visible]);
 
-  // Keep the selection when it survives the filter/search; otherwise
-  // fall to the first visible row (chats' handleFilterChange pattern).
+  // Keep the selection when it survives filter/search; else first visible row.
   const selected =
     visible.find((s) => s.id === selectedId) ?? visible[0] ?? null;
 
@@ -160,13 +144,9 @@ export function SkillsBrowserCore({
     }
   };
 
-  /**
-   * A skill was permanently deleted. Move the selection to an ADJACENT row
-   * (next, else previous) computed from the list as it stands right now —
-   * the fallback in `selected` would otherwise silently land on `visible[0]`,
-   * which is a different skill somewhere else in the list and reads as the
-   * app having jumped on its own.
-   */
+  /** Move selection to an ADJACENT row (next, else previous) computed from
+   *  the list as it stands now — `selected`'s `visible[0]` fallback would
+   *  land on an unrelated skill and read as the app jumping on its own. */
   const handleDeleted = useCallback(
     (deletedId: string) => {
       const at = visible.findIndex((s) => s.id === deletedId);
@@ -181,7 +161,7 @@ export function SkillsBrowserCore({
 
   return (
     <div className="page-float flex antialiased">
-      {/* Left list pane */}
+      {/* List pane */}
       <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
@@ -239,7 +219,7 @@ export function SkillsBrowserCore({
         </div>
       </div>
 
-      {/* Right pane — the full editor for the selected skill */}
+      {/* Editor pane */}
       <DetailPane
         skill={selected}
         workspaceSlug={workspaceSlug}
@@ -332,11 +312,8 @@ function StatusChip({ status }: { status: SkillStatus }) {
   );
 }
 
-/**
- * Right pane: loads the selected skill's full body client-side and
- * renders the inline `SkillView` editor, keyed by skill id so switching
- * rows remounts fresh editor state (and flushes pending saves).
- */
+/** Loads the selected skill's body client-side. ⚠ Keyed by skill id so
+ *  switching rows remounts fresh editor state and flushes pending saves. */
 function DetailPane({
   skill,
   workspaceSlug,
@@ -362,8 +339,7 @@ function DetailPane({
   const [failed, setFailed] = useState(false);
   const slug = skill?.slug ?? null;
 
-  // Reset for the incoming skill during render (sanctioned
-  // adjust-state-during-render pattern — no effect round-trip).
+  // Reset during render (adjust-state-during-render, no effect round-trip).
   const [lastSlug, setLastSlug] = useState(slug);
   if (lastSlug !== slug) {
     setLastSlug(slug);
@@ -374,10 +350,9 @@ function DetailPane({
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    // Scope the fetch to the workspace being viewed. Without the
-    // X-Workspace-Id header the route falls back to the caller's DEFAULT
-    // workspace (resolveActiveWorkspace) — so on any non-default
-    // workspace the slug 404s and the pane shows "Couldn't load".
+    // ⚠ Must pass workspaceId: without the X-Workspace-Id header the route
+    // falls back to the caller's DEFAULT workspace (resolveActiveWorkspace),
+    // so on any other workspace the slug 404s into "Couldn't load".
     fetchSkill(slug, workspaceId)
       .then((r) => {
         if (!cancelled) setResolved(r);

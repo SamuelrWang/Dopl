@@ -1,12 +1,8 @@
 import type { GraphLayout, NodeLayout, NodeRect, Point } from "./types";
 
 /**
- * Pure position helpers for the hybrid (auto + stored) layout model. The
- * domain layout fn produces `auto` positions; a user's dragged positions
- * live in `stored`. `resolvePositions` merges them (stored wins per node,
- * auto fills the rest); `placeNewNode` finds a free spot for a just-created
- * card; `worldBounds` sizes the scroll world around whatever positions
- * ended up effective. All deterministic and DOM-free.
+ * Pure position helpers for the hybrid (auto + stored) layout model.
+ * Deterministic, DOM-free.
  */
 
 const NEW_NODE_PAD = 24;
@@ -14,13 +10,9 @@ const SCAN_STEP = 32;
 const SCAN_COLUMN_ROWS = 12;
 const SCAN_MAX_TRIES = 240;
 
-/**
- * Effective positions: for every node the domain auto-layout placed, a
- * stored (dragged) position wins if present, otherwise the auto position
- * stands. Width always comes from auto (persistence only stores x/y).
- * Stored entries for nodes no longer in `auto` are ignored — a deleted
- * node can't resurrect a lane.
- */
+/** Effective positions: stored (dragged) wins per node, else auto. Width
+ *  always from auto — persistence only stores x/y. Stored ids absent from
+ *  `auto` ignored: a deleted node can't resurrect a lane. */
 export function resolvePositions(
   auto: Record<string, NodeLayout>,
   stored?: GraphLayout | null
@@ -37,12 +29,8 @@ export function resolvePositions(
   return out;
 }
 
-/**
- * Drop stored (dragged) entries whose node is no longer in the auto layout —
- * a deleted node's position is dead data. Used to keep the persisted layout
- * from accumulating orphans, and to keep the "layout dirtied" signal honest
- * (a deleted node shouldn't light up the Reset-layout button).
- */
+/** Drop stored entries whose node left the auto layout. Keeps the blob
+ *  orphan-free and Reset-layout unlit for a deleted node. */
 export function pruneLayout(
   layout: GraphLayout,
   auto: Record<string, NodeLayout>
@@ -55,13 +43,10 @@ export function pruneLayout(
 }
 
 /**
- * Fold a layout patch into the stored layout for a server-side persist. An
- * empty patch is the reset signal → REPLACES with `{}`. Any other patch
- * SHALLOW-MERGES per node id over the current layout, so two tabs each
- * dragging a different card don't clobber each other (the `layout` column is
- * one blob, so a partial write must fold in the untouched nodes here). Shared
- * by the ontology repository so the merge-except-empty
- * semantic is defined once.
+ * ⚠ Merge-except-empty, defined once for the ontology repository. Empty patch
+ * = reset signal → REPLACES with `{}`. Any other patch SHALLOW-MERGES per
+ * node id: the `layout` column is one blob, so a partial write must fold in
+ * untouched nodes here or two tabs dragging different cards clobber.
  */
 export function mergeStoredLayout(
   current: GraphLayout | null | undefined,
@@ -80,13 +65,9 @@ function overlaps(a: NodeRect, b: NodeRect, pad: number): boolean {
   );
 }
 
-/**
- * A free spot for a new card near the visual centre-right — where the eye
- * expects the "next" node — scanning down then into a fresh column until it
- * clears every existing rect. `viewport` (visible scroll rect in world
- * coords) anchors the search when supplied; otherwise it lands to the right
- * of everything already placed.
- */
+/** Free spot for a new card near centre-right, scanning down then into a
+ *  fresh column. `viewport` (visible scroll rect, world coords) anchors the
+ *  search; without it, lands right of everything placed. */
 export function placeNewNode(
   existing: NodeRect[],
   size: { width: number; height: number },
@@ -123,7 +104,7 @@ export function placeNewNode(
   return candidate;
 }
 
-/** World size that contains every rect plus padding, floored at a minimum. */
+/** World size containing every rect + padding, floored at `min`. */
 export function worldBounds(
   rects: NodeRect[],
   padding: number,

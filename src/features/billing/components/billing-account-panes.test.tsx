@@ -1,24 +1,13 @@
 // @vitest-environment jsdom
 /**
- * WHAT THE STRIPE PANES SAY WHEN STRIPE DOES NOT ANSWER.
+ * Stripe panes when Stripe does NOT answer.
  *
- * Every pane on this tab reports on the workspace's Stripe CUSTOMER, and each
- * one has an empty state that is a MEASUREMENT: "No card on file" means Stripe
- * was asked and said none; "No invoices yet" means the customer has never been
- * billed. A read that THREW measured nothing — and the panes used to render the
- * same words for it, because `undefined` (failed) and `null` (measured absent)
- * collapse into one falsy check and `data ?? []` erases the distinction
- * entirely. An admin whose Stripe call 500s would be told their card is gone
- * and their two years of receipts do not exist.
- *
- * So these drive the real transport with a FAILING route — the whole
- * hook/query/pane path, not a stubbed hook — and pin the one property that
- * matters: on failure the pane says it could not load, offers a retry, and
- * NEVER says the thing that is only true when Stripe answered.
- *
- * The cancel flow is here for the same reason from the write side: its failure
- * used to render underneath a ConfirmDialog that deliberately stays open on a
- * throw, i.e. behind the scrim, where it is in the DOM and unreadable.
+ * Empty states here are MEASUREMENTS ("No card on file" = Stripe said none). A
+ * read that THREW measured nothing, yet `undefined` (failed) and `null`
+ * (measured absent) collapse into one falsy check and `data ?? []` erases the
+ * distinction. Drives the real transport with a FAILING route (whole
+ * hook/query/pane path, not a stubbed hook): on failure pane must say it could
+ * not load, offer retry, and NEVER say what is only true when Stripe answered.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,12 +27,10 @@ import type { BillingPortal } from "./use-billing-portal";
 import type { PaymentMethodDto } from "../billing-account";
 
 /**
- * `ConfirmDialog` portals itself in from a `requestAnimationFrame` chain, so a
- * test that clicks through the real one is timing the animation rather than the
- * flow. This stub reproduces the ONE behaviour the section is written against
- * and that B2 turned on — `await onConfirm()`, close on resolve, STAY OPEN on a
- * throw — so "the dialog closed and the error is in the section" is a real
- * assertion about the contract rather than about rAF.
+ * ⚠ Real `ConfirmDialog` portals in from a `requestAnimationFrame` chain, so
+ * clicking through it times the animation, not the flow. Stub reproduces the
+ * one contract the section is written against: `await onConfirm()`, close on
+ * resolve, STAY OPEN on throw.
  */
 vi.mock("@/shared/ui/confirm-dialog", () => ({
   ConfirmDialog: ({
@@ -66,7 +53,7 @@ vi.mock("@/shared/ui/confirm-dialog", () => ({
               await onConfirm();
               onOpenChange(false);
             } catch {
-              /* the real dialog swallows it and stays open */
+              /* real dialog swallows it and stays open */
             }
           }}
         >
@@ -102,8 +89,7 @@ afterEach(() => {
 
 function mount(node: ReactElement) {
   const client = new QueryClient({
-    // No retry, so a failing read reaches its error state in one hop and the
-    // test is not waiting on a backoff.
+    // No retry: failing read reaches error state in one hop, no backoff wait.
     defaultOptions: { queries: { retry: false } },
   });
   return render(
@@ -124,7 +110,7 @@ const CARD: PaymentMethodDto = {
   expYear: 2029,
 };
 
-/** Every billing read answers 500, the way a thrown Stripe call surfaces. */
+/** Every billing read answers 500, as a thrown Stripe call surfaces. */
 const stripeIsDown: typeof reply = () => ({
   status: 500,
   body: { error: { code: "INTERNAL_ERROR", message: "Stripe is unavailable" } },
@@ -142,8 +128,6 @@ describe("the payment method pane when the read fails", () => {
         "Couldn't load the payment method"
       )
     );
-    // THE POINT. "No card on file" is a measurement of the Stripe customer;
-    // nothing measured anything here.
     expect(view.queryByText(/No card on file/)).toBeNull();
     expect(view.getByRole("button", { name: "Retry" })).toBeTruthy();
   });
@@ -166,7 +150,6 @@ describe("the payment method pane when the read fails", () => {
   });
 
   it("still says 'No card on file' when Stripe genuinely answers none", async () => {
-    // The other half of the distinction: a MEASURED absence keeps its copy.
     reply = () => ({ status: 200, body: { paymentMethod: null } });
     const view = mount(
       <BillingPaymentMethod workspaceId="ws-1" portal={PORTAL} />
@@ -177,9 +160,8 @@ describe("the payment method pane when the read fails", () => {
   });
 
   it("drops the Expires line rather than printing '00 / 0'", async () => {
-    // Stripe can return a card object with no expiry. Zero-defaulting it
-    // renders a date that does not exist, on the page people open to check
-    // exactly that field.
+    // Stripe can return a card with no expiry; zero-defaulting renders a date
+    // that does not exist.
     reply = () => ({
       status: 200,
       body: { paymentMethod: { ...CARD, expMonth: null, expYear: null } },
@@ -204,9 +186,8 @@ describe("the invoice table when the read fails", () => {
         "Couldn't load invoices"
       )
     );
-    // `invoices` is `data ?? []` — the SAME empty array a customer with no
-    // history produces. Reaching the empty state from here would tell a
-    // two-year customer their receipts are gone.
+    // `invoices` is `data ?? []` — same empty array as a customer with no
+    // history.
     expect(view.queryByText(/No invoices yet/)).toBeNull();
     expect(view.getByRole("button", { name: "Retry" })).toBeTruthy();
   });
@@ -231,7 +212,6 @@ describe("a cancel the server refuses", () => {
     );
   }
 
-  /** Open the confirm and click through it. */
   async function confirmCancel(view: ReturnType<typeof cancelPane>) {
     fireEvent.click(view.getByRole("button", { name: "Cancel plan" }));
     await act(async () => {
@@ -261,7 +241,6 @@ describe("a cancel the server refuses", () => {
         "This workspace has no active subscription to cancel."
       )
     );
-    // Behind the scrim it would be unreadable — the dialog must be gone.
     expect(view.queryByTestId("confirm-dialog")).toBeNull();
   });
 
@@ -282,10 +261,8 @@ describe("a cancel the server refuses", () => {
   });
 
   it("fires exactly ONE POST per confirmed cancel", async () => {
-    // The button is held through the awaited status invalidation, not just the
-    // round trip: in the gap between the two this section still renders its
-    // "Cancel plan" face from the OLD status, and a live button there is a
-    // second cancel of a decision already made.
+    // Button held through the awaited status invalidation, not just the round
+    // trip: in the gap the section still renders "Cancel plan" from OLD status.
     reply = (path) =>
       path.startsWith(BILLING_CANCEL_PATH)
         ? {

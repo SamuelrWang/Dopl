@@ -8,10 +8,7 @@ import type { Skill } from "@/features/skills/types";
 import { duplicateSkill } from "@/features/skills/client/api";
 import { errMessage } from "./skill-view-utils";
 
-/**
- * The skill header's export / duplicate / delete cluster, with the
- * permanent-delete confirmation it owns.
- */
+/** Export / duplicate / delete cluster, with the permanent-delete confirm. */
 export function SkillHeaderActions({
   slug,
   workspaceId,
@@ -25,8 +22,8 @@ export function SkillHeaderActions({
   canEdit: boolean;
   onDuplicated?: (skill: Skill) => void;
   onListChanged?: () => void;
-  /** Omitted when the caller may not delete this skill — the button and
-   *  its dialog are then not rendered at all. */
+  /** Omitted when the caller may not delete — button and dialog then don't
+   *  render at all. */
   onDelete?: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -34,9 +31,8 @@ export function SkillHeaderActions({
   return (
     <>
       <a
-        // A plain download link can't send X-Workspace-Id, so scope the export
-        // to the active workspace with the `?workspaceId=` query param the
-        // route accepts (membership-checked server-side).
+        // ⚠ A plain download link can't send X-Workspace-Id, so the export
+        // scopes via `?workspaceId=` (membership-checked server-side).
         href={`/api/skills/${encodeURIComponent(slug)}/export?workspaceId=${encodeURIComponent(workspaceId)}`}
         download
         title="Download as a Claude-Code-compatible skill zip"

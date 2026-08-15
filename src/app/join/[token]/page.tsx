@@ -1,11 +1,7 @@
 /**
- * /join/[token] — shareable join-link landing page.
- *
- * Server-fetches the public link info (workspace + inviter context), then
- * renders a card. Unauthenticated visitors see who invited them and a
- * sign-in CTA that bounces through /login and back here; authenticated
- * visitors get a "Request to join" button that files an admin-approval
- * join request.
+ * /join/[token] — shareable join-link landing. Unauthenticated visitors see who invited them and
+ * a sign-in CTA that bounces through /login and back; authenticated visitors get a
+ * "Request to join" button that files an admin-approval request.
  */
 
 import { notFound } from "next/navigation";

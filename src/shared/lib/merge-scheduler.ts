@@ -1,18 +1,13 @@
 /**
- * A debounced, per-key MERGING save scheduler.
+ * Debounced, per-key MERGING save scheduler. ⚠ `schedule()` calls for one key
+ * inside the delay window MERGE their (shallow) payloads and collapse to a
+ * single run of the newest runner with the FULL merged payload — editing two
+ * fields in quick succession must never drop the first field's write.
  *
- * Multiple `schedule()` calls for the same key inside the delay window merge
- * their (shallow) payload objects and collapse to a single run of the newest
- * runner with the FULL merged payload — so editing two fields of one entity
- * in quick succession never drops the first field's write (the bug a
- * per-entity, per-field-payload debounce had). Framework-agnostic and
- * synchronously testable with fake timers.
- *
- * Beyond debouncing it exposes `cancel`/`flush` (and their `*Where`
- * predicate variants) so a caller can, before a structural mutation, either
- * force pending text saves out (avoiding an invalidation clobbering them) or
- * drop saves for an entity that's being deleted (avoiding a late timer
- * resurrecting it).
+ * `cancel`/`flush` (+ `*Where` predicate variants) let a caller, before a
+ * structural mutation, force pending text saves out (so an invalidation cannot
+ * clobber them) or drop saves for an entity being deleted (so a late timer
+ * cannot resurrect it).
  */
 
 interface Entry {

@@ -1,10 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 
-/**
- * Pulsing placeholder block — the token-tinted shimmer atom (kit). Every
- * page/table loading skeleton composes this (or the helpers below); no
- * component re-hardcodes the pulse/surface recipe locally.
- */
+/** Shimmer atom (kit). Every loading skeleton composes this — never re-hardcode pulse/surface recipe locally. */
 export function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -16,10 +12,7 @@ export function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-/**
- * Sized shimmer bar — the loading atom the route/table skeletons compose
- * (px numbers or CSS sizes; pass `rounded-full` etc. via className).
- */
+/** Sized shimmer bar. px numbers or CSS sizes; radius via className. */
 export function SkeletonBar({
   h,
   w,
@@ -32,10 +25,7 @@ export function SkeletonBar({
   return <Skeleton style={{ height: h, width: w }} className={className} />;
 }
 
-/**
- * Single line-of-copy ghost — a rounded-full pill sized to one text line.
- * Width defaults to full; height to a body line.
- */
+/** One-text-line ghost — rounded-full pill. */
 export function SkeletonLine({
   w = "100%",
   h = 10,
@@ -48,7 +38,7 @@ export function SkeletonLine({
   return <SkeletonBar h={h} w={w} className={cn("rounded-full", className)} />;
 }
 
-/** Tapering paragraph ghost — N lines with decreasing widths. */
+/** Tapering paragraph ghost — N lines, decreasing widths. */
 const PARAGRAPH_WIDTHS = ["100%", "94%", "88%", "80%", "72%", "64%"];
 
 export function SkeletonText({
@@ -67,10 +57,7 @@ export function SkeletonText({
   );
 }
 
-/**
- * List-row ghost — an optional leading avatar/icon block over two stacked
- * lines. The row shape the knowledge / chats / members list panes share.
- */
+/** List-row ghost — optional leading avatar/icon over two stacked lines. */
 export function SkeletonRow({
   leading = "circle",
   className,
@@ -97,11 +84,9 @@ export function SkeletonRow({
 }
 
 /**
- * Message-transcript ghost — the alternating bubble column shared by the
- * chats archive (`chats/components/message-list.tsx`) and the channels
- * thread. Agent turns sit flat on the elevated surface, the user's indent
- * right on the subtle card surface, exactly as the loaded list does, so the
- * swap to real messages doesn't reflow the column.
+ * Message-transcript ghost — alternating bubble column (chats archive +
+ * channels thread). Bubble geometry must match the loaded list (agent flat on
+ * elevated, user indented on subtle card) or the swap to real messages reflows.
  */
 export function TranscriptSkeleton({
   bubbles = 4,
@@ -134,17 +119,10 @@ export function TranscriptSkeleton({
 }
 
 /**
- * Two-pane list + detail loading skeleton inside the shared `.page-float`
- * shell — the shape knowledge / chats / skills / members / channels all
- * load into. A list pane (header + search + segmented control + row
- * ghosts) beside a detail pane, so arriving at a two-pane page never
- * flashes flat panels or empty space before the elevated surface paints.
- *
- * `detail` swaps the right pane for a shape that matches the real one —
- * channels passes a `TranscriptSkeleton`; the default is the document
- * ghost that knowledge / chats / skills load into. `label` is the
- * screen-reader announcement (the visual is `aria-hidden` shimmer, so this
- * is the ONLY thing a reader gets).
+ * Two-pane list + detail loading shell — knowledge / chats / skills / members /
+ * channels. `detail` swaps the right pane (channels passes `TranscriptSkeleton`).
+ * `label` is the screen-reader announcement: the visual is `aria-hidden`
+ * shimmer, so it is the ONLY thing a reader gets.
  */
 export function TwoPaneListSkeleton({
   listWidth = 372,
@@ -193,12 +171,7 @@ export function TwoPaneListSkeleton({
   );
 }
 
-/**
- * Detail-pane chrome + a slot — the 52px top bar every right pane carries
- * (crumb + one trailing action) over whatever body shape the caller wants.
- * Exported so a feature skeleton can keep the shared chrome and vary only
- * the body.
- */
+/** Detail-pane chrome + slot — the shared 52px top bar over a caller-supplied body. */
 export function DetailPaneSkeleton({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -212,12 +185,7 @@ export function DetailPaneSkeleton({ children }: { children: React.ReactNode }) 
   );
 }
 
-/**
- * Right-pane document ghost — top bar + a centered title, prose lines, and
- * a framed meta-card ghost. Mirrors the loaded detail pane's shape (the
- * knowledge/chats document, the skills editor, the members console's
- * member/team/resource document) rather than the transient empty state.
- */
+/** Right-pane document ghost. Mirrors the loaded detail pane, not the empty state. */
 export function DetailDocSkeleton() {
   return (
     <DetailPaneSkeleton>
@@ -241,12 +209,9 @@ export function DetailDocSkeleton() {
 }
 
 /**
- * Generic single-surface page ghost — the `.page-float` frame, the 52px
- * header strip every page carries, and a neutral body of card ghosts.
- * The shape a page loads into when it is NOT a two-pane list (overview,
- * settings, ontology, canvas) and the shape the desktop shell holds
- * through its whole boot chain, so five sequential pending states read as
- * ONE steady surface instead of five text flickers.
+ * Single-surface page ghost — for pages that are NOT two-pane lists (overview,
+ * settings, ontology, canvas). Desktop shell holds this through its whole boot
+ * chain so five sequential pending states read as ONE surface, not five flickers.
  */
 export function PageShellSkeleton({ label = "Loading" }: { label?: string }) {
   return (

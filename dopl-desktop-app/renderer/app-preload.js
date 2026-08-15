@@ -1,29 +1,25 @@
 // Preload for the BUNDLED UI window (main/spa-window.js).
 //
-// `window.dopl` here is the ENTIRE privileged API the SPA gets: a fixed, small
-// set of members, no dynamic channels, no Node, no fs. It follows
-// session-preload.js's model (a local page may hold a real bridge) with
-// session-preload.js's discipline (every argument coerced to a primitive
-// before it crosses, fail-closed).
+// `window.dopl` is the ENTIRE privileged API the SPA gets: a fixed, small set of members, no
+// dynamic channels, no Node, no fs. Every argument is coerced to a primitive before it crosses,
+// fail-closed (session-preload.js's discipline).
 //
-// TWO INVARIANTS THAT MUST SURVIVE EVERY EDIT:
+// ⚠ TWO INVARIANTS THAT MUST SURVIVE EVERY EDIT:
+//  1. NO TOKENS. `getAuthState` answers `{ signedIn, userId }` and nothing else. Access token,
+//     refresh token and cookie jar stay in main. A renderer that never holds a credential
+//     cannot leak one.
+//  2. NO CALLER-SUPPLIED HEADERS. `apiRequest` takes a path and a small typed options object;
+//     main builds every header, Authorization included. A page that can set headers can forge
+//     identity or reach a third party.
 //
-//  1. NO TOKENS. `getAuthState` answers `{ signedIn, userId }` and nothing
-//     else. The access token, the refresh token and the cookie jar stay in
-//     main (main/auth-store.js keeps the blob in safeStorage). A renderer that
-//     never holds a credential cannot leak one.
-//  2. NO CALLER-SUPPLIED HEADERS. `apiRequest` takes a path and a small typed
-//     options object; main builds every header, including Authorization. If the
-//     page could set headers it could forge identity or reach a third party.
-//
-// The main side additionally binds every handler to THIS window's top frame
-// (main/ui-bridge.js), so a payload can never target another window.
+// Main additionally binds every handler to THIS window's top frame (main/ui-bridge.js), so a
+// payload can never target another window.
 
 const { contextBridge, ipcRenderer } = require('electron');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
-// §3.3: main's session-pill push. Named here as a constant for the same reason every other
-// channel is a literal — test/preload-parity pins that no ipc channel name is computed.
+// ⚠ A constant, like every other channel name: test/preload-parity pins that no ipc channel
+// name is computed.
 const SESSIONS_EVENT = 'dopl:sessions';
 
 const METHODS = { GET: 1, POST: 1, PATCH: 1, PUT: 1, DELETE: 1 };
@@ -35,10 +31,9 @@ const asMethod = (v) => {
   return METHODS[s] ? s : 'GET';
 };
 
-// Only the two request-shaping headers the app's HTTP contract defines
-// (x-workspace-id, x-updated-at) may be influenced from here, and only as
-// values — main decides the header names. Body is passed through the structured
-// clone as-is; main serializes it.
+// ⚠ Only the two request-shaping headers the HTTP contract defines (x-workspace-id,
+// x-updated-at) may be influenced from here, and only as VALUES — main decides the names.
+// Body rides the structured clone as-is; main serializes it.
 function asRequestOpts(opts) {
   const o = opts && typeof opts === 'object' ? opts : {};
   const out = { method: asMethod(o.method) };
@@ -48,8 +43,8 @@ function asRequestOpts(opts) {
   return out;
 }
 
-// main → renderer auth pushes. One shared listener, fanned out to the page's
-// callbacks; the raw ipcRenderer event object is never handed over.
+// main -> renderer auth pushes. One shared listener fanned out to the page's callbacks;
+// ⚠ the raw ipcRenderer event object is never handed over.
 const authListeners = new Set();
 ipcRenderer.on(AUTH_STATE_EVENT, (_event, state) => {
   for (const cb of authListeners) {
@@ -61,30 +56,28 @@ ipcRenderer.on(AUTH_STATE_EVENT, (_event, state) => {
   }
 });
 
-// The app's public origin, injected by main (spa-window.js
-// additionalArguments). A constant, not a capability — safe to expose.
+// The app's public origin, injected by main (spa-window.js additionalArguments). A constant,
+// not a capability.
 const APP_ORIGIN_ARG = process.argv
   .find((a) => a.startsWith('--dopl-app-origin='));
 const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
 
-// Channel-scoped input coercion, mirrored from renderer/preload.js — the
-// bridge never forwards raw renderer values.
+// ⚠ Channel-scoped input coercion, mirrored from renderer/preload.js — the bridge never
+// forwards raw renderer values.
 const asId = (channelId) => String(channelId == null ? '' : channelId);
 const asMode = (mode) => String(mode == null ? '' : mode);
 
 contextBridge.exposeInMainWorld('dopl', {
-  // The public https origin for building user-facing URLs (join links,
-  // MCP endpoints) — the document's own origin is file:// here.
+  // Public https origin for user-facing URLs — the document's own origin is file:// here.
   appOrigin: APP_ORIGIN,
 
-  // → { status, statusText, hasBody, body? }. Never throws for an HTTP status;
-  //   the renderer decodes the error envelope (apps/desktop-ui/src/lib/api.ts).
-  //   Rejects only when the request never completed or the call was malformed.
+  // -> { status, statusText, hasBody, body? }. ⚠ Never throws for an HTTP status — the
+  //    renderer decodes the error envelope (apps/desktop-ui/src/lib/api.ts). Rejects only when
+  //    the request never completed or the call was malformed.
   apiRequest: (path, opts) =>
     ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
 
-  // Main-initiated navigation (notification click → the channel's page).
-  // Path-only payload; the renderer's router decides what to do with it.
+  // Main-initiated navigation (notification click -> the channel's page). Path-only payload.
   onNavigate: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => {
@@ -99,14 +92,14 @@ contextBridge.exposeInMainWorld('dopl', {
   // Sign out: main drops the credential and pushes the signed-out state.
   signOut: () => ipcRenderer.invoke('dopl:sign-out'),
 
-  // Start the external OAuth sign-in. Main arms the login-CSRF nonce and
-  // opens the browser — the renderer never builds the URL.
+  // ⚠ Main arms the login-CSRF nonce and opens the browser — the renderer never builds the
+  // URL.
   beginSignIn: (provider) =>
     ipcRenderer.invoke('dopl:begin-sign-in', provider === 'github' ? 'github' : 'google'),
 
-  // Native email/password + magic link — main runs the GoTrue calls (the
-  // renderer has no network). The password crosses this bridge once, into
-  // one https request body; it is never stored or logged.
+  // Native email/password + magic link — main runs the GoTrue calls (the renderer has no
+  // network). ⚠ The password crosses once, into one https request body; never stored or
+  // logged.
   passwordSignIn: (payload) => {
     const p = payload && typeof payload === 'object' ? payload : {};
     return ipcRenderer.invoke('dopl:password-sign-in', {
@@ -132,12 +125,9 @@ contextBridge.exposeInMainWorld('dopl', {
     return () => authListeners.delete(callback);
   },
 
-  // Open an http(s) URL in the SYSTEM browser (main re-validates the scheme).
-  // Per-channel controls for the consent card + channel header — the SAME
-  // five label-only ops the remote-page preload exposes (renderer/preload.js),
-  // invoking the SAME sender-bound handlers (main/channel-dir-ipc.js, which
-  // resolves the live main window — the SPA window in DOPL_UI=spa mode).
-  // Absolute paths never cross this bridge; folder ops return labels only.
+  // Per-channel controls for the consent card + channel header — the SAME five label-only ops
+  // renderer/preload.js exposes, on the SAME sender-bound handlers (main/channel-dir-ipc.js).
+  // ⚠ Absolute paths never cross this bridge; folder ops return LABELS only.
   channels: {
     getFolderLabel: (channelId) =>
       ipcRenderer.invoke('channels:getFolderLabel', asId(channelId)),
@@ -157,39 +147,26 @@ contextBridge.exposeInMainWorld('dopl', {
       }),
   },
 
-  // The session-card's "Open thread" button — the SAME single op the
-  // remote-page preload exposes (renderer/preload.js), invoking the SAME
-  // sender-bound handler (main/channel-dir-ipc.js `sessions:reopen`, which
-  // resolves the live main window — the SPA window in DOPL_UI=spa mode — and
-  // requires its TOP frame). Ids are coerced to strings here; main re-validates
-  // (channelId must be a UUID) and answers `{ ok }` — ok:false when the thread
-  // is truly closed. Wire name `task` == domain name `thread`.
+  // `reopen` — the session card's "Open thread" button, the SAME op renderer/preload.js
+  // exposes on the SAME sender-bound handler (main/channel-dir-ipc.js `sessions:reopen`, which
+  // requires the live main window's TOP frame). Ids coerced here, re-validated in main
+  // (channelId must be a UUID). Wire name `task` == domain name `thread`.
+  // ⚠ OPENS THE WINDOW ONLY: starts no query, wakes no agent, runs no gated tool, so it widens
+  // neither invariant above. A parked shell stays parked until a steer or accepted inbound.
+  // ⚠ The web tree FEATURE-DETECTS this namespace (`@/shared/lib/desktop` getDesktopSessions ->
+  // `sessions.reopen`) and renders NOTHING when absent, so dropping it silently removes the
+  // button rather than failing. Pinned by test/preload-parity.test.mjs.
   //
-  // This OPENS THE WINDOW ONLY (v3.0 A5): it starts no query, wakes no agent
-  // and runs no gated tool, so it widens neither invariant above — a parked
-  // shell stays parked until a steer or an accepted inbound resumes it.
-  //
-  // The web tree feature-detects this namespace (`@/shared/lib/desktop`
-  // getDesktopSessions → `sessions.reopen`) and renders NOTHING when it is
-  // absent, so dropping it here silently removes the button rather than
-  // failing. Pinned by test/preload-parity.test.mjs.
-  //
-  // `summaries` / `onSummaries` (rollback plan §3.3) are the SESSION PILLS' feed: the
-  // sessions running on THIS machine, each with a friendly name, a coarse state
-  // (working|idle|ended) and its channel + thread, projected in main by
-  // main/session-summary.js and served/pushed by main/ui-bridge.js. Read once on mount,
-  // then listen — a push-only surface leaves a freshly opened channel blank until the
-  // next state change, and on a quiet machine that is never.
-  //
-  // SPA-ONLY, DELIBERATELY. These two are absent from renderer/preload.js: that preload
-  // belongs to the window hosting the RETIRED website (ENGINEERING §9.3), and a retired
-  // surface does not grow new capabilities. The parity invariant runs remote ⊆ SPA, so
-  // this widens nothing — and test/preload-parity.test.mjs records the divergence
-  // explicitly rather than letting it read as an oversight.
-  //
-  // NOTHING PRIVILEGED CROSSES. The reply is derived from in-memory state: no path, no
-  // token, no window handle, no absolute anything. It starts no query and opens no
-  // window — the pill's "Open" is `reopen` above, which is unchanged.
+  // `summaries` / `onSummaries` — the SESSION PILLS' feed: sessions running on THIS machine,
+  // each with a name, a coarse state (working|idle|ended) and its channel + thread, projected
+  // by main/session-summary.js. Read once on mount, then listen — a push-only surface leaves a
+  // freshly opened channel blank until the next state change, which on a quiet machine is
+  // never.
+  // ⚠ SPA-ONLY, deliberately: absent from renderer/preload.js, which belongs to the window
+  // hosting the RETIRED website and does not grow new capabilities. The parity invariant runs
+  // remote ⊆ SPA, so this widens nothing; test/preload-parity records the divergence.
+  // ⚠ NOTHING PRIVILEGED CROSSES: derived from in-memory state — no path, no token, no window
+  // handle, no absolute anything.
   sessions: {
     reopen: (channelId, taskId) =>
       ipcRenderer.invoke('sessions:reopen', {
@@ -208,11 +185,9 @@ contextBridge.exposeInMainWorld('dopl', {
     },
   },
 
-  // Phase 3 live updates: main watches postgres_changes for the viewed
-  // workspace's content tables and forwards coalesced change events; the
-  // renderer's shared-channel-registry turns them into refetch signals.
-  // syncWatch tells main WHICH workspace the UI is looking at (null =
-  // none). Subscription returns an unsubscribe fn.
+  // Live updates: main watches postgres_changes for the viewed workspace's content tables and
+  // forwards coalesced change events; the renderer's shared-channel-registry turns them into
+  // refetch signals. syncWatch tells main WHICH workspace the UI is on (null = none).
   syncWatch: (workspaceId) =>
     ipcRenderer.invoke('dopl:sync-watch', workspaceId == null ? null : String(workspaceId)),
   onSyncEvent: (callback) => {
@@ -227,13 +202,10 @@ contextBridge.exposeInMainWorld('dopl', {
 
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),
 
-  // → a `data:image/...;base64,...` URI, or null. The packaged page's
-  // `img-src` cannot list the OAuth CDNs (`lh3.googleusercontent.com`,
-  // `avatars.githubusercontent.com` — an open-ended set), so main fetches the
-  // avatar on the renderer's behalf and returns the bytes inline. Main owns
-  // the destination allowlist (main/avatar-policy.js) AND re-checks the mime
-  // and size of what it hands back; a refused URL answers null and the
-  // component keeps its initials. Never a URL, never a header, never a token —
-  // this does NOT widen the two invariants above.
+  // -> a `data:image/...;base64,...` URI, or null. The packaged page's `img-src` cannot list
+  // the OAuth CDNs (an open-ended set), so main fetches the avatar and returns the bytes
+  // inline. ⚠ Main owns the destination allowlist (main/avatar-policy.js) AND re-checks mime +
+  // size; a refused URL answers null and the component keeps its initials. Never a URL, never
+  // a header, never a token.
   avatarDataUri: (url) => ipcRenderer.invoke('dopl:avatar', asStr(url)),
 });

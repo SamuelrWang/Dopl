@@ -7,48 +7,32 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
- * GET /api/cron/reconcile-seats
+ * GET /api/cron/reconcile-seats — daily seat-quantity true-up (vercel.json). Inline sync on
+ * join/leave is best-effort (a Stripe hiccup is swallowed so it cannot fail the membership
+ * change), so quantity drifts; this recomputes it for every live Team workspace via the shared
+ * `syncSeatQuantity`.
  *
- * Daily seat-quantity true-up (vercel.json). Per-seat Team subscriptions are
- * normally kept in sync inline when a member joins/leaves, but that call is
- * best-effort (a Stripe hiccup during add/remove is swallowed so it can't
- * fail the membership change), so quantity can drift. This sweep recomputes
- * the active-member count for every live Team workspace and true-ups the
- * Stripe seat quantity via the shared `syncSeatQuantity` reconciler.
+ * Idempotent: `syncSeatQuantity` re-reads billing, skips a matching count (no proration churn),
+ * and only touches live Team subs — a run with no drift is a pure no-op.
  *
- * Idempotent + safe to run repeatedly: `syncSeatQuantity` re-reads billing,
- * skips when the seat count already matches (no proration churn), and only
- * ever touches live Team subs — so a run with no drift is a pure no-op.
+ * ⚠ Per-workspace isolation: one Stripe error never aborts the sweep, and the route still returns
+ * 200 so the scheduler does not retry-storm the batch over one bad sub.
  *
- * Per-workspace isolation: one workspace's Stripe error never aborts the
- * sweep; failures are collected and surfaced in a single system event, and
- * the route still returns 200 so the scheduler doesn't retry-storm the whole
- * batch over one bad sub.
- *
- * Auth: CRON_SECRET bearer via requireCronSecret (fail-closed 503 when unset,
- * 401 without the secret), same as the other /api/cron/* routes.
+ * Auth: CRON_SECRET bearer via requireCronSecret (fail-closed 503 when unset, 401 without it).
  */
 export const dynamic = "force-dynamic";
 
 /**
- * How many workspaces are reconciled at once.
- *
- * This was an uncapped `Promise.allSettled` over EVERY live Team workspace,
- * and each element is 2 DB reads + 2 Stripe calls + a write. At any real
- * customer count that opens every one of them in the same tick: Stripe
- * answers 429 (its limit is per-second, and a rate-limited response looks
- * exactly like a failed true-up here — the sweep would report mass failure
- * with no cause), and the connection pooler saturates on the DB half before
- * that. Small on purpose: this is a nightly sweep with no deadline, so
- * throughput is worth nothing and staying under everyone's limits is worth
- * a lot.
+ * ⚠ Concurrency cap, small on purpose. Each unit is 2 DB reads + 2 Stripe calls + a write;
+ * uncapped, every live Team workspace opens in the same tick, Stripe answers 429 (a rate-limited
+ * response looks exactly like a failed true-up here, so the sweep reports mass failure with no
+ * cause) and the pooler saturates first. A nightly sweep has no deadline — throughput is worth
+ * nothing and staying under everyone's limits is worth a lot.
  */
 const RECONCILE_CONCURRENCY = 5;
 
-/**
- * `Promise.allSettled` with a bounded worker pool. Results stay index-aligned
- * with `items` so callers can name the failures.
- */
+/** `Promise.allSettled` with a bounded worker pool. ⚠ Results stay index-aligned with `items`
+ *  so callers can name the failures. */
 async function settleWithConcurrency<T, R>(
   items: T[],
   limit: number,
@@ -75,8 +59,7 @@ export async function GET(request: NextRequest) {
   const denied = requireCronSecret(request);
   if (denied) return denied;
 
-  // No live key (test/preview) — syncSeatQuantity would no-op every row, so
-  // skip the DB scan entirely and report the skip.
+  // No live key (test/preview): syncSeatQuantity no-ops every row, so skip the DB scan.
   if (!isStripeConfigured()) {
     return NextResponse.json({ ok: true, skipped: "stripe_not_configured" });
   }
@@ -94,8 +77,7 @@ export async function GET(request: NextRequest) {
       fingerprintKeys: ["cron", "reconcile-seats", "enumerate-fail"],
       userId: null,
     });
-    // The cause is in the system event above; the response body carries the
-    // shared sanitized envelope rather than the raw exception (ENGINEERING §9).
+    // Cause is in the system event above; body carries the sanitized envelope (ENGINEERING §9).
     return toHttpErrorResponse("api/cron/reconcile-seats", err);
   }
 
@@ -126,8 +108,7 @@ export async function GET(request: NextRequest) {
   const succeeded = scanned - failed;
 
   void logSystemEvent({
-    // Info on a clean sweep (healthy heartbeat); error when any workspace's
-    // true-up threw so it shows up in the health dashboard.
+    // Info on a clean sweep; error when any true-up threw, so it reaches the health dashboard.
     severity: failed > 0 ? "error" : "info",
     category: "billing",
     source: "GET /api/cron/reconcile-seats",

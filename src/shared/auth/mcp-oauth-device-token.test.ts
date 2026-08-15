@@ -1,14 +1,11 @@
 /**
- * Unit tests for the device-token lifecycle — `issueDeviceToken`'s
- * revoke-and-replace invariant and `revokeDeviceTokens` (F-085), plus the
- * property that makes revocation mean anything: `validateAccessToken` refuses a
- * revoked row. `supabaseAdmin` is mocked with a chainable builder that records
- * every call.
+ * Device-token lifecycle: `issueDeviceToken`'s revoke-and-replace invariant,
+ * `revokeDeviceTokens`, and the property that makes revocation mean anything —
+ * `validateAccessToken` refuses a revoked row.
  *
- * Contract: one active device token per (user, client, label). A fresh mint
- * MUST first revoke any prior un-revoked token for that exact triple (so a
- * looping client can't accumulate unbounded 90-day credentials), and the
- * revoke UPDATE must run BEFORE the new INSERT.
+ * ⚠ Contract: ONE active token per (user, client, label). A fresh mint MUST
+ * first revoke any prior un-revoked token for that exact triple, and the revoke
+ * UPDATE must run BEFORE the new INSERT.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -23,18 +20,13 @@ import {
   MCP_SCOPES,
 } from "./mcp-oauth";
 
-// The reserved first-party client every CLI device token is issued under
-// (private const in mcp-oauth.ts — pinned here as the contract value).
+// ⚠ Private const in mcp-oauth.ts — pinned here as the contract value.
 const DEVICE_CLIENT_ID = "dopl_client_device_cli";
 
 type Call = { op: string; args: unknown[] };
 
-/**
- * Chainable, thenable Supabase-builder stub. Every method records its call and
- * returns the builder; awaiting the builder at any point resolves to a
- * success result, so `.upsert(...)`, `.update(...).eq()...is()`, and
- * `.insert(...)` all resolve without a real DB.
- */
+/** Chainable thenable Supabase-builder stub: every method records its call and
+ *  returns the builder; awaiting at any point resolves success. */
 function makeAdmin() {
   const calls: Call[] = [];
   const builder: Record<string, unknown> = {};
@@ -74,15 +66,11 @@ describe("issueDeviceToken", () => {
     const insertIdx = opIndex(calls, "insert");
     expect(updateIdx).toBeGreaterThanOrEqual(0);
     expect(insertIdx).toBeGreaterThanOrEqual(0);
-    // The revoke must precede the insert.
     expect(updateIdx).toBeLessThan(insertIdx);
 
-    // The revoke UPDATE stamps revoked_at.
     const updateArg = calls[updateIdx].args[0] as Record<string, unknown>;
     expect(typeof updateArg.revoked_at).toBe("string");
 
-    // The revoke chain's filters: exactly (user, device client, label) and
-    // only rows not already revoked.
     const revokeFilters = calls
       .slice(updateIdx, insertIdx)
       .filter((c) => c.op === "eq" || c.op === "is")
@@ -106,16 +94,12 @@ describe("issueDeviceToken", () => {
     expect(insertArg.user_id).toBe("user-9");
     expect(insertArg.client_id).toBe(DEVICE_CLIENT_ID);
     expect(insertArg.client_name).toBe("Sams-MBP");
-    // No refresh token — a device re-mints rather than rotating.
     expect(insertArg.refresh_token_hash).toBeNull();
     expect(insertArg.refresh_expires_at).toBeNull();
-    // Only the hash is persisted, never the plaintext token.
     expect(typeof insertArg.access_token_hash).toBe("string");
     expect(insertArg.access_token_hash).not.toBe(token);
-    // Default scopes = the full read+write MCP set.
     expect(insertArg.scopes).toEqual([...MCP_SCOPES]);
 
-    // The returned token is a plaintext access token; expiry ~90 days out.
     expect(token.startsWith("dopl_at_")).toBe(true);
     const ttlDays = (Date.parse(expiresAt) - Date.now()) / 86_400_000;
     expect(ttlDays).toBeGreaterThan(89);
@@ -143,7 +127,6 @@ describe("issueDeviceToken", () => {
 
     await issueDeviceToken({ userId: "user-9", deviceLabel: "Sams-MBP" });
 
-    // ensureDeviceClient upserts the oauth_clients row, and it happens first.
     const upsertIdx = opIndex(calls, "upsert");
     expect(upsertIdx).toBeGreaterThanOrEqual(0);
     expect(upsertIdx).toBeLessThan(opIndex(calls, "insert"));
@@ -152,17 +135,12 @@ describe("issueDeviceToken", () => {
   });
 });
 
-// ── F-085: revokeDeviceTokens ──────────────────────────────────────────────
-//
-// The server half of desktop sign-out. Until this existed, sign-out could only
-// delete the app's local copies while the 90-day dopl.read+dopl.write bearer
-// stayed valid — so anything that had already read it kept full API access to
-// the account that just signed out.
+// ── revokeDeviceTokens: the server half of desktop sign-out ────────────────
+// ⚠ Without it, sign-out deletes only local copies while the 90-day
+// read+write bearer stays valid for anything that already read it.
 
-/**
- * Like `makeAdmin`, but each awaited chain resolves to the next queued row set
- * (what `.select("id")` returns after an UPDATE). Also records `.select`.
- */
+/** Like `makeAdmin`, but each awaited chain resolves to the next queued row set
+ *  (what `.select("id")` returns after an UPDATE). */
 function makeRevokeAdmin(results: { id: string }[][]) {
   const calls: Call[] = [];
   const queue = [...results];
@@ -202,20 +180,19 @@ describe("revokeDeviceTokens (F-085)", () => {
 
     expect(revoked).toBe(1);
     expect(calls[opIndex(calls, "from")].args[0]).toBe("mcp_tokens");
-    // Soft revoke: revoked_at is stamped, the row is NOT deleted (the settings
-    // list and the audit trail both read it).
+    // ⚠ Soft revoke: the row is NOT deleted — settings list and audit trail
+    // both read it.
     const updateArg = calls[opIndex(calls, "update")].args[0] as Record<string, unknown>;
     expect(Object.keys(updateArg)).toEqual(["revoked_at"]);
     expect(typeof updateArg.revoked_at).toBe("string");
 
     const f = filters(calls);
-    // OWNER SCOPE — without this, one user could revoke another's credential.
+    // ⚠ OWNER SCOPE — else one user could revoke another's credential.
     expect(f).toContainEqual(["eq", "user_id", "user-9"]);
-    // DEVICE-CLIENT SCOPE — this surface mints device tokens, so it revokes
-    // device tokens; an OAuth agent grant is revoked from Connected apps.
+    // ⚠ DEVICE-CLIENT SCOPE — device tokens only; an OAuth agent grant is
+    // revoked from Connected apps.
     expect(f).toContainEqual(["eq", "client_id", DEVICE_CLIENT_ID]);
     expect(f).toContainEqual(["eq", "client_name", "Dopl Desktop CLI (Sams-MBP)"]);
-    // Already-revoked rows keep their ORIGINAL timestamp.
     expect(f).toContainEqual(["is", "revoked_at", null]);
   });
 
@@ -272,7 +249,7 @@ describe("revokeDeviceTokens (F-085)", () => {
 // ── What makes revocation MEAN something ───────────────────────────────────
 
 describe("validateAccessToken vs a revoked row", () => {
-  /** Single-row read builder: `.select(...).eq(...).maybeSingle()`. */
+  /** Single-row read builder. */
   function makeReader(row: Record<string, unknown> | null) {
     const builder: Record<string, unknown> = {};
     const chain = () => builder;
@@ -321,12 +298,7 @@ describe("validateAccessToken vs a revoked row", () => {
     });
   });
 
-  /**
-   * WHAT THE VALIDATOR NOW CARRIES OUT. These two columns were in the row all
-   * along and the select skipped them, which is why the transport boundary
-   * could not tell the agent what credential it was acting through. Both are
-   * descriptive: nothing in the codebase gates on either.
-   */
+  /** ⚠ Both columns are DESCRIPTIVE — nothing in the codebase gates on either. */
   it("reports a device token as `device`, carrying its mint label verbatim", async () => {
     vi.mocked(supabaseAdmin).mockReturnValue(
       makeReader({
@@ -344,13 +316,10 @@ describe("validateAccessToken vs a revoked row", () => {
     });
   });
 
-  /**
-   * The DISCRIMINATOR IS `client_id`, NOT THE NAME. `client_name` is
-   * caller-supplied on both mint paths, so a DCR app that registers itself
-   * under the device client's display name must still classify as an OAuth
-   * grant — otherwise a remote app could dress itself up as the operator's own
-   * machine in the agent's own identity readout.
-   */
+  /** ⚠ DISCRIMINATOR IS `client_id`, NOT THE NAME. `client_name` is
+   *  caller-supplied on both mint paths, so a DCR app registering under the
+   *  device client's display name must still classify as an OAuth grant — else
+   *  a remote app dresses itself up as the operator's own machine. */
   it("a DCR app impersonating the device client's NAME is still `oauth-app`", async () => {
     vi.mocked(supabaseAdmin).mockReturnValue(
       makeReader({

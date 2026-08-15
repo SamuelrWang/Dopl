@@ -1,10 +1,9 @@
 /**
- * Unit tests for the chats read service under the retention window.
- * Repository + billing entitlements are mocked (no Supabase). Rules:
- *   - free plan  -> list is queried with the DB cutoff; hiddenCount surfaced
- *   - pro plan   -> no window filter, hiddenCount 0, no cutoff/count queries
+ * Chats read service under the retention window; repository + billing mocked.
+ *   - free: list queried with the DB cutoff, hiddenCount surfaced
+ *   - pro:  no window filter, hiddenCount 0, no cutoff/count queries
  *   - getChat boundary: older-than-cutoff hidden (typed denial), on/after
- *     the cutoff visible; pro loads anything
+ *     visible; pro loads anything
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

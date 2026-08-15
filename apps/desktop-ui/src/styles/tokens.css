@@ -1,37 +1,19 @@
-/* ─────────────────────────────────────────────────────────────────────────
-   Dopl desktop SPA — DESIGN TOKENS (VERBATIM COPY).
-
-   SOURCE OF TRUTH: `src/app/globals.css` (the Next web app).
-   Copied ranges: lines 6–388 (@theme inline + the :root palette + the html /
-   @layer base rules), 415–449 (.mosaic-bg app frame + AppShell geometry vars),
-   892–917 (the global discreet-scrollbar rules). Deliberately NOT copied:
-   the landing/login-only rules (.design-grid, login orbs, logo-scroll) —
-   they die with the website in Phase 4. `loginFadeIn` and `.dopl-slider`
-   were in that list until /onboarding was ported INTO the app; they now
-   live at the foot of the sibling kit.css.
-
-   ⚠ DRIFT WARNING (REFACTOR-FINDINGS F-074). This is the SECOND hand-copy of
-   the same palette: `dopl-desktop-app/renderer/session/tokens.css` is the
-   first, and F-074 exists because a hand-copy silently rots. Until the SPA and
-   the session window import ONE file at build time, any edit to globals.css's
-   token layers or kit recipes MUST be mirrored here (and there) in the same
-   change. Kit recipes live in the sibling `kit.css`.
-
-   docs/DESIGN-SYSTEM.md is the contract these tokens implement: semantic
-   text-* ramp, token color utilities, kit classes. Never hardcode a hex, a px
+/* Dopl desktop SPA — DESIGN TOKENS. Contract: docs/DESIGN-SYSTEM.md (semantic
+   text-* ramp, token color utilities, kit classes). Never hardcode a hex, a px
    font size, or a shadow/border recipe in a component.
-   ───────────────────────────────────────────────────────────────────────── */
 
-/* ─────────────────────────────────────────────────────────────────────
-   Dopl — Design Tokens
    One palette, defined once in :root: light neutral surfaces, dark ink,
-   #1c2127 CTAs, and a single blue (--link #2f6fed). No dark/light split.
-   ───────────────────────────────────────────────────────────────────── */
+   #1c2127 CTAs, one blue (--link #2f6fed). No dark/light split.
+
+   ⚠ DRIFT (F-074) — THIRD hand-copy of the same palette. Source of truth is
+   `src/app/globals.css`; `dopl-desktop-app/renderer/session/tokens.css` is the
+   other copy. Until all three import ONE file at build time, any edit to
+   globals.css's token layers MUST be mirrored in both, same change. Kit
+   recipes live in the sibling `kit.css`.
+   NOT copied on purpose: landing/login-only rules (.design-grid, login orbs,
+   logo-scroll). */
 
 @theme inline {
-  /* ── New design tokens ───────────────────────────────────────── */
-
-  /* Surfaces */
   --color-bg-base: var(--bg-base);
   --color-bg-elevated: var(--bg-elevated);
   --color-bg-elevated-hover: var(--bg-elevated-hover);
@@ -39,37 +21,27 @@
   --color-bg-inset-hover: var(--bg-inset-hover);
   --color-bg-overlay: var(--bg-overlay);
 
-  /* Borders */
   --color-border-subtle: var(--border-subtle);
   --color-border-default: var(--border-default);
   --color-border-strong: var(--border-strong);
   --color-border-highlight: var(--border-highlight);
 
-  /* Text */
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
   --color-text-disabled: var(--text-disabled);
 
-  /* Accent */
   --color-accent-primary: var(--accent-primary);
   --color-accent-glow: var(--accent-glow);
   --color-accent-soft: var(--accent-soft);
 
-  /* Status */
   --color-success: var(--success);
   --color-caution: var(--caution);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
 
-  /* ── Tokenization layer (light-mode sweep) ────────────────────────
-     New semantic tokens that the dark-first components used to bypass
-     with raw white/black-alpha literals. Dark values (in :root) equal
-     the old literals exactly, so adding these changes nothing until a
-     component is migrated to use them. See docs plan: light mode. */
-
-  /* Elevation tints (replace bg-white/[0.0x]) — kept alpha to preserve
-     nested-translucency compositing identically in dark. */
+  /* Elevation tints (replace bg-white/[0.0x]). ⚠ Kept as alpha, not solid, to
+     preserve nested-translucency compositing. */
   --color-surface-raised-1: var(--surface-raised-1);
   --color-surface-raised-2: var(--surface-raised-2);
   --color-surface-raised-3: var(--surface-raised-3);
@@ -78,26 +50,23 @@
   --color-modal-surface: var(--modal-surface);
   --color-scrim: var(--scrim);
 
-  /* Text — adds the missing 5th tier (today's white/50–60 band) */
   --color-text-tertiary: var(--text-tertiary);
 
-  /* Accent split: links stay blue in light; actions/selected go neutral */
+  /* Accent split: links stay blue; actions/selected go neutral */
   --color-link: var(--link);
   --color-accent-on: var(--accent-on);
 
-  /* Cluster/agent "active" green (Agent: on pills, attachment banner) —
-     bright on dark, darker emerald on light so it stays legible. */
+  /* Cluster/agent "active" green (Agent: on pills, attachment banner) */
   --color-agent-on: var(--agent-on);
 
-  /* Inverted affordance (menu rows that flip to solid on hover/active) +
-     active-state indicator border. In light these become the neutral
-     #7C7372 chip with light text, matching the reference selected item. */
+  /* Inverted affordance (menu rows flipping solid on hover/active) +
+     active-state indicator border */
   --color-surface-invert: var(--surface-invert);
   --color-text-on-invert: var(--text-on-invert);
   --color-border-active: var(--border-active);
 
-  /* Primary solid CTA buttons (Save / Accept) — distinct from menu-row
-     invert: in light they go strong neutral ink, not the muted chip. */
+  /* Primary solid CTA (Save / Accept) — deliberately NOT the menu-row
+     invert; stronger ink. */
   --color-surface-cta: var(--surface-cta);
   --color-text-on-cta: var(--text-on-cta);
 
@@ -109,9 +78,6 @@
   --color-popover: var(--bg-overlay);
   --color-popover-foreground: var(--text-primary);
   --color-primary: var(--accent-primary);
-  /* Foreground on the accent/primary surface — uses accent-on (= text-primary
-     in dark, so dark is unchanged) so it stays legible when the accent goes
-     dark neutral in light mode. */
   --color-primary-foreground: var(--accent-on);
   --color-secondary: var(--bg-inset);
   --color-secondary-foreground: var(--text-primary);
@@ -124,7 +90,6 @@
   --color-input: var(--border-default);
   --color-ring: var(--accent-primary);
 
-  /* Sidebar (alias for shadcn compat) */
   --color-sidebar: var(--bg-elevated);
   --color-sidebar-foreground: var(--text-primary);
   --color-sidebar-primary: var(--accent-primary);
@@ -134,49 +99,34 @@
   --color-sidebar-border: var(--border-subtle);
   --color-sidebar-ring: var(--accent-primary);
 
-  /* Charts */
   --color-chart-1: var(--accent-primary);
   --color-chart-2: var(--text-secondary);
   --color-chart-3: var(--text-muted);
   --color-chart-4: var(--success);
   --color-chart-5: var(--warning);
 
-  /* Fonts — always fall back to a system sans (never the browser's
-     serif default) if the loaded font variable is missing. */
-  /* App UI font: match the landing page (lp-nav / hero use --grotesk =
-     Helvetica Neue). Single lever for the whole authenticated app. */
+  /* ⚠ Every font var MUST end in a real system family. An undefined var with
+     no fallback makes the whole declaration invalid at computed-value time:
+     the element then INHERITS --font-app, never reaching the `Georgia, serif`
+     tail that looks like it is there.
+
+     Single lever for the whole authenticated app; matches landing --grotesk. */
   --font-app: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-sans: var(--font-app), system-ui, -apple-system, "Segoe UI",
     sans-serif;
-  /* THE ONE INTENTIONAL DEVIATION from globals.css (:148 there):
-     `var(--font-geist-mono)` is defined by `next/font/google` in
-     src/app/layout.tsx, which a Vite SPA has no equivalent for — and an
-     undefined var with no fallback poisons the whole declaration, so every
-     mono surface would fall back to the browser serif. The SPA is
-     system-fonts-only on purpose (CSP `font-src 'self'`, offline-safe, no
-     webfont download); the app UI already renders in --font-app everywhere.
-     Do NOT "fix" this back to the next/font variable. */
+  /* ⚠ INTENTIONAL DEVIATION from globals.css, which uses
+     `var(--font-geist-mono)` from `next/font/google` (src/app/layout.tsx). A
+     Vite SPA has no next/font, and the SPA is system-fonts-only on purpose
+     (CSP `font-src 'self'`, offline-safe). Do NOT "fix" this back. */
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-heading: var(--font-app), system-ui, sans-serif;
-  /* Wordmark serif. On the web this variable is Newsreader, loaded by
-     `next/font/google` in src/app/layout.tsx (the name `--font-playfair`
-     predates the switch). The SPA has no next/font and stays
-     system-fonts-only (CSP `font-src 'self'`, offline-safe, no webfont
-     download), so it resolves to the nearest license-free system serifs:
-     Charter / Iowan Old Style / Sitka Text are the same transitional
-     text-serif class as Newsreader, with Georgia as the universal floor.
-
-     DEFINING it is the fix, not a nicety: the reused wordmarks write
-     `font-family: var(--font-playfair), Georgia, serif`
-     (`onboarding-flow-core.tsx`, `login-form-core.tsx`,
-     `reset-password-screen.tsx`), and an UNDEFINED var with no fallback makes
-     the whole declaration invalid at computed-value time — the element then
-     INHERITS --font-app and the wordmark rendered in Helvetica, never
-     reaching the `Georgia, serif` fallback that looks like it is there. */
+  /* Wordmark serif; on the web this is Newsreader via next/font (the
+     `--font-playfair` name predates the switch). System equivalents here.
+     Consumers: `onboarding-flow-core.tsx`, `login-form-core.tsx`,
+     `reset-password-screen.tsx`. */
   --font-playfair: Charter, "Bitstream Charter", "Iowan Old Style",
     "Sitka Text", Georgia, "Times New Roman", serif;
 
-  /* Radius scale */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -186,20 +136,19 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
 
-  /* Header-strip / subtle card surface (see .section-card usage) */
   --color-card-surface-subtle: var(--card-surface-subtle);
 
-  /* ── Type scale — the official UI ramp (docs/DESIGN-SYSTEM.md).
-     Semantic text-* utilities for ALL interface text; never raw px.
-       micro   10.5px  timestamps, counts, mono ids
-       label   11px    uppercase section labels (always with uppercase
-                       tracking-wide font-semibold)
-       caption 11.5px  metadata, sublines, secondary chips
-       small   12px    tree rows, tabs, menu items, compact buttons
-       body    12.5px  default body, row titles, inputs
-       lead    13px    prose/document body, emphasized text
-       title   14px    pane headers, card titles
-       display 18px    page/document titles                          ── */
+  /* Official UI ramp (docs/DESIGN-SYSTEM.md). Use text-* utilities for ALL
+     interface text; never raw px.
+       micro   timestamps, counts, mono ids
+       label   uppercase section labels (always uppercase tracking-wide
+               font-semibold)
+       caption metadata, sublines, secondary chips
+       small   tree rows, tabs, menu items, compact buttons
+       body    default body, row titles, inputs
+       lead    prose/document body, emphasized text
+       title   pane headers, card titles
+       display page/document titles */
   --text-micro: 10.5px;
   --text-micro--line-height: 1.4;
   --text-label: 11px;
@@ -218,13 +167,7 @@
   --text-display--line-height: 1.375;
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Token values — the one real palette (single system)
-   ───────────────────────────────────────────────────────────────────── */
-
 :root {
-  /* Surfaces — the one real palette (promoted verbatim from the former
-     app-shell .lightScope so every surface inherits it from the root). */
   --bg-base: #f5f7fa;
   --bg-elevated: #fbfcfd;
   --bg-elevated-hover: #f1f4f7;
@@ -232,7 +175,6 @@
   --bg-inset-hover: #eaeaea;
   --bg-overlay: #fefefe;
 
-  /* Opaque panel surfaces */
   --panel-surface: #fbfcfd;
   --panel-surface-focus: #ffffff;
   --input-surface: #f1f4f7;
@@ -245,7 +187,6 @@
   --cluster-menu-surface: oklch(0.06 0 0);
   --tabs-surface: oklch(0.135 0 0);
 
-  /* Borders (dark hairlines on light surfaces) */
   --border-subtle: oklch(0 0 0 / 6%);
   --border-default: oklch(0 0 0 / 8%);
   --border-strong: oklch(0 0 0 / 12%);
@@ -257,25 +198,21 @@
   --text-muted: #98a2ad;
   --text-disabled: #c4cad1;
 
-  /* Accent — neutral UI ink. accent-glow/soft are the legacy cyan effect
-     tints still consumed by canvas/marketing glows; converted in the
-     canvas-effect + marketing passes, not here. */
+  /* Accent — neutral UI ink. accent-glow/soft are legacy cyan effect tints
+     still consumed by canvas/marketing glows. */
   --accent-primary: #3e3a3b;
   --accent-glow: oklch(0.68 0.22 250);
   --accent-soft: oklch(0.45 0.12 245);
 
-  /* Status colors */
   --success: oklch(0.55 0.15 155);
   --caution: oklch(0.72 0.15 95);
   --warning: oklch(0.62 0.13 75);
   --danger: oklch(0.55 0.22 25);
 
-  /* ── Tokenization layer ──
-     These back the --color-* tokens above. The effect tokens further down
+  /* These back the --color-* tokens above. The effect tokens further down
      (glows, gradients, cluster-outline, panel shadow/shine, navbar/cluster
      surfaces) still hold legacy dark/cyan values consumed only by canvas
-     effects + marketing; they convert in the canvas-effect + marketing
-     passes, not here, so app surfaces stay pixel-identical. */
+     effects + marketing. */
 
   /* Elevation tints — exact alpha equivalents of bg-white/[0.02/0.04/0.06/0.08] */
   --surface-raised-1: oklch(0 0 0 / 2%);
@@ -286,16 +223,14 @@
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);
 
-  /* Text tier-3 */
   --text-tertiary: #7c858f;
 
-  /* Accent split — the only blue in the palette is --link */
+  /* --link is the ONLY blue in the palette */
   --link: #2f6fed;
   --accent-on: #fefefe;
 
-  /* Inverted affordance + active indicator + inset hairline divider.
-     hairline-shine stays the subtle white inset (a canvas-panel effect,
-     not part of the surface palette). */
+  /* Inverted affordance + active indicator. hairline-shine is a canvas-panel
+     effect, not part of the surface palette. */
   --surface-invert: #1c2127;
   --text-on-invert: #ffffff;
   --surface-cta: #1c2127;
@@ -303,19 +238,16 @@
   --border-active: #3e3a3b;
   --hairline-shine: rgba(255, 255, 255, 0.06);
 
-  /* Cluster/agent active green */
   --agent-on: oklch(0.52 0.14 162);
 
-  /* Panel header — the dark frame surface (#1c2127) with white text. */
+  /* Panel header — dark frame surface, white text. */
   --panel-header-surface: var(--surface-cta);
   --panel-header-border: rgba(255, 255, 255, 0.12);
   --panel-header-text: #ffffff;
 
-  /* App-shell chrome palette — promoted from the former app-shell.module.css
-     `.root` scope so the shell inherits it from the global root like
-     everything else. Duplicates of semantic tokens are aliased to keep one
-     source; the rest (rail/purple/lavender/orange/line) have no semantic
-     equivalent and live here. */
+  /* App-shell chrome palette. Duplicates of semantic tokens are ALIASED, not
+     re-valued, to keep one source; rail/purple/lavender/orange/line have no
+     semantic equivalent. */
   --rail: #2c3640;
   --rail-tile: #3a4651;
   --rail-tile-hi: #46535f;
@@ -333,15 +265,13 @@
   --orange: #d8bca6;
   --black: var(--surface-cta);
 
-  /* Cluster outline (dashed region behind grouped panels) — drawn in SVG.
-     Alpha variants of --accent-primary so the region reads clearly. */
+  /* Cluster outline (dashed region behind grouped panels) — drawn in SVG. */
   --cluster-outline-stroke: oklch(0.78 0.16 240 / 60%);
   --cluster-outline-stroke-strong: oklch(0.78 0.16 240 / 80%);
   --cluster-outline-fill: oklch(0.78 0.16 240 / 5%);
   --cluster-outline-fill-strong: oklch(0.78 0.16 240 / 8%);
 
-  /* Panel shine + selection — used by canvas-panel inline styles.
-     Dark keeps the white shine; light inverts to a soft neutral shadow. */
+  /* Panel shine + selection — consumed by canvas-panel INLINE styles. */
   --shine-top-gradient: linear-gradient(
     90deg,
     transparent 0%,
@@ -351,26 +281,24 @@
     transparent 100%
   );
   --ring-selected: 0 0 0 2px rgba(255, 255, 255, 0.5);
-  /* Plain drop shadow — no inset top-edge highlight (that read as a second,
-     inner border on the panels). One clean border per panel. */
+  /* ⚠ No inset top-edge highlight here on purpose — it reads as a second,
+     inner border on the panels. */
   --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.3);
 
-  /* Radius base */
   --radius: 0.625rem;
 
-  /* ── Accent palette (neutralized — no blue tint) ─────────────── */
-  --paper: #1a1a1a;       /* main surface — true charcoal */
+  /* ── Legacy named palette ─────────────────────────────────────── */
+  --paper: #1a1a1a;       /* main surface */
   --forest: #e0e0e0;      /* primary text */
   --grid-line: #a0a0a0;   /* secondary text */
   --coral: #FF8C69;       /* alerts / errors */
   --mint: #9EFFBF;        /* success */
   --gold: #F4D35E;        /* warnings */
 
-  /* App-frame background — the rail/frame color, so the body behind the
-     shell matches it (no dark flash on route transitions). */
+  /* Must equal --rail so the body behind the shell matches the frame — else
+     a dark flash on route transitions. */
   --body-bg: #2c3640;
 
-  /* Gradients — neutral charcoal */
   --gradient-elevated: linear-gradient(
     180deg,
     oklch(0.21 0 0) 0%,
@@ -384,7 +312,6 @@
     oklch(0.20 0.15 260) 100%
   );
 
-  /* Shadows / glows */
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
     0 2px 8px -2px oklch(0 0 0 / 40%);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
@@ -398,9 +325,6 @@
   --inset-highlight-strong: inset 0 1px 0 0 oklch(1 0 0 / 22%);
 }
 
-/* One palette — defined once in :root above. The former `html.light`
-   override block and the dark/light split are gone; every surface
-   inherits the single system from the root. */
 html {
   color-scheme: light;
 }
@@ -413,8 +337,7 @@ html {
   body {
     background-color: var(--body-bg);
     color: var(--forest);
-    /* App UI font — Helvetica Neue (matches the landing), with a system-sans
-       fallback so it can never drop to the browser's serif default. */
+    /* ⚠ Keep the system-sans tail — without it this drops to browser serif. */
     font-family: var(--font-app), system-ui, -apple-system, sans-serif;
   }
 
@@ -422,51 +345,38 @@ html {
     @apply font-sans;
   }
 
-  /* Block the browser's two-finger swipe-to-navigate gesture. Without this,
-     horizontal trackpad pans on pannable surfaces (the graph view) trigger
-     Back/Forward navigation whenever the pan reaches what the browser
-     considers "overscroll." */
+  /* ⚠ Blocks browser two-finger swipe-to-navigate: without it a horizontal
+     trackpad pan on a pannable surface fires Back/Forward at overscroll. */
   html,
   body {
     overscroll-behavior: none;
   }
 }
 
-
-/* ─────────────────────────────────────────────────────────────────────
-   App-frame background (.mosaic-bg) — flat, no grid or texture.
-   ───────────────────────────────────────────────────────────────────── */
-
-/* Flat app-frame background, themed via --body-bg. There is intentionally
-   NO frame grid or texture — the app frame stays flat. */
+/* App frame. Intentionally NO grid or texture — stays flat. */
 .mosaic-bg {
   background-color: var(--body-bg);
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   AppShell geometry — single source of truth for the new-design chrome.
-   Consumed by shared/layout/app-shell/app-shell.module.css (titlebar,
-   rail, sidebar, surface margins, panel radius). Change values here only.
-   ───────────────────────────────────────────────────────────────────── */
+/* AppShell geometry — SINGLE SOURCE OF TRUTH for the chrome. Consumed by
+   shared/layout/app-shell/app-shell.module.css. Change values here only. */
 :root {
-  /* Titlebar removed (was 32px) — kept at 0 so derived panel insets stay valid. */
+  /* Titlebar + rail both gone; kept at 0 so derived panel insets stay valid. */
   --shell-titlebar-h: 0px;
-  /* Rail removed (2026-08-11) — the workspace switcher lives in the sidebar
-     brand pill now. Kept at 0 so the derived panel insets stay valid. */
   --shell-rail-w: 0px;
   --shell-sidebar-w: 232px;
-  /* Sidebar surface + resting nav-chip fill (Folkd-style sidebar). */
+  /* Sidebar surface + resting nav-chip fill. */
   --shell-surface: #ececec;
   --shell-chip: #e2e2e2;
-  /* Matches --shell-gap-bottom so the panel's top and bottom margins are equal. */
+  /* Must match --shell-gap-bottom — equal top/bottom panel margins. */
   --shell-gap-top: 6px;
   --shell-gap-right: 6px;
   --shell-gap-bottom: 6px;
-  /* Matches `.page-float`'s 8px side margin so the sidebar's brand pill sits
-     the same distance from the window edge as from the page card. */
+  /* Must match `.page-float`'s 8px side margin so the sidebar brand pill sits
+     the same distance from window edge as from the page card. */
   --shell-gap-left: 8px;
   --shell-panel-radius: 0px;
-  /* Derived: viewport insets of the white main panel. */
+  /* Derived: viewport insets of the main panel. */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
   --app-panel-left: calc(
     var(--shell-rail-w) + var(--shell-gap-left) + var(--shell-sidebar-w)
@@ -475,9 +385,7 @@ html {
   --app-panel-bottom: var(--shell-gap-bottom);
 }
 
-
-/* ── Discreet scrollbar: dark pill only, no track ──────────────────── */
-/* Applied globally so every scrollable element uses the same style. */
+/* Discreet scrollbar: pill only, no track. Global on purpose. */
 *,
 .scrollbar-discreet {
   scrollbar-width: thin;

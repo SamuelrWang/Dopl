@@ -1,18 +1,12 @@
 /**
- * THE DERIVED "newest published build", as a failure table.
+ * The derived "newest published build", as a FAILURE TABLE — what it hands the
+ * clamp when GitHub does NOT behave.
  *
- * This module exists to keep the anti-brick clamp's reference value from
- * decaying, so the property under test is not "does it read GitHub" — it is
- * "what does it hand the clamp when GitHub does NOT behave". Every case below
- * checks the same direction of failure:
+ *   wrong-LOW latest  → clamp refuses more floors → fewer people blocked
+ *   wrong-HIGH latest → clamp permits a floor nothing can install → BRICK
  *
- *   a wrong-LOW latest  → the clamp refuses more floors → fewer people blocked
- *   a wrong-HIGH latest → the clamp permits a floor nothing can install → BRICK
- *
- * So `null`, a stale value and an old value are all acceptable outcomes of a bad
- * day, and inventing a version is the one unacceptable one. Nothing here may
- * make the request path wait, either: the cache is read synchronously and the
- * refresh is scheduled, never awaited.
+ * So `null`, stale and old are all acceptable; inventing a version is not.
+ * Nothing here may make the request path wait.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
@@ -74,11 +68,9 @@ afterEach(() => {
 
 describe("the release feed URL", () => {
   it("points at the repo the desktop app actually publishes to (the drift alarm)", () => {
-    // The URL is a constant, so nothing in this repo would notice a rename. The
-    // desktop's own publish block is the only other place the pair is written,
-    // and if the two disagree the derivation silently 404s forever and the
-    // clamp quietly falls back to the stale env var — the exact failure this
-    // module was built to end. Read the real file rather than restate it.
+    // ⚠ If this pair and the desktop's publish block disagree, the derivation
+    // silently 404s forever and the clamp falls back to a stale env var. Read
+    // the real file rather than restate it.
     const pkg = JSON.parse(
       readFileSync(path.join(process.cwd(), "dopl-desktop-app", "package.json"), "utf8")
     ) as { build: { publish: { provider: string; owner: string; repo: string }[] } };
@@ -89,11 +81,9 @@ describe("the release feed URL", () => {
   });
 
   it("asks for the updater's own channel file, not the REST API", () => {
-    // Two reasons, both load-bearing. (1) `api.github.com` is 60/hr per IP
-    // unauthenticated and a lambda egresses from a shared pool — the probe that
-    // designed this module got a 403 before it got a release. (2) The channel
-    // file is the byte-for-byte file electron-updater consumes, so the server's
-    // clamp and the client's GUARD 2 read ONE fact instead of two that drift.
+    // ⚠ `api.github.com` is 60/hr per IP unauthenticated and a lambda egresses
+    // from a shared pool. The channel file is also the byte-for-byte file
+    // electron-updater consumes, so clamp and GUARD 2 read ONE fact.
     expect(LATEST_RELEASE_URL).toBe(
       `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}/releases/latest/download/${RELEASE_CHANNEL_FILE}`
     );
@@ -109,9 +99,8 @@ describe("parseChannelVersion", () => {
   });
 
   it("strips a tag-style `v` prefix and surrounding quotes", () => {
-    // The channel file does not use either today. A tag does (`v1.7.24`), and
-    // a yml emitter is free to quote, so both are absorbed rather than becoming
-    // an unreadable version that blanks the clamp.
+    // A tag uses `v1.7.24` and a yml emitter may quote — absorb both rather
+    // than blanking the clamp on an unreadable version.
     expect(parseChannelVersion("version: v1.7.24")).toBe("1.7.24");
     expect(parseChannelVersion("version: '1.7.24'")).toBe("1.7.24");
     expect(parseChannelVersion('version: "v1.9.0-beta.2"')).toBe("1.9.0-beta.2");
@@ -142,14 +131,12 @@ describe("parseChannelVersion", () => {
   });
 
   it("does not match an INDENTED version — those belong to a file entry", () => {
-    // `files:` entries are nested, and a nested key is not the release version.
     expect(parseChannelVersion("files:\n  - url: x.zip\n    version: 9.9.9\n")).toBeNull();
   });
 
   it("refuses to scan an unbounded body", () => {
-    // A captive portal or an error page can be arbitrarily large, and a regex
-    // over megabytes on the request path is its own outage. Only the head of
-    // the body is read, so a version buried past it is simply not found.
+    // ⚠ Only the head of the body is read — a regex over a megabyte-sized
+    // captive-portal page on the request path is its own outage.
     const buried = `${"# padding\n".repeat(5000)}version: 1.7.24\n`;
     expect(parseChannelVersion(buried)).toBeNull();
     expect(parseChannelVersion(`version: 1.7.24\n${"# padding\n".repeat(5000)}`)).toBe("1.7.24");
@@ -173,10 +160,8 @@ describe("refreshLatestRelease", () => {
   });
 
   it("KEEPS the stale value past the TTL — expiry schedules, it never blanks", async () => {
-    // The asymmetry that makes this safe: a stale-low latest refuses floors and
-    // blocks nobody, while a null latest disables the clamp and lets a mistyped
-    // floor through. So an expired entry is still the better answer of the two,
-    // and it stays until something better replaces it.
+    // ⚠ Stale-low refuses floors and blocks nobody; null disables the clamp and
+    // lets a mistyped floor through. Expired stays until something better lands.
     await refreshLatestRelease();
     expect(isLatestReleaseRefreshDue(Date.now() + LATEST_RELEASE_TTL_MS + 1)).toBe(true);
     expect(cachedLatestRelease()).toBe("1.7.24");
@@ -200,8 +185,8 @@ describe("refreshLatestRelease", () => {
   });
 
   it("a 200 carrying GARBAGE is the same as an outage", async () => {
-    // The dangerous shape: a proxy or an error page answering 200. A body we
-    // cannot read a version out of must not become a version.
+    // ⚠ Dangerous shape: a proxy or error page answering 200. An unreadable
+    // body must not become a version.
     await refreshLatestRelease();
     serve("<!DOCTYPE html><html>error</html>");
     expect(await refreshLatestRelease()).toBe("1.7.24");
@@ -214,14 +199,11 @@ describe("refreshLatestRelease", () => {
     const now = Date.now();
     expect(isLatestReleaseRefreshDue(now + LATEST_RELEASE_RETRY_MS - 1000)).toBe(false);
     expect(isLatestReleaseRefreshDue(now + LATEST_RELEASE_RETRY_MS + 1000)).toBe(true);
-    // And the retry is far shorter than the success TTL: an instance that never
-    // reached GitHub should converge in a minute, not ten.
     expect(LATEST_RELEASE_RETRY_MS).toBeLessThan(LATEST_RELEASE_TTL_MS);
   });
 
   it("refuses a body that DECLARES itself huge, without buffering it", async () => {
-    // A redirect that landed on the 200MB zip, or something answering for
-    // GitHub. Reading it to find out would be its own outage.
+    // A redirect landing on the 200MB zip. Reading it to find out is an outage.
     await refreshLatestRelease();
     vi.stubGlobal(
       "fetch",
@@ -258,8 +240,8 @@ describe("refreshLatestRelease", () => {
   });
 
   it("says a NEW failure once and repeats itself never", async () => {
-    // F-125's own lesson is that a silent failure is the bug — but the desktop
-    // fleet asks on a timer, and a line per attempt buries the one that matters.
+    // A silent failure is the bug, but the fleet asks on a timer and a line per
+    // attempt buries the one that matters.
     serve(null);
     await refreshLatestRelease();
     expect(warn).toHaveBeenCalledTimes(1);
@@ -279,26 +261,20 @@ describe("refreshLatestRelease", () => {
 // ── The request path ─────────────────────────────────────────────────────────
 
 /**
- * THE REAL-TIMER FLAKE, FIXED (2026-08-06). These three assertions waited on
- * `vi.waitFor`'s DEFAULT 1000ms budget, and the work they wait for is deferred through
- * `after()` — so the wait is a race against however loaded the machine is. It passed in
- * isolation and failed under the full suite, which is the signature of exactly that, and it
- * was carried as a known flake rather than fixed.
- *
- * FAKE TIMERS ARE NOT THE FIX HERE: the deferred work is a real promise chain around a
- * stubbed `fetch`, not a scheduled timer, so advancing a clock would not release it. What is
- * wrong is the BUDGET, not the mechanism — 1000ms is a guess about machine speed sitting in
- * the middle of an assertion about caching. A budget wide enough that only a genuine hang
- * can exhaust it removes the guess without weakening what is asserted: the polling interval
- * is unchanged, so a passing run is exactly as fast as it was.
+ * ⚠ These waits need a WIDE `vi.waitFor` budget, not the 1000ms default: the work
+ * is deferred through `after()`, so the default races machine load (green in
+ * isolation, flaky under the full suite). Fake timers do NOT fix it — the
+ * deferred work is a real promise chain around a stubbed `fetch`, not a
+ * scheduled timer. The polling interval is unchanged, so passing runs are as
+ * fast as ever.
  */
 const waitForCache = (fn: () => void) =>
   vi.waitFor(fn, { timeout: 15_000, interval: 10 });
 
 describe("scheduleLatestReleaseRefresh", () => {
   it("returns before the round trip does, always", () => {
-    // The guarantee the route depends on. A never-resolving fetch is GitHub at
-    // its worst — hung rather than down — and the scheduler still returns.
+    // ⚠ The guarantee the route depends on: a never-resolving fetch (GitHub hung
+    // rather than down) and the scheduler still returns.
     const spy = vi.fn(() => new Promise<Response>(() => {}));
     vi.stubGlobal("fetch", spy);
     scheduleLatestReleaseRefresh();
@@ -315,9 +291,8 @@ describe("scheduleLatestReleaseRefresh", () => {
   });
 
   it("a BURST of cold requests is still one round trip", async () => {
-    // `after()` defers, so every request in a burst passes the due check with
-    // nothing yet in flight. The re-check inside the scheduled work is what
-    // stops that from becoming one GitHub trip per boot.
+    // ⚠ `after()` defers, so a burst all passes the due check with nothing in
+    // flight; the re-check inside the scheduled work is what caps the trips.
     const spy = serve(REAL_CHANNEL_FILE);
     scheduleLatestReleaseRefresh();
     scheduleLatestReleaseRefresh();
@@ -328,9 +303,8 @@ describe("scheduleLatestReleaseRefresh", () => {
   });
 
   it("runs detached outside a request scope, so the cache still warms", async () => {
-    // `after()` throws where there is no request (tests, scripts); the fallback
-    // is the `scheduleEntryEmbedding` idiom. Without it every test below this
-    // one would be asserting against a cache nothing ever fills.
+    // ⚠ `after()` throws where there is no request (tests, scripts); without the
+    // fallback every test below asserts against a cache nothing ever fills.
     scheduleLatestReleaseRefresh();
     await waitForCache(() => expect(cachedLatestRelease()).toBe("1.7.24"));
   });

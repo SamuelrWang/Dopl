@@ -33,11 +33,8 @@ export interface ResolvedMembership {
 }
 
 /**
- * A workspace the caller can reach, PAIRED WITH the membership facts the
- * lookup already had to read to prove reachability — `role` and the caller's
- * own id. Returned by the two membership-aware lookups below so a caller
- * never has to re-ask `GET /api/workspaces/me` for something the resolve
- * already knew (P0-2b).
+ * A reachable workspace + the membership facts the lookup already read to prove
+ * reachability, so no caller re-asks `GET /api/workspaces/me` for them.
  */
 export interface MemberWorkspace {
   workspace: Workspace;
@@ -53,18 +50,10 @@ export interface WorkspaceChoice {
 }
 
 /**
- * Workspace-resolution failure surfaced by `resolveActiveWorkspace` when a
- * request can't be pinned to a single workspace. Uses the FLAT billing-style
- * envelope (`{ error, message, workspaces? }`, mirroring
- * `entitlementDeniedBody`) — NOT the nested `HttpError` shape — so the MCP
- * client / web `apiRequest` surface the code + message verbatim.
- *
- *   - WORKSPACE_REQUIRED (400): no header and the caller has 0 or 2+ active
- *     memberships. `workspaces` lists every membership ({name, slug, role});
- *     when empty the message points at `POST /api/workspaces` to create one.
- *   - WORKSPACE_INVALID (400): the `X-Workspace-Id` header (or the export
- *     `?workspaceId=` param) is present-but-blank or not a UUID. Never
- *     coerced to "no header", never a 500.
+ * Workspace-resolution failure from `resolveActiveWorkspace`. ⚠ FLAT
+ * billing-style envelope (`{ error, message, workspaces? }`, mirroring
+ * `entitlementDeniedBody`), NOT the nested `HttpError` shape, so the MCP client
+ * and web `apiRequest` surface code + message verbatim.
  */
 export class WorkspaceResolutionError extends Error {
   readonly status = 400 as const;
@@ -100,22 +89,19 @@ const WORKSPACE_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Authoritative auth lookup used by `withWorkspaceAuth`. Returns the workspace
- * + the caller's active membership, or throws an HttpError. Never returns
- * null — `404` is the cleanest response for both "not a member" and
- * "workspace does not exist" so existence isn't an oracle.
+ * Authoritative auth lookup behind `withWorkspaceAuth`: workspace + the
+ * caller's active membership, or throws `HttpError`. ⚠ Never null — 404 answers
+ * both "not a member" and "does not exist" so existence isn't an oracle.
  */
 export async function resolveMembershipOrThrow(
   workspaceId: string,
   userId: string
 ): Promise<ResolvedMembership> {
-  // PARALLEL, not sequential (P0-2a). Both reads key only on `workspaceId`
-  // (plus `userId`), so neither is an input to the other — awaiting them in
-  // series added a whole DB round trip to every one of the 82 routes behind
-  // `withWorkspaceAuth`. The 404 ordering is preserved exactly: a missing
-  // workspace still answers before the membership is judged, so existence is
-  // never an oracle and a non-member of a real workspace is indistinguishable
-  // from a member of a nonexistent one.
+  // ⚠ PARALLEL, not sequential: both reads key only on `workspaceId` (plus
+  // `userId`), and series adds a DB round trip to every route behind
+  // `withWorkspaceAuth`. ⚠ 404 ordering is preserved exactly — a missing
+  // workspace answers before the membership is judged, so a non-member of a
+  // real workspace is indistinguishable from a member of a nonexistent one.
   const [workspace, membership] = await Promise.all([
     findWorkspaceById(workspaceId),
     findMembership(workspaceId, userId),
@@ -129,26 +115,23 @@ export async function resolveMembershipOrThrow(
 }
 
 /**
- * Resolve the active workspace for an authenticated request. Used by
- * `withWorkspaceAuth` and `GET /api/workspaces/me`. Fail-CLOSED and
- * explicit — there is NO silent default-workspace fallback (MCP-2):
+ * Resolve the active workspace for an authenticated request
+ * (`withWorkspaceAuth`, `GET /api/workspaces/me`). ⚠ Fail-CLOSED: there is NO
+ * silent default-workspace fallback.
  *
- *   1. `X-Workspace-Id` header (or export `?workspaceId=` param, threaded
- *      here as `headerWorkspaceId`) — UUID only. Present-but-blank or a
- *      non-UUID value → 400 `WORKSPACE_INVALID` (never coerced to "no
- *      header"; a slug in the header used to 500 — now a clean 400).
+ *   1. `X-Workspace-Id` header (or export `?workspaceId=`, threaded as
+ *      `headerWorkspaceId`) — UUID only. Blank or non-UUID → 400
+ *      `WORKSPACE_INVALID`, never coerced to "no header".
  *   2. No header → the caller's ACTIVE memberships
- *      (`listWorkspacesWithRoleForUser`). This ONE query powers the count,
- *      the auto-target, and the 400 body:
- *        - exactly 1 → auto-target it (role from the same lookup);
- *        - 0 → 400 `WORKSPACE_REQUIRED`, `workspaces: []`, message points
- *          at `POST /api/workspaces`;
+ *      (`listWorkspacesWithRoleForUser`), ONE query powering count,
+ *      auto-target and the 400 body:
+ *        - exactly 1 → auto-target (role from the same lookup);
+ *        - 0 → 400 `WORKSPACE_REQUIRED`, `workspaces: []`;
  *        - 2+ → 400 `WORKSPACE_REQUIRED` listing {name, slug, role}.
  *
- * NEVER use `findDefaultWorkspaceForUser` here — that is oldest-OWNED only
- * (billing-webhook legacy) and diverges from membership (owns 0 / member of
- * 1, owns 1 / member of 3). The API-key workspace lock is applied by the
- * caller (`withWorkspaceAuth`) before this runs, not here.
+ * ⚠ NEVER use `findDefaultWorkspaceForUser` here — oldest-OWNED only
+ * (billing-webhook legacy), which diverges from membership. The API-key
+ * workspace lock is applied by `withWorkspaceAuth` before this runs.
  */
 export async function resolveActiveWorkspace(
   userId: string,
@@ -183,55 +166,34 @@ export async function resolveActiveWorkspace(
 }
 
 /**
- * Idempotent: creates the user's default workspace if it doesn't exist yet.
- * Called from `resolveActiveWorkspace` (used by the auth callback +
- * any first-time route hit) and from signup hooks. Slug uniqueness is
- * no longer required (publicId is the unique routing key), but the
- * SELECT-then-INSERT shape is racy: a fast OAuth round-trip can land
- * on `/canvas` while the callback is still inserting, both call
- * `ensureDefaultWorkspace`, both see "no existing," and both try to
- * insert. The second insert blew up with a unique-constraint or
- * left two "Untitled" rows depending on which constraint fired.
- *
- * Fix (Audit A-019): catch the unique-constraint violation on the
- * second concurrent insert and resolve via a re-fetch — the first
- * caller already created the row we wanted. No advisory lock needed
- * since the unique constraint already serialises us; we just need to
- * recover gracefully.
+ * Idempotent: creates the user's default workspace if absent. Called from
+ * `resolveActiveWorkspace` (auth callback, first-time route hit) and signup.
  */
 export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
   // Fast path — no lock taken when the workspace already exists.
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
   const name = "Untitled";
-  // Race-proofing moved INTO the database (2026-08-02): the old
-  // catch-23505 recovery here became dead code when the slug uniqueness
-  // constraints were dropped (20260502120000 / 20260504000000 — public_id
-  // is random and never collides), so two concurrent callers could both
-  // insert "Untitled". The ensure_default_workspace RPC serializes
-  // check-then-insert under a per-owner advisory lock; `created` tells us
-  // whether THIS call won and therefore owes the seed.
+  // ⚠ Race-proofing lives in the DATABASE — catch-23505 cannot work here (slug
+  // uniqueness constraints dropped, public_id never collides). The
+  // `ensure_default_workspace` RPC serializes check-then-insert under a
+  // per-owner advisory lock; `created` says whether THIS call owes the seed.
   const { workspace, created } = await ensureDefaultWorkspaceRow({
     ownerId: userId,
     name,
     slug: slugifyWorkspaceName(name),
   });
   if (created) {
-    // Seed the "how to use Dopl" starter corpus. Best-effort + idempotent
-    // (never throws), so a seed hiccup can't wedge workspace creation.
+    // Starter corpus. Best-effort + idempotent (never throws).
     await seedNewWorkspace(workspace.id, userId);
   }
   return workspace;
 }
 
 /**
- * Onboarding helper: give the user's default workspace its real name
- * (either what the user typed on the final onboarding step, or the
- * auto-name "{FirstName}'s Workspace") once we know who they are. An
- * optional description is set in the same write. Only fires while the
- * workspace still carries the provisioning placeholder name ("Untitled")
- * — if the user already renamed it (settings, MCP), their name wins and
- * this is a no-op. Idempotent, so onboarding completion can safely retry.
+ * Onboarding helper: name the default workspace, + optional description.
+ * ⚠ Only fires while the name is still the placeholder "Untitled" — a user
+ * rename (settings, MCP) wins. Idempotent.
  */
 export async function renameDefaultWorkspaceIfUntitled(
   userId: string,
@@ -248,12 +210,7 @@ export async function renameDefaultWorkspaceIfUntitled(
   return updateWorkspace(workspace.id, patch);
 }
 
-/**
- * List the caller's workspaces; each row carries the caller's role on
- * the workspace. Used by `GET /api/workspaces` (so the agent's
- * `list_workspaces` MCP tool gets `{id, slug, name, role, ...}` in one
- * round trip) and the workspace switcher UI.
- */
+/** The caller's workspaces, each row carrying their role. */
 export async function listMyWorkspacesWithRole(
   userId: string
 ): Promise<WorkspaceWithRole[]> {
@@ -261,13 +218,9 @@ export async function listMyWorkspacesWithRole(
 }
 
 /**
- * Head-counts for the overview page's stat cards. The `/overview` server
- * component and `GET /api/workspaces/[workspaceSlug]/overview-counts` both
- * read through here so the RSC page and the SPA can never drift — the page
- * used to inline these `supabaseAdmin()` queries itself (ENGINEERING §8:
- * pages don't talk to Supabase).
- *
- * Membership is NOT checked here; callers resolve the workspace
+ * Head-counts for the overview stat cards; the `/overview` RSC page and
+ * `GET /api/workspaces/[workspaceSlug]/overview-counts` both read through here
+ * so they cannot drift. ⚠ Membership is NOT checked — callers resolve
  * membership-scoped first (`resolveApiWorkspace`).
  */
 export async function getWorkspaceOverviewCounts(
@@ -286,7 +239,7 @@ export async function createWorkspaceForUser(
     slug: slugifyWorkspaceName(input.name),
     description: input.description ?? null,
   });
-  // Seed the "how to use Dopl" starter corpus (best-effort, never throws).
+  // Starter corpus (best-effort, never throws).
   await seedNewWorkspace(workspace.id, userId);
   return workspace;
 }
@@ -303,11 +256,9 @@ export async function renameWorkspace(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.name && patch.name !== workspace.name) update.name = patch.name;
 
-  // Slug is purely cosmetic now (publicId is the URL identity), so
-  // there's no uniqueness check. We still gate against reserved
-  // top-level route names so a workspace can't visually claim
-  // `/login`, `/settings`, etc., even though the route resolver
-  // wouldn't actually serve it from there.
+  // Slug is cosmetic (publicId is the URL identity), so no uniqueness check.
+  // Reserved top-level route names are still gated so a workspace cannot
+  // visually claim `/login`, `/settings`, etc.
   if (patch.slug && patch.slug !== workspace.slug) {
     if (RESERVED_WORKSPACE_SLUGS.has(patch.slug)) {
       throw new HttpError(
@@ -326,10 +277,9 @@ export async function renameWorkspace(
 }
 
 /**
- * Set or clear a workspace's icon URL. Admin+ only. The URL is produced
- * server-side by the upload route (Supabase Storage public URL) or passed
- * as null to clear — never user-supplied, so there's no URL validation
- * here beyond the role gate.
+ * Set or clear a workspace's icon URL. Admin+. ⚠ The URL is produced
+ * server-side by the upload route (Supabase Storage public URL) or null to
+ * clear — never user-supplied, hence no URL validation beyond the role gate.
  */
 export async function updateWorkspaceIcon(
   workspaceId: string,
@@ -369,11 +319,7 @@ export function requireMinRole(role: Role, min: Role): void {
   }
 }
 
-/**
- * Membership-aware slug lookup — finds a workspace the user can access
- * regardless of ownership. Used by `/workspace/[slug]` and the settings
- * page so invited members reach the workspace via its public URL.
- */
+/** Membership-aware slug lookup — access regardless of ownership. */
 export async function findWorkspaceForMember(
   userId: string,
   slug: string
@@ -386,16 +332,9 @@ export async function findWorkspaceForMember(
 }
 
 /**
- * Membership-aware publicId lookup. Returns the workspace if and only
- * if the caller is an active member. Used by the route resolver to
- * surface 404 (not 403) for workspaces the user can't access — the
- * existence of a workspace at a given publicId is not an oracle.
- *
- * RETURNS THE MEMBERSHIP FACTS, not just the workspace (P0-2b). The
- * membership row is read here anyway; discarding `role` was the entire
- * reason `GET /api/workspaces/me` existed as a separate hop behind
- * `/api/workspaces/resolve` — every segment-resolving caller already
- * paid for the answer and then asked for it again.
+ * Membership-aware publicId lookup: the workspace iff the caller is an active
+ * member, plus the MEMBERSHIP FACTS the read already had. ⚠ The route resolver
+ * surfaces 404 (not 403) so existence is not an oracle.
  */
 export async function findWorkspaceForMemberByPublicId(
   userId: string,

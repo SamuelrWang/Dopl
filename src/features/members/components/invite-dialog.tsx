@@ -41,11 +41,8 @@ const ROLES: Array<{ value: AssignableRole; label: string; hint: string }> = [
   { value: "viewer", label: "Viewer", hint: "Read-only access to the workspace" },
 ];
 
-/**
- * Shareable invite link: anyone with the link can request to join; an
- * admin approves from the members page. The link is permanent until
- * reset (resetting invalidates previously shared copies).
- */
+/** Shareable invite link — holders request to join, an admin approves.
+ *  Permanent until reset; reset invalidates previously shared copies. */
 function ShareLinkSection({
   workspaceSlug,
   open,
@@ -57,10 +54,8 @@ function ShareLinkSection({
   const { resetLink } = useInvitationWrites(workspaceSlug);
   const busy = resetLink.pending;
 
-  // Fetches only while the dialog is open; errors keep the loading state
-  // (same as the old hand-rolled effect). staleTime 0: every open must
-  // revalidate — another admin may have rotated the link, and a cached
-  // token would be a dead invite.
+  // ⚠ staleTime 0: every open must revalidate — another admin may have
+  // rotated the link, and a cached token is a dead invite.
   const linkQuery = useApiQuery<{ token: string }>(joinLinkPath(workspaceSlug), {
     enabled: open,
     staleTime: 0,
@@ -68,12 +63,10 @@ function ShareLinkSection({
   const token = linkQuery.data?.token ?? null;
 
   /**
-   * THE OLD LINK IS NOT SHOWN THROUGH THE RESET. Only the server can mint the
-   * new token, so there is nothing to patch optimistically — and inventing a
-   * placeholder would put a dead invite URL on screen for an admin to copy.
-   * What was actually wrong was displaying the OUTGOING link, still copyable,
-   * while the rotation that kills it is in flight. So the field goes to its
-   * generating state on the click and the POST's own answer fills it back in.
+   * ⚠ The outgoing link must NOT stay copyable through a reset. Only the
+   * server can mint the new token, so there is nothing to patch
+   * optimistically: the field goes to its generating state on click and the
+   * POST's answer fills it back in.
    */
   const url =
     !busy && token && typeof window !== "undefined"
@@ -124,7 +117,7 @@ function ShareLinkSection({
   );
 }
 
-/** Split a comma/whitespace-separated string into unique trimmed emails. */
+/** Comma/whitespace-separated → unique trimmed emails. */
 function parseEmails(raw: string): string[] {
   const seen = new Set<string>();
   for (const part of raw.split(/[\s,]+/)) {
@@ -136,24 +129,17 @@ function parseEmails(raw: string): string[] {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * True when a failed invite is the Solo plan's member-limit gate.
- * `apiRequest` decodes both envelopes into `ApiError`: the nested
- * `{ error: { code, message } }` lands on `code`, while the flat
- * `{ error: "SOLO_MEMBER_LIMIT" }` (no sibling message) lands on
- * `message` — check both.
- */
+/** True when a failed invite is the Solo member-limit gate. ⚠ Check BOTH
+ *  fields: `apiRequest` puts the nested `{error:{code,message}}` on `code`
+ *  and the flat `{error:"SOLO_MEMBER_LIMIT"}` on `message`. */
 function isSoloMemberLimit(err: unknown): boolean {
   if (!(err instanceof ApiError) || err.status !== 402) return false;
   return err.code === "SOLO_MEMBER_LIMIT" || err.message === "SOLO_MEMBER_LIMIT";
 }
 
-/**
- * Add members to a workspace by email. Accepts one or more emails
- * (comma/space separated) and a role; each becomes a token-based
- * invitation the invitee picks up from their sidebar on next login —
- * no email is sent. Matches the Notion "Add members" layout.
- */
+/** Add members by email (comma/space separated) + role. Each becomes a
+ *  token invitation picked up from the invitee's sidebar on next login —
+ *  no email is sent. */
 export function InviteDialog({
   workspaceSlug,
   open,
@@ -227,12 +213,11 @@ export function InviteDialog({
       );
       const failed = results.filter((r) => !r.ok).map((r) => r.email);
       const succeeded = results.filter((r) => r.ok).map((r) => r.email);
-      // Partial success: the successful invitations exist server-side, so
-      // refresh the pending list before surfacing failures or the upgrade.
+      // Partial success: successful invitations exist server-side, so refresh
+      // the pending list before surfacing failures or the upgrade.
       if (succeeded.length > 0) onInvited?.(succeeded[0]);
-      // Solo plan member gate → open the Team upgrade flow instead of a
-      // raw error. The dialog keeps its state so the user can retry the
-      // same invites after upgrading.
+      // Solo member gate → Team upgrade flow, not a raw error. Dialog keeps
+      // its state so the same invites can be retried after upgrading.
       if (results.some((r) => r.soloBlocked)) {
         setUpgradeOpen(true);
         return;

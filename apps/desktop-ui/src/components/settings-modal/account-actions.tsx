@@ -5,15 +5,12 @@ import { getBridge } from "#/lib/dopl-bridge";
 import { accountPagePath, openInBrowser } from "#/lib/open-in-browser";
 
 /**
- * The desktop Account pane's footer — what replaces the web section's
- * `DeleteAccount`.
+ * Desktop Account pane footer — replaces the web section's `DeleteAccount`.
  *
- * Sign-out belongs to MAIN: it holds the session and the renderer holds no
- * token it could drop, so the button is a thin call to `window.dopl.signOut()`
- * and HIDES ITSELF when that op is absent (an older main) rather than
- * pretending to have signed the user out. Deletion stays web-only — it is
- * irreversible, and the flow it runs (Supabase sign-out + redirect) is not
- * reproducible here — so it links out instead.
+ * ⚠ Sign-out belongs to MAIN (it holds the session; the renderer holds no token
+ * it could drop), so the button HIDES ITSELF when `signOut` is absent rather
+ * than pretending. Deletion stays web-only: irreversible, and its Supabase
+ * sign-out + redirect is not reproducible here.
  */
 export function AccountActions({ workspaceSegment }: { workspaceSegment: string }) {
   const bridge = getBridge();
@@ -42,11 +39,8 @@ export function AccountActions({ workspaceSegment }: { workspaceSegment: string 
         </p>
         <button
           type="button"
-          // `/billing/{segment}` — the post-retirement billing + account page
-          // (`src/app/billing/[segment]/page.tsx`), which carries the account
-          // danger zone. It used to open `/{segment}/canvas` and ask the user
-          // to find Settings → Account in a modal; that whole tree is being
-          // deleted (docs/migration-research/website-retirement-plan.md, D4).
+          // `/billing/{segment}` (`src/app/billing/[segment]/page.tsx`) carries
+          // the account danger zone.
           onClick={() => openInBrowser(accountPagePath(workspaceSegment))}
           className="btn-light flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-small font-medium text-danger"
         >

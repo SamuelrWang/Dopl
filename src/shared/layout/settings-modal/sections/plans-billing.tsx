@@ -14,13 +14,10 @@ import { PlansBillingCore, type CheckoutPlan } from "./plans-billing-core";
 import styles from "../settings-modal.module.css";
 
 /**
- * Plans & Billing — the WEB binding.
- *
- * The pane lives in `./plans-billing-core`, which is Stripe-free; this file
- * adds the two things only a browser document can do: swap the pane for
- * Stripe's embedded checkout in place, and redirect this tab to the
- * Stripe-hosted billing portal. Both handlers are unchanged from when they
- * lived alongside the markup.
+ * Plans & Billing — WEB binding. The pane lives in the Stripe-free
+ * `./plans-billing-core`; this file adds the two browser-only moves: swap the
+ * pane for Stripe embedded checkout in place, and redirect this tab to the
+ * Stripe-hosted portal.
  */
 export function PlansBilling({
   billingReturn = null,
@@ -30,26 +27,16 @@ export function PlansBilling({
   workspaceId,
 }: {
   billingReturn?: "success" | "return" | null;
-  /**
-   * Open checkout on this plan at mount instead of on a click. Set by the
-   * `/billing/[segment]` page from `?billing=upgrade&plan=…`, so a desktop
-   * user who already chose Pro or Team in the app is not asked again in the
-   * browser (`src/features/billing/url.ts`). Null everywhere else — the
-   * settings modal opens on the plan list, unchanged.
-   */
+  /** Opens checkout on this plan at mount instead of on a click. Set by
+   *  `/billing/[segment]` from `?billing=upgrade&plan=…`
+   *  (`features/billing/url.ts`); null everywhere else. */
   initialCheckoutPlan?: CheckoutPlan | null;
   /**
-   * Reports whether the embedded checkout form is CURRENTLY MOUNTED.
-   *
-   * A host that can unmount this pane — the `/billing/[segment]` tab shell can,
-   * on a tab click — needs to know, because Stripe's form holds card entry that
-   * exists only in this tree: unmounting it discards whatever the person typed
-   * and the session it was collected under, with no warning and nothing to
-   * restore. The signal goes UP so the host can make its own control inert
-   * rather than this pane guessing at a host it does not know it has.
-   *
-   * Must be referentially stable (a `useState` setter is). Optional — the
-   * settings modal never unmounts the pane out from under checkout.
+   * Whether the embedded checkout form is CURRENTLY MOUNTED.
+   * ⚠ A host that can unmount this pane (the `/billing/[segment]` tab shell, on
+   * a tab click) must know: Stripe's form holds card entry living only in this
+   * tree, and unmounting silently discards it and its session.
+   * Must be referentially stable (a `useState` setter is).
    */
   onCheckoutOpenChange?: (open: boolean) => void;
   role: Role;
@@ -60,18 +47,15 @@ export function PlansBilling({
   const [checkoutPlan, setCheckoutPlan] = useState<CheckoutPlan | null>(
     initialCheckoutPlan
   );
-  // The portal POST + redirect moved to `useBillingPortal` when the billing
-  // page's payment-method card needed the identical handoff; the behaviour is
-  // unchanged.
   const portal = useBillingPortal(workspaceId);
 
-  // The exact condition the checkout branch below renders on, so the signal
-  // cannot drift from what is actually mounted.
+  // ⚠ Must stay the exact condition the checkout branch below renders on, or the
+  // signal drifts from what is actually mounted.
   const checkoutOpen = Boolean(checkoutPlan) && !ent.isPaid;
   useEffect(() => {
     onCheckoutOpenChange?.(checkoutOpen);
-    // Unmounting this pane unmounts the form with it — the host must not be
-    // left holding a stale "checkout is open".
+    // Unmounting this pane unmounts the form — don't leave the host holding a
+    // stale "checkout is open".
     return () => onCheckoutOpenChange?.(false);
   }, [checkoutOpen, onCheckoutOpenChange]);
 

@@ -1,22 +1,11 @@
 /**
- * `POST /api/workspaces/ensure-default` — the SPA's first-launch landing pad.
- *
- * THE PROPERTY THIS FILE EXISTS FOR: this is the only route that PROVISIONS.
- * `GET /api/workspaces` lists and 404s a user who has none, so a brand-new
- * desktop session had nowhere to go. Two things must hold:
- *
- *   1. **Idempotence is the contract, not a nicety.** The SPA calls this on
- *      every cold boot. If a second call created a second workspace, every
- *      launch would fork the user's account. The convergence itself lives in
- *      `ensureDefaultWorkspace`; what this file pins is that the ROUTE adds no
- *      create-on-each-request behaviour of its own and stays a 200 (not a 201)
- *      so no client reads it as "new".
- *   2. **`segment` must be the canonical `{slug}-{publicId}`** — it is the URL
- *      the client routes on. `workspaceSegment` is deliberately NOT mocked, so
- *      a drift in the canonical form fails here.
- *
- * Only the auth layer and the workspace service are mocked; the shipping
- * `withUserAuth` runs, so the 401 path is real.
+ * `POST /api/workspaces/ensure-default` — the only route that PROVISIONS. Two properties:
+ *   1. ⚠ IDEMPOTENCE IS THE CONTRACT. The SPA calls this on every cold boot; a second workspace
+ *      per call forks the account. Convergence lives in `ensureDefaultWorkspace`; this pins that
+ *      the ROUTE adds no create-per-request behaviour and stays 200, never 201.
+ *   2. `segment` must be the canonical `{slug}-{publicId}` — the URL the client routes on.
+ *      `workspaceSegment` is deliberately NOT mocked, so canonical-form drift fails here.
+ * The shipping `withUserAuth` runs, so the 401 path is real.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -103,15 +92,13 @@ describe("POST /api/workspaces/ensure-default", () => {
   });
 
   it("is idempotent: a repeat call yields the same workspace and no extra create", async () => {
-    // The SPA fires this on every cold boot; a second workspace per launch
-    // would fork the account.
+    // A second workspace per launch would fork the account.
     mockEnsure.mockResolvedValue(WORKSPACE);
 
     const first = await (await POST(postReq())).json();
     const second = await (await POST(postReq())).json();
     expect(second).toEqual(first);
-    // The route never creates on its own — provisioning is the service's
-    // single, converging call.
+    // Provisioning is the service's single converging call.
     expect(mockEnsure).toHaveBeenCalledTimes(2);
     expect(mockEnsure).toHaveBeenNthCalledWith(2, "user-1");
   });

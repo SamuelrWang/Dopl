@@ -5,13 +5,10 @@ import { requireSkillSlug, toSkillErrorResponse } from "@/shared/api/skill-route
 import { buildSkillContext, getSkillBySlug, listFiles } from "@/features/skills/server/service";
 
 /**
- * GET /api/skills/[skillSlug]/export — download the skill as a zip in
- * the standard agent-skills layout: `<slug>/SKILL.md` + supplementary
- * files alongside. Compatible with Claude Code's skills directory.
- *
- * A plain download link can't send X-Workspace-Id, so `workspaceIdFromQuery`
- * lets the wrapper resolve `?workspaceId=` at the header's priority
- * (membership-checked) — `auth` already names the effective export workspace.
+ * GET — the skill as a zip in the standard agent-skills layout (`<slug>/SKILL.md` +
+ * supplementary files); compatible with Claude Code's skills directory.
+ * ⚠ A plain download link cannot send X-Workspace-Id, so `workspaceIdFromQuery` lets the wrapper
+ * resolve `?workspaceId=` at the header's priority (membership-checked).
  */
 export const GET = withWorkspaceAuth(async (_request, auth) => {
   try {

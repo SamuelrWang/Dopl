@@ -1,14 +1,6 @@
-/**
- * Skeleton mirroring `SkillView`'s chrome (header strip + main editor
- * column). Rendered by the skills browser's detail pane
- * (`skills-browser-core.tsx`) while the selected skill's full body is
- * fetched, so selecting a row paints instantly instead of holding the
- * previous skill or blanking.
- *
- * (It used to say "rendered by the route-level `loading.tsx`" — skills has
- * no separate detail route and no route-level `loading.tsx` survives
- * anywhere in the repo.)
- */
+/** Mirrors `SkillView`'s chrome. Rendered by `skills-browser-core.tsx` while
+ *  the selected skill's body is fetched, so selecting a row paints instantly
+ *  instead of holding the previous skill or blanking. */
 import { SkeletonBar } from "@/shared/ui/skeleton";
 
 export function SkillViewSkeleton() {

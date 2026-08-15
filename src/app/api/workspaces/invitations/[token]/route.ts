@@ -3,12 +3,8 @@ import { getInvitationByToken } from "@/features/workspaces/server/invitations";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
- * GET /api/workspaces/invitations/[token] — fetch the public-facing
- * status of an invitation: the workspace name, inviter email, role being
- * granted, and whether the link is still live.
- *
- * Intentionally NOT auth-gated. Anyone with the token can read it; the
- * security property is the token's unguessability (256 bits of entropy).
+ * GET — an invitation's public status (workspace name, inviter email, role, still-live).
+ * ⚠ Intentionally NOT auth-gated: the security property is the token's unguessability (256 bits).
  * The ACCEPT endpoint requires auth.
  */
 export const GET = async (
@@ -27,8 +23,7 @@ export const GET = async (
         { status: 404 }
       );
     }
-    // Strip the token from the public payload — the caller already has
-    // it (it's in the URL). No need to echo it back.
+    // Strip the token — the caller already has it in the URL.
     const { token: _omit, ...invitationWithoutToken } = status.invitation;
     void _omit;
     return NextResponse.json({

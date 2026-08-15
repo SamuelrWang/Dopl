@@ -8,9 +8,8 @@ import {
 import { buildKnowledgeContext } from "@/features/knowledge/server/service";
 import { buildFolderArchive } from "@/features/knowledge/server/export";
 
-// A plain download link can't send X-Workspace-Id, so `workspaceIdFromQuery`
-// lets the wrapper resolve `?workspaceId=` at the header's priority
-// (membership-checked) — `auth` already names the effective export workspace.
+// ⚠ A plain download link cannot send X-Workspace-Id, so `workspaceIdFromQuery` lets the wrapper
+// resolve `?workspaceId=` at the header's priority (membership-checked).
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = auth.params?.folderId;

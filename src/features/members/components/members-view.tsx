@@ -45,12 +45,9 @@ interface Props {
   myRole: MemberRole;
 }
 
-/**
- * Members page — the workspace's access-control console as a two-pane
- * master-detail surface (same layout language as Chats and Knowledge):
- * roster/teams/resources list on the left behind a segmented switcher,
- * the selection's document on the right. No slide-out drawers.
- */
+/** Members page — access-control console as a two-pane master-detail
+ *  surface: roster/teams/resources behind a segmented switcher on the left,
+ *  the selection's document on the right. */
 export function MembersView({
   workspaceSlug,
   workspaceId,
@@ -83,24 +80,18 @@ export function MembersView({
   const teamList = useMemo(() => teams ?? [], [teams]);
   const resourceList = useMemo(() => resources ?? [], [resources]);
 
-  /**
-   * The ONE remaining broadcast refresh, and it has one caller: creating a team
-   * is the only write on this console that still cannot patch its own caches
-   * (the server mints the id, the memberships and the grants in a single POST).
-   * Every other write is a mutation config that patches the exact cache it
-   * changed — which is why the detail panes no longer take an `onTeamsChanged`
-   * prop at all.
-   */
+  /** ⚠ The ONE broadcast refresh, one caller: team creation is the only write
+   *  here that can't patch its own caches (server mints id, memberships and
+   *  grants in a single POST). Every other write patches its exact cache. */
   const onTeamCreated = useCallback(() => {
     refreshTeams();
     refreshMembers();
     refreshResources();
   }, [refreshTeams, refreshMembers, refreshResources]);
 
-  // Effective selection is DERIVED: an explicit pick that still exists
-  // on the active tab wins; otherwise the tab's first row. Data arrives
-  // async, entities get deleted — deriving (instead of syncing state)
-  // means the detail pane always shows something real.
+  // Selection is DERIVED, not synced: explicit pick if it still exists on the
+  // active tab, else the tab's first row. Data arrives async and entities get
+  // deleted, so deriving keeps the detail pane on something real.
   const effectiveSelection = useMemo<Selection>(() => {
     const firstOfTab = (): Selection => {
       if (tab === "members" && memberList.length > 0) {
@@ -150,9 +141,7 @@ export function MembersView({
     setSelection(null);
   };
 
-  // The ✕ on an invited row. It used to await a DELETE and then refetch, so
-  // nothing on screen moved for two network hops; the row leaves in `onMutate`
-  // now and comes back only if the DELETE fails.
+  // ✕ on an invited row: leaves in `onMutate`, returns only if DELETE fails.
   const handleRevokeInvitation = (id: string) => {
     revoke.mutate({ invitationId: id });
   };
@@ -162,13 +151,12 @@ export function MembersView({
     action: "approve" | "decline",
     role: AssignableRole
   ) => {
-    // The row is dropped optimistically and the roster is invalidated by the
-    // mutation, so the only thing left here is the 402 branch.
+    // Row drop + roster invalidation are the mutation's; only 402 is left here.
     joinRequests
       .resolve(id, action, role)
       .catch((err: unknown) => {
-        // Solo plan is single-member — approving is blocked server-side.
-        // Offer the in-place Team upgrade instead of a dead-end toast.
+        // Solo is single-member, so approval is blocked server-side — offer
+        // the in-place Team upgrade rather than a dead-end toast.
         if (
           err instanceof ApiError &&
           err.code === "SOLO_MEMBER_LIMIT" &&
@@ -183,10 +171,9 @@ export function MembersView({
       });
   };
 
-  // Cold arrival: the roster has not answered yet. Rendering the real panes
-  // with `members = []` used to claim "No members yet." in a workspace that
-  // always has at least the viewer — a false empty state, not a loading one.
-  // The shared two-pane skeleton is the same geometry this console loads into.
+  // ⚠ Cold arrival: rendering the real panes with `members = []` claims "No
+  // members yet." in a workspace that always has at least the viewer. Skeleton
+  // instead — same geometry this console loads into.
   if (loading && members === null) {
     return <TwoPaneListSkeleton label="Loading members" rows={6} leading="circle" />;
   }

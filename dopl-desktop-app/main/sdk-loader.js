@@ -1,26 +1,20 @@
-// Claude Agent SDK loader (v1.9 Session Window, Track T1).
+// Claude Agent SDK loader.
 //
-// The SINGLE module that touches the ESM-only SDK, so the CJS->ESM interop and the
-// packaged-binary path math live in exactly one place (contract §D).
-//   getSdk()                  cached dynamic import() of the ESM SDK
-//   resolveClaudeExecutable() the asar-unpacked path for options.pathToClaudeCodeExecutable
-//   buildMcpServers(cfg, wsId) the in-memory mcpServers object (dopl bearer from
-//                              safeStorage + the session's X-Workspace-Id pin)
-//   buildSecretPathDenyRules() the credential-path deny rules every session runs with
+// ⚠ The SINGLE module that touches the ESM-only SDK, so CJS->ESM interop and packaged-binary
+// path math live in exactly one place (contract §D).
+//   getSdk()                   cached dynamic import() of the ESM SDK
+//   resolveClaudeExecutable()  asar-unpacked path for options.pathToClaudeCodeExecutable
+//   buildMcpServers(cfg, wsId) in-memory mcpServers object (dopl bearer from safeStorage +
+//                              the session's X-Workspace-Id pin)
+//   buildSecretPathDenyRules() credential-path deny rules every session runs with
 //
-// WHY dynamic import (research §0 / §D): the SDK ships `sdk.mjs` (ESM only) but the
-// Electron main process is CJS. A static `require` throws ERR_REQUIRE_ESM; a dynamic
-// `import()` is the standard CJS->ESM bridge and Electron 43 (Node 20/22) supports
-// it. We import only what the engine needs (`query`, `AbortError`).
-//
-// WHY the asar rewrite (research R1): the 256 MB `claude` Mach-O cannot exec from
-// inside the read-only app.asar and codesign cannot sign a file inside it, so the
-// binary is `asarUnpack`ed. require.resolve still reports the in-asar path, so we
-// rewrite `app.asar` -> `app.asar.unpacked` where the real, signed binary lives. In
-// dev / an unpackaged tree there is no `app.asar` segment and the path is unchanged.
-//
-// The dopl bearer NEVER hits logs/argv: it stays inside the returned in-memory
-// mcpServers object, held by safeStorage and never read back off disk (§H-7, C1).
+// ⚠ Dynamic import, not require: the SDK ships `sdk.mjs` (ESM only) and Electron main is CJS,
+// so a static require throws ERR_REQUIRE_ESM.
+// ⚠ asar rewrite: the 256 MB `claude` Mach-O cannot exec from inside the read-only app.asar and
+// codesign cannot sign a file inside it, so it is `asarUnpack`ed. require.resolve still reports
+// the in-asar path. A dev/unpackaged tree has no `app.asar` segment and is unchanged.
+// ⚠ The dopl bearer NEVER hits logs/argv: it stays inside the returned in-memory mcpServers
+// object, held by safeStorage, never read back off disk (§H-7).
 
 const path = require('path');
 const { app } = require('electron');
@@ -31,26 +25,24 @@ const SDK_PKG = '@anthropic-ai/claude-agent-sdk';
 
 let _sdk = null; // cached ESM namespace
 
-// Standard CJS->ESM bridge, cached once. Throws (caught by the caller) only if the
-// package is genuinely absent — the engine then reports {skipped:'no-sdk'}.
+// CJS->ESM bridge, cached once. Throws (caught by the caller) only when the package is
+// genuinely absent — the engine then reports {skipped:'no-sdk'}.
 async function getSdk() {
   if (!_sdk) _sdk = await import(SDK_PKG);
   return _sdk;
 }
 
-// Rewrite an in-asar path to its asar.unpacked twin. Pure string transform, so it
-// is trivially correct and testable without electron. A path with no `app.asar`
-// segment (dev / unpackaged) is returned unchanged; an already-`.unpacked` path is
-// left alone by the negative lookahead.
+// In-asar path -> its asar.unpacked twin. Pure string transform (testable without electron).
+// No `app.asar` segment => unchanged; an already-`.unpacked` path is left alone by the
+// negative lookahead.
 function rewriteAsarUnpacked(p) {
   if (typeof p !== 'string') return p;
   return p.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
 }
 
-// The absolute path to the bundled `claude` executable, or null when it cannot be
-// located (the engine then falls back — headless remains the fallback executor).
-// The platform binary ships as `@anthropic-ai/claude-agent-sdk-<platform>-<arch>`
-// (an optionalDependency, host-arch only) with a `claude` file at its package root.
+// Absolute path to the bundled `claude` executable, or null (engine falls back to headless).
+// The platform binary ships as `@anthropic-ai/claude-agent-sdk-<platform>-<arch>` (an
+// optionalDependency, host-arch only) with a `claude` file at its package root.
 function resolveClaudeExecutable() {
   const platformPkg = `${SDK_PKG}-${process.platform}-${process.arch}`;
   try {
@@ -63,19 +55,15 @@ function resolveClaudeExecutable() {
   }
 }
 
-// C1 (HIGH-2) — THE DEVICE TOKEN IS OFF DISK FOR THE SDK PATH. buildMcpServers used to
-// read userData/mcp-spawn.json, a mode-600 file carrying a 90-day dopl.read+dopl.write
-// bearer. `Read` is PRE-APPROVED on all three session profiles, which means the SDK
-// SHADOWS it and the call never reaches canUseTool at all: an injected agent could lift
-// that token with ZERO operator clicks and then act as this device against the Dopl API,
-// bypassing every control the session window offers. The bearer now comes from
-// mcp-config's safeStorage-held cache and is injected straight into this in-memory
-// object, so a session spawn needs no plaintext credential on disk. The file survives
-// ONLY for the CLI path (session-spawner's --mcp-config, manual `claude` runs), and
+// ⚠ THE DEVICE TOKEN STAYS OFF DISK ON THE SDK PATH. `Read` is PRE-APPROVED on all three
+// session profiles, so the SDK SHADOWS it and the call never reaches canUseTool — a plaintext
+// bearer in userData/mcp-spawn.json is liftable with ZERO operator clicks. The bearer comes
+// from mcp-config's safeStorage-held cache straight into the in-memory object. The file
+// survives ONLY for the CLI path (session-spawner's --mcp-config, manual `claude` runs), and
 // buildSecretPathDenyRules below keeps the pre-approved read tools out of it.
 function doplBearer() {
-  // Lazily required: mcp-config pulls in auth/session-spawner, and an unwired harness
-  // (or a pre-sign-in launch) must read as "no token", never throw into a launch.
+  // ⚠ Lazy require: mcp-config pulls in auth/session-spawner, and an unwired harness (or a
+  // pre-sign-in launch) must read as "no token", never throw into a launch.
   try {
     return require('./mcp-config').deviceTokenForSpawn() || '';
   } catch (_) {
@@ -83,24 +71,20 @@ function doplBearer() {
   }
 }
 
-// Q9 — ONE DEFINITION of the per-server call timeout. mcp-config owns the number
-// (it writes the same key into the spawn-config file) and derives it from the
-// server's own await budget; this module used to restate the literal, which is
-// exactly how the two drifted. Lazy for the same reason doplBearer is lazy, and
-// only ever reached AFTER doplBearer has already proven mcp-config loads.
+// ⚠ ONE DEFINITION of the per-server call timeout: mcp-config owns the number (it writes the
+// same key into the spawn-config file) and derives it from the server's await budget. Never
+// restate the literal here. Lazy like doplBearer, and only reached after it proved mcp-config
+// loads.
 function clientTimeoutMs() {
   return require('./mcp-config').MCP_CLIENT_TIMEOUT_MS;
 }
 
-// C1 — the tool-BOUND half of the same fix. A pre-approved tool never reaches our gate,
-// so this deny has to ride options.disallowedTools (the SDK's rule layer), not
-// grantDecision. It fences the two directories that hold credentials on this machine:
-// userData (mcp-spawn.json + the safeStorage-encrypted electron-store) and ~/.claude*
-// (the CLI's own config + its keychain-adjacent state). Rules are gitignore-style, so an
-// absolute path takes the `//` (filesystem-root) prefix and `~/` is the home dir. Applied
-// to EVERY profile, because every profile pre-approves the local reads. `Read` is the
-// load-bearing entry; the Grep/Glob twins are belt (an unrecognized rule is a harmless
-// no-op on this CLI, which is why naming them costs nothing).
+// ⚠ Tool-BOUND half of the same fix. A pre-approved tool never reaches grantDecision, so this
+// deny must ride options.disallowedTools (the SDK's rule layer). Fences the two credential
+// directories: userData (mcp-spawn.json + the safeStorage-encrypted electron-store) and
+// ~/.claude* (CLI config + keychain-adjacent state). Rules are gitignore-style: an absolute
+// path takes the `//` filesystem-root prefix, `~/` is home. Applied to EVERY profile, because
+// every profile pre-approves the local reads. `Read` is load-bearing; Grep/Glob are belt.
 const SECRET_TOOLS = ['Read', 'Grep', 'Glob'];
 const SECRET_HOME_PATHS = ['~/.claude*', '~/.claude/**'];
 function buildSecretPathDenyRules() {
@@ -116,183 +100,103 @@ function buildSecretPathDenyRules() {
   return rules;
 }
 
-// The in-memory mcpServers object (research §4 — replaces the --mcp-config file).
-// `doplToolsPolicy` is ACCEPTED AND DELIBERATELY NOT FORWARDED — the per-server `tools`
-// field is a PERMISSION policy, not an allowlist, and handing it short tool names DELETED
-// this whole server entry. The verified evidence is in the block at the end of this
-// function. With no token (pre-sign-in) returns {} so the session still runs, exactly as
-// the missing-file case used to.
+// The in-memory mcpServers object (replaces the --mcp-config file).
+// ⚠ `doplToolsPolicy` is ACCEPTED AND DELIBERATELY NOT FORWARDED — see the block at the end of
+// this function. No token (pre-sign-in) => {}, so the session still runs.
 //
-// C2 (HIGH-3): the url is ALWAYS the compiled-in MCP_URL. The old `dopl.url || MCP_URL`
-// trusted a value read back off disk, so any local process that rewrote that file could
-// point the session's whole MCP surface — bearer included — at its own endpoint.
+// ⚠ The url is ALWAYS the compiled-in MCP_URL. A `dopl.url || MCP_URL` read trusts a value off
+// disk, so any local process rewriting that file repoints the session's whole MCP surface —
+// bearer included — at its own endpoint.
 //
-// v2.x WORKSPACE PIN. `workspaceId` (the SESSION's workspace UUID) rides as the
-// `X-Workspace-Id` request header. The device credential can span several
-// workspaces, and a multi-workspace connection has NO default: every dopl call
-// that omitted `workspace=` came back refused ("This connection has no default
-// workspace ... pass workspace=<slug_or_id>"), which is half of why a spawned
-// agent could not deliver. The MCP endpoint reads that header as a per-request
-// pin and resolves it against the caller's own memberships
-// (src/app/api/mcp/route.ts -> packages/mcp-server factory), so pinning it here
-// auto-targets every call the session makes even when the model forgets the arg.
-// It GRANTS nothing new: the pin must match a membership the credential already
-// has, and a per-call `workspace=` still wins (the server resolves the arg first
-// and runs that handler in its own scope). UUID only, never a slug — two prod
-// workspaces can share a slug. Omitted entirely when there is no session
-// workspace, which leaves today's behavior untouched.
+// WORKSPACE PIN: the session's workspace UUID rides as `X-Workspace-Id`. The device credential
+// can span workspaces and a multi-workspace connection has NO default, so a call omitting
+// `workspace=` is refused. The MCP endpoint resolves the header against the caller's own
+// memberships (src/app/api/mcp/route.ts -> packages/mcp-server factory). ⚠ GRANTS nothing: the
+// pin must match an existing membership, and a per-call `workspace=` still wins. ⚠ UUID only,
+// never a slug — two prod workspaces can share a slug. Omitted when there is no session
+// workspace.
 function buildMcpServers(doplToolsPolicy, workspaceId) {
   const token = doplBearer();
   if (!token) return {};
   const server = {
     type: 'http',
     url: MCP_URL,
-    // FIX Q9. Claude Code 2.1.220 (bundled by @anthropic-ai/claude-agent-sdk 0.3.220,
-    // the version this app ships) HONOURS a per-server `timeout`: it aborts a tool call
-    // whose RESPONSE HEADERS have not arrived by
-    // min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647) ms, reporting
-    // the bare string "The operation timed out." Two nuances that make this a deliberate
-    // choice rather than a free knob: the key can only RAISE that abort above the 60s
-    // floor, never lower it; and it ALSO lowers the hard tool-call ceiling from ~1e8 ms
-    // to this value. Both are fine here — this entry is in-memory and ours alone.
-    // /api/mcp used to buffer (enableJsonResponse), so the 60s bound covered the WHOLE
-    // call and every op="await" died at exactly 60s — before the ~2min mark where the
-    // client backgrounds a pending call, the one thing that wakes an idle session. The
-    // route now STREAMS (headers flush at t≈0, F-092), which is the real fix for every
-    // client. This field stays as belt-and-braces: it protects spawns against a
-    // not-yet-deployed server or a buffering proxy, and costs nothing once headers
-    // stream. The VALUE is derived in mcp-config.js — never restate it here.
+    // Per-server `timeout`, honoured by claude 2.1.220 / claude-agent-sdk 0.3.220: aborts a
+    // tool call whose RESPONSE HEADERS have not arrived by
+    // min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647) ms.
+    // ⚠ It can only RAISE the abort above the 60s floor, never lower it, and it ALSO lowers the
+    // hard tool-call ceiling from ~1e8 ms to this value. Belt-and-braces against a
+    // not-yet-deployed server or a buffering proxy (/api/mcp now streams, F-092).
+    // ⚠ The VALUE is derived in mcp-config.js — never restate it here.
     timeout: clientTimeoutMs(),
-    // F-177 — THE DOPL TOOLS ARE NEVER DEFERRED BEHIND `ToolSearch`. Verified against the
-    // bundled runtime (claude 2.1.220 / @anthropic-ai/claude-agent-sdk 0.3.220), not inferred:
-    //   · tool search defaults ON — with no `ENABLE_TOOL_SEARCH` in the env the mode resolves
-    //     to `tst`, and `buildScrubbedEnv` strips only the permission knobs, so it is on;
-    //   · `isDeferredTool` returns TRUE for EVERY MCP tool (`if (isMcp) return true`) unless the
-    //     server or the tool carries `alwaysLoad`. The per-server `tools` policy does NOT exempt
-    //     anything — it is a PERMISSION policy ({name, permission_policy}), not a load policy,
-    //     which is what prompt-framing's FIX F3b comment assumed it was;
-    //   · deferral is skipped wholesale only when `ToolSearch` is missing from the offered set
-    //     ("Tool search disabled: ToolSearchTool is not available (may have been disallowed via
-    //     disallowedTools)"). That is the ONLY reason `dopl_channel` was eagerly present before
-    //     F-177: every profile hard-denied ToolSearch, so nothing could be deferred.
-    // F-177 hands `full` its ToolSearch back, which would have flipped deferral ON for exactly
-    // the profile the product ships by default — and `dopl_channel` is the session's DELIVERY
-    // PATH. It would have arrived as a bare name needing a ToolSearch call that (a) the prompt
-    // forbids by name (prompt-framing FIX F3b) and (b) gates in every Axis-A mode, `bypass`
-    // included. That is the F3 incident verbatim: an agent reporting "I do not have the
-    // mcp__dopl__dopl_channel tool". `alwaysLoad` makes ToolSearch's presence IRRELEVANT here.
-    // It also fixes the quieter half: MCP startup is non-blocking by default, so the turn-1
-    // prompt could be built before this server connected at all; `alwaysLoad` blocks the launch
-    // until it does, capped by the CLI at its 5s connect timeout — a bound this app already
-    // prices in many times over (MCP_CLIENT_TIMEOUT_MS 290s, LAUNCHING_MS 5min).
-    // NO-OP FOR THE RESTRICTED PROFILES by construction: read_only and dopl_only still deny
-    // ToolSearch, so deferral was already off for them and their tool set is byte-unchanged.
+    // ⚠ `alwaysLoad` keeps the dopl tools OUT of `ToolSearch` deferral. Verified on the bundled
+    // runtime: tool search defaults ON (no ENABLE_TOOL_SEARCH => `tst`, and buildScrubbedEnv
+    // strips only permission knobs), and `isDeferredTool` returns TRUE for EVERY MCP tool
+    // (`if (isMcp) return true`) unless server or tool carries `alwaysLoad`. The per-server
+    // `tools` policy exempts nothing — it is a PERMISSION policy, not a load policy. Deferral
+    // is skipped wholesale only when ToolSearch is absent from the offered set.
+    // Without this, `full` (which has ToolSearch) gets `dopl_channel` — the session's DELIVERY
+    // PATH — as a bare name needing a ToolSearch call the prompt forbids by name and that gates
+    // in every Axis-A mode, `bypass` included: "I do not have the mcp__dopl__dopl_channel tool".
+    // Also blocks launch until the server connects (MCP startup is non-blocking by default, so
+    // the turn-1 prompt could be built before it did), capped by the CLI's 5s connect timeout.
+    // NO-OP for read_only / dopl_only, which still deny ToolSearch.
     alwaysLoad: true,
     headers: {
       Authorization: `Bearer ${token}`,
-      // WAKE-V1 RUNTIME DISAMBIGUATION. Every MCP call a DESKTOP-SPAWNED session makes
-      // carries this header; the operator's EXTERNAL Claude Code session (same device
-      // credential, its own `claude` process) does not send it. `runtime` is a RESERVED
-      // metadata key server-side — a caller-supplied value in the message body is
-      // stripped, and the stamp is written only for this exact header value — so
-      // metadata.runtime === 'desktop-session' says a desktop-shaped runtime posted it.
-      //
-      // A ROUTING HINT, NOT AN AUTHORIZATION SIGNAL (see src/shared/auth/runtime-header.ts).
-      // Anything holding this device token can set the header, so the stamp PROVES
-      // nothing about who is calling; it only labels the expected origin. What makes
-      // targeting.requesterTaskOpen safe is that it fails CLOSED (no stamp -> no window
-      // at all) on top of the conjunct that does carry identity: the message's
-      // authorUserId is the operator themselves, and the thread is one they created.
-      // Nothing may be GRANTED on this header. Unconditional: it identifies the RUNTIME,
-      // not the workspace, so it rides even without a pin.
+      // RUNTIME DISAMBIGUATION: every MCP call a DESKTOP-SPAWNED session makes carries this;
+      // the operator's EXTERNAL Claude Code session (same device credential, own `claude`
+      // process) does not. `runtime` is a RESERVED server-side metadata key — a body copy is
+      // stripped and the stamp is written only for this exact header value.
+      // ⚠ ROUTING HINT, NOT AUTHORIZATION (src/shared/auth/runtime-header.ts): anything holding
+      // this device token can set it, so it PROVES nothing about the caller. Nothing may be
+      // GRANTED on it. Unconditional — it identifies the RUNTIME, not the workspace.
       'X-Dopl-Runtime': 'desktop-session',
     },
   };
   const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
   if (pin) server.headers['X-Workspace-Id'] = pin;
-  // THE PER-SERVER `tools` POLICY IS NOT AN ALLOWLIST — AND PASSING ONE DELETED THIS SERVER.
-  // (F-177 follow-up, 2026-08-08. Verified against the bundled runtime, not inferred.)
-  //
-  // WHAT STOOD HERE: `if (Array.isArray(doplToolsPolicy)) server.tools = doplToolsPolicy;` —
-  // the SHORT dopl names out of `session-profiles.buildSessionToolConfig` (`['dopl_channel']`
-  // for read_only), intended as a second bound so a restricted profile's server only OFFERED
-  // its scoped tools.
-  //
-  // WHAT THE FIELD ACTUALLY IS. In @anthropic-ai/claude-agent-sdk 0.3.220 (Claude Code
-  // 2.1.220 — the version this app ships) every remote server config declares
-  // `tools?: McpServerToolPolicy[]`, and `McpServerToolPolicy` is
-  // `{ name: string; permission_policy?: 'always_allow'|'always_ask'|'always_deny';
-  // org_max_permission?: 'allow'|'ask'|'blocked' }` (sdk.d.ts — `McpHttpServerConfig`,
-  // `McpServerToolPolicy`). It is a PERMISSION policy carried on `mcp_set_servers` for
-  // REMOTE servers. There is no shape of it that means "offer only these", which is also
-  // why it exempts nothing from `ToolSearch` deferral (the F3b note above, and
-  // prompt-framing's).
-  //
-  // AND IT WAS NOT INERT, IT WAS DESTRUCTIVE. The CLI validates `--mcp-config` PER ENTRY
-  // with zod (`tools: E.array(E.object({name, permission_policy})).optional()` on the http
-  // variant) and a failed `safeParse` does not strip the offending field — it DROPS THE
-  // WHOLE SERVER and continues: `Skipped — invalid MCP server config for "dopl": tools.0: …`.
-  // Observed end-to-end against the bundled binary (`--print --output-format stream-json
-  // --verbose`, reading the init message's `mcp_servers`):
-  //     tools: ['dopl_channel']         ->  "mcp_servers": []            <- the entry is GONE
+  // ⚠ NEVER SET `server.tools`. The per-server `tools` field is a PERMISSION policy —
+  // `{ name, permission_policy?, org_max_permission? }[]` (sdk.d.ts McpHttpServerConfig /
+  // McpServerToolPolicy) — not a visibility allowlist, and it exempts nothing from ToolSearch
+  // deferral. Worse, the CLI zod-validates `--mcp-config` PER ENTRY and a failed safeParse
+  // DROPS THE WHOLE SERVER: `Skipped — invalid MCP server config for "dopl": tools.0: …`.
+  // Observed against the bundled binary (--print --output-format stream-json --verbose, init
+  // message's `mcp_servers`):
+  //     tools: ['dopl_channel']           ->  "mcp_servers": []   <- entry GONE
   //     tools: [{ name: 'dopl_channel' }] ->  "mcp_servers": [{"name":"dopl",…}]
-  //     tools omitted                    ->  "mcp_servers": [{"name":"dopl",…}]
-  // So every `read_only` / `dopl_only` SDK session launched with NO dopl server at all — no
-  // `dopl_channel`, i.e. no delivery path, and the `alwaysLoad` guarantee above moot for the
-  // two profiles that carried a policy. `full` passes null and was never affected.
-  //
-  // WHY REMOVED RATHER THAN CONVERTED. The semantics this line wanted (a visibility
-  // allowlist) cannot be expressed by a permission policy, and inventing one on a PERMISSION
-  // surface is the worse error. Nothing is lost, because the SAME bound is already carried by
-  // SDK `disallowedTools`, whose complement over the server's real surface IS the old
-  // allowlist: read_only denies DOPL_SAFE_TOOLS + the admins + the retired tools, leaving
-  // `dopl_channel`; dopl_only denies the admins + the retired tools, leaving the safe tools +
-  // the channel. Everything that survives that still stops at `canUseTool`, which fails
-  // closed. `doplToolsPolicy` stays in the SIGNATURE so session-query's call shape and the
-  // profile table are untouched — it is deliberately unread.
-  // Pinned by test/mcp-server-tools-policy.test.mjs (including the deny-list join).
+  //     tools omitted                     ->  "mcp_servers": [{"name":"dopl",…}]
+  // Passing the short names left every read_only / dopl_only session with NO dopl server and
+  // no delivery path. The same bound is already carried by SDK `disallowedTools`, whose
+  // complement over the server's real surface IS the intended allowlist, and everything
+  // surviving it still stops at canUseTool. `doplToolsPolicy` stays in the SIGNATURE so
+  // session-query's call shape and the profile table are untouched — deliberately unread.
+  // Pinned by test/mcp-server-tools-policy.test.mjs.
   return { dopl: server };
 }
 
-// F2 — WHICH SESSION IS CALLING, stamped onto an entry buildMcpServers just made.
+// WHICH SESSION IS CALLING, stamped onto an entry buildMcpServers just made. One device
+// credential is held by many concurrent sessions BY DESIGN, and nothing else on the wire says
+// which of them wrote a message. The server strips any caller-supplied `metadata.session_id`
+// and stamps the reserved key ONLY from this header — same discipline as X-Dopl-Runtime.
 //
-// One device credential can be held by any number of concurrent sessions at once,
-// and on THIS machine that is BY DESIGN. Nothing on the wire said which of them
-// wrote a message, so two sessions posted under one identity and gave a peer
-// contradictory instructions 79 seconds apart with nothing able to attribute
-// either. (The identity in question was a `channel_agents` handle, claimed
-// per-call with `as_agent`; named agents are gone — channels rollback §1 — and a
-// SESSION is now the only agent identity there is, which is what this header
-// names.) The header closes that: the server strips any caller-supplied
-// `metadata.session_id` and stamps the reserved key ONLY from this header — the
-// identical discipline X-Dopl-Runtime is on, one lane over.
+// ⚠ SEPARATE FUNCTION on purpose: buildMcpServers answers "what MCP server does this app
+// offer" — the same answer for every spawn, which mcp-config.js writes ONCE into the shared
+// spawn config the headless `--mcp-config` path reads, where a per-session value cannot live.
+// This answers "which run is calling", knowable only on the in-memory SDK path.
 //
-// A SEPARATE FUNCTION, and the seam is real rather than cosmetic. buildMcpServers
-// answers "what MCP server does this app offer", which is the same answer for
-// every spawn — mcp-config.js writes that same shape ONCE, to the shared spawn
-// config the headless `--mcp-config` path reads, where a per-session value could
-// not live at all. This answers "which run is calling", which only the in-memory
-// SDK path can know (session-query.js has the session record and therefore its
-// slot). Keeping them apart is what stops the second question being asked of a
-// shared config file that cannot answer it.
-//
-// A LABEL, NOT A LOCK: nothing is granted by it, nothing is enforced on it, and no
-// session count is limited anywhere. An absent or malformed slot stamps NOTHING,
-// which is byte-for-byte today's request — the SHAPE is the server's own
-// (`src/shared/auth/session-header.ts`: id characters only, no whitespace, <=128),
-// mirrored here so an unsendable value is never put on the wire, exactly as
-// app-version.js does with VERSION_RE.
+// ⚠ A LABEL, NOT A LOCK: nothing granted, nothing enforced, no session count limited. An absent
+// or malformed slot stamps NOTHING. SHAPE mirrors the server's own
+// (src/shared/auth/session-header.ts: id characters only, no whitespace, <=128).
 const SESSION_ID_RE = /^[A-Za-z0-9:._-]{1,128}$/;
 function withSessionStamp(servers, sessionId) {
   const slot = typeof sessionId === 'string' ? sessionId.trim() : '';
   const entry = servers && typeof servers === 'object' ? servers.dopl : null;
-  // A LABEL MUST NEVER BREAK A LAUNCH. This runs inside buildSdkOptions, the ONE
-  // assembly point every spawn shape goes through, so a throw here would take the
-  // whole session down for an attribution hint. buildMcpServers always ships a
-  // `headers` object, which is why the two guards below are unreachable TODAY —
-  // they are here so a future entry that arrives without one (or a non-object in
-  // `dopl`) stamps nothing instead of crashing the spawn. MUTATES IN PLACE: the
-  // call site ignores the return value.
+  // ⚠ A LABEL MUST NEVER BREAK A LAUNCH. Runs inside buildSdkOptions, the ONE assembly point
+  // every spawn shape goes through, so a throw takes the whole session down for an attribution
+  // hint. The guards are unreachable today (buildMcpServers always ships `headers`) and exist
+  // so a future entry without one stamps nothing instead of crashing the spawn.
+  // MUTATES IN PLACE: the call site ignores the return value.
   if (entry && typeof entry === 'object' && slot && SESSION_ID_RE.test(slot)) {
     entry.headers = entry.headers || {};
     entry.headers['X-Dopl-Session-Id'] = slot;
@@ -300,18 +204,14 @@ function withSessionStamp(servers, sessionId) {
   return servers;
 }
 
-// FIX M2 — a scrubbed copy of process.env for options.env. The SDK's options.env
-// REPLACES the child env entirely (research §1: you must spread process.env
-// yourself), so we copy every var and DELETE only the permission-affecting knobs an
-// operator might have exported that would short-circuit canUseTool — a dangerous
-// default permission MODE, or BYPASS / ACCEPT_EDITS / DONT_ASK / SKIP_PERMISSIONS /
-// AUTO_APPROVE / DANGEROUS toggles — but ONLY when the key is also CLAUDE_CODE_* /
-// ANTHROPIC_* (so unrelated app env is untouched). AUTH IS PRESERVED: the research
-// proved the bundled binary authenticates from the macOS keychain even under a
-// fully-stripped env (apiKeySource=none), and the auth-critical vars do NOT match
-// the permission pattern — CLAUDE_CODE_OAUTH_TOKEN (the setup-token fallback),
-// ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN (deliberate key auth), ANTHROPIC_BASE_URL
-// (gateway) all pass through. PATH / HOME / keychain access are never removed.
+// FIX M2 — a scrubbed copy of process.env for options.env.
+// ⚠ The SDK's options.env REPLACES the child env entirely, so every var is copied and only the
+// permission-affecting knobs that would short-circuit canUseTool are dropped — and only when
+// the key is ALSO CLAUDE_CODE_* / ANTHROPIC_*, so unrelated app env is untouched.
+// ⚠ AUTH IS PRESERVED: the bundled binary authenticates from the macOS keychain even under a
+// fully-stripped env (apiKeySource=none), and CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_API_KEY /
+// ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL do not match the permission pattern. PATH / HOME /
+// keychain access are never removed.
 const PERMISSION_ENV_RE = /PERMISSION|BYPASS|ACCEPT_EDITS|DONT_ASK|SKIP_PERMISSIONS|AUTO_APPROVE|DANGEROUS/i;
 function buildScrubbedEnv() {
   const src = process.env || {};
@@ -329,6 +229,6 @@ module.exports = {
   rewriteAsarUnpacked,
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above
-  buildSecretPathDenyRules, // C1: the credential-path deny every session runs with
+  buildSecretPathDenyRules, // credential-path deny every session runs with
   buildScrubbedEnv,
 };

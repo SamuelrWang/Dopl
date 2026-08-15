@@ -3,17 +3,14 @@
 import { useState } from "react";
 
 /**
- * THE Stripe billing portal handoff, in one place.
+ * THE Stripe billing portal handoff, one place. Two surfaces reach it (plans
+ * pane "Manage billing"/"Update payment method", payment-method card
+ * "Update"). Same-tab redirect, web-side only — desktop does its own
+ * `openExternal`.
  *
- * Two surfaces on this page reach the hosted portal — the plans pane's "Manage
- * billing" / "Update payment method" and the payment-method card's "Update" —
- * and they were about to hand-roll the same POST + redirect twice. The portal
- * is a same-tab redirect on the web (the desktop binding does its own
- * `openExternal`, which is why this hook is web-side only).
- *
- * The route's error body is FLAT (`{error: "…"}`, a legacy shape predating the
- * nested envelope), while the auth wrapper's is nested — so both are read here,
- * because the caller cannot tell which layer refused.
+ * ⚠ Route's error body is FLAT (`{error: "…"}`, legacy shape) while the auth
+ * wrapper's is nested; both are read here since the caller cannot tell which
+ * layer refused.
  */
 export interface BillingPortal {
   open: () => Promise<void>;

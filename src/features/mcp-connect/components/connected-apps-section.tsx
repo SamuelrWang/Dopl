@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * ConnectedAppsSection — lists the user's active MCP OAuth grants (apps
- * connected via "Connect → log in") with a Disconnect (revoke) action,
- * framed in the standard section box. Backed by /api/oauth/grants.
+ * The user's active MCP OAuth grants (apps connected via "Connect → log in")
+ * with a Disconnect (revoke) action. Backed by /api/oauth/grants.
  */
 
 import { useState } from "react";
@@ -28,15 +27,15 @@ const selectGrants = (body: { grants?: Grant[] }) => body.grants ?? [];
 export function ConnectedAppsSection() {
   const queryClient = useQueryClient();
   const query = useApiQuery(GRANTS_PATH, { select: selectGrants });
-  // Errors degrade to "no connected apps", matching the old behavior.
+  // Errors degrade to "no connected apps".
   const grants = query.isError ? [] : (query.data ?? null);
   const [revoking, setRevoking] = useState<string | null>(null);
 
   async function revoke(id: string) {
     setRevoking(id);
     try {
-      // `apiRequest`, not `fetch`: the desktop renderer reuses this section and
-      // its only transport is the Electron IPC bridge behind this seam.
+      // ⚠ `apiRequest`, not `fetch`: the desktop renderer reuses this section
+      // and its only transport is the Electron IPC bridge behind this seam.
       await apiRequest<void>(`/api/oauth/grants/${id}`, { method: "DELETE" });
       queryClient.setQueryData(
         [GRANTS_PATH, undefined, undefined],

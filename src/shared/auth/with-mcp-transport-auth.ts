@@ -3,55 +3,36 @@ import { touchMcpStatus, checkAndRecordRateLimitSubject } from "./mcp-session";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 import type { McpCredential } from "./mcp-credential";
 
-// Per-token request ceiling for OAuth callers at the /api/mcp boundary.
-// Generous by default — agents are bursty — but caps runaway abuse.
-//
-// UNIFIED BUDGET (2026-08-08): the loopback `/api/*` calls this transport makes
-// now ALSO count against the same `mcp:<tokenId>` subject, because `withUserAuth`
-// grew a matching limiter in its OAuth-bearer branch (see the note there). That
-// closes the hole where a token pointed straight at the REST routes bypassed
-// this ceiling entirely. Both doors read this SAME env var, so a token spends
-// one shared 600/min budget across the transport and direct REST rather than two
-// independent ones. Override via env.
+// Per-token ceiling for OAuth callers at the /api/mcp boundary.
+// ⚠ UNIFIED BUDGET: `withUserAuth`'s OAuth-bearer branch runs a matching limiter
+// on the same `mcp:<tokenId>` subject, and both doors read this SAME env var —
+// one shared budget across the transport and direct REST, never two.
 const OAUTH_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
 /**
- * Authentication for the remote MCP transport boundary (`/api/mcp`).
+ * Auth for the remote MCP transport boundary (`/api/mcp`). OAuth access token
+ * only — there is no API-key path.
  *
- * Accepts an OAuth access token (the "Connect → log in" flow) via
- * `mcp-oauth.ts`. This is the only credential — there is no API-key path.
- *
- * This is intentionally distinct from `withMcpAccess` / `withWorkspaceAuth`:
- * those run the heavy gating (paywall, rate limit, per-resource
- * `agent_write_enabled`) and fire on every downstream `/api/*` call the
- * in-app MCP server makes via the loopback `DoplClient`. Here we only:
- *   1. validate the credential cheaply for an early, spec-correct 401, and
- *   2. light up the "MCP connected" indicator.
- * The credential is then forwarded to the loopback client so the real
- * gating happens exactly once per tool call, in one place.
+ * ⚠ Deliberately distinct from `withMcpAccess` / `withWorkspaceAuth`, which run
+ * the heavy gating on every downstream loopback `/api/*` call. Here only:
+ *   1. cheap credential validation for an early, spec-correct 401;
+ *   2. lighting the "MCP connected" indicator.
+ * The credential is forwarded to the loopback client so real gating happens
+ * exactly once per tool call, in one place.
  */
 
 export interface McpAuthContext {
   /** Raw credential to forward to the loopback DoplClient (Authorization: Bearer). */
   credential: string;
   userId: string;
-  /**
-   * Workspace this session is locked to, else null. Always null for OAuth
-   * callers (they target any workspace via `x-workspace-id` or the per-call
-   * `workspace=` arg).
-   */
+  /** Workspace this session is locked to. Always null for OAuth callers — they
+   *  target any workspace via `x-workspace-id` or the per-call `workspace=`. */
   apiKeyWorkspaceId: string | null;
-  /**
-   * OAuth scopes for this session (e.g. ["dopl.read","dopl.write"]). Passed
-   * into bootServer to gate write/admin tool registration.
-   */
+  /** OAuth scopes; passed into bootServer to gate write/admin tool
+   *  registration. */
   scopes?: string[];
-  /**
-   * WHICH credential answered, for the agent's benefit only. `validateAccessToken`
-   * has always resolved this and the boundary has always discarded it, which is
-   * half of why an agent could not say what it was acting through. NOT an
-   * authorization input — nothing here may gate anything.
-   */
+  /** WHICH credential answered, for the agent's benefit. ⚠ NOT an authorization
+   *  input — nothing here may gate anything. */
   credential_info: McpCredential;
 }
 
@@ -65,7 +46,6 @@ export async function authenticateMcpRequest(
   const header = request.headers.get("authorization");
   const key = header?.replace(/^Bearer\s+/i, "").trim();
 
-  // OAuth access token (remote "Connect → log in" flow) — the only credential.
   if (key && isOAuthAccessToken(key)) {
     const tok = await validateAccessToken(key);
     if (tok) {
@@ -93,12 +73,6 @@ export async function authenticateMcpRequest(
   return { ok: false, response: unauthorized(request) };
 }
 
-/**
- * RFC 9728 / MCP-auth-spec 401: a `WWW-Authenticate` challenge that points
- * MCP clients at our protected-resource metadata so they can discover how to
- * authenticate (Stage 3 fills the metadata with the OAuth authorization
- * server; in Stage 2 it advertises bearer).
- */
 function rateLimited(): Response {
   return new Response(
     JSON.stringify({
@@ -113,6 +87,8 @@ function rateLimited(): Response {
   );
 }
 
+/** RFC 9728 / MCP-auth-spec 401: a `WWW-Authenticate` challenge pointing MCP
+ *  clients at our protected-resource metadata. */
 function unauthorized(request: Request): Response {
   const origin = new URL(request.url).origin;
   const metadataUrl = `${origin}/.well-known/oauth-protected-resource`;

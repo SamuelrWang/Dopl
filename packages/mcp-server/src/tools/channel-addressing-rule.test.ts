@@ -1,34 +1,19 @@
 /**
- * THE ADDRESSING RULE, pinned against the code that actually implements it.
+ * THE ADDRESSING RULE, pinned against the code that implements it: whether the
+ * SENTENCES this tool emits about who a message reaches are TRUE. Each test
+ * fails if a known-false claim comes back:
  *
- * A sibling of `channel-addressing.test.ts` (which is at the §2 cap and covers
- * the render surfaces) because these assertions have one subject the other file
- * does not own: whether the SENTENCES this tool emits about who a message
- * reaches are true.
- *
- * The wave these replace asserted three things that are not true, and each one
- * has a concrete failure attached:
- *
- *   F1 — "an unaddressed post triggers no agent, including in a two-member
- *        channel". `classify` keys its implicit trigger on `memberCount === 2`
- *        (dopl-desktop-app/main/targeting.js:152) and never reads `is_direct`,
- *        so a person's unaddressed message in a two-member channel IS a request
- *        for the only other member. An agent told otherwise re-posts with `to=`
- *        and the peer gets the same request twice, with two consent prompts.
- *
- *   H3 — "nobody was woken by it", said about a post that THREADED. Three
- *        routes run before `classify` (listener-messages.js:36-38) and none of
- *        them reads `to_user_id`: a first-class thread tag is fed straight into
- *        the counterparty's live session. The note rendered its claim directly
- *        above "THREADED into X — the other side reads this as a continuation".
- *
- *   H2 — "NONE of the messages above is addressed to you … do not answer them".
- *        The canonical reply in this product is UNADDRESSED
- *        (channel-post.js#postResult, prompt-framing.js#deliveryCall), so in
- *        exactly the N-party case the notice exists for it told a requester its
- *        own answer was somebody else's traffic.
- *
- * Each test below fails if the corresponding sentence comes back.
+ *   ⚠ "an unaddressed post triggers no agent, including in a two-member
+ *     channel" — `classify` keys the implicit trigger on `memberCount === 2`
+ *     (main/targeting.js) and never reads `is_direct`, so an agent told
+ *     otherwise re-posts with `to=` and the peer gets two consent prompts.
+ *   ⚠ "nobody was woken by it", said about a THREADED post — three routes run
+ *     before `classify` (listener-messages.js) and none reads `to_user_id`: a
+ *     first-class thread tag feeds the counterparty's live session directly.
+ *   ⚠ "NONE of the messages above is addressed to you … do not answer them" —
+ *     the canonical reply here is UNADDRESSED (`channel-post.js › postResult`,
+ *     `prompt-framing.js › deliveryCall`), so this tells a requester its own
+ *     answer is somebody else's traffic.
  */
 
 import { readFileSync } from "node:fs";
@@ -101,10 +86,9 @@ function rosterClient(userIds: string[]): DoplClient {
 
 describe("the group-channel threshold is not restated per lane", () => {
   it("matches the web app's GROUP_CHANNEL_MIN_MEMBERS", () => {
-    // The web composer hint and the invite-dialog note both key on this
-    // constant; this package cannot import across the package boundary, so the
-    // copy is pinned to the original instead of trusted to stay in step. That
-    // drift is exactly what produced F1: three strings, one magic rule, no link.
+    // ⚠ Web composer hint and invite-dialog note key on the same constant, and
+    // this package cannot import across the boundary — pin the copy rather than
+    // trust it to stay in step.
     const web = readFileSync("../../src/features/channels/constants.ts", "utf8");
     const declared = /GROUP_CHANNEL_MIN_MEMBERS = (\d+)/.exec(web);
     expect(declared, "the web constant moved or was renamed").not.toBeNull();
@@ -113,30 +97,21 @@ describe("the group-channel threshold is not restated per lane", () => {
 
 });
 
-// ── the merged agent cap, and why nothing pins it any more ───────────
-//
-// `MAX_ADDRESSED_AGENTS` was a second cross-lane constant, pinned here on the
-// same doctrine as the threshold above: the tool PUBLISHED it as
-// `to_agents.max()`, so a copy one higher than the server's turned the declared
-// surface into a promise the route refused. Named-agent addressing is gone
-// (channels rollback §1) — no `to_agent`, no `to_agents`, no cap, and no
-// `CHANNEL_TOO_MANY_AGENTS` code to classify.
 
 describe("the removed named-agent surface is ABSENT from the published shape", () => {
   it("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
-    // Not "declared and ignored": a param an MCP client can still see is a
-    // param a model will still try, and a silently-dropped address is the
-    // invisible-delivery failure the addressing contract exists to prevent.
+    // ⚠ Not "declared and ignored" — a param an MCP client can see is a param a
+    // model will try, and a silently-dropped address is the invisible-delivery
+    // failure the addressing contract exists to prevent.
     for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent", "status"]) {
       expect(CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
     }
   });
 
   it("REFUSES every removed op at the enum, before any handler runs", () => {
-    // The seven lifecycle / membership ops. They are DROPPED rather than kept
-    // for a teaching refusal — unlike `close_thread`, whose capability MOVED
-    // (to `propose_close`) and whose refusal names where. These capabilities
-    // are gone, so "invalid enum value" is the honest answer.
+    // ⚠ DROPPED rather than kept for a teaching refusal, unlike `close_thread`
+    // whose capability MOVED to `propose_close`. These capabilities are gone,
+    // so "invalid enum value" is the honest answer.
     for (const op of [
       "agents",
       "summon_agent",
@@ -167,8 +142,8 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
       "get_thread",
       "create_thread",
       "propose_close",
-      // Kept in the enum ON PURPOSE: an older agent's call gets a teaching
-      // refusal naming `propose_close`, not an opaque enum error.
+      // ⚠ Kept in the enum ON PURPOSE — an older agent gets a teaching refusal
+      // naming `propose_close`, not an opaque enum error.
       "close_thread",
       "set_thread_mode",
     ]) {
@@ -184,8 +159,8 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
 
 describe("routesToASession — first-class only", () => {
   it("is true for a uuid thread id and false for everything else", () => {
-    // Mirrors `firstClassTaskId` (targeting.js): the pre-classify routes call
-    // it, and it returns '' for a legacy id, so only a uuid reaches a session.
+    // ⚠ Mirrors `firstClassTaskId` (targeting.js): pre-classify routes call it
+    // and it returns '' for a legacy id, so only a uuid reaches a session.
     expect(routesToASession(UUID)).toBe(true);
     expect(routesToASession(UUID.toUpperCase())).toBe(true);
     expect(routesToASession(LEGACY)).toBe(false);
@@ -211,8 +186,8 @@ describe("unaddressedPostNote", () => {
     const note = unaddressedPostNote({ ...base, addressed: false })!;
     expect(note).toContain("NOT ADDRESSED");
     expect(note).toContain("from an AGENT is never taken as an implicit request");
-    // F1: the claim that produced duplicate requests. A two-member channel is
-    // NOT a channel where an unaddressed message reaches nobody.
+    // ⚠ A two-member channel is NOT one where an unaddressed message reaches
+    // nobody — that claim produces duplicate requests.
     expect(note).not.toContain("nobody was woken");
     expect(note).not.toMatch(/including a two-member/i);
   });
@@ -225,7 +200,7 @@ describe("unaddressedPostNote", () => {
     })!;
     expect(note).toContain("NOT ADDRESSED, BUT THREADED");
     expect(note).toContain("may be in front of their agent right now");
-    // H3's second half: the old remedy manufactured the duplicate request.
+    // ⚠ Remedy must not be "re-post with to=" — that manufactures a duplicate.
     expect(note).toContain("Do NOT re-post it with `to=`");
     expect(note).not.toMatch(/re-post it with to="/);
   });
@@ -281,7 +256,6 @@ describe("rosterAddressingRule — stated from the count it just read", () => {
     const rule = rosterAddressingRule("general", 2);
     expect(rule).toContain("Two members is the ONE size");
     expect(rule).toContain("from a PERSON as meant for the only other member");
-    // …and the caller's own posts still are not, which is why `to` still matters.
     expect(rule).toContain("A post from an AGENT never counts");
   });
 
@@ -298,7 +272,7 @@ describe("rosterAddressingRule — stated from the count it just read", () => {
       const rule = rosterAddressingRule("general", n);
       expect(rule).toContain("it cannot tell you whether this is one");
       expect(rule).not.toMatch(/including a two-member/i);
-      // H3 at every size: a thread tag routes past the addressing entirely, so no
+      // ⚠ At every size a thread tag routes past the addressing entirely, so no
       // branch may say an unaddressed post reaches nobody without that caveat.
       expect(rule).toContain("routes the post into the session already working it");
     }
@@ -333,10 +307,9 @@ describe("members — the rule reaches the result", () => {
 
 describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
   it("does not tell a waiting agent that its own answer belongs to someone else", () => {
-    // H2. Both halves of the fact are in the desktop: `postResult` posts the
-    // responder's reply with no `toUserId`, and `deliveryCall` teaches the
-    // delivery call with no `to`. So "nothing here is addressed to you" cannot
-    // be narrowed to "none of this is yours".
+    // ⚠ `postResult` posts a responder's reply with no `toUserId` and
+    // `deliveryCall` teaches the delivery call with no `to`, so "nothing here
+    // is addressed to you" cannot narrow to "none of this is yours".
     expect(AWAIT_UNNAMED_NOTICE).toContain("a reply here is normally posted UNADDRESSED");
     expect(AWAIT_UNNAMED_NOTICE).toContain("that is your reply");
     expect(AWAIT_UNNAMED_NOTICE).not.toContain("Do not answer them");
@@ -355,16 +328,13 @@ describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
   });
 });
 
-// ── ...and WHEN it fires, which is a separate claim ───────────────────
+// ── ...and WHEN it fires, a separate claim ───────────────────────────
 //
-// The notice's premise is "somebody ELSE wrote things and none of them names
-// you". The predicate ran over the whole page including the caller's OWN posts,
-// so it fired live on a page holding exactly one message — the caller's own
-// request, addressed to the peer — and told the agent "NONE of the messages
-// above NAMES you" about a message the agent had just written. `opAwait` also
-// passes `excludeAuthor` now, so own posts should not reach the render at all;
-// this is the second line of defence, because the notice must be false-free on
-// whatever it is handed.
+// ⚠ Premise is "somebody ELSE wrote things and none names you". A predicate
+// running over the caller's OWN posts fires on a page holding only the caller's
+// own request and tells the agent it does not name them. `excludeAuthor` should
+// keep own posts out; this is the second line of defence, because the notice
+// must be false-free on whatever it is handed.
 
 describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
   function awaitClient(messages: Array<Record<string, unknown>>): DoplClient {
@@ -407,7 +377,6 @@ describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
   });
 
   it("says NOTHING when every message on the page is the caller's own", async () => {
-    // The observed live case: one message, mine, addressed to the peer.
     const text = await noticeFor([message(8, ME, PEER)]);
     expect(text).not.toContain("NONE of the messages above NAMES you");
   });
@@ -425,8 +394,7 @@ describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
   });
 
   it("judges the peer's messages alone — the caller's own can't suppress it", async () => {
-    // Mixed page: my own post naming the peer, plus their unaddressed reply.
-    // The notice is about theirs, and the presence of mine changes nothing.
+    // Mixed page — the notice is about theirs; mine changes nothing.
     expect(await noticeFor([message(8, ME, PEER), message(9, PEER)])).toContain(
       "NONE of the messages above NAMES you",
     );

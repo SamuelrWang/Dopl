@@ -29,8 +29,8 @@ const DOT_STYLE: Record<ActivityDot, string> = {
 };
 
 interface Props {
-  /** The active tab's list hasn't answered yet — row ghosts, never an
-   *  empty state (an unanswered query is not an empty workspace). */
+  /** ⚠ Active tab's list hasn't answered: row ghosts, never an empty state —
+   *  an unanswered query is not an empty workspace. */
   loading?: boolean;
   tab: MembersTabKey;
   onTabChange: (tab: MembersTabKey) => void;
@@ -53,11 +53,8 @@ interface Props {
     action: "approve" | "decline",
     role: AssignableRole
   ) => void;
-  /**
-   * A queue write is in flight. The optimistic drop already takes the acted-on
-   * row (and its buttons) off screen, so this only stops a SECOND row being
-   * fired at while the first is settling.
-   */
+  /** Queue write in flight. The optimistic drop already removes the acted-on
+   *  row, so this only stops a SECOND row firing while the first settles. */
   queuesBusy?: boolean;
 }
 
@@ -67,12 +64,9 @@ const SEARCH_PLACEHOLDER: Record<MembersTabKey, string> = {
   access: "Search resources",
 };
 
-/**
- * Left list pane of the members console: header with admin actions,
- * concave search well, the Members | Teams | Access segmented switcher,
- * and the per-tab list. Admin-only queues (join requests, invited)
- * render as label-strip groups above the roster.
- */
+/** Left list pane: admin actions header, search well, Members | Teams |
+ *  Access switcher, per-tab list. Admin-only queues (join requests, invited)
+ *  render as label-strip groups above the roster. */
 export function MembersListPane({
   loading = false,
   tab,
@@ -336,8 +330,8 @@ function TeamListRow({
   selected: boolean;
   onSelect: () => void;
 }) {
-  // Counted through the shared helper so this caption can't claim more
-  // resources than the Access tab is willing to list (retirement D7).
+  // ⚠ Counted through the shared helper so this caption can't claim more
+  // resources than the Access tab will list.
   const scoped = scopedResourceCount(team);
   return (
     <RowShell selected={selected} onSelect={onSelect}>
@@ -404,12 +398,8 @@ function EmptyCopy({ text }: { text: string }) {
   );
 }
 
-/**
- * Row ghosts for the active tab while its query is in flight — the same
- * avatar + two-line shape `MemberListRow` / `TeamListRow` render, from the
- * shared kit. Replaces the false "No members yet." an unanswered query used
- * to produce.
- */
+/** Row ghosts while the active tab's query is in flight — same avatar +
+ *  two-line shape as `MemberListRow` / `TeamListRow`. */
 function ListRowsSkeleton() {
   return (
     <div role="status" aria-busy="true" aria-live="polite">

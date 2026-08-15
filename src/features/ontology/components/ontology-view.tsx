@@ -21,19 +21,15 @@ interface Props {
   initialClusterSlug?: string;
   /** Admin/owner — controls whether the upgrade prompt offers checkout. */
   canManageBilling?: boolean;
-  /** Member+ — viewers can read the ontology but can't create, so their
-   *  create affordances (New cluster / Column / Add new) are hidden. */
+  /** Member+ — viewers read but can't create, so create affordances
+   *  (New cluster / Column / Add new) are hidden. */
   canEdit?: boolean;
   /**
    * How the address bar follows the active cluster's slug. Defaults to
-   * `history.replaceState` with the path URL — what the Next app has always
-   * done, and why the RSC pages pass nothing (a server component cannot hand a
-   * function to a client component anyway).
-   *
-   * The desktop SPA injects its hash-router equivalent: the packaged renderer
-   * is a `file://` document where replacing the path is a Chromium security
-   * error, so the same intent has to travel through the router there. Same
-   * seam.
+   * `history.replaceState`; RSC pages pass nothing (a server component can't
+   * hand a function to a client component). ⚠ Desktop SPA injects its
+   * hash-router equivalent — the packaged renderer is a `file://` document
+   * where replacing the path is a Chromium security error.
    */
   replaceUrl?: (path: string) => void;
 }
@@ -43,11 +39,9 @@ const replaceHistoryUrl = (path: string): void =>
   window.history.replaceState(null, "", path);
 
 /**
- * Ontology page root. One cluster per page; its columns are container
- * objects whose children are the cards. Selecting a card opens the
- * editor panel; every edit persists through use-ontology. The active
- * cluster is URL-addressed by slug (history.replaceState on switch, so
- * tab flips don't remount the page).
+ * Ontology page root. One cluster per page; columns are container objects whose
+ * children are cards. Edits persist through use-ontology. Active cluster is
+ * URL-addressed by slug via replaceState, so tab flips don't remount the page.
  */
 export function OntologyView({
   workspaceId,
@@ -61,17 +55,15 @@ export function OntologyView({
   // Declared above the store: the store's delete callback refreshes it.
   const ent = useWorkspaceEntitlements(workspaceId);
   const { isCapped, refresh } = ent;
-  // The cap is a server-side count, so it can only move once the delete has
-  // landed — and deleting is the only way back under it.
+  // Cap is a server-side count: only moves once the write has landed.
   const refreshCap = useCallback(() => {
     if (isCapped) void refresh();
   }, [isCapped, refresh]);
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // A create puts its rows on screen under PROVISIONAL ids and swaps them for
-  // the server's when the POST answers. Selection is this component's state, so
-  // it has to move with them — otherwise the board and the panel blank out at
-  // the moment the create succeeds, which reads as the create having failed.
+  // Create renders rows under PROVISIONAL ids, swapped when the POST answers.
+  // ⚠ Selection is local state and must move with them, else board + panel
+  // blank out exactly when the create succeeds.
   const handleIdsResolved = useCallback((map: Readonly<Record<string, string>>) => {
     setClusterId((id) => (id ? (map[id] ?? id) : id));
     setSelectedId((id) => (id ? (map[id] ?? id) : id));
@@ -81,8 +73,6 @@ export function OntologyView({
     {
       onOverCap: () => setUpgradeOpen(true),
       onDeleted: refreshCap,
-      // The cap is a server-side count either way: it can only move once the
-      // create has actually landed, not when its optimistic row appeared.
       onCreated: refreshCap,
       onIdsResolved: handleIdsResolved,
     }
@@ -103,23 +93,18 @@ export function OntologyView({
     setConfirmDeleteCluster(false);
   };
 
-  // The address bar follows the SELECTED cluster's slug, in an effect rather
-  // than inside `selectCluster`, because an optimistically created cluster is
-  // selected BEFORE it has a slug — the server mints that (uniqueness is a
-  // table-wide question) and it arrives with `CREATE_RESOLVE`. Keyed on the
-  // slug alone: slugs are stable across renames, so a rename does not churn
-  // history, and a cluster the user has not explicitly selected (deep link,
-  // first-cluster fallback) leaves the URL exactly as it found it.
+  // ⚠ Effect, not inline in `selectCluster`: an optimistic cluster is selected
+  // BEFORE it has a slug (server mints it, arrives via `CREATE_RESOLVE`). Keyed
+  // on slug alone — stable across renames, and an unselected cluster (deep
+  // link, first-cluster fallback) leaves the URL untouched.
   const activeSlug = cluster && cluster.id === clusterId ? cluster.slug : null;
   useEffect(() => {
     if (activeSlug) replaceUrl(`/${workspaceSegment}/ontology/${activeSlug}`);
   }, [activeSlug, workspaceSegment, replaceUrl]);
 
-  // Permanent, cascading delete of the open cluster — the tab strip is where
-  // clusters live, so it is where they end. Selection moves to the ADJACENT
-  // tab (next, else previous), never to index 0: the `?? clusters[0]` display
-  // fallback would land on an unrelated board and read as the app having
-  // jumped on its own (skills-browser-core's handleDeleted pattern).
+  // Permanent cascading delete. Selection moves to the ADJACENT tab (next,
+  // else previous), never index 0: the `?? clusters[0]` display fallback would
+  // land on an unrelated board (skills-browser-core `handleDeleted` pattern).
   const handleDeleteCluster = () => {
     if (!cluster) return;
     const at = graph.clusters.findIndex((c) => c.id === cluster.id);
@@ -130,18 +115,15 @@ export function OntologyView({
       selectCluster(neighbour.id);
       return;
     }
-    // Last cluster: nothing left to address. Drop the dead slug from the URL
-    // so a reload doesn't deep-link at a cluster that no longer exists.
+    // Last cluster: drop the dead slug so a reload doesn't deep-link at it.
     setClusterId(null);
     setSelectedId(null);
     replaceUrl(`/${workspaceSegment}/ontology`);
   };
 
-  // A new cluster creates two objects (a column + its first card), so it
-  // needs headroom of 2. Pre-check that — not just the exact cap — so the
-  // create can't pass at 999/1000 then trip the server cap mid-sequence,
-  // leaving an orphaned partial cluster behind a raw error toast. Over the
-  // cap (or without room for both), open the upgrade prompt instead.
+  // ⚠ New cluster creates TWO objects (column + first card) → needs headroom
+  // of 2, not just under-cap. Otherwise a create at 999/1000 trips the server
+  // cap mid-sequence and leaves an orphaned partial cluster.
   const handleCreateCluster = () => {
     if (
       ent.overCap ||
@@ -152,15 +134,13 @@ export function OntologyView({
       setUpgradeOpen(true);
       return;
     }
-    // Synchronous: the tab, its column and its first card are in the reducer
-    // before this returns, so the board switches to them in the same frame as
-    // the click. The three POSTs settle behind the pending rows, and the cap
-    // meter refreshes from `onCreated` when they land.
+    // Synchronous: tab + column + first card land in the reducer before this
+    // returns, so the board switches in the same frame as the click.
     selectCluster(createCluster().id);
   };
 
-  // Cards inherit the column's template fields, relationships, and
-  // actions — server-side, and mirrored locally for the pending row.
+  // Cards inherit column's template fields, relationships, actions —
+  // server-side, mirrored locally for the pending row.
   const handleCreateObject = (
     target: { clusterId: string } | { parentObjectId: string }
   ) => {
@@ -215,9 +195,9 @@ export function OntologyView({
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-          {/* Trackless stadium pills — same language as SegmentedControl
-              (.seg-pill resting, .raised-tab active); hand-composed because
-              of the trailing new-cluster button and pending states. */}
+          {/* Trackless stadium pills — SegmentedControl language (.seg-pill
+              resting, .raised-tab active); hand-composed for the trailing
+              new-cluster button + pending states. */}
           <div className="flex items-center gap-1.5">
             {graph.clusters.map((c) => (
               <button
@@ -249,8 +229,8 @@ export function OntologyView({
               </button>
             )}
           </div>
-          {/* Inert until the cluster is real: an edit typed into a provisional
-              row would debounce a PATCH at an id the server has never seen. */}
+          {/* ⚠ Inert until cluster is real: an edit on a provisional row would
+              debounce a PATCH at an id the server has never seen. */}
           <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-baseline gap-2")}>
             <input
               type="text"
@@ -363,10 +343,7 @@ export function OntologyView({
   );
 }
 
-/**
- * Floats the ontology surface as ONE raised card above the shell's
- * sidebar panel — the global .page-float surface (same as knowledge-v2).
- */
+/** Floats the surface as ONE raised card via the global .page-float. */
 function Frame({ children }: { children?: React.ReactNode }) {
   return (
     <div className="page-float flex flex-col antialiased">{children}</div>

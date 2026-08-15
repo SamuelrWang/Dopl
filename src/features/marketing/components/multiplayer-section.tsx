@@ -1,12 +1,6 @@
 import { MultiplayerCard, type MultiplayerCardProps } from "./multiplayer-card";
 import { AgentProfileVisual, ChatVisual, ToolGridVisual } from "./multiplayer-visuals";
 
-/**
- * "Multiplayer" — the benefits row between the pinned banner scene and the
- * folder deck. Eyebrow + a large, light-weight left-aligned heading, then three
- * equal cards. Add or reorder cards by editing BENEFITS; the card markup is
- * MultiplayerCard and the faux visuals are ./multiplayer-visuals.
- */
 const BENEFITS: MultiplayerCardProps[] = [
   {
     visual: <ChatVisual />,

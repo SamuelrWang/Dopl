@@ -21,11 +21,10 @@ import {
 
 /**
  * Consent service — the human-in-the-loop gate as server-side rows so web and
- * desktop share one source of truth. A caller may only ever raise / read /
- * decide requests where THEY are the operator (`operator_user_id = ctx.userId`
- * always, never from the body), so this surface can't be used to spoof a
- * request at, or peek at, another operator's machine. Writes go through the
- * service role; the operator-only rule is enforced here.
+ * desktop share one source of truth. ⚠ A caller may only raise / read / decide
+ * requests where THEY are the operator (`operator_user_id = ctx.userId` always,
+ * NEVER from the body). Writes go through the service role, so the operator-only
+ * rule is enforced HERE and nowhere else.
  */
 
 /** Hydrate requester display onto a set of consent rows (inbound cards). */
@@ -45,65 +44,42 @@ async function hydrateOne(row: ConsentRequestRow): Promise<ChannelConsentRequest
 }
 
 /**
- * CONSUME-TIME TRUST RE-VERIFICATION (CHANNELS-AUDIT C-19 / F-174).
+ * CONSUME-TIME TRUST RE-VERIFICATION.
  *
- * An `auto_allowed` row is born with `expires_at: null` and nothing ever
- * sweeps it, so trust used to be checked exactly ONCE — at create. After that
- * the row authorized a spawn forever: the operator could revoke the rule, or
- * the trusted teammate could leave the workspace, and the stored row still
- * came back as an allow the desktop honored.
+ * ⚠ An `auto_allowed` row is born with `expires_at: null` and nothing sweeps it,
+ * so trust checked once at create authorizes a spawn FOREVER — the operator can
+ * revoke the rule, or the teammate leave the workspace, and the stored row still
+ * reads as an allow. The row is not the authority; the row PLUS a live rule is.
  *
- * The row is not the authority; the row PLUS a live rule is. So every server
- * path that can hand an `auto_allowed` row to the machine that CONSUMES it
- * re-derives the rule first and, when it is gone, retires the row to
- * `expired`. That is the desktop watcher's existing terminal path
- * (`mapStatus` → 'expire' → `inboundExpired`), so no desktop change is needed
- * and **old builds fail closed too** — which is the whole reason this lives on
- * the server read path rather than in the client.
+ * So every server path that can hand an `auto_allowed` row to the machine that
+ * CONSUMES it re-derives the rule and, when it is gone, retires the row to
+ * `expired` — the desktop watcher's existing terminal path (`mapStatus` →
+ * 'expire' → `inboundExpired`). ⚠ Lives on the SERVER read path precisely so old
+ * desktop builds fail closed too.
  *
- * WHY NOT A SWEEP IN `deleteTrustRule`. A revocation hook sees only explicit
- * revocations, and it covers only half the cases: `isTrustedRequester` also
- * re-checks live workspace membership, so a teammate who simply LEFT stops
- * auto-allowing here with no rule ever deleted. That is the same doctrine
- * `trust-service.ts` already states for the rule; this extends it to the row.
+ * ⚠ Not a sweep in `deleteTrustRule`: a revocation hook sees only explicit
+ * revocations, and `isTrustedRequester` also re-checks live workspace
+ * membership, so a teammate who simply LEFT stops auto-allowing with no rule
+ * ever deleted.
  *
- * THE AUDIT-TRAIL ARGUMENT IS WEAKER THAN IT READS, and this is the honest
- * version. It holds for `getConsentRequest`: a poll happens while the row is
- * still in flight, so retiring it there rewrites nothing that ran. It does NOT
- * hold for the two create-converge paths. The desktop replays creates on
- * crash-recovery, and a replay whose settled-map entry was lost re-raises a
- * trigger whose row was ALREADY consumed — `revalidateAutoAllow` then retires
- * that consumed row to `expired`, which is exactly the audit rewrite the sweep
- * was rejected for ("your agent ran N times without asking you" loses a row it
- * should have kept). Accepted deliberately: the alternative is handing a
- * machine a live allow under a revoked rule, and failing closed on an
- * already-finished unit of work costs a trail entry, not a spawn. It is a
- * nuance of the audit trail, not a defense of the check.
+ * ⚠ NOT on the list read. `listConsentRequests` is the audit surface and nothing
+ * authorizes from it (`decideConsentRequest` CASes on `pending`), so sweeping
+ * there rewrites settled history for rows that already did their work. Accepted
+ * cost: a crash-recovery replay can retire an already-consumed row, losing a
+ * trail entry — cheaper than handing a machine a live allow under a revoked rule.
  *
- * NOT ON THE LIST READ. `listConsentRequests` is the audit surface and nothing
- * authorizes from it (`decideConsentRequest` CASes on `pending`, so an
- * `auto_allowed` row is not decidable there). Sweeping on a list read would
- * rewrite settled history for rows that already did their work.
- *
- * THE GUARD IS HTTP-LAYER ONLY. Realtime and PostgREST hand out the RAW row,
- * never this function's verdict, so anything that authorizes off a subscription
- * payload bypasses it entirely. Both current consumers are invalidation-only by
- * contract — the desktop's `ui-sync.js` states it outright ("an event is a
- * DOORBELL, never content") and the renderer refetches through the authed API —
- * so the guard is in front of every path that can actually consume a row today.
- * A future optimization that READS the payload instead of refetching would step
- * around it; that is the thing not to do.
- *
- * Running sessions are untouched by construction: this changes what the ROW
- * authorizes NEXT, never what is already executing.
+ * ⚠ HTTP-LAYER ONLY. Realtime and PostgREST hand out the RAW row, never this
+ * verdict. Both current consumers are invalidation-only by contract (`ui-sync.js`
+ * — "an event is a DOORBELL, never content"). An optimization that READS the
+ * subscription payload instead of refetching steps around this guard entirely.
  */
 async function revalidateAutoAllow(
   ctx: ChannelContext,
   row: ConsentRequestRow
 ): Promise<ConsentRequestRow> {
   if (row.status !== "auto_allowed") return row;
-  // A null requester is an `ON DELETE SET NULL` from a deleted account: there
-  // is nobody left to re-verify, so it fails closed instead of authorizing.
+  // ⚠ Null requester = `ON DELETE SET NULL` from a deleted account. Nobody left
+  // to re-verify, so fail closed.
   const stillTrusted =
     row.requester_user_id !== null &&
     (await isTrustedRequester(ctx, row.requester_user_id));
@@ -111,43 +87,34 @@ async function revalidateAutoAllow(
 
   const retired = await collab.expireRevokedAutoAllow(row.id);
   if (retired) return retired;
-  // The CAS matched nothing — another writer moved the row between our read
-  // and the sweep. Re-read rather than return the stale allow we just refused
-  // to honor; a vanished row reads as expired for the same reason (the desktop
-  // already treats a 404 as expired).
+  // CAS matched nothing — another writer moved the row between read and sweep.
+  // ⚠ Re-read rather than return the stale allow we just refused; a vanished row
+  // reads as expired (the desktop already treats a 404 that way).
   const current = await collab.findConsentById(row.id);
   if (!current) return { ...row, status: "expired" };
-  // The re-read is a fresh read of the same id, so it can in principle come
-  // back `auto_allowed` again. Today it cannot — `insertConsentRequest` is the
-  // only writer of that status and it writes on INSERT, so nothing can move a
-  // row back INTO an allow — but that is an invariant of another file, and the
-  // whole point of this branch is that we already refused this row. Fail closed
-  // on the verdict we just reached rather than on a re-read's word: never hand
-  // back an allow this function declined one line earlier.
+  // ⚠ The re-read can in principle come back `auto_allowed` again. Today it
+  // cannot (`insertConsentRequest` is the only writer of that status, on INSERT)
+  // — but that is an invariant of ANOTHER file. Fail closed on the verdict we
+  // just reached; never hand back an allow this function declined a line earlier.
   if (current.status === "auto_allowed") return { ...current, status: "expired" };
   return current;
 }
 
 /**
- * Create a consent request. The desktop POSTs this on an inbound trigger or a
- * drafted outbound reply. The operator is always the caller; the inbound
- * requester is derived from the triggering message (never trusted from the
- * body). If a standing trust rule covers the requester, the row is born
- * `auto_allowed` (decided_by='trust') so the desktop can spawn immediately and
- * the web audit still records it.
+ * Create a consent request. ⚠ Operator is always the caller; the inbound
+ * requester is derived from the triggering message, NEVER trusted from the body.
+ * A standing trust rule births the row `auto_allowed` (decided_by='trust').
  *
- * IDEMPOTENT per (operator, channel, kind, message_seq), for BOTH kinds and at
- * ANY status:
- *   - the desktop replays creates on crash-recovery, so a trigger the human
- *     already DENIED must come back denied — re-raising it would let a trust
- *     rule added in the meantime auto-allow work the human refused;
- *   - an outbound retry must return the same review row, or approving each
- *     copy posts the agent's reply twice.
- * A partial unique index enforces the same key in the database, so two
- * concurrent creates converge instead of racing (the 23505 branch below).
- * Both converge paths run `revalidateAutoAllow` on the stored row: de-duping
- * must not resurrect an auto-allow whose rule was revoked in the meantime —
- * the mirror of the denied-trigger rule above.
+ * ⚠ IDEMPOTENT per (operator, channel, kind, message_seq), BOTH kinds, at ANY
+ * status:
+ *   - desktop replays creates on crash-recovery, so a trigger the human DENIED
+ *     must come back denied — re-raising lets a trust rule added since
+ *     auto-allow work the human refused;
+ *   - an outbound retry must return the SAME review row, or approving each copy
+ *     posts the agent's reply twice.
+ * A partial unique index enforces the key in the DB so concurrent creates
+ * converge (the 23505 branch). Both converge paths run `revalidateAutoAllow` —
+ * de-duping must not resurrect an auto-allow whose rule was revoked.
  */
 export async function createConsentRequest(
   ctx: ChannelContext,
@@ -159,8 +126,8 @@ export async function createConsentRequest(
     throw new ChannelForbiddenError("raise consent for this channel");
   }
 
-  // Sweep BEFORE the de-dupe read: an elapsed row must be read as 'expired',
-  // never handed back as a live 'pending' prompt the desktop then waits on.
+  // ⚠ Sweep BEFORE the de-dupe read — an elapsed row must read as 'expired',
+  // never come back as a live 'pending' prompt the desktop waits on.
   await collab.expireStalePending(ctx.userId);
 
   const messageSeq = input.messageSeq ?? null;
@@ -171,22 +138,18 @@ export async function createConsentRequest(
       input.kind,
       messageSeq
     );
-    // The de-duped row is handed straight back to a machine that will act on
-    // it, so a stored auto-allow is re-verified here too — the crash-recovery
-    // replay is exactly how a row outlives the rule that created it (C-19).
+    // ⚠ The de-duped row goes straight to a machine that will act on it, and the
+    // crash-recovery replay is exactly how a row outlives its rule.
     if (existing) return hydrateOne(await revalidateAutoAllow(ctx, existing));
   }
 
-  // Inbound: derive the requester from the triggering message's author.
   const requesterUserId =
     input.kind === "inbound" && messageSeq !== null
       ? await collab.findMessageAuthorBySeq(channel.id, messageSeq)
       : null;
 
-  // Standing trust auto-allows an inbound request from a trusted teammate —
-  // re-checked against live workspace membership, never the rule alone. This
-  // is the birth check only; `revalidateAutoAllow` re-runs it every time the
-  // resulting row is handed back to be consumed.
+  // ⚠ Re-checked against live workspace membership, never the rule alone. Birth
+  // check only — `revalidateAutoAllow` re-runs it on every consume.
   const trusted =
     input.kind === "inbound" &&
     requesterUserId !== null &&
@@ -202,8 +165,8 @@ export async function createConsentRequest(
     message_seq: messageSeq,
     summary: input.summary,
     body_preview: input.bodyPreview,
-    // A drafted reply belongs to an outbound review only — the union already
-    // drops it on inbound; this keeps the column honest at the write.
+    // Outbound only — the union already drops it on inbound; this keeps the
+    // column honest at the write.
     proposed_reply: input.kind === "outbound" ? input.proposedReply ?? null : null,
     status: trusted ? "auto_allowed" : "pending",
     decided_by: trusted ? "trust" : null,
@@ -214,7 +177,6 @@ export async function createConsentRequest(
   try {
     return hydrateOne(await collab.insertConsentRequest(insert));
   } catch (err) {
-    // Lost the create race — converge on the stored winner (same key).
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && messageSeq !== null) {
       const raced = await collab.findConsentByTrigger(
         ctx.userId,
@@ -236,11 +198,9 @@ const STATUS_FILTERS: Record<ConsentStatusFilter, string[] | undefined> = {
 };
 
 /**
- * The operator's consent inbox (both kinds), newest first. Defaults to
- * `pending` — the cards awaiting an answer. `decided` / `all` open the audit
- * trail, which is the only way to read the `auto_allowed` rows a trust rule
- * writes: "your agent ran N times without asking you" is the whole
- * justification for recording them.
+ * The operator's consent inbox (both kinds), newest first. Defaults `pending`.
+ * `decided` / `all` open the audit trail — the ONLY way to read the
+ * `auto_allowed` rows a trust rule writes.
  */
 export async function listConsentRequests(
   ctx: ChannelContext,
@@ -248,9 +208,8 @@ export async function listConsentRequests(
 ): Promise<ChannelConsentRequest[]> {
   await collab.expireStalePending(ctx.userId);
   const rows = await collab.listConsentRequests(ctx.userId, {
-    // Operator-scoped is NOT workspace-scoped. See the repository's docblock:
-    // without this the inbox (and the sidebar badge built from it) shows the
-    // operator's pending requests from every workspace they belong to.
+    // ⚠ Operator-scoped is NOT workspace-scoped — without this the inbox (and
+    // the sidebar badge built from it) shows every workspace's requests.
     workspaceId: ctx.workspaceId,
     channelId: opts.channelId,
     statuses: STATUS_FILTERS[opts.status ?? "pending"],
@@ -260,10 +219,8 @@ export async function listConsentRequests(
 
 /**
  * Load one request the caller owns (desktop poll). 404s otherwise.
- *
- * This is THE consume path: the desktop's watcher polls this row and spawns
- * the moment it reads `allowed` / `auto_allowed`, so an auto-allow is
- * re-verified against live trust here before it is handed over (C-19).
+ * ⚠ THE consume path — the watcher spawns the moment it reads `allowed` /
+ * `auto_allowed`, so an auto-allow is re-verified against live trust here.
  */
 export async function getConsentRequest(
   ctx: ChannelContext,
@@ -277,16 +234,14 @@ export async function getConsentRequest(
 /**
  * Record the operator's Allow / Deny (or Send / Cancel) decision.
  *
- * Two writers are normal here, not exceptional: the desktop's native dialog
- * and the web card both answer the same row, and the desktop mirrors its
- * local answer back over HTTP. So the pre-read is for authorization only
- * (operator / 404), and the decision itself is a compare-and-swap on
+ * ⚠ Two writers are NORMAL: the desktop dialog and the web card answer the same
+ * row, and the desktop mirrors its local answer back over HTTP. The pre-read is
+ * for AUTHORIZATION ONLY; the decision is a compare-and-swap on
  * `status = 'pending'`. A lost race is a 409, never a silent overwrite — a
- * human's Deny must not be clobbered by a late Allow arriving from the other
- * surface.
+ * human's Deny must not be clobbered by a late Allow from the other surface.
  *
- * `surface` is the audit trail of WHICH human surface answered; a standing
- * trust rule writes 'trust' at create time and is not a decision path here.
+ * `surface` is the audit trail of WHICH human surface answered; a trust rule
+ * writes 'trust' at create time and is not a decision path here.
  */
 export async function decideConsentRequest(
   ctx: ChannelContext,
@@ -305,9 +260,8 @@ export async function decideConsentRequest(
     decided_at: new Date().toISOString(),
   });
   if (!updated) {
-    // The CAS found the row no longer pending: someone else decided it
-    // between the read and the write. Re-read so the 409 names the status
-    // that actually won.
+    // CAS found the row no longer pending. Re-read so the 409 names the status
+    // that actually WON.
     const winner = await collab.findConsentById(id);
     throw new ConsentAlreadyDecidedError(winner?.status ?? "decided");
   }
@@ -316,8 +270,8 @@ export async function decideConsentRequest(
 
 /**
  * Fetch a request and assert the caller is its operator in this workspace.
- * A missing row, a foreign operator, or a cross-workspace id all collapse to
- * one not-found so ids can't be probed.
+ * ⚠ Missing row, foreign operator, and cross-workspace id all collapse to ONE
+ * not-found so ids cannot be probed.
  */
 async function requireOperatorRow(
   ctx: ChannelContext,

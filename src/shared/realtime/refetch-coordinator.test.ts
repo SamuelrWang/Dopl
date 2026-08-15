@@ -52,12 +52,10 @@ describe("createRefetchCoordinator", () => {
     const c = createRefetchCoordinator(run);
 
     c.request(true);
-    // A write settled but others remain (still busy) — stay deferred.
     c.settle(true);
     expect(run).not.toHaveBeenCalled();
     expect(c.isDeferred()).toBe(true);
 
-    // Last write drains — now it runs.
     c.settle(false);
     expect(run).toHaveBeenCalledTimes(1);
   });
@@ -71,7 +69,7 @@ describe("createRefetchCoordinator", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(c.isDeferred()).toBe(false);
 
-    // A later settle must NOT re-run the already-satisfied refetch.
+    // ⚠ A later settle must NOT re-run the already-satisfied refetch.
     c.settle(false);
     expect(run).toHaveBeenCalledTimes(1);
   });

@@ -1,13 +1,8 @@
 /**
- * INVARIANT SUITE — GET /api/billing/status, the credits + cancel fields.
- *
- * This one route feeds every billing surface (`useWorkspaceEntitlements`), so
- * the pins here are about the shape crossing the wire:
- *   - `credits` is present for EVERY plan, not just capped free workspaces;
- *   - it is computed from the SAME plan verdict and period helpers the consume
- *     path uses, so the meter cannot disagree with what enforcement charges;
- *   - a workspace with no usage row reads 0, not an error;
- *   - `cancelAtPeriodEnd` rides the same payload.
+ * INVARIANT SUITE — GET /api/billing/status. Feeds every billing surface, so the pins are about
+ * the wire shape: `credits` present for EVERY plan (not just capped free ones); computed from the
+ * SAME plan verdict and period helpers the consume path uses, so the meter cannot disagree with
+ * enforcement; no usage row reads 0, not an error; `cancelAtPeriodEnd` rides the same payload.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

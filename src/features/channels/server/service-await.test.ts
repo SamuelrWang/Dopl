@@ -1,17 +1,13 @@
 /**
- * Unit tests for the await HOLD (`awaitNewMessages`) — the Q8 egress diet.
- * Repositories are mocked; `service-reads` (the existence probe + the access
- * recheck) runs for real, so these also pin which REPO calls a tick makes.
- *
- * Three invariants, in order of how badly they break things:
- *  1. SECURITY — no message is DELIVERED to a caller who lost access. The
- *     recheck no longer runs every tick, so the hold must revalidate on the
- *     return path, unconditionally, before it reads rows.
- *  2. CONTRACT — same cursor semantics, same rows, same "returns the instant
- *     a message arrives", same 404 on revocation. Callers must not be able to
- *     tell the diet happened.
- *  3. EGRESS — a quiet tick issues ONE minimal existence query and no row
- *     read, and the recheck runs on the first held tick then every 10th.
+ * The await HOLD (`awaitNewMessages`). Repositories mocked; `service-reads` (the
+ * existence probe + access recheck) runs for real, so these also pin which REPO
+ * calls a tick makes. Three invariants:
+ *  1. ⚠ SECURITY — no message is DELIVERED to a caller who lost access. The
+ *     recheck does not run every tick, so the hold must revalidate on the RETURN
+ *     path, unconditionally, before it reads rows.
+ *  2. CONTRACT — same cursor semantics, rows, instant return, 404 on revocation.
+ *  3. EGRESS — a quiet tick issues ONE minimal existence query and no row read;
+ *     recheck runs on the first held tick then every 10th.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -73,9 +69,8 @@ function membership(): ChannelMemberRow {
 }
 
 /**
- * Run a hold that ends after EXACTLY `ticks` held ticks. Bounded by the abort
- * signal rather than the wall clock so tick counts are deterministic (and the
- * suite never sleeps): `probe(tick)` decides whether that tick sees a message.
+ * Hold ending after EXACTLY `ticks` held ticks. Bounded by the abort signal, not
+ * the wall clock, so counts are deterministic and the suite never sleeps.
  */
 function holdFor(
   ticks: number,
@@ -101,7 +96,6 @@ function holdFor(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Access is intact: private channel, caller still a member.
   vi.mocked(repo.findChannelAccess).mockResolvedValue({
     id: CHAN,
     visibility: "private",
@@ -126,8 +120,8 @@ describe("awaitNewMessages — security: access is proven before delivery", () =
       return reads === 1 ? [] : [messageRow(11)];
     });
 
-    // The hit lands on tick 2 — NOT a scheduled recheck tick — so the only
-    // thing that can prove access before delivery is the return-path recheck.
+    // Hit on tick 2, NOT a scheduled recheck tick, so only the return-path
+    // recheck can prove access before delivery.
     const result = await holdFor(30, (tick) => {
       order.push("probe");
       return tick >= 2;
@@ -145,8 +139,7 @@ describe("awaitNewMessages — security: access is proven before delivery", () =
   });
 
   it("cuts off a member whose access was revoked mid-hold, on the tick a message lands", async () => {
-    // Quiet until tick 3, so the loss lands BETWEEN scheduled rechecks: only
-    // the return-path recheck can catch it.
+    // Quiet until tick 3, so the loss lands BETWEEN scheduled rechecks.
     let seen = 0;
     // Tick 1's scheduled recheck passes; membership is revoked after it.
     vi.mocked(repo.hasMembership).mockImplementation(async () => seen < 2);
@@ -157,7 +150,7 @@ describe("awaitNewMessages — security: access is proven before delivery", () =
         return tick >= 3;
       })
     ).rejects.toBeInstanceOf(ChannelNotFoundError);
-    // The rows for the message that arrived were NEVER read, let alone returned.
+    // ⚠ Rows for the arrived message were NEVER read, let alone returned.
     expect(repoMessages.listMessages).toHaveBeenCalledTimes(1); // tick 0 only
   });
 
@@ -177,8 +170,7 @@ describe("awaitNewMessages — security: access is proven before delivery", () =
   });
 
   it("still ends the hold on the scheduled recheck while nothing is arriving", async () => {
-    // No message ever lands: the ONLY thing that can notice the revocation is
-    // the periodic recheck (bounded staleness), and it must still fire.
+    // No message lands, so only the periodic recheck can notice the revocation.
     vi.mocked(repo.hasMembership).mockResolvedValue(false);
     await expect(holdFor(30)).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
@@ -204,8 +196,8 @@ describe("awaitNewMessages — caller contract is unchanged", () => {
     const result = await holdFor(30);
 
     expect(result.messages.map((m) => m.seq)).toEqual([11, 12]);
-    // Tick 0 is a direct row read: the desktop's `timeoutMs=1` wake path must
-    // not pay an extra round trip, and access was just proven by the resolve.
+    // Tick 0 is a direct row read — the desktop's `timeoutMs=1` wake path must
+    // not pay an extra round trip, and the resolve just proved access.
     expect(repoMessages.hasMessagesAfter).not.toHaveBeenCalled();
     expect(repo.findChannelAccess).not.toHaveBeenCalled();
     expect(result.revalidations).toBe(0);
@@ -218,7 +210,7 @@ describe("awaitNewMessages — caller contract is unchanged", () => {
       since: 42,
       limit: 200,
     });
-    // Third arg is the (unset) author filter — see the exclusion suite below.
+    // Third arg is the (unset) author filter.
     expect(repoMessages.hasMessagesAfter).toHaveBeenCalledWith(CHAN, 42, undefined);
   });
 
@@ -229,8 +221,8 @@ describe("awaitNewMessages — caller contract is unchanged", () => {
   });
 
   it("keeps holding when an existence hit reads back empty (never `[] + not timed out`)", async () => {
-    // A probe hit whose rows vanish would otherwise return the one shape no
-    // caller can interpret: no messages AND timedOut false.
+    // ⚠ A probe hit whose rows vanish must not return the uninterpretable
+    // shape: no messages AND timedOut false.
     vi.mocked(repoMessages.listMessages).mockResolvedValue([]);
 
     const result = await holdFor(5, () => true);
@@ -265,14 +257,13 @@ describe("awaitNewMessages — egress shape (Q8)", () => {
   it("a quiet tick issues ONE existence probe and NO row read", async () => {
     const result = await holdFor(6);
     expect(vi.mocked(repoMessages.hasMessagesAfter).mock.calls).toHaveLength(6);
-    // The only row read in the whole hold is tick 0's.
     expect(repoMessages.listMessages).toHaveBeenCalledTimes(1);
     expect(result.polls).toBe(7);
   });
 
   it("rechecks access on the first held tick, then every 10th — not every tick", async () => {
     const result = await holdFor(25);
-    // 25 held ticks -> rechecks at ticks 1, 11, 21 = 3 (was 25 before Q8).
+    // 25 held ticks → rechecks at 1, 11, 21 = 3.
     expect(result.revalidations).toBe(3);
     expect(repo.findChannelAccess).toHaveBeenCalledTimes(3);
     expect(repo.hasMembership).toHaveBeenCalledTimes(3);
@@ -281,13 +272,13 @@ describe("awaitNewMessages — egress shape (Q8)", () => {
 
   it("holds the recheck cadence across a LONG hold (the 240s assembled case)", async () => {
     const result = await holdFor(160);
-    // 160 ticks: rechecks at 1, 11, … 151 = 16, not 160.
+    // 160 ticks → rechecks at 1, 11, … 151 = 16.
     expect(result.revalidations).toBe(16);
   });
 
   it("does not double-recheck when a message lands on a scheduled recheck tick", async () => {
-    // Tick 1 is both a scheduled recheck AND the tick that hits: the return
-    // path must reuse that proof rather than issue a second identical pair.
+    // Tick 1 is both a scheduled recheck AND the hit — the return path must
+    // reuse that proof, not issue a second identical pair.
     vi.mocked(repoMessages.listMessages)
       .mockResolvedValueOnce([])
       .mockResolvedValue([messageRow(11)]);
@@ -302,7 +293,7 @@ describe("awaitNewMessages — egress shape (Q8)", () => {
   it("uses the NARROW access projections, never the full-row lookups", async () => {
     vi.mocked(repo.findMembership).mockResolvedValue(membership());
     await holdFor(6);
-    // The per-tick recheck must never pull a whole channel / member row.
+    // ⚠ Per-tick recheck must never pull a whole channel / member row.
     expect(repo.findChannelById).not.toHaveBeenCalled();
     expect(repo.findMembership).not.toHaveBeenCalled();
     expect(repo.findChannelAccess).toHaveBeenCalledWith(WS, CHAN);
@@ -312,12 +303,10 @@ describe("awaitNewMessages — egress shape (Q8)", () => {
 
 describe("awaitNewMessages — author exclusion (opt-in)", () => {
   /**
-   * A caller that posts while its own await is armed used to wake itself on
-   * its own echo, which is exactly the multi-step case the hold exists for.
-   * These run BOTH repo mocks over one fake table that honours the filter, so
-   * they pin the forwarding and the loop's behaviour together — a filter
-   * threaded to the row read but not to the existence probe would show up
-   * here as a hold that spins instead of one that keeps waiting.
+   * A caller posting while its own await is armed must not wake on its own echo.
+   * ⚠ Both repo mocks run over one fake table that honours the filter — a filter
+   * threaded to the row read but NOT to the existence probe shows up here as a
+   * hold that spins instead of one that keeps waiting.
    */
   function holdOver(
     rows: ChannelMessageRow[],
@@ -375,9 +364,8 @@ describe("awaitNewMessages — author exclusion (opt-in)", () => {
   });
 
   it("an existence probe that sees only OWN messages never triggers a row fetch", async () => {
-    // The own message lands mid-hold. If the probe were unfiltered it would
-    // hit every tick and the hold would fetch, read back empty and continue —
-    // a two-query spin per tick for the rest of the hold.
+    // ⚠ Unfiltered, the probe hits every tick and the hold fetches, reads back
+    // empty and continues — a two-query spin per tick for the rest of the hold.
     const rows: ChannelMessageRow[] = [];
     const result = await holdOver(rows, {
       excludeAuthor: USER,
@@ -387,7 +375,6 @@ describe("awaitNewMessages — author exclusion (opt-in)", () => {
       },
     });
     expect(result.messages).toEqual([]);
-    // Tick 0's direct read is the only row read in the whole hold.
     expect(repoMessages.listMessages).toHaveBeenCalledTimes(1);
     expect(result.polls).toBe(7); // 1 read + 6 probes, no fetch-and-discard
   });
@@ -403,8 +390,8 @@ describe("awaitNewMessages — author exclusion (opt-in)", () => {
   });
 
   it("without the option, an own-authored message ends the hold exactly as before", async () => {
-    // The desktop listener depends on this: it NEEDS its own account's
-    // messages for thread targeting and requester-window routing.
+    // Desktop listener NEEDS its own account's messages for thread targeting
+    // and requester-window routing.
     const result = await holdOver([ownRow(11), messageRow(12)]);
     expect(result.messages.map((m) => m.seq)).toEqual([11, 12]);
     expect(repoMessages.listMessages).toHaveBeenCalledWith(CHAN, {
@@ -417,10 +404,9 @@ describe("awaitNewMessages — author exclusion (opt-in)", () => {
 
 describe("awaitNewMessages — telemetry survives a bad ending (L6)", () => {
   it("leaves its counts in the caller's object when the hold THROWS", () => {
-    // A hold ended by a mid-hold revocation or soft-delete raises
-    // ChannelNotFoundError, so it never reaches a return value. With the counts
-    // living only in that return value, exactly the holds worth measuring
-    // during an egress incident were the ones that logged nothing.
+    // ⚠ A hold ended by mid-hold revocation/soft-delete throws
+    // ChannelNotFoundError and never reaches a return value, so counts living
+    // only there lose exactly the holds worth measuring.
     const counters: AwaitHoldCounters = { polls: 0, revalidations: 0 };
     let seen = 0;
     vi.mocked(repo.hasMembership).mockImplementation(async () => seen < 2);
@@ -437,7 +423,7 @@ describe("awaitNewMessages — telemetry survives a bad ending (L6)", () => {
     )
       .rejects.toBeInstanceOf(ChannelNotFoundError)
       .then(() => {
-        // tick 0's row read + probes on ticks 1..3, and the recheck that threw.
+        // tick 0 row read + probes on ticks 1..3 + the recheck that threw.
         expect(counters.polls).toBe(4);
         expect(counters.revalidations).toBe(1);
       });

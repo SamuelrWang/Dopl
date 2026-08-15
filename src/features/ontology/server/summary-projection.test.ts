@@ -1,28 +1,17 @@
 /**
- * INVARIANT SUITE — the ontology SUMMARY projection (launch blocker P0-3).
+ * INVARIANT SUITE — the ontology SUMMARY projection. `getSummary` only stays
+ * the answer while these hold:
  *
- * `GET /api/ontology` did four parallel whole-table pulls with no bound
- * anywhere and shipped every JSONB column with them — `attributes` (schema
- * ceiling: 100 entries, text values to 4000 chars), `methods`, `template`, plus
- * each cluster's `layout`. `dopl_map`, the call the MCP server instructions
- * mandate before every agent's first substantive reply, paid all of it to
- * render cluster names and column names.
+ *   1. NO JSONB LEAVES — absent, not "empty arrays". A reused `mapObjectRow`
+ *      or a `...row` spread puts hundreds of KB back on the hot path silently.
+ *   2. STRUCTURE IDENTICAL to `getSnapshot`'s — `columnIds`/`childIds` must
+ *      assemble the same way, so a map render swaps projections unchanged.
+ *   3. THE RELATIONSHIPS TABLE IS NEVER READ — it grows with the square of the
+ *      graph and no map-shaped render draws it.
+ *   4. A CLIPPED READ SAYS SO — the row ceilings are only defensible while
+ *      truncated is distinguishable from exhausted.
  *
- * `getSummary` is the answer, and it only stays the answer while these hold:
- *
- *   1. NO JSONB LEAVES. Not "empty arrays" — absent. A future `mapObjectRow`
- *      reused here, or a helpful `...row` spread, puts hundreds of KB back on
- *      the hot path and nothing else in the system would notice.
- *   2. THE STRUCTURE IS IDENTICAL to `getSnapshot`'s. The whole point is that a
- *      map-shaped render swaps projections without changing a line, so
- *      `columnIds` / `childIds` must assemble the same way.
- *   3. THE RELATIONSHIPS TABLE IS NEVER READ. It is the table that grows with
- *      the square of the graph and the one no map-shaped render draws.
- *   4. A CLIPPED READ SAYS SO. The new row ceilings are only defensible while
- *      a truncated view is distinguishable from an exhausted one.
- *
- * Repository layers are mocked, so this is the projection under test and
- * nothing else.
+ * Repository layers mocked: the projection is what's under test.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -105,8 +94,8 @@ describe("getSummary — what does NOT cross the wire", () => {
   it("ships no attributes, methods or template on any object", async () => {
     const summary = await getSummary(CTX);
     for (const object of Object.values(summary.objects)) {
-      // `not.toHaveProperty`, not `toEqual([])`: an empty array is a claim that
-      // the object has none, which is a different — and wrong — statement.
+      // `not.toHaveProperty`, not `toEqual([])`: an empty array claims the
+      // object HAS none — a different, wrong statement.
       expect(object).not.toHaveProperty("attributes");
       expect(object).not.toHaveProperty("methods");
       expect(object).not.toHaveProperty("template");
@@ -172,8 +161,7 @@ describe("getSummary — the row ceilings are reported, not silent", () => {
   });
 
   it("reports truncated:true when the object read comes back AT its ceiling", async () => {
-    // At the ceiling is indistinguishable from over it, so it counts as
-    // clipped — the one direction that cannot mislead a caller.
+    // At-ceiling is indistinguishable from over → counts as clipped.
     prime({
       objects: Array.from({ length: ONTOLOGY_READ_LIMITS.objects }, (_, i) => ({
         id: `o-${i}`,

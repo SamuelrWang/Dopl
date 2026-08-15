@@ -1,13 +1,10 @@
 /**
- * The ontology seed's WRITE SHAPE and its cross-reference resolution.
+ * The ontology seed's WRITE SHAPE and cross-reference resolution.
  *
- * This runs inside the post-signup redirect, so the count of awaited
- * round-trips is a product property, not a micro-optimisation: it used to
- * be ~34 (an insert AND an update per object, a membership insert each, a
- * delete+insert replace-set per relationship source). The assertions below
- * pin the four-statement form, and — more importantly — pin that batching
- * did not cost the graph anything: same objects, same parentage, same
- * ordering, same resolved attribute ids, same relationship endpoints.
+ * ⚠ Runs inside the post-signup redirect, so the awaited round-trip count is a
+ * product property. Pins the four-statement form AND that batching cost the
+ * graph nothing: same objects, parentage, ordering, resolved attribute ids and
+ * relationship endpoints.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -78,12 +75,10 @@ describe("ontology seed — write shape", () => {
   it("never inserts an object it then updates", async () => {
     await seedWorkspace({ workspaceId: WS, userId: USER }, REFS);
 
-    // The old shape was insertObject → updateObject on the SAME row, to
-    // add subtitle/template. Both columns are now set at insert time.
+    // subtitle/template set at insert time, not by a follow-up update.
     expect(repo.insertObject).not.toHaveBeenCalled();
     expect(repo.updateObject).not.toHaveBeenCalled();
     expect(repo.insertMembership).not.toHaveBeenCalled();
-    // The replace-set form deletes rows that cannot exist in a seed.
     expect(repo.replaceRelationshipsForSource).not.toHaveBeenCalled();
   });
 
@@ -129,7 +124,6 @@ describe("ontology seed — the graph the batch produces", () => {
         const row = byName.get(child.name);
         expect(row).toBeDefined();
         const authored = child.attributes.length;
-        // Nothing is dropped when every ref resolves.
         expect(row?.attributes).toHaveLength(authored);
         for (const attr of row?.attributes ?? []) {
           if (attr.value.kind === "text") continue;
@@ -139,9 +133,7 @@ describe("ontology seed — the graph the batch produces", () => {
         }
       }
     }
-    // The cross-reference threading is the reason the seed is ordered
-    // knowledge → skills → ontology; a corpus with no link attributes
-    // would make this test vacuous.
+    // ⚠ Seed order is knowledge → skills → ontology; cross-refs depend on it.
     expect(linkAttributes).toBeGreaterThan(0);
   });
 
@@ -210,7 +202,6 @@ describe("ontology seed — the graph the batch produces", () => {
         );
       }
     }
-    // Distinct positions per source, so the board's ordering is stable.
     const bySource = new Map<string, number[]>();
     for (const e of edges) {
       bySource.set(e.sourceObjectId, [

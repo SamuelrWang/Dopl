@@ -1,38 +1,23 @@
 import "server-only";
 
 /**
- * Service layer for the knowledge feature — the public surface.
- *
- * Single source of truth — REST handlers (Item 2) and MCP tools (Item 4)
- * both call into this. The service:
- *   - Builds `KnowledgeContext` from auth metadata at the route boundary.
- *   - Enforces the per-base `agent_write_enabled` toggle for any
- *     `source: "agent"` mutation.
- *   - Resolves slugs / IDs into rows, validates workspace scope, throws
- *     domain errors that the route layer maps to HTTP responses.
- *   - Walks the folder tree for cycle detection on `moveFolder`.
- *   - Lazy-seeds brand-new workspaces with the legacy fixtures via
- *     `listBases`.
- *
- * This module is a barrel: the implementation lives in per-domain
- * siblings so each file has one clear purpose. Cross-cutting gates and
- * helpers used by more than one domain live in `service-shared.ts`.
+ * Public surface of the knowledge service — a BARREL. Single source of truth
+ * for REST handlers and MCP tools alike; implementation lives in per-domain
+ * siblings:
  *   - `service-shared.ts`   — context, visibility gates, write gate, helpers
  *   - `service-bases.ts`    — base reads (`getBaseById` is the shared gate)
  *   - `service-base-writes.ts` — base create/update/delete
  *   - `service-folders.ts`  — folder reads + writes + `getBaseTree`
  *   - `service-entries.ts`  — entry reads + writes + `resolveEntryRefs`
  *   - `service-paths.ts`    — path-addressed reads + writes
- *   - `service-storage.ts`  — the per-KB storage cap (growth gate + limit)
- *   - `service-stars.ts`    — PER-USER base stars (a favourite, scoped to ctx.userId)
+ *   - `service-storage.ts`  — per-KB storage cap (growth gate + limit)
+ *   - `service-stars.ts`    — PER-USER base stars, scoped to ctx.userId
  *   - `service-seed.ts`     — workspace fixture seeding
  *
- * DELETES ARE PERMANENT (2026-08-07). Soft-delete, trash listing, restore
- * and purge are gone — `delete*` removes the rows immediately. The
- * `deleted_at` columns and the read-path `deleted_at IS NULL` filters stay
- * so rows tombstoned before the switch remain hidden until the one-time
- * cleanup migration (`20260807110000_purge_soft_deleted_rows.sql`) sweeps
- * them.
+ * ⚠ DELETES ARE PERMANENT. No soft-delete, trash, restore or purge. The
+ * `deleted_at` columns and read-path `deleted_at IS NULL` filters remain only
+ * so pre-switch tombstones stay hidden until
+ * `20260807110000_purge_soft_deleted_rows.sql` sweeps them.
  */
 
 export { buildKnowledgeContext, assertBaseWritable } from "./service-shared";

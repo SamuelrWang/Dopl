@@ -1,16 +1,11 @@
 /**
  * meta-tools.ts — `list_workspaces` and `current_workspace`.
  *
- * Split out of `server.ts` (§2, the 2026-07-20 op-dispatch precedent: the
- * registrar stays thin and the handlers are siblings). These two are the only
- * tools `server.ts` itself authored — every other tool comes from a registrar
- * under `tools/` — so they are the ones that made the registrar fat.
- *
- * They are USER-scoped, not workspace-scoped: a membership lookup does not need
- * a workspace, which is why they register through `registerMetaTool` (no
- * injected `workspace=` arg) and report the session default in their footer.
- * Everything else the domain path enforces — the four gates, `strictInput` —
- * applies to them identically; see `registrar.ts`.
+ * ⚠ USER-scoped, not workspace-scoped: a membership lookup needs no workspace,
+ * which is why they register through `registerMetaTool` (no injected
+ * `workspace=` arg) and report the session default in their footer. Everything
+ * else the domain path enforces — the four gates, `strictInput` — applies
+ * identically; see `registrar.ts`.
  */
 
 import { callerStatusLine, sessionLines, type CallerIdentity } from "./tools/identity.js";
@@ -29,21 +24,18 @@ export interface MetaToolDeps {
   caller: CallerIdentity;
 }
 
-// ── Workspace directory tools (M-2) ───────────────────────────────
-// Two read-only tools that let the agent discover its workspaces and
-// see what a no-arg call resolves to. Targeting is per-call only: pass
-// the `workspace=` arg injected by `registerTool` (M-1). There is no
-// sticky `set_workspace` — the connection is stateless, so a "switch"
-// couldn't persist anyway.
+// Two read-only tools: discover your workspaces, and see what a no-arg call
+// resolves to. ⚠ Targeting is PER-CALL only (`workspace=`, injected by
+// `registerTool`). There is no sticky `set_workspace` — the connection is
+// stateless, so a "switch" could not persist.
 export function registerWorkspaceMetaTools(
   registerMetaTool: RegisterTool,
   { directory, activeWorkspace, caller }: MetaToolDeps,
 ): void {
   /**
-   * The caller's own identity as a standalone block, for the meta-tools whose
-   * answers can be read without a footer. Same record, same wording as the
-   * footer and as `whoami` — one definition, so two surfaces cannot drift into
-   * disagreeing about the same session.
+   * Caller identity as a standalone block, for the meta-tools whose answers can
+   * be read without a footer. ⚠ Same record and wording as the footer and
+   * `whoami` — one definition, so two surfaces cannot disagree about a session.
    */
   function callerBlock(): string[] {
     return [...sessionLines(caller), callerStatusLine(caller).trim(), ""];
@@ -96,13 +88,10 @@ export function registerWorkspaceMetaTools(
     "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one membership (or a request pin); when the caller belongs to 2+ workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').",
     {},
     async () => {
-      // WHERE THE CALLER LINE COMES FROM, per branch. With a session default
-      // the footer fires and already carries it, so rendering it here too would
-      // print the caller twice in one response. Without one — the 2+-membership
-      // branch below — `appendDoplStatus` returns early and the response would
-      // carry no identity at all, which is precisely the state an agent is in
-      // when it reaches for this tool. So: footer when there is one, rendered
-      // here when there is not, one definition either way.
+      // ⚠ Caller line per branch: with a session default the footer already
+      // carries it (rendering here too prints the caller twice); without one
+      // `appendDoplStatus` returns early and the response carries NO identity —
+      // exactly the state an agent is in when it reaches for this tool.
       if (activeWorkspace) {
         const lines = [
           `A no-\`workspace=\` call targets ${inlineOr(activeWorkspace.name, UNNAMED_WORKSPACE)}:`,
@@ -114,7 +103,6 @@ export function registerWorkspaceMetaTools(
           content: [{ type: "text" as const, text: lines.join("\n") }],
         };
       }
-      // No session default → surface the directory so the agent can pick.
       const list = await directory.getWorkspaceList();
       if (list.length === 0) {
         return {
@@ -134,10 +122,9 @@ export function registerWorkspaceMetaTools(
         "",
       ];
       for (const w of list) {
-        // The id joins the slug here as it does everywhere else. This branch
-        // used to print the slug alone, so the one surface an agent reaches for
-        // when it does not know where it is was also the one that withheld the
-        // handle nobody can forge.
+        // ⚠ Id joins the slug here as everywhere else — this is the surface an
+        // agent reaches for when it does not know where it is, so it must not
+        // withhold the handle nobody can forge.
         lines.push(
           `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})`,
         );

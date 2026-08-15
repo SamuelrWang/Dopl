@@ -1,17 +1,5 @@
-/**
- * The banner's opening beat: a Dopl desktop notification, seated top-right of
- * the picture, sized and laid out like a real macOS notification (app icon at
- * the left, app/title line, message body, "now" at the right).
- *
- * The copy is a REAL product surface — a channels consent request, where one
- * member's agent asks for approval before posting into a channel it does not
- * own. It is the thing the scene then clicks.
- *
- * Purely presentational. Its box is the glass wrapper (driven by
- * use-banner-scrub.ts) and its fade is `--lp-notif-opacity` on the scene; this
- * component owns neither. The icon is the existing favicon asset — the same one
- * `logo.tsx` uses for the brand lockup — so no new asset enters the tree.
- */
+/** Faux macOS notification. Box comes from the glass wrapper
+ *  (use-banner-scrub.ts), fade from `--lp-notif-opacity` on the scene. */
 export function NotificationCard() {
   return (
     <div className="lp-banner-notif">

@@ -8,12 +8,9 @@ interface WorkspaceNameStepProps {
   onSubmit: (name: string, description: string) => void;
 }
 
-/**
- * Onboarding step 3 — name the auto-provisioned workspace and, optionally,
- * describe it. Light theme to match the survey/connect steps (auth-3D kit,
- * not the token surface). The name is encouraged but optional: leaving it
- * blank lets the server keep the "{FirstName}'s Workspace" fallback.
- */
+/** Onboarding step 3 — name the auto-provisioned workspace (+ optional
+ *  description). Auth-3D kit, not the token surface, matching steps 1-2. Blank
+ *  name keeps the server's "{FirstName}'s Workspace" fallback. */
 export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

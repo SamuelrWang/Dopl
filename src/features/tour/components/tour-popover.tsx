@@ -4,16 +4,15 @@ import { createPortal } from "react-dom";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { TOUR_FINISH, TOUR_STEPS } from "../tour-steps";
-// From the CORE, not the `next/navigation` binding: the popover is rendered by
-// the core provider, so importing the binding would pull Next back in.
+// ⚠ From the CORE, not the `next/navigation` binding — the core provider
+// renders this, so importing the binding pulls Next back in.
 import { useTour } from "./tour-provider-core";
 import styles from "./tour.module.css";
 
 /**
- * The fixed top-right tour card. Popover-only (no on-page spotlight in v1):
- * a `.bento` surface above page content but below modals. Returns null while
- * the tour is inactive, so it adds no DOM for users who never start it.
- * Portals to <body> so it escapes the shell's stacking context.
+ * Fixed top-right tour card: `.bento` surface above page content, below modals.
+ * Null while inactive, so no DOM for users who never start it. Portals to
+ * <body> to escape the shell's stacking context.
  */
 export function TourPopover() {
   const { stepIndex, next, back, close } = useTour();

@@ -1,11 +1,8 @@
 /**
- * INVARIANT SUITE — seat sync isolation.
- *
- * `syncSeatQuantity` is the single Stripe-touching seat reconciler. This
- * locks its guards (never hit Stripe without a key, without a live Team
- * sub, when the count already matches, or for a flat Solo plan) and the
- * happy path (retrieve sub -> update item quantity -> persist seat_count).
- * Stripe + the billing repository are fully mocked — no network.
+ * INVARIANT SUITE — seat sync. Locks `syncSeatQuantity`'s guards (no Stripe
+ * without a key / live Team sub / a changed count / non-flat plan) and the
+ * happy path (retrieve sub → update item quantity → persist seat_count).
+ * Stripe + billing repository fully mocked, no network.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,8 +11,8 @@ import type { WorkspaceBillingRow } from "./workspace-billing";
 const retrieve = vi.fn();
 const updateItem = vi.fn();
 
-// Keep the real `selectSeatItem` (the multi-item picker under test) while
-// stubbing the Stripe client + config guard.
+// Keep the real `selectSeatItem` (the picker under test); stub the Stripe
+// client + config guard.
 vi.mock("./stripe", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./stripe")>();
   return {
@@ -145,7 +142,6 @@ describe("syncSeatQuantity — reconcile", () => {
 
   it("updates the seat-priced item on a multi-item subscription, not data[0]", async () => {
     vi.stubEnv("STRIPE_PRO_SEAT_PRICE_ID", "price_seat");
-    // First item is a legacy add-on; the seat price is the second item.
     retrieve.mockResolvedValue({
       items: {
         data: [

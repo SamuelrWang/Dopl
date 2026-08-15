@@ -3,37 +3,27 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
 
 /**
- * DATA ACCESS FOR `channel_sessions` — read-session-state's storage (rollback
- * §3.5), both directions: the desktop's push in, and the MCP op's read out.
+ * DATA ACCESS FOR `channel_sessions` — read-session-state's storage, both
+ * directions: the desktop's push in, the MCP op's read out. These two functions
+ * are the only place in the tree that knows the shape of a session row.
  *
- * SPLIT OUT OF `repository-collab.ts` (§2, F-147). That file holds the v1.2
- * collaboration tables (consent, trust, presence) and the write half pushed it
- * to 532 of the 500-line cap. The seam is a real one and not a line-count
- * dodge: this is one TABLE with one writer and one reader, it arrived with the
- * rollback rather than with v1.2, and its two functions are the only place in
- * the tree that knows the shape of a session row.
- *
- * EVERY FUNCTION HERE USES THE RLS-BYPASSING ADMIN CLIENT, which is not a
- * convenience — the table `REVOKE`s INSERT/UPDATE/DELETE from `authenticated`
- * and `anon` outright, so there is no other way to write it. That makes the
- * `user_id` / `workspace_id` arguments below the entire fence, and both come
- * from the authenticated context in `session-state-service.ts`. Nothing here
- * may ever read an identity out of a payload.
+ * ⚠ EVERY FUNCTION USES THE RLS-BYPASSING ADMIN CLIENT, and not for convenience:
+ * the table `REVOKE`s INSERT/UPDATE/DELETE from `authenticated` and `anon`, so
+ * there is no other way to write it. That makes the `user_id` / `workspace_id`
+ * arguments THE ENTIRE FENCE, and both come from the authenticated context in
+ * `session-state-service.ts`. ⚠ Never read an identity out of a payload.
  */
 
-// One member's live sessions are bounded by the desktop's window budget
-// (MAX_SESSION_WINDOWS), so this is far above any real machine and exists only
-// to make a truncation loud rather than silent. PostgREST truncates an
-// un-limited select SILENTLY.
+// ⚠ PostgREST truncates an un-limited select SILENTLY. Far above the desktop's
+// window budget (MAX_SESSION_WINDOWS); exists only to make truncation loud.
 const SESSION_ROWS_LIMIT = 500;
 
 // ─── Session states (rollback §3.5, read-session-state) ─────────────
 
 /**
- * PostgREST's code for "that relation is not in the schema cache" — the answer
- * a select gets when the table does not exist (or has not been reloaded into
- * the API's cache yet). See {@link listSessionStates} for why it is not an
- * error here. Matched on the CODE, never on the message, which is prose.
+ * PostgREST's code for "that relation is not in the schema cache". See
+ * {@link listSessionStates} for why it is not an error here.
+ * ⚠ Matched on the CODE, never the message, which is prose.
  */
 const PGRST_MISSING_RELATION = "PGRST205";
 
@@ -47,36 +37,19 @@ function isMissingRelation(error: unknown): boolean {
 
 /**
  * The caller's OWN live sessions, newest change first, optionally narrowed to
- * one channel. Scoped to `userId` here (and by RLS) because a session belongs
- * to one member's machine and read-session-state answers about the caller's own
- * — a peer has no read on it.
+ * one channel. ⚠ Scoped to `userId` here (and by RLS): a session belongs to one
+ * member's machine and a peer has no read on it. Writer is the desktop's
+ * `main/session-state-push.js` via {@link replaceSessionStates}.
  *
- * ~~The write half is NOT wired in this phase.~~ **F-147 wired it** — see
- * {@link replaceSessionStates} below, whose one caller is the desktop's
- * `main/session-state-push.js`. An empty answer now means what it always said
- * it meant: no machine of the caller's is reporting anything.
+ * ⚠ A MISSING RELATION degrades to the honest empty answer, so the op is correct
+ * whether or not the migration has landed — "no live sessions are reported" is
+ * what an empty table and an absent table both mean to the caller. Deliberately
+ * NARROW: one PostgREST code and nothing else. A permission error, a column
+ * mismatch, a dead connection and a timeout all still THROW, because each means
+ * the answer is UNKNOWN rather than EMPTY, and an empty list is a claim.
  *
- * F-145 — AND THE MIGRATION IS THE OTHER HALF OF THAT SENTENCE. F-144 shipped
- * `channel_sessions` UNAPPLIED (Samuel's gauntlet applies it), so on the live
- * database this select answered `PGRST205` and the throw travelled all the way
- * out: `mapChannelError` has no arm for a raw PostgREST error, so the route
- * returned a 500 INTERNAL_ERROR. Four places — this function's own docblock,
- * `session-state-service`, the route, and F-144 — all claimed it "returns []
- * live", and none of them was true.
- *
- * SO THE MISSING RELATION IS DEGRADED TO THE HONEST EMPTY ANSWER, and the op is
- * correct whether or not the migration has landed: "no live sessions are being
- * reported" is exactly what a table with no rows and a table that does not yet
- * exist both mean to the caller — the writer exists now (F-147), but it cannot
- * have stored anything in a relation that is not there. This is deliberately
- * NARROW — one PostgREST code, nothing else. A permission
- * error, a column mismatch, a dead connection and a timeout all still throw,
- * because each of those means the answer is UNKNOWN rather than EMPTY, and an
- * empty list is a claim.
- *
- * DELETE THIS DEGRADE once the table is applied everywhere and the desktop push
- * has landed: past that point a missing relation is a real deployment fault and
- * should be loud.
+ * ⚠ DELETE THIS DEGRADE once the table is applied everywhere — past that point a
+ * missing relation is a real deployment fault and should be loud.
  */
 export async function listSessionStates(
   userId: string,
@@ -100,17 +73,16 @@ export async function listSessionStates(
   return (data ?? []) as SessionStateRow[];
 }
 
-/** The columns the reconcile compares. `id` / `created_at` / `updated_at` are
- *  deliberately absent: they are the row's identity and the row's history, and
- *  neither is something the desktop reports or the diff should look at. */
+/** Columns the reconcile compares. ⚠ `id` / `created_at` / `updated_at` are
+ *  deliberately absent — identity and history, neither reported by the desktop
+ *  nor something the diff should look at. */
 const SESSION_DIFF_COLUMNS =
   "session_key, channel_id, task_id, name, state, channel_name, thread_title";
 
-/** Row-shaped comparison of what is stored against what was reported. Field by
- *  field rather than JSON.stringify, because key ORDER differs between a
- *  PostgREST row and a service-built object and a string compare would then
- *  report every row as changed — which is the failure that would touch every
- *  `updated_at` on every push and quietly destroy the read's ordering. */
+/** ⚠ Field by field, NEVER JSON.stringify: key ORDER differs between a
+ *  PostgREST row and a service-built object, so a string compare reports every
+ *  row as changed — touching every `updated_at` on every push and destroying
+ *  the read's ordering. */
 function sessionRowMatches(
   stored: SessionStateUpsert,
   reported: SessionStateUpsert
@@ -126,30 +98,25 @@ function sessionRowMatches(
 }
 
 /**
- * REPLACE the caller's whole live set for one workspace (rollback §3.5, the
- * write half of read-session-state — F-144's flagged delivery gap, now wired).
+ * REPLACE the caller's whole live set for one workspace — the write half of
+ * read-session-state.
  *
- * THE SCOPE IS `(userId, workspaceId)` AND BOTH COME FROM THE CONTEXT. The table
- * `REVOKE`s INSERT/UPDATE/DELETE from `authenticated`/`anon`, so this runs on the
- * admin client with RLS bypassed and the fence is this function — exactly as
- * {@link listSessionStates} is the fence for the read. There is no field in
- * {@link SessionStateUpsert} for a user id, so no payload can name another
- * member's rows.
+ * ⚠ SCOPE IS `(userId, workspaceId)` AND BOTH COME FROM THE CONTEXT. The table
+ * `REVOKE`s INSERT/UPDATE/DELETE from `authenticated`/`anon`, so this runs with
+ * RLS bypassed and THIS FUNCTION is the fence. {@link SessionStateUpsert} has no
+ * user-id field, so no payload can name another member's rows.
  *
- * WHY THE WHOLE SET AND NOT A DELTA. The row's lifetime is the pill's lifetime
- * (F-142), and a delta needs an explicit removal message a crashed desktop never
- * sends. A full set makes removal implicit — anything not listed is deleted here
- * — so rows cannot accumulate, which is plan §5's whole point about NOT being
- * `agent_presence`.
+ * ⚠ THE WHOLE SET, NOT A DELTA: the row's lifetime is the pill's lifetime, and a
+ * delta needs an explicit removal message a crashed desktop never sends. A full
+ * set makes removal implicit — anything not listed is deleted — so rows cannot
+ * accumulate.
  *
- * WHY IT READS FIRST. `updated_at` is the read's `ORDER BY` and the field the
- * MCP result reports as "when the desktop last reported a change for this
- * session" (the trigger stamps it on every UPDATE, F-145). Upserting the whole
- * set unconditionally would touch every row on every push, so five sessions
- * would all claim to have changed when one of them did, and the ordering would
- * become arbitrary while still looking plausible — the exact failure shape the
- * migration's `updated_at` note describes. So the reconcile writes only rows
- * that actually differ, and a push where nothing changed costs one SELECT.
+ * ⚠ IT READS FIRST. `updated_at` is the read's `ORDER BY` and what the MCP result
+ * reports as "when the desktop last reported a change" (a trigger stamps it on
+ * every UPDATE). Upserting the whole set unconditionally touches every row on
+ * every push, so five sessions all claim to have changed when one did and the
+ * ordering goes arbitrary while still looking plausible. The reconcile writes
+ * only rows that differ; a push where nothing changed costs one SELECT.
  *
  * NOT DEGRADED ON `PGRST205`, unlike the read. The read can honestly answer "no
  * live sessions are being reported" over a missing table because the answer is

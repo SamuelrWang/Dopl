@@ -1,14 +1,10 @@
 "use client";
 
 /**
- * LiquidGlass — a refractive glass card. Its look comes from a displacement map
- * shaped like the rounded-rect (see build-displacement-map.ts): the map drives an
- * SVG feDisplacementMap applied as `backdrop-filter`, so it refracts whatever is
- * behind it. A colour tint is composited inside the filter (white = no-op); a
- * specular glint is a static CSS bevel on all four edges.
- *
- * Defaults are the approved "frosted" look — drop it over any dark backdrop with
- * just a `className`; override the knobs for a different glass.
+ * Refractive glass card. Rounded-rect displacement map (build-displacement-map.ts)
+ * drives an SVG feDisplacementMap applied as `backdrop-filter` → refracts the
+ * backdrop. Tint composited inside the filter; glint is a static CSS bevel.
+ * Defaults = "frosted" over a dark backdrop.
  */
 
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -24,26 +20,23 @@ export type LiquidGlassProps = {
   depth?: number;
   /** Rim half-width of the refraction ring. */
   splay?: number;
-  /** Extra inner falloff added to the ring on the inside of the edge. */
+  /** Extra inner falloff on the ring, inside the edge. */
   feather?: number;
   /** Bevel profile exponent — <1 sharpens the edge, >1 rounds it. */
   curve?: number;
   /** Chromatic aberration: per-channel displacement offset (0 = off). */
   chroma?: number;
-  /** Specular glint intensity, 0–150 (scales the edge highlight opacity). */
+  /** Specular glint intensity 0–150 (edge highlight opacity). */
   glint?: number;
   /** Glass tint level 0–1. */
   tint?: number;
-  /** Glass tint colour. */
   tintColor?: string;
   /** Standalone blur over the refraction (px). */
   blur?: number;
-  /** Build the displacement map ONCE on mount and never rebuild on resize.
-   *  For scroll-scrubbed cards whose box animates every frame: a rebuild
-   *  swaps the `<feImage>` data-URI, and the async decode pops the
-   *  refraction visibly. The frozen map stretches with the box
-   *  (`preserveAspectRatio="none"`), so the rim scales WITH the panel —
-   *  visually consistent — instead of popping at each rebuild. */
+  /** ⚠ Build map ONCE on mount, never rebuild on resize. For scroll-scrubbed
+   *  cards (box animates every frame): rebuild swaps the `<feImage>` data-URI
+   *  and the async decode pops the refraction visibly. Frozen map stretches
+   *  with the box (`preserveAspectRatio="none"`) — rim scales, no pop. */
   staticMap?: boolean;
   style?: CSSProperties;
 };
@@ -51,7 +44,7 @@ export type LiquidGlassProps = {
 const KEEP_R = "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0";
 const KEEP_GB = "0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0";
 
-const MAX_MAP_PX = 900; // cap the offscreen map so huge cards don't blow out memory
+const MAX_MAP_PX = 900; // cap offscreen map — huge cards would blow out memory
 
 export function LiquidGlass({
   children,
@@ -86,13 +79,13 @@ export function LiquidGlass({
       setMap(buildDisplacementMap(canvas, w, h, { radius, rim: splay, curve, feather }));
     };
     draw();
-    if (staticMap) return; // one map for the card's whole life — see the prop doc
+    if (staticMap) return; // see `staticMap` prop doc
     const ro = new ResizeObserver(draw);
     ro.observe(el);
     return () => ro.disconnect();
   }, [radius, splay, curve, feather, staticMap]);
 
-  // Chromatic split: red takes the larger displacement, green+blue ride the smaller.
+  // Chromatic split: red larger displacement, green+blue smaller.
   const sR = depth * (1 + chroma);
   const sGB = depth * (1 - chroma);
 
@@ -124,7 +117,7 @@ export function LiquidGlass({
             <feDisplacementMap in="SourceGraphic" in2="map" scale={depth} xChannelSelector="R" yChannelSelector="G" result="disp" />
           )}
 
-          {/* colour tint — multiplied over the refracted backdrop (white = no-op) */}
+          {/* tint — multiplied over refracted backdrop (white = no-op) */}
           {tint > 0 && (
             <>
               <feFlood floodColor={tintColor} floodOpacity={tint} result="tintFlood" />
@@ -135,7 +128,7 @@ export function LiquidGlass({
         </filter>
       </svg>
 
-      {/* refraction: backdrop-filter samples whatever is behind the card */}
+      {/* refraction: backdrop-filter samples behind the card */}
       <div
         className="absolute inset-0"
         style={{
@@ -145,7 +138,7 @@ export function LiquidGlass({
         }}
       />
 
-      {/* specular glint — white bevel on all four edges, light from top-left + bottom-right */}
+      {/* specular glint — white bevel, all 4 edges, light top-left + bottom-right */}
       <div
         className="absolute inset-0"
         style={{

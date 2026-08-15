@@ -20,7 +20,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = requireFolderId(auth);
     const patch = await parseJson(request, KnowledgeFolderUpdateSchema);
-    // Optional `X-Updated-At` precondition (Item 5.A.3).
+    // Optional `X-Updated-At` precondition.
     const expectedUpdatedAt =
       request.headers.get("x-updated-at") ?? undefined;
     const ctx = buildKnowledgeContext(auth);

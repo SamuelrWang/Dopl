@@ -1,20 +1,14 @@
-// Q6 — the in-window "Sign in to Claude" banner (renderer half).
+// The in-window "Sign in to Claude" banner — renderer half.
 //
-// A SELF-CONTAINED surface: it owns one element (#authNotice, static markup in session.html)
-// and the narrow `doplSession.auth` bridge, so it adds NOTHING to session.js / the view-model /
-// session-render.js — all three sit at the §2 500-line cap. It is loaded as a plain <script>
-// like every other renderer module; with no bridge (a standalone open, or an older preload) it
-// binds nothing and the banner simply never shows.
+// A SELF-CONTAINED surface: one element (#authNotice, static markup in session.html) and the
+// narrow `doplSession.auth` bridge. With no bridge it binds nothing and the banner never shows.
 //
-// SECURITY: every string reaches the DOM via textContent. There is no innerHTML, no template
-// interpolation, and no id / path / token in the payload — the banner carries display copy only
-// (session-auth-detect.js owns the words). The button sends NO argument: main resolves the
-// session from the window, exactly like the permission dock and the inbound gate.
-//
-// WHY A BANNER AND NOT A STREAM BUBBLE: the dead end this replaces WAS a bubble. A bubble
-// scrolls away, cannot be re-shown without another failure, and competes with the transcript's
-// scroll-pin rule. This sits in the chrome, above the composer, next to the other decision
-// surfaces (the permission dock, the ended banner) and disappears when it is answered.
+// ⚠ SECURITY: every string reaches the DOM via textContent — no innerHTML, no template
+// interpolation, and no id / path / token in the payload (session-auth-detect.js owns the
+// words). The button sends NO argument: main resolves the session from the window.
+// ⚠ A BANNER, NOT A STREAM BUBBLE: a bubble scrolls away, cannot be re-shown without another
+// failure, and competes with the transcript's scroll-pin rule. This sits in the chrome beside
+// the other decision surfaces and disappears when answered.
 
 (function () {
   "use strict";
@@ -43,8 +37,8 @@
     }
   }
 
-  // Paint one notice. `busy` locks the button while the sign-in flow owns the screen (the OAuth
-  // page + the paste-back window), so a second click cannot stack a second flow.
+  // Paint one notice. ⚠ `busy` locks the button while the sign-in flow owns the screen, so a
+  // second click cannot stack a second flow.
   function show(notice) {
     if (!notice) return hide();
     el.classList.add("is-active");
@@ -69,9 +63,8 @@
     if (parts.button) parts.button.disabled = true;
     Promise.resolve(bridge.signIn())
       .then((res) => {
-        // Main is authoritative: it re-paints the banner (a failed flow) or clears it (a
-        // successful one, followed by the session starting). A refused invoke just hands the
-        // button back so the operator can try again.
+        // ⚠ Main is authoritative: it re-paints the banner (failed flow) or clears it
+        // (successful). A refused invoke just hands the button back.
         if (res && res.ok === false && el.classList.contains("is-active")) {
           busy = false;
           if (parts.button) parts.button.disabled = false;

@@ -1,19 +1,12 @@
 /**
- * Canonical parser for skill bodies.
- *
- * Bodies are vanilla markdown with two Dopl-flavored extensions
- * encoded as standard markdown links:
- *
- *   [label](dopl://kb/<slug>)                       → KB chip
- *   [label](dopl://connector/<provider>)            → connector chip
- *   [label](dopl://connector/<provider>.<field>)    → connector chip
- *                                                     (with sub-field)
- *
- * `## Heading` lines on their own paragraph become section blocks.
- *
- * The parser is consumed by both the React renderer (chips) and the
- * server-side MCP resolver (extracted references). Pure and runs in
- * either environment — no `server-only` / `client-only` directive.
+ * Canonical parser for skill bodies: vanilla markdown plus two extensions
+ * encoded as standard markdown links —
+ *   [label](dopl://kb/<slug>)                    → KB chip
+ *   [label](dopl://connector/<provider>)         → connector chip
+ *   [label](dopl://connector/<provider>.<field>) → connector chip, sub-field
+ * `## Heading` on its own paragraph becomes a section block.
+ * ⚠ Consumed by both the React renderer and the server-side MCP resolver, so
+ * it stays pure — no `server-only` / `client-only` directive.
  */
 
 export interface KbRef {
@@ -59,10 +52,8 @@ const KB_HREF = /^dopl:\/\/kb\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/i;
 const CONNECTOR_HREF =
   /^dopl:\/\/connector\/([a-z0-9-]+)(?:\.([a-z0-9-]+))?$/i;
 
-// Markdown-link tokenizer. Stops at the first ')' after the opening '('.
-// Bracketed labels can't contain a literal `]` and links can't contain
-// a literal `)` — matches the vanilla-markdown parsing the renderer
-// would do anyway.
+// Markdown-link tokenizer, stopping at the first ')' after '('. Labels can't
+// contain a literal `]` and links can't contain `)` — same as vanilla markdown.
 const LINK_TOKEN = /\[([^\]]+)\]\(([^)]+)\)/g;
 
 const SECTION_LINE = /^##\s+(.+?)\s*$/;

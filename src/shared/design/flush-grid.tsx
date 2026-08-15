@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * FlushGrid — sets the --grid-cell-x / --grid-cell-y CSS variables on <body>
- * so the fixed grid overlay (in globals.css :after of .mosaic-bg) divides the
- * viewport into an exact integer number of cells. Result: the grid lines are
- * perfectly flush at every edge of the screen, no partial cells.
- *
- * Targets ~160px per cell but rounds to whatever integer division gives the
- * closest fit, both horizontally and vertically.
+ * Sets --grid-cell-x / --grid-cell-y on <body>; consumed by globals.css
+ * `.mosaic-bg::after`. Integer cell count per axis → grid flush at every
+ * viewport edge, no partial cells. Targets ~160px, rounds to nearest fit.
  */
 
 import { useEffect } from "react";
@@ -23,7 +19,6 @@ export function FlushGrid() {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
-      // Pick the integer number of cells that gets us closest to TARGET_CELL
       const colsX = Math.max(1, Math.round(vw / TARGET_CELL));
       const colsY = Math.max(1, Math.round(vh / TARGET_CELL));
 
@@ -36,8 +31,7 @@ export function FlushGrid() {
 
     recompute();
 
-    // Debounce resize to avoid thrashing CSS variables during rapid
-    // browser zoom (which fires many resize events in quick succession).
+    // Debounce: browser zoom fires many resize events; don't thrash the vars.
     let timer: ReturnType<typeof setTimeout>;
     const onResize = () => {
       clearTimeout(timer);

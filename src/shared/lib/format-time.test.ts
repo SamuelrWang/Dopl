@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { formatChannelTimestamp } from "./format-time";
 
-/**
- * Build an ISO string for a Date constructed from LOCAL components, so the
- * round-trip through `formatChannelTimestamp` (which renders in local time)
- * is deterministic regardless of the runner's timezone.
- */
+/** ⚠ ISO built from LOCAL components so the round-trip through
+ *  `formatChannelTimestamp` is deterministic in any runner timezone. */
 function isoFor(date: Date): string {
   return date.toISOString();
 }
@@ -23,7 +20,6 @@ describe("formatChannelTimestamp", () => {
     );
     const out = formatChannelTimestamp(isoFor(today));
     expect(out).toBe("2:34 PM");
-    // No calendar date on a same-day stamp.
     expect(out).not.toContain(",");
   });
 
@@ -39,7 +35,6 @@ describe("formatChannelTimestamp", () => {
     );
     earlier.setDate(earlier.getDate() - 8);
     const out = formatChannelTimestamp(isoFor(earlier));
-    // Self-consistent with the same locale calls the formatter uses.
     const expectedDate = earlier.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -50,7 +45,6 @@ describe("formatChannelTimestamp", () => {
       minute: "2-digit",
     });
     expect(out).toBe(`${expectedDate}, ${expectedTime}`);
-    // A prior-day stamp always carries a calendar date.
     expect(out).toContain(",");
     expect(out).toMatch(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} (AM|PM)$/);
   });

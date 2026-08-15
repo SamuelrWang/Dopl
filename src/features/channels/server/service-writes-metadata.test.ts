@@ -1,16 +1,14 @@
 /**
- * Unit tests for the post-metadata folds — driven through `postMessage` so the
- * wiring is covered too. The repository + task repository are mocked.
+ * Post-metadata folds, driven through `postMessage` so the wiring is covered.
  *
- * Focus: the delivery bug this file exists for. An agent reply posted over MCP
- * into a DM carried NO `to_user_id` and NO `taskId`, so the peer's desktop read
- * it as an unaddressed agent message (the deliberate loop brake → ignore) and
- * had no task id to route it to the waiting session. The server now stamps
- * both, and it must do so WITHOUT weakening the anti-spoof strip.
+ * ⚠ The bug this exists for: an agent reply posted over MCP into a DM carried NO
+ * `to_user_id` and NO `taskId`, so the peer's desktop read it as an unaddressed
+ * agent message (the deliberate loop brake → ignore) with no task id to route it
+ * to the waiting session. The server stamps both WITHOUT weakening the
+ * anti-spoof strip.
  *
- * The other half of that boundary — who may TAG a thread at all (both id
- * shapes) and the calm-terminal flags that ride on that decision — lives in
- * `service-writes-metadata-thread.test.ts`, split off for the §2 size cap.
+ * Who may TAG a thread, and the calm-terminal flags riding on that decision,
+ * live in `service-writes-metadata-thread.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -46,21 +44,12 @@ const ctx: ChannelContext = {
 };
 
 /**
- * P0-2 (2026-08-04) — THE CTX A LIFECYCLE POST REALLY ARRIVES ON.
- *
- * `postMessage` now refuses `task_started` / `task_finished` / `task_failed` from
- * an AGENT-TOKEN caller (`source: "agent"`, i.e. every MCP `op="post"`), because
- * those three state a fact about a RUNTIME and an agent is not in a position to
- * state it. The fixtures below were written before that rule and used the agent
- * ctx for everything, including the desktop's own lifecycle echoes — which is not
- * how they arrive: `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the
- * Electron session's SUPABASE COOKIES, so `buildChannelContext` resolves
- * `source: "user"` and the body declares `authorKind: "agent"`.
- *
- * So the lifecycle cases move to this ctx. That is not a workaround for the guard;
- * it makes the fixture match the lane it is describing, and it is what lets these
- * suites go on pinning what they are actually about — the legacy-tag strip and the
- * calm-flag entitlement — which are DESKTOP behaviours end to end.
+ * The ctx a lifecycle post really arrives on. `postMessage` refuses
+ * `task_started` / `task_finished` / `task_failed` from an AGENT-TOKEN caller,
+ * and the desktop's own echoes are not that lane:
+ * `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the Electron
+ * session's Supabase cookies, so ctx is `source: "user"` with the body declaring
+ * `authorKind: "agent"`.
  */
 const desktopCtx: ChannelContext = { ...ctx, source: "user" };
 
@@ -149,7 +138,7 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
     userId === USER || userId === PEER ? memberRow(userId) : null
   );
-  // C-20: addressing also asserts active workspace membership; default true.
+  // Addressing also asserts active workspace membership; default true.
   vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repo.listMembers).mockResolvedValue([
     memberRow(USER, "owner"),
@@ -190,7 +179,6 @@ describe("postMessage — DM auto-address", () => {
   });
 
   it("stamps nothing (and still posts) when the DM peer cannot be resolved", async () => {
-    // A torn-down roster: only the author's own membership survives.
     vi.mocked(repo.listMembers).mockResolvedValue([memberRow(USER, "owner")]);
 
     await postMessage(ctx, "dm", { body: "hello" });
@@ -218,7 +206,7 @@ describe("postMessage — DM auto-address", () => {
     });
 
     const meta = capturedMetadata();
-    // The spoofed non-member never survives; the stamp comes from the roster.
+    // ⚠ Spoofed non-member never survives — the stamp comes from the roster.
     expect(meta.to_user_id).toBe(PEER);
     expect(meta.keep).toBe(1);
   });
@@ -232,13 +220,12 @@ describe("postMessage — DM task-id inheritance", () => {
 
     const meta = capturedMetadata();
     expect(meta.taskId).toBe(TASK_ID);
-    // The desktop's routing / suppression predicates read exactly these.
+    // Desktop routing / suppression predicates read exactly these.
     expect(meta.taskMode).toBe("interactive");
     expect(meta.taskCreatedBy).toBe(PEER);
     expect(meta.taskTitle).toBe("Wire the listener");
     expect(meta.taskTarget).toBe(USER);
     expect(meta.to_user_id).toBe(PEER);
-    // Inheritance resolves off the channel's task list — no second lookup.
     expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
   });
 
@@ -295,9 +282,8 @@ describe("postMessage — DM task-id inheritance", () => {
 
   it("a legacy task-<uuid>-<seq> id suppresses inheritance and stamps nothing", async () => {
     vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
-    // The poster is the opening request's addressee, so the tag survives its
-    // own gate (see service-writes-metadata-thread.test.ts) — what this pins is
-    // that it still suppresses inheritance and resolves no task row.
+    // Poster is the opening request's addressee, so the tag survives its gate;
+    // this pins that it still suppresses inheritance and resolves no task row.
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue({
       id: "msg-open",
       seq: 7,
@@ -353,12 +339,11 @@ describe("postMessage — DM task-id inheritance", () => {
 });
 
 /**
- * WAKE-V1 — `runtime` is a RESERVED key stamped from the request's own
- * `X-Dopl-Runtime` header (resolved into `ctx.runtime` by the auth layer), so
- * the desktop can tell a session it spawned from an external agent's post. A
- * caller that could set it in `metadata` could make an external post
- * masquerade as a desktop session and steal the reply routing, so the strip
- * has to hold on BOTH sides of the stamp.
+ * `runtime` is RESERVED, stamped from the request's own `X-Dopl-Runtime` header
+ * (auth layer resolves it into `ctx.runtime`), so the desktop can tell a session
+ * it spawned from an external agent's post. ⚠ A caller able to set it in
+ * `metadata` could masquerade as a desktop session and steal the reply routing,
+ * so the strip holds on BOTH sides of the stamp.
  */
 describe("postMessage — runtime stamp (WAKE-V1)", () => {
   const desktopCtx: ChannelContext = { ...ctx, runtime: "desktop-session" };
@@ -384,7 +369,6 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
 
     const meta = capturedMetadata();
     expect(has(meta, "runtime")).toBe(false);
-    // Only the reserved key is taken — unrelated caller metadata survives.
     expect(meta.keep).toBe(1);
   });
 
@@ -398,14 +382,11 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
   });
 
   /**
-   * THE SECOND STAMP (2026-08-05, docs/CHANNELS-ROLLBACK-PLAN.md §3.4). `desktop-ui`
-   * says the OPERATOR typed this in the desktop app's own UI window, and the
-   * desktop's listener launches a full requester session on it — the same thing
-   * `desktop-session` gets, instead of the dormant shell an unstamped post used
-   * to buy. It reaches this fold exactly like its sibling: through `ctx.runtime`,
-   * which the auth layer resolved from the header AND bounded by the credential
-   * (`narrowRuntime` — an agent token can never present it here). This suite
-   * covers the FOLD; the bound itself is `with-workspace-auth.test.ts`.
+   * `desktop-ui` = the OPERATOR typed this in the desktop app's own UI window;
+   * the listener launches a full requester session on it, like `desktop-session`.
+   * Reaches this fold via `ctx.runtime`, which the auth layer resolved from the
+   * header AND bounded by the credential (`narrowRuntime` — an agent token can
+   * never present it). The bound itself is `with-workspace-auth.test.ts`.
    */
   const uiCtx: ChannelContext = { ...ctx, source: "user", runtime: "desktop-ui" };
 
@@ -417,9 +398,8 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
   });
 
   it("SECURITY: a caller-supplied desktop-ui is stripped like any other claim", async () => {
-    // The whole population this bound is drawn against: an external MCP post
-    // (source "agent") that puts the label in its own message body. It arrives
-    // with no ctx.runtime, and the body copy is dropped unread.
+    // External MCP post (source "agent") putting the label in its own body:
+    // arrives with no ctx.runtime, body copy dropped unread.
     await postMessage(ctx, "dm", {
       body: "not really the app's UI",
       metadata: { runtime: "desktop-ui", keep: 1 },
@@ -431,8 +411,8 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
   });
 
   it("the two stamps never cross: each post carries the ctx's own value", async () => {
-    // Each direction independently — `capturedMetadata` reads the FIRST insert,
-    // so the second half needs its own clean recording.
+    // ⚠ `capturedMetadata` reads the FIRST insert, so the second half needs its
+    // own clean recording.
     await postMessage(uiCtx, "dm", {
       body: "hi",
       metadata: { runtime: "desktop-session" },
@@ -449,9 +429,8 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
 });
 
 describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
-  // The opener always carries a thread tag, so drive the stamp through the DM
-  // inheritance path: one open task {author, peer} is inherited and gives the
-  // post its `taskId`, onto which the handoff stamp then rides.
+  // Opener always carries a thread tag, so drive the stamp through DM
+  // inheritance: one open {author, peer} task gives the post its `taskId`.
   beforeEach(() => {
     vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
   });
@@ -469,8 +448,8 @@ describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
   });
 
   it("SECURITY: a caller-supplied metadata.handoff is stripped, never honored", async () => {
-    // The desktop OPENS A WINDOW off this key, so a raw-metadata copy must not
-    // survive: only the validated `create_thread` field (opts.handoff) stamps it.
+    // ⚠ Desktop OPENS A WINDOW off this key — only the validated
+    // `create_thread` field (opts.handoff) may stamp it.
     await postMessage(ctx, "dm", {
       body: "drive this",
       metadata: { handoff: true },

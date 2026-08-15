@@ -7,10 +7,9 @@ import { AppShellLayout } from "#/components/app-shell";
 import OverviewPage from "./index";
 
 /**
- * Overview smoke test: the real page, inside the real shell, on the real query
- * stack — only the TRANSPORT is mocked (`#/lib/api-transport` is the one seam
- * bytes leave through), so the assertions cover the actual request paths the
- * port fires.
+ * Overview smoke test: real page, real shell, real query stack. Only the
+ * TRANSPORT is mocked — `#/lib/api-transport` is the one seam bytes leave
+ * through — so assertions cover actual request paths.
  */
 
 const { sendRequest } = vi.hoisted(() => ({ sendRequest: vi.fn() }));
@@ -39,8 +38,7 @@ function ok(body: unknown) {
 
 function mockApi() {
   sendRequest.mockImplementation(({ path }: { path: string }) => {
-    // The page's workspace read is `POST /api/boot` now (P0-2) — the same
-    // answer as resolve, plus the role/caller-id that used to cost a `me` hop.
+    // Workspace read is `POST /api/boot`: resolve's answer plus role/caller-id.
     if (path === "/api/boot") {
       return Promise.resolve(
         ok({
@@ -109,13 +107,12 @@ describe("overview page", () => {
     expect(screen.getByText("/acme")).toBeInTheDocument();
     expect(await screen.findByText("Agent connected")).toBeInTheDocument();
 
-    // ── THE STAT ROW, PINNED AS A SET ──────────────────────────────────
-    // Assert the WHOLE row, never one card: the count went 4 → 3 with the
-    // retirement and nothing failed, because only Skills was ever checked
-    // and the "2 people in this workspace" line below is MembersWidgetCore
-    // copy, not a card. Deleting "Knowledge bases" or "Members" must fail
-    // HERE. The row doubles as navigation, so each href is a real route, and
-    // the length check is what stops a fourth card linking to "Not found".
+    // ⚠ Assert the WHOLE stat row, never one card: a card count change once
+    // slipped through because only Skills was checked, and the "2 people in
+    // this workspace" line is MembersWidgetCore copy, not a card. Deleting
+    // "Knowledge bases" or "Members" must fail HERE. The row doubles as
+    // navigation, so each href is a real route and the length check is what
+    // stops a fourth card linking to "Not found".
     const skills = screen.getByRole("link", { name: /Skills 11 agent playbooks/ });
     const statRow = skills.parentElement as HTMLElement;
     const cards = within(statRow).getAllByRole("link");
@@ -125,7 +122,6 @@ describe("overview page", () => {
       "/acme-ab12cd/skills",
       "/acme-ab12cd/members",
     ]);
-    // Counts come straight off overview-counts, in card order.
     expect(cards.map((card) => within(card).getByText(/^\d+$/).textContent)).toEqual([
       "7",
       "11",
@@ -141,11 +137,10 @@ describe("overview page", () => {
 
     const paths = sendRequest.mock.calls.map(([req]) => req.path);
     expect(paths).toContain("/api/boot");
-    // The segment travels in the boot BODY, not the query string.
+    // ⚠ Segment travels in the boot BODY, not the query string.
     expect(sendRequest.mock.calls.map(([req]) => req.body)).toContainEqual({
       segment: "acme-ab12cd",
     });
-    // Deleted hop: the boot answer carries the caller's role and id.
     expect(paths).not.toContain("/api/workspaces/me");
     expect(paths).toContain("/api/workspaces/acme-ab12cd/overview-counts");
     expect(paths).toContain("/api/workspaces/acme-ab12cd/members");

@@ -1,21 +1,17 @@
 /**
- * Unit tests for the consent service — the human-in-the-loop gate. Repos are
- * mocked; `service-shared` (loadVisibleChannel + resolvers) runs for real.
+ * The consent service — human-in-the-loop gate. Repos mocked; `service-shared`
+ * runs for real. Security-load-bearing invariants:
+ *   - ⚠ operator is ALWAYS the caller; a foreign / missing / cross-workspace id
+ *     is ONE not-found, so ids cannot be probed across operators;
+ *   - a standing trust rule auto-allows inbound ('auto_allowed' / 'trust') so
+ *     the desktop can spawn — only while the teammate is an ACTIVE workspace
+ *     member;
+ *   - a decided request can't be re-decided; the decision is a
+ *     compare-and-swap so a late Allow can't clobber a human's Deny;
+ *   - a trigger de-dupes at ANY status, both kinds.
  *
- * Security-load-bearing invariants:
- *   - operator is ALWAYS the caller; a foreign / missing id is one not-found
- *     (no id probing across operators), including a cross-workspace id.
- *   - a standing trust rule auto-allows an inbound request (status
- *     'auto_allowed', decided_by 'trust') so the desktop can spawn — but only
- *     while the trusted teammate is still an active workspace member.
- *   - a decided request can't be re-decided, and the decision is a
- *     compare-and-swap so a late Allow can't clobber a human's Deny.
- *   - a trigger de-dupes at ANY status, both kinds: a DENIED trigger must
- *     never be re-raised, and an outbound retry must not stack review rows.
- *
- * The CONSUMPTION half of the trust rule — a stored `auto_allowed` row losing
- * its authority when the rule is revoked or the teammate leaves (C-19) — is
- * its own lane, split to `consent-service-trust-revocation.test.ts` (§2 cap).
+ * Trust-rule CONSUMPTION lives in
+ * `consent-service-trust-revocation.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -112,10 +108,8 @@ function trustRow() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // `clearAllMocks` clears calls but NOT a queued `mockResolvedValueOnce`, and
-  // the CAS case below queues two reads on this one. An unconsumed queue entry
-  // would leak into the next test, so reset the queue explicitly (back to the
-  // automock default: undefined → ConsentNotFoundError).
+  // ⚠ `clearAllMocks` clears calls but NOT a queued `mockResolvedValueOnce`,
+  // and the CAS case queues two reads here. Reset the queue explicitly.
   vi.mocked(collab.findConsentById).mockReset();
   vi.mocked(repo.findChannelById).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER));
@@ -155,8 +149,8 @@ describe("createConsentRequest", () => {
     expect(inserted.operator_user_id).toBe(USER);
     expect(inserted.proposed_reply).toBe("here you go");
     expect(inserted.status).toBe("pending");
-    // Outbound is the operator's OWN agent — there is no requester to derive,
-    // and trust must never short-circuit the approve-out gate.
+    // ⚠ Outbound is the operator's OWN agent — no requester to derive, and
+    // trust must never short-circuit the approve-out gate.
     expect(inserted.requester_user_id).toBeNull();
     expect(collab.findMessageAuthorBySeq).not.toHaveBeenCalled();
     expect(out.kind).toBe("outbound");
@@ -172,8 +166,8 @@ describe("createConsentRequest", () => {
   });
 
   it("trust does NOT survive the trusted user leaving the workspace (L-10)", async () => {
-    // The rule row outlives the membership (nothing sweeps agent_trust_rules
-    // on removal), so trust is re-validated at CONSUMPTION, not creation.
+    // ⚠ The rule row outlives the membership (nothing sweeps
+    // agent_trust_rules), so trust is re-validated at CONSUMPTION.
     vi.mocked(collab.findTrustRule).mockResolvedValue(trustRow());
     vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false);
     await createConsentRequest(ctx, { channelId: CHANNEL, kind: "inbound", messageSeq: 5, summary: "s", bodyPreview: "b" });
@@ -190,9 +184,8 @@ describe("createConsentRequest", () => {
   });
 
   it("a DENIED trigger is NOT re-raised — the stored decision comes back (M-1)", async () => {
-    // The desktop replays creates on crash-recovery. If a denied trigger could
-    // be re-raised, a trust rule added in the meantime would auto-allow work
-    // the human explicitly refused.
+    // ⚠ Desktop replays creates on crash-recovery. A re-raisable denied trigger
+    // lets a trust rule added since auto-allow work the human refused.
     vi.mocked(collab.findConsentByTrigger).mockResolvedValue(
       consentRow({ id: "denied-1", status: "denied", decided_by: "web" })
     );
@@ -220,8 +213,7 @@ describe("createConsentRequest", () => {
   });
 
   it("sweeps elapsed rows BEFORE the de-dupe read (L-11)", async () => {
-    // Otherwise a past-TTL row is handed back as a live 'pending' prompt the
-    // desktop then waits on until its own poll deadline.
+    // Otherwise a past-TTL row is handed back as a live 'pending' prompt.
     await createConsentRequest(ctx, { channelId: CHANNEL, kind: "inbound", messageSeq: 5, summary: "s", bodyPreview: "b" });
     expect(collab.expireStalePending).toHaveBeenCalledWith(USER);
     const sweepOrder = vi.mocked(collab.expireStalePending).mock.invocationCallOrder[0];
@@ -241,7 +233,7 @@ describe("createConsentRequest", () => {
   });
 
   it("refuses a non-member raising a request (public channel, forbidden)", async () => {
-    // A private-channel non-member 404s (existence must not leak); the
+    // ⚠ Private-channel non-member 404s (existence must not leak), so the
     // forbidden branch needs a visible-but-not-joined public channel.
     vi.mocked(repo.findChannelById).mockResolvedValue({ ...channelRow(), visibility: "public" });
     vi.mocked(repo.findMembership).mockResolvedValue(null);
@@ -260,8 +252,7 @@ describe("listConsentRequests — status filter (M-4)", () => {
   });
 
   it("'decided' opens the auto_allowed audit trail", async () => {
-    // These rows are the ONLY record of "your agent ran N times without
-    // asking you" — the stated justification for writing them.
+    // ⚠ Only record of "your agent ran N times without asking you".
     await listConsentRequests(ctx, { status: "decided" });
     expect(vi.mocked(collab.listConsentRequests).mock.calls[0][1]?.statuses).toContain(
       "auto_allowed"
@@ -273,11 +264,10 @@ describe("listConsentRequests — status filter (M-4)", () => {
     expect(vi.mocked(collab.listConsentRequests).mock.calls[0][1]?.statuses).toBeUndefined();
   });
 
-  // The inbox is the source of the sidebar's pending badge. A consent row
-  // carries `operator_user_id` and nothing else that says whose workspace
-  // raised it, and the read runs under the service-role client (no RLS), so
-  // an operator-only filter shows the operator every workspace's requests at
-  // once. The workspace bound has to travel with the query.
+  // ⚠ A consent row carries `operator_user_id` and nothing else naming its
+  // workspace, and the read runs under the service-role client (no RLS), so an
+  // operator-only filter shows every workspace's requests at once. The
+  // workspace bound must travel with the query.
   it("scopes the read to the ACTIVE workspace, not just the operator", async () => {
     await listConsentRequests(ctx);
     expect(vi.mocked(collab.listConsentRequests).mock.calls[0][0]).toBe(USER);
@@ -306,9 +296,8 @@ describe("getConsentRequest / decideConsentRequest — operator-only", () => {
   });
 
   it("404s a request from another WORKSPACE, even for the same operator", async () => {
-    // The id is the caller's own, but reached with a different X-Workspace-Id.
-    // Both fences must hold — operator AND workspace — or a request could be
-    // read / decided from outside the workspace it belongs to.
+    // ⚠ Caller's own id reached with a different X-Workspace-Id. BOTH fences
+    // must hold, or a request is readable/decidable from outside its workspace.
     vi.mocked(collab.findConsentById).mockResolvedValue(
       consentRow({ workspace_id: "ws-other" })
     );
@@ -360,11 +349,9 @@ describe("getConsentRequest / decideConsentRequest — operator-only", () => {
   });
 
   it("CAS: a decision that lost the race 409s instead of clobbering (H-2)", async () => {
-    // The desktop dialog and the web card are concurrent writers by design.
-    // Both read 'pending'; the loser's UPDATE matches no row (status is no
-    // longer pending) and must NOT overwrite the winner's decision — a
-    // human's Deny being replaced by a late Allow is the failure that
-    // defeats the whole gate.
+    // ⚠ Desktop dialog and web card are concurrent writers by design. Both read
+    // 'pending'; the loser's UPDATE matches no row and must NOT overwrite the
+    // winner — a Deny replaced by a late Allow defeats the whole gate.
     vi.mocked(collab.findConsentById)
       .mockResolvedValueOnce(consentRow({ status: "pending" })) // authz pre-read
       .mockResolvedValueOnce(consentRow({ status: "denied" })); // re-read: who won
@@ -372,7 +359,7 @@ describe("getConsentRequest / decideConsentRequest — operator-only", () => {
 
     const err = await decideConsentRequest(ctx, "consent-1", "allow").catch((e) => e);
     expect(err).toBeInstanceOf(ConsentAlreadyDecidedError);
-    // The 409 names the status that actually won, not the stale pre-read.
+    // ⚠ The 409 names the status that WON, not the stale pre-read.
     expect((err as ConsentAlreadyDecidedError).status).toBe("denied");
   });
 });

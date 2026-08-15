@@ -3,11 +3,8 @@ import { revokeToken } from "@/shared/auth/mcp-oauth";
 
 export const dynamic = "force-dynamic";
 
-/**
- * RFC 7009 token revocation. Accepts an access or refresh token. Per spec,
- * always returns 200 — even for unknown tokens — so callers can't probe
- * which tokens exist.
- */
+/** RFC 7009 revocation (access or refresh token). ⚠ Always 200, even for unknown tokens, so
+ *  callers cannot probe which tokens exist. */
 export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
@@ -17,7 +14,7 @@ export async function POST(request: NextRequest) {
         : "";
     if (token) await revokeToken(token);
   } catch {
-    // Malformed body — still return 200 per spec.
+    // Malformed body — still 200 per spec.
   }
   return new NextResponse(null, {
     status: 200,

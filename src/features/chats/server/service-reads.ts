@@ -13,20 +13,14 @@ import {
   type ChatContext,
 } from "./service-shared";
 
-/**
- * Read-side chats service: the visibility-filtered list + single-chat
- * detail (transcript) reads. Both funnel through the shared visibility
- * gate + grant context in `service-shared`, then the free-plan retention
- * window (hide, never delete) resolved in `./retention`.
- */
+/** Read-side chats service: visibility-filtered list + single-chat detail.
+ *  Both funnel through the visibility gate + grant context in
+ *  `service-shared`, then the retention window (hide, never delete) from
+ *  `./retention`. */
 
-/**
- * Everything the caller may read: own chats, workspace-shared ones, and
- * team-scoped ones granted to one of the caller's teams — minus any that
- * fall outside the free-plan retention window (excluded in the DB query).
- * `hiddenCount` reports how many the window hid so the UI can offer an
- * upgrade; 0 on Pro / full-history plans.
- */
+/** Own chats + workspace-shared + team-scoped ones granted to the caller's
+ *  teams, minus anything outside the retention window (excluded in the DB
+ *  query). `hiddenCount` = how many the window hid; 0 on full-history plans. */
 export async function listChats(ctx: ChatContext): Promise<ChatList> {
   const { since } = await resolveChatsWindow(ctx.workspaceId);
   const [rows, hiddenCount] = await Promise.all([
@@ -51,12 +45,9 @@ export async function listChats(ctx: ChatContext): Promise<ChatList> {
   return { chats, hiddenCount };
 }
 
-/**
- * Base detail read — visibility gate only, NO retention window. Used
- * internally by writes (`service-writes`) to echo back a just-written
- * chat: an owner backfilling an old session must get their chat back, not
- * a window denial.
- */
+/** ⚠ Visibility gate only, NO retention window. Used by `service-writes` to
+ *  echo a just-written chat — an owner backfilling an old session must get
+ *  their chat back, not a window denial. */
 export async function readChatDetail(
   ctx: ChatContext,
   chatId: string
@@ -84,14 +75,10 @@ export async function readChatDetail(
   };
 }
 
-/**
- * Window-enforced detail read for browsing (web UI + MCP `get`). A chat
- * outside the free-plan retention window is hidden — never deleted — so
- * this throws `ChatOutsideRetentionError` for the route to convert into
- * the friendly upgrade envelope. `sessionDate`/`since` are `YYYY-MM-DD`
- * strings; lexical `<` equals date order, and the boundary itself is
- * DB-computed (see `retentionCutoff`).
- */
+/** Window-enforced detail read for browsing (web UI + MCP `get`). Throws
+ *  `ChatOutsideRetentionError` for the route to convert into the upgrade
+ *  envelope. `sessionDate`/`since` are `YYYY-MM-DD`, so lexical `<` is date
+ *  order; the boundary is DB-computed (`retentionCutoff`). */
 export async function getChat(ctx: ChatContext, chatId: string): Promise<ChatDetail> {
   const [{ since }, detail] = await Promise.all([
     resolveChatsWindow(ctx.workspaceId),

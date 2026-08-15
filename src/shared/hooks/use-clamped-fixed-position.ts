@@ -3,20 +3,14 @@
 import { useLayoutEffect, useRef } from "react";
 
 /**
- * Position a fixed, cursor-anchored popup (context menu, dropdown) so it
- * always opens fully inside the viewport.
+ * Position a fixed, cursor-anchored popup so it always opens fully inside the
+ * viewport. Returns `ref` + initial `style`.
  *
- * Returns a `ref` + initial `style` for the popup element. The element
- * first renders invisible (opacity 0 — NOT visibility:hidden, which
- * would break autoFocus inputs inside the popup) at the requested
- * coords, then a layout effect measures its real size and rewrites
- * `left`/`top` clamped to the viewport (with `margin` px of breathing
- * room) before paint — no flicker, no hardcoded size estimates. Styles
- * are mutated imperatively so there's no extra render pass.
- *
- * Usage:
- *   const { ref, style } = useClampedFixedPosition<HTMLDivElement>(x, y);
- *   return <div ref={ref} style={{ ...style, zIndex: 1000 }} ... />;
+ * The element renders invisible at the requested coords, then a layout effect
+ * measures and rewrites `left`/`top` clamped to the viewport (with `margin` px)
+ * before paint. ⚠ opacity 0, NOT visibility:hidden — the latter breaks autoFocus
+ * inputs inside the popup. ⚠ Styles are mutated imperatively so there is no
+ * extra render pass.
  */
 export function useClampedFixedPosition<T extends HTMLElement>(
   x: number,

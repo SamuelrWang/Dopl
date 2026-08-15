@@ -1,19 +1,11 @@
 /**
- * `GET /api/workspaces/[workspaceSlug]/my-access` — the sidebar's access
- * matrix, and the third read of the SAME membership row per request.
- *
- * WHAT THIS FILE PINS (launch-blocker P0-2, §3.3). Resolving the segment
- * fetches the caller's membership to decide whether they may see the
- * workspace at all. `listEffectiveAccess` then fetched it AGAIN to learn
- * their role, because the resolver threw the answer away. Threading
- * `opts.role` is the fix, and it is invisible in the response — so nothing
- * but a test stops it from being undone by a refactor that "simplifies" the
- * call back to two arguments.
- *
- * The payload projection is pinned too: a teams-mode resource with NO grant
- * must serialize as `level: "read"`, never be omitted. The client reads a
- * missing entry as the role default ("edit" for members), which would flip a
- * just-revoked KB panel back to editable.
+ * `GET /api/workspaces/[workspaceSlug]/my-access`.
+ * ⚠ `opts.role` is THREADED from the segment resolve into `listEffectiveAccess` so the same
+ * membership row is not read twice. The fix is invisible in the response, so only this test stops
+ * a refactor from "simplifying" the call back to two arguments.
+ * ⚠ A teams-mode resource with NO grant must serialize as `level: "read"`, never be omitted — the
+ * client reads a missing entry as the role default ("edit" for members), flipping a just-revoked
+ * KB panel back to editable.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

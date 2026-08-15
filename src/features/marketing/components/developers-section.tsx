@@ -11,26 +11,15 @@ import {
 } from "lucide-react";
 
 /**
- * "Developers" — the page's closing section, cloned from the Natural.dev
- * reference: eyebrow, a thin two-line heading, then a wide SKY band carrying a
- * row of tab pills directly above one white terminal window, and a single dark
- * CTA pill beneath the band.
- *
- * The tab IS the command: selecting one swaps the single line in the terminal
- * (a 160ms fade, keyed on the tab id so React remounts and replays it). Add or
- * reorder clients by editing TABS — nothing else in here is per-client.
- *
- * This is now the LAST thing on the page, so it owns the bottom edge:
- * `.lp-dev` carries the padding that keeps the page from ending flush against
- * the CTA. `.lp-ctl` never had a bottom margin — the hero's 48px padding was
- * the whole story — so nothing had to move off ControlSection.
+ * Tab IS the command: selecting one swaps the terminal line (keyed on tab id
+ * so React remounts and replays the fade). Add/reorder clients via TABS.
  */
 
 /**
- * The production Dopl MCP endpoint. This is the value the desktop derives at
- * runtime (`dopl-desktop-app/main/config.js` › `MCP_URL` — app origin +
- * `/api/mcp`), served by `src/app/api/mcp/route.ts`. It is NOT on a subdomain:
- * the MCP route lives on the app origin. Do not "tidy" it into mcp.usedopl.com.
+ * ⚠ NOT a subdomain — MCP route lives on the app origin; do not "tidy" into
+ * mcp.usedopl.com. Same value the desktop derives at runtime
+ * (`dopl-desktop-app/main/config.js` › `MCP_URL`), served by
+ * `src/app/api/mcp/route.ts`.
  */
 const MCP_URL = "https://www.usedopl.com/api/mcp";
 
@@ -42,9 +31,7 @@ type DevTab = {
 };
 
 
-/** Claude Code's pixel robot-face mark, approximated as blocks (reference
- *  zoom: a chunky pixel-art face). Currentcolor so the active/ghost states
- *  tint it like the text. */
+/** Currentcolor so active/ghost tab states tint it with the text. */
 function ClaudeCodeGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 16 12" width="15" height="12" className={className} aria-hidden>
@@ -63,8 +50,6 @@ function ClaudeCodeGlyph({ className }: { className?: string }) {
   );
 }
 
-/** Codex's cloud-with-prompt mark (reference zoom: a soft cloud outline
- *  holding a "›_" prompt). */
 function CodexGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 18 14" width="16" height="13" className={className} aria-hidden>
@@ -95,28 +80,23 @@ const TABS: readonly DevTab[] = [
     id: "codex",
     label: "Codex",
     icon: CodexGlyph,
-    // Verified against Codex CLI's `mcp add`: `--url` is the flag for a
-    // Streamable-HTTP (remote) server, so this form is real.
+    // Codex CLI: `--url` is the flag for a Streamable-HTTP (remote) server.
     command: `codex mcp add dopl --url ${MCP_URL}`,
   },
   {
     id: "cursor",
     label: "Cursor",
     icon: MousePointer2,
-    // NOT a CLI line on purpose. Cursor has no `cursor mcp add` verb — adding a
-    // server is the UI (Settings › Tools & MCP), a deep link, or an edit to
-    // ~/.cursor/mcp.json. So we show the config entry itself, on one line.
-    // Swap this for a command the day Cursor's CLI grows one.
+    // Not a CLI line on purpose: Cursor has no `cursor mcp add` verb — it's UI
+    // or a ~/.cursor/mcp.json edit. Swap to a command if their CLI grows one.
     command: `"dopl": { "url": "${MCP_URL}" }`,
   },
   {
     id: "sdk",
     label: "SDK",
     icon: SquareTerminal,
-    // ⚠ `@dopl/client` is the package NAME (packages/dopl-client/package.json),
-    // but that manifest is `"private": true` and says "not published to npm" —
-    // this line will not resolve until the package actually ships. Publish it
-    // or change this copy before the section goes live.
+    // ⚠ Will not resolve: packages/dopl-client/package.json is `private: true`,
+    // unpublished. Publish or change this copy before the section goes live.
     command: "npm install @dopl/client",
   },
 ];
@@ -130,7 +110,7 @@ export function DevelopersSection() {
 
   function select(next: number) {
     setActive(next);
-    // A stale "Copied" under a command you did not copy is a lie — clear it.
+    // Stale "Copied" under a command you didn't copy is a lie.
     setCopied(false);
   }
 
@@ -150,8 +130,8 @@ export function DevelopersSection() {
     try {
       await navigator.clipboard.writeText(tab.command);
     } catch {
-      // Blocked (insecure origin, denied permission) — stay silent rather than
-      // claim a copy that never happened.
+      // Blocked (insecure origin, denied permission) — never claim a copy
+      // that didn't happen.
       return;
     }
     setCopied(true);
@@ -166,8 +146,8 @@ export function DevelopersSection() {
         <h2 className="lp-dev-heading">Connect your agent via MCP, SDK, or CLI</h2>
 
         <div className="lp-dev-band">
-          {/* ONE liquid-glass panel carries the tab row AND the terminal —
-              static box, so backdrop-filter is on safe ground here. */}
+          {/* One glass panel for tabs + terminal. Static box, so
+              backdrop-filter is safe here. */}
           <LiquidGlass radius={18} className="lp-dev-glass">
               <div className="lp-dev-glass-pad">
           <div
@@ -242,9 +222,8 @@ export function DevelopersSection() {
         </div>
 
         <div className="lp-dev-cta">
-          {/* TODO: the playground does not exist yet. Point this at `/playground`
-              (a hosted try-it surface for the MCP tools) once that route ships;
-              until then it is a placeholder that must not navigate. */}
+          {/* TODO: `/playground` route doesn't exist yet — placeholder,
+              must not navigate. */}
           <a href="#" className="lp-btn lp-btn--sm lp-btn--3d">
             Try in playground
             <ArrowRight size={14} strokeWidth={2} aria-hidden />

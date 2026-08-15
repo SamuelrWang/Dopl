@@ -1,7 +1,7 @@
 /**
- * Shared password policy for the surfaces that SET a password (sign-up + reset).
- * Sign-in never re-validates — an existing password just has to match. Keep the
- * rules here so the form UI, validation, and error copy can't drift apart.
+ * Password policy for surfaces that SET a password (sign-up + reset). Sign-in
+ * never re-validates. ⚠ Single source — form UI, validation and error copy all
+ * derive from here or they drift.
  */
 
 export const PASSWORD_MIN_LENGTH = 10;
@@ -29,12 +29,12 @@ export function evaluatePassword(pw: string): PasswordEvaluation {
   ];
   const met = checks.filter((c) => c.met).length;
   const valid = met === checks.length;
-  // A short password is weak no matter how many character classes it has.
+  // Short password stays weak regardless of character-class count.
   const score = pw.length < PASSWORD_MIN_LENGTH ? Math.min(1, met) : Math.min(4, Math.max(0, met - 1));
   const strength: PasswordStrength =
     score <= 1 ? "weak" : score === 2 ? "fair" : score === 3 ? "good" : "strong";
   return { checks, valid, score, strength };
 }
 
-/** One-line message for the error banner when a new password is rejected. */
+/** Error-banner line when a new password is rejected. */
 export const PASSWORD_REQUIREMENT_MESSAGE = `Password must be at least ${PASSWORD_MIN_LENGTH} characters and include an uppercase letter, a lowercase letter, a number, and a symbol.`;

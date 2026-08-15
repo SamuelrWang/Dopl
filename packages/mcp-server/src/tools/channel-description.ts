@@ -1,23 +1,13 @@
 /**
- * THE AGENT-FACING PROSE for `dopl_channel` — the tool description, which is
- * the largest single thing in this tool and the only part of it a model reads
- * before deciding what to do.
+ * THE AGENT-FACING PROSE for `dopl_channel` — the CONTRACT (what a channel is,
+ * the one law, what each op does); the registrar is the mechanism. ⚠ The
+ * `channel-` filename prefix is required by the parity split-scan
+ * (parity.test.ts).
  *
- * Split out of the registrar (`channel.ts`) at the §2 500-line cap when THE LAW
- * landed, and the seam is not arithmetic: this file is the CONTRACT (what a
- * channel is, the one law, what each op does), while the registrar is the
- * mechanism (schema, required-param checks, op routing). They change for
- * different reasons and at different rates — every behaviour round rewrites
- * paragraphs here and touches nothing there.
- *
- * The `channel-` filename prefix is required by the parity split-scan
- * (parity.test.ts), which asserts every op in the enum is documented in this
- * string and that no declared param is undocumented or dead.
- *
- * TWO INVARIANTS FOR ANYONE EDITING THE TEXT:
- *  1. Every op name appears in the description as a quoted `"op_name"` — the
- *     parity test greps for exactly that.
- *  2. THE LAW block stays first and stays short; it is read on every
+ * ⚠ TWO INVARIANTS FOR ANYONE EDITING THE TEXT:
+ *  1. Every op name appears as a quoted `"op_name"` — the parity test greps for
+ *     exactly that.
+ *  2. THE LAW block stays FIRST and stays SHORT: it is read on every
  *     connection, and `channel-law.test.ts` pins its load-bearing sentences.
  */
 

@@ -9,23 +9,20 @@ import { seedWorkspace as seedOntology } from "@/features/ontology/server/servic
 import { seedWorkspace as seedChat } from "@/features/chats/server/service-seed";
 
 /**
- * New-workspace seeding orchestrator. When a workspace is first created,
- * this populates it with the "how to use Dopl" starter corpus across
- * every surface: a Knowledge guide, three Skills, an Ontology playbook,
- * and one sample Chat — all cross-referenced by real ids.
+ * New-workspace seeding orchestrator: the "how to use Dopl" starter corpus
+ * (Knowledge guide, three Skills, Ontology playbook, one sample Chat), all
+ * cross-referenced by real ids.
  *
  * Contract:
  *   - Single entry point: `seedNewWorkspace(workspaceId, userId)`.
  *   - Idempotent: returns early if the Dopl Guide KB already exists.
- *   - Dependency-ordered: knowledge + skills first (their entry keys and
+ *   - ⚠ Dependency-ordered: knowledge + skills first (their entry keys and
  *     skill slugs feed the ontology cross-refs), then ontology → chat.
- *   - Best-effort: each surface is wrapped so one failure logs and the
- *     rest still seed. This function never throws — workspace creation
- *     must never be blocked by a seed hiccup.
+ *   - ⚠ Best-effort and NEVER throws — workspace creation must not be blocked
+ *     by a seed hiccup.
  *
- * Only called from the actual workspace-CREATION path (see
- * `service.ensureDefaultWorkspace` + `service.createWorkspaceForUser`);
- * pre-existing workspaces are never seeded.
+ * Only called from the workspace-CREATION path
+ * (`service.ensureDefaultWorkspace` / `service.createWorkspaceForUser`).
  */
 
 export interface SeedNewWorkspaceResult {
@@ -54,21 +51,20 @@ export async function seedNewWorkspace(
   workspaceId: string,
   userId: string
 ): Promise<SeedNewWorkspaceResult> {
-  // Idempotency: the Dopl Guide is the anchor; if it exists, this
-  // workspace was already seeded (or the owner recreated it deliberately).
+  // Idempotency anchor: the Dopl Guide existing means already seeded.
   try {
     const existing = await findBaseBySlug(workspaceId, DOPL_GUIDE_SLUG);
     if (existing) return EMPTY_RESULT;
   } catch (err) {
-    // A failed existence check shouldn't wedge creation — but we also
-    // can't safely proceed to insert (risk of duplicates), so bail.
+    // Failed existence check must not wedge creation, but inserting risks
+    // duplicates — so bail.
     logSeedFailure("idempotency-check", err);
     return EMPTY_RESULT;
   }
 
   const result: SeedNewWorkspaceResult = { ...EMPTY_RESULT, seeded: true };
 
-  // 1. Knowledge — the cross-reference anchor. Entry ids feed everything.
+  // 1. Knowledge — cross-reference anchor; entry ids feed everything.
   let entryIdByKey: Record<string, string> = {};
   try {
     const ctx: KnowledgeContext = {

@@ -3,14 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 /**
- * RFC 8414 Authorization Server Metadata for Dopl's self-hosted OAuth 2.1
- * server. Served at `/.well-known/oauth-authorization-server` via a rewrite
- * (next.config.ts). MCP clients fetch this (pointed here by the protected-
- * resource metadata) to discover the endpoints, then run dynamic client
- * registration + authorization-code/PKCE.
- *
- * Public clients only (`token_endpoint_auth_method: none`), S256 PKCE
- * required, refresh-token grant supported.
+ * RFC 8414 Authorization Server Metadata. ⚠ Served at
+ * `/.well-known/oauth-authorization-server` via a REWRITE (next.config.ts). Clients arrive from
+ * the protected-resource metadata, then run DCR + authorization-code/PKCE.
+ * Public clients only (`token_endpoint_auth_method: none`), S256 PKCE required, refresh supported.
  */
 export function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;

@@ -1,20 +1,11 @@
 import type { EdgeSide, NodeRect, Point, SceneEdge } from "./types";
 
 /**
- * Domain-agnostic orthogonal edge router. Given a set of edges and the
- * live node rectangles (arbitrary, user-draggable positions), it produces
- * a clean elbow polyline per edge: sides picked by relative geometry with
- * hysteresis, parallel edges in a shared corridor fanned onto distinct
- * lanes, a minimum stub off each node before the first turn, exit/entry
- * anchors spread along a node's side when several edges share it, and — for
- * a vertical run blocked by an intervening card — a side loop instead of a
- * line drawn straight through the obstacle. The result lands on
- * `SceneEdge.points`, which EdgeLayer renders verbatim (rounded corners +
- * arrowheads that terminate exactly on the node border).
- *
- * Pure and deterministic (stable in input edge order) so it unit-tests
- * without a DOM. Replaces the per-feature side/mid guessing the ontology
- * layouts used to do.
+ * Domain-agnostic orthogonal edge router: edges + live node rects → one elbow
+ * polyline per edge on `SceneEdge.points`, rendered verbatim by EdgeLayer.
+ * Sides by geometry w/ hysteresis; parallel edges fanned onto corridor lanes;
+ * min stub before first turn; vertical run blocked by a card → side loop.
+ * Deterministic in input edge order.
  */
 
 export interface RouteOptions {
@@ -27,13 +18,12 @@ export interface RouteOptions {
 export const DEFAULT_STUB = 24;
 export const DEFAULT_LANE_GAP = 22;
 
-// A vertical target must clear the best horizontal gap by this much before
-// routing flips from horizontal (the layered-DAG default) to vertical — the
-// hysteresis that keeps a slightly-offset neighbour from swinging sides.
+// Vertical target must clear the best horizontal gap by this much to flip
+// H→V. Keeps a slightly-offset neighbour from swinging sides.
 const HYSTERESIS = 24;
 // Corridors within this many px collapse into one lane group.
 const CORRIDOR_BUCKET = 48;
-// How far a side loop sits off the outer node edge (before lane fan-out).
+// Side-loop offset from the outer node edge (before lane fan-out).
 const LOOP_INSET = 32;
 // Anchor spread band along a node side when many edges share it.
 const ANCHOR_MIN_T = 0.25;
@@ -83,8 +73,7 @@ function bucket(v: number): number {
   return Math.round(v / CORRIDOR_BUCKET);
 }
 
-// 0, +1, -1, +2, -2, … × gap — packs parallel lanes tight around the base
-// while guaranteeing each one is distinct.
+// 0, +1, -1, +2, -2, … × gap — tight around base, each lane distinct.
 function laneOffset(index: number, gap: number): number {
   if (index === 0) return 0;
   const magnitude = Math.ceil(index / 2) * gap;
@@ -92,10 +81,9 @@ function laneOffset(index: number, gap: number): number {
 }
 
 /**
- * Pick the routing family for one edge from the two rects' relative
- * position. Horizontal is the default (both consumer graphs flow
- * left→right); vertical only wins when the target is clearly above/below by
- * more than the best horizontal gap plus the hysteresis band.
+ * Routing family from relative rect position. H is the default (consumer
+ * graphs flow left→right); V wins only when the target clears the best
+ * horizontal gap by more than HYSTERESIS.
  */
 export function chooseRouting(a: NodeRect, b: NodeRect): {
   orient: Orient;
@@ -122,11 +110,8 @@ export function chooseRouting(a: NodeRect, b: NodeRect): {
   return { orient: "H", fromSide: h.from, toSide: h.to };
 }
 
-/**
- * Is a straight vertical run between `a` and `b` blocked by a third node?
- * (The classic "column → non-adjacent card in the same lane" case — a
- * straight drop would cut through the card stacked between them.)
- */
+/** Straight vertical run a→b blocked by a third node? (column → non-adjacent
+ *  card in the same lane: the drop would cut through the card between them) */
 function verticalBlocked(a: NodeRect, b: NodeRect, rects: NodeRect[]): boolean {
   const top = Math.min(a.y + a.height, b.y + b.height);
   const bottom = Math.max(a.y, b.y);
@@ -141,8 +126,8 @@ function verticalBlocked(a: NodeRect, b: NodeRect, rects: NodeRect[]): boolean {
   return false;
 }
 
-/** Longest horizontal segment's midpoint (else longest segment) — never a
- *  corner, so a label pill never straddles an elbow. */
+/** Midpoint of longest horizontal segment (else longest segment). ⚠ Never a
+ *  corner — a label pill must not straddle an elbow. */
 export function labelAnchor(points: Point[]): Point {
   if (points.length === 0) return { x: 0, y: 0 };
   if (points.length === 1) return points[0];
@@ -178,9 +163,8 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /**
- * Route every edge whose endpoints resolve, returning the same edges with
- * `points` (a world-space elbow polyline) filled in. Edges with a missing
- * endpoint are dropped.
+ * Route every edge whose endpoints resolve → same edges with `points` (world-
+ * space elbow polyline) filled in. Missing endpoint → edge dropped.
  */
 export function routeEdges(
   edges: SceneEdge[],
@@ -193,7 +177,6 @@ export function routeEdges(
 
   // Pass 1 — family + sides + corridor bucket per edge.
   const plans: Plan[] = [];
-  // Pass 2 seeds: how many edges share each (node, side) anchor.
   const anchorGroups = new Map<string, Plan[]>();
 
   for (const edge of edges) {
@@ -208,8 +191,7 @@ export function routeEdges(
     let toSide = picked.toSide;
 
     if (orient === "V" && verticalBlocked(from, to, allRects)) {
-      // Loop out the near horizontal side rather than cut through the
-      // obstacle: exit + enter the LEFT sides, drop down a side corridor.
+      // Loop out rather than cut through: exit + enter LEFT, side corridor.
       route = "loop";
       fromSide = "left";
       toSide = "left";
@@ -255,8 +237,8 @@ export function routeEdges(
     pushGroup(anchorGroups, `${edge.to}:${toSide}`, plan);
   }
 
-  // Pass 2 — spread anchors along a shared node side, ordered by the cross
-  // coordinate of the far endpoint so lines don't cross at the node.
+  // Pass 2 — spread anchors on a shared node side, ordered by the far
+  // endpoint's cross coordinate so lines don't cross at the node.
   for (const [key, group] of anchorGroups) {
     if (group.length <= 1) continue;
     const [nodeId, side] = key.split(":") as [string, EdgeSide];
@@ -269,7 +251,7 @@ export function routeEdges(
     });
   }
 
-  // Pass 3 — lane index within each corridor.
+  // Pass 3 — lane index per corridor.
   const laneCounters = new Map<string, number>();
   for (const plan of plans) {
     const k = laneCounters.get(plan.corridorKey) ?? 0;
@@ -277,7 +259,6 @@ export function routeEdges(
     plan.laneIndex = k;
   }
 
-  // Pass 4 — build the polyline.
   return plans.map((plan) => buildEdge(plan, stub, laneGap));
 }
 
@@ -294,7 +275,7 @@ function buildEdge(plan: Plan, stub: number, laneGap: number): SceneEdge {
 
   let points: Point[];
   if (route === "loop") {
-    // Side corridor to the left of both nodes; successive loops fan outward.
+    // Side corridor left of both nodes; successive loops fan outward.
     const laneX = Math.min(from.x, to.x) - LOOP_INSET - plan.laneIndex * laneGap;
     points = [p0, { x: laneX, y: p0.y }, { x: laneX, y: p1.y }, p1];
   } else if (orient === "H") {

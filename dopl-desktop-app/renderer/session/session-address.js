@@ -1,32 +1,25 @@
-// Dopl session window — the COMPOSER ADDRESSEE PILL, the pure layer (rollback §3.2).
+// Dopl session window — the COMPOSER ADDRESSEE PILL, pure layer.
 //
 // ONE composer, TWO addressees, chosen on a CONTROL. The default steers the window you are
-// looking at ("Message flint"); the other row posts the operator's OWN words into the channel
-// addressed to the peer (their inbound gate, their agent, their reply).
+// looking at; the other row posts the operator's OWN words into the channel addressed to the
+// peer (their inbound gate, their agent, their reply).
 //
-// WHAT THIS REPLACES, AND WHY IT IS NOT THE SAME THING REBUILT. v2.8 had the identical pair of
-// destinations behind a leading `@` in the text: `@my-agent` steered, `@their-agent` posted to
-// the peer. It went with the named agents (rollback §1), and §3.2 brings the CAPABILITY back
-// without the syntax. That is the whole difference and it is the point of the phase — a tag is
-// only reachable by someone who already knows it exists, an option nobody discovers is an
-// option nobody has, and the one you cannot discover here is the one that leaves this machine.
-// So: no tokenizer, no popup-over-the-caret state machine, no matcher, no "an unrecognized tag
-// is not a tag" rule, and no keydown contention with Enter. A picked target is a variable, the
-// draft is plain text end to end, and the delivered bytes are exactly what was typed.
+// ⚠ A CONTROL, deliberately NOT an `@tag`: a tag is only reachable by someone who already knows
+// it exists, and the option you cannot discover here is the one that LEAVES THIS MACHINE. So no
+// tokenizer, no popup-over-the-caret state machine, no matcher, no "an unrecognized tag is not
+// a tag" rule, and no keydown contention with Enter. A picked target is a variable, the draft
+// is plain text end to end, and the delivered bytes are exactly what was typed.
 //
-// SECURITY (why a peer-addressed send carries no approval card): every gate on this surface
-// bounds an AGENT-authored action — the outbound decision card exists because the agent drafted
-// a message and the operator must authorize it leaving this machine. A peer-addressed send is
-// the opposite shape: human-typed, human-picked, into a channel the human is already a member
-// of, so a card would ask the operator to approve themselves to themselves. It is the identical
-// posture to the web composer. Nothing on this path touches grantDecision / allowForTask / the
-// two permission axes, it never becomes a steer (no session:send, no pushTurn, no canUseTool),
-// and the PEER's side gates it like any other inbound message.
+// ⚠ SECURITY — why a peer-addressed send carries NO approval card: every gate on this surface
+// bounds an AGENT-authored action. A peer-addressed send is the opposite shape — human-typed,
+// human-picked, into a channel the human is already a member of — so a card would ask the
+// operator to approve themselves to themselves (identical posture to the web composer). Nothing
+// on this path touches grantDecision / allowForTask / the two permission axes, it never becomes
+// a steer (no session:send, no pushTurn, no canUseTool), and the PEER's side gates it like any
+// other inbound message.
 //
-// DOM / electron / fs free and UMD-wrapped like session-chrome.js: a plain <script> in the
-// sandboxed renderer (attaching globalThis.DoplSessionAddress), a require() under node --test.
-// It returns STRINGS and PLAIN OBJECTS only, never markup; session-address-ui.js prints every
-// string it produces via textContent.
+// ⚠ DOM / electron / fs free and UMD-wrapped like session-chrome.js. Returns STRINGS and PLAIN
+// OBJECTS only, never markup; session-address-ui.js prints every string via textContent.
 
 (function (global, factory) {
   const api = factory();
@@ -38,12 +31,9 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  // The shared string discipline (collapse to one line + cap) lives in session-format.js,
-  // reached the same way session-chrome.js reaches the view-model: a require() under node, the
-  // renderer global in the sandbox (session.html loads session-format.js first). The
-  // counterparty's display name is the ONLY untrusted input this module reads, and oneLine is
-  // what bounds it, so a missing formatter is a hard load error rather than a silent fallback
-  // that would let an unbounded name through.
+  // Shared string discipline (one line + cap) lives in session-format.js. ⚠ The counterparty's
+  // display name is the ONLY untrusted input here and `oneLine` is what bounds it, so a missing
+  // formatter is a HARD LOAD ERROR — a silent fallback would let an unbounded name through.
   const fmt =
     typeof module === "object" && typeof require === "function"
       ? require("./session-format.js")
@@ -56,14 +46,13 @@
 
   // ── copy (NO em dashes; every string reaches the DOM via textContent) ────────
   const MENU_LABEL = "Send to";
-  // The handle is minted in MAIN (session-summary's ledger, F-142) and read over IPC. Until it
-  // arrives — and on a desktop older than §3.2, whose IPC has no such handler — the row still
-  // has to say what it does. It names the WINDOW rather than a nonexistent agent, because
-  // "this session" is true in every case and a placeholder handle would not be.
+  // The handle is minted in MAIN (session-summary's ledger) and read over IPC. ⚠ Until it
+  // arrives (and on a desktop whose IPC has no such handler) the fallback names the WINDOW, not
+  // a placeholder handle: "this session" is true in every case.
   const SELF_FALLBACK = "this session";
   const SELF_HINT = "Steers the agent in this window.";
-  // The peer row's hint says the two things the operator cannot see: my agent is not involved,
-  // and theirs is. Both are load-bearing — this is the row that leaves the machine.
+  // ⚠ The peer row's hint states the two things the operator cannot see: my agent is not
+  // involved, theirs is. Both load-bearing — this is the row that leaves the machine.
   const PEER_HINT = "Posts your own words to the channel. Their agent picks it up, yours does not see it.";
   const PEER_FALLBACK = "the peer";
   const SOLO_NOTE = "This session has no counterparty, so only your own agent can be reached from here.";
@@ -73,13 +62,13 @@
 
   const TARGET_SELF = "self";
   const TARGET_PEER = "peer";
-  /** THE RESTING TARGET IS THE WINDOW YOU ARE LOOKING AT (§3.2). Steering costs nothing and
-   *  stays on this machine; the other row wakes somebody else, so it is the one you opt into. */
+  /** ⚠ THE RESTING TARGET IS THE WINDOW YOU ARE LOOKING AT: steering costs nothing and stays
+   *  on this machine, while the other row wakes somebody else, so it is opt-in. */
   const DEFAULT_TARGET = TARGET_SELF;
 
   const NAME_CAP = 80; // the bound chrome.identityName / prompt-framing.sanitizeName use
-  // Tighter than NAME_CAP: the who-line is one short uppercase row above the message body, and
-  // an unbounded name there pushed the body and the Sent status clean off screen (v2.8 FIX F1).
+  // ⚠ Tighter than NAME_CAP: the who-line is one short uppercase row above the body, and an
+  // unbounded name there pushes the body and the Sent status clean off screen.
   const WHO_NAME_CAP = 60;
 
   /** A display name, one-lined and bounded, or "" — the ONE place either name is sanitized. */
@@ -151,10 +140,9 @@
   }
 
   // ── the two stream reducer cases, composed OVER vm.reduceEvent in session.js ──
-  // They live here (not in the view-model) because session-viewmodel.js is at its hard 500-line
-  // §2 cap. A peer post renders in MY stream as its OWN kind — never a 'turn' (it is not a steer
-  // and my agent never saw it) and never an 'outbound' (my agent did not draft it, and there is
-  // no permission to answer).
+  // ⚠ A peer post renders in MY stream as its OWN kind — never a 'turn' (not a steer; my agent
+  // never saw it) and never an 'outbound' (my agent did not draft it, and there is no
+  // permission to answer).
   function reducePeerMessage(state, event) {
     const st = state;
     const ev = event;

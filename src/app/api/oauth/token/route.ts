@@ -10,28 +10,22 @@ import { enforceOAuthIpRateLimit } from "@/shared/auth/oauth-rate-limit";
 
 export const dynamic = "force-dynamic";
 
-// Per-IP token ceiling. The auth codes / tokens here are 256-bit and single-use
-// so unlike /register this endpoint mints nothing on a bad guess (it's
-// cost-only), hence a higher bound than registration: a real client hits it on
-// the code exchange and once per hour per token on refresh, so 60/min/IP covers
-// even a busy multi-token NAT while still capping a brute-force sweep. Override
-// via env.
+// Per-IP token ceiling, higher than /register's: codes and tokens here are 256-bit single-use,
+// so a bad guess mints nothing (cost-only). A real client hits it on the code exchange and once
+// per hour per token on refresh, so 60/min/IP covers a busy multi-token NAT while capping a
+// brute-force sweep. Override via env.
 const TOKEN_RPM = Number(process.env.OAUTH_TOKEN_RATE_LIMIT_RPM) || 60;
 
 /**
- * OAuth 2.1 token endpoint. Supports:
- *   - grant_type=authorization_code (PKCE verifier required)
- *   - grant_type=refresh_token (rotating)
- *
- * Public clients, so no client authentication — the auth code is bound to
- * the client_id + redirect_uri + PKCE challenge at issuance and re-checked
- * here. Form-encoded per the OAuth spec.
+ * OAuth 2.1 token endpoint: `authorization_code` (PKCE verifier required) and rotating
+ * `refresh_token`. Public clients, so no client authentication — the code is bound to
+ * client_id + redirect_uri + PKCE challenge at issuance and re-checked here.
  */
 async function readParams(
   request: NextRequest,
 ): Promise<Record<string, string>> {
   const ct = request.headers.get("content-type") || "";
-  // OAuth mandates form-encoding, but some MCP clients send JSON — accept both.
+  // ⚠ OAuth mandates form-encoding, but some MCP clients send JSON — accept both.
   if (ct.includes("application/json")) {
     try {
       const j = (await request.json()) as Record<string, unknown>;

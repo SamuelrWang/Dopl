@@ -20,7 +20,7 @@ import type { ContextMenuItem } from "../tree-context-menu";
 import { reportError } from "./utils";
 import type { Selection } from "./types";
 
-/** A delete/move target plus the base it belongs to (v2 has many open trees). */
+/** Delete/move target plus its base (many trees can be open). */
 interface ScopedItem {
   baseId: string;
   item: ContextMenuItem;
@@ -35,10 +35,9 @@ interface Args {
 }
 
 /**
- * Tree CRUD/move/delete/download handlers, ported from v1 KnowledgeBaseView
- * and generalized per `baseId` (v2 keeps many trees open at once). Owns the
- * inline-rename node + the delete/move dialog targets. Extracted from the main
- * controller to keep both files under the size cap.
+ * Tree CRUD/move/delete/download handlers, keyed per `baseId` because many
+ * trees stay open. Owns the inline-rename node and the delete/move dialog
+ * targets. Split from the controller to hold both files under the 500-line cap.
  */
 export function useKnowledgeV2Trees({
   workspaceId,
@@ -50,8 +49,8 @@ export function useKnowledgeV2Trees({
   const [deleteTarget, setDeleteTarget] = useState<ScopedItem | null>(null);
   const [moveTarget, setMoveTarget] = useState<ScopedItem | null>(null);
 
-  // Effective write access on a base — falls open while the access fetch is
-  // pending so owners/admins never see a flash of disabled affordances.
+  // ⚠ Falls OPEN while the access fetch is pending, so owners/admins never
+  // see a flash of disabled affordances.
   const access = useMyAccessContext();
   const canEdit = useCallback(
     (baseId: string) => {
@@ -66,8 +65,8 @@ export function useKnowledgeV2Trees({
       try {
         const folder = await apiCreateFolder(baseId, { parentId, name }, workspaceId);
         await refreshTree(baseId);
-        // Drop the new folder into inline-rename (the tree marks it a stub so
-        // Escape removes the empty placeholder).
+        // Into inline-rename; the tree marks it a stub so Escape removes the
+        // empty placeholder.
         setEditingNodeId(folder.id);
         return folder.id;
       } catch (err) {
@@ -94,7 +93,7 @@ export function useKnowledgeV2Trees({
     [workspaceId, refreshTree, bases, setSelection]
   );
 
-  // Raw movers throw on failure so the move dialog can keep itself open.
+  // ⚠ Raw movers THROW on failure so the move dialog can stay open.
   const moveFolderRaw = useCallback(
     async (baseId: string, folderId: string, newParentId: string | null) => {
       await apiMoveFolder(folderId, { parentId: newParentId }, workspaceId);
@@ -244,7 +243,7 @@ export function useKnowledgeV2Trees({
   };
 }
 
-/** The per-base tree handlers passed down to base-tree.tsx → TreeRows. */
+/** Per-base tree handlers passed to base-tree.tsx → TreeRows. */
 export type TreeHandlers = ReturnType<
   typeof useKnowledgeV2Trees
 >["treeHandlers"];

@@ -6,25 +6,15 @@ import { getProfileBillingRef } from "@/features/billing/server/subscriptions";
 
 export const DELETE = withUserAuth(async (_request, { userId }) => {
   try {
-    // Session-only enforcement lives in the wrapper (`{ sessionOnly: true }`
-    // below): an MCP agent token — of any scope — is refused before reaching
-    // this handler, so account deletion can only come from an interactive
-    // session.
+    // sessionOnly (wrapper below) refuses any MCP agent token before this handler runs.
     const user = { id: userId };
 
     const admin = supabaseAdmin();
 
-    // ── Shared-workspace guard (BEFORE billing/storage so we can bail
-    // early without side effects). If the caller owns any workspace
-    // that still has other active members, refuse the delete. Cascading
-    // the workspace away here would vaporize co-members' KBs / skills /
-    // clusters along with it. Force the user to either
-    // transfer ownership or remove the other members first.
-    //
-    // Two-query manual join — PostgREST `!inner` joins have been
-    // returning opaque 500s on this schema since the May 2026
-    // workspace_id denormalization migrations (see attachments.ts:256
-    // for the rationale). Robust regardless of schema-cache state.
+    // ⚠ Shared-workspace guard runs BEFORE billing/storage so it bails with no side effects.
+    // Cascading a workspace with other active members would vaporize co-members' KBs/skills.
+    // ⚠ Two-query manual join: PostgREST `!inner` joins return opaque 500s on this schema since
+    // the May 2026 workspace_id denormalization migrations (rationale in attachments.ts).
     const { data: ownedWorkspaces, error: ownedError } = await admin
       .from("workspaces")
       .select("id, name")
@@ -81,17 +71,10 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
       }
     }
 
-    // ── Stripe subscription cancellation (FIRST, aborts on failure) ──
-    // If a user deletes their account we MUST stop the recurring billing
-    // first — otherwise Stripe keeps charging their card while their
-    // Supabase row is gone. We abort the delete if cancellation fails
-    // so the user can retry rather than silently losing the ability to
-    // cancel their subscription from the UI.
-    //
-    // Two sources: the legacy per-user subscription (profiles) and the
-    // per-workspace subscriptions on the user's owned workspaces. The
-    // shared-workspace guard above already ensured every owned workspace
-    // is solo, so cascading them away is safe once billing is stopped.
+    // ⚠ Stripe cancellation FIRST, and it aborts the delete on failure — otherwise Stripe keeps
+    // charging a card whose Supabase row is gone, with no UI left to cancel from.
+    // Two sources: legacy per-user subscription (profiles) + per-workspace subs on owned
+    // workspaces (all solo, per the guard above).
     const subscriptionIds = new Set<string>();
     const profileRef = await getProfileBillingRef(user.id).catch(() => null);
     if (profileRef?.stripeSubscriptionId) {
@@ -131,7 +114,6 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
       }
     }
 
-    // Clean up community thumbnail storage
     const { data: thumbFiles } = await admin.storage
       .from("community-thumbnails")
       .list(user.id, { limit: 100 });
@@ -140,9 +122,8 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
       await admin.storage.from("community-thumbnails").remove(thumbPaths);
     }
 
-    // Delete the auth user — all per-user data cascades automatically:
-    // profiles, user-scoped clusters, user_preferences
-    // mcp_events.user_id / system_events.user_id are SET NULL (analytics retained)
+    // Cascades profiles / user-scoped clusters / user_preferences.
+    // mcp_events.user_id + system_events.user_id are SET NULL (analytics retained).
     const { error } = await admin.auth.admin.deleteUser(user.id);
 
     if (error) {

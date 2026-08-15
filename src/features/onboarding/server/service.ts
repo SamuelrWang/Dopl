@@ -24,11 +24,8 @@ export async function getOnboardingStatus(
   return { onboarded: onboardedAt !== null, surveyCompleted };
 }
 
-/**
- * Record survey answers as a conversion event. Once per user — a
- * refresh-and-resubmit just no-ops so the analytics row stays the
- * first (real) submission.
- */
+/** Survey answers → conversion event, once per user. Resubmit no-ops so the
+ *  analytics row stays the first (real) submission. */
 export async function submitSurvey(
   userId: string,
   input: SurveySubmission
@@ -47,12 +44,9 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 }
 
 /**
- * Finish onboarding: name the default workspace, stamp onboarded_at, and
- * hand back the workspace URL to land on. The name comes from the final
- * onboarding step when the user typed one; a blank name falls back to the
- * auto-name ("{FirstName}'s Workspace"). An optional description is set in
- * the same write. Every step is idempotent so a retry after partial
- * failure converges.
+ * Finish onboarding: name default workspace, stamp onboarded_at, return the
+ * URL to land on. Blank name → "{FirstName}'s Workspace". ⚠ Every step
+ * idempotent so a retry after partial failure converges.
  */
 export async function completeOnboarding(
   userId: string,
@@ -74,7 +68,6 @@ export async function completeOnboarding(
     workspaceName,
     description
   );
-  // Land the user on the overview page — the proper workspace home.
 
   const won = await markOnboarded(userId);
   if (won) {
@@ -88,16 +81,15 @@ export async function completeOnboarding(
   return { redirectPath: `/${workspaceSegment(workspace)}/overview` };
 }
 
-/** Re-export for the auth-callback gate (avoids a repository import there). */
+/** Re-export for the auth-callback gate — keeps repository out of it. */
 export async function isOnboarded(userId: string): Promise<boolean> {
   return (await findOnboardedAt(userId)) !== null;
 }
 
 /**
- * First name for the workspace title: profiles.display_name →
+ * First name for workspace title: profiles.display_name →
  * user_metadata.full_name → user_metadata.name, first whitespace token.
- * Never the email local-part — "samuelnywang717's Workspace" is worse
- * than the "My Workspace" fallback.
+ * ⚠ Never the email local-part — worse than the "My Workspace" fallback.
  */
 async function resolveFirstName(userId: string): Promise<string | null> {
   const displayName = await findDisplayName(userId);
@@ -112,7 +104,7 @@ async function resolveFirstName(userId: string): Promise<string | null> {
       const fullName = meta?.full_name ?? meta?.name;
       if (typeof fullName === "string") candidate = fullName.trim();
     } catch {
-      // Metadata lookup is best-effort; fall through to the generic name.
+      // Best-effort; fall through to the generic name.
     }
   }
 

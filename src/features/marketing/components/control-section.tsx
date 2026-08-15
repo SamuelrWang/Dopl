@@ -2,20 +2,9 @@ import { ArrowRight, BadgeCheck, Check, Copy, MoreHorizontal } from "lucide-reac
 
 import { GET_STARTED_URL } from "../constants";
 
-/**
- * "Control" — the closing section, cloned from the Natural.dev reference:
- * two columns on the plain WHITE page. Left: eyebrow, thin two-line heading,
- * four checked bullets with generous vertical air, then the CTA pair (dark
- * pill + text link). Right: a large LIGHT-GRAY panel with the white
- * agent-identity card floating in its upper area — the gray field around the
- * white card is the reference's key texture.
- *
- * Static on purpose (2026-08-13): this section had a scroll-driven dark-strips
- * entrance; the owner cut it. No hooks, no modes, no animation — a server
- * component like the other static sections.
- */
+/** ⚠ Static on purpose — no hooks, no modes. Keep it a server component. */
 
-/** One line each. Order is the argument: identity → consent → rules → record. */
+/** ⚠ Order is the argument: identity → consent → rules → record. */
 const BULLETS: readonly string[] = [
   "Every agent has a stable identity",
   "Actions are consent-gated by the people they affect",
@@ -45,18 +34,15 @@ export function ControlSection() {
               Learn more
               <ArrowRight size={14} strokeWidth={2} aria-hidden />
             </a>
-            {/* TODO: no "Talk to the team" destination exists yet — no contact
-                route, no sales inbox. Point this at the real one when there is
-                one; until then it is a placeholder that does not navigate. */}
+            {/* TODO: no contact route yet — placeholder, must not navigate. */}
             <a href="#" className="lp-ctl-secondary">
               Talk to the team
             </a>
           </div>
         </div>
 
-        {/* Static prop, like the multiplayer visuals: no real data, nothing
-            interactive, no focusable children — so the whole panel is hidden
-            from assistive tech and the copy on the left does the talking. */}
+        {/* Static prop, no focusable children — hidden from AT; left column is
+            the accessible content. */}
         <div className="lp-ctl-panel" aria-hidden="true">
           <div className="lp-ctl-card">
             <div className="lp-ctl-card-head">

@@ -1,15 +1,9 @@
 import type { ChatExportInput } from "../schema";
 
-/**
- * Seed chat for a brand-new workspace: one archived sample session,
- * "Getting started with Dopl". It doubles as documentation — its content
- * teaches the export ritual, and its shape (summary-per-message,
- * checked deliverables, a learning) shows what a good export looks like.
- *
- * Pure content — no I/O. `service-seed.ts` runs it through the ordinary
- * `exportChat` path. `sessionDate` is omitted so the sample dates to the
- * workspace's creation day.
- */
+/** Seed chat for a new workspace — one archived sample session that doubles
+ *  as documentation of a good export. Pure content, no I/O; `service-seed.ts`
+ *  runs it through the ordinary `exportChat` path. `sessionDate` is omitted so
+ *  the sample dates to the workspace's creation day. */
 
 /** Stable idempotency handle for the seeded sample chat. */
 export const SEED_CHAT_SESSION_ID = "dopl-seed-getting-started";
@@ -21,8 +15,7 @@ export function buildChatSeed(): ChatExportInput {
       "A first session on a new Dopl workspace: how to orient with dopl_map, where different kinds of memory belong, and how to leave a trail. A worked example of a clean export.",
     source: "claude-code",
     clientSessionId: SEED_CHAT_SESSION_ID,
-    // Public so every workspace member sees the example; a real user's
-    // own exports default to private.
+    // Public so every member sees the example; real exports default private.
     visibility: "public",
     deliverables: [
       { label: "Read the Dopl Guide — “Start here” entry", done: true },

@@ -1,30 +1,21 @@
 /**
  * INVARIANT SUITE — the two REMOVALS the launch surface makes, checked against
- * the tables that enforce them.
+ * the tables that enforce them. One question asked twice: is this capability
+ * really gone, everywhere it is described?
  *
- *   1. D1/D2 — the hide-before-delete seam. `HIDDEN_TOOLS` keeps a named tool
- *      out of `tools/list` while its code is still in the tree. It is EMPTY
- *      today: workflows and their clusters were its only entries, hidden
- *      2026-08-07 and deleted 2026-08-11. What has to hold is that every name
- *      in it is a REAL registered tool (a name with no registrar is dead law
- *      that reads as coverage), that no surviving description routes an agent
- *      to one, and that the visible list is exactly the surviving tools.
+ *   1. The hide-before-delete seam. `HIDDEN_TOOLS` keeps a named tool out of
+ *      `tools/list` while its code is still in the tree. ⚠ Every name in it
+ *      must be a REAL registered tool (a name with no registrar is dead law
+ *      that reads as coverage), no surviving description may route an agent to
+ *      one, and the visible list must be exactly the surviving tools.
+ *   2. DELETION IS APP-ONLY — every op on every live `_admin` tool is refused,
+ *      and each tool SAYS SO in its description, so `tools/list` never
+ *      advertises a delete the server will refuse.
  *
- *   2. §2b — DELETION IS APP-ONLY. Every op on every live `_admin` tool is
- *      refused, and each of those tools SAYS SO in its own description, so
- *      `tools/list` never advertises a delete the server will refuse.
- *
- * They are one file because they are one question asked twice — "is this
- * capability really gone, everywhere it is described?" — and because the
- * delete assertions read `HIDDEN_TOOLS` to know which admin tools are live.
- *
- * Split out of `parity.test.ts` when that file crossed the §2 500-line cap;
- * the shared capture and the parsed gating tables live in `parity-harness.ts`.
- *
- * The completeness check asks the REAL predicate — `isBlockedDeleteOp` from
- * `delete-policy.ts` — not a copy. The TABLE is still parsed out of source
- * (that is what catches a table drifting from an op enum), but a rule checked
- * against a reimplementation of itself only proves the copy agrees with itself.
+ * ⚠ The completeness check asks the REAL predicate (`isBlockedDeleteOp` from
+ * `delete-policy.ts`), not a copy — a rule checked against a reimplementation
+ * of itself only proves the copy agrees with itself. The TABLE is still parsed
+ * from source, which is what catches a table drifting from an op enum.
  */
 
 import { describe, it, expect } from "vitest";
@@ -43,8 +34,7 @@ import {
 
 describe("HIDDEN_TOOLS — the retired surface", () => {
   it("names only tools that really are registered by a registrar", () => {
-    // A stale name here is dead law that reads as coverage: it looks like the
-    // tool is being suppressed when in fact nothing by that name exists.
+    // ⚠ A stale name is dead law that reads as coverage.
     for (const name of HIDDEN_TOOLS) {
       expect(
         TOOL_BY_NAME.has(name),
@@ -54,21 +44,17 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
   });
 
   it("is EMPTY — nothing is mid-retirement (workflows/clusters were deleted)", () => {
-    // Pinned as a VALUE, not skipped. The set held four names between
-    // 2026-08-07 and 2026-08-11; those tools are now deleted outright, so the
-    // honest state is `[]` and this test is what makes a re-hide deliberate.
-    // The mechanism is NOT dead: the next feature to retire adds its names
-    // here, ships dark, and is deleted in a later change. When that happens,
-    // this expectation changes with it — and the rule the sibling test states
-    // still applies (both halves of a domain, the action tool AND its admin
-    // twin, or the delete op is the one reachable operation left).
+    // ⚠ Pinned as a VALUE, not skipped — this is what makes a re-hide
+    // deliberate. The mechanism is not dead: the next retirement adds names
+    // here, ships dark, and deletes later. ⚠ Hide BOTH halves of a domain (the
+    // action tool AND its admin twin), or the delete op is the one reachable
+    // operation left.
     expect([...HIDDEN_TOOLS]).toEqual([]);
   });
 
   it("the live tool list is exactly the surviving tools", () => {
-    // The pin an agent's `tools/list` is compared against. The meta-tools
-    // (`list_workspaces` / `current_workspace`) register through
-    // `registerMetaTool` and so are not in this capture.
+    // ⚠ Meta-tools register through `registerMetaTool` and are not in this
+    // capture.
     expect(VISIBLE_TOOLS.map((t) => t.name).sort()).toEqual(
       [
         "dopl_channel",
@@ -88,13 +74,11 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
   });
 
   it("no surviving tool's description sends an agent to a hidden tool", () => {
-    // The tool is gone from `tools/list`; a description that still routes to it
-    // teaches a call that cannot be made, which reads to the agent as a broken
-    // connection rather than as a removed feature. VACUOUS while HIDDEN_TOOLS
-    // is empty, and kept for the same reason the table is: it is the second
-    // half of the hide step, and it must already exist when the next one runs.
-    // The DELETED names are pinned separately and non-vacuously by
-    // `retirement.test.ts › RETIRED`, against the real `buildInstructions`.
+    // ⚠ A description routing to a hidden tool teaches a call that cannot be
+    // made, which reads as a broken connection, not a removed feature. Vacuous
+    // while HIDDEN_TOOLS is empty and kept anyway — it is the second half of
+    // the hide step and must exist before the next one runs. DELETED names are
+    // pinned non-vacuously by `retirement.test.ts › RETIRED`.
     for (const tool of VISIBLE_TOOLS) {
       for (const hidden of HIDDEN_TOOLS) {
         expect(
@@ -121,8 +105,7 @@ describe("delete ops are refused, not performed", () => {
   });
 
   it("every op it lists exists in that tool's op enum", () => {
-    // The WRITE_OPS.dopl_skill drift bug, applied to the delete table: a
-    // blocked op that no longer exists is a rule guarding nothing.
+    // ⚠ A blocked op that no longer exists is a rule guarding nothing.
     for (const [name, ops] of Object.entries(DELETE_BLOCKED_OPS)) {
       const enumOps = opEnum(TOOL_BY_NAME.get(name)!);
       expect(enumOps, `${name} has no op enum but DELETE_BLOCKED_OPS gates it`).not.toBeNull();
@@ -136,13 +119,11 @@ describe("delete ops are refused, not performed", () => {
   });
 
   it("SECURITY: EVERY op on EVERY live admin tool is refused — no delete path survives", () => {
-    // THE INVARIANT THAT MATTERS. Every remaining `*_admin` op is destructive by
-    // construction (that is why the tool exists), so a new op landing on one of
-    // them un-refused would be a delete an agent can perform. Asked of the real
-    // predicate, so the fail-closed name-shape fallback counts too — which is
-    // what lets a future admin op inherit the rule without anyone editing the
-    // table. If this fails on a genuinely non-destructive new op, that op does
-    // not belong on an `_admin` tool.
+    // ⚠ THE INVARIANT THAT MATTERS: every `*_admin` op is destructive by
+    // construction, so a new un-refused one is a delete an agent can perform.
+    // Asked of the REAL predicate so the fail-closed name-shape fallback counts
+    // and a future admin op inherits the rule with no table edit. A failure on
+    // a genuinely non-destructive op means it does not belong on `_admin`.
     for (const tool of VISIBLE_TOOLS) {
       if (!isAdmin(tool.name)) continue;
       const enumOps = opEnum(tool);
@@ -167,9 +148,9 @@ describe("delete ops are refused, not performed", () => {
   });
 
   it("leaves the non-admin tools alone — this is a delete block, not a write block", () => {
-    // The opposite failure: an over-broad rule that swallowed `remove_attribute`
-    // or `remove_template_field` (ontology FIELD edits) would quietly remove
-    // working capability, and it would do it with a message about deletion.
+    // ⚠ Opposite failure: an over-broad rule swallowing `remove_attribute` or
+    // `remove_template_field` (ontology FIELD edits) removes working capability
+    // with a message about deletion.
     for (const tool of VISIBLE_TOOLS) {
       if (isAdmin(tool.name)) continue;
       for (const op of opEnum(tool) ?? []) {
@@ -182,9 +163,8 @@ describe("delete ops are refused, not performed", () => {
   });
 
   it("no admin description still claims a delete is recoverable", () => {
-    // Deletion in the app is PERMANENT — the trash feature is gone. A leftover
-    // "soft-deleted"/"restorable" sentence would have an agent tell a user an
-    // item can be brought back.
+    // ⚠ Deletion in the app is PERMANENT — a "soft-deleted"/"restorable"
+    // sentence has an agent tell a user an item can be brought back.
     for (const tool of VISIBLE_TOOLS) {
       if (!isAdmin(tool.name)) continue;
       for (const stale of ["soft-delete", "soft-deleted", "restorable", "restore from trash"]) {

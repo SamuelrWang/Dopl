@@ -91,9 +91,8 @@ function agentReply(): ChannelMessage {
 
 describe("a provisional card (the optimistic request)", () => {
   it("marks the card pending while its opening message is unsaved", () => {
-    // The head carries a `pending:` id until the POST answers. The card is the
-    // REAL component with the real content — dimmed and inert, not a skeleton
-    // and not a lie about a thread that does not exist yet.
+    // Head carries a `pending:` id until the POST answers. Real component with
+    // real content — dimmed and inert, not a skeleton.
     const html = renderToStaticMarkup(
       <SessionCard
         session={session({
@@ -103,8 +102,8 @@ describe("a provisional card (the optimistic request)", () => {
         currentUserId={ME}
       />
     );
-    // Read off the <article> itself: the status chip's pulse dot carries its
-    // own `opacity-60`, so a whole-document match would pass either way.
+    // ⚠ Read off the <article> itself — the status chip's pulse dot has its own
+    // `opacity-60`, so a whole-document match passes either way.
     const article = html.slice(0, html.indexOf(">") + 1);
     expect(article).toContain('data-pending=""');
     expect(article).toContain("opacity-60");
@@ -123,8 +122,8 @@ describe("a provisional card (the optimistic request)", () => {
   });
 });
 
-// Each test that defines `window` cleans it up so the server-render tests see
-// the true "no bridge on the server" state (getDesktopSessions -> null).
+// ⚠ Tests defining `window` must clean up, or server-render tests lose the
+// "no bridge on the server" state (getDesktopSessions -> null).
 afterEach(() => {
   delete (globalThis as { window?: unknown }).window;
   vi.restoreAllMocks();
@@ -161,7 +160,6 @@ describe("reopenSessionWindow (the click action)", () => {
   });
 
   it("notes ONLY the refusals the operator can act on", async () => {
-    // An unreachable channel and a spent window budget each get their own line.
     const unreachable = vi.fn().mockResolvedValue({ ok: false, reason: "no-thread" });
     expect(await reopenSessionWindow({ reopen: unreachable }, CHANNEL_ID, THREAD_ID)).toBe(
       NO_LOCAL_SESSION_NOTE
@@ -170,8 +168,8 @@ describe("reopenSessionWindow (the click action)", () => {
     expect(await reopenSessionWindow({ reopen: budget }, CHANNEL_ID, THREAD_ID)).toBe(
       SESSION_BUDGET_NOTE
     );
-    // A bare {ok:false} (an older desktop with no reason) stays QUIET: on this
-    // build a thread with no local record opens, so it is not a refusal.
+    // Bare {ok:false} (older desktop, no reason) stays QUIET — a thread with no
+    // local record opens on this build, so it is not a refusal.
     const bare = vi.fn().mockResolvedValue({ ok: false });
     expect(await reopenSessionWindow({ reopen: bare }, CHANNEL_ID, THREAD_ID)).toBeNull();
   });
@@ -186,10 +184,8 @@ describe("ReopenWindowButton render gating", () => {
   });
 });
 
-/**
- * The window control is always available once the bridge exists: it takes no
- * session or thread status, so nothing but an in-flight open can disable it.
- */
+/** Window control is always available once the bridge exists — it takes no
+ *  session or thread status, so only an in-flight open disables it. */
 describe("OpenWindowControls", () => {
   const noop = () => {};
 
@@ -213,17 +209,13 @@ describe("OpenWindowControls", () => {
     const markup = renderToStaticMarkup(
       <OpenWindowControls busy={false} note={NO_LOCAL_SESSION_NOTE} onOpen={noop} />
     );
-    // Apostrophe is HTML-escaped in static markup, so assert the stable half.
+    // ⚠ Apostrophe is HTML-escaped in static markup — assert the stable half.
     expect(markup).toContain("available on this machine");
-    // The button stays clickable so the operator can retry.
     expect(markup).toContain("Open thread");
     expect(markup).not.toContain('disabled=""');
   });
 
   it("renders the note it is GIVEN, not a hardcoded one", () => {
-    // The control was rewired from a boolean to a note string; rendering the
-    // constant instead of the prop made the budget refusal unreachable and told
-    // the operator to fix the wrong thing.
     const markup = renderToStaticMarkup(
       <OpenWindowControls busy={false} note={SESSION_BUDGET_NOTE} onOpen={noop} />
     );
@@ -232,9 +224,9 @@ describe("OpenWindowControls", () => {
   });
 
   it("scopes the note to the CHANNEL, not to a missing local session", () => {
-    // A thread with no local record now OPENS (the desktop resolves the channel
-    // from the API and paints history read-only), so the old machine-scoped
-    // copy would be a lie. The note survives only for an unreachable channel.
+    // A thread with no local record OPENS (desktop resolves the channel from the
+    // API, paints history read-only). The note survives only for an unreachable
+    // channel.
     expect(NO_LOCAL_SESSION_NOTE).toBe(
       "This channel isn't available on this machine."
     );
@@ -247,8 +239,8 @@ describe("SessionCard render", () => {
   it("renders the card, and the desktop-only reopen button is absent on the server", () => {
     const markup = renderToStaticMarkup(<SessionCard session={session()} />);
     expect(markup).toContain("Ship the fix");
-    // The window button is feature-detected after mount, so it never appears in
-    // the server / first-paint markup — proving the hydration-safe gating.
+    // ⚠ Feature-detected after mount, so it never appears in server /
+    // first-paint markup — the hydration-safe gating.
     expect(markup).not.toContain("Open thread");
   });
 
@@ -258,8 +250,8 @@ describe("SessionCard render", () => {
   });
 
   it("replaces 'Working…' with the capped note when an open-thread overlay pins status active", () => {
-    // The thread row is still open (overlay -> status "active"), but a turn-cap
-    // task_failed landed with no restart: the card must not keep claiming work.
+    // Thread row still open (overlay → "active") but a turn-cap task_failed
+    // landed with no restart — the card must not keep claiming work.
     const markup = renderToStaticMarkup(
       <SessionCard session={session({ status: "active", calmEndStatus: "capped" })} />
     );
@@ -280,7 +272,7 @@ describe("SessionCard render", () => {
   });
 
   it("keeps 'Working…' suppressed entirely once an agent reply arrived (calm end ignored)", () => {
-    // An agent reply suppresses the line via showWorking; the calm-end note must
+    // Agent reply suppresses the line via showWorking; the calm-end note must
     // not resurrect it.
     const markup = renderToStaticMarkup(
       <SessionCard
@@ -293,8 +285,7 @@ describe("SessionCard render", () => {
     );
     expect(markup).not.toContain("Working…");
     expect(markup).not.toContain("Work on this thread was interrupted.");
-    // The reply itself starts collapsed (default-collapsed entries) — its
-    // author line is present, the body is behind the chevron.
+    // Starts collapsed — author line present, body behind the chevron.
     expect(markup).not.toContain("Here is the answer.");
     expect(markup).toContain('aria-expanded="false"');
   });
@@ -315,12 +306,9 @@ describe("SessionCard render", () => {
         })}
       />
     );
-    // Summary-less entry: body hidden, author line shown.
     expect(markup).not.toContain("Here is the answer.");
-    // Summary-bearing entry: summary shown, body hidden.
     expect(markup).toContain("One-line summary");
     expect(markup).not.toContain("Long body behind a summary");
-    // Both chevrons read collapsed.
     expect(markup).not.toContain('aria-expanded="true"');
   });
 
@@ -328,11 +316,10 @@ describe("SessionCard render", () => {
     const markup = renderToStaticMarkup(
       <SessionCard session={session({ status: "capped", summary: "Turn limit reached" })} />
     );
-    // Calm chip label + calm dot (muted, never the danger red).
+    // Calm chip label + calm dot — muted, never the danger red.
     expect(markup).toContain("Limit reached");
     expect(markup).toContain("bg-text-disabled");
     expect(markup).not.toContain("bg-danger");
-    // The terminal note (no reply delivered) explains the calm ending.
     expect(markup).toContain(
       "This thread hit its turn limit. Open the thread to continue."
     );
@@ -348,11 +335,8 @@ describe("SessionCard render", () => {
   });
 });
 
-/**
- * Thread controls on the card: Close only. Reopen was removed from the card in
- * v2.5 (it lives in the thread panel), so a closed thread's footer carries no thread
- * mutation at all.
- */
+/** Thread controls on the card: Close only. Reopen lives in the thread panel,
+ *  so a closed thread's footer carries no thread mutation at all. */
 describe("SessionCard thread controls", () => {
   const closeThread = async () => {};
 
@@ -387,11 +371,10 @@ describe("SessionCard thread controls", () => {
 });
 
 /**
- * Whose thread does this card show? A channel runs several threads at once
- * between different pairs, so the footer must not offer the viewer a session on
- * an exchange they are not in: "Open thread" opens a window BOUND to this
- * thread, and the desktop forces the thread tag onto whatever that session
- * posts, so a non-party would only reach a server refusal.
+ * ⚠ A channel runs several threads at once between different pairs, so the
+ * footer must not offer a session on an exchange the viewer is not in: "Open
+ * thread" opens a window BOUND to this thread and the desktop forces the thread
+ * tag onto whatever it posts, so a non-party only reaches a server refusal.
  */
 describe("SessionCard thread party", () => {
   const OTHER_PAIR = { createdBy: "u-ada", targetUserId: "u-bo" };
@@ -407,7 +390,6 @@ describe("SessionCard thread party", () => {
     );
     expect(markup).toContain("Read-only");
     expect(markup).toContain("only its two members can post into it");
-    // The close control was already party-gated; the marker states the rule.
     expect(markup).not.toContain("Close thread");
   });
 
@@ -419,8 +401,8 @@ describe("SessionCard thread party", () => {
   });
 
   it("claims nothing for a legacy session with no thread row", () => {
-    // No `channel_tasks` row means the parties are unknown, so the card keeps
-    // its normal footer rather than guessing in either direction.
+    // No `channel_tasks` row = parties unknown, so keep the normal footer
+    // rather than guessing in either direction.
     const markup = renderToStaticMarkup(
       <SessionCard session={session()} currentUserId={ME} />
     );
@@ -435,10 +417,7 @@ describe("SessionCard thread party", () => {
   });
 });
 
-/**
- * The card container is always neutral; status is the chip's job. The green
- * active treatment shipped in v2.4 and was removed same day by product call.
- */
+/** Card container is always neutral — status is the chip's job. */
 describe("SessionCard container treatment", () => {
   it("keeps the neutral container for every status, active included", () => {
     for (const status of [

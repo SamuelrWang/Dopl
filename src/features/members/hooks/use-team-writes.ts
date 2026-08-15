@@ -25,34 +25,25 @@ import {
 } from "../lib/optimistic-cache";
 
 /**
- * TEAM identity and TEAM MEMBERSHIP writes on the shared mutation layer.
- *
- * The rename is the one worth naming: it commits on blur, and the name it
- * commits is read back by three places at once — the crumb bar, the left list
- * row, and the header input's own reset effect. All three read the roster/teams
- * CACHE, so patching that cache is what makes a rename land everywhere in the
- * same frame instead of reverting to the old name for a round trip.
- *
- * Membership drafts carry the whole `TeamView` captured AT SUBMIT rather than
- * an id, because the roster's team chips need the team's name/colour/icon to
- * render, and re-reading them from the current selection is the race the
- * mutation layer's fourth rule exists to prevent.
+ * Team identity + team membership writes on the shared mutation layer.
+ * Rename commits on blur and is read back by the crumb bar, the list row and
+ * the header input's reset effect — all three read the teams CACHE.
+ * ⚠ Membership drafts carry the whole `TeamView` captured AT SUBMIT, not an
+ * id: roster chips need name/colour/icon, and re-reading them from the
+ * current selection is the in-flight-selection race.
  */
 
 export interface TeamPatchDraft {
   teamId: string;
-  /** Only the fields being committed; the patch is applied over the cached row. */
+  /** Only the fields being committed; applied over the cached row. */
   patch: { name?: string; description?: string | null };
 }
 
 export interface TeamDeleteDraft {
   teamId: string;
-  /**
-   * The team's roster CAPTURED AT SUBMIT (rule 4) — the row is gone from the
-   * cache the moment the optimistic patch runs, so the ids cannot be looked up
-   * afterwards. Deleting a team deletes the grants it carried, which is what
-   * `memberAccessPath` resolves through for each of these members.
-   */
+  /** ⚠ Roster CAPTURED AT SUBMIT — the row leaves the cache the moment the
+   *  optimistic patch runs, so the ids can't be looked up afterwards. Deleting
+   *  a team deletes its grants, which `memberAccessPath` resolves through. */
   memberIds: string[];
 }
 
@@ -70,23 +61,18 @@ export interface TeamWrites {
   pending: boolean;
 }
 
-/**
- * Every touched member's resolved-access pane, which only the server computes.
- * One key per member because these keys are whole PATHS: TanStack matches keys
- * per array element, so `[…/members]` reaches no `[…/members/<id>/access]`
- * entry — there is no prefix that covers them and the ids have to be named.
- */
+/** Every touched member's server-computed access pane. ⚠ One key per member:
+ *  these keys are whole PATHS and TanStack matches per array element, so
+ *  `[…/members]` reaches no `[…/members/<id>/access]` entry. */
 function accessKeys(workspaceSlug: string, userIds: string[]): QueryKey[] {
   return userIds.map(
     (userId) => memberKeys.memberAccess(workspaceSlug, userId).all
   );
 }
 
-/**
- * Exported so the write-config suite can drive the SHIPPED config through
- * TanStack's own `MutationObserver` rather than a copy of it — a re-declared
- * config passes while the real one is wrong.
- */
+/** Exported so the write-config suite drives the SHIPPED config through
+ *  `MutationObserver` — a re-declared copy passes while the real one is
+ *  wrong. */
 export function teamDeleteConfig(
   workspaceSlug: string
 ): UseApiMutationConfig<TeamDeleteDraft, unknown> {
@@ -95,9 +81,9 @@ export function teamDeleteConfig(
       path: teamPath(workspaceSlug, draft.teamId),
       method: "DELETE",
     }),
-    // The team row AND every roster chip pointing at it go together: a chip
-    // left behind is the console asserting membership of a team that no longer
-    // exists, and the paired snapshot restores both if the DELETE fails.
+    // ⚠ Team row and every roster chip pointing at it go together — a leftover
+    // chip asserts membership of a team that no longer exists. Paired snapshot
+    // restores both if the DELETE fails.
     optimistic: (draft) => [
       patchCache<TeamsCache>(memberKeys.teams(workspaceSlug).all, (cache) =>
         dropTeam(cache, draft.teamId)
@@ -106,9 +92,8 @@ export function teamDeleteConfig(
         dropTeamRef(cache, draft.teamId)
       ),
     ],
-    // Deleting the team destroys its grants, so what the server resolves for
-    // each of its members changes — and that pane is the one surface here that
-    // no client can recompute.
+    // Deleting the team destroys its grants, changing what the server resolves
+    // for each member — the one surface no client can recompute.
     invalidate: (draft) => accessKeys(workspaceSlug, draft.memberIds),
   };
 }
@@ -151,14 +136,12 @@ export function useTeamWrites(workspaceSlug: string): TeamWrites {
   });
 
   const removeMembers = useApiMutation<TeamMembershipDraft, unknown>({
-    // One id per call — the endpoint is a per-member DELETE, and the UI only
-    // ever removes one at a time (each behind its own confirm).
+    // One id per call: the endpoint is a per-member DELETE.
     request: (draft) => {
       const [userId] = draft.userIds;
-      // An empty draft would otherwise DELETE `…/members/undefined`, which is
-      // a request the server gets to interpret. Thrown from `request`, so it
-      // rejects inside the mutation and the layer rolls the optimistic patch
-      // back on the same path a refused DELETE takes.
+      // ⚠ Empty draft would DELETE `…/members/undefined`. Thrown from
+      // `request` so the layer rolls the optimistic patch back exactly as a
+      // refused DELETE would.
       if (!userId) throw new Error("Removing a member needs one member id");
       return {
         path: teamMemberPath(workspaceSlug, draft.team.id, userId),

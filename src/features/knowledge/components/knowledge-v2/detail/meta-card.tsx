@@ -13,7 +13,7 @@ export interface MetaTeamRef {
 }
 
 export interface MetaCardProps {
-  /** Editable base name (live, persisted by the parent's save hook). */
+  /** Editable base name; persisted by the parent's save hook. */
   name: string;
   /** Editable agent-facing description. */
   description: string;
@@ -30,18 +30,16 @@ export interface MetaCardProps {
   accessLabel: string;
   /** Teams granted access (teams-mode bases). Empty/undefined hides the row. */
   teams?: MetaTeamRef[];
-  /** This base's stored bytes; `null` = unknown, which hides the meter
-   *  entirely rather than drawing an empty track. */
+  /** Stored bytes; `null` = unknown → meter hidden, not an empty track. */
   storageBytes?: number | null;
-  /** The workspace's per-base storage cap in bytes; `null` = unknown. */
+  /** Per-base storage cap in bytes; `null` = unknown. */
   storageLimit?: number | null;
 }
 
 /**
- * The base overview card: a label strip over a body holding the two editable
- * fields (name + description, in concave wells) and the read-only meta grid
- * (dates, visibility, access, teams). All values are real — name/description
- * persist via the base PATCH route; the rest is derived from the base row.
+ * Base overview card: two editable fields (name + description) over a
+ * read-only meta grid. Name/description persist via the base PATCH route; the
+ * rest is derived from the base row.
  */
 export function MetaCard({
   name,

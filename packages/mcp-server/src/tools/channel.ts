@@ -7,51 +7,35 @@
  * for replies. Every message has a monotonic `seq` cursor, so a listener can
  * ask for "everything after seq N" (op="read"/"await").
  *
- * This file is the thin registrar: it owns the single tool schema + op
- * routing and delegates each op to a handler in a sibling module —
- *   - `channel-shared.ts`     — channel + member reference resolution, and the
- *                               ONE neutralizer every peer-authored string that
- *                               reaches a result must pass through
- *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread / members
- *                               / read_sessions (rollback §3.5: what MY OWN
- *                               sessions are doing; `channel` is an optional
- *                               filter there, not a requirement)
- *   - `channel-ops-await.ts`  — await (the assembled long hold; split off at the
- *                               §2 cap — it is the only op here that loops)
- *   - `channel-ops-open.ts`   — open / invite (the ROOM and who is in it; split
- *                               off at the §2 cap)
- *   - `channel-ops-write.ts`  — post, plus `channel-post-notes.ts` /
- *                               `channel-post-linkage.ts`, which own the
- *                               result lines a post's addressing and threading
- *                               produce
+ * Thin registrar: owns the single tool schema + op routing, delegating to
+ *   - `channel-shared.ts`     — ref resolution + the ONE neutralizer every
+ *                               peer-authored string must pass through
+ *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread /
+ *                               members / read_sessions
+ *   - `channel-ops-await.ts`  — await (the only looping op)
+ *   - `channel-ops-open.ts`   — open / invite
+ *   - `channel-ops-write.ts`  — post (+ `channel-post-notes.ts` /
+ *                               `channel-post-linkage.ts` for its result lines)
  *   - `channel-ops-threads.ts`— create_thread / propose_close / close_thread /
- *                               set_thread_mode. DECISION 2 (2026-08-04): an
- *                               agent PROPOSES and a human CLOSES, so
- *                               `close_thread` stays in the enum only to hand
- *                               an older agent a teaching refusal.
- *   - `channel-render.ts`     — the read renderers + the untrusted-content
- *                               headers, which the write side now shares
+ *                               set_thread_mode
+ *   - `channel-render.ts`     — read renderers + untrusted-content headers,
+ *                               shared with the write side
  *
- * REMOVED in the channels rollback (§1, 2026-08-05): `channel-ops-agents.ts`
- * (agents / summon_agent / rename_agent / set_agent_status / disengage_agent /
- * join_thread / leave_thread), `channel-agent-refs.ts` and
- * `channel-render-agents.ts` (agent-handle resolution and rendering) and
- * `channel-handshake-key.ts` (the two-agent thread-open key). A channel reaches
- * PEOPLE; the only distinction a post makes is `intent` chat vs. request.
+ * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing; the only
+ * distinction a post makes is `intent` chat vs. request.
  *
- * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The ops
- * and params here say `thread`; `channel_tasks`, `metadata.taskId`, the
- * `task_*` message kinds and the `/tasks` routes keep the storage name.
+ * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
+ * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
+ * `/tasks` routes keep the storage name.
  *
- * No `dopl_channel_admin` twin: there are no destructive ops over MCP v1
- * (archive/delete are human decisions in the web UI).
+ * ⚠ No `dopl_channel_admin` twin — no destructive ops over MCP (archive/delete
+ * are human decisions in the web UI).
  */
 
 import type { DoplClient } from "@dopl/client";
 import { missingParams, type RegisterTool, type ToolResponse } from "./respond";
-// The tool's two declared halves, each its own module since the §2 split: the
-// PROSE (what a channel is, THE LAW, what every op does) and the published
-// input SHAPE (params, caps, per-param teaching). This file is mechanism only.
+// The tool's two declared halves: PROSE (what a channel is, THE LAW, what each
+// op does) and published input SHAPE. This file is mechanism only.
 import { CHANNEL_DESCRIPTION } from "./channel-description";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
@@ -74,33 +58,23 @@ import {
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
 /**
- * `caller` — the session's ONE identity record (server.ts / `identity.ts`),
- * resolved once at boot. Two fields matter here and they are used for two
- * different things:
+ * `caller` — the session's ONE identity record (`identity.ts`), resolved once
+ * at boot:
+ *   - `userId` renders "· to you" instead of a uuid the agent cannot match
+ *     against itself, and filters the caller's own posts out of its `await`.
+ *   - `runtime` decides what the wake teaching may CLAIM (from
+ *     `X-Dopl-Runtime`). ⚠ An OBSERVATION that gates nothing — without it the
+ *     tool promises every caller that a pending `await` outlives the turn,
+ *     which is measurably false for an external session.
  *
- *   - `userId` lets a read render "· to you" instead of a uuid the agent has no
- *     way to match against itself: without it, an agent in a five-member
- *     channel can see a message is addressed to SOMEONE and still not know
- *     whether that someone is itself. It also filters the caller's own posts
- *     out of its own `await` hold.
- *   - `runtime` decides what the wake teaching may CLAIM. The server receives
- *     the discriminating signal (`X-Dopl-Runtime`) and this tool used to be
- *     handed the user id alone, so it promised every caller that a pending
- *     `await` outlives the turn — true for nobody it was told to, and
- *     measurably false for an external session. See `channel-wake-guidance.ts`.
- *     It is an OBSERVATION and gates nothing (`identity.ts`).
+ * ⚠ Resolved at boot, never per call: `await` runs a poll loop, so an identity
+ * lookup per read is a round-trip on the hottest path. Defaults to
+ * {@link UNKNOWN_CALLER} — ids render as ids, no line claims to know "you", no
+ * line claims a wake.
  *
- * Resolved at boot rather than fetched per call on purpose — `await` runs a
- * poll loop, and an identity lookup per read would be a round-trip on the
- * hottest path in the tool. Defaults to {@link UNKNOWN_CALLER} (tests call this
- * registrar with two arguments): every id then renders as an id, which is
- * honest, no line claims to know who "you" is, and no line claims a wake.
- *
- * `isAdmin` — the caller's workspace-admin flag from the boot status ping
- * (factory.ts). Used ONLY by `op="members"` to decide whether member email may
- * be rendered (F-100). Defaults false, i.e. fail-closed: a test registrar or a
- * failed ping never leaks email. Email otherwise appears only on the caller's
- * own row.
+ * `isAdmin` — workspace-admin flag from the boot status ping. ⚠ Used ONLY by
+ * `op="members"` to gate member EMAIL, and defaults false (fail-closed): a test
+ * registrar or a failed ping never leaks email.
  */
 export function registerChannelTool(
   register: RegisterTool,
@@ -151,23 +125,13 @@ export function registerChannelTool(
             runtime,
           });
         }
-        // P0-3 (2026-08-04) — THE MILESTONE IS ITS OWN OP, and the fixing of the
-        // kind happens HERE, at the routing seam, exactly like `open`'s
-        // `direct` branch. That is the whole point of the op: neither call makes
-        // the agent pick a `kind`, so "mark a milestone" and "send a reply"
-        // cannot be confused by choosing wrongly between enum values that sit
-        // one apart. `thread` is REQUIRED where `post` leaves it optional — an
-        // untagged milestone groups into nothing, which is the one shape of this
-        // call that is always a mistake.
-        //
-        // It delegates to `opPost` rather than growing a second delivery path:
-        // one set of error narration, one result-line vocabulary, and the lines
-        // a post produces (did it thread? who was addressed?) are exactly the
-        // ones a milestone's author needs. `to` is NOT routed through — a
-        // milestone marks the thread, it addresses nobody. (`to_agent` /
-        // `to_agents` were on that list until named agents went; they are not
-        // params of this tool at all now — `channel-schema.ts` refuses them by
-        // name and `channel-ops-write.ts:232` narrates the refusal.)
+        // ⚠ The `kind` is fixed HERE, at the routing seam, so the agent never
+        // picks between enum values one apart. `thread` is REQUIRED where
+        // `post` leaves it optional — an untagged milestone groups into
+        // nothing, the one shape of this call that is always a mistake.
+        // Delegates to `opPost` rather than growing a second delivery path.
+        // ⚠ `to` is NOT routed through: a milestone marks the thread and
+        // addresses nobody.
         case "milestone": {
           const miss = missingParams("milestone", args, [
             "channel",
@@ -191,9 +155,8 @@ export function registerChannelTool(
             args.since,
             args.limit,
             selfUserId,
-            // Any non-empty string is legal — legacy `task-<channelId>-<seq>`
+            // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
             // ids are real `metadata.taskId` values and must stay filterable.
-            // `opRead` treats blank/whitespace as unset.
             args.thread,
           );
         }
@@ -212,8 +175,7 @@ export function registerChannelTool(
         case "members": {
           const miss = missingParams("members", args, ["channel"]);
           if (miss) return miss;
-          // F-100: pass the caller's workspace-admin flag so the roster only
-          // renders member email to an admin or the caller's own row.
+          // ⚠ Admin flag gates member EMAIL in the roster render.
           return opMembers(client, args.channel as string, selfUserId, isAdmin);
         }
         case "list_threads": {
@@ -231,10 +193,9 @@ export function registerChannelTool(
             selfUserId,
           );
         }
-        // READ-SESSION-STATE (rollback §3.5). `channel` is an OPTIONAL filter —
-        // omitted, it lists every session of the caller's — so no missingParams
-        // check. Own-scoped in the service; no identity is passed here because
-        // the transport's own credential is the caller.
+        // ⚠ `channel` is an OPTIONAL filter here, hence no missingParams check.
+        // Own-scoped in the service; the transport credential IS the caller, so
+        // no identity is passed.
         case "read_sessions":
           return opReadSessions(client, args.channel);
         case "create_thread": {
@@ -254,15 +215,13 @@ export function registerChannelTool(
             args.mode,
             args.client_msg_id,
             runtime,
-            // SPAWN-WITH-HANDOFF (rollback §3.5) — a create that DECLARES it
-            // opens the driving session on the operator's own machine.
+            // SPAWN-WITH-HANDOFF — declares the driving session opens on the
+            // operator's own machine.
             args.handoff,
           );
         }
-        // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM. An agent's terminal act
-        // on a thread is a PROPOSAL its operator confirms; the close itself is a
-        // human's, because closing settles the SHARED thread for both members and
-        // the operator may still have things to say in it.
+        // ⚠ PROPOSE-THEN-CONFIRM: an agent's terminal act is a PROPOSAL its
+        // operator confirms. A close settles the SHARED thread for both members.
         case "propose_close": {
           const miss = missingParams("propose_close", args, [
             "channel",
@@ -278,11 +237,10 @@ export function registerChannelTool(
             args.summary,
           );
         }
-        // …and the op it replaces is answered rather than removed. Dropping
-        // `close_thread` from the enum would turn every call an older agent makes
-        // into a zod "invalid enum value", which is the one moment it most needs
-        // to be told what to do instead. The server refuses an agent-token close
-        // too (`ThreadCloseIsHumanOnlyError`), so this is teaching, not the gate.
+        // ⚠ Answered, not removed: dropping `close_thread` from the enum turns
+        // an older agent's call into a zod "invalid enum value" at the moment
+        // it most needs telling what to do instead. Teaching, not the gate —
+        // the server refuses an agent-token close (`ThreadCloseIsHumanOnlyError`).
         case "close_thread":
           return closeThreadIsHumansToMake();
         case "set_thread_mode": {

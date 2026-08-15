@@ -1,10 +1,8 @@
 /**
- * Teams feature — named member groups inside a workspace that carry
- * resource access grants for knowledge bases and skills.
- *
- * Scoping model: a resource's `access_mode` is either 'workspace'
- * (every active member, level by role default) or 'teams' (only teams
- * with a grant row; owner/admin and the creator always retain edit).
+ * Teams — named member groups carrying resource access grants for KBs and
+ * skills. A resource's `access_mode` is 'workspace' (every active member,
+ * level by role default) or 'teams' (only teams with a grant row; owner,
+ * admin and creator always retain edit).
  */
 
 import type {
@@ -63,12 +61,10 @@ export interface TeamsModeResourceAccess {
   level: AccessLevel | null;
 }
 
-/**
- * Batch access-resolution result for one user in one workspace.
- * `workspace`-mode resources never appear in `teamsModeResources` —
- * their level is always `defaultLevel`. A teams-mode resource that is
- * absent from the array (or has level null) is invisible to the user.
- */
+/** Batch access resolution for one user in one workspace. ⚠ `workspace`-mode
+ *  resources never appear in `teamsModeResources` (their level is always
+ *  `defaultLevel`); a teams-mode resource absent from the array, or with level
+ *  null, is invisible to the user. */
 export interface EffectiveAccessResult {
   defaultLevel: AccessLevel;
   isAdmin: boolean;

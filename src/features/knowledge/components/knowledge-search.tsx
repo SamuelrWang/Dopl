@@ -1,15 +1,11 @@
 "use client";
 
 /**
- * Search box for the workspace's knowledge bases (Item 5.D).
+ * Debounced server-side full-text search over the workspace's knowledge bases.
+ * Clicking a hit calls `onSelectEntry`; the parent decides what that means.
  *
- * Debounced server-side full-text search. Renders a results dropdown
- * with title + snippet + rank. Clicking a hit calls `onSelectEntry`
- * (parent decides whether to navigate, open in the editor, etc.).
- *
- * Different from the tree's own search input (which is an in-memory
- * substring filter on titles) — this hits the tsvector RPC, scores
- * by ts_rank, and includes body matches.
+ * NOT the tree's own search input (in-memory substring filter on titles):
+ * this hits the tsvector RPC, scores by ts_rank, and matches bodies.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -43,7 +39,6 @@ export function KnowledgeSearch({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Click outside closes the dropdown.
   useEffect(() => {
     if (!open) return;
     function handle(e: MouseEvent) {
@@ -58,9 +53,8 @@ export function KnowledgeSearch({
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
-  // Debounced fetch. When query is empty we skip the fetch entirely;
-  // old `hits`/`error` linger in state but the dropdown is gated on
-  // `query.trim().length > 0` below, so they don't render.
+  // Empty query skips the fetch: stale `hits`/`error` linger in state but the
+  // dropdown is gated on `query.trim().length > 0` below.
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length === 0) return;
@@ -155,19 +149,14 @@ export function KnowledgeSearch({
 }
 
 /**
- * Render a `ts_headline` snippet as React nodes. The RPC wraps matched
- * terms in `<b>…</b>`; we split on those bare tags and emit a `<strong>`
- * for the matched chunks and a text node for everything else.
+ * `ts_headline` snippet → React nodes. RPC wraps matched terms in `<b>…</b>`.
  *
- * Avoids `dangerouslySetInnerHTML` — even though the RPC controls the
- * markup, body content is user-authored and can contain `<script>`,
- * `<iframe>`, etc. that ts_headline would faithfully preserve. Doing
- * the parse explicitly here means an attacker who somehow injects
- * markup into a body cannot escape the snippet rendering.
+ * ⚠ NEVER `dangerouslySetInnerHTML` here: bodies are user-authored and
+ * ts_headline faithfully preserves any `<script>`/`<iframe>` in them. Parsing
+ * explicitly is what stops injected markup escaping the snippet.
  */
 function renderSnippet(snippet: string): React.ReactNode {
-  // Tokenize on bare `<b>` / `</b>`; everything else (including any
-  // other markup) is text.
+  // Tokenize on bare `<b>`/`</b>`; all other markup is text.
   const parts = snippet.split(/(<b>|<\/b>)/g);
   const out: React.ReactNode[] = [];
   let highlighting = false;

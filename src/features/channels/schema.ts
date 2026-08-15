@@ -9,18 +9,14 @@ import {
 import type { MessageIntent } from "./types";
 
 /**
- * THE REMOVED MULTIPLAYER PARAMS (channels rollback phase 2, 2026-08-05).
+ * Removed multiplayer params (`docs/CHANNELS-ROLLBACK-PLAN.md` §1).
  *
- * Named-agent addressing (`toAgent` / `toAgents` / `authorAgentId`) and breakout
- * rooms (`participants`) are gone — see `docs/CHANNELS-ROLLBACK-PLAN.md` §1.
- * They are declared as `z.never()` rather than simply deleted, because a plain
- * deletion is SILENT: zod strips unknown keys, so an old client's `to_agent`
- * would post successfully and address nobody, which is the invisible-delivery
- * failure the addressing contract existed to prevent. Present → a 400 naming
- * the field and its replacement; absent → the field never appears at all, so
- * every current caller's payload is byte-for-byte what it was.
+ * ⚠ `z.never()`, not deletion: zod STRIPS unknown keys, so a plain delete makes
+ * an old client's `to_agent` post succeed and address nobody — the invisible
+ * delivery failure the addressing contract exists to prevent. Present → 400
+ * naming the replacement; absent → field never appears.
  *
- * Delete these lines once no build in the field still sends them.
+ * Delete once no build in the field still sends them.
  */
 function removedParam(message: string) {
   return z.never({ error: message }).optional();
@@ -36,62 +32,33 @@ const REMOVED_PARTICIPANTS =
 const VisibilitySchema = z.enum(["private", "public"]);
 
 /**
- * Q1 (write-op sweep) — CHARSET RULES FOR THE CHANNEL HEADER.
+ * CHARSET GATE on the channel header. `name` / `topic` are peer-authored and
+ * spliced into `dopl_channel` results as SERVER NARRATION (outside the
+ * untrusted-content headers that disclaim message bodies), so a newline forges
+ * a line. Length bounds alone are not enough. MCP renderers neutralize too, but
+ * they are not the only consumers (`channels-list-pane` renders topic inline;
+ * desktop listener builds prompts from channel context).
  *
- * `name` and `topic` were bounded by LENGTH ONLY (120 / 2000) and by nothing
- * else. Both are peer-authored and both are spliced into `dopl_channel` results
- * as SERVER NARRATION — the part of a tool result a model reads as the tool
- * speaking, outside the untrusted-content headers that disclaim message bodies:
- *
- *   - `name` lands in nearly every write-op line ("Posted to <name>", "Added
- *     <member> to <name>", every 400 mapping). `resolveChannelOr` resolves
- *     PUBLIC channels the caller was never invited to, so the name can come
- *     from someone the reading agent has had no contact with.
- *   - `topic` lands in `op="list"`, which the tool description tells an agent
- *     to start with, and a public channel is listed to every workspace member.
- *
- * The MCP renderers neutralize both now, and that is the layer that actually
- * has to hold. This is the second layer, for the same reason `display_name` got
- * one tonight: a route-only fence next to an open gate is not a fence, and the
- * renderers are not the only consumers (`channels-list-pane` renders the topic
- * inline, the desktop listener builds prompts from channel context). A field
- * that can never hold a newline cannot forge a line anywhere, including in
- * surfaces written later that forget to neutralize.
- *
- * SAME RULE FOR BOTH, and it is not a product restriction: the create dialog
- * offers a single-line `<input maxLength={2000}>` for the topic and renders it
- * in a `truncate` span. Multi-line topics exist only through the API — i.e.
- * only for a caller composing one deliberately.
- *
- * The rule itself now lives in `@/shared/lib/safe-label` — it was written
- * twice (here and as `DISPLAY_NAME_RE` in
- * `src/app/api/user/profile/route.ts`) and has been applied to a dozen more
- * short labels since, so it has one home. Character for character the same
- * class and the same error copy: control characters (the newline that forges a
- * line, and every other C0 / DEL byte), zero-width and bidi-override
- * characters, and the line/paragraph separators some renderers still treat as
- * newlines.
+ * ⚠ Rule lives in `@/shared/lib/safe-label`, shared with `DISPLAY_NAME_RE` in
+ * `src/app/api/user/profile/route.ts` — same class, same error copy. Bans C0 /
+ * DEL, zero-width, bidi-override, line/paragraph separators.
  */
 
 /** `name` — required where it appears, trimmed, 1..120, charset-bounded. */
 const ChannelNameSchema = safeLabel("Channel name", 120);
 
 /**
- * `topic` — optional, so `""` stays legal (the create dialog sends the field
- * cleared, and the column is NOT NULL with a `''` default). `safeOptionalLabel`
- * carries the explicit empty-string branch the charset class cannot express on
- * its own: `""` carries nothing to forge with.
+ * `topic` — optional so `""` stays legal (create dialog sends it cleared; column
+ * is NOT NULL default `''`). `safeOptionalLabel` carries the empty-string branch.
  */
 const ChannelTopicSchema = safeOptionalLabel("Channel topic", 2000);
-// `system` is server-reserved (joins / topic changes are generated by the
-// service, never by a client): a caller must not be able to post an
-// anonymized system-styled message. Agent stays postable — the desktop app
-// posts task results with authorKind `agent` over a cookie session, and the
-// service derives `agent` vs `user` from the token when authorKind is omitted.
+// `system` server-reserved — caller must not post an anonymized system-styled
+// message. `agent` stays postable: desktop posts task results with authorKind
+// `agent` over a cookie session; service derives agent vs user from the token
+// when authorKind omitted.
 const PostableAuthorKindSchema = z.enum(["user", "agent"]);
-// `system` is server-emitted only — callers can never post it (matches the MCP
-// tool's post enum, which also excludes it). The full kind union (incl.
-// `system`) lives in types.ts; the schema only ever validates caller input.
+// `system` server-emitted only (matches MCP post enum). Full kind union incl.
+// `system` lives in types.ts; schema only validates caller input.
 const PostableMessageKindSchema = z.enum([
   "message",
   "task_started",
@@ -101,17 +68,14 @@ const PostableMessageKindSchema = z.enum([
 ]);
 
 /**
- * Create a channel. Two shapes on one endpoint (union):
- *   - normal: `{ name, slug?, topic?, visibility? }` — `slug` is optional (the
- *     service derives one and resolves collisions); `visibility` defaults to
- *     private in the service.
- *   - direct (v15): `{ direct: true, memberUserId }` — a 1:1 channel with the
- *     named member. No name/slug/topic/visibility (the service stores a
- *     placeholder name + private visibility); dedup + membership-of-2 are
- *     enforced server-side, and a self-target is rejected.
+ * Create a channel. Two shapes on one endpoint:
+ *   - normal — service derives `slug` + resolves collisions; visibility
+ *     defaults private.
+ *   - direct — 1:1; service stores placeholder name + private. Dedup,
+ *     membership-of-2, self-target rejection all enforced server-side.
  *
- * A union (not a discriminated union) so today's `{ name }` callers keep
- * parsing unchanged: the normal branch has no discriminator to add.
+ * ⚠ Plain union, NOT discriminated: normal branch has no discriminator to add,
+ * so today's `{ name }` callers keep parsing unchanged.
  */
 export const ChannelCreateSchema = z.union([
   z.object({
@@ -143,36 +107,16 @@ export const ChannelUpdateSchema = z
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
 
 /**
- * CHAT vs. REQUEST — whether a post is allowed to reach anybody's agent.
+ * CHAT vs REQUEST — whether a post may reach anybody's agent.
+ *  - `request` (DEFAULT, what every existing caller gets) — DM auto-address
+ *    fires, receiving listener triggers.
+ *  - `chat` — human talk. DM auto-address SKIPPED entirely: no `to_user_id`
+ *    manufactured from the peer. Everything else normal (seq, realtime, read
+ *    watermark, explicit `thread` tag).
  *
- * The operator's report, verbatim: *"if I send a message it's just going as a
- * message to the channel... doesn't prompt an agent."* It was the opposite. In
- * a DM the server AUTO-ADDRESSES every post to the peer (v2.6, and for a good
- * reason — an unaddressed agent reply is deliberately ignorable, so a real
- * reply was posting successfully and never being delivered). The cost of that
- * fix was that two HUMANS could not talk in a DM without poking each other's
- * machines: every "sounds good" addressed the peer and raised a consent prompt.
- *
- * So intent is now first-class rather than inferred:
- *  - `request` (the DEFAULT, and what every existing caller gets) — today's
- *    behaviour, byte for byte. The DM auto-address still fires and the
- *    receiving listener still triggers.
- *  - `chat` — HUMAN TALK. The DM auto-address is SKIPPED ENTIRELY: no
- *    `to_user_id` is manufactured from the peer, so nothing on the far side
- *    classifies an aside as an ask. Everything else about the post is normal
- *    (seq, realtime, read watermark, an explicit `thread` tag if the caller
- *    passes one).
- *
- * `chat` WITH an explicit human `to` is a CONTRADICTION and is refused 400
- * `CHANNEL_CHAT_ADDRESSED` (`server/errors.ts`) rather than silently resolved.
- * Addressing a PERSON starts that person's agent on a subject they never saw a
- * title for; asking for someone else's machine is what `request` is for, and it
- * carries the title their consent prompt renders.
- *
- * These two are now the WHOLE addressing vocabulary. Named-agent addressing
- * (`toAgent` / `toAgents`) used to be a third thing a post could do and is gone
- * (rollback §1) — a channel reaches PEOPLE, and a person's machine decides what
- * to start.
+ * ⚠ `chat` + explicit human `to` is a contradiction → 400
+ * `CHANNEL_CHAT_ADDRESSED` (`server/errors.ts`), never silently resolved:
+ * addressing a person starts their agent on a subject they saw no title for.
  */
 const MessageIntentSchema: z.ZodType<MessageIntent> = z.enum([
   "chat",
@@ -180,22 +124,15 @@ const MessageIntentSchema: z.ZodType<MessageIntent> = z.enum([
 ]);
 
 /**
- * Post a message or activity event. `body` carries the human-readable
- * render (so the thread needs no special-casing per kind); structured
- * payload rides in `metadata`. `clientMsgId` is the idempotency key.
+ * Post a message or activity event. `body` carries the human-readable render
+ * (thread needs no per-kind special-casing); structured payload rides in
+ * `metadata`. `clientMsgId` is the idempotency key.
  *
- * Addressing (v1.1): `toUserId` targets a specific channel member (the
- * service validates it is an active member, else 400) and `summary` is a
- * one-line intent used in the receiver's notification. Both are persisted
- * into `metadata` as `{to_user_id, summary}`.
+ * `toUserId` must be an ACTIVE member (service validates, else 400); `summary`
+ * is the one-liner in the receiver's notification. Both persist into `metadata`
+ * as `{to_user_id, summary}`. `intent` → {@link MessageIntentSchema}.
  *
- * `intent` says whether this post is meant to reach the addressee's machine at
- * all — see {@link MessageIntentSchema}. Together with `toUserId` that is the
- * whole addressing surface: a channel reaches PEOPLE.
- *
- * The three `z.never()` fields below are the REMOVED named-agent params, kept
- * declared so an old client is told rather than silently unaddressed — see
- * {@link removedParam}.
+ * `z.never()` fields below → {@link removedParam}.
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
@@ -230,13 +167,11 @@ const TaskModeSchema = z.enum(["interactive", "autonomous"]);
 const TaskOutcomeSchema = z.enum(["completed", "failed"]);
 
 /**
- * Create a task in a channel. `title` is the queryable header; `body` is the
- * requester's initial request (posted as the task's first message, addressed
- * to `toUserId`); `mode` defaults to interactive. `toUserId` must be an active
- * member of the channel (validated in the service). `clientMsgId` is an
- * optional idempotency key — a re-sent create_task with the same key returns
- * the already-created task instead of double-creating it (and double-spawning
- * the responder's window), mirroring the message post's idempotency.
+ * Create a task. `title` = queryable header; `body` = initial request (posted
+ * as the task's first message, addressed to `toUserId`); `mode` defaults
+ * interactive. `toUserId` must be an active member (service validates).
+ * `clientMsgId` idempotency key: a re-send returns the existing task rather
+ * than double-creating it AND double-spawning the responder's window.
  */
 export const TaskCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -245,21 +180,18 @@ export const TaskCreateSchema = z.object({
   toUserId: z.string().uuid(),
   clientMsgId: z.string().min(1).max(200).optional(),
   /**
-   * SPAWN-WITH-HANDOFF (rollback §3.5, 2026-08-05). An EXTERNAL agent (the
-   * operator's own Claude Desktop / Claude Code over MCP) declares that the
-   * session driving this thread should open ON THE OPERATOR'S MACHINE rather
-   * than being kept by the external session that created it. Default (absent /
-   * false) is unchanged: an external create opens nothing on the operator's
-   * machine and the external session keeps the reply.
+   * SPAWN-WITH-HANDOFF: external agent (operator's own Claude Desktop / Code
+   * over MCP) asks that the driving session open ON THE OPERATOR'S MACHINE
+   * instead of staying with the external session. Absent/false → external
+   * create opens nothing locally and keeps the reply.
    *
-   * The flag rides the OPENING MESSAGE as a reserved `metadata.handoff` stamp
-   * (server-written, never caller-metadata — see
-   * `service-writes-metadata.resolvePostMetadata`), which the desktop listener
-   * reads to decide whether to launch a requester session (`targeting.js`
-   * `requesterTaskOpen`). It is only ever HONORED on the operator's own posts:
-   * the launch predicate also requires `authorUserId === me` AND
-   * `taskCreatedBy === me`, which no peer can forge, so a handoff a peer stamps
-   * on their own create can never open a window on someone else's machine.
+   * Rides the opening message as reserved `metadata.handoff` (server-written,
+   * never caller metadata — `service-writes-metadata.resolvePostMetadata`);
+   * desktop listener reads it in `targeting.js` `requesterTaskOpen`.
+   *
+   * ⚠ Security gate: launch predicate ALSO requires `authorUserId === me` AND
+   * `taskCreatedBy === me`, so a peer's handoff can never open a window on
+   * someone else's machine.
    */
   handoff: z.boolean().optional(),
   /** REMOVED (rollback §1) — see {@link removedParam}. */
@@ -268,18 +200,15 @@ export const TaskCreateSchema = z.object({
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
 
 /**
- * Update a task: close it (`op:"close"` — creator or target, and HUMAN LANE
- * ONLY since 2026-08-04), PROPOSE closing it (`op:"propose_close"` — creator or
- * target, the agent's terminal act), change its mode (`op:"set_mode"` — creator
- * only), OR reopen a closed one (`op:"reopen"` — creator or target, web-only;
- * no MCP counterpart). A discriminated union so the ops can't bleed fields into
- * each other. `reopen` carries no payload — it clears the closed state back to
- * open server-side.
+ * Update a task. Authz per op:
+ *   - `close` — creator or target, HUMAN LANE ONLY.
+ *   - `propose_close` — creator or target; the agent's terminal act.
+ *   - `set_mode` — creator only.
+ *   - `reopen` — creator or target, web-only (no MCP counterpart); no payload.
  *
- * `propose_close` deliberately mirrors `close`'s payload (an outcome plus an
- * optional one-line summary) rather than inventing a shape of its own: a
- * proposal is exactly the close it is asking a human to confirm, and the surface
- * that confirms it hands those same two values straight to `close`.
+ * Discriminated union so ops can't bleed fields. `propose_close` mirrors
+ * `close`'s payload on purpose: the confirming surface hands those same two
+ * values straight to `close`.
  */
 export const TaskUpdateSchema = z.discriminatedUnion("op", [
   z.object({
@@ -301,16 +230,11 @@ export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
 const AgentToolProfileSchema = z.enum(["full", "dopl_only", "read_only"]);
 
 /**
- * PATCH /members body: a member updating their OWN per-channel preference —
- * the agent tool profile. At least one field is required (an empty patch is a
- * no-op the route rejects). Self-only: the service always targets the caller's
- * row.
+ * PATCH /members: member updates their OWN per-channel agent tool profile.
+ * Self-only — service always targets the caller's row. Empty patch rejected.
  *
- * `notifyScope` rode this same patch until 2026-08-08, when notify scope was
- * removed from the product (F-170). It is now an unknown key, which zod STRIPS:
- * a stale client sending `{notifyScope}` alone hits the empty-patch refusal,
- * and one sending it alongside a tool profile has it silently dropped. That is
- * the intended answer — there is nothing left to store it in.
+ * `notifyScope` is now an unknown key (F-170 removed it) and zod STRIPS it: a
+ * stale client sending it alone hits the empty-patch refusal. Intended.
  */
 export const ChannelMemberSelfUpdateSchema = z
   .object({
@@ -336,16 +260,13 @@ export type ChannelMemberRemoveInput = z.infer<
 /**
  * `?since=<seq>&limit=<n<=200>&thread=<taskId>` for a message read.
  *
- * `thread` is a FILTER, not a lookup: it keeps only the rows whose
- * `metadata.taskId` equals it. Deliberately ANY non-empty string — a thread id
- * is a `channel_tasks` uuid today, but the transcript still carries LEGACY
- * `task-<channelId>-<seq>` ids from before threads were a table, and those are
- * real `metadata.taskId` values a reader must be able to isolate. A `.uuid()`
- * here would 400 exactly the exchanges that are hardest to reconstruct by hand.
+ * `thread` is a FILTER, not a lookup: keeps rows whose `metadata.taskId`
+ * equals it. ⚠ Deliberately ANY non-empty string, NOT `.uuid()` — the
+ * transcript still carries legacy `task-<channelId>-<seq>` ids from before
+ * threads were a table, and `.uuid()` would 400 exactly those.
  *
- * Nothing is checked against `channel_tasks`: an id that matches no row is not
- * an error, it returns `[]`. Length is bounded like `clientMsgId` (the other
- * caller-supplied opaque key) so a filter value can't be unbounded.
+ * Never checked against `channel_tasks`: an unmatched id returns `[]`, not an
+ * error. Length bounded like `clientMsgId`.
  */
 export const MessageReadQuerySchema = z.object({
   since: z.coerce.number().int().nonnegative().optional(),
@@ -362,10 +283,10 @@ export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
 
 /**
  * `?since=<seq>&timeoutMs<=50000&excludeAuthor=<userId>` for the await
- * long-poll. `excludeAuthor` is OPT-IN: the desktop listener omits it because
- * it needs its own account's messages (thread targeting, requester-window
- * routing, version-skew observation), while an MCP await passes the caller's
- * own id so the caller's own posts cannot pop its own hold.
+ * long-poll. `excludeAuthor` is OPT-IN: desktop listener omits it (needs its
+ * own account's messages for thread targeting, requester-window routing,
+ * version-skew observation); MCP await passes the caller's own id so its own
+ * posts cannot pop its hold.
  */
 export const AwaitQuerySchema = z.object({
   since: z.coerce.number().int().nonnegative().optional(),
@@ -382,11 +303,10 @@ export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
 // ─── Consent (inbound consent + outbound review) ────────────────────────────
 
 /**
- * The triggering message's `seq`. NOT coerced: this arrives in a JSON body,
- * where `z.coerce.number()` would silently turn `null` / `""` / `[]` into 0
- * and `true` into 1 — a de-dupe key must never be manufactured out of junk.
- * (Coercion belongs on query strings, where everything is a string by
- * definition.) `seq` is a 1-based identity column, so 0 is not a real seq.
+ * Triggering message's `seq`. ⚠ NOT coerced — arrives in a JSON body, where
+ * `z.coerce.number()` turns `null` / `""` / `[]` into 0 and `true` into 1, and
+ * a de-dupe key must never be manufactured from junk. `seq` is 1-based, so 0 is
+ * never real. Coercion belongs on query strings only.
  */
 const ConsentMessageSeqSchema = z.number().int().positive();
 
@@ -398,19 +318,15 @@ const consentCreateBase = {
 };
 
 /**
- * Create a consent request. The desktop POSTs this when a trigger fires
- * (inbound) or a reply is drafted (outbound). `operatorUserId` is NEVER in the
- * body — it is always the authenticated caller (a caller can only raise a
- * request addressed to themselves). `requesterUserId` is derived server-side
- * from the triggering message. `summary` shares the message summary's cap
- * (it renders on the card); `bodyPreview` / `proposedReply` are larger.
+ * Create a consent request (desktop POSTs on trigger / on drafted reply).
  *
- * A discriminated union on `kind` so the two shapes can't bleed into each
- * other: only an OUTBOUND request carries a `proposedReply` (an inbound row
- * with a drafted reply is nonsense, and accepting one let a caller pre-seed
- * the outbound review's payload). `messageSeq` is meaningful for BOTH kinds —
- * it is the de-dupe key (inbound: the triggering message; outbound: the
- * message the reply answers), so a retry can't stack duplicate cards.
+ * ⚠ `operatorUserId` is NEVER in the body — always the authenticated caller, so
+ * a caller can only raise a request addressed to themselves. `requesterUserId`
+ * derived server-side from the triggering message.
+ *
+ * Discriminated on `kind`: only OUTBOUND carries `proposedReply` — accepting it
+ * on inbound would let a caller pre-seed the outbound review's payload.
+ * `messageSeq` is the de-dupe key for BOTH kinds, so retries can't stack cards.
  */
 export const ConsentCreateSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -429,10 +345,8 @@ export type ConsentCreateInput = z.infer<typeof ConsentCreateSchema>;
 
 /**
  * Which human surface recorded the decision — persisted verbatim into
- * `decided_by` for the audit trail. The desktop's native dialog sends
- * `decidedBy: 'desktop'`; the web UI omits it and defaults to `web`.
- * `trust` is server-generated only (a standing rule, not a human click) and
- * is deliberately NOT accepted from a caller.
+ * `decided_by` for audit. ⚠ `trust` is server-generated only (standing rule,
+ * not a human click) and deliberately NOT accepted from a caller.
  */
 const ConsentDecidedBySchema = z.enum(["web", "desktop"]);
 
@@ -444,11 +358,9 @@ export const ConsentDecisionSchema = z.object({
 export type ConsentDecisionInput = z.infer<typeof ConsentDecisionSchema>;
 
 /**
- * Consent inbox filter. `pending` (the default, and what the web inbox
- * renders) keeps the card list to things that still need an answer;
- * `decided` is the audit view — it is the ONLY way to read the
- * `auto_allowed` rows a trust rule writes, i.e. "your agent ran N times
- * without asking"; `all` is both.
+ * Consent inbox filter. `pending` (default, web inbox) = still needs an answer.
+ * `decided` = audit view; ONLY way to read the `auto_allowed` rows a trust rule
+ * writes ("your agent ran N times without asking"). `all` = both.
  */
 const ConsentStatusFilterSchema = z.enum(["pending", "decided", "all"]);
 export type ConsentStatusFilter = z.infer<typeof ConsentStatusFilterSchema>;
@@ -461,11 +373,8 @@ export const ConsentListQuerySchema = z.object({
 export type ConsentListQuery = z.infer<typeof ConsentListQuerySchema>;
 
 /**
- * Read-session-state's schemas (rollback §3.5) live in `schema-sessions.ts` and
- * are re-exported here so every existing `@/features/channels/schema` import is
- * unchanged. They moved because the WRITE half's schema did not fit: this file
- * stood at 487/500 and §2's answer to that is a split on a real seam, not a
- * trimmed comment. See that file for the query param's F-145 history.
+ * Session-state schemas live in `schema-sessions.ts`; re-exported here so every
+ * existing `@/features/channels/schema` import stays unchanged.
  */
 export {
   SessionStateQuerySchema,
@@ -488,10 +397,9 @@ export type TrustMutateInput = z.infer<typeof TrustMutateSchema>;
 // ─── Presence (desktop heartbeat) ───────────────────────────────────────────
 
 /**
- * POST /presence body: an optional status label (defaults to 'listening').
- * A closed enum, not free text — the column is rendered as a listener state
- * and a matching CHECK constraint backs it in the database, so an arbitrary
- * string can't be written through the heartbeat and then surfaced in the UI.
+ * POST /presence body: optional status label (defaults 'listening').
+ * ⚠ Closed enum, not free text — a matching CHECK constraint backs the column,
+ * and the value is surfaced in the UI as listener state.
  */
 export const PresenceHeartbeatSchema = z.object({
   status: z.enum(["listening", "busy", "paused", "offline"]).optional(),

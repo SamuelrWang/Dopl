@@ -9,9 +9,8 @@ import {
 } from "./dto";
 
 /**
- * Raw Supabase I/O for knowledge FOLDERS — reads, ancestor walk, writes,
- * and cascade trash/restore. No business logic, no auth checks; see
- * `repository.ts` for the split map and conventions.
+ * Raw Supabase I/O for knowledge FOLDERS. No business logic, no auth checks —
+ * see `repository.ts` for the split map and conventions.
  */
 
 export async function findFolderById(
@@ -43,11 +42,8 @@ export async function listFoldersForBase(
   return ((data ?? []) as KnowledgeFolderRow[]).map(mapFolderRow);
 }
 
-/**
- * Find a folder by (kb, parent, name) — the unique partial index from
- * Item 4 makes this a max-1-row query among active rows. Used by the
- * path resolver.
- */
+/** By (kb, parent, name). Unique partial index guarantees max-1 active row.
+ *  Used by the path resolver. */
 export async function findActiveFolderByName(
   baseId: string,
   parentId: string | null,
@@ -68,20 +64,14 @@ export async function findActiveFolderByName(
 }
 
 /**
- * Walks `parent_id` from the given folder up to the root. Used by the
- * service's cycle pre-check on `moveFolder` and to build breadcrumbs.
+ * `parent_id` chain from folder to root, index 0 = the folder itself. Feeds
+ * `moveFolder`'s cycle pre-check and breadcrumbs.
  *
- * Returns the chain ordered from the given folder up to the root
- * (index 0 is the folder itself).
+ * ⚠ INCLUDES soft-deleted nodes — a cycle through a trashed folder is still a
+ * cycle once restored. Capped at 1000 hops, matching the DB trigger's guard.
  *
- * Includes soft-deleted nodes — a cycle that runs through a trashed
- * folder is still a cycle and would still cause infinite recursion if
- * the trashed folder were ever restored. Capped at 1000 hops as a
- * safety net (matches the DB trigger's guard).
- *
- * Iterative walk — N round-trips. Folder trees are typically shallow
- * (<10 levels), so the cost is negligible. A recursive-CTE RPC could
- * replace this for deep trees if it ever matters.
+ * Iterative: N round trips. Trees are shallow (<10 levels); a recursive-CTE
+ * RPC could replace this if depth ever matters.
  */
 export async function listFolderAncestors(
   folderId: string
@@ -99,13 +89,9 @@ export async function listFolderAncestors(
   return chain;
 }
 
-/**
- * Highest `position` among active folders in a (base, parent) bucket, or
- * -1 when the bucket is empty. Sibling to `maxEntryPositionIn` — lets
- * `insertFolder` append with `max + 1` so folders created in sequence keep
- * their insertion order in position-sorted views instead of all landing at
- * 0 (F-8).
- */
+/** Highest `position` among active folders in a (base, parent) bucket, -1 when
+ *  empty. Sibling of `maxEntryPositionIn`; `insertFolder` appends at max + 1 so
+ *  insertion order survives position-sorted views (F-8). */
 export async function maxFolderPositionIn(
   baseId: string,
   parentId: string | null
@@ -139,8 +125,8 @@ export async function insertFolder(
   args: InsertFolderArgs
 ): Promise<KnowledgeFolder> {
   const db = supabaseAdmin();
-  // F-8: append after existing siblings when no explicit position was
-  // given (see maxEntryPositionIn for the concurrency note).
+  // F-8: append after siblings when position unpinned (concurrency note on
+  // maxEntryPositionIn).
   const position =
     args.position ??
     (await maxFolderPositionIn(args.knowledgeBaseId, args.parentId ?? null)) + 1;
@@ -189,7 +175,7 @@ export async function updateFolderRow(
     update.description = stripNulls(patch.description);
   if (patch.parentId !== undefined) update.parent_id = patch.parentId;
   if (patch.position !== undefined) update.position = patch.position;
-  // Optimistic concurrency CAS (see updateBaseRow).
+  // Optimistic-concurrency CAS (see updateBaseRow).
   let query = db.from("knowledge_folders").update(update).eq("id", id);
   if (expectedUpdatedAt !== undefined) {
     query = query.eq("updated_at", expectedUpdatedAt);
@@ -204,36 +190,27 @@ export async function updateFolderRow(
 }
 
 /**
- * PERMANENTLY delete a folder, every descendant folder, and every entry
- * in that subtree, in ONE atomic RPC. Deletion is immediate and
- * irreversible — there is no trash (2026-08-07).
+ * PERMANENTLY delete a folder, its descendant folders and every entry in the
+ * subtree, in ONE atomic RPC. No trash.
  *
- * WHY AN RPC. This was N SELECTs to walk the tree plus TWO independent
- * DELETEs. Nothing bound those two writes, so an entries-delete that
- * committed followed by a folder-delete that failed left the folder alive
- * and empty with its notes permanently gone — and with trash removed there
- * is nothing to recover them from. That is verbatim the failure the
- * ontology cluster RPC was written to close ("One function body = both
- * DELETEs commit or neither", 20260807120000). The same argument applies
- * here, so the same shape does: one transaction, one round trip.
+ * ⚠ MUST stay a single transaction. Split writes let an entries-delete commit
+ * and a folder-delete fail, leaving an empty folder with its notes permanently
+ * gone and nothing to recover them from.
  *
- * THE ORDER SURVIVES INTO THE FUNCTION BODY. `knowledge_entries.folder_id`
- * is `ON DELETE SET NULL`, so deleting the folder first would ORPHAN its
- * entries into the base root instead of removing them; the RPC deletes the
- * subtree's entries FIRST, then the root folder — whose descendant
- * *folders* cascade out via the self-referential `parent_id ... ON DELETE
- * CASCADE` FK. The recursive CTE inside replaces the breadth-first walk
- * that used to live here.
+ * ⚠ ORDER IS LOAD-BEARING inside the function body: `knowledge_entries
+ * .folder_id` is `ON DELETE SET NULL`, so deleting the folder first ORPHANS
+ * its entries into the base root. The RPC deletes subtree ENTRIES first, then
+ * the root folder — descendant folders cascade via the self-referential
+ * `parent_id ... ON DELETE CASCADE`.
  */
 export async function hardDeleteFolder(
   workspaceId: string,
   id: string
 ): Promise<void> {
   const db = supabaseAdmin();
-  // RPC added by migration 20260807140000_cascade_hard_delete_folder_and_object.sql;
-  // not yet in the generated Database types (regenerated after the migration
-  // applies). DEPLOY-BLOCKING with that migration — this is the only folder
-  // delete path, so shipping without it fails every folder delete at runtime.
+  // ⚠ RPC from 20260807140000_cascade_hard_delete_folder_and_object.sql, not in
+  // the generated Database types. DEPLOY-BLOCKING with that migration: this is
+  // the ONLY folder delete path, so shipping without it fails every delete.
   const { error } = await db.rpc(
     "cascade_hard_delete_folder" as never,
     { p_workspace_id: workspaceId, p_folder_id: id } as never

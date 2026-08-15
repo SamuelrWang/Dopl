@@ -9,11 +9,9 @@ import type { ObjectMethod, OntologyObject } from "../types";
 import { FIELD_WELL } from "./ontology-bits";
 
 /**
- * Actions section — what the object CAN DO: the day-to-day things an
- * agent performs for it (send email, search LinkedIn, …). Each action
- * is its own raised card on the inset body: name on the card, then
- * concave entry wells for description / outcome / tools. Footer adds a
- * new action.
+ * Actions section — what the object CAN DO (things an agent performs for it).
+ * Each action is a raised card: name, then concave wells for description /
+ * outcome / tools. Footer adds one.
  */
 export function ActionsEditor({
   object,

@@ -7,12 +7,9 @@ interface Props {
   messages: ChatMessage[];
 }
 
-/**
- * The summarized transcript as chat-like boxes: user messages sit on
- * the subtle card surface and indent right; agent messages stay flat
- * white. Verbatim excerpts (user-requested) render as pressed-in quote
- * wells inside their box.
- */
+/** Summarized transcript as chat-like boxes: user messages on the card
+ *  surface, indented right; agent messages flat. Verbatim excerpts render as
+ *  pressed-in quote wells. */
 export function MessageList({ messages }: Props) {
   return (
     <div className="flex flex-col gap-2.5">

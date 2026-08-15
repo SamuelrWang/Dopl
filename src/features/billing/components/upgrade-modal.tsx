@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-// Deep import, not the `settings-modal` barrel: the barrel also re-exports
-// SettingsModal, whose section tree reaches `next/navigation`. This modal is
-// mounted by pages the desktop SPA reuses (chats' retention strip), where a
-// `next/*` module anywhere in the graph fails the build.
+// ⚠ Deep import, NOT the `settings-modal` barrel: the barrel re-exports
+// SettingsModal, whose section tree reaches `next/navigation`. This modal
+// mounts in desktop-SPA-reused pages, where any `next/*` fails the build.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { getSpaBridge, isSpaRenderer } from "@/shared/lib/spa-bridge";
@@ -36,21 +35,14 @@ interface Props {
   /** Optional context line explaining why the modal opened. */
   reason?: string;
   /**
-   * "generic" (default): the free-workspace upsell — single-member
-   * workspaces choose Pro or Team; 2+ members get Team only.
-   * "add-member": the invite/join blocked path — Team is the only
-   * offer, and a live Solo subscription is swapped in place via
-   * `/api/billing/upgrade-to-team` (no checkout).
+   * "generic" (default): free-workspace upsell — single-member picks Pro or
+   * Team, 2+ members get Team only.
+   * "add-member": invite/join blocked path — Team only, and a live Solo sub
+   * swaps in place via `/api/billing/upgrade-to-team` (no checkout).
    */
   variant?: "generic" | "add-member";
 }
 
-/**
- * Reusable upgrade prompt shared by the settings pane, the ontology
- * over-cap flow, the chats retention upsell, and the Solo member-limit
- * block. Admin/owner see the purchase path; everyone else gets an
- * "ask an admin" note.
- */
 export function UpgradeModal({
   open,
   onOpenChange,
@@ -89,7 +81,6 @@ export function UpgradeModal({
         err instanceof ApiError &&
         (err.code === "NOT_ON_SOLO" || err.message === "NOT_ON_SOLO")
       ) {
-        // Billing state moved under us — resync and let the user retry.
         setSwitchError(
           "This workspace is no longer on Pro. Refreshing billing state…"
         );
@@ -188,15 +179,13 @@ function CheckoutView({
 }
 
 /**
- * The DESKTOP leg of checkout — the same handoff the settings modal's billing
- * pane makes (`apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`).
+ * DESKTOP leg of checkout — same handoff as
+ * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`.
  *
- * The packaged renderer cannot mount Stripe at all: `script-src 'self'` refuses
- * js.stripe.com, `connect-src 'none'` refuses its XHR, `frame-src 'none'`
- * refuses its iframes, and the checkout session fetch would resolve against a
- * `file://` document. So the paywall stops at the pitch and sends the purchase
- * to the browser, which lands on this identical checkout signed in
- * (journey-audit GAP-9; before this the button dead-ended on an error card).
+ * ⚠ Packaged renderer cannot mount Stripe at all: `script-src 'self'` refuses
+ * js.stripe.com, `connect-src 'none'` its XHR, `frame-src 'none'` its iframes,
+ * and the session fetch would resolve against a `file://` document. So the
+ * paywall stops at the pitch and sends the purchase to the browser (GAP-9).
  */
 function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
   const [opened, setOpened] = useState(false);
@@ -222,20 +211,14 @@ function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
 }
 
 /**
- * The web billing surface for the workspace the desktop app is CURRENTLY
- * showing: `/billing/{segment}?billing=upgrade&plan=…` — THE POST-RETIREMENT
- * BILLING PAGE (`src/app/billing/[segment]/page.tsx`), not the
- * `/{segment}/canvas?billing=upgrade` this used to open, which dies with the
- * app tree (docs/migration-research/website-retirement-plan.md).
+ * `/billing/{segment}?billing=upgrade&plan=…` for the workspace the desktop app
+ * is CURRENTLY showing (`src/app/billing/[segment]/page.tsx`).
  *
- * The segment comes off the desktop hash router's own location — `#/{segment}/…`
- * — because a segment-less `/billing` resolves the user's DEFAULT workspace,
- * which is not necessarily the one being upgraded. The origin comes from the
- * preload constant, never `window.location` (a `file://` document here).
- *
- * `plan` rides along because the user already answered that question in the app:
- * the browser opens straight into checkout for the plan they picked, instead of
- * asking again on the other side of an `openExternal`.
+ * ⚠ Segment comes off the desktop hash router's location (`#/{segment}/…`): a
+ * segment-less `/billing` resolves the user's DEFAULT workspace, not the one
+ * being upgraded. Origin comes from the preload constant, never
+ * `window.location` (a `file://` document here). `plan` rides along so the
+ * browser opens straight into checkout.
  */
 function browserBillingUrl(plan: CheckoutPlan): string {
   const segment = window.location.hash.replace(/^#\/?/, "").split(/[/?#]/)[0];
@@ -262,11 +245,10 @@ function GenericUpsell({
   onClose: () => void;
 }) {
   const soloEligible = ent.memberCount === 1;
-  // A live (or grace-period) subscription behind a free-reporting plan is a
-  // degraded Solo sub — checkout would 409 on the existing subscription, so
-  // Team must swap in place via /api/billing/upgrade-to-team, exactly like
-  // the add-member variant. (An entitled paid workspace shows AlreadyPaidNote
-  // instead of these options, so this only fires for the degraded case.)
+  // ⚠ Live (or grace-period) sub behind a free-reporting plan = degraded Solo
+  // sub; checkout would 409, so Team must swap in place via
+  // /api/billing/upgrade-to-team. Entitled paid workspaces show
+  // AlreadyPaidNote instead, so this only fires for the degraded case.
   const hasLiveSub = ent.status === "active" || ent.status === "past_due";
 
   return (
@@ -394,10 +376,9 @@ function AddMemberBlocked({
   onClose: () => void;
 }) {
   const seats = ent.billableSeats;
-  // Any live non-Team subscription behind a SOLO_MEMBER_LIMIT 402 is the
-  // Solo sub — including the degraded backstop case where entitlements
-  // report plan=free because a second member slipped in. Those must swap
-  // in place; a checkout would 409 on the existing subscription.
+  // ⚠ Any live non-Team sub behind a SOLO_MEMBER_LIMIT 402 is the Solo sub
+  // (incl. the degraded case reporting plan=free). Must swap in place —
+  // checkout would 409 on the existing subscription.
   const hasLiveSub = ent.status === "active" || ent.status === "past_due";
 
   return (
@@ -436,9 +417,9 @@ function AddMemberBlocked({
       {!canManageBilling ? (
         <AskAdminNote onClose={onClose} action="upgrade this workspace to Team" />
       ) : ent.loading ? (
-        // The 402 opens this modal before the first /api/billing/status
-        // resolves; acting on DEFAULT_STATUS would offer checkout to a
-        // live-Solo workspace (which then 409s). Wait for the real state.
+        // ⚠ The 402 opens this modal before /api/billing/status resolves;
+        // acting on DEFAULT_STATUS offers checkout to a live-Solo workspace
+        // (409). Wait for real state.
         <div className="bento mt-5 h-16 animate-pulse opacity-50" />
       ) : ent.isTeam ? (
         <div className="mt-5">
@@ -454,8 +435,7 @@ function AddMemberBlocked({
           )}
           <div className="flex items-center gap-2">
             {hasLiveSub ? (
-              // Live Solo subscription (entitled or degraded): swap it to
-              // per-seat Team in place — no second checkout.
+              // Live Solo sub: swap to per-seat Team in place, no 2nd checkout.
               <button
                 type="button"
                 onClick={onSwitchToTeam}

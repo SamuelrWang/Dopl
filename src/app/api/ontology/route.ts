@@ -9,28 +9,18 @@ import {
 } from "@/features/ontology/server/service";
 
 /**
- * `?view=summary` — THE PROJECTION PARAMETER, and why it is a parameter rather
- * than a second route (P0-3).
+ * `?view=summary` — a PROJECTION parameter, not a second route: both views answer the same
+ * question about the same resource and differ only in how much of each row comes back. A split
+ * would give them separate auth wrappers, error mapping and futures for one resource whose shape
+ * must stay in lockstep.
  *
- * Both views answer the same question about the same resource — "what is in
- * this workspace's ontology" — and differ only in how much of each row comes
- * back. That is what a projection is, and splitting it into `/api/ontology` +
- * `/api/ontology/map` would give the two views separate auth wrappers, separate
- * error mapping and separate futures, for one resource whose shape is meant to
- * stay in lockstep. It also keeps the client contract additive: an existing
- * caller that sends nothing is byte-for-byte where it was.
+ * ⚠ FULL IS THE DEFAULT. The board and graph view read `attributes` / `methods` / `template` /
+ * `layout` straight off this response, as do the MCP ops that resolve an object out of the
+ * snapshot — a thinner default is silent data loss, not a diet.
  *
- * FULL IS THE DEFAULT, DELIBERATELY. The board and the graph view read
- * `attributes` / `methods` / `template` / `layout` straight off this response,
- * so a default that dropped them would not be a diet — it would be a silent
- * data loss on the two surfaces that consume it, and on the MCP ops
- * (`op="get"`, the attribute/action writes) that resolve an object out of the
- * snapshot. Anything wanting the cheap view has to say so; nothing gets a
- * thinner answer than it asked for.
- *
- * An unrecognised `view` is a 400, not a silent fall-through to `full`: the one
- * failure this parameter can have is a caller believing it opted into the cheap
- * read and quietly getting the expensive one.
+ * ⚠ An unrecognised `view` is a 400, never a fall-through to `full`: the one failure this
+ * parameter can have is a caller believing it opted into the cheap read and getting the expensive
+ * one.
  */
 const VIEWS = ["full", "summary"] as const;
 

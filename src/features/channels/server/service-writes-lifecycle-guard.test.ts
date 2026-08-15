@@ -1,30 +1,14 @@
 /**
- * P0-2 — THE LIFECYCLE KINDS ARE NOT AN AGENT'S TO POST (2026-08-04).
+ * Lifecycle kinds are not an agent's to post — the AUTHORITATIVE half, holding
+ * for anything posting straight at `/api/channels/[id]/messages` with a device
+ * token. (`channel-ops-write.ts` refuses earlier for MCP callers.)
  *
- * THE INCIDENT. Two agents exchanged over a DM. The responder did the work and
- * posted its whole answer as `kind:"task_finished"`, and the answer appeared
- * NOWHERE on the requester's side: `lib/group-thread.ts` folds a terminal marker
- * into `draft.endEvent` and never pushes it to `draft.entries`, so its body is
- * structurally unrenderable. The prompt invited the choice and the tool's flat
- * five-value `kind` enum made it one keystroke away.
- *
- * WHAT THIS SUITE IS FOR, and why it is not the MCP tool's suite. The tool
- * refuses those three before the call is made (fast, teaching, "nothing was
- * sent" trivially true — `channel-ops-write.ts`, pinned in the mcp-server
- * package). This is the AUTHORITATIVE half: the one that holds for anything that
- * posts straight at `/api/channels/[id]/messages` with a device token, which is
- * every external agent and every future client.
- *
- * THE SEAM IS THE CREDENTIAL, and pinning it is most of the value here, because
- * getting it wrong in either direction is a real outage:
- *   - too wide, and the DESKTOP RUNTIME's own lifecycle echoes stop
- *     (`main/session-window.js` onLaunched/onEnded → `channel-post.postTaskEvent`,
- *     which posts on the Electron session's SUPABASE COOKIES, so `source:"user"`),
- *     and every session card in the product stops saying whether work started;
- *   - too wide the other way, and the CLOSE ROUTE's own echo stops, so a closed
- *     thread never tells the peer's card it ended;
- *   - too narrow, and the incident comes straight back.
- * All three are asserted below, in both directions.
+ * ⚠ THE SEAM IS THE CREDENTIAL, not who the message says wrote it. Too wide and
+ * the desktop runtime's own echoes stop (`main/session-window.js` posts on
+ * Electron's Supabase cookies, so `source:"user"`) or the close route's echo
+ * stops; too narrow and an agent's answer posted as `task_finished` renders
+ * nowhere (`lib/group-thread.ts` folds terminal markers into `draft.endEvent`,
+ * never `draft.entries`). Asserted in both directions.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -53,16 +37,9 @@ const PEER = "user-2";
 const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 /**
- * THE TWO LANES, side by side, because the whole guard is the difference.
- *
- * `agentCtx` is what `buildChannelContext` produces for a BEARER agent token
- * (`with-auth.ts` sets `agentTokenId`, `service-shared.ts` maps it to
- * `source:"agent"`), i.e. every MCP `op="post"`.
- *
- * `desktopCtx` is what the SAME function produces for a cookie caller — the
- * desktop listener and the web app both — and it is the lane that legitimately
- * writes lifecycle markers. The body still declares `authorKind:"agent"`; the
- * marker is agent-authored, it is just not agent-CREDENTIALLED.
+ * The two lanes. `agentCtx` = bearer agent token (every MCP `op="post"`);
+ * `desktopCtx` = cookie caller (desktop listener + web), the lane that
+ * legitimately writes lifecycle markers.
  */
 const agentCtx: ChannelContext = {
   workspaceId: WS,
@@ -157,16 +134,15 @@ beforeEach(() => {
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
-  // The re-proposal anchor (C-6). 0 = "nothing has been said in this thread",
-  // which is the shape every pre-existing assertion below was written against.
+  // Re-proposal anchor. 0 = "nothing said in this thread yet".
   vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(0);
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
   vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
     taskRow({ ...patch })
   );
-  // C-30 — close now goes through the CONDITIONAL update (`WHERE status = ?`),
-  // so first-write-wins is decided by the statement rather than by a read.
+  // Close goes through the CONDITIONAL update, so first-write-wins is decided
+  // by the statement rather than by a read.
   vi.mocked(repoTasks.updateTaskIfStatus).mockImplementation(
     async (_id, _status, patch) => taskRow({ ...patch })
   );
@@ -179,14 +155,12 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
     await expect(
       postMessage(agentCtx, "general", { body: "Here is the finished analysis…", kind })
     ).rejects.toBeInstanceOf(ChannelLifecycleKindForbiddenError);
-    // NOTHING WAS SENT, and that has to be true rather than merely reported: the
-    // whole failure mode is an agent believing it delivered.
+    // ⚠ Nothing was SENT, not merely reported — the failure mode is an agent
+    // believing it delivered.
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("names the kind and says where the prose goes instead", async () => {
-    // The message is what an agent reads after a -32603, so it carries the
-    // remedy, not just the rule.
     const err: Error = await postMessage(agentCtx, "general", {
       body: "done",
       kind: "task_finished",
@@ -200,10 +174,9 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
   });
 
   it("refuses BEFORE the idempotency short-circuit, so a retry cannot replay it", async () => {
-    // The guard sits beside `assertChatIsUnaddressed` for exactly this reason. If
-    // it sat after, a caller whose first attempt was refused could re-send with
-    // the same client_msg_id, hit `findMessageByClientId`, and be handed a stored
-    // message back as if the post had succeeded.
+    // ⚠ If the guard sat AFTER, a refused caller could re-send the same
+    // client_msg_id, hit `findMessageByClientId`, and be handed a stored message
+    // back as if the post succeeded.
     vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
       insertedRow({
         channel_id: "chan-1",
@@ -231,9 +204,8 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
 
 describe("postMessage — the lanes the guard must NOT touch", () => {
   it("task_progress stays agent-writable: it is the milestone lane", async () => {
-    // The one `task_*` kind whose body IS rendered (`splitSessionEntries`), and
-    // the one that claims nothing about a session's lifecycle. Closing it would
-    // leave an agent no way to mark progress at all.
+    // Only `task_*` kind whose body IS rendered (`splitSessionEntries`) and the
+    // only one claiming nothing about lifecycle.
     const msg = await postMessage(agentCtx, "general", {
       body: "schema half landed",
       kind: "task_progress",
@@ -251,39 +223,29 @@ describe("postMessage — the lanes the guard must NOT touch", () => {
     "the DESKTOP RUNTIME still posts %s on its cookie session",
     async (kind) => {
       // `main/session-window.js` onLaunched/onEnded → `channel-post.postTaskEvent`
-      // → `listener-io.apiFetch`, which authenticates with the Electron session's
-      // Supabase cookies. If this ever fails, every session card in the product
-      // stops saying whether work started or how it ended.
+      // → `listener-io.apiFetch`, on the Electron session's Supabase cookies.
       const msg = await postMessage(desktopCtx, "general", {
         body: "Started working on this request.",
         kind,
         authorKind: "agent",
       });
       expect(msg.kind).toBe(kind);
-      // …and it is still an AGENT-authored row. The guard is about the
-      // CREDENTIAL, never about who the message says wrote it.
+      // ⚠ Still an AGENT-authored row — the guard is about the CREDENTIAL.
       expect(inserted()?.author_kind).toBe("agent");
     }
   );
 
   it("the CLOSE ECHO is exempt even on an agent ctx (the server speaking, not the agent)", async () => {
-    // The one server-internal caller. It is exempted at its call site rather than
-    // by identity, because a close raised over MCP arrives with an agent ctx and
-    // the echo still has to tell the peer's card the thread ended.
-    //
-    // Reached through `proposeTaskClose`? No — through `closeTask` on the human
-    // lane, which is the only thing that raises it. Asserted here beside the
-    // guard so the exemption cannot be removed without this failing.
+    // The one server-internal caller, exempted at its CALL SITE rather than by
+    // identity: a close raised over MCP arrives with an agent ctx and the echo
+    // still has to tell the peer's card the thread ended.
     await closeTask(desktopCtx, "general", TASK_ID, "completed", "Shipped");
     expect(inserted()?.kind).toBe("task_finished");
     expect(inserted()?.body).toBe("Shipped");
   });
 
   it("the exemption is NOT a general agent-ctx hole", async () => {
-    // Belt: the option exists, and nothing an HTTP caller sends can set it. The
-    // proof is structural (it is not a field of ChannelMessageCreateInput), and
-    // this pins the behavioural half — a caller passing the key inside its own
-    // metadata gets no exemption.
+    // ⚠ A caller passing the key inside its own metadata gets no exemption.
     await expect(
       postMessage(agentCtx, "general", {
         body: "done",
@@ -306,8 +268,8 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("the refusal comes BEFORE any lookup, so it leaks nothing about the thread", async () => {
-    // A thread id an agent is not a party to, and one that does not exist, must
-    // answer identically — otherwise the shape of the error is a probe.
+    // ⚠ Non-party and nonexistent thread ids must answer IDENTICALLY, else the
+    // shape of the error is a probe.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
     await expect(
       closeTask(agentCtx, "general", TASK_ID, "completed")
@@ -324,17 +286,15 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   it("an agent's PROPOSAL posts a marked, NON-TERMINAL note and touches no row", async () => {
     const res = await proposeTaskClose(agentCtx, "general", TASK_ID, "completed", "Analysis is in.");
 
-    // THE THREAD IS UNTOUCHED. This is the property the whole design turns on: a
-    // proposal must not change routing, status, or anything the peer sees about
-    // the thread's state.
+    // ⚠ Thread UNTOUCHED — a proposal must not change routing, status, or
+    // anything the peer sees.
     expect(repoTasks.updateTask).not.toHaveBeenCalled();
     expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
     expect(res.thread.status).toBe("open");
 
     const row = inserted();
-    // NON-TERMINAL by construction: `task_progress` is an `entries` row in
-    // `groupThread`, never an `endEvent`, so a proposal can never paint the
-    // shared thread as finished on the peer's card.
+    // ⚠ Non-terminal by construction: `task_progress` is an `entries` row in
+    // `groupThread`, never an `endEvent`.
     expect(row?.kind).toBe("task_progress");
     expect(row?.body).toBe("Analysis is in.");
     expect(row?.metadata).toMatchObject({
@@ -353,21 +313,11 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   /**
-   * C-6 / F-172 — PROPOSE_CLOSE IS RE-RAISABLE (Samuel, 2026-08-08).
-   *
-   * It used to be one-shot FOREVER: the key was `(thread, outcome)` and nothing
-   * else, so the second genuine proposal in a long exchange hit `postMessage`'s
-   * `client_msg_id` short-circuit and was silently swallowed — the agent's only
-   * terminal act permanently consumed by its first use, the stale prompt
-   * reloading forever. The client was already built the other way round
-   * (`readCloseProposal` takes the LATEST, `session-card.tsx` dismisses per
-   * message id), so this is the server catching up to a promise two surfaces
-   * had already made.
-   *
-   * The key is now (thread, outcome, ACTIVITY ANCHOR), and the anchor excludes
-   * proposals — which is what keeps a retry deduping while a real re-proposal
-   * writes. Both directions are asserted, because a fix that only satisfies one
-   * of them is the bug or the spam.
+   * ⚠ `propose_close` is RE-RAISABLE. Key is (thread, outcome, ACTIVITY ANCHOR)
+   * and the anchor EXCLUDES proposals — that is what keeps a retry deduping
+   * while a genuine re-proposal still writes. A `(thread, outcome)` key alone is
+   * one-shot forever and silently swallows the second real proposal.
+   * Both directions asserted: satisfying only one is the bug or the spam.
    */
   it("keys the proposal on (thread, outcome, activity anchor)", async () => {
     vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
@@ -382,9 +332,8 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("a RETRY with nothing said in between still collapses to one prompt", async () => {
-    // The anchor excludes proposals, so posting one does not move it. A restarted
-    // session, a lost response, or a chatty agent re-proposing all recompute the
-    // SAME key and hit the idempotency short-circuit.
+    // Anchor excludes proposals, so posting one does not move it — retries all
+    // recompute the SAME key and hit the idempotency short-circuit.
     vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
     await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
     const first = inserted()?.client_msg_id;
@@ -396,9 +345,8 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("a proposal raised AFTER more exchange writes a NEW prompt", async () => {
-    // The case that was impossible before: propose → human keeps it open → work
-    // continues → propose again. The thread moved, so the anchor moved, so the
-    // key is new and the card's "most recent proposal" is the live one.
+    // propose → human keeps it open → work continues → propose again. Thread
+    // moved, so anchor moved, so the key is new.
     vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
     await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
     const first = inserted()?.client_msg_id;
@@ -414,8 +362,7 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("the outcome still separates two proposals at the same anchor", async () => {
-    // (thread, outcome, anchor): "this failed" and "this is done" are different
-    // claims and must not dedupe into each other.
+    // ⚠ "this failed" and "this is done" are different claims — must not dedupe.
     vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(9);
     await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
     const completed = inserted()?.client_msg_id;
@@ -427,10 +374,8 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("does NOT share a key namespace with the stale-thread cron", async () => {
-    // The cron used to restate this exact key so the two rows would collide,
-    // which is how a scheduled sweep landing first could REPLACE an agent's
-    // stated reason with "no activity for a while" on a card that renders the
-    // most recent proposal. Different authors, different claims, different keys.
+    // ⚠ Different authors, different claims, DIFFERENT KEYS — sharing a key lets
+    // a scheduled sweep landing first replace an agent's stated reason.
     vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
     await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
     expect(inserted()?.client_msg_id).not.toBe(`stale-swept-${TASK_ID}-17`);
@@ -438,7 +383,7 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("a member who could not CLOSE the thread cannot PROPOSE on it either", async () => {
-    // Proposing raises a one-click prompt in front of a human; it must not be
+    // ⚠ Proposing raises a one-click prompt in front of a human — must not be
     // reachable by somebody the close itself would refuse.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
       taskRow({ created_by: "someone-else", target_user_id: "another" })
@@ -450,11 +395,9 @@ describe("closeTask / proposeTaskClose — an agent proposes, a human closes", (
   });
 
   it("the close-proposal keys are RESERVED: a caller cannot forge the prompt", async () => {
-    // `closeProposed` is what raises a "close this thread?" button in front of a
-    // human whose one click settles the exchange for both members. A peer able to
-    // stamp it on somebody else's thread could manufacture that prompt, so the
-    // keys are stripped from caller metadata unconditionally and re-stamped only
-    // from the server-internal option.
+    // ⚠ A peer able to stamp `closeProposed` on somebody else's thread could
+    // manufacture the confirm prompt, so the keys are stripped from caller
+    // metadata unconditionally and re-stamped only server-internally.
     await postMessage(agentCtx, "general", {
       body: "nothing to see here",
       kind: "task_progress",

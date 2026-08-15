@@ -10,18 +10,11 @@ import {
 } from "@/features/channels/server/service";
 
 /**
- * The named-agent ATTRIBUTION roster — READ ONLY, and the last route of the
- * multiplayer surface.
- *
- * `POST` (summon) lived here and `PATCH` / rename / status / disengage lived at
- * `agents/[agentId]`; all of them are gone with named agents (rollback §1),
- * along with the whole lifecycle they drove. This GET survives for exactly one
- * consumer: the transcript resolving a stored `metadata.author_agent_id` to the
- * handle it rendered under. Delete it when historical attribution stops
- * mattering, not before — the messages outlive the feature.
- *
- * Agent-reachable over the MCP device token — NOT sessionOnly — and the service
- * enforces the channel's own visibility rule.
+ * Named-agent ATTRIBUTION roster — READ ONLY. Named agents are gone; this GET survives for one
+ * consumer: the transcript resolving a stored `metadata.author_agent_id` to the handle it
+ * rendered under. ⚠ Delete only when historical attribution stops mattering — the messages
+ * outlive the feature.
+ * NOT sessionOnly; the service enforces the channel's visibility rule.
  */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {

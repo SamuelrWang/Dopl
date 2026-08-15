@@ -1,22 +1,11 @@
 /**
- * THE POLYMORPHIC-RESOURCE WRITE PATH.
- *
- * `team_resource_access.resource_id` points at one of FOUR tables depending on
- * `resource_type`, and the repository is the only thing that knows which. It
- * used to decide with an inline `knowledge_base ? knowledge_bases : workflows`
- * ternary, so `skill` writes went to the `workflows` table — and a Supabase
- * `.update()` matching zero rows returns `{ error: null }`, so nothing threw,
- * the route 200'd, and the skill's scope silently never changed.
- *
- * `workflow` is no longer a resource type and `workflows` no longer a table
- * (deleted 2026-08-11), but the regression guard below is NOT about workflows —
- * it is about the map dispatching each type to its own table. It keeps naming
- * the old fallback because that is the table a broken dispatch fell through to.
- *
- * That failure mode is INVISIBLE to every test that mocks at a higher layer: it
- * has no error, no exception, and no wrong return value. The only way to catch
- * it is to assert on the TABLE NAME the query builder was handed, which is what
- * these do. (There were no tests at all under `teams/server/` before this.)
+ * The polymorphic-resource write path: `team_resource_access.resource_id`
+ * points at one of FOUR tables depending on `resource_type`, and the
+ * repository is the only thing that knows which.
+ * ⚠ A mis-dispatched write is INVISIBLE at any higher layer — a Supabase
+ * `.update()` matching zero rows returns `{ error: null }`, so nothing throws,
+ * the route 200s and the scope silently never changes. These assert on the
+ * TABLE NAME the query builder was handed; that is the only way to catch it.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -39,14 +28,9 @@ interface Recorded {
   eq: Array<[string, unknown]>;
 }
 
-/**
- * Chainable Supabase-builder stub. Records the table, the projection, the
- * update payload and every filter; resolves `maybeSingle()` to `row`.
- *
- * `update()` resolves as a thenable with `{ error: null }` — the real client's
- * "matched nothing, nobody complained" behavior, which is precisely the
- * behavior that let the bug hide.
- */
+/** Chainable Supabase-builder stub: records table, projection, update payload
+ *  and filters; `maybeSingle()` resolves to `row`. ⚠ `update()` resolves
+ *  `{ error: null }` like the real client's "matched nothing" behavior. */
 function makeDb(row: unknown = null) {
   const calls: Recorded = { from: [], select: [], update: [], eq: [] };
   const builder: Record<string, unknown> = {};
@@ -105,8 +89,8 @@ describe("setResourceAccessModeRow — table routing", () => {
   it.each(["chat", "chat_folder"] as const)(
     "refuses %s rather than writing the column directly",
     async (resourceType) => {
-      // A folder's scope is authoritative for its chats and is propagated to
-      // them; setting the column here would desync the two with no error.
+      // ⚠ Folder scope is authoritative for its chats and propagates to them;
+      // setting the column here desyncs the two with no error.
       const { builder, calls } = makeDb();
       vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
 
@@ -153,7 +137,7 @@ describe("getResourceAccessMeta — table + column routing", () => {
   });
 
   it("reads a chat folder's creator from user_id, not created_by", async () => {
-    // Chat folders are the odd one out — the creator column is `user_id`.
+    // Chat folders are the odd one out: creator column is `user_id`.
     const { builder, calls } = makeDb({
       name: "Kickoffs",
       access_mode: "teams",
@@ -169,8 +153,8 @@ describe("getResourceAccessMeta — table + column routing", () => {
   });
 
   it("reads a chat's name from `title` and its creator from `owner_id`", async () => {
-    // Not reachable from the console today, but the union member exists and
-    // the columns are named differently on every table.
+    // Not reachable from the console, but the union member exists and every
+    // table names its columns differently.
     const { builder, calls } = makeDb({
       title: "Kickoff",
       access_mode: "teams",

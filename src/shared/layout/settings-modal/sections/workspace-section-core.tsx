@@ -4,15 +4,15 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { meetsMinRole, type Role, type Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsFormCore } from "@/features/workspaces/components/workspace-settings-form-core";
 import { WorkspaceDangerZoneCore } from "@/features/workspaces/components/workspace-danger-zone-core";
-// Deep import, not the `mcp-connect` barrel — the barrel pulls sibling
-// components the desktop renderer has no need for into its bundle.
+// ⚠ Deep import, NOT the `mcp-connect` barrel — the barrel drags sibling
+// components the desktop renderer doesn't need into its bundle.
 import { RemoteConnect } from "@/features/mcp-connect/components/remote-connect";
 import { SectionShell } from "./section-shell";
 
-/** `GET /api/workspaces/{segment}` → `{ workspace, role }`. Exported because
- *  every surface that reads or INVALIDATES this entry must spell the key the
- *  same way — the settings page and this pane deliberately share one cache
- *  entry, and that only holds while the path is built in one place. */
+/** `GET /api/workspaces/{segment}` → `{ workspace, role }`. ⚠ Exported because
+ *  every surface that reads or INVALIDATES this entry must spell the key
+ *  identically — the settings page and this pane share one cache entry, which
+ *  only holds while the path is built in one place. */
 export function workspaceReadPath(segment: string): string {
   return `/api/workspaces/${encodeURIComponent(segment)}`;
 }
@@ -20,31 +20,25 @@ export function workspaceReadPath(segment: string): string {
 interface BodyProps {
   workspace: Workspace;
   role: Role;
-  /** Post-rename navigation — `previous` is the workspace as it was read, so
-   *  the caller can tell a slug-changing rename from an in-place edit. */
+  /** Post-rename navigation. `previous` = the workspace as read, so the caller
+   *  can tell a slug-changing rename from an in-place edit. */
   onSaved: (updated: Workspace, previous: Workspace) => void;
-  /** Post-delete navigation; `next` is the workspace to land on, if any. */
+  /** Post-delete navigation; `next` = workspace to land on, if any. */
   onDeleted: (next: Workspace | null) => void;
-  /** Workspace-image control, rendered above the form for editors. Web only:
-   *  the upload is multipart, which the desktop IPC bridge (JSON) can't carry. */
+  /** Editors only, above the form. Web only: the upload is multipart, which the
+   *  desktop's JSON IPC bridge can't carry. */
   imageUploader?: (workspace: Workspace) => React.ReactNode;
-  /** Surface-specific sections, rendered after the MCP block and before the
-   *  owner-only danger zone. The desktop `/settings` PAGE hangs its connected
-   *  apps section here; the modal has none. */
+  /** Rendered after the MCP block, before the owner-only danger zone. Desktop
+   *  `/settings` PAGE hangs connected-apps here; the modal has none. */
   extras?: React.ReactNode;
 }
 
 /**
- * THE workspace-settings composition: icon uploader, rename/description form,
- * MCP connection block, owner-only danger zone — in that order.
- *
- * A fragment, not a card: the caller owns the chrome. Two surfaces render it —
- * the settings MODAL's General pane (via `WorkspaceSectionCore` below, inside a
- * `SectionShell`) and the desktop SPA's `/settings` PAGE (directly, inside its
- * own page header). Both are reachable and both are live, and they used to
- * hand-compose the same three components independently, which is how their
- * post-rename behaviour drifted apart (2026-08-03 fleet audit,
- * duplication-quality). One source; the differences stay in props.
+ * THE workspace-settings composition, in order: icon uploader,
+ * rename/description form, MCP block, owner-only danger zone.
+ * ⚠ A fragment, not a card — the caller owns the chrome. Two live surfaces
+ * render it (settings MODAL via `WorkspaceSectionCore`, desktop `/settings`
+ * PAGE directly). ONE source; differences stay in props.
  */
 export function WorkspaceSectionBody({
   workspace,
@@ -83,24 +77,19 @@ export function WorkspaceSectionBody({
 
 interface Props {
   workspaceSegment: string;
-  /** Post-rename navigation — `previous` is the workspace as it was read, so
-   *  the caller can tell a slug-changing rename from an in-place edit. */
+  /** See `BodyProps.onSaved`. */
   onSaved: (updated: Workspace, previous: Workspace) => void;
-  /** Post-delete navigation; `next` is the workspace to land on, if any. */
+  /** See `BodyProps.onDeleted`. */
   onDeleted: (next: Workspace | null) => void;
-  /** Workspace-image control, rendered above the form for editors. Web only:
-   *  the upload is multipart, which the desktop IPC bridge (JSON) can't carry. */
+  /** See `BodyProps.imageUploader` — web only. */
   imageUploader?: (workspace: Workspace) => React.ReactNode;
 }
 
 /**
- * Workspace > General. Fetches the full workspace (the switcher only
- * carries a slim slice) and renders `WorkspaceSectionBody` inside the modal's
- * section chrome.
- *
- * Next-free core: the two workspace forms are their router-agnostic cores and
- * the post-write navigation arrives as props, so the web binding
- * (`./workspace-section`) and the desktop renderer share this one file.
+ * Workspace > General. Fetches the FULL workspace (the switcher carries only a
+ * slim slice) and renders `WorkspaceSectionBody` in the modal's section chrome.
+ * Next-free core — post-write navigation arrives as props, so the web binding
+ * (`./workspace-section`) and the desktop renderer share this file.
  */
 export function WorkspaceSectionCore({
   workspaceSegment,
@@ -113,8 +102,8 @@ export function WorkspaceSectionCore({
   );
   const workspace = query.data?.workspace ?? null;
   const role = query.data?.role ?? null;
-  // Error only when there's nothing to show — a failed background
-  // refetch must not replace the (possibly mid-edit) settings form.
+  // ⚠ Error ONLY when there's nothing to show: a failed background refetch must
+  // not replace the (possibly mid-edit) settings form.
   const error = query.error && !query.data ? "Failed to load workspace" : null;
 
   if (error) {

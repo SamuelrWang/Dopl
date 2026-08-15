@@ -14,10 +14,8 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * GET /api/workspaces/[workspaceSlug]/access-matrix — teams + all KB/skill
- * resources with their access modes, for the Access tab. Any active member.
- */
+/** GET — teams + all KB/skill resources with their access modes, for the Access tab.
+ *  Any active member. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -33,10 +31,7 @@ export const GET = withUserAuth(
   }
 );
 
-/**
- * PUT /api/workspaces/[workspaceSlug]/access-matrix — flip a resource between
- * workspace-wide and teams-scoped access. Admin+ only.
- */
+/** PUT — flip a resource between workspace-wide and teams-scoped access. Admin+. */
 export const PUT = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -57,8 +52,7 @@ export const PUT = withUserAuth(
       return toErrorResponse(err);
     }
   },
-  // sessionOnly: flipping resource access scope is an admin access-control
-  // mutation, not an agent one — same class as changing a member's role.
+  // sessionOnly: an access-control mutation, same class as a role change.
   { sessionOnly: true }
 );
 

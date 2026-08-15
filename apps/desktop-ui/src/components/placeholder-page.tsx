@@ -1,10 +1,6 @@
 /**
- * The stand-in every unported route renders (see `src/routes.tsx`). ONE
- * component rather than 14 identical files — porting a page means writing the
- * real component and pointing its row's `element` at it, then this stops
- * rendering for that route.
- *
- * Token classes only, no hand-rolled values (docs/DESIGN-SYSTEM.md).
+ * Stand-in for every unported route (`src/routes.tsx`). To port a page, write
+ * the real component and repoint its row's `element`.
  */
 export function PlaceholderPage({
   title,

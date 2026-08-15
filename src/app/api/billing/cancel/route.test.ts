@@ -1,18 +1,12 @@
 /**
- * POST /api/billing/cancel — the one route on this page that spends nothing and
- * can still cost the most.
- *
- * FOUR PROPERTIES:
- *   - the gates: admin AND `sessionOnly`. An MCP agent holding a `dopl.write`
- *     token must never be able to end its operator's subscription, and there is
- *     no dialog on that surface to stop it (INVARIANTS §3).
- *   - it sets Stripe's `cancel_at_period_end` — never `subscriptions.cancel`.
- *     An immediate cancel would revoke access the customer has paid for.
- *   - the LOCAL row is written in the same request, not left to the webhook,
- *     so the person who just clicked is told when their access ends.
+ * POST /api/billing/cancel — four properties:
+ *   - gates: admin AND `sessionOnly` (an agent with a write token must never end its operator's
+ *     subscription, and that surface has no dialog to stop it — INVARIANTS §3);
+ *   - it sets `cancel_at_period_end`, NEVER `subscriptions.cancel` — an immediate cancel revokes
+ *     access already paid for;
+ *   - the LOCAL row is written in the same request, not left to the webhook;
  *   - no live subscription is a 409 with a named code, never a silent 200.
- *
- * The Stripe SDK is faked at the module boundary. Nothing touches the network.
+ * The Stripe SDK is faked at the module boundary; nothing touches the network.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -123,7 +117,6 @@ describe("cancelling", () => {
       id: "sub_123",
       params: { cancel_at_period_end: true },
     });
-    // An immediate cancel would revoke access already paid for.
     expect(stripeCalls.canceledImmediately).toBe(false);
   });
 
@@ -132,7 +125,7 @@ describe("cancelling", () => {
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith("ws-1", {
       cancelAtPeriodEnd: true,
     });
-    // NOT the event watermark: stamping it here would make Stripe's own
+    // ⚠ NOT the event watermark: stamping it here makes Stripe's own
     // `customer.subscription.updated` look stale and get dropped.
     const patch = mockRepo.upsertWorkspaceBilling.mock.calls[0][1];
     expect(patch).not.toHaveProperty("lastStripeEventCreated");

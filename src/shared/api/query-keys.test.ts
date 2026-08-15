@@ -1,9 +1,8 @@
 /**
- * The key factory's ONE job: produce the same tuple `useApiQuery` registers,
- * and a prefix that reaches every variant of it. A key that differs by one
- * element is a silent no-op — the optimistic write lands in a cache entry no
- * observer is subscribed to, nothing renders, and nothing fails — so both
- * halves are pinned here AND against TanStack's own matcher.
+ * The key factory's ONE job: the same tuple `useApiQuery` registers, plus a
+ * prefix reaching every variant. ⚠ A key differing by one element is a SILENT
+ * no-op — the write lands in an entry no observer is subscribed to, nothing
+ * renders, nothing fails. Both halves pinned here AND against TanStack's matcher.
  */
 
 import { describe, expect, it } from "vitest";
@@ -22,9 +21,8 @@ describe("apiQueryKey", () => {
   });
 
   it("matches the tuple use-api-query-core builds, read off its source", () => {
-    // The two must agree forever; the whole layer rests on it. Reading the
-    // source is the only assertion available in a DOM-free suite, and it is
-    // the one that fails if that line is ever reordered.
+    // ⚠ The two must agree forever. Reading the source is the only assertion
+    // available in a DOM-free suite, and it fails if that line is reordered.
     const core = readFileSync(
       new URL("../hooks/use-api-query-core.ts", import.meta.url),
       "utf8"
@@ -53,9 +51,8 @@ describe("apiPathKey / apiResource", () => {
   });
 
   it("does NOT match a longer path that merely starts with the same string", () => {
-    // Key matching is per-ARRAY-ELEMENT, not per-character: `/api/channels`
-    // must never patch `/api/channels/consent`. If it did, a channel-list
-    // write would silently clobber the consent inbox.
+    // ⚠ Key matching is per-ARRAY-ELEMENT, not per-character: `/api/channels`
+    // must never patch `/api/channels/consent`.
     const client = new QueryClient();
     client.setQueryData(apiQueryKey("/api/channels/consent", {}), "consent");
     expect(

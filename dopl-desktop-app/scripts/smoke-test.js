@@ -1,17 +1,11 @@
 /**
- * Headless-ish smoke test: launch Electron, load the BUNDLED SPA with the same
- * webPreferences as production, and assert the page loads. Prints a JSON result
- * and exits non-zero on failure. Run: `node_modules/.bin/electron scripts/smoke-test.js`
+ * Smoke test: launch Electron, load the BUNDLED SPA with production webPreferences, assert the
+ * page loads. Prints a JSON result, exits non-zero on failure.
+ * Run: `node_modules/.bin/electron scripts/smoke-test.js`
  *
- * STAGE D (2026-08-06): this used to `loadURL(https://www.usedopl.com/)` — it was a smoke
- * test for the remote WRAPPER, and it needed the network to pass. That shell is deleted and
- * those web pages are gone, so the old target now 302s to /get-started at best. It loads the
- * same local `renderer/app/index.html` the product does, which makes it both accurate and
- * offline-capable.
- *
- * IT NEEDS A BUILT SPA. `renderer/app/` is produced by `npm run build:ui` from the repo
- * root; a tree that has never built one fails here with `reason: 'no-spa-bundle'` rather
- * than a confusing did-fail-load.
+ * ⚠ Loads the LOCAL `renderer/app/index.html`, never a remote URL — accurate and offline.
+ * ⚠ NEEDS A BUILT SPA (`npm run build:ui` from the repo root); a tree that never built one
+ * fails with `reason: 'no-spa-bundle'` rather than a confusing did-fail-load.
  */
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
@@ -47,9 +41,9 @@ app.whenReady().then(() => {
 
   const timer = setTimeout(() => done(false, { reason: 'timeout', errors }), TIMEOUT_MS);
 
-  // Electron 35+: 'console-message' emits a single event object
-  // ({ level, message, lineNumber, sourceId, frame }); level is now a
-  // string ('info' | 'warning' | 'error' | 'debug'), not the old integer.
+  // ⚠ Electron 35+: 'console-message' emits ONE event object
+  // ({ level, message, lineNumber, sourceId, frame }), and `level` is a STRING
+  // ('info'|'warning'|'error'|'debug'), not the old integer.
   wc.on('console-message', ({ level, message }) => {
     if (level === 'error') errors.push(message);
   });

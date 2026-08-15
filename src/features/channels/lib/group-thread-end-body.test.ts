@@ -1,27 +1,16 @@
 /**
- * P0-4 — A TERMINAL MARKER'S BODY IS RENDERABLE WHEN IT SAYS SOMETHING.
+ * ⚠ A TERMINAL MARKER'S BODY IS RENDERABLE WHEN IT SAYS SOMETHING.
+ * `task_finished` / `task_failed` set `draft.endEvent` and are never pushed to
+ * `draft.entries`, so without this their body has NO RENDER PATH AT ALL.
  *
- * THE STRUCTURAL HALF OF THE 2026-08-04 INCIDENT. `task_finished` / `task_failed`
- * set `draft.endEvent` and were never pushed to `draft.entries`, so their body
- * had NO RENDER PATH AT ALL. A responder agent posted its whole answer as
- * `task_finished`; the row was stored, delivered, and shown nowhere. The header
- * made it worse rather than better: `computeSummary` scanned the START event
- * first, and a `task_started`'s `metadata.summary` is the REQUESTER'S ORIGINAL
- * ASK (server-stamped when the thread opened), so the card described the question
- * for the whole life of the exchange, including after it was answered.
+ * ⚠ Needed even though the post is now refused from an agent — the refusal stops
+ * NEW ones only. It does nothing for rows that ALREADY EXIST, the desktop
+ * runtime's legitimate `bodyOverride` ends, or a human's CLOSE SUMMARY riding
+ * out as the echo's body. All three are content.
  *
- * WHY THIS IS NEEDED EVEN THOUGH THE POST IS NOW REFUSED. `service-writes`
- * refuses that kind from an agent, which stops NEW ones. It does nothing for:
- *   - rows that ALREADY EXIST in the transcript (the incident's answer is one);
- *   - the desktop runtime's legitimate `bodyOverride` ends;
- *   - a human's CLOSE SUMMARY, which rides out as the echo's body.
- * All three are content, and content the renderer drops is this whole round's
- * bug class. The belt is needed regardless of the guard.
- *
- * THE LINE IT DRAWS is "does this marker say something the GENERATORS do not",
- * and it is drawn twice over — by calm FLAG first (a flagged marker is status,
- * whatever its wording, and the card already renders a note off the flag), then
- * by the enumerated generated bodies. Not by length: "Task failed" is short and
+ * ⚠ The line is "does this marker say something the GENERATORS do not", drawn by
+ * calm FLAG first (a flagged marker is status whatever its wording) and then by
+ * the enumerated generated bodies. NEVER by length: "Task failed" is short and
  * generated, a one-line close summary is short and real.
  */
 
@@ -66,7 +55,7 @@ function onlySession(items: ReturnType<typeof groupThread>): SessionGroup {
 // ── 1. the incident, end to end ────────────────────────────────────────────────
 
 describe("the answer posted as task_finished (the incident)", () => {
-  /** The exact wire shape: an opener with the ASK as its summary, then the answer. */
+  /** Exact wire shape: opener with the ASK as its summary, then the answer. */
   const ANSWER =
     "Here is the analysis you asked for: the listener drops the trigger when the CLI probe fails, and the fix is to probe the bundled binary instead.";
   const THREAD = "task-c1-11";
@@ -92,16 +81,15 @@ describe("the answer posted as task_finished (the incident)", () => {
 
   it("the answer REACHES a render lane instead of vanishing", () => {
     const session = onlySession(incident());
-    // Before the fix this was 1 (the requester's own opener) and the answer was
-    // nowhere in the render model at all.
+    // ⚠ Without the fix this is 1 (the opener) and the answer is nowhere in the
+    // render model at all.
     const { replies } = splitSessionEntries(session.entries);
     expect(replies.map((r) => r.body)).toContain(ANSWER);
   });
 
   it("…and the header stops describing the ASK once the exchange has ended", () => {
-    // `computeSummary` used to scan the START first, whose summary is the
-    // server-stamped opening ask. A card that has been answered saying "Why did
-    // channels go quiet?" is how a good summary hid its own answer.
+    // ⚠ Scanning the START first takes its server-stamped opening ASK, so an
+    // answered card keeps describing the question.
     const session = onlySession(incident());
     expect(session.summary).toBe(ANSWER.slice(0, 119) + "…");
   });
@@ -119,8 +107,8 @@ describe("substantiveEndBody — status is not content", () => {
   const CALM_FLAGS = ["declined", "dropped", "interrupted", "capped", "ended"] as const;
 
   it.each(CALM_FLAGS)("a %s marker is status, whatever its body says", (flag) => {
-    // Checked by FLAG, not by string, so a later build's re-wording cannot leak a
-    // status line into the reply lane. The card renders a calm note off the flag.
+    // ⚠ Checked by FLAG, not by string, so a re-wording cannot leak a status
+    // line into the reply lane.
     const m = msg({
       kind: "task_failed",
       body: "some wording a future build invents",
@@ -145,8 +133,7 @@ describe("substantiveEndBody — status is not content", () => {
   });
 
   it("a calm-flagged end leaves `entries` exactly as it was", () => {
-    // The regression guard for the promotion itself: a lone dropped/declined echo
-    // is a card with no body, and it must stay one.
+    // ⚠ A lone dropped/declined echo is a card with NO body and must stay one.
     const session = onlySession(
       groupThread([
         msg({ kind: "task_failed", body: "Reply not sent", metadata: { taskId: "t-1", dropped: true } }),
@@ -161,8 +148,8 @@ describe("substantiveEndBody — status is not content", () => {
 
 describe("the belt covers every terminal that carries real words", () => {
   it("a human's CLOSE SUMMARY (the echo's body) renders", () => {
-    // `closeTask` writes the operator's one-line outcome as the echo body. It is
-    // the most-read sentence on a finished thread and it had no render path.
+    // `closeTask` writes the operator's one-line outcome as the echo body — the
+    // most-read sentence on a finished thread.
     const SUMMARY = "Shipped in 1.8.5; the listener now probes the bundled binary.";
     const session = onlySession(
       groupThread([
@@ -174,8 +161,8 @@ describe("the belt covers every terminal that carries real words", () => {
   });
 
   it("a genuine FAILURE with a real reason renders (and stays `failed`)", () => {
-    // A `task_failed` with no calm flag is a real failure, and its reason is the
-    // one thing the operator needs. The chip says failed; the body says why.
+    // A `task_failed` with no calm flag is a real failure: chip says failed, body
+    // says why.
     const REASON = "The upstream export endpoint returned 502 on every retry.";
     const session = onlySession(
       groupThread([msg({ kind: "task_failed", body: REASON, metadata: { taskId: "t-3" } })])
@@ -199,8 +186,8 @@ describe("the belt covers every terminal that carries real words", () => {
   });
 
   it("a promoted terminal joins REPLIES, never the milestone lane", () => {
-    // An entry in NEITHER lane is invisible in exactly the way `endEvent` was, so
-    // the lane it lands in is load-bearing rather than cosmetic.
+    // ⚠ An entry in NEITHER lane is invisible exactly the way `endEvent` was —
+    // the lane is load-bearing, not cosmetic.
     const session = onlySession(
       groupThread([
         msg({ kind: "task_progress", body: "schema half landed", metadata: { taskId: "t-5" } }),
@@ -227,7 +214,7 @@ describe("computeSummary — the header describes the outcome, not the ask", () 
   });
 
   it("with no end at all, the start's summary still carries the card", () => {
-    // The reorder must not cost a RUNNING session its header.
+    // ⚠ The reorder must not cost a RUNNING session its header.
     const session = onlySession(
       groupThread([
         msg({ kind: "task_started", body: "x", metadata: { taskId: "t-7", summary: "the ask" } }),

@@ -1,22 +1,15 @@
 /**
- * Plan definitions — the single source for the settings-modal Plans &
- * Billing pane and the public /pricing page. Plans are WORKSPACE-level and
- * all three are real, purchasable plans now:
- *   - Starter: full features; solo work is uncapped, teams of 2+ get a
- *     100-object cap and a 90-day chat window.
- *   - Pro: $5.99/month flat, single-member workspaces only.
- *   - Team: $7.99 per seat / month, seats sync to member count.
- * Checkout sells both paid plans — Solo (flat, quantity 1) and Team
- * (per-seat) — via their live Stripe prices.
+ * Plan definitions — single source for the Plans & Billing pane and /pricing.
+ * Plans are WORKSPACE-level. Checkout sells solo (flat, quantity 1) and team
+ * (per-seat) against their live Stripe prices.
  */
 
 export type PlanId = "free" | "solo" | "team";
 
 /**
- * Canonical billing/subscription status for a workspace. "free" = no live
- * subscription; the paid states mirror Stripe (active / past_due / canceled).
- * Single source for the entitlements contract (server + client mirror) so
- * the union isn't hand-redeclared per module.
+ * Canonical workspace billing status. "free" = no live subscription; paid
+ * states mirror Stripe. Single source for the entitlements contract so the
+ * union isn't hand-redeclared per module.
  */
 export type BillingStatus = "free" | "active" | "past_due" | "canceled";
 

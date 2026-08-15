@@ -1,11 +1,10 @@
-// Dedicated preload for a Dopl SESSION window (v1.9).
+// Dedicated preload for a Dopl SESSION window.
 //
-// This surface loads a LOCAL file page only (loadFile, no remote content) with
-// contextIsolation + sandbox + nodeIntegration:false. The bridge below is the
-// ENTIRE privileged API the page gets — exactly the §A.4 contract, nothing more.
-// No Node, no fs, no dynamic channels. The main side binds the sessionId from
-// the window (event.sender), so a forged id in a payload is ignored; we do not
-// even send one. Every argument is coerced to a primitive before it crosses.
+// ⚠ LOCAL file page only (loadFile, no remote content), contextIsolation + sandbox +
+// nodeIntegration:false. The bridge below is the ENTIRE privileged API the page gets (§A.4):
+// no Node, no fs, no dynamic channels. Main binds the sessionId from the window
+// (event.sender), so a forged id in a payload is ignored — we do not even send one. Every
+// argument is coerced to a primitive before it crosses.
 const { contextBridge, ipcRenderer } = require('electron');
 
 const asStr = (v) => String(v == null ? '' : v);
@@ -15,22 +14,21 @@ const asDecision = (d) => {
   return s === 'allow-once' || s === 'allow-task' || s === 'deny' ? s : 'deny';
 };
 const asOutcome = (o) => (asStr(o) === 'failed' ? 'failed' : 'completed');
-// v2.5 D1: the inbound gate decision is fail-closed — anything but an explicit accept
-// (once, or for this session) is a decline, so a forged/garbled value never feeds the agent.
-// v3.0: `accept-task` stays the wire value (wire name `task` == domain name `thread`); the
-// grant it arms lives on the session object and a park clears it, which the copy now says.
+// ⚠ FAIL-CLOSED: anything but an explicit accept (once, or for this session) is a decline, so
+// a forged/garbled value never feeds the agent. `accept-task` is the WIRE value (wire `task` ==
+// domain `thread`); the grant it arms lives on the session object and a park clears it.
 const asInbound = (d) => {
   const s = asStr(d);
   return s === 'accept' || s === 'accept-task' ? s : 'decline';
 };
 // Consent decision is fail-closed: anything but an explicit 'accept' is a deny.
 const asConsent = (d) => (asStr(d) === 'accept' ? 'accept' : 'deny');
-// v2.9 THE TWO AXES. A sandboxed preload cannot require() main, so these lists are the
-// renderer-side copy of session-profiles' canonical tables (pinned against it, the reducer
-// and session.html by test/session-permission-axes). Both coerce FAIL-CLOSED: anything that
-// is not an exact member lands on the MOST RESTRICTIVE value of that axis, so a compromised
-// page cannot reach `bypass` or `auto_both` by sending a near-miss string. Main re-coerces
-// against the same tables, so this is the first of two identical gates, never the only one.
+// ⚠ THE TWO AXES. A sandboxed preload cannot require() main, so these are the RENDERER-SIDE
+// COPY of session-profiles' canonical tables (pinned against it, the reducer and session.html
+// by test/session-permission-axes). Both coerce FAIL-CLOSED: a non-member lands on the MOST
+// RESTRICTIVE value, so a compromised page cannot reach `bypass` or `auto_both` with a
+// near-miss string. Main re-coerces against the same tables — first of two gates, never the
+// only one.
 const asToolMode = (v) => {
   const s = asStr(v);
   return s === 'accept_edits' || s === 'auto' || s === 'bypass' ? s : 'manual';
@@ -39,20 +37,17 @@ const asMessageMode = (v) => {
   const s = asStr(v);
   return s === 'auto_inbound' || s === 'auto_outbound' || s === 'auto_both' ? s : 'ask';
 };
-// 2026-08-02 THE MODEL. The renderer-side copy of main/session-model.MODEL_CHOICES (a sandboxed
-// preload cannot require main), pinned against it, session.html and session-store by
-// test/session-model.test.mjs. It matters MORE than the two above: this value becomes
-// `--model <argv>` on a child process, so a near-miss string must never survive. Fail-closed to
-// 'default', which sets no model option at all. Main re-coerces against the same list, so this
-// is the first of several identical gates and never the only one.
+// ⚠ THE MODEL: renderer-side copy of main/session-model.MODEL_CHOICES, pinned against it,
+// session.html and session-store by test/session-model.test.mjs. Stricter than the two axes —
+// this value becomes `--model <argv>` on a CHILD PROCESS, so a near-miss must never survive.
+// Fail-closed to 'default', which sets no model option at all. Main re-coerces.
 const asModel = (v) => {
   const s = asStr(v);
   return s === 'opus' || s === 'sonnet' || s === 'haiku' || s === 'fable' ? s : 'default';
 };
 
-// The session id lives in the window URL (session.html?sid=…). Read-only; the
-// main process is authoritative and re-derives it from the window — this is a
-// display/debug convenience only.
+// The session id lives in the window URL (session.html?sid=…). ⚠ Read-only display/debug
+// convenience — main is authoritative and re-derives it from the window.
 function sessionIdFromUrl() {
   try {
     return asStr(new URLSearchParams(window.location.search).get('sid'));
@@ -61,10 +56,9 @@ function sessionIdFromUrl() {
   }
 }
 
-// Single renderer-side event sink. main → renderer 'session:event' is forwarded
-// to the page's callback; the raw ipcRenderer event is never handed over. Events
-// that arrive before session.js registers its handler (the engine may emit
-// 'init' during window load) are buffered and flushed on registration.
+// Single renderer-side event sink. ⚠ The raw ipcRenderer event is never handed over. Events
+// arriving before session.js registers its handler (the engine may emit 'init' during window
+// load) are BUFFERED and flushed on registration.
 let handler = null;
 let buffer = [];
 function deliver(payload) {
@@ -74,10 +68,9 @@ function deliver(payload) {
     /* never let a renderer callback throw back across the bridge */
   }
 }
-// Q6: the sign-in banner is owned by session-auth-ui.js, not the transcript controller, so the
-// SAME main->renderer stream fans out to a second, narrow sink. Only the two auth payload types
-// reach it; everything else is untouched, and the transcript view-model ignores them (its
-// `default` case), so neither surface can steal the other's events.
+// The sign-in banner is owned by session-auth-ui.js, so the SAME stream fans out to a second
+// narrow sink. ⚠ Only the two auth payload types reach it, and the transcript view-model
+// ignores them (its `default` case), so neither surface can steal the other's events.
 const AUTH_TYPES = { auth_required: true, auth_cleared: true };
 let authHandler = null;
 let authBuffer = [];
@@ -88,11 +81,9 @@ function deliverAuth(payload) {
     /* never let a renderer callback throw back across the bridge */
   }
 }
-// 2026-08-02: the REQUEST LIFECYCLE STRIP is owned by session-request-ui.js on exactly the same
-// terms as the sign-in banner above — its own element, its own narrow sink — because session.js,
-// session-render.js and the view-model are all at the §2 500-line cap and this line needs none
-// of them. One payload type reaches it; the transcript view-model ignores that type (its
-// `default` case), so neither surface can steal the other's events.
+// The REQUEST LIFECYCLE STRIP is owned by session-request-ui.js on the same terms as the
+// sign-in banner: its own element, its own narrow sink. ⚠ One payload type reaches it, and the
+// transcript view-model ignores that type, so neither surface can steal the other's events.
 const REQUEST_TYPES = { request_status: true };
 let requestHandler = null;
 let requestBuffer = [];
@@ -129,31 +120,26 @@ contextBridge.exposeInMainWorld('doplSession', {
   send(text, priority) {
     ipcRenderer.invoke('session:send', { text: asStr(text), priority: asPriority(priority) });
   },
-  // v2.8: the operator's OWN words, addressed to the PEER's agent (an `@their-agent` tag in
-  // the composer). NOT a steer: it never reaches the SDK, so there is no priority and no
-  // turn. Fire-and-forget on purpose — the outcome comes back over the session:event stream
-  // (operator_post / operator_post_result), which is also what survives a slow POST.
+  // The operator's OWN words addressed to the PEER's agent. ⚠ NOT a steer: it never reaches
+  // the SDK, so no priority and no turn. Fire-and-forget — the outcome returns over the
+  // session:event stream (operator_post / operator_post_result), which survives a slow POST.
   sendToPeer(text) {
     ipcRenderer.invoke('session:send-peer', { text: asStr(text) });
   },
-  // §3.2: the handle main gave this session, for the composer pill's resting row. Takes no
-  // argument in either direction beyond main's {name}: the session is re-derived from
-  // event.sender, so there is nothing to forge. The PROMISE is returned — the pill paints the
-  // fallback ("Message this session") until it resolves, and repaints when it does.
+  // The handle main gave this session, for the composer pill's resting row. ⚠ No argument
+  // either way beyond main's {name} — the session is re-derived from event.sender, so there is
+  // nothing to forge. The PROMISE is returned; the pill paints a fallback until it resolves.
   agentName() {
     return ipcRenderer.invoke('session:agent-name', {});
   },
-  // v2.7 L3: the invoke PROMISE is RETURNED (it always resolved main's {ok} — the dock
-  // simply ignored it), so the inline outbound decision card can stamp itself only once
-  // main has actually taken the decision, exactly like the inbound gate. The decision
-  // string stays fail-closed: anything but allow-once / allow-task coerces to 'deny'.
+  // ⚠ The invoke PROMISE is RETURNED so the inline outbound card stamps itself only once main
+  // has actually taken the decision. Decision string is fail-closed to 'deny'.
   permission(requestId, decision) {
     return ipcRenderer.invoke('session:permission', { requestId: asStr(requestId), decision: asDecision(decision) });
   },
-  // v2.5 D1: the inbound gate. FIX F10: the invoke PROMISE is returned, so the renderer
-  // can stamp the card only once main has actually taken the decision. The dead
-  // accept-only alias that used to sit here (and its main handler) is deleted: nothing
-  // called it, and it invited a decision carrying no pendingId.
+  // The inbound gate. ⚠ The invoke PROMISE is returned so the renderer stamps the card only
+  // once main has taken the decision. There is deliberately no accept-only alias — it would
+  // invite a decision carrying no pendingId.
   inboundDecision(pendingId, decision) {
     return ipcRenderer.invoke('session:inbound-decision', { pendingId: asStr(pendingId), decision: asInbound(decision) });
   },
@@ -166,46 +152,42 @@ contextBridge.exposeInMainWorld('doplSession', {
   closeTask(outcome, summary) {
     ipcRenderer.invoke('session:close-task', { outcome: asOutcome(outcome), summary: asStr(summary) });
   },
-  // Pre-consent Accept/Deny (item 8). The main side re-derives the consent row
-  // from event.sender; the payload carries only the coerced decision.
+  // Pre-consent Accept/Deny. ⚠ Main re-derives the consent row from event.sender; the payload
+  // carries only the coerced decision.
   consentDecision(decision) {
     return ipcRenderer.invoke('session:consent-decision', { decision: asConsent(decision) });
   },
-  // F-118 — the attended handoff: open the OPERATOR'S OWN Claude Code on this request,
-  // with a prefilled, unsubmitted prompt. NO ARGUMENT in either direction beyond main's
-  // {ok, route}: main re-derives the consent card from the window, exactly like
-  // consentDecision above, so there is no id to forge and no text this page can inject
-  // into the prompt. It decides nothing on the server, so Accept stays answerable.
+  // The attended handoff: open the OPERATOR'S OWN Claude Code on this request with a
+  // prefilled, unsubmitted prompt. ⚠ NO ARGUMENT either way beyond main's {ok, route} — main
+  // re-derives the consent card from the window, so there is no id to forge and no text this
+  // page can inject into the prompt. Decides nothing server-side, so Accept stays answerable.
   attendedHandoff() {
     return ipcRenderer.invoke('session:attended-handoff', {});
   },
-  // v2.9 AXIS A — per-session TOOL permissions (manual | accept_edits | auto | bypass).
-  // What MY agent may do on THIS machine. It can never approve an outbound message or an
-  // incoming one; hard-deny stays immovable in every mode, `bypass` included (§H-2).
-  // FIX 2 (2026-08-02): the invoke PROMISE is RETURNED, like permission() and
-  // inboundDecision() already do. It was DISCARDED, so main's {ok:false} — every change made
-  // from a pre-consent window answered with one — reached nothing, and the select sat there
-  // showing a posture main had never taken. The renderer now reverts on a refusal.
+  // AXIS A — per-session TOOL permissions (manual | accept_edits | auto | bypass): what MY
+  // agent may do on THIS machine. ⚠ Can never approve a message either way; hard-deny is
+  // immovable in every mode, `bypass` included (§H-2).
+  // ⚠ The invoke PROMISE is RETURNED: discarded, main's {ok:false} (every change from a
+  // pre-consent window) reaches nothing and the select shows a posture main never took.
   setToolMode(mode) {
     return ipcRenderer.invoke('session:set-tool-mode', { mode: asToolMode(mode) });
   },
-  // v2.9 AXIS B — per-session MESSAGE flow (ask | auto_inbound | auto_outbound | auto_both).
-  // What crosses between machines. It can never approve a work tool, and even auto_outbound
-  // only covers a post into this session's OWN channel: opening a DM stays a click.
+  // AXIS B — per-session MESSAGE flow (ask | auto_inbound | auto_outbound | auto_both): what
+  // crosses between machines. ⚠ Can never approve a work tool, and auto_outbound covers only a
+  // post into this session's OWN channel — opening a DM stays a click.
   setMessageMode(mode) {
     return ipcRenderer.invoke('session:set-message-mode', { mode: asMessageMode(mode) });
   },
-  // 2026-08-02 — THE MODEL this session runs on. NOT a permission: it can approve nothing and
-  // deny nothing, and the two axes above are unaffected by it. Live mid-session (main calls
-  // Query.setModel, which applies to the next response) and durable across a park/resume. The
-  // invoke PROMISE is returned like the two axes, so the select reverts when main refuses.
+  // THE MODEL this session runs on. ⚠ NOT a permission — approves nothing, denies nothing, and
+  // the two axes are unaffected. Live mid-session (main calls Query.setModel, applying to the
+  // next response) and durable across park/resume. PROMISE returned so the select can revert.
   setModel(model) {
     return ipcRenderer.invoke('session:set-model', { model: asModel(model) });
   },
-  // Q6 — the Claude Code sign-in banner. THREE narrow members, no arguments in either
-  // direction: main re-derives the session from the window (event.sender) exactly like every
-  // other handler, so there is no id to forge, and the only thing that crosses back is the
-  // banner's own display payload (title / body / action / note — never a token or a path).
+  // The Claude Code sign-in banner. ⚠ Three narrow members, no arguments either way: main
+  // re-derives the session from event.sender, so there is no id to forge, and only the
+  // banner's display payload crosses back (title / body / action / note — never a token or
+  // path).
   auth: {
     onNotice(cb) {
       authHandler = typeof cb === 'function' ? cb : null;
@@ -224,9 +206,9 @@ contextBridge.exposeInMainWorld('doplSession', {
       return ipcRenderer.invoke('session:auth-state', {});
     },
   },
-  // 2026-08-02 — the REQUEST LIFECYCLE STRIP. ONE member, and it only RECEIVES: the strip has
-  // no control on it, so there is nothing to invoke and nothing to forge. The payload carries a
-  // status word from a closed table and no id, name or body.
+  // The REQUEST LIFECYCLE STRIP. ⚠ ONE member, RECEIVE-only: the strip has no control, so
+  // there is nothing to invoke and nothing to forge. The payload carries a status word from a
+  // closed table — no id, name or body.
   request: {
     onStatus(cb) {
       requestHandler = typeof cb === 'function' ? cb : null;
@@ -237,8 +219,8 @@ contextBridge.exposeInMainWorld('doplSession', {
       }
     },
   },
-  // Folder display + change (item 7). LABEL only ever crosses back — the main
-  // side resolves channelId from the session; the abs path never enters here.
+  // Folder display + change. ⚠ LABEL only ever crosses back — main resolves channelId from
+  // the session, and the abs path never enters here.
   folder: {
     get() {
       return ipcRenderer.invoke('session:folder-get', {});

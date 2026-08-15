@@ -38,7 +38,6 @@ export function SearchIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-/** Speaker with two arcs — the ambient-audio toggle's ON face. */
 export function SpeakerIcon({ size = 20 }: { size?: number }) {
   return (
     <svg
@@ -59,7 +58,6 @@ export function SpeakerIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-/** Same cone, arcs replaced by a cross — the toggle's OFF face. */
 export function SpeakerMutedIcon({ size = 20 }: { size?: number }) {
   return (
     <svg
@@ -80,7 +78,6 @@ export function SpeakerMutedIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-/** Two offset strokes — matches the reference's "Menu" glyph. */
 export function MenuIcon({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>

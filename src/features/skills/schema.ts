@@ -2,15 +2,10 @@ import { z } from "zod";
 import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
 
 /**
- * Zod schemas for the skills feature. Both REST handlers and MCP tools
- * parse against these so the service sees a consistent shape from
- * either entry point.
- *
- * Conventions mirror features/knowledge:
- *   - Slugs are kebab-case.
- *   - Skills are single-file; the body is the one SKILL.md procedure.
- *   - Body capped at 1 MB to bound DoS surface (matches KB).
- *   - All `*Update` schemas are partial.
+ * Zod schemas for skills. REST handlers and MCP tools both parse against
+ * these, so the service sees one shape from either entry point.
+ * Kebab-case slugs; single SKILL.md body capped at 1 MB (DoS bound, matches
+ * KB); all `*Update` schemas partial.
  */
 
 const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -19,18 +14,16 @@ const MAX_BODY_BYTES = 1_048_576;
 const bodyMaxMessage = "Body must be 1 MB or less";
 
 /**
- * `name` and `folder` are the skill's two short labels — `dopl_map` prints
- * the name at session start, `dopl_skill` op="list" prints both, and
- * `dopl_search` prints the name as a hit header. Charset-bounded per
- * `@/shared/lib/safe-label`; `skills_editor_update` is a `public` UPDATE
- * policy, so the matching DB CHECK is the half that actually holds.
- *
- * `description`, `whenToUse`, `whenNotToUse` and the SKILL.md body are
- * NOT bounded and must not be: they are the procedure itself, legitimately
- * multi-line markdown, and rendered as bodies under framing that says so.
+ * `name` and `folder` are the skill's short labels in agent narration
+ * (`dopl_map`, `dopl_skill` op="list", `dopl_search` hit headers), so both
+ * are charset-bounded per `@/shared/lib/safe-label`. ⚠ `skills_editor_update`
+ * is a `public` UPDATE policy, so the matching DB CHECK is the half that
+ * actually holds.
+ * ⚠ `description`, `whenToUse`, `whenNotToUse` and the body are NOT bounded
+ * and must not be — they are the procedure, legitimately multi-line markdown.
  */
 const SkillNameSchema = safeLabel("Skill name", 120);
-/** Organizing folder label. Trimmed; the service maps empty → unfiled (null). */
+/** Trimmed; the service maps empty → unfiled (null). */
 const SkillFolderSchema = safeOptionalLabel("Skill folder", 80);
 
 // ─── Skill ──────────────────────────────────────────────────────────
@@ -52,16 +45,12 @@ export const SkillCreateSchema = z.object({
   slug: z.string().min(1).max(80).regex(slugRegex).optional(),
   status: SkillStatusSchema.optional(),
   agentWriteEnabled: z.boolean().optional(),
-  /** Optional organizing folder label. Trimmed; empty → unfiled (null). */
+  /** Trimmed; empty → unfiled (null). */
   folder: SkillFolderSchema.nullable().optional(),
-  /** Optional initial body for SKILL.md. Defaults to empty. */
+  /** Initial SKILL.md body. Defaults to empty. */
   body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
-  /**
-   * Optional visibility. Service-level `createSkill` defaults to
-   * `'private'` when omitted (start drafty, opt to publish later).
-   * The full enum is accepted so a future "+ New public skill"
-   * affordance can plumb `'public'` without schema churn.
-   */
+  /** Omitted → `createSkill` defaults to `'private'`. Full enum accepted so
+   *  a "New public skill" affordance needs no schema change. */
   visibility: z.enum(["public", "private"]).optional(),
 });
 export type SkillCreateInput = z.infer<typeof SkillCreateSchema>;
@@ -75,14 +64,11 @@ export const SkillUpdateSchema = z
     slug: z.string().min(1).max(80).regex(slugRegex).optional(),
     status: SkillStatusSchema.optional(),
     agentWriteEnabled: z.boolean().optional(),
-    /** Organizing folder label. Trimmed; empty → unfiled (null). */
+    /** Trimmed; empty → unfiled (null). */
     folder: SkillFolderSchema.nullable().optional(),
-    /**
-     * Full three-way sharing (skill_team_sharing migration): visibility
-     * is two-way, and 'public' pairs with accessMode 'workspace'
-     * (everyone) or 'teams' (granted teams only). Owner or workspace
-     * admin only — enforced in the service.
-     */
+    /** Three-way sharing: 'public' pairs with accessMode 'workspace'
+     *  (everyone) or 'teams' (granted teams). Owner / workspace admin only,
+     *  enforced in the service. */
     visibility: z.enum(["public", "private"]).optional(),
     accessMode: z.enum(["workspace", "teams"]).optional(),
     /** Teams granted read access; only meaningful with accessMode 'teams'. */
@@ -106,7 +92,7 @@ export type SkillUpdateInput = z.infer<typeof SkillUpdateSchema>;
 // ─── Skill body (the single SKILL.md) ───────────────────────────────
 
 export const SkillFileWriteSchema = z.object({
-  /** Body content — full overwrite (PUT semantics) of the SKILL.md. */
+  /** Full overwrite (PUT semantics) of the SKILL.md. */
   body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage),
 });
 export type SkillFileWriteInput = z.infer<typeof SkillFileWriteSchema>;

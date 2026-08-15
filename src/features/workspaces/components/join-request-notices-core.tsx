@@ -3,9 +3,9 @@
 import { useCallback, useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-// Deep import, never the `settings-modal` barrel: the barrel re-exports
-// SettingsModal, whose account pane pulls `next/navigation` in and would drag
-// Next into the desktop renderer's import graph.
+// ⚠ Deep import, never the `settings-modal` barrel: the barrel re-exports
+// SettingsModal, whose account pane pulls `next/navigation` into the desktop
+// renderer's import graph.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { JoinRequestNotice } from "../server/join-links";
@@ -22,29 +22,24 @@ type Notice = Pick<
 
 export interface JoinRequestNoticesCoreProps {
   /**
-   * Navigate to the freshly-joined workspace. The core owns the path; the
-   * caller owns how to get there — `next/navigation` on the web, the SPA
-   * router in the desktop renderer.
+   * Navigate to the freshly-joined workspace. Core owns the path, caller owns
+   * how to get there (`next/navigation` on web, SPA router in the renderer).
    */
   onNavigate: (path: string) => void;
 }
 
 /**
- * One-time join-request popups, mounted once in the app shell:
- *   - "Awaiting admin approval" right after requesting via a join link
- *   - "You've joined X" (+ Go to workspace) once an admin approves
- *   - "Request declined" once an admin declines
- * Each dismissal acks the notice server-side so it never re-shows.
- * Notices show one at a time, oldest first.
+ * One-time join-request popups, mounted once in the app shell: awaiting
+ * approval, joined (+ Go to workspace), declined. Each dismissal acks the
+ * notice server-side so it never re-shows; one at a time, oldest first.
  *
- * Router-free by construction (the wave-1 core/binding pattern), and the ack
- * goes through `apiRequest` rather than a raw relative `fetch`: the packaged
- * desktop renderer is a `file://` document under `connect-src 'none'`, where a
- * bare `fetch("/api/…")` resolves to `file:///api/…` and never leaves.
+ * ⚠ Router-free (core/binding pattern), and the ack goes through `apiRequest`,
+ * never a relative `fetch`: the packaged renderer is a `file://` document under
+ * `connect-src 'none'`, where `fetch("/api/…")` resolves to `file:///api/…`.
  * `./join-request-notices` is the `next/navigation` binding.
  */
 export function JoinRequestNoticesCore({ onNavigate }: JoinRequestNoticesCoreProps) {
-  // Notices are best-effort — errors just render nothing.
+  // Best-effort — errors just render nothing.
   const query = useApiQuery<{ notices: Notice[] }>("/api/me/join-requests");
   const [ackedIds, setAckedIds] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);

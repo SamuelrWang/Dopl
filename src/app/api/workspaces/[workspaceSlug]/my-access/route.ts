@@ -13,17 +13,11 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[workspaceSlug]/my-access — return the caller's
- * effective access on every resource in this workspace, in one round
- * trip. Used by the sidebar to badge each KB/skill row with a read or
- * edit icon. Shape (stable since the per-member override era):
- *   {
- *     defaultLevel: "read" | "edit",
- *     overrides: { resourceType, resourceId, level }[]
- *   }
- * `overrides` now carries the caller's resolved level on teams-mode
- * resources (max across their teams). Resources they can't see at all
- * never reach the client lists, so they're simply omitted.
+ * GET /api/workspaces/[workspaceSlug]/my-access — the caller's effective access on every resource
+ * in one round trip; the sidebar badges each KB/skill row from it.
+ * Shape: `{ defaultLevel: "read" | "edit", overrides: { resourceType, resourceId, level }[] }`.
+ * `overrides` carries the resolved level on teams-mode resources (max across their teams);
+ * resources they cannot see are omitted.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
@@ -40,10 +34,8 @@ export const GET = withUserAuth(
           { status: 400 },
         );
       }
-      // ROLE THREADED, not re-read (P0-2, §3.3). The segment resolve already
-      // fetched this caller's membership to prove they may see the workspace
-      // at all; passing its `role` into `listEffectiveAccess` skips the
-      // identical `findMembership` that ran a second time per request.
+      // ⚠ ROLE THREADED, not re-read: the segment resolve already fetched this membership, so
+      // passing its `role` skips an identical `findMembership` per request.
       const resolved = await resolveApiWorkspaceAccess(workspaceSlug, userId);
       if (!resolved) {
         return NextResponse.json(
@@ -70,11 +62,9 @@ export const GET = withUserAuth(
           { status: 403 },
         );
       }
-      // Audit A-010: this is per-user data; never let a CDN cache it
-      // by URL alone. Vercel's authenticated-route default is usually
-      // safe but explicit beats implicit on a privacy-adjacent payload.
-      // The projection is shared with `POST /api/boot`, which seeds this
-      // endpoint's client cache entry — they must not drift.
+      // ⚠ Per-user data — never CDN-cacheable by URL alone.
+      // ⚠ The projection is shared with `POST /api/boot`, which seeds this endpoint's client
+      // cache entry: they must not drift.
       return NextResponse.json(toMyAccessPayload(result), {
         headers: { "Cache-Control": "private, no-store" },
       });

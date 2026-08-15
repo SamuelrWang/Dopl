@@ -59,12 +59,10 @@ export function registerMembersTool(
   register: RegisterTool,
   client: DoplClient,
   /**
-   * The session's ONE identity record (server.ts). `whoami` used to re-derive
-   * the caller from `GET /api/workspaces/me`, whose `userId` is nullable — so
-   * when that came back null the op printed a workspace, a role and no
-   * identifier, while `dopl_channel` in the same connection was confidently
-   * marking "you" off a different id. Defaults to unknown, which renders as
-   * unknown.
+   * ⚠ The session's ONE identity record. Re-deriving the caller from
+   * `GET /api/workspaces/me` (nullable `userId`) prints a workspace and a role
+   * with no identifier, while `dopl_channel` on the same connection marks "you"
+   * off a different id. Defaults to unknown, which renders as unknown.
    */
   caller: CallerIdentity = UNKNOWN_CALLER,
 ): void {
@@ -114,15 +112,11 @@ export function registerMembersTool(
 // ─── Op handlers ────────────────────────────────────────────────────
 
 /**
- * THE authoritative answer to "who am I and where am I".
- *
- * The identity comes from the session record, not from this op's own round
- * trip: `getMyMembership().userId` is `string | null` and was the only source
- * here, so a server that did not report it produced a whoami that named a
- * workspace and a role and identified nobody — while the SAME connection's
- * `dopl_channel` roster was marking "you" from the boot ping's id. Now the
- * session id decides, the membership call supplies role/teams/workspace, and
- * the roster row is looked up by that one id.
+ * THE authoritative answer to "who am I and where am I". ⚠ Identity comes from
+ * the SESSION record, never this op's own round trip: `getMyMembership().userId`
+ * is `string | null`, so using it alone names a workspace and a role and
+ * identifies nobody. The membership call supplies role/teams/workspace and the
+ * roster row is looked up by the session id.
  */
 async function opWhoami(
   client: DoplClient,
@@ -172,20 +166,18 @@ async function opList(
   lines.push(`${UNTRUSTED_ROSTER_HEADER}\n`);
   for (const m of sortByRole(members)) {
     const teams = m.teams.length > 0 ? teamChips(m.teams) : "no teams";
-    // `· you` matches the channel roster's marking exactly (channel-render.ts
-    // `formatMemberLine`). The two rosters render the same workspace from the
-    // same column, and one of them used to leave the caller to work out which
-    // row was theirs by eye.
+    // ⚠ `· you` must match `channel-render.ts › formatMemberLine` exactly — the
+    // two rosters render the same workspace from the same column.
     const you = caller.userId && m.userId === caller.userId ? " · you" : "";
     lines.push(`- ${memberDisplay(m)} — **${m.role}** · ${statusLabel(m)} · ${teams}${you}`);
   }
   if (!caller.userId) {
     lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id.`);
   }
-  // The roster applies NO status predicate (workspaces/server/repository.ts),
-  // so "Members — 7" counts invitations nobody accepted and memberships
-  // somebody deactivated. The per-row status was already rendered; what was
-  // missing was any reason to read it.
+  // ⚠ The roster applies NO status predicate
+  // (workspaces/server/repository.ts), so the count includes unaccepted
+  // invitations and deactivated memberships — say so, or nobody reads the
+  // per-row status.
   lines.push(
     `\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`,
   );
@@ -201,13 +193,11 @@ async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
   const m = match.member;
 
   const lines: string[] = [];
-  // The header goes FIRST — ahead of the heading, because the heading is itself
-  // one of the untrusted strings. Framing that arrives after the text it frames
-  // has already been read is not framing.
+  // ⚠ Header goes FIRST, ahead of the heading — the heading is itself one of
+  // the untrusted strings.
   lines.push(`${UNTRUSTED_ROSTER_HEADER}\n`);
-  // Was `## ${displayName}` — a real markdown heading built from a column any
-  // signed-in user PATCHes for themselves. One newline in it opened a second
-  // heading of the attacker's choosing at the top of the result.
+  // ⚠ A raw `## ${displayName}` is a real heading built from a column any
+  // signed-in user PATCHes for themselves — one newline opens a second heading.
   lines.push(`## Member ${memberDisplay(m)}\n`);
   if (m.email) lines.push(`- Email: ${inlineOr(m.email, "`(unreadable)`")}`);
   lines.push(`- User id: \`${m.userId}\``);
@@ -215,10 +205,9 @@ async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
   lines.push(`- Status: ${statusLabel(m)}`);
   lines.push(`- Teams: ${teamChips(m.teams)}`);
 
-  // The CONTACT_POINTER below is deliberately NOT on this path. A DM
-  // (dopl_channel op="open", direct=true) and a channel invite both require an
-  // ACTIVE workspace member, so offering the route on an invited-but-not-joined
-  // or deactivated row would name a call the server refuses.
+  // ⚠ CONTACT_POINTER deliberately NOT on this path: a DM and a channel invite
+  // both require an ACTIVE member, so offering it on an
+  // invited-but-not-joined or deactivated row names a call the server refuses.
   if (m.status !== "active") {
     lines.push(``);
     lines.push(
@@ -273,9 +262,8 @@ async function opGetTeam(client: DoplClient, ref: string): Promise<ToolResponse>
     teams.find((t) => t.id === ref) ??
     teams.find((t) => t.name.toLowerCase() === lower);
   if (!team) {
-    // The candidate list is other members' team names — neutralized. The echo
-    // of `ref` is the caller's own argument, but a backtick in it would still
-    // escape the span, so it goes through the same helper.
+    // Candidate list is other members' team names. ⚠ `ref` is the caller's own
+    // argument, but a backtick still escapes the span.
     const names = teams.map((t) => teamDisplay(t.name, t.id)).join(", ") || "(none)";
     return err(
       `No team matching ${inlineOr(ref, "`(unreadable ref)`")}. Teams here: ${names}.`,
@@ -285,19 +273,14 @@ async function opGetTeam(client: DoplClient, ref: string): Promise<ToolResponse>
 }
 
 /**
- * THE OP THE OTHER TOOLS POINT AT, so it had better say what it is.
- *
- * For an admin or owner this really is the inventory: the enumeration
- * (features/teams/server/service.ts) filters on workspace + `deleted_at IS
- * NULL` and nothing else — no status, no visibility — which is precisely why
- * `dopl_map` and `dopl_skill(op="list")` now name it as the authoritative
- * alternative to themselves. For a member or viewer the same op re-filters down
- * to what they can reach, so pointing a non-admin here without saying so would
- * hand them a second view they would read as a census. Both halves, stated.
- *
- * The caller's role is not in this response and fetching it would be a second
- * round trip, so the line states the RULE and lets the caller apply it — the
- * same reason every other note in this sweep names a filter and not a count.
+ * THE OP THE OTHER TOOLS POINT AT, so it must say what it is. For an admin or
+ * owner it IS the inventory (`features/teams/server/service.ts` filters on
+ * workspace + `deleted_at IS NULL`, no status, no visibility), which is why
+ * `dopl_map` and `dopl_skill(op="list")` name it as the authoritative
+ * alternative. ⚠ For a member or viewer the SAME op re-filters to what they can
+ * reach, so both halves must be stated or a non-admin reads a second view as a
+ * census. The caller's role is not in this response and fetching it is another
+ * round trip, so state the RULE and let the caller apply it.
  */
 const MATRIX_SCOPE_NOTE = `_Covers knowledge bases and skills only; chats, chat folders and ontology objects are not in this grid. If you are an ADMIN or OWNER this is the full inventory of those two, every status and every visibility included, and it is what settles a disagreement between two members' list ops. If you are a MEMBER or VIEWER it has been re-filtered to what you can reach, so it is a view like the rest. The teams half above is unfiltered for everyone._`;
 
@@ -337,10 +320,9 @@ async function opMyAccess(client: DoplClient): Promise<ToolResponse> {
   lines.push(`- Role **${me.role}** → default level **${access.defaultLevel}** on workspace-mode resources.`);
   if (me.role === "owner" || me.role === "admin") {
     lines.push(`- As ${me.role}: edit on everything, including teams-only resources.`);
-    // The endpoint returns an EMPTY override list for an admin by design
-    // (teams/server/access.ts), so the absence of rows below is the answer,
-    // not a failure to enumerate. An agent auditing "what can I touch" against
-    // a member's longer output would otherwise read this as the smaller set.
+    // ⚠ The endpoint returns an EMPTY override list for an admin BY DESIGN
+    // (teams/server/access.ts) — absence of rows is the answer, not a failure
+    // to enumerate, and reads as the smaller set otherwise.
     lines.push(
       `\n_No per-resource rows are listed for an admin or owner: the empty list IS the answer, not a truncation. dopl_members(op="access_matrix") enumerates the resources themselves._`,
     );
@@ -367,20 +349,18 @@ async function opMyAccess(client: DoplClient): Promise<ToolResponse> {
 }
 
 /**
- * The list above is TEAMS-MODE resources only: workspace-mode ones are never
- * enumerated, they collapse into the role default stated at the top. Without
- * this the section reads as "these are the things I can touch", which is the
- * short answer to the wrong question.
+ * ⚠ TEAMS-MODE resources only — workspace-mode ones are never enumerated, they
+ * collapse into the role default stated at the top. Without this the section
+ * reads as "these are the things I can touch".
  */
 const WORKSPACE_MODE_NOTE = `Teams-mode resources only. Workspace-mode ones are not listed here — they are covered by your role's default level above. Chats and ontology objects are outside this model entirely.`;
 
 /**
- * The my-access endpoint pads teams-mode resources the caller can't see
- * with level "read" (a web-UI affordance-locking quirk — the web client
- * only ever looks overrides up, never enumerates them). Enumerating
- * them here would both claim access that doesn't exist and leak hidden
- * resource ids, so intersect with the visibility-filtered matrix: absent
- * from the matrix ⇔ invisible to the caller.
+ * ⚠ The my-access endpoint PADS teams-mode resources the caller cannot see with
+ * level "read" (a web-UI affordance-locking quirk — the web client only looks
+ * overrides up, never enumerates). Enumerating them claims access that does not
+ * exist AND leaks hidden resource ids, so intersect with the
+ * visibility-filtered matrix: absent from the matrix ⇔ invisible to the caller.
  */
 function visibleOverrides(
   access: MyAccess,

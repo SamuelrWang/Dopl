@@ -2,19 +2,15 @@
  * Rollback for `useOntology()`'s OPTIMISTIC deletes (sibling of
  * `create-cluster-rollback.ts`).
  *
- * `dispatch` removes the object/cluster from the reducer before the DELETE is
- * sent, and the same dispatch sets the store's `dirty` flag — which
- * permanently disables the seed effect. So a delete that the server refuses
- * leaves the row live server-side, gone locally, and unreachable by any
- * refetch for the rest of the session: the divergence only surfaces on the
- * next mount, with the "deleted" row back beside whatever replacement the
- * user made in the meantime.
+ * The dispatch that removes the row also sets the store's `dirty` flag, which
+ * permanently disables the seed effect — so a refused delete leaves the row
+ * live server-side, gone locally, and unreachable by any refetch until the next
+ * mount.
  *
- * The undo merges the removed slice back into the CURRENT state rather than
- * reinstating the pre-delete snapshot wholesale: several writes can be in
- * flight at once, and a wholesale revert would silently drop any edit made
- * during the failed request's round trip — including one whose debounced
- * PATCH has not fired yet, which would then persist the reverted value.
+ * ⚠ The undo MERGES the removed slice into CURRENT state, never reinstates the
+ * pre-delete snapshot wholesale: several writes can be in flight, and a
+ * wholesale revert drops edits made during the round trip — including one whose
+ * debounced PATCH hasn't fired, which would then persist the reverted value.
  */
 
 import { clusterObjectIds, type GraphAction, type GraphState } from "./graph-state";
@@ -53,10 +49,9 @@ export function planDeleteRollback(
 }
 
 /**
- * Puts the deleted objects back, and un-scrubs the containment / relationship
- * references the delete stripped from the objects that survived it. Every
- * other field on a survivor comes from `current`, so a name or attribute edit
- * made during the round trip rides through the rollback untouched.
+ * Puts deleted objects back and un-scrubs the containment/relationship refs the
+ * delete stripped from survivors. ⚠ Every other field on a survivor comes from
+ * `current`, so an edit made during the round trip survives the rollback.
  */
 function restoreObjects(
   before: GraphState,
@@ -82,8 +77,8 @@ function restoreObjects(
 
 /**
  * Restores `columnIds` on clusters an object delete pruned, and re-inserts a
- * deleted cluster AT ITS ORIGINAL INDEX — tab order is the user's map of the
- * workspace, so a failed delete must not silently reorder the strip.
+ * deleted cluster AT ITS ORIGINAL INDEX — ⚠ a failed delete must not reorder
+ * the tab strip.
  */
 function restoreClusters(
   before: GraphState,

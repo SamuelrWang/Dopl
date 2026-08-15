@@ -1,21 +1,14 @@
 import "server-only";
 import type { SkillConnector, SkillStatus } from "../types";
 
-/**
- * Seed skills for a brand-new workspace: three skills that teach an agent
- * to operate Dopl itself — archiving sessions, filing knowledge, and
- * authoring the ontology. They replace the earlier generic set
- * (outbound-email-drafting etc.), which was never wired to anything live.
- *
- * Bodies use the canonical `[label](dopl://kb/<slug>)` syntax that
- * `parseSkillBody` understands, linking back to the seeded Dopl Guide
- * knowledge base. All three are filed in the "Dopl" folder.
- */
+/** Seed skills for a new workspace: three skills teaching an agent to operate
+ *  Dopl itself. Bodies use the canonical `[label](dopl://kb/<slug>)` syntax
+ *  `parseSkillBody` understands, linking to the seeded Dopl Guide KB. */
 
 /** Folder every seeded skill lands in. */
 export const DOPL_SKILL_FOLDER = "Dopl";
 
-/** Stable slugs — the ontology seed cross-references these. */
+/** ⚠ Stable slugs — the ontology seed cross-references these. */
 export const SEED_SKILL_SLUGS = {
   archiveSession: "archive-a-session-to-chats",
   fileKnowledge: "file-knowledge-well",

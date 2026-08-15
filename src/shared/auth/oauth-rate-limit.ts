@@ -3,26 +3,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAndRecordRateLimitSubject } from "./mcp-session";
 
 /**
- * Per-IP rate limiting for the UNAUTHENTICATED OAuth endpoints (`/api/oauth/*`).
+ * Per-IP rate limiting for the UNAUTHENTICATED OAuth endpoints (`/api/oauth/*`),
+ * which have no bearer to key on. ⚠ `/register` INSERTs an `oauth_clients` row
+ * per call, so uncapped it is an unauthenticated unbounded table-growth
+ * primitive.
  *
- * These endpoints have no bearer to key on — `/register` (RFC 7591 dynamic
- * client registration) and `/token` are reachable before any credential
- * exists. `/register` in particular INSERTs an `oauth_clients` row per call, so
- * without a cap it is an unauthenticated unbounded table-growth primitive. We
- * bound abuse per source IP while leaving the legitimate MCP-client onboarding
- * path (register → authorize → token, all within minutes) comfortably open.
- *
- * Reuses the exact same store + RPC the OAuth bearer limiter uses
+ * ⚠ Reuses the SAME store + RPC as the OAuth bearer limiter
  * (`rate_limit_events` via `checkAndRecordRateLimitSubject`) — one mechanism,
- * many subjects — rather than inventing a second one.
+ * many subjects.
  */
 
 /**
- * Best-effort client IP from the proxy headers Vercel/most CDNs set. Falls back
- * to `"unknown"`, which fails TOWARD limiting: every header-less caller shares
- * one bucket rather than escaping the limit. IP is only a rate-limit key here,
- * never persisted or trusted for authz, so a spoofed `X-Forwarded-For` can at
- * most starve its own bucket.
+ * Best-effort client IP from proxy headers. ⚠ Falls back to `"unknown"`, which
+ * fails TOWARD limiting — header-less callers share one bucket rather than
+ * escaping. IP is a rate-limit key only, never persisted or trusted for authz,
+ * so a spoofed `X-Forwarded-For` can at most starve its own bucket.
  */
 export function clientIpFromRequest(request: NextRequest): string {
   const fwd = request.headers.get("x-forwarded-for");
@@ -34,11 +29,10 @@ export function clientIpFromRequest(request: NextRequest): string {
 }
 
 /**
- * Enforce a per-IP ceiling for an OAuth endpoint. Returns a ready-to-return 429
- * `NextResponse` (RFC 6749 `{ error, error_description }` shape, with
- * `Retry-After`) when the caller is over the limit, else `null`. Fail-closed:
- * `checkAndRecordRateLimitSubject` returns false on any DB error, so a limiter
- * outage rejects rather than admits.
+ * Per-IP ceiling for an OAuth endpoint. Returns a ready 429 `NextResponse`
+ * (RFC 6749 `{ error, error_description }` + `Retry-After`) when over the limit,
+ * else `null`. ⚠ Fail-closed: `checkAndRecordRateLimitSubject` returns false on
+ * any DB error, so a limiter outage rejects rather than admits.
  */
 export async function enforceOAuthIpRateLimit(
   request: NextRequest,

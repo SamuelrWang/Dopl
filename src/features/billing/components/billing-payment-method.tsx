@@ -7,25 +7,15 @@ import { useWorkspacePaymentMethod } from "./use-billing-account";
 import type { BillingPortal } from "./use-billing-portal";
 
 /**
- * The card on file. READ HERE, EDIT IN STRIPE — deliberately.
+ * Card on file. READ HERE, EDIT IN STRIPE — showing brand/last4/expiry needs no
+ * PCI surface of our own; "Update" is the hosted-portal handoff.
  *
- * Showing the brand, last four and expiry answers the question people actually
- * open billing for ("which card is this coming off, and is it about to
- * expire?"), and answering it needs no PCI surface of our own. CHANGING the
- * card does, so "Update" is the same hosted-portal handoff every other
- * card-shaped affordance in the product uses.
+ * Rendered by `billing-plans-pane.tsx` only for a paid workspace with a Stripe
+ * customer, so `null` = Stripe has no card for an existing customer.
  *
- * Rendered only for a paid workspace with a Stripe customer, by
- * `billing-plans-pane.tsx` — so `null` here means Stripe has no card for a
- * customer that exists, not "this workspace never paid".
- *
- * WHICH IS EXACTLY WHY A FAILED READ MAY NOT REACH THAT COPY. "No card on
- * file" is a MEASUREMENT of the customer's Stripe account; a read that threw
- * measured nothing. Collapsing the two tells an admin whose Stripe call
- * 500'd that their card is gone, and the next thing they do is re-enter it.
- * The error branch is checked BEFORE the empty one, and it offers a retry
- * rather than the portal, because nothing here says the portal would work
- * either.
+ * ⚠ Error branch checked BEFORE the empty one: "No card on file" is a
+ * MEASUREMENT; a read that threw measured nothing. Retry, not the portal —
+ * nothing here says the portal would work either.
  */
 export function BillingPaymentMethod({
   workspaceId,
@@ -82,7 +72,7 @@ export function BillingPaymentMethod({
             <div className="text-body font-medium text-text-primary">
               {formatCardLabel(paymentMethod)}
             </div>
-            {/* No expiry from Stripe → no line. "00 / 0" is not a date. */}
+            {/* No expiry from Stripe → no line; "00 / 0" is not a date. */}
             {expiry && (
               <div className="text-caption text-text-secondary">
                 Expires {expiry}

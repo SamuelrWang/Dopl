@@ -35,34 +35,22 @@ import type {
 
 /**
  * THE FLAGSHIP WRITE PATH — sending a message and starting a session, made
- * optimistic.
+ * optimistic. Within one frame of the click:
+ *   1. mint a `clientMsgId` — the server's idempotency key, so a retry of a
+ *      failed send cannot double-post;
+ *   2. write the message into the transcript cache as a pending row; a REQUEST
+ *      also gets a pending OPEN thread row, ⚠ or its session card computes to
+ *      "complete" from a lone unanswered human message;
+ *   3. clear the composer (its own state, before the await);
+ *   4. send the POST.
+ * The response is USED — a chat send swaps its pending row for the saved one in
+ * place. On failure `onError` restores the step-2 snapshot and the composer puts
+ * the draft back.
  *
- * What it replaced: `await postMessage()` (whose response CONTAINS the created
- * row and threw it away) → `await refetchMessages()` (re-downloading the whole
- * 200-message page) → `void refetchChannels()`. Between the click and anything
- * appearing on screen, the only pixel that changed was a 30px send button at
- * 50% opacity, across two serial network hops.
- *
- * What happens now, in order, within one frame of the click:
- *   1. a `clientMsgId` is minted — the idempotency key the server has always
- *      honoured and no client ever sent, so the retry of a failed send cannot
- *      double-post;
- *   2. the message is written into the transcript cache as a pending row, and
- *      a request additionally gets a pending OPEN thread row so its session
- *      card reads "active" rather than computing to "complete" from a lone
- *      unanswered human message;
- *   3. the composer clears (its own state, cleared before the await);
- *   4. the POST leaves.
- * When it answers, the answer is USED: a chat send swaps its own pending row
- * for the saved one in place. When it fails, `onError` restores the exact
- * cache snapshot taken in step 2 and the composer puts the draft back.
- *
- * EVERY CACHE WRITE IS KEYED BY THE CHANNEL ID CAPTURED AT SUBMIT TIME (it
- * rides in the draft, and the per-channel keys embed it in their path). That
- * is what stops an in-flight send from landing in the transcript of a channel
- * the user switched to meanwhile — the open race in which all three
- * per-channel reads use `keepPreviousData` and nobody reads
- * `isPlaceholderData`.
+ * ⚠ EVERY CACHE WRITE IS KEYED BY THE CHANNEL ID CAPTURED AT SUBMIT TIME (it
+ * rides in the draft and the per-channel keys embed it). That is what stops an
+ * in-flight send landing in the transcript of a channel the user switched to —
+ * all three per-channel reads use `keepPreviousData`.
  */
 
 export interface SendDraft {
@@ -99,8 +87,8 @@ export interface ThreadWritesParams {
   gate: MutationGate;
 }
 
-/** What the three configs need beyond their params: the cache they read to
- *  decide whether a key still needs the cold-start refetch. */
+/** The cache the configs read to decide whether a key still needs the
+ *  cold-start refetch. */
 export interface ThreadWriteDeps extends ThreadWritesParams {
   client: QueryClient;
 }
@@ -113,10 +101,9 @@ const messagesKey = (channelId: string) => channelKeys.messages(channelId).all;
 const threadsKey = (channelId: string) => channelKeys.threads(channelId).all;
 
 /**
- * The three configs are exported APART from the hook, exactly as the lifecycle
- * writes are, so `use-thread-writes.test.ts` can drive them through TanStack's
- * own framework-free `MutationObserver` — `npm test` has no DOM, and the order
- * onMutate → mutationFn → onSuccess/onError → onSettled IS the contract.
+ * ⚠ Exported APART from the hook so `use-thread-writes.test.ts` can drive them
+ * through TanStack's own `MutationObserver` — `npm test` has no DOM, and the
+ * order onMutate → mutationFn → onSuccess/onError → onSettled IS the contract.
  */
 export function sendConfig(
   deps: ThreadWriteDeps
@@ -146,47 +133,38 @@ export function sendConfig(
           })
         )
       ),
-    // THE RESPONSE IS THE POINT: the saved row replaces its pending twin in
+    // ⚠ The RESPONSE is the point: the saved row replaces its pending twin in
     // place. No `refetchMessages`, so a send costs exactly one round trip.
     reconcile: (data, draft) =>
       patchCache<MessagesCache>(messagesKey(draft.channelId), (cache) =>
         reconcileMessage(cache, data.message)
       ),
     // The list carries `lastMessageAt` / unread ordering, which this write
-    // does change and cannot compute. UNCONDITIONAL.
+    // changes and cannot compute. UNCONDITIONAL.
     //
-    // THE TRANSCRIPT IS NAMED TOO, AND IT IS THE COLD-CACHE CASE ONLY.
-    // Both the optimistic patch and the reconcile decline on an undefined
-    // entry on purpose (seeding a one-message list into a query that never
-    // loaded would render a transcript of exactly that message and then flip),
-    // so on a channel whose transcript has not loaded NOTHING here puts the
-    // sent message on screen — and the bundled SPA has no realtime doorbell to
-    // do it later. That state is reachable in one gesture: all three
-    // per-channel reads are `keepPreviousData`, so a switch keeps showing the
-    // PREVIOUS channel's transcript while the new one is still in flight, and
-    // a send into the new channel can beat its first read.
+    // ⚠ The transcript is named too, but COLD-CACHE ONLY. Both the optimistic
+    // patch and the reconcile decline on an undefined entry on purpose, so on a
+    // channel whose transcript has not loaded NOTHING here puts the sent message
+    // on screen — and the bundled SPA has no realtime doorbell to do it later.
+    // Reachable in one gesture: all three per-channel reads are
+    // `keepPreviousData`, so a send can beat the new channel's first read.
     //
-    // `coldKeys` and not a plain listing, because this is THE FLAGSHIP SEND and
-    // rule 1 bites hardest here. `invalidateQueries` defaults to
-    // `refetchType: "active"`, and the transcript query IS active — so naming
-    // it unconditionally would re-download the 200-message page on EVERY
-    // message sent, which is the exact cost this write was built to remove
-    // ("no `refetchMessages`, so a send costs exactly one round trip", above).
-    // `openThread` and `threadOp` DO name it unconditionally and are still
-    // right to: their server-written opening message and lifecycle echo cannot
-    // be reconciled from the response at all, so for them the refetch is the
-    // only path to the screen warm or cold.
+    // ⚠ `coldKeys`, never a plain listing: `invalidateQueries` defaults to
+    // `refetchType: "active"` and the transcript query IS active, so naming it
+    // unconditionally re-downloads the 200-message page on EVERY send — the
+    // exact cost this write exists to remove. `openThread` and `threadOp` DO
+    // name it unconditionally and are right to: their server-written opening
+    // message and lifecycle echo cannot be reconciled from the response at all.
     invalidate: (draft) => [
       channelKeys.list().all,
       ...coldKeys(deps.client, [messagesKey(draft.channelId)]),
     ],
     settleWith: deps.gate,
-    // A FAILED send re-reads the transcript unconditionally, and this is the
-    // other half of keeping the settle-time path cold-only. `onError` has just
-    // restored the pre-send snapshot, which is a guess: a POST that timed out
-    // after the row was written leaves the message STORED and the local cache
-    // saying it never happened. Rule 1's cost argument does not apply here —
-    // this runs on the rare path, not on every message.
+    // ⚠ A FAILED send re-reads the transcript UNCONDITIONALLY: `onError` has
+    // just restored the pre-send snapshot, which is a guess — a POST that timed
+    // out after the row was written leaves the message STORED while the local
+    // cache says it never happened. Rare path, so the cost argument does not
+    // apply.
     onError: (err, draft) => {
       void deps.client.invalidateQueries({
         queryKey: messagesKey(draft.channelId),
@@ -225,8 +203,8 @@ export function openThreadConfig(
               authorName: deps.currentUserName,
               authorAvatarUrl: deps.currentUserAvatarUrl,
               // `taskId` binds the row into a session card; `to_user_id` draws
-              // the addressee line. Both are the wire spellings the transcript
-              // already reads, so the pending card is the real component.
+              // the addressee line. ⚠ Wire spellings, so the pending card is the
+              // real component.
               metadata: { taskId: threadId, to_user_id: draft.toUserId },
             })
           )
@@ -246,11 +224,10 @@ export function openThreadConfig(
         ),
       ];
     },
-    // The POST answers with the thread but NOT its opening message (the server
+    // ⚠ The POST answers with the thread but NOT its opening message (server
     // writes that under its own derived key), so the reconcile re-points the
     // pending row at the real thread id and swaps the overlay. The stored
-    // opening message arrives with the invalidated read and replaces the
-    // pending row wholesale — by which time the card is already correct.
+    // opening message arrives with the invalidated read.
     reconcile: (data, draft) => [
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) =>
         upsertThread(cache, data.task, pendingMessageId(draft.clientMsgId))
@@ -264,9 +241,9 @@ export function openThreadConfig(
       channelKeys.list().all,
     ],
     settleWith: deps.gate,
-    // Both patched caches — the transcript AND the pending thread overlay —
-    // are snapshotted together in `onMutate`, so the rollback removes the card
-    // whole rather than leaving a titled shell with no message in it.
+    // ⚠ Both patched caches — transcript AND pending thread overlay — are
+    // snapshotted together in `onMutate`, so the rollback removes the card whole
+    // rather than leaving a titled shell with no message in it.
     onError: (err) => failed(err, "Couldn't open the thread"),
   };
 }
@@ -286,8 +263,8 @@ export function threadOpConfig(
           ? { op: "close", outcome: draft.outcome, summary: draft.summary }
           : { op: "reopen" },
     }),
-    // The thread row IS the transcript's status overlay, so patching it
-    // flips the card's chip on the click rather than after two round trips.
+    // The thread row IS the transcript's status overlay, so patching it flips
+    // the card's chip on the click rather than after two round trips.
     optimistic: (draft) =>
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) => {
         const current = cache?.tasks.find((t) => t.id === draft.threadId);
@@ -304,8 +281,7 @@ export function threadOpConfig(
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) =>
         upsertThread(cache, data.task)
       ),
-    // A close/reopen posts a lifecycle echo into the transcript, which only
-    // the server can render.
+    // A close/reopen posts a lifecycle echo only the server can render.
     invalidate: (draft) => [
       messagesKey(draft.channelId),
       channelKeys.list().all,
@@ -322,7 +298,7 @@ export function threadOpConfig(
 }
 
 export function useThreadWrites(params: ThreadWritesParams) {
-  // Rebuilt every render on purpose: `useApiMutationWith` reads its config
+  // ⚠ Rebuilt every render on purpose — `useApiMutationWith` reads its config
   // through a ref, so these closures are always the current render's.
   const deps: ThreadWriteDeps = { ...params, client: useQueryClient() };
   const send = useApiMutationWith<SendDraft, { message: ChannelMessage }>(

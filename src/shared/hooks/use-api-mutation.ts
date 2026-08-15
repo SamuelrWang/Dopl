@@ -16,38 +16,26 @@ import {
 } from "@/shared/realtime/refetch-coordinator";
 
 /**
- * THE write hook — `useApiQuery`'s missing other half.
+ * THE write hook — `useApiQuery`'s other half. Owns, so no call site does:
  *
- * Before this the repo had zero `useMutation`, zero `onMutate` and zero
- * rollback: ~86 write sites hand-rolled `setBusy(true); await api(); await
- * refetch()`, so the fastest thing a click could produce was a dimmed button
- * for the length of two network hops, and the created row the POST already
- * answered with was thrown away and re-downloaded.
+ *  - **Optimistic write.** `optimistic: (draft) => patches` runs in `onMutate`,
+ *    BEFORE the request leaves. Patched entries are snapshotted and restored
+ *    verbatim by `onError`.
+ *  - **Reconcile from the answer.** `reconcile: (data, draft) => patches` folds
+ *    the server response into the cache. ⚠ A write whose response contains the
+ *    created row does NOT need a refetch.
+ *  - **Invalidation on settle** (success or failure) for caches this write could
+ *    NOT reconcile. ⚠ Explicit on purpose: invalidating a cache you just
+ *    reconciled re-downloads it and undoes the point.
+ *  - **`pending`**, so callers keep no `useState` busy flag.
+ *  - **`settleWith(gate)`** — composes `createRefetchCoordinator`: a realtime
+ *    event arriving mid-write must not refetch over an in-flight local change.
+ *    The gate counts writes in flight and releases the deferred refetch when the
+ *    last settles.
  *
- * What this owns, so no call site owns it again:
- *
- *  - **The optimistic write.** `optimistic: (draft) => patches` runs in
- *    `onMutate`, i.e. BEFORE the request leaves. Every patched cache entry is
- *    snapshotted first and restored verbatim by `onError`, so a failure is a
- *    revert rather than a stale lie.
- *  - **Reconciling from the answer.** `reconcile: (data, draft) => patches`
- *    folds the server's own response into the cache. A write whose response
- *    contains the created row does NOT need a refetch, and asking for one is
- *    how a 30-message send re-downloads 200.
- *  - **Invalidation on settle**, success or failure, for the caches this write
- *    could NOT reconcile itself. Deliberately explicit: invalidating the cache
- *    you just reconciled re-downloads it and undoes the point.
- *  - **`pending`**, so a caller never keeps its own `useState` busy flag.
- *  - **`settleWith(gate)`** — composition with `createRefetchCoordinator`,
- *    which already solves the hard half: a realtime event arriving mid-write
- *    must not refetch over an in-flight local change. The gate counts writes
- *    in flight and releases the coordinator's deferred refetch when the last
- *    one settles.
- *
- * TRANSPORT-INJECTED exactly like `use-api-query-core.ts`: the whole
- * implementation takes an `ApiMutationRequestFn`, and `useApiMutation` is the
- * three-line web binding over `@/shared/api/api-client`. The desktop SPA binds
- * `useApiMutationWith` to its own `apiRequest` and shares every line above.
+ * TRANSPORT-INJECTED like `use-api-query-core.ts`: implementation takes an
+ * `ApiMutationRequestFn`; `useApiMutation` is the web binding, and the desktop
+ * SPA binds `useApiMutationWith` to its own `apiRequest`.
  */
 
 export type ApiMutationRequestFn = <T>(
@@ -73,8 +61,8 @@ type ApiQueryParams = ApiRequestOpts["query"];
 
 /**
  * One cache edit: WHICH entries, and what they become. `key` is matched by
- * TanStack's array-prefix rule, so `apiPathKey(path)` patches every workspace
- * / query-param variant of a resource in one entry.
+ * TanStack's array-prefix rule, so `apiPathKey(path)` patches every workspace /
+ * query-param variant of a resource in one entry.
  */
 export interface CachePatch {
   key: QueryKey;
@@ -82,13 +70,11 @@ export interface CachePatch {
 }
 
 /**
- * Build a typed patch — `(draft) => (cache) => nextCache` with the key bound.
- * The cache type is erased at the boundary so a list of patches over different
- * resources stays one array; it is checked where it matters, in `update`.
+ * Build a typed patch with the key bound. Cache type is erased at the boundary
+ * so patches over different resources stay one array; checked in `update`.
  *
- * NOTE the shape a patch receives: `useApiQuery` stores the RAW response body
- * and applies `select` on read, so a messages patch operates on
- * `{ messages: [...] }`, never on the selected array.
+ * ⚠ `useApiQuery` stores the RAW response body and applies `select` on read, so
+ * a messages patch operates on `{ messages: [...] }`, never the selected array.
  */
 export function patchCache<TCache>(
   key: QueryKey,
@@ -98,25 +84,12 @@ export function patchCache<TCache>(
 }
 
 /**
- * THE COLD-CACHE FALLBACK (ENGINEERING §7, rule 1's one exception). Keeps only
- * the keys whose cache entry STILL holds no data.
- *
- * `optimistic` and `reconcile` both decline on an entry with no data — there is
- * no list to patch a row into — so during a cold start or the IndexedDB restore
- * window a write lands SERVER-SIDE and never reaches the screen, invisibly,
- * because the surface renders from its SSR/initial-props fallback. A write
- * whose reconcile is its only path to the screen therefore names its keys
- * through this filter.
- *
- * It runs in `onSettled`, i.e. AFTER `reconcile`, so "still no data" IS the
- * decline rather than a guess about it. A warm cache re-downloads nothing
- * (which is what keeps this inside rule 1); a cold one gets exactly the one
- * refetch that makes the write visible. A key with no entry at all is kept and
- * is a no-op: `invalidateQueries` only marks queries that exist, and one
- * mounted later fetches fresh anyway.
- *
- * Named for what it RETURNS — the subset of `keys` that is cold — because the
- * result is spread into an `invalidate` list, not branched on.
+ * COLD-CACHE FALLBACK (ENGINEERING §7, rule 1's one exception). Returns only
+ * keys whose cache entry STILL holds no data. `optimistic`/`reconcile` both
+ * decline on a data-less entry, so on a cold start or the IndexedDB restore
+ * window a write lands server-side and never reaches the screen; a write whose
+ * reconcile is its only path to the screen names its keys through this filter.
+ * ⚠ Runs in `onSettled`, AFTER `reconcile`, so "still no data" IS the decline.
  */
 export function coldKeys(client: QueryClient, keys: QueryKey[]): QueryKey[] {
   return keys.filter(
@@ -160,12 +133,9 @@ export interface MutationRollback {
   snapshots: Array<[QueryKey, unknown]>;
 }
 
-/**
- * The mutation options a config becomes — exported so the behaviour can be
- * driven by TanStack's own framework-free `MutationObserver` in tests, i.e.
- * the rollback and the settle order are pinned against the real machinery
- * rather than a re-implementation of it.
- */
+/** Mutation options a config becomes. Exported so tests drive it via TanStack's
+ *  framework-free `MutationObserver` — rollback and settle order pinned against
+ *  the real machinery, not a re-implementation. */
 export function buildApiMutationOptions<TDraft, TData>(
   client: QueryClient,
   request: ApiMutationRequestFn,
@@ -185,16 +155,14 @@ export function buildApiMutationOptions<TDraft, TData>(
     async onMutate(draft: TDraft) {
       config.settleWith?.begin();
       const patches = toPatches(config.optimistic?.(draft));
-      // CANCEL BEFORE PATCHING, never after: TanStack's cancel reverts a query
-      // to its pre-fetch state, so cancelling second would restore the very
-      // data the optimistic write just replaced.
-      //
-      // AND ONLY QUERIES THAT ALREADY HAVE DATA. A cancel exists to stop an
-      // in-flight READ landing on top of this write — a query on its FIRST
-      // load has nothing to land on, the optimistic patch declines to seed it
-      // (there is no list to append to), and cancelling it strands the surface
-      // empty until some unrelated signal refetches. Sending into a channel
-      // whose transcript is still loading is exactly that case.
+      // ⚠ CANCEL BEFORE PATCHING: TanStack's cancel reverts a query to its
+      // pre-fetch state, so cancelling second restores the data the optimistic
+      // write just replaced.
+      // ⚠ ONLY QUERIES THAT ALREADY HAVE DATA. Cancel exists to stop an
+      // in-flight READ landing on this write; a query on its FIRST load has
+      // nothing to land on, and cancelling it strands the surface empty until
+      // some unrelated signal refetches (e.g. sending into a still-loading
+      // channel transcript).
       await Promise.all(
         patches.map((patch) =>
           client.cancelQueries({
@@ -251,9 +219,8 @@ export function useApiMutationWith<TDraft, TData>(
   config: UseApiMutationConfig<TDraft, TData>
 ): ApiMutation<TDraft, TData> {
   const client = useQueryClient();
-  // The config is rebuilt every render (its callbacks close over props); the
-  // options object must therefore read the LATEST one rather than the one
-  // captured when the mutation was created.
+  // ⚠ Config is rebuilt every render (callbacks close over props), so options
+  // must read the LATEST one, not the one captured at mutation creation.
   const configRef = useRef(config);
   configRef.current = config;
   const options = useMemo(
@@ -280,7 +247,7 @@ export function useApiMutationWith<TDraft, TData>(
   };
 }
 
-/** The web binding. Same three lines as `use-api-query.ts`. */
+/** The web binding. */
 export function useApiMutation<TDraft, TData>(
   config: UseApiMutationConfig<TDraft, TData>
 ): ApiMutation<TDraft, TData> {
@@ -296,15 +263,9 @@ export interface RefetchGate {
   isBusy: () => boolean;
 }
 
-/**
- * `createRefetchCoordinator` plus the write counter it needs, as one hook.
- *
- * The coordinator is deliberately framework-agnostic and takes `busy` as an
- * argument, which every caller then tracked with its own `useRef(0)` and its
- * own `finally` block. This owns that counter so `settleWith: gate` is the
- * whole integration, and a write that throws still releases it (`onSettled`
- * runs on both paths).
- */
+/** `createRefetchCoordinator` plus the write counter it needs, as one hook. Owns
+ *  the counter so `settleWith: gate` is the whole integration; a write that
+ *  throws still releases it (`onSettled` runs on both paths). */
 export function useRefetchGate(run: () => void): RefetchGate {
   const runRef = useRef(run);
   useEffect(() => {
@@ -312,8 +273,8 @@ export function useRefetchGate(run: () => void): RefetchGate {
   });
   const busyRef = useRef(0);
   const coordinatorRef = useRef<RefetchCoordinator | null>(null);
-  // Built on FIRST USE, never in the render pass: refs may not be touched
-  // during render, and nothing needs a coordinator until an event arrives.
+  // ⚠ Built on FIRST USE, never during render: refs may not be touched in the
+  // render pass.
   const coordinator = useCallback((): RefetchCoordinator => {
     coordinatorRef.current ??= createRefetchCoordinator(() => runRef.current());
     return coordinatorRef.current;

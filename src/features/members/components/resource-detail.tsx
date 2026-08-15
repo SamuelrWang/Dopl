@@ -18,11 +18,8 @@ interface Props {
   canManage: boolean;
 }
 
-/**
- * Resource detail — the Access tab's right pane. Resource-centric
- * replacement for the old horizontal-scroll matrix table: one resource,
- * its workspace/teams scope control, and a per-team access list.
- */
+/** Access tab's right pane: one resource, its workspace/teams scope control,
+ *  and a per-team access list. */
 export function ResourceDetail({
   workspaceSlug,
   resource: r,
@@ -47,9 +44,8 @@ export function ResourceDetail({
     });
   }
 
-  // The segmented control is driven straight off the cached `accessMode`, so
-  // the optimistic patch IS the thumb moving on the click. It used to sit on
-  // the old segment until the round trip finished.
+  // Segmented control renders straight off the cached `accessMode`, so the
+  // optimistic patch IS the thumb moving.
   function changeScope(next: "workspace" | "teams") {
     if (!canManage || next === r.accessMode) return;
     run(() =>
@@ -92,11 +88,10 @@ export function ResourceDetail({
             ]}
             value={r.accessMode}
             onChange={changeScope}
-            // Inert for the round trip, exactly like the grant control below.
-            // Two scope PUTs interleaved is a rollback bug, not just a double
-            // request: the second `onMutate` snapshots the FIRST one's
-            // optimistic value, so a failure restores the cache to a mode that
-            // was never saved.
+            // ⚠ Inert for the round trip, like the grant control below: two
+            // interleaved scope PUTs are a ROLLBACK bug, not just a double
+            // request — the second `onMutate` snapshots the first's optimistic
+            // value, so a failure restores a mode that was never saved.
             disabled={busy}
             className="w-[190px]"
           />

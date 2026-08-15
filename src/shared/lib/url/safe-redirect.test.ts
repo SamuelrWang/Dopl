@@ -45,23 +45,19 @@ describe("safeRedirect", () => {
   });
 
   it("rejects malformed input that throws", () => {
-    // The URL constructor is forgiving but defensive guard.
     expect(safeRedirect("/")).toBe("/");
   });
 
   it("strips host injection via URL parsing", () => {
-    // A path like "/.." should normalize but not escape origin.
     const result = safeRedirect("/../etc/passwd");
-    // URL normalizes /../etc/passwd → /etc/passwd; same origin so it's allowed.
+    // URL normalizes /../etc/passwd → /etc/passwd; same origin, allowed.
     expect(result.startsWith("/")).toBe(true);
     expect(result.includes("evil")).toBe(false);
   });
 
-  // THE DRIFT GUARD. `safe-redirect.ts` is the LEAF — `post-auth-landing.ts` imports
-  // `safeRedirect` from it — so it cannot import `WEB_POST_AUTH_LANDING` back without
-  // closing a cycle, and carries its own literal instead. This is what keeps the two from
-  // parting company. It matters because the previous literal was `/canvas`, which Stage D
-  // deleted: an unreachable default that any NEW caller would have silently inherited.
+  // ⚠ DRIFT GUARD. `safe-redirect.ts` is the LEAF, so it cannot import
+  // `WEB_POST_AUTH_LANDING` back without closing a cycle and carries its own
+  // literal. This is the only thing keeping the two from parting company.
   it("the local fallback literal still equals the post-auth landing", () => {
     expect(safeRedirect(null)).toBe(WEB_POST_AUTH_LANDING);
     expect(safeRedirect("https://evil.com")).toBe(WEB_POST_AUTH_LANDING);

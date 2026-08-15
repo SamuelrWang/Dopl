@@ -1,12 +1,7 @@
 /**
- * INVARIANT SUITE — the MCP credit constants and the period rule.
- *
- * `credits.ts` is the ONE retune spot, so the two things pinned here are the
- * two things everything else derives from: the per-plan allowance map, and
- * WHICH WINDOW a call is charged to. The period rule is the subtle half — get
- * it wrong and a lapsed subscription pins a workspace to a window that never
- * rolls, or a paid workspace's credits reset on the 1st instead of on its
- * billing date.
+ * INVARIANT SUITE — MCP credit constants + period rule. `credits.ts` is the ONE
+ * retune spot; pinned here are the per-plan allowance map and WHICH WINDOW a
+ * call is charged to.
  */
 
 import { describe, it, expect } from "vitest";
@@ -35,13 +30,12 @@ describe("allowances", () => {
   });
 
   it("team is FLAT per workspace, not per seat — it is not a multiple of solo", () => {
-    // A guard on the pricing DECISION, not on arithmetic: if team ever becomes
-    // per-seat, it stops being expressible as one number in this map at all.
+    // Guards the pricing DECISION: per-seat team is not expressible here.
     expect(MONTHLY_MCP_CREDITS.team).toBeGreaterThan(MONTHLY_MCP_CREDITS.solo);
   });
 });
 
-/** A live future anchor — the shape a mid-period cancellation leaves behind. */
+/** Live future anchor — shape a mid-period cancellation leaves behind. */
 const LIVE_ANCHOR = {
   currentPeriodStart: "2026-07-21T09:30:00.000Z",
   currentPeriodEnd: "2026-08-21T09:30:00.000Z",
@@ -69,14 +63,10 @@ describe("resolveCreditPeriod — subscription anchor", () => {
 });
 
 /**
- * THE CANCELLATION LOCKOUT, pinned at the rule that heals it.
- *
- * Cancel mid-period and the row keeps an anchor whose END IS STILL IN THE
- * FUTURE. If the period rule honoured it, the workspace's first free-plan call
- * would be charged to the same period key the paid plan had been spending
- * against — `used` already past the 500 free limit — and MCP would refuse
- * every call until the old period would have expired. The verdict is read
- * FIRST precisely so that state heals on the next consume, with no webhook.
+ * Cancellation lockout, pinned at the rule that heals it. A mid-period cancel
+ * leaves a future-ending anchor; honouring it would charge the first free-plan
+ * call to the period key the paid plan already spent past 500. Verdict read
+ * FIRST heals it on next consume, no webhook.
  */
 describe("resolveCreditPeriod — a FREE verdict ignores the anchor", () => {
   it("uses the calendar month even when a live future anchor is stamped", () => {

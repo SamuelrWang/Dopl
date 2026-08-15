@@ -16,17 +16,14 @@ import {
 } from "./workspace-billing";
 
 /**
- * MCP credits — the business logic between the route and the repository.
+ * MCP credits — business logic between route and repository. NUMBERS live in
+ * `../credits.ts` (the one retune spot); this owns only the two questions that
+ * need the database: "may this call proceed" and "how much is left".
  *
- * The NUMBERS are not here: allowances, the per-call cost and the period rule
- * all live in `../credits.ts`, the one retune spot. This module owns only the
- * two questions that need the database — "may this call proceed" (consume) and
- * "how much is left" (summary).
- *
- * THE PLAN IS THE ENTITLEMENT VERDICT, never `workspace_billing.plan`. A solo
- * subscription that has grown a second member is DEGRADED to free by
- * `entitlements.ts › paidEntitlement`, and reading the raw column would hand
- * that workspace 10,000 credits it is not entitled to.
+ * ⚠ The plan is the ENTITLEMENT VERDICT, never `workspace_billing.plan` — a
+ * solo sub that grew a second member is degraded to free by
+ * `entitlements.ts › paidEntitlement`, and the raw column would hand it 10,000
+ * credits it is not entitled to.
  */
 
 /** What a workspace's credit meter says right now. */
@@ -39,19 +36,18 @@ export interface CreditsSummary extends CreditPeriod {
 /** The consume decision, plus everything a refusal needs to explain itself. */
 export interface CreditConsumeResult extends CreditsSummary {
   allowed: boolean;
-  /** Where an exhausted caller is sent. Carried in the RESPONSE because the
-   *  MCP server package cannot import the server-side `upgradeUrl()`. */
+  /** Where an exhausted caller is sent. In the RESPONSE because the MCP server
+   *  package cannot import the server-side `upgradeUrl()`. */
   upgradeUrl: string;
 }
 
 /**
- * The credit window for a billing row (null row = calendar month).
+ * Credit window for a billing row (null row = calendar month).
  *
- * `entitledPlan` IS REQUIRED AND IS THE VERDICT, not `billing.plan`: a free
- * verdict ignores the subscription anchor outright, which is what un-sticks a
- * workspace canceled mid-period (see `../credits.ts › resolveCreditPeriod`).
- * Both callers — enforcement and the settings meter — pass the same verdict,
- * so `used` and `limit` always describe the window the gate charged.
+ * ⚠ `entitledPlan` is the VERDICT, not `billing.plan`: a free verdict ignores
+ * the subscription anchor outright, which un-sticks a workspace canceled
+ * mid-period (`../credits.ts › resolveCreditPeriod`). Both callers —
+ * enforcement and the settings meter — must pass the SAME verdict.
  */
 export function creditPeriodFor(
   billing: WorkspaceBillingRow | null,
@@ -67,10 +63,9 @@ export function creditPeriodFor(
 }
 
 /**
- * Read-only meter for a workspace whose plan + billing row the caller ALREADY
- * has. Takes both rather than re-reading them, because its one caller (the
- * billing status service) has just paid for those reads and
- * `getWorkspaceEntitlements` alone is three queries.
+ * Read-only meter; takes plan + billing row rather than re-reading, because its
+ * one caller has just paid for those reads (`getWorkspaceEntitlements` alone is
+ * three queries).
  */
 export async function summarizeCredits(
   workspaceId: string,
@@ -89,23 +84,18 @@ export async function summarizeCredits(
 }
 
 /**
- * Charge one MCP tool call to a workspace. Resolves the entitled plan and the
- * credit window, then spends `CREDITS_PER_MCP_CALL` through the atomic
- * upsert-CAS RPC. `allowed: false` means the workspace is out of credits for
- * this period — the data is intact, the next period rolls the counter.
+ * Charge one MCP tool call. Resolves entitled plan + credit window, then spends
+ * `CREDITS_PER_MCP_CALL` through the atomic upsert-CAS RPC. `allowed: false` =
+ * out of credits this period; data intact, next period rolls the counter.
  *
- * THROWS on an unexpected read/RPC failure. The fail DIRECTION is the route's
- * decision, not this function's — see `POST /api/mcp/credits/consume`.
+ * THROWS on an unexpected read/RPC failure — fail DIRECTION is the route's
+ * decision (`POST /api/mcp/credits/consume`).
  *
- * THREE ROUND TRIPS, AND THAT IS A BUDGET, NOT AN OBSERVATION: the billing row
- * and the member count (concurrent), then the RPC. It used to be five, because
- * it called `getWorkspaceEntitlements` — which fans out to a `COUNT(*)` over
- * `ontology_objects` for the object cap — and THEN read `workspace_billing` a
- * second time for the period anchor. Neither the cap nor the chats window is
- * on this path. `entitledPlanFor` is the same verdict logic with only the two
- * inputs the verdict has, and the ONE billing row feeds both the verdict and
- * the period. Do not reintroduce `getWorkspaceEntitlements` here: this runs
- * once per MCP tool call.
+ * ⚠ THREE ROUND TRIPS IS A BUDGET: billing row + member count (concurrent),
+ * then the RPC. Do NOT reintroduce `getWorkspaceEntitlements` here — it fans
+ * out to a `COUNT(*)` over `ontology_objects` for a cap this path never
+ * consults, plus a second `workspace_billing` read. This runs once per MCP
+ * tool call.
  */
 export async function consumeMcpCredits(
   workspaceId: string

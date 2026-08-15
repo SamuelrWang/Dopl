@@ -8,15 +8,11 @@
 //   - permissionPostBody(perm)                 -> the drafted body of a gated post (D2)
 //   - postDestinationText(perm)                -> WHERE that post is going (FIX #9; v2.x names the peer)
 //
-// Split out of session-viewmodel.js purely to respect the HARD 500-line-per-file cap
-// (§2) while v2.5 added the inbound-gate + history reducer cases — the same discipline
-// as the earlier session-chrome.js / session-render.js splits. This module has NO
-// dependencies at all (not even the view-model), is DOM / electron / fs free, and is
+// ⚠ NO dependencies at all (not even the view-model), DOM / electron / fs free, and
 // UMD-wrapped: a plain <script> in the sandboxed renderer (attaching
 // `globalThis.DoplSessionLabels`), a require() under node --test. session-viewmodel.js
-// re-exports every function here, so `vm.statusText(...)` keeps working unchanged.
-//
-// It produces STRINGS only, never markup; session.js prints them via textContent.
+// re-exports every function here.
+// ⚠ STRINGS only, never markup; session.js prints them via textContent.
 
 (function (global, factory) {
   const api = factory();
@@ -32,13 +28,11 @@
     launching: "Launching",
     consent: "Consent",
     running: "Running",
-    // P1: a parked (idle-paused) session — resumable, NOT ended. Composer stays enabled.
+    // A parked (idle-paused) session — resumable, NOT ended. Composer stays enabled.
     parked: "Paused",
     awaiting_permission: "Awaiting permission",
-    // v2.5 D1 / FIX #1: `awaiting_inbound` is the INBOUND GATE — a counterparty message
-    // is held on this machine, waiting on the operator. It used to read "Awaiting reply",
-    // which says the inverse (we are waiting on the peer). The phase carries the gate now
-    // (FIX #6), so this label is the one the pill shows whenever a card is pending.
+    // ⚠ `awaiting_inbound` is the INBOUND GATE: a counterparty message held HERE, waiting on
+    // the operator. "Awaiting reply" says the inverse (waiting on the peer).
     awaiting_inbound: "Message waiting",
     interrupted: "Interrupted",
     ended: "Ended",
@@ -48,7 +42,7 @@
     idle: "Idle",
     awaiting_peer: "Waiting for reply",
     awaiting_permission: "Awaiting permission",
-    // v2.5 D1: a counterparty message is held at the inbound gate, awaiting Accept.
+    // A counterparty message held at the inbound gate, awaiting Accept.
     awaiting_inbound: "Message waiting",
   };
 
@@ -67,24 +61,20 @@
     return "is-" + ph;
   }
 
-  // The folder-pill label (item 5): the abbreviated dir short-form. The engine
-  // now always emits a REAL resolved dir (item 6 default = ~/Downloads), so the
-  // null case is only the pre-event render — fall back to the same default.
+  // The folder-pill label: the abbreviated dir short-form. The engine always emits a REAL
+  // resolved dir, so the null case is only the pre-event render.
   function folderLabel(folder) {
     const label = folder && folder.label;
     return label ? String(label) : "~/Downloads";
   }
 
-  // ── v2.9: the TWO-AXIS posture line (contract D) ────────────────────────────
-  // The old single line said "Auto-approving" for a switch that governed BOTH the shell and
-  // outbound messages, and never named the blast radius (HIGH-4). Each axis now states, in
-  // plain words, what it actually does — and the permissive tool modes name the reach
-  // ("commands", "shell and web", "every command on this machine"). Fixed copy, sentence
-  // case, NO em dash (§H-13). Unknown values fall back to the most restrictive line, so a
-  // garbled mode can never read as more permissive than it is.
-  // FIX F2 (v2.9 review): the `auto` line used to say "asking for shell and web" while the mode
-  // ALSO auto-approved the workspace-write Dopl tools, which put data off this machine where
-  // every workspace member can read it. `auto` now gates those too, and the line names them.
+  // ── THE TWO-AXIS posture line ───────────────────────────────────────────────
+  // Each axis states in plain words what it does, and the permissive tool modes NAME the
+  // reach. Fixed copy, sentence case, NO em dash (§H-13).
+  // ⚠ Unknown values fall back to the most restrictive line, so a garbled mode can never read
+  // as more permissive than it is.
+  // ⚠ The `auto` line must name workspace WRITES: `auto` gates them, and omitting them
+  // understates data leaving this machine into rows every workspace member can read.
   const TOOL_POSTURE = {
     manual: "Asking before each command",
     accept_edits: "Auto approving file edits",
@@ -104,9 +94,9 @@
     return MESSAGE_POSTURE[mode] || MESSAGE_POSTURE.ask;
   }
 
-  // The whole status-strip line: BOTH axes, always, with the tool-profile label as trailing
-  // context (item 9). One axis is never shown without the other — a half-stated posture is
-  // how the operator came to believe one switch meant one thing.
+  // ⚠ BOTH axes, ALWAYS, with the tool-profile label as trailing context. One axis is never
+  // shown without the other — a half-stated posture is how one switch comes to read as one
+  // thing.
   function permissionPostureText(toolMode, messageMode, profileLabel) {
     const label = profileLabel == null ? "" : String(profileLabel).trim();
     return "Tools: " + toolPostureText(toolMode) +
@@ -114,18 +104,16 @@
       (label ? " · " + label : "");
   }
 
-  // The danger callout for the one mode that hands over the whole machine. It is per SESSION
-  // and dies with it (and with a park), which the operator must be told at the moment they
-  // pick it, not in a tooltip. "" for every other mode, which hides the chip.
+  // The danger callout for the one mode that hands over the whole machine. ⚠ Per SESSION, and
+  // dies with it (and with a park) — the operator must be told at the moment they pick it.
+  // "" for every other mode, which hides the chip.
   function bypassNoticeText(toolMode) {
     return toolMode === "bypass" ? "Bypass is on for this session only" : "";
   }
 
-  // ── v2.5 D2: what a gated dopl_channel post is about to send ────────────────
-  // The dock shows the body verbatim (textContent) so the operator approves WHAT is being
-  // said, not just that a tool ran. "" for every other tool / op, and for a non-string
-  // body. Homed here (not in the view-model) purely for the §2 500-line cap; the
-  // view-model re-exports it, so vm.permissionPostBody(...) is unchanged.
+  // What a gated dopl_channel post is about to send. The dock shows it verbatim
+  // (textContent), so the operator approves WHAT is being said, not just that a tool ran.
+  // "" for every other tool / op, and for a non-string body.
   function permissionPostBody(perm) {
     const p = perm || {};
     const name = p.name == null ? "" : String(p.name);
@@ -135,51 +123,36 @@
     return typeof input.body === "string" ? input.body : "";
   }
 
-  // FIX #9 — the DESTINATION of that post. The dock rendered the body with no target at
-  // all, so the cross-channel exfil case D2 exists to catch (Read a file, op=post it into
-  // a DM with another member) looked exactly like a normal reply to the peer. Main stamps
-  // `ownChannel` on the permission payload (session-io, from isOwnChannelPost against the
-  // session's own channelId). FAIL-SUSPICIOUS: anything other than an explicit true reads
-  // as another channel, so a missing marker can never make an exfil post look routine.
-  //
-  // v2.x named the recipient on EVERY own-channel post ("To: David's agent"), because
-  // "To: this channel" read like a warning next to the cross-channel line it shares a slot
-  // with. N-PARTY CORRECTION (2026-07-31): that name was only ever right in a 1:1. Main fills
-  // `to` with the session's BOUND COUNTERPARTY when the call named nobody
-  // (session-io.withPostSurface: "unaddressed -> the bound counterparty"), and in a GROUP
-  // channel an unaddressed post reaches no agent at all, so the card promised "To: David's
-  // agent" about a message no agent would read.
-  //
-  // BUT IT SWUNG TOO FAR (H2, same day). Dropping the name for EVERY unaddressed post
-  // understated the case that is all of today's live traffic: in a DIRECT channel the SERVER
-  // addresses the post — `resolveDirectPeer` stamps `to_user_id` with the other member — so
-  // the agent is correctly told it needs no `to`, and the operator was then shown "no
-  // recipient named" about a message that goes to David and wakes David's agent. An approval
-  // card that understates the blast radius is the same defect as one that overstates it.
-  // `directChannel` is the one bit that separates the two: main stamps it from the server's
-  // own `isDirect` flag (channel-context / the listener's channel DTO), and it is FAIL-QUIET
-  // — anything other than an explicit true leaves the channel-level wording, so a launch
-  // shape that does not carry the flag can never invent a recipient.
-  // Whitespace-collapsed and capped: it is a label, not prose.
+  // The DESTINATION of that post. Without it the cross-channel exfil case (Read a file,
+  // op=post it into a DM with another member) looks exactly like a normal reply to the peer.
+  // Main stamps `ownChannel` on the permission payload (session-io, from isOwnChannelPost).
+  // ⚠ FAIL-SUSPICIOUS: anything but an explicit true reads as ANOTHER channel, so a missing
+  // marker can never make an exfil post look routine.
+  // ⚠ The recipient is named ONLY when someone really is named. Main fills `to` with the
+  // session's BOUND COUNTERPARTY when the call named nobody, and in a GROUP channel an
+  // unaddressed post reaches no agent at all — naming one promises a reader who does not
+  // exist. But in a DIRECT channel the SERVER addresses it (`resolveDirectPeer` stamps
+  // `to_user_id`), so "no recipient named" understates a message that wakes the peer's agent.
+  // `directChannel` separates the two and is FAIL-QUIET: anything but an explicit true keeps
+  // the channel-level wording, so a launch shape without the flag cannot invent a recipient.
+  // Whitespace-collapsed and capped: a label, not prose.
   const PEER_CAP = 60;
   function peerName(perm) {
     const raw = perm && perm.to != null ? String(perm.to).replace(/\s+/g, " ").trim() : "";
     return raw.length > PEER_CAP ? raw.slice(0, PEER_CAP - 1).trimEnd() + "…" : raw;
   }
-  // MEDIUM-2 — the kind suffix. A post can claim to be a structured lifecycle EVENT
-  // (`kind: task_finished`), which the peer's UI renders as an outcome rather than as chat.
-  // The card used to show a forged one as an ordinary reply; main stamps the real value
-  // (`postKind`, absent for a plain message) and it is named here, verbatim, so a forged
-  // completion is visible before it is approved.
+  // ⚠ The kind suffix. A post can claim to be a structured lifecycle EVENT (`kind:
+  // task_finished`), which the peer's UI renders as an outcome rather than chat. Main stamps
+  // the real value (`postKind`, absent for a plain message) and it is named VERBATIM here, so
+  // a forged completion is visible before it is approved.
   function postKindSuffix(perm) {
     const kind = perm && perm.postKind != null ? String(perm.postKind).trim() : "";
     return kind ? ", marked " + kind : "";
   }
-  // MEDIUM-2 — `addressed` means the CALL named a recipient (`to:`), which may be a different
-  // channel member from this session's counterparty. Main puts the real value on `to` and
-  // flags it, so the card names who the message is really for instead of the peer it assumes.
-  // H2 — `directChannel` means the SERVER will name one: a DM post with no `to` is stamped to
-  // the other member before it lands. Two different ways of knowing, one true outcome.
+  // `addressed` = the CALL named a recipient (`to:`), possibly a DIFFERENT member from this
+  // session's counterparty — main puts the real value on `to`, so the card names who the
+  // message is really for. `directChannel` = the SERVER will name one (a DM post with no `to`
+  // is stamped to the other member). Two ways of knowing, one true outcome.
   const UNADDRESSED = "To: this channel, no recipient named";
   function isNamedRecipient(perm) {
     return !!perm && (perm.addressed === true || perm.directChannel === true);
@@ -192,21 +165,18 @@
   }
 
   // Is this post leaving the session's own channel? Drives the dock's warning styling.
-  // Same fail-suspicious rule: only an explicit true is treated as the own channel.
+  // ⚠ Same fail-suspicious rule: only an explicit true is the own channel.
   function isCrossChannelPost(perm) {
     return !perm || perm.ownChannel !== true;
   }
 
-  // ── THE CONTEXT METER (2026-08-02) ─────────────────────────────────────────────────────
-  // "How full is this session's window", from main's per-turn measurement. Two rules, and both
-  // are about NOT overstating what is known:
-  //   NO DENOMINATOR, NO PERCENTAGE. When this build does not know the running model's window
-  //     size main sends `window: null`, and the meter then shows the raw count and stops. The
-  //     operator uses this number to decide when to end a session and start a fresh one, and a
-  //     percentage invented from a guessed denominator would be worse than no gauge at all.
-  //   NOTHING BEFORE THE FIRST MEASUREMENT. No turn has ended, so there is nothing to say, and
-  //     an empty string renders as an empty span rather than as a confident "0%".
-  // Pure string work, no DOM: session-modes-ui.js paints the result via textContent.
+  // ── THE CONTEXT METER: "how full is this session's window", from main's per-turn
+  // measurement. Two rules, both about not overstating what is known:
+  // ⚠ NO DENOMINATOR, NO PERCENTAGE. `window: null` means this build does not know the model's
+  //   window size, so show the raw count and stop — the operator ends sessions on this number,
+  //   and a percentage from a guessed denominator is worse than no gauge.
+  // ⚠ NOTHING BEFORE THE FIRST MEASUREMENT: "" renders an empty span, not a confident "0%".
+  // Pure string work, no DOM; session-modes-ui.js paints via textContent.
   function compactTokens(n) {
     const v = Number(n);
     if (!(v > 0)) return "0";
@@ -218,9 +188,9 @@
     return String(Math.round(v));
   }
 
-  // The occupancy as a whole percentage, or null when there is no honest denominator. Clamped
-  // at 100: a prompt that measured larger than the window we believe in is a fact about our
-  // table being wrong, and "104%" would only ever read as a bug.
+  // Occupancy as a whole percentage, or null with no honest denominator. ⚠ Clamped at 100: a
+  // prompt measuring larger than the window we believe in means our table is wrong, and "104%"
+  // only ever reads as a bug.
   function contextPercent(ctx) {
     const c = ctx || {};
     const tokens = Number(c.tokens);
@@ -238,9 +208,8 @@
     return compactTokens(tokens) + " / " + compactTokens(c.window) + " (" + pct + "%)";
   }
 
-  // Amber past 75%, red past 90% — a warning early enough to act on (finish the exchange, end
-  // the session, open a fresh one) rather than one that arrives when there is no room left.
-  // No level without a percentage: an unknown window is never coloured as if it were full.
+  // Amber past 75%, red past 90% — early enough to act on. ⚠ No level without a percentage:
+  // an unknown window is never coloured as if it were full.
   function contextMeterLevel(ctx) {
     const pct = contextPercent(ctx);
     if (pct === null) return "";
@@ -249,13 +218,11 @@
     return "";
   }
 
-  // 2026-08-02 — WHY A CARD IS ASKING. main stamps a machine-readable `gateReason` code on every
-  // gate/deny payload (session-profiles GATE_REASONS); this is the ONLY place it becomes words.
-  // Without it an uncovered tool under `bypass` reads as a broken toggle and a slug-addressed post
-  // as a random refusal. Unknown or absent renders NO line; where there is a fix, the line names it.
-  // M3 (2026-08-05): moved here from session-render.js, which was at the §2 cap — see the note
-  // there. The two `*-read` codes are M3's: an own-channel READ now follows the INBOUND half of
-  // message approval, so "reads are never auto-run" stopped being true and stopped being the copy.
+  // WHY A CARD IS ASKING. Main stamps a machine-readable `gateReason` on every gate/deny
+  // payload (session-profiles GATE_REASONS); ⚠ this is the ONLY place it becomes words.
+  // Without it an uncovered tool under `bypass` reads as a broken toggle and a slug-addressed
+  // post as a random refusal. Unknown or absent renders NO line; where there is a fix, the
+  // line names it.
   const GATE_REASON = {
     "hard-denied": "Blocked for this session.",
     "not-covered-by-bypass": "Asking because the current tool setting does not cover this tool.",
@@ -268,9 +235,9 @@
     "channel-op-approval-required": "Asking because message approval covers this channel's messages, not this operation.",
     "awaiting-approval": "Asking because tool approval is set to ask before each tool.",
   };
-  // M1: OWN PROPERTY ONLY. A bare index on an object literal answers a FUNCTION for 'constructor'
-  // and 'toString', which `|| ""` does not catch, so those two words used to put source code into
-  // textContent. Same idiom as session-park.requestRank and session-request-ui's TEXT table.
+  // ⚠ OWN PROPERTY ONLY. A bare index on an object literal answers a FUNCTION for
+  // 'constructor' and 'toString', which `|| ""` does not catch — those two words then put
+  // SOURCE CODE into textContent.
   function gateReasonText(reason) {
     const k = String(reason == null ? "" : reason);
     return Object.prototype.hasOwnProperty.call(GATE_REASON, k) ? GATE_REASON[k] : "";
@@ -279,9 +246,9 @@
   return {
     statusText, statusDotKey, folderLabel,
     compactTokens, contextPercent, contextMeterText, contextMeterLevel,
-    gateReasonText, // M3: the gate-reason copy (session-render re-exports it verbatim)
-    // v2.9 (contract D): the two-axis posture + the bypass danger line. `permissionModeText`
-    // is GONE, not aliased — one string can no longer describe two independent postures.
+    gateReasonText, // the gate-reason copy (session-render re-exports it verbatim)
+    // ⚠ The two-axis posture + bypass danger line. There is deliberately NO single
+    // `permissionModeText`: one string cannot describe two independent postures.
     toolPostureText, messagePostureText, permissionPostureText, bypassNoticeText,
     permissionPostBody, postDestinationText, isCrossChannelPost,
   };

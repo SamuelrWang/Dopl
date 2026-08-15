@@ -1,15 +1,12 @@
 /**
- * Pure computation of a member's effective access, SERVER-invoked only —
- * the `/members/[userId]/access` route runs it over pre-fetched teams +
- * resources for the members-page "Effective access" display. Do NOT
- * import from client code: effective access must always be resolved
- * server-side (see docs/REFACTOR-FINDINGS.md F-023).
- *
- * Encodes the same rules as the authoritative enforcement resolvers in
+ * Pure effective-access computation, ⚠ SERVER-invoked only — never import
+ * from client code; effective access must always resolve server-side. The
+ * `/members/[userId]/access` route runs it over pre-fetched teams+resources.
+ * ⚠ Encodes the same rules as the authoritative resolvers in
  * `./server/access.ts` (admins and creators edit; workspace-mode → role
- * default; teams-mode → max team grant capped at the role ceiling). The
- * two stay separate because the server fns early-return to skip team
- * queries — if you change a rule HERE, change `server/access.ts` too.
+ * default; teams-mode → max team grant capped at the role ceiling). They stay
+ * separate because the server fns early-return to skip team queries — change
+ * a rule here and change `server/access.ts` too.
  */
 
 import type { Role } from "@/features/workspaces/types";

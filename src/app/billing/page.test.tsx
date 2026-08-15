@@ -1,11 +1,6 @@
 /**
- * `/billing` — the segment-less forwarder.
- *
- * It exists for the callers that hold a workspace id at best (the 402/403
- * `upgrade_url` envelopes, which MCP agents follow literally, and the public
- * pricing page). Its whole job is: gate, resolve the default workspace, and
- * hand the query on untouched — because the query is what says "open checkout"
- * or "you just paid".
+ * `/billing` — the segment-less forwarder: gate, resolve the default workspace, hand the query on
+ * untouched (the query is what says "open checkout" or "you just paid").
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -72,9 +67,7 @@ describe("the forwarder", () => {
   });
 
   it("never detours through onboarding", async () => {
-    // `/canvas` — the page this replaces — sent un-onboarded users to a survey
-    // first. Somebody arriving HERE is trying to pay; a survey in front of that
-    // is an abandoned checkout, and /onboarding is on the RETIRE list anyway.
+    // Somebody arriving here is trying to pay; a survey in front of that is an abandoned checkout.
     expect(await outcome({ billing: "success", session_id: "cs_1" })).toBe(
       `REDIRECT:/billing/${SEGMENT}?billing=success&session_id=cs_1`
     );

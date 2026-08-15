@@ -5,11 +5,8 @@ import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import { containerNameOf, type GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 
-/**
- * Cursor-following quick view for an object (study-notes verse-tooltip
- * pattern: fixed portal at cursor + 14px, clamped to the viewport,
- * pointer-events-none).
- */
+/** Cursor-following quick view: fixed portal at cursor + 14px, clamped to
+ *  viewport, pointer-events-none. */
 export function ObjectHoverCard({
   object,
   graph,

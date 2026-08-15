@@ -18,23 +18,13 @@ import {
 import type { AssignableRole } from "../types";
 
 /**
- * The two WORKSPACE-MEMBERSHIP writes — change a role, remove a member —
- * on the shared mutation layer.
- *
- * What they were: `setBusy(true); await updateMemberRole(); onChanged()`, where
- * `onChanged` refetched the roster. The role select therefore rendered the OLD
- * role for the whole round trip while disabled — the stale-value class in the
- * launch audit — and the removed member sat in the list until a second network
- * hop answered. Both caches are now patched before the request leaves, and a
- * failure restores the exact snapshot.
- *
- * F-045 CLOSES HERE. `useInvalidateBillingStatus` was exported in July with
- * zero callers, so seat and member counts went stale after every membership
- * change and the entitlements read papered over it with a 5s `staleTime`. A
- * removal is a real seat change (Team bills per seat, and the seats reconcile
- * against membership), so it invalidates the billing status on SUCCESS —
- * `onSuccess`, not `invalidate`, because a removal that FAILED changed no
- * seats and re-downloading the entitlements would be a wasted round trip.
+ * The two workspace-membership writes — change a role, remove a member — on
+ * the shared mutation layer. Both caches are patched before the request
+ * leaves; a failure restores the exact snapshot.
+ * ⚠ A removal is a real seat change (Team bills per seat and seats reconcile
+ * against membership), so it invalidates billing status in `onSuccess` — not
+ * `invalidate`, because a FAILED removal moved no seats and re-downloading
+ * entitlements would be a wasted round trip.
  */
 
 export interface MemberRoleDraft {
@@ -60,10 +50,9 @@ export function memberRoleConfig(
       patchCache<MembersCache>(memberKeys.members(workspaceSlug).all, (cache) =>
         setMemberRole(cache, draft.userId, draft.role)
       ),
-    // Role sets the CEILING on effective access and short-circuits entirely
-    // for admins, so the member's server-resolved access pane is the one cache
-    // this write cannot compute. It has its own key and, before the console
-    // was converted, no writer anywhere in the app.
+    // ⚠ Role sets the CEILING on effective access and short-circuits for
+    // admins, so the member's server-resolved access pane (its own key) is the
+    // one cache this write cannot compute.
     invalidate: (draft) => [
       memberKeys.memberAccess(workspaceSlug, draft.userId).all,
     ],
@@ -79,9 +68,9 @@ export function removeMemberConfig(
       path: memberPath(workspaceSlug, draft.userId),
       method: "DELETE",
     }),
-    // Both caches are snapshotted together in `onMutate`, so a failed removal
-    // puts the member back in the roster AND back in their teams — rather than
-    // leaving teams that have forgotten a member the roster still lists.
+    // ⚠ Both caches snapshot together in `onMutate`, so a failed removal
+    // restores roster AND teams — otherwise teams forget a member the roster
+    // still lists.
     optimistic: (draft) => [
       patchCache<MembersCache>(memberKeys.members(workspaceSlug).all, (cache) =>
         dropMember(cache, draft.userId)

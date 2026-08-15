@@ -2,12 +2,9 @@
  * THE GROUPING STATE MACHINE — how a flat transcript becomes cards, and what the
  * single open FALLBACK WINDOW will and will not absorb.
  *
- * §2 split (2026-08-08): this file was 983 lines and is the seam it kept when it
- * was cut. The status/summary DERIVATION moved to `group-thread-status.test.ts`,
- * the N-party pair-join and author gate to `group-thread-pairs.test.ts`, and the
- * render-lane helpers to `group-thread-render.test.ts` — the same four seams the
- * source split along. Each file rolls its own message factory, matching the
- * convention the sibling `group-thread-*.test.ts` files already set.
+ * Siblings: status/summary derivation in `group-thread-status.test.ts`, N-party
+ * pair-join and author gate in `group-thread-pairs.test.ts`, render lanes in
+ * `group-thread-render.test.ts`.
  */
 
 import { describe, expect, it } from "vitest";
@@ -58,7 +55,6 @@ describe("groupThread", () => {
     const t = "task-c1-9";
     const items = groupThread([
       msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
-      // Terminal-mode reply posted via MCP: no taskId of its own.
       msg({ kind: "message", authorKind: "agent", body: "Terminal reply." }),
     ]);
     expect(sessions(items)).toHaveLength(1);
@@ -66,16 +62,14 @@ describe("groupThread", () => {
     if (s.type !== "session") throw new Error("expected session");
     expect(s.session.entries).toHaveLength(1);
     expect(s.session.entries[0].body).toBe("Terminal reply.");
-    // task_started + a delivered reply but no finish -> Done: terminal mode is
-    // detached and never emits a finish, so a delivered reply is the completion
-    // signal (a perpetual "Active" pulse would be wrong).
+    // ⚠ task_started + delivered reply, no finish → Done. Terminal mode is
+    // detached and never emits a finish, so the reply IS the completion signal.
     expect(s.session.status).toBe("done");
   });
 
   it("treats a taskId-tagged reply with no lifecycle markers as a done session", () => {
     const t = "task-c1-10";
     const items = groupThread([
-      // task_started/finished never landed, but the reply carries the taskId.
       msg({ kind: "message", authorKind: "agent", body: "Answer.", metadata: { taskId: t } }),
     ]);
     const s = sessions(items)[0];
@@ -127,7 +121,6 @@ describe("groupThread", () => {
   it("keeps interleaved concurrent sessions apart — taskId routing never cross-absorbs", () => {
     const a = "task-c1-20";
     const b = "task-c1-21";
-    // Two task_started fire before either finishes; their replies interleave.
     const items = groupThread([
       msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: a } }),
       msg({ kind: "message", authorKind: "agent", body: "A first", metadata: { taskId: a } }),
@@ -142,8 +135,8 @@ describe("groupThread", () => {
     if (s[0].type !== "session" || s[1].type !== "session") throw new Error("expected sessions");
     expect(s[0].session.taskId).toBe(a);
     expect(s[1].session.taskId).toBe(b);
-    // A owns both its replies even though B opened in between; B owns only its
-    // own — the second `task_started` never lets B swallow A's later reply.
+    // ⚠ A owns both its replies even though B opened in between — the second
+    // `task_started` must not let B swallow A's later reply.
     expect(s[0].session.entries.map((e) => e.body)).toEqual(["A first", "A second"]);
     expect(s[1].session.entries.map((e) => e.body)).toEqual(["B first"]);
     expect(s[0].session.status).toBe("done");
@@ -156,8 +149,8 @@ describe("groupThread", () => {
     const items = groupThread([
       msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: a } }),
       msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: b } }),
-      // No taskId of its own: it may only attach to the currently-open window
-      // (b), never fold back into the superseded earlier session (a).
+      // ⚠ No taskId: attaches to the currently-open window only, never folds
+      // back into the superseded earlier session.
       msg({ kind: "message", authorKind: "agent", body: "which one?" }),
     ]);
     const s = sessions(items);
@@ -174,17 +167,15 @@ describe("groupThread", () => {
     const items = groupThread([
       msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
       msg({ kind: "message", authorKind: "agent", body: "reply", metadata: { taskId: t } }),
-      // Human row is a hard boundary: it closes the still-open (unfinished)
-      // fallback window.
+      // ⚠ Human row is a hard boundary — closes the unfinished fallback window.
       msg({ kind: "message", authorKind: "user", body: "thanks" }),
-      // Unrelated agent chat with no taskId must stand alone, not fold into t.
+      // ⚠ Unrelated agent chat with no taskId must stand alone.
       msg({ kind: "message", authorKind: "agent", body: "different topic" }),
     ]);
     expect(sessions(items)).toHaveLength(1);
     const s = sessions(items)[0];
     if (s.type !== "session") throw new Error("expected session");
     expect(s.session.entries.map((e) => e.body)).toEqual(["reply"]);
-    // The trailing agent post is a standalone plain bubble.
     const types = items.map((i) => i.type);
     expect(types).toEqual(["session", "message", "message"]);
     const last = items[items.length - 1];
@@ -203,34 +194,29 @@ describe("groupThread", () => {
     expect(types).toEqual(["session", "message", "message"]);
     const s = sessions(items)[0];
     if (s.type !== "session") throw new Error("expected session");
-    // Session opened but the system row closed its window before any reply.
     expect(s.session.entries).toHaveLength(0);
   });
 
   it("groups a human request and its agent replies sharing an explicit UUID taskId into one card", () => {
-    // A first-class task: the requester's own message carries the task id, and
-    // both replies share it. Everything folds into one card, including the
-    // human request (old lifecycle grouping never absorbed a human row).
+    // First-class task: the requester's own message carries the task id and both
+    // replies share it, so the human request folds into the card too.
     const t = "3f1c8e42-9b7a-4c2e-8d6f-2a1b0c9d8e7f";
     const items = groupThread([
       msg({ kind: "message", authorKind: "user", body: "please do X", metadata: { taskId: t } }),
       msg({ kind: "message", authorKind: "agent", body: "On it.", metadata: { taskId: t } }),
       msg({ kind: "message", authorKind: "agent", body: "Done.", metadata: { taskId: t } }),
     ]);
-    // A single session card, no standalone bubbles.
     expect(items).toHaveLength(1);
     const s = sessions(items);
     expect(s).toHaveLength(1);
     if (s[0].type !== "session") throw new Error("expected session");
     expect(s[0].session.taskId).toBe(t);
-    // The requester's own message folds into the body alongside the replies.
     expect(s[0].session.entries.map((e) => e.body)).toEqual([
       "please do X",
       "On it.",
       "Done.",
     ]);
-    // No overlay -> derived: delivered replies imply Done, and no first-class
-    // title/mode.
+    // No overlay → derived: delivered replies imply Done, no title/mode.
     expect(s[0].session.status).toBe("done");
     expect(s[0].session.title).toBeNull();
     expect(s[0].session.mode).toBeNull();
@@ -240,11 +226,10 @@ describe("groupThread", () => {
     const t = "task-c1-27";
     const items = groupThread([
       msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
-      // Terminal-mode reply, no taskId, no finish: joins the session and marks
-      // it Done, and consumes the fallback window.
+      // Terminal-mode reply joins the session, marks it Done, spends the window.
       msg({ kind: "message", authorKind: "agent", body: "terminal result" }),
-      // A later unrelated no-taskId post — with no boundary in between — must
-      // still stand alone, because the window was spent by the reply above.
+      // ⚠ A later no-taskId post with NO boundary between must still stand
+      // alone — the window was spent by the reply above.
       msg({ kind: "message", authorKind: "agent", body: "unrelated later" }),
     ]);
     const s = sessions(items);
@@ -260,9 +245,8 @@ describe("groupThread", () => {
   });
 
   it("backfills the legacy seq-N request into its task-{channel}-N card as the opening entry", () => {
-    // Legacy flow: the requester's proposal (seq 50, addressed to the responder,
-    // no task id) spawned `task-c1-50`. It should be pulled into that card as the
-    // opening entry, ahead of the agent reply, and removed from the loose stream.
+    // Legacy: the requester's seq-50 proposal spawned `task-c1-50` and is pulled
+    // into that card as the opening entry, ahead of the reply.
     const t = "task-c1-50";
     const items = groupThread([
       msg({ seq: 50, kind: "message", authorKind: "user", authorUserId: "u_req", body: "the proposal", metadata: { to_user_id: "u_resp" } }),
@@ -270,7 +254,6 @@ describe("groupThread", () => {
       msg({ seq: 52, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "done reply", metadata: { taskId: t } }),
       msg({ seq: 53, kind: "task_finished", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
     ]);
-    // Just the one card — the standalone proposal was absorbed.
     expect(items).toHaveLength(1);
     const s = sessions(items);
     expect(s).toHaveLength(1);

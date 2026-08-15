@@ -25,23 +25,15 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
-/**
- * Toolbar for the KB doc editor. Extracted from `doc-editor.tsx` for
- * the §2 file-size cap. Behavior unchanged from the inlined version,
- * plus a new "table-active" group that only appears when the cursor
- * is inside a table — gives the user/agent affordances to add or
- * remove rows/columns without right-click menus.
- */
+/** Toolbar for the KB doc editor. Table group appears only inside a table. */
 
 interface ToolbarProps {
   editor: Editor;
-  /** `float` = the original viewport-fixed bottom pill (skills editor).
-   *  `header` = a flat inline row that sits in a panel header band
-   *  (knowledge-v2 entry). */
+  /** `float` = viewport-fixed bottom pill (skills editor).
+   *  `header` = flat inline row in a panel header band (knowledge-v2). */
   variant?: "float" | "header";
   /** Tailwind classes for the fixed pill's horizontal inset at md+, so the
-   *  bar centers over the content panel rather than the viewport. Defaults
-   *  to the v1 KB-detail layout offset. Only used by the `float` variant. */
+   *  bar centers over the content panel, not the viewport. `float` only. */
   toolbarInset?: string;
 }
 
@@ -58,10 +50,8 @@ export function Toolbar({
   variant = "float",
   toolbarInset = "md:left-[570px] md:right-[6px]",
 }: ToolbarProps) {
-  // Subscribe to the editor's transaction stream so mark/node active states
-  // and undo/redo availability stay fresh regardless of whether this
-  // component's parent re-renders (the `header` variant is rendered outside
-  // the `useEditor` owner, so it would otherwise never update).
+  // ⚠ Subscribe to the transaction stream, not parent renders: the `header`
+  // variant renders outside the `useEditor` owner and would never update.
   const s = useEditorState({
     editor,
     selector: ({ editor }) => ({
@@ -201,8 +191,6 @@ export function Toolbar({
     ],
   ];
 
-  // Conditional table-editing group. `useEditorState` above re-renders the
-  // toolbar on every selection change, so `s.table` is fresh on each render.
   const inTable = s.table;
   const tableGroup: ReadonlyArray<ToolbarItem> = inTable
     ? [
@@ -258,9 +246,7 @@ export function Toolbar({
     </div>
   ));
 
-  // Header variant — a flat inline row that lives in a panel header band
-  // (knowledge-v2 entry). It scrolls horizontally on narrow panels so no
-  // button is ever clipped.
+  // Header variant: scrolls horizontally on narrow panels, no button clipped.
   if (variant === "header") {
     return (
       <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
@@ -269,12 +255,9 @@ export function Toolbar({
     );
   }
 
-  // Float variant — viewport-fixed pill pinned to the bottom while the file
-  // panel scrolls (skills editor). The panel sits right of the app rail
-  // (74px) + surface margin (4px) + app sidebar (204px) + KB tree (288px) =
-  // 570px, with the surface's 6px right margin — so offset left/right to
-  // center over the panel (not the viewport) at md+. Below md the
-  // tree/sidebars collapse.
+  // Float variant — fixed pill, bottom. Default inset derives from: app rail
+  // 74 + surface margin 4 + sidebar 204 + KB tree 288 = 570px left, 6px right
+  // (surface margin). Centers over the panel, not the viewport, at md+.
   return (
     <div
       className={cn(
@@ -311,13 +294,11 @@ function ToolbarButton({
       className={cn(
         "flex h-7 w-8 shrink-0 items-center justify-center rounded-md",
         variant === "header"
-          ? // Flat icon button: muted resting ink, raised-tint hover, pressed
-            // (concave-sel) active — the app-wide compact-chrome idiom.
+          ? // Flat icon button — app-wide compact-chrome idiom.
             active
             ? "concave-sel cursor-pointer text-text-primary"
             : "text-text-secondary hover:bg-surface-raised-1 hover:text-text-primary"
-          : // Original pill styling for the float variant (skills).
-            cn("text-text-primary", active ? "btn-pressed" : "btn-light"),
+          : cn("text-text-primary", active ? "btn-pressed" : "btn-light"),
         !disabled && "cursor-pointer",
         disabled && "opacity-40"
       )}

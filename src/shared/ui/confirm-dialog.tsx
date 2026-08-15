@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-// Deep import, not the `settings-modal` barrel: the barrel also re-exports
-// SettingsModal, whose section tree reaches `next/navigation`. This dialog is a
-// leaf primitive reused by pages the desktop SPA bundles, where a `next/*`
-// module anywhere in the graph fails the build.
+// ⚠ Deep import, NOT the `settings-modal` barrel — the barrel re-exports
+// SettingsModal, whose section tree reaches `next/navigation`, and any `next/*`
+// module in the graph fails the desktop SPA build.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 
@@ -12,23 +11,17 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** Supporting copy. Newlines render as paragraph breaks. */
+  /** Newlines render as paragraph breaks. */
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Red confirm button for destructive actions. */
   destructive?: boolean;
-  /** Called when the user confirms. May be async — the dialog shows a
-   *  busy state and closes on resolve; a throw keeps it open (the
-   *  caller is expected to toast the error). */
+  /** May be async: busy state, closes on resolve. A throw keeps it open —
+   *  caller toasts the error. */
   onConfirm: () => void | Promise<void>;
 }
 
-/**
- * In-app confirmation dialog in the new design language — replaces
- * `window.confirm`. Built on ModalShell (scrim + fade/pop animation)
- * in its compact size.
- */
+/** In-app confirmation — use instead of `window.confirm`. Compact ModalShell. */
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -47,8 +40,7 @@ export function ConfirmDialog({
       await onConfirm();
       onOpenChange(false);
     } catch {
-      // Caller surfaces the error (toast); keep the dialog open so the
-      // user can retry or cancel.
+      // Caller toasts; stay open so the user can retry or cancel.
     } finally {
       setBusy(false);
     }

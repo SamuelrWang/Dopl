@@ -3,9 +3,8 @@
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Switch — the kit toggle: a pill-shaped `.concave-track` (ink-filled
- * when on) carrying a raised white thumb, the same pressed-track /
- * raised-face language as SegmentedControl.
+ * Switch — kit toggle: pill `.concave-track` (ink-filled when on) + raised
+ * thumb. Same pressed-track / raised-face language as SegmentedControl.
  */
 export function Switch({
   checked,
@@ -18,7 +17,7 @@ export function Switch({
   onChange: (next: boolean) => void;
   disabled?: boolean;
   "aria-label"?: string;
-  /** Layout-only additions (margins) — recipes stay in the kit. */
+  /** Layout-only (margins) — recipes stay in the kit. */
   className?: string;
 }) {
   return (

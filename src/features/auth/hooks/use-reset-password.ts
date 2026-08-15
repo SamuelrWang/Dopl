@@ -8,10 +8,9 @@ import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 
 type Status = "checking" | "ready" | "invalid";
 
-/** Drives the set-new-password form reached from a recovery email. The recovery
- *  link is routed through /auth/callback, which exchanges the code into a live
- *  session before forwarding here — so on mount we just confirm a session
- *  exists. We also listen for PASSWORD_RECOVERY to cover the hash-based flow. */
+/** Set-new-password form reached from a recovery email. /auth/callback already
+ *  exchanged the code into a session, so mount just confirms one exists;
+ *  PASSWORD_RECOVERY listener covers the hash-based flow too. */
 export function useResetPassword() {
   const supabase = getSupabaseBrowser();
 
@@ -62,8 +61,6 @@ export function useResetPassword() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setMessage("Password updated. Redirecting…");
-      // Stage D deleted /canvas; this reached it only through the retirement
-      // 302. A password reset is a real user path, so it names a live route.
       window.location.assign(WEB_POST_AUTH_LANDING);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");

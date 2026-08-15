@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 /**
- * ACCEPTING AN INVITATION IS A MEMBERSHIP, AND MEMBERSHIP IS SPENT IN THE APP.
- *
- * The accept used to end in `router.push('/{slug}-{publicId}')`, which the
- * retirement map 302s to `/get-started` — so the reward for accepting was a
- * download page that never mentioned the workspace. What replaces it is the
- * `dopl://open/{segment}` handoff, and the invitation's OWN states (dead,
- * signed-out) are unchanged and pinned here so the new branch cannot swallow
- * one of them.
+ * Accepting an invitation is a MEMBERSHIP, spent in the app. ⚠ Any in-app web
+ * path here is 302'd to `/get-started` by the retirement map, so the accept
+ * ends in the `dopl://open/{segment}` handoff. The invitation's own states
+ * (dead, signed-out) are pinned so the new branch cannot swallow them.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

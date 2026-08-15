@@ -1,12 +1,9 @@
 /**
- * IDENTITY + LOCUS — the renderer contract.
- *
- * Every assertion here is a claim the product now makes to an agent about who
- * and where it is, or a claim it deliberately REFUSES to make. The refusals are
- * the load-bearing half: the incident this work came from was two agents
- * spending a round arguing about which of them was which, and the failure mode
- * a wrong fix produces is an agent that is confidently wrong about its locus
- * instead of one that knows it cannot tell.
+ * IDENTITY + LOCUS — the renderer contract: what the product claims to an agent
+ * about who and where it is, and what it deliberately REFUSES to claim. ⚠ The
+ * refusals are the load-bearing half — the failure mode a wrong fix produces is
+ * an agent confidently wrong about its locus instead of one that knows it
+ * cannot tell.
  */
 
 import { describe, it, expect } from "vitest";
@@ -38,10 +35,7 @@ describe("callerStatusLine — the line that rides every response", () => {
     expect(callerStatusLine(CALLER)).toContain("runtime=desktop-session");
   });
 
-  /**
-   * The whole point of the footer over a lookup: an agent cannot fail to read
-   * a line that arrives attached to every result it asked for.
-   */
+  /** Footer over lookup: a line attached to every result cannot go unread. */
   it("is one terse line under the `caller:` key", () => {
     const line = callerStatusLine(CALLER);
     expect(line.split("\n")).toHaveLength(1);
@@ -55,9 +49,9 @@ describe("callerStatusLine — the line that rides every response", () => {
   });
 
   /**
-   * The hostname stays OFF the every-response footer: it is a per-response
-   * token cost that never changes, and a footer is one careless paste away from
-   * a channel message a peer reads. `whoami` is where it belongs.
+   * ⚠ Hostname stays OFF the every-response footer: a per-response token cost
+   * that never changes, and one careless paste from a channel message a peer
+   * reads. `whoami` is where it belongs.
    */
   it("does NOT carry the credential label", () => {
     expect(callerStatusLine(CALLER)).not.toContain("mbp.local");
@@ -70,11 +64,9 @@ describe("runtime — an OBSERVATION, never a conclusion", () => {
   });
 
   /**
-   * `unstamped` says what the server SAW. It deliberately does not say
-   * "external": an absent stamp is usually an external client, but a desktop
-   * spawn on an older build is unstamped too (the desktop's own
-   * `session-dispatch.js` calls that skew out by name), and the copy must not
-   * pick a side the server cannot see.
+   * ⚠ `unstamped` says what the server SAW, never "external": an absent stamp is
+   * usually an external client, but a desktop spawn on an older build is
+   * unstamped too, and the copy must not pick a side the server cannot see.
    */
   it.each([null, "", "desktop-session ", "DESKTOP-SESSION", "made-up"])(
     "reports `unstamped` — never `external` — for %p",
@@ -104,11 +96,10 @@ describe("sessionLines — the caller's own credential", () => {
   });
 
   /**
-   * A device label is free-form text off the mint request body
-   * (`z.string().trim().min(1).max(120)`, no charset rule), so it is exactly
-   * the shape the shared neutralizer exists for: a newline plus `##` in it
-   * would open a heading in the server's own voice, inside the answer an agent
-   * asked for BECAUSE it was unsure what to trust.
+   * ⚠ A device label is free-form text off the mint request body (length-capped,
+   * no charset rule), so a newline plus `##` opens a heading in the server's own
+   * voice — inside the answer an agent asked for BECAUSE it was unsure what to
+   * trust.
    */
   it("neutralizes a hostile credential label into one inline value", () => {
     const [line] = sessionLines({
@@ -128,10 +119,9 @@ describe("sessionLines — the caller's own credential", () => {
 
 describe("LOCUS_NOTE — what the server refuses to claim", () => {
   /**
-   * THE REFUSAL THAT MATTERS. An agent could not tell whether its counterparty
-   * was a different machine or a different account on the same machine, and no
-   * signal for it exists anywhere. Accounts are decidable (user ids); machines
-   * are not, and the note has to say so instead of letting the agent guess.
+   * ⚠ THE REFUSAL THAT MATTERS: accounts are decidable (user ids), MACHINES ARE
+   * NOT, and no signal for it exists anywhere. The note must say so instead of
+   * letting the agent guess.
    */
   it("states plainly that a peer's MACHINE is not knowable from here", () => {
     expect(LOCUS_NOTE).toContain("not knowable from here");

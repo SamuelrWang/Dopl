@@ -5,18 +5,11 @@ import { workspaceSegment } from "@/features/workspaces/url";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 /**
- * POST /api/workspaces/ensure-default — return the caller's default
- * (oldest-owned) workspace, provisioning it if they have none. The HTTP
- * twin of the boot path `src/app/canvas/page.tsx:32` and the auth
- * callback take: `GET /api/workspaces` lists but never provisions, so a
- * brand-new SPA session had nowhere to land.
- *
- * Idempotent — `ensureDefaultWorkspace` returns the existing workspace
- * untouched and converges on the unique-violation race, so a retry after
- * a partial failure is safe.
- *
- * `segment` is the canonical `{slug}-{publicId}` the client routes on, so
- * the caller doesn't have to re-derive it from the workspace fields.
+ * POST — the caller's default (oldest-owned) workspace, provisioning it if they have none.
+ * `GET /api/workspaces` lists but never provisions, so a brand-new SPA session had nowhere to land.
+ * Idempotent: `ensureDefaultWorkspace` returns an existing workspace untouched and converges on
+ * the unique-violation race, so a retry after a partial failure is safe.
+ * `segment` is the canonical `{slug}-{publicId}` the client routes on.
  */
 export const POST = withUserAuth(async (_request, { userId }) => {
   try {

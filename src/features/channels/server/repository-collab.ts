@@ -9,23 +9,19 @@ import type {
 } from "./collab-dto";
 
 /**
- * Explicit row caps. PostgREST applies its own `max-rows` server setting to
- * an un-limited select and truncates SILENTLY (no error, no marker), so any
- * read whose result feeds a derived count states its bound here instead of
- * inheriting an invisible one. Each is far above a realistic workspace and
- * exists to make truncation loud (a clipped list is a wrong online count, not
- * a crash).
+ * ⚠ Explicit row caps. PostgREST applies its own `max-rows` to an un-limited
+ * select and truncates SILENTLY — no error, no marker — so any read feeding a
+ * derived count states its bound HERE rather than inheriting an invisible one.
+ * A clipped list is a wrong online count, not a crash.
  */
 const CONSENT_LIST_LIMIT = 200;
 const PRESENCE_ROWS_LIMIT = 5_000;
 const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
 
 /**
- * Pure data access for the v1.2 collaboration tables (consent requests,
- * trust rules, presence) plus the presence read-helpers the channels reads
- * hydrate members / online counts with. Kept out of `repository.ts` so that
- * file stays under the 500-line cap. Every function uses the service-role
- * admin client (RLS-bypassing) — visibility + authz live in the services.
+ * Pure data access for the collaboration tables (consent requests, trust rules,
+ * presence) plus the presence read-helpers. ⚠ Service-role admin client
+ * (RLS-bypassing) — visibility + authz live in the SERVICES.
  */
 
 // ─── Consent requests ───────────────────────────────────────────────
@@ -60,9 +56,9 @@ export async function insertConsentRequest(
 }
 
 /**
- * Lazy expiry sweep, scoped to one operator: flip their elapsed pending rows
- * to 'expired' before a read so the inbox never shows a stale prompt. Cheap —
- * the (operator_user_id, status) index makes it a no-op when nothing elapsed.
+ * Lazy expiry sweep for one operator: flip elapsed pending rows to 'expired'
+ * before a read so the inbox never shows a stale prompt. The
+ * (operator_user_id, status) index makes it a no-op when nothing elapsed.
  */
 export async function expireStalePending(operatorUserId: string): Promise<void> {
   const db = supabaseAdmin();
@@ -78,15 +74,12 @@ export async function expireStalePending(operatorUserId: string): Promise<void> 
 
 interface ConsentListOpts {
   /**
-   * REQUIRED, and the reason it is not optional: a consent row is written with
-   * `operator_user_id: <the operator>` and nothing else that identifies WHOSE
-   * workspace raised it, so an operator-only filter returns their pending rows
-   * from EVERY workspace they belong to. This read runs under `supabaseAdmin()`
-   * (service role), so RLS is not a backstop — and RLS would scope to the
-   * operator anyway, which is not the same bound. The sidebar's pending badge
-   * is built from this list, and it counted another workspace's requests until
-   * 2026-08-10. `listTrustRules` below has always filtered on both columns;
-   * this is that shape, restored.
+   * ⚠ REQUIRED, not optional. A consent row carries `operator_user_id` and
+   * nothing else naming WHOSE workspace raised it, so an operator-only filter
+   * returns pending rows from EVERY workspace they belong to — and the sidebar's
+   * pending badge is built from this list. This read runs under
+   * `supabaseAdmin()` (service role), so RLS is no backstop; RLS would scope to
+   * the operator anyway, which is not the same bound.
    */
   workspaceId: string;
   channelId?: string;
@@ -128,16 +121,15 @@ export async function findConsentById(
 }
 
 /**
- * The row already raised for one trigger, whatever its status. The de-dupe
- * key is (operator, channel, kind, message_seq) — the operator is part of it
- * because every recipient of a message raises their OWN request against the
- * same seq, so a channel-wide key would collide across teammates.
+ * The row already raised for one trigger, whatever its status. De-dupe key is
+ * (operator, channel, kind, message_seq) — ⚠ the operator is part of it because
+ * every recipient raises their OWN request against the same seq, so a
+ * channel-wide key collides across teammates.
  *
- * This is the indexed replacement for scanning the operator's whole consent
- * history in JS: those rows carry up to 32KB of body_preview + proposed_reply
- * EACH and `auto_allowed` ones are never swept, so a trusted teammate's
- * traffic would grow the scan without bound. A partial unique index backs
- * this key, so `limit(1)` is belt-and-braces for rows predating it.
+ * ⚠ Indexed, never a JS scan of the operator's consent history: those rows carry
+ * up to 32KB of body_preview + proposed_reply EACH and `auto_allowed` ones are
+ * never swept, so a trusted teammate's traffic grows the scan without bound.
+ * A partial unique index backs the key; `limit(1)` covers rows predating it.
  */
 export async function findConsentByTrigger(
   operatorUserId: string,
@@ -167,16 +159,15 @@ type ConsentDecisionPatch = {
 };
 
 /**
- * Compare-and-swap the decision: the UPDATE only lands while the row is
- * still `pending`, and a no-op returns null so the caller can 409.
+ * Compare-and-swap the decision: the UPDATE lands only while the row is still
+ * `pending`; a no-op returns null so the caller can 409.
  *
- * This surface is explicitly multi-writer — the desktop's native dialog, its
- * alert notification, and the web card all race for the same row, and the
- * desktop additionally mirrors a locally-made decision back with a PATCH. A
- * read-then-write would let a late Allow silently overwrite the human's Deny
- * (the whole point of the gate) and would re-stamp `decided_at` on an already
- * settled request. The `.eq("status","pending")` guard makes first-writer-wins
- * a property of the database, not of the interleaving.
+ * ⚠ Explicitly multi-writer — the desktop's native dialog, its alert
+ * notification and the web card all race for this row, and the desktop mirrors
+ * a local decision back with a PATCH. A read-then-write lets a late Allow
+ * overwrite the human's Deny and re-stamps `decided_at` on a settled request.
+ * The `.eq("status","pending")` guard makes first-writer-wins a property of the
+ * DATABASE, not of the interleaving.
  */
 export async function updateConsentDecision(
   id: string,
@@ -195,18 +186,15 @@ export async function updateConsentDecision(
 }
 
 /**
- * Retire ONE `auto_allowed` row whose standing trust rule no longer holds
- * (C-19). Compare-and-swap on `status = 'auto_allowed'` for exactly the reason
- * `updateConsentDecision` CASes on `pending`: this surface is multi-writer, so
- * a revocation sweep must never clobber a status some other writer already
- * moved. A no-op returns null and the caller re-reads rather than trusting its
- * own stale copy.
+ * Retire ONE `auto_allowed` row whose standing trust rule no longer holds.
+ * ⚠ Compare-and-swap on `status = 'auto_allowed'` for the same reason
+ * `updateConsentDecision` CASes on `pending`: multi-writer surface, so a
+ * revocation sweep must never clobber a status another writer already moved.
  *
- * `decided_by` / `decided_at` are LEFT ALONE — "a trust rule allowed this row,
+ * ⚠ `decided_by` / `decided_at` are LEFT ALONE — "a trust rule allowed this row,
  * at this time" stays true and is the audit trail. `expires_at` is null on an
- * auto-allow (which is *why* the row never elapsed on its own), so stamping it
- * here records the moment the authority died: the row reads "trust allowed it,
- * then the rule was gone before anything consumed it."
+ * auto-allow (which is why it never elapsed), so stamping it here records the
+ * moment the authority died.
  */
 export async function expireRevokedAutoAllow(
   id: string
@@ -334,9 +322,8 @@ export interface DerivedPresence {
 }
 
 /**
- * Presence for every member of a workspace, keyed by user id, with `online`
- * derived against the 90s window. Drives the roster's online dots + the
- * per-channel online counts. One indexed query for the whole page.
+ * Presence for every workspace member, keyed by user id, `online` derived
+ * against PRESENCE_ONLINE_WINDOW_MS. One indexed query for the whole page.
  */
 export async function presenceForWorkspace(
   workspaceId: string

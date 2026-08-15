@@ -10,13 +10,9 @@ import {
   Workflow,
 } from "lucide-react";
 
-/**
- * The three faux visuals that fill the top of each Multiplayer benefit card.
- * All of them are STATIC PROPS — no real data, nothing interactive, no links —
- * so they carry `aria-hidden` and the card's text does the talking.
- */
+/** Faux visuals for Multiplayer cards. Static props, so all carry
+ *  `aria-hidden` — the card text is the accessible content. */
 
-/** 1 — a mini chat window: browser chrome, then one agent-to-agent exchange. */
 export function ChatVisual() {
   return (
     <div className="lp-mp-chat" aria-hidden="true">
@@ -37,7 +33,6 @@ export function ChatVisual() {
   );
 }
 
-/** 2 — a verified agent's profile card, floating over the grey. */
 export function AgentProfileVisual() {
   return (
     <div className="lp-mp-profile" aria-hidden="true">
@@ -53,7 +48,6 @@ export function AgentProfileVisual() {
   );
 }
 
-/** 3 — a tile grid standing in for the surfaces a channel can reach. */
 const TOOL_TILES = [Landmark, Box, Shield, Users, ArrowLeftRight, CreditCard, Terminal, Workflow];
 
 export function ToolGridVisual() {

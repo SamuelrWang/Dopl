@@ -1,8 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-// Deep import, not the `settings-modal` barrel: the barrel also re-exports
-// SettingsModal, whose delete-account section pulls in `next/navigation` and
+// ⚠ Deep import, not the `settings-modal` barrel: the barrel re-exports
+// SettingsModal, whose delete-account section pulls `next/navigation` and
 // would drag Next into the desktop SPA's import graph.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
@@ -19,20 +19,18 @@ interface Props {
   base: KnowledgeBase;
   currentUserId: string;
   role: Role;
-  /** Active folders in the base — each gets an agent-facing description
-   *  editor in the Descriptions section. */
+  /** Active folders; each gets a description editor in Descriptions. */
   folders: KnowledgeFolder[];
-  /** Called after a folder description saves so the parent can refresh
-   *  its tree snapshot. */
+  /** Fires after a folder description saves, so the parent can refresh its
+   *  tree snapshot. */
   onFoldersChanged?: () => void;
   /** Router bindings for the form's slug-change / delete moves. */
   routing: KnowledgeRouting;
 }
 
 /**
- * Per-KB settings dialog in the new design language: the shared
- * ModalShell (scrim + fade/pop-in card + light token scope) in its
- * narrow single-pane size, wrapping the existing token-based form.
+ * Per-KB settings dialog: shared ModalShell (narrow single-pane, light token
+ * scope) wrapping the token-based form.
  */
 export function BaseSettingsModal({
   open,

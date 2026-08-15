@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * RemoteConnect — the "Connect → log in" block. Surfaces the hosted MCP
- * endpoint URL + the Claude Code HTTP command. No API key: the client runs the
- * OAuth dance (browser sign-in) on first connect, and server updates roll out
- * automatically (nothing installed locally).
- *
- * Rendered in the settings + overview surfaces (the canvas connection panel
- * that also mounted it retired with the page).
+ * The "Connect → log in" block: hosted MCP endpoint URL + the Claude Code HTTP
+ * command. No API key — the client runs the OAuth dance on first connect and
+ * server updates roll out automatically. Rendered in settings + overview.
  * Origin is read client-side to match the live deployment.
  */
 

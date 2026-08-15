@@ -9,10 +9,8 @@ if (!supabaseUrl) {
   throw new Error("NEXT_PUBLIC_SUPABASE_URL environment variable is not set");
 }
 
-/**
- * Server-side admin client (service role key, bypasses RLS).
- * Lazy-initialized to avoid errors when this module is evaluated on the client.
- */
+/** Server-side admin client (service role key, ⚠ bypasses RLS). Lazy-initialized
+ *  so evaluating this module on the client does not throw. */
 let _admin: SupabaseClient | null = null;
 
 export function supabaseAdmin(): SupabaseClient {
@@ -26,10 +24,8 @@ export function supabaseAdmin(): SupabaseClient {
   return _admin;
 }
 
-/**
- * Create an auth-aware Supabase client for Server Components and API routes.
- * Reads/writes session cookies for authentication.
- */
+/** Auth-aware Supabase client for Server Components and API routes; reads and
+ *  writes session cookies. */
 export function createServerSupabaseClient(cookieStore: {
   getAll(): { name: string; value: string }[];
   set(name: string, value: string, options: CookieOptions): void;
@@ -45,8 +41,8 @@ export function createServerSupabaseClient(cookieStore: {
             cookieStore.set(name, value, options)
           );
         } catch {
-          // setAll can be called from Server Components where cookies are read-only.
-          // This is fine — the middleware handles the cookie refresh.
+          // setAll can fire from Server Components, where cookies are
+          // read-only. Fine — the middleware handles the refresh.
         }
       },
     },

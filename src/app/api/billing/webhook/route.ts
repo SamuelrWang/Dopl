@@ -20,9 +20,8 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid signature";
     const ip = request.headers.get("x-forwarded-for") || "unknown";
-    // Log signature failures so we can detect probing / tampering — but never
-    // echo Stripe's raw verification error back to the caller (it can leak
-    // internals / aid tampering). The client gets a static message.
+    // ⚠ Log signature failures for probing/tampering detection, but NEVER echo Stripe's raw
+    // verification error back — it leaks internals and aids tampering.
     console.error(
       `[webhook] Invalid Stripe signature from ${ip} at ${new Date().toISOString()}: ${message}`
     );

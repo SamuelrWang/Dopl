@@ -1,23 +1,17 @@
 /**
  * F-163 — the option-forwarding contract, asserted against what TanStack
- * ACTUALLY RESOLVES rather than what the hook appears to pass.
+ * ACTUALLY RESOLVES, not what the hook appears to pass.
  *
- * The bug this pins was invisible to any test that checked "the option is
- * forwarded": `staleTime: opts.staleTime` DID forward, faithfully, including
- * the `undefined` of every caller that named nothing. TanStack merges options
- * by spread, so that `undefined` won over `QUERY_DEFAULT_OPTIONS.staleTime`
- * and the app's documented 30s policy was inert on both clients for every read
- * in the product.
+ * ⚠ A "was the option forwarded?" test cannot catch this: `staleTime:
+ * opts.staleTime` DID forward, including the `undefined` of every caller that
+ * named nothing, and spread-merge made that `undefined` beat
+ * `QUERY_DEFAULT_OPTIONS.staleTime`.
  *
- * So the assertions here are of two kinds and both are required:
- *   1. `defaultQueryOptions()` — the RESOLVED value a query runs with. This is
- *      the merge the bug lived in, so it is the only place the default can be
- *      proven to survive.
- *   2. `QueryObserver` — the CONSEQUENCE. A fresh cache entry must not be
- *      refetched on subscribe, and an explicit `staleTime: 0` must still force
- *      one. `0` is the trap: it is falsy, and treating it as "unset" would
- *      silently hand the consent inbox / invite link / channel transcript a
- *      30s cache they explicitly refused.
+ * Both assertion kinds are required:
+ *   1. `defaultQueryOptions()` — the RESOLVED value, the only place the default
+ *      can be proven to survive the merge.
+ *   2. `QueryObserver` — the CONSEQUENCE. ⚠ `0` is the trap: falsy, and treating
+ *      it as "unset" hands a 30s cache to callers that explicitly refused one.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -40,14 +34,13 @@ interface Body {
   ok: boolean;
 }
 
-/** A client carrying the REAL app defaults — the same object the web
- *  `QueryProvider` and the desktop SPA's `createQueryClient` both mount. */
+/** ⚠ REAL app defaults — the same object web `QueryProvider` and the SPA's
+ *  `createQueryClient` both mount. */
 const appClient = () => new QueryClient({ defaultOptions: QUERY_DEFAULT_OPTIONS });
 
 const okRequest: ApiRequestFn = (async () => ({ ok: true })) as ApiRequestFn;
 
-/** What TanStack runs the query with: the client default merged with the
- *  hook's options. */
+/** What TanStack runs with: client default merged with the hook's options. */
 function resolved(opts: UseApiQueryOpts<Body> = {}, client = appClient()) {
   return client.defaultQueryOptions(
     buildApiQueryOptions<Body>(okRequest, PATH, opts)
@@ -56,20 +49,17 @@ function resolved(opts: UseApiQueryOpts<Body> = {}, client = appClient()) {
 
 describe("the client default survives an unspecified option", () => {
   it("resolves staleTime to the app default when the caller names none", () => {
-    // The assertion that would have caught F-163. Checking "staleTime was
-    // passed through" would not have: it was, as `undefined`, which is
-    // precisely what deleted the default.
+    // ⚠ Checking "staleTime was passed through" would NOT catch F-163: it was,
+    // as `undefined`, which is precisely what deleted the default.
     expect(DEFAULT_STALE_TIME).toBe(30_000);
     expect(resolved().staleTime).toBe(DEFAULT_STALE_TIME);
-    // Spelled out, because these are the two values the bug produced.
     expect(resolved().staleTime).not.toBeUndefined();
     expect(resolved().staleTime).not.toBe(0);
   });
 
   it("omits every unnamed option from the object entirely", () => {
-    // The structural half. A key present with value `undefined` overrides the
-    // default; only ABSENCE falls through. This holds the fix in place for
-    // every option, not just the one that was reported.
+    // ⚠ Structural half: a key present with value `undefined` overrides the
+    // default; only ABSENCE falls through. Holds for every option.
     const built = buildApiQueryOptions<Body>(okRequest, PATH, {});
 
     expect("staleTime" in built).toBe(false);
@@ -79,9 +69,9 @@ describe("the client default survives an unspecified option", () => {
   });
 
   it("leaves the rest of the default policy intact", () => {
-    // gcTime must stay >= the persisted cache's maxAge or restored entries are
-    // collected before they can be used (query-defaults.ts), and the retry
-    // predicate is what stops 4xx being retried.
+    // ⚠ gcTime must stay >= the persisted cache's maxAge or restored entries are
+    // collected before use (query-defaults.ts); the retry predicate stops 4xx
+    // retries.
     expect(resolved().gcTime).toBe(QUERY_CACHE_MAX_AGE_MS);
     expect(typeof resolved().retry).toBe("function");
   });
@@ -110,8 +100,7 @@ describe("an explicit option still wins", () => {
   });
 });
 
-/** Subscribe an observer the way a mounting component does, and report whether
- *  the query fetched. */
+/** Subscribe like a mounting component; report whether the query fetched. */
 async function fetchesOnSubscribe(
   client: QueryClient,
   request: ApiRequestFn,
@@ -122,7 +111,7 @@ async function fetchesOnSubscribe(
     buildApiQueryOptions<Body>(request, PATH, opts)
   );
   const unsubscribe = observer.subscribe(() => {});
-  // One macrotask: enough for notifyManager to flush the mount dispatch.
+  // ⚠ One macrotask: enough for notifyManager to flush the mount dispatch.
   await new Promise((r) => setTimeout(r, 0));
   unsubscribe();
 }
@@ -130,9 +119,7 @@ async function fetchesOnSubscribe(
 describe("what that means on a mount", () => {
   it("serves a fresh cache entry without refetching it", async () => {
     const client = appClient();
-    // Written now — inside the 30s window. Under F-163 this refetched anyway,
-    // which is how the bug was found: the boot answer was seeded into the
-    // shell's key and re-fetched one commit later regardless.
+    // Inside the 30s window. Under F-163 this refetched anyway.
     client.setQueryData(apiQueryKey(PATH), { ok: true });
     const request = vi.fn(async () => ({ ok: true })) as unknown as ApiRequestFn;
 
@@ -160,9 +147,8 @@ describe("what that means on a mount", () => {
 
     await fetchesOnSubscribe(client, request);
 
-    // The persisted-cache case: a relaunch restores an entry whose
-    // `dataUpdatedAt` predates the process exit, so it is stale on arrival and
-    // revalidates. Caching is stale-WHILE-revalidate, not stale-instead-of.
+    // Persisted-cache case: a restored entry's `dataUpdatedAt` predates the
+    // process exit, so it is stale on arrival. Stale-WHILE-revalidate.
     expect(request).toHaveBeenCalledTimes(1);
   });
 });

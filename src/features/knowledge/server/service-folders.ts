@@ -25,10 +25,8 @@ import {
 } from "./service-shared";
 import { getBaseById } from "./service-bases";
 
-/**
- * Knowledge folder reads + writes, plus `getBaseTree` (the base + folder
- * + entry-metadata snapshot shared by REST and the MCP get_tree op).
- */
+/** Folder reads + writes, plus `getBaseTree` — the snapshot shared by REST and
+ *  the MCP get_tree op. */
 
 export async function listFolders(
   ctx: KnowledgeContext,
@@ -39,15 +37,13 @@ export async function listFolders(
 }
 
 /**
- * Snapshot of a base + its folders + entries (metadata only — bodies
- * stripped). Used by `GET /api/knowledge/bases/[baseId]/tree` and the
- * MCP get_tree op. Lives here so REST and MCP share one composition and
- * one auth path.
+ * Base + folders + entries, metadata only (bodies stripped). ⚠ Lives here so
+ * `GET /api/knowledge/bases/[baseId]/tree` and MCP get_tree share ONE
+ * composition and ONE auth path.
  *
- * Entry paging is opt-in (`entryLimit` + `entryOffset`): folders always
- * ship in full (they're the light structure), entries page. Without
- * `entryLimit` the response is the legacy full snapshot — no extra
- * fields, no count query.
+ * Entry paging is opt-in (`entryLimit` + `entryOffset`); folders always ship
+ * in full. Without `entryLimit`: full snapshot, no extra fields, no count
+ * query.
  */
 export async function getBaseTree(
   ctx: KnowledgeContext,
@@ -121,9 +117,8 @@ export async function updateFolder(
   if (expectedUpdatedAt && folder.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, folder.updatedAt);
   }
-  // Atomic CAS gate (closes the read→write race the pre-check above
-  // can't): null means a concurrent write landed; re-fetch for the
-  // actual version and surface the stale conflict.
+  // Atomic CAS gate closing the read→write race the pre-check can't: null =
+  // concurrent write landed; re-fetch actual version, surface stale conflict.
   const saved = await repo.updateFolderRow(id, patch, expectedUpdatedAt);
   if (saved === null) {
     const fresh = await getFolderInternal(ctx, id, false);
@@ -151,9 +146,8 @@ export async function moveFolder(
         `Cannot move folder ${id} across knowledge bases`
       );
     }
-    // Cycle pre-check: walk the destination's ancestry; if it contains
-    // the folder being moved, we'd create a loop. The DB trigger is the
-    // safety net but this gives the caller a clean domain error first.
+    // Destination ancestry containing the moved folder = a loop. DB trigger is
+    // the safety net; this gives the caller a clean domain error first.
     const ancestors = await repo.listFolderAncestors(newParent.id);
     if (ancestors.some((a) => a.id === folder.id)) {
       throw new FolderCycleError(folder.id, newParent.id);
@@ -166,11 +160,7 @@ export async function moveFolder(
   });
 }
 
-/**
- * PERMANENTLY delete a folder and its whole subtree (descendant folders +
- * their entries). No trash, no restore (2026-08-07). Gates unchanged from
- * the old soft-delete path.
- */
+/** PERMANENT delete of a folder and its whole subtree. No trash, no restore. */
 export async function deleteFolder(
   ctx: KnowledgeContext,
   id: string
@@ -178,8 +168,8 @@ export async function deleteFolder(
   const folder = await getFolderInternal(ctx, id, false);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
-  // F-10: honor the parent base's agent-read-only flag on the by-id delete
-  // route too (an agent API key can hit this directly, not just via MCP).
+  // F-10: honor the parent base's agent-read-only flag here too — an agent
+  // API key can hit this route directly, not only via MCP.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.hardDeleteFolder(ctx.workspaceId, id);

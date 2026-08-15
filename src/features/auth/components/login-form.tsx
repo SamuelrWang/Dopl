@@ -6,26 +6,18 @@ import { useLoginActions } from "../hooks/use-login";
 import { LoginFormCore } from "./login-form-core";
 import type { LoginMode } from "../hooks/use-login-core";
 
-/** Left column of the login screen: email/password form with Google/GitHub
- *  social sign-in. Light theme.
+/** Next binding for `./login-form-core` (markup + state machine live there):
+ *  supabase actions, `next/link` legal links, mode switch as ROUTE change.
  *
- *  The markup and the state machine live in `./login-form-core` — this file is
- *  only the Next binding (supabase-backed actions, `next/link` legal links, and
- *  the mode switch as a ROUTE change), so the desktop SPA's signed-out screen
- *  renders the identical form over the Electron bridge.
- *
- *  No `brand`: on the web the lockup lives in the page's upper-left corner
- *  (`./login-screen` → `AuthSplitLayout`'s `brand`), not at the top of this
- *  column. The desktop binding still passes one. */
+ *  No `brand` — web lockup lives page upper-left (`./login-screen` →
+ *  `AuthSplitLayout` `brand`). Desktop binding does pass one. */
 export function LoginForm({ defaultMode }: { defaultMode: LoginMode }) {
   const actions = useLoginActions();
   const searchParams = useSearchParams();
 
-  // THE SWITCH CARRIES THE QUERY. `?redirectTo=` is the whole reason a deep
-  // link (an invite, a join token, an OAuth consent) survives a sign-in, and
-  // `useLoginActions` reads it off the URL — so a switch that navigated to a
-  // BARE `/signup` would silently drop the return trip for exactly the visitor
-  // who was sent here from somewhere. Same for `installCluster`.
+  // ⚠ Switch must carry the query. `useLoginActions` reads `?redirectTo=` (and
+  // `installCluster`) off the URL; navigating to a BARE `/signup` silently
+  // drops the deep link for visitors who arrived from one.
   const query = searchParams.toString();
   const href = (mode: LoginMode) =>
     `${mode === "signup" ? "/signup" : "/login"}${query ? `?${query}` : ""}`;

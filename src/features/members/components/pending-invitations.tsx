@@ -15,11 +15,9 @@ interface Props {
   teams: TeamView[];
 }
 
-/**
- * Pending-invitations banner above the members list (admin only). Each
- * row shows the invitee's email, invited role, pre-assigned team chips,
- * send time, and a revoke button. Empty state is owned by the parent.
- */
+/** Pending-invitations banner above the members list, admin only: email,
+ *  invited role, pre-assigned team chips, send time, revoke. Empty state is
+ *  the parent's. */
 export function PendingInvitations({
   workspaceSlug,
   invitations,
@@ -27,20 +25,15 @@ export function PendingInvitations({
 }: Props) {
   const { revoke } = useInvitationWrites(workspaceSlug);
   const [error, setError] = useState<string | null>(null);
-  // The invitation a confirm is open for. Revoking is a hard delete of the
-  // row — every destructive action in the app asks first.
+  // Invitation a confirm is open for. Revoke is a hard delete of the row.
   const [revokeTarget, setRevokeTarget] = useState<WorkspaceInvitationView | null>(
     null
   );
   const teamById = new Map(teams.map((t) => [t.id, t]));
 
-  /**
-   * The row leaves the list in `onMutate` and the dialog closes on the click,
-   * so the confirm does not have to await anything to be believed. A failure
-   * restores the row from the layer's snapshot; the banner still names the
-   * server's reason, because ConfirmDialog swallows a throw and only keeps
-   * itself open.
-   */
+  /** Row leaves in `onMutate` and the dialog closes on click, so the confirm
+   *  awaits nothing. A failure restores the row from the snapshot; the banner
+   *  names the server's reason, since ConfirmDialog swallows the throw. */
   async function revokeInvitation(invitation: WorkspaceInvitationView) {
     setError(null);
     setRevokeTarget(null);

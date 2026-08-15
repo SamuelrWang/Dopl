@@ -117,7 +117,6 @@ describe("getWorkspaceEntitlements — solo", () => {
     expect(e.objectCap).toBeNull();
     expect(e.canCreateObjects).toBe(true);
     expect(e.chatsWindowDays).toBeNull();
-    // Solo is flat — no per-seat concept.
     expect(e.seatCount).toBeNull();
   });
 
@@ -322,10 +321,9 @@ describe("entitlementDeniedBody", () => {
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
-  // GAP-11, as re-decided by the retirement plan (D1): API-first clients (MCP
-  // agents) follow this URL literally, so it must name a page that both
-  // SURVIVES the website retirement and can take money. `/canvas?billing=…` is
-  // on the RETIRE list; `/pricing` is a marketing page that sells nothing.
+  // ⚠ GAP-11 / D1: API-first clients (MCP agents) follow this URL literally,
+  // so it must name a page that SURVIVES retirement and can take money.
+  // `/canvas?billing=…` RETIRES; `/pricing` sells nothing.
   it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {
     const body = entitlementDeniedBody();
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);

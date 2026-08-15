@@ -1,15 +1,9 @@
 /**
- * `/billing/{segment}` — the gate, the resolution, and what the URL is allowed
- * to make the page do.
- *
- * This is the page money flows through after the website retires, and it is
- * reached by people who are frequently NOT signed in (a first-time payer's
- * browser has never seen Dopl) and by URLs minted days earlier by Stripe. So
- * the three things pinned here are the three that silently cost a payment:
+ * `/billing/{segment}` — the three properties that silently cost a payment:
  *   1. a signed-out visit bounces to /login and comes back WITH ITS QUERY;
- *   2. a workspace the caller cannot reach 404s like one that does not exist;
- *   3. `?billing=success` reaches the pane as the poll signal, and
- *      `?billing=upgrade&plan=…` opens that plan's checkout — nothing else does.
+ *   2. an unreachable workspace 404s like a nonexistent one;
+ *   3. `?billing=success` reaches the pane as the poll signal and `?billing=upgrade&plan=…`
+ *      opens that plan's checkout — nothing else does.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -38,8 +32,7 @@ vi.mock("@/features/workspaces/server/segment", () => ({
 vi.mock("@/features/workspaces/server/service", () => ({
   resolveMembershipOrThrow: mocks.resolveMembershipOrThrow,
 }));
-// Stubbed so the page's own decisions are observable as props, without pulling
-// Stripe and the browser-only panes into a node test.
+// Stubbed so the page's decisions are observable as props, without Stripe or browser-only panes.
 vi.mock("@/features/billing/components/billing-page-screen", () => ({
   BillingPageScreen: () => null,
 }));
@@ -78,7 +71,7 @@ async function render(
   return element.props;
 }
 
-/** The thrown control-flow marker (`redirect()` / `notFound()`). */
+/** Thrown control-flow marker (`redirect()` / `notFound()`). */
 async function outcome(
   query: Record<string, string | string[] | undefined> = {},
   segment: string = SEGMENT
@@ -105,10 +98,8 @@ describe("the auth gate", () => {
   });
 
   it("carries the QUERY through the bounce — the first-time-payer case", async () => {
-    // A brand-new payer follows `?billing=upgrade&plan=solo` out of the desktop
-    // app in a browser that has never signed in. If the query does not ride
-    // along in `redirectTo`, they land on a plan list after signing in and the
-    // checkout they already chose never opens.
+    // Without the query in `redirectTo`, a new payer lands on the plan list and the checkout
+    // they already chose never opens.
     mocks.getUser.mockResolvedValue(null);
     expect(await outcome({ billing: "upgrade", plan: "solo" })).toBe(
       `REDIRECT:/login?redirectTo=${encodeURIComponent(
@@ -126,9 +117,7 @@ describe("the auth gate", () => {
 
 describe("segment resolution", () => {
   it("404s an unreachable segment — the same answer as a nonexistent one", async () => {
-    // Membership-scoped resolution: a workspace the caller is not a member of
-    // and a workspace that does not exist must be indistinguishable, or the
-    // page is a workspace-existence oracle.
+    // Non-member and nonexistent must be indistinguishable, or the page is an existence oracle.
     mocks.resolveWorkspaceSegmentForUser.mockResolvedValue(null);
     expect(await outcome({}, "someone-elses-ws-000000000000")).toBe("NOT_FOUND");
   });
@@ -152,17 +141,14 @@ describe("segment resolution", () => {
     const props = await render();
     expect(props.workspaceId).toBe("ws-1");
     expect(props.workspaceName).toBe("Acme");
-    // Gating (who may buy / manage) is the pane's, from a server-resolved role
-    // — so a viewer never sees a purchase button flash before a fetch lands.
+    // Role is server-resolved so a viewer never sees a purchase button flash before a fetch.
     expect(props.role).toBe("viewer");
   });
 });
 
 describe("what the URL is allowed to do", () => {
   it("arms the post-checkout poll on ?billing=success", async () => {
-    // `plans-billing-core` only runs its 20×1s status poll when it is handed a
-    // non-null `billingReturn`. Drop this and somebody who just paid stares at
-    // a Starter plan until they reload.
+    // ⚠ `plans-billing-core` runs its 20×1s status poll only on a non-null `billingReturn`.
     expect((await render({ billing: "success", session_id: "cs_1" })).billingReturn).toBe(
       "success"
     );
@@ -199,8 +185,7 @@ describe("what the URL is allowed to do", () => {
   });
 
   it("ignores a bare ?plan= with no upgrade intent", async () => {
-    // Only an explicit "sell me this" opens a payment form. A stray param on a
-    // success return must not drop the payer back into checkout.
+    // A stray param on a success return must not drop the payer back into checkout.
     expect((await render({ plan: "solo" })).initialCheckoutPlan).toBeNull();
     expect(
       (await render({ billing: "success", plan: "solo" })).initialCheckoutPlan
@@ -208,10 +193,7 @@ describe("what the URL is allowed to do", () => {
   });
 
   it("opens on Usage for a bare visit and on Billing mid-transaction", async () => {
-    // The tab is resolved HERE, on the server, so a shared `?tab=` link and a
-    // Stripe return both decide the FIRST paint rather than a flash of the
-    // wrong pane. `?billing=` in any of its three values means the visitor was
-    // sent here by a payment flow.
+    // Resolved server-side so `?tab=` and a Stripe return decide the FIRST paint, not a flash.
     expect((await render({})).initialTab).toBe("usage");
     expect((await render({ billing: "upgrade" })).initialTab).toBe("billing");
     expect((await render({ billing: "success" })).initialTab).toBe("billing");
@@ -224,10 +206,8 @@ describe("what the URL is allowed to do", () => {
   });
 
   it("keeps a payment intent on Billing even when ?tab= says otherwise", async () => {
-    // `?billing=success&tab=usage` is not a preference — it is what a checkout
-    // return BECOMES once the shell writes `?tab=` on a click. Resolving it to
-    // Usage strands the payer: the post-payment poll lives in the Billing pane,
-    // so nothing would ever correct their stale Starter plan.
+    // ⚠ `?billing=success&tab=usage` is what a checkout return BECOMES once the shell writes
+    // `?tab=`. Resolving it to Usage strands the payer — the poll lives in the Billing pane.
     expect(
       (await render({ tab: "usage", billing: "success" })).initialTab
     ).toBe("billing");

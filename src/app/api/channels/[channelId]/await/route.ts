@@ -15,30 +15,23 @@ import { AwaitQuerySchema } from "@/features/channels/schema";
 import { DEFAULT_AWAIT_TIMEOUT_MS } from "@/features/channels/constants";
 
 /**
- * Long-poll for new messages. Validates channel access up front, then holds
- * on `seq > since` (~1.5s ticks, capped by `timeoutMs` <= 50s) and returns as
- * soon as anything arrives — else `{ messages: [], timedOut: true }` so the
- * caller re-polls with the same cursor. The hold loop, its existence-check
- * tick and its access-recheck cadence live in `service-await.ts`
- * (`awaitNewMessages`); a mid-hold soft-delete or membership revocation ends
- * the hold with a 404 and never returns messages.
+ * Long-poll for new messages. Validates access up front, then holds on `seq > since` (~1.5s
+ * ticks, capped by `timeoutMs` <= 50s); on nothing it answers `{ messages: [], timedOut: true }`
+ * so the caller re-polls with the same cursor. Hold loop + existence-check tick + access-recheck
+ * cadence live in `service-await.ts › awaitNewMessages`.
+ * ⚠ A mid-hold soft-delete or membership revocation ends the hold with a 404 and NEVER returns
+ * messages.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * One line per hold so the Q8 egress diet is measurable in production
- * (queries-per-hold is the whole point of the change). Set
- * `DOPL_AWAIT_DIAG=0` to silence it.
- *
- * FIX L6 — EVERY hold logs, including one that ends badly. This used to sit
- * inside the `try` after `awaitNewMessages` returned, so a hold ended by a
- * mid-hold revocation or soft-delete (a `ChannelNotFoundError` → 404) emitted
- * nothing at all: the metric covered only the holds that finished cleanly,
- * which is the wrong half of the population to be watching during an egress
- * incident. It now runs from a `finally` and names the OUTCOME, and the counts
- * come from an object the loop mutates, so they survive the throw.
+ * One line per hold so queries-per-hold is measurable in production. `DOPL_AWAIT_DIAG=0` silences.
+ * ⚠ Must run from a `finally`, not inside the `try`: a hold ended by a mid-hold revocation or
+ * soft-delete (`ChannelNotFoundError` → 404) would emit nothing, leaving the metric covering only
+ * clean finishes — the wrong half of the population during an egress incident. The counts come
+ * from an object the loop mutates so they survive the throw.
  */
 function logHold(
   channelId: string,
@@ -57,7 +50,7 @@ function logHold(
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   const started = Date.now();
   const counters: AwaitHoldCounters = { polls: 0, revalidations: 0 };
-  // Set once the ref resolves; a failure before that has no channel to name.
+  // Set once the ref resolves; an earlier failure has no channel to name.
   let channelId = "";
   let outcome: "hit" | "timeout" | "error" = "error";
   try {
@@ -71,8 +64,8 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       throw new HttpError(400, "VALIDATION_FAILED", "Invalid query", parsed.error.issues);
     }
     const { since, timeoutMs, excludeAuthor } = parsed.data;
-    // Deadline is struck BEFORE the ref resolves, as it always has been: the
-    // hold must stay bounded under `maxDuration` including that lookup.
+    // ⚠ Deadline struck BEFORE the ref resolves: the hold must stay bounded under `maxDuration`
+    // including that lookup.
     const deadline = Date.now() + (timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS);
 
     const ctx = buildChannelContext(auth);

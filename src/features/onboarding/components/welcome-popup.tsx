@@ -11,20 +11,16 @@ import { getAppOrigin } from "@/shared/lib/app-origin";
 const WELCOME_KEY = "dopl:welcome";
 
 export interface WelcomePopupProps {
-  /**
-   * The brand mark above the heading. Defaults to the web app's public
-   * favicon; the desktop SPA passes its own bundled mark because an absolute
-   * `/favicons/...` src resolves to the filesystem root in a `file://`
-   * document (same reason `OnboardingFlowCore` takes `brand`).
-   */
+  /** Brand mark above the heading; defaults to the web favicon. ⚠ Desktop SPA
+   *  must pass a bundled mark — `/favicons/...` resolves to filesystem root in
+   *  a `file://` document (same as `OnboardingFlowCore` › brand). */
   brand?: React.ReactNode;
 }
 
 /**
- * Founder's welcome — shown once, in the workspace, right after onboarding
- * completes. Onboarding sets the `dopl:welcome` flag before redirecting in.
- * The flag is cleared on DISMISS (not on read) so a remount / StrictMode
- * double-mount keeps the popup open instead of flashing it away.
+ * Founder's welcome — once, post-onboarding. Onboarding sets `dopl:welcome`
+ * before redirecting in. ⚠ Flag cleared on DISMISS, not on read: clearing on
+ * read makes a remount / StrictMode double-mount flash it away.
  */
 export function WelcomePopup({ brand }: WelcomePopupProps = {}) {
   const [open, setOpen] = useState(false);
@@ -39,7 +35,7 @@ export function WelcomePopup({ brand }: WelcomePopupProps = {}) {
     try {
       if (window.localStorage.getItem(WELCOME_KEY) === "1") {
         setOpen(true);
-        // Mount at opacity 0, then flip next frame so it fades in.
+        // Mount at opacity 0, flip next frame to fade in.
         raf = requestAnimationFrame(() => setShown(true));
       }
     } catch {
@@ -61,8 +57,8 @@ export function WelcomePopup({ brand }: WelcomePopupProps = {}) {
   }
 
   function walkMeThrough() {
-    // Decoupled trigger — the TourProvider (in the app shell) listens for this
-    // window event, so onboarding starts the tour without importing it.
+    // Decoupled: TourProvider (app shell) listens for this window event, so
+    // onboarding starts the tour without importing it.
     try {
       window.dispatchEvent(new Event("dopl:start-tour"));
     } catch {
@@ -77,10 +73,9 @@ export function WelcomePopup({ brand }: WelcomePopupProps = {}) {
     origin ? `${origin}/api/mcp` : DEFAULT_MCP_URL
   );
 
-  // Portal to <body> so the popup escapes the AppShell root's z-30 stacking
-  // context. Without this its z-50 is local to that context and the canvas
-  // surface (portaled to <body> at z-31) paints over the card. `open` only
-  // flips true inside a client effect, so document.body is always defined here.
+  // ⚠ Portal to <body>: escapes AppShell root's z-30 stacking context, where a
+  // local z-50 loses to the <body>-portaled canvas surface at z-31. `open` only
+  // flips true in a client effect, so document.body is defined here.
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto px-6 py-10"

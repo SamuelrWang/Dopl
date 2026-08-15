@@ -12,15 +12,11 @@ import type { Skill, SkillContext } from "../types";
 import { SkillAgentWriteDisabledError } from "./errors";
 
 /**
- * Shared internals for the skills service. Context construction, the
- * `canSeeSkill` visibility matrix + its grant-precompute helper, the
- * grant-set DTO decorator, and the agent-write gate — used by more than
- * one of the per-domain service modules (`service-reads`,
- * `service-writes`, `service-body`, `service-trash`, `service-history`).
- *
- * The repository (`./repository.ts`) bypasses RLS via the service-role
- * client — every caller MUST filter by `ctx.workspaceId` so cross-
- * workspace leakage stays impossible.
+ * Shared internals for the skills service: context construction, the
+ * `canSeeSkill` visibility matrix + grant precompute, the grant-set DTO
+ * decorator, and the agent-write gate.
+ * ⚠ `./repository.ts` bypasses RLS via the service-role client — every
+ * caller MUST filter by `ctx.workspaceId` or workspaces leak into each other.
  */
 
 export interface AuthLike {
@@ -41,18 +37,15 @@ export function buildSkillContext(auth: AuthLike): SkillContext {
   };
 }
 
-/**
- * Postgres `text` columns cannot store U+0000; a stray NUL (a paste artifact
- * or raw agent output in a name, field, or body) otherwise surfaces as an
- * opaque INTERNAL_ERROR at the DB boundary (F-7). Strip it from every string
- * written so the save succeeds cleanly. Undefined/null pass through untouched.
- */
+/** ⚠ Postgres `text` cannot store U+0000 — a stray NUL from a paste or raw
+ *  agent output surfaces as an opaque INTERNAL_ERROR at the DB boundary.
+ *  Strip from every written string. Undefined/null pass through. */
 export function stripNullBytes<T extends string | null | undefined>(value: T): T {
   return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;
 }
 
-/** Precomputed grant context for visibility checks over a set of rows.
- *  Mirrors `grantsForRows` in the chats service. */
+/** Precomputed grant context for visibility checks over a row set. Mirrors
+ *  `grantsForRows` in the chats service. */
 export interface SkillGrantCtx {
   /** Teams the caller belongs to. Fetched only when needed. */
   myTeamIds: Set<string>;
@@ -65,8 +58,8 @@ const EMPTY_SKILL_GRANTS: SkillGrantCtx = {
   bySkill: new Map(),
 };
 
-/** Fetch the caller's teams + skill grants — but only when some row is
- *  team-scoped and not the caller's own (fixed query count per request). */
+/** Caller's teams + skill grants, fetched only when some row is team-scoped
+ *  and not the caller's own. Fixed query count per request. */
 export async function grantsForSkills(
   ctx: SkillContext,
   rows: Skill[]
@@ -94,13 +87,12 @@ export async function grantsForSkills(
 }
 
 /**
- * Three-way visibility filter (M-10 extended for team scoping — the
- * exact model `canSeeChat` uses):
- *   - Public + workspace mode: always.
- *   - Public + teams mode: owner, workspace admins, or members of a
- *     granted team. Never via a workspace-scoped API key.
- *   - Private via session or personal credential: owner-only.
- *   - Private via workspace-scoped API key: never.
+ * Three-way visibility filter. Same model as `canSeeChat`:
+ *   - public + workspace mode: always
+ *   - public + teams mode: owner, workspace admins, or a granted team's
+ *     members. Never via a workspace-scoped API key.
+ *   - private via session / personal credential: owner-only
+ *   - private via workspace-scoped API key: never
  */
 export function canSeeSkill(
   ctx: SkillContext,
@@ -116,8 +108,8 @@ export function canSeeSkill(
   return granted.some((teamId) => grants.myTeamIds.has(teamId));
 }
 
-/** Grant set for the DTO — owners (and admins) see it; other viewers get
- *  an empty list so team composition doesn't leak through a shared skill. */
+/** ⚠ Grant set for the DTO: owners and admins only. Other viewers get an
+ *  empty list — team composition must not leak through a shared skill. */
 export function withGrantSet(
   ctx: SkillContext,
   skill: Skill,
@@ -130,23 +122,18 @@ export function withGrantSet(
 }
 
 /**
- * Gate for agent-origin skill writes. Skills participate in the team
- * access matrix now (skill_team_sharing), so the rule is the effective
- * access level: role default on workspace-mode skills, grant level on
- * team-mode ones. Writes need 'edit'.
- *
- * An agent that tries to flip `agentWriteEnabled` itself in updateSkill
- * is rejected there with a 403 (SKILL_AGENT_WRITE_TOGGLE_FORBIDDEN) — that
- * path doesn't call here.
+ * Gate for agent-origin skill writes. Rule is the effective access level:
+ * role default on workspace-mode skills, grant level on team-mode ones.
+ * Writes need 'edit'. (An agent flipping `agentWriteEnabled` is rejected in
+ * updateSkill, which doesn't call here.)
  */
 export async function assertAgentWriteAllowed(
   ctx: SkillContext,
   skill: Skill
 ): Promise<void> {
   if (ctx.source !== "agent") return;
-  // `agent_write_enabled=false` makes a skill read-only to agents (F-10b):
-  // enforce it before the team-access check so the read-only flag wins over
-  // an agent that otherwise has team "edit". Human callers returned above.
+  // ⚠ Order matters: `agent_write_enabled=false` is checked BEFORE the
+  // team-access check, so the read-only flag beats an agent holding "edit".
   if (!skill.agentWriteEnabled) {
     throw new SkillAgentWriteDisabledError(skill.slug);
   }

@@ -26,11 +26,8 @@ describe("parseSegment", () => {
   });
 
   it("rejects suffixes with uppercase letters", () => {
-    // Proxy 308s mixed-case URLs to lowercase before they reach the
-    // resolver — and our generator emits lowercase only — so a real
-    // request can't carry uppercase here. Reject explicitly so a
-    // hand-typed canonical with uppercase doesn't silently look up a
-    // missing publicId.
+    // ⚠ Reject uppercase explicitly (proxy already 308s mixed-case to
+    // lowercase) so a hand-typed canonical doesn't look up a missing publicId.
     expect(parseSegment("foo-AAAAAAAAAAAA")).toBeNull();
   });
 

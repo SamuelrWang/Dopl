@@ -20,38 +20,25 @@ export interface OnboardingFlowCoreProps {
   initialStep: OnboardingStep;
   /** Deep-link passthrough; the server re-validates via safeRedirect. */
   redirectTo?: string;
-  /**
-   * Fired with the path the server says to land on. Router-agnostic: the web
-   * binding pushes it with `next/navigation`, the desktop SPA navigates its
-   * hash router.
-   */
+  /** Fires with the server-chosen landing path. Router-agnostic: web pushes
+   *  via `next/navigation`, desktop SPA uses its hash router. */
   onDone: (redirectTo: string) => void;
-  /**
-   * Brand mark rendered above the wordmark. The web app passes its
-   * `/favicons/...` `<img>`; the packaged SPA is a `file://` document where
-   * that absolute path resolves to the filesystem root, so it passes nothing
-   * and the wordmark stands alone.
-   */
+  /** Brand mark above the wordmark. ⚠ Packaged SPA passes nothing: it is a
+   *  `file://` document where `/favicons/...` resolves to filesystem root. */
   brand?: ReactNode;
-  /**
-   * Right-pane banner, passed straight through to `AuthSplitLayout` — same
-   * `file://` problem as `brand`, same fix: the packaged SPA hands over a
-   * Vite-bundled asset URL, and anything else falls back to the layout's
-   * `public/` default. See `shared/layout/auth-split/auth-split-layout.tsx` ›
-   * AuthSplitLayout for why the shared file can't import the image itself.
-   */
+  /** Right-pane banner, passed through to `AuthSplitLayout`. Same `file://`
+   *  problem as `brand`: packaged SPA hands a Vite-bundled asset URL, else the
+   *  layout's `public/` default. Why the shared file can't import the image:
+   *  `shared/layout/auth-split/auth-split-layout.tsx` › AuthSplitLayout. */
   bannerSrc?: string;
 }
 
 /**
- * The onboarding stepper's Next-free core (see `./onboarding-flow` for the web
- * binding): survey → MCP connect → (transition) workspace naming. Reuses the
- * login split layout — the questionnaire fades in on the left where the sign-in
- * form was, banner panel on the right.
+ * Onboarding stepper core, Next-free (web binding: `./onboarding-flow`):
+ * survey → MCP connect → workspace naming, on the login split layout.
  *
- * Both writes go through `apiRequest`, the transport seam the desktop renderer
- * rides over IPC (the packaged renderer ships `connect-src 'none'`, so the raw
- * `fetch` this used to do could not survive the port).
+ * ⚠ Writes must go through `apiRequest`, not raw `fetch` — packaged desktop
+ * renderer ships `connect-src 'none'` and rides that seam over IPC.
  */
 export function OnboardingFlowCore({
   initialStep,
@@ -66,8 +53,7 @@ export function OnboardingFlowCore({
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const finishRef = useRef(false);
-  // Remembers the last finish payload so the error-banner Retry re-submits
-  // the same workspace name/description instead of losing them.
+  // Retry needs the last finish payload or it loses name/description.
   const finishArgsRef = useRef<FinishArgs>({ mcpConnected: true });
 
   const connected = useMcpConnectionPoll(step === "connect" && !finishing);
@@ -118,7 +104,7 @@ export function OnboardingFlowCore({
       try {
         window.localStorage.setItem("dopl:welcome", "1");
       } catch {
-        // storage unavailable — the welcome popup just won't show
+        // storage unavailable — welcome popup just won't show
       }
       onDone(body.redirectTo);
     } catch {
@@ -127,8 +113,6 @@ export function OnboardingFlowCore({
       setError("Couldn't set up your workspace. Please try again.");
     }
   }
-
-  // No auto-advance: the user clicks Continue (enabled once connected) to finish.
 
   return (
     <AuthSplitLayout bannerSrc={bannerSrc}>

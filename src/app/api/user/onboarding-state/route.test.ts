@@ -1,20 +1,10 @@
 /**
- * `GET /api/user/onboarding-state` — the SPA's boot gate.
- *
- * THE PROPERTY THIS FILE EXISTS FOR: the desktop SPA has no RSC to run
- * `isOnboarded(user.id)` before it decides between `/onboarding` and the
- * workspace, so this route IS the gate. Two failure modes matter:
- *
- *   1. The gate must be per-caller. `isOnboarded` has to be asked about the
- *      AUTHENTICATED user id — a route that answered for anybody else would
- *      let one account's onboarding state route another's session.
- *   2. The gate must fail LOUD, not open. If the read throws and the route
- *      degrades to `{ isOnboarded: true }`, a brand-new user skips onboarding
- *      forever; the 500 is the correct answer.
- *
- * Only the auth token/session layer and the onboarding service are mocked —
- * the wrapper under test is the shipping `withUserAuth`, exercised end to end
- * from a real NextRequest, so the 401 path is the real one.
+ * `GET /api/user/onboarding-state` — the SPA's boot gate (no RSC to run `isOnboarded` first).
+ *   1. ⚠ Per-caller: `isOnboarded` is asked about the AUTHENTICATED user id, or one account's
+ *      onboarding state routes another's session.
+ *   2. ⚠ Fails LOUD, not open: degrading to `{ isOnboarded: true }` makes a brand-new user skip
+ *      onboarding forever. The 500 is correct.
+ * The shipping `withUserAuth` runs, so the 401 path is real.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -31,8 +21,7 @@ vi.mock("@/shared/auth/mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => null),
   isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
 }));
-// `getSessionUser` verifies the cookie LOCALLY via `getClaims()` (no GoTrue
-// round-trip) — mock that, not `getUser()`.
+// ⚠ `getSessionUser` verifies the cookie LOCALLY via `getClaims()` — mock that, not `getUser()`.
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
     auth: {
@@ -53,7 +42,7 @@ import { getOnboardingStatus, isOnboarded } from "@/features/onboarding/server/s
 
 const mockIsOnboarded = vi.mocked(isOnboarded);
 const mockStatus = vi.mocked(getOnboardingStatus);
-// Silence the unused-var rule for the legacy mock kept for API parity.
+// Legacy mock kept for API parity.
 void mockIsOnboarded;
 
 const URL_ = "http://localhost/api/user/onboarding-state";
@@ -93,7 +82,7 @@ describe("GET /api/user/onboarding-state", () => {
   });
 
   it("fails loud on a read error instead of degrading to 'onboarded'", async () => {
-    // Degrading open here would silently skip onboarding for every new user.
+    // Degrading open silently skips onboarding for every new user.
     mockStatus.mockRejectedValue(new Error("db down"));
 
     const res = await GET(getReq());

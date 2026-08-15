@@ -1,20 +1,16 @@
 /**
- * NET-NEW — bootServer workspace resolution + directory-load failure.
- *
- * The SDK `McpServer` is mocked (like server.test.ts) so `createServer`
- * registers tools without touching a real transport. We drive `bootServer`
- * over a stubbed `DoplClient` and assert what it wires onto the client
- * (`setWorkspaceId` — the on-the-wire default) and what it reports back
- * (`activeWorkspace`, `directoryLoadFailed`).
+ * bootServer workspace resolution + directory-load failure. The SDK `McpServer`
+ * is mocked so `createServer` registers tools without a transport; `bootServer`
+ * runs over a stubbed `DoplClient`, asserting what it wires onto the client
+ * (`setWorkspaceId`) and what it reports back.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
-// `registerTool` and deliberately NOT `tool` — see the note on the same mock in
-// `server.test.ts` (F-145): the positional overload cannot carry a strict input
-// schema, so a regression to it must be a TypeError here rather than a silent
-// re-registration.
+// ⚠ `registerTool` and deliberately NOT `tool` — the positional overload cannot
+// carry a strict input schema, so a regression must be a TypeError here rather
+// than a silent re-registration. Same mock as `server.test.ts`.
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
     registerTool() {}
@@ -96,7 +92,7 @@ describe("bootServer workspace resolution", () => {
     const res = await bootServer(client, { onDiag });
     expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
     expect(res.activeWorkspace).toBeNull();
-    // The dropped pin must be observable, not silent (FIX 2).
+    // ⚠ A dropped pin must be observable, not silent.
     expect(onDiag).toHaveBeenCalledWith(
       expect.stringContaining("ghost"),
     );
@@ -120,10 +116,10 @@ describe("bootServer workspace resolution", () => {
 
 // ── Identity: ONE record for the whole session ─────────────────────────
 //
-// Two sources for the same fact is how two tools on one connection came to
-// disagree about who was calling. The transport's id is read off the credential
-// that is authorizing THIS request; the status ping's is a second loopback that
-// fails independently. When both exist, the credential wins.
+// ⚠ Two sources for the same fact is how two tools on one connection disagree
+// about who is calling. The TRANSPORT's id is read off the credential
+// authorizing THIS request; the status ping's is a second loopback that fails
+// independently. When both exist, the credential wins.
 
 describe("bootServer caller identity", () => {
   it("prefers the transport's user id over the status ping's", async () => {

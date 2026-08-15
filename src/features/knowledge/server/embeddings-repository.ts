@@ -1,11 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
-/**
- * Raw I/O for `knowledge_entry_chunks` (semantic-search embeddings).
- * Service-role only — the table has RLS enabled with no policies.
- * Kept out of repository.ts (already scheduled for a size split).
- */
+/** Raw I/O for `knowledge_entry_chunks`. ⚠ Service-role only — the table has
+ *  RLS enabled with NO policies. */
 
 export interface ChunkHashRow {
   chunkIndex: number;
@@ -54,7 +51,7 @@ export async function upsertChunks(rows: UpsertChunkRow[]): Promise<void> {
   if (error) throw error;
 }
 
-/** Drop chunks at or beyond `fromIndex` (entry shrank on re-chunk). */
+/** Drop chunks at or beyond `fromIndex` — entry shrank on re-chunk. */
 export async function deleteChunksFrom(
   entryId: string,
   fromIndex: number

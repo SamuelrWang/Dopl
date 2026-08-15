@@ -10,18 +10,14 @@ import {
 } from "./query-defaults";
 
 /**
- * App-wide TanStack Query client (ENGINEERING §7 server-state layer).
+ * App-wide TanStack Query client (ENGINEERING §7). ⚠ Defaults live in
+ * `./query-defaults.ts` — the desktop SPA mounts the identical client; this file
+ * owns only the web-side PERSISTENCE wiring.
  *
- * The defaults themselves live in `./query-defaults.ts` because the desktop
- * SPA mounts the identical client (apps/desktop-ui) — this file owns only the
- * web-side PERSISTENCE wiring.
- *
- * Phase 1 (docs/DESKTOP-MIGRATION-PLAN.md): the cache is PERSISTED to
- * IndexedDB. A cold start (app relaunch, hard reload) hydrates the last
- * dehydrated snapshot and renders it immediately — stale-while-revalidate
- * instead of a skeleton — while every restored query refetches in the
- * background per its own staleness. `gcTime` must exceed `maxAge` for
- * restored entries to survive garbage collection between visits.
+ * Cache is PERSISTED to IndexedDB: a cold start hydrates the last snapshot and
+ * renders it immediately (stale-while-revalidate) while restored queries refetch
+ * per their own staleness. ⚠ `gcTime` must exceed `maxAge` or restored entries
+ * are collected between visits.
  */
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -29,17 +25,15 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     () => new QueryClient({ defaultOptions: QUERY_DEFAULT_OPTIONS })
   );
 
-  // ALWAYS the persist provider, on server and client alike — branching
-  // the provider type on `typeof window` would give the server and the
-  // hydrating client different element types at the app root, forcing a
-  // full client-side re-render. The persister object is inert at render
-  // time: its IndexedDB operations only run from client-side effects, so
-  // the SSR pass never touches `indexedDB`.
+  // ⚠ ALWAYS the persist provider, server and client alike: branching the
+  // provider type on `typeof window` gives the server and hydrating client
+  // different element types at the app root, forcing a full re-render. The
+  // persister is inert at render time — its IndexedDB ops run only in effects.
   const [persister] = useState(() => createIdbPersister());
 
-  // Fleet audit 2026-08-03 (high): the persisted cache outlived the session,
-  // restoring the PREVIOUS account's data for the next sign-in. Any signed-
-  // out transition wipes both the live cache and the disk snapshot.
+  // ⚠ Any signed-out transition must wipe BOTH the live cache and the disk
+  // snapshot, else the persisted cache outlives the session and restores the
+  // previous account's data on the next sign-in.
   useEffect(() => {
     let unsub: (() => void) | undefined;
     void (async () => {
@@ -53,8 +47,8 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         });
         unsub = () => data.subscription.unsubscribe();
       } catch {
-        // No browser Supabase config (SPA renderer) — the SPA clears via
-        // its own bridge auth push instead.
+        // No browser Supabase config (SPA renderer) — the SPA clears via its
+        // own bridge auth push.
       }
     })();
     return () => {
@@ -68,12 +62,12 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       persistOptions={{
         persister,
         maxAge: QUERY_CACHE_MAX_AGE_MS,
-        // Build-keyed: a deploy that reshapes any response must not be able to
-        // hydrate yesterday's shape. TanStack drops the whole snapshot when
-        // this differs from the one it was persisted with (`./idb-persister`).
+        // ⚠ Build-keyed: TanStack drops the whole snapshot when this differs
+        // from the one it was persisted with, so a deploy that reshapes a
+        // response cannot hydrate yesterday's shape.
         buster: QUERY_CACHE_BUSTER,
-        // Persist only settled successes — an error entry restored from
-        // disk would render as a phantom failure.
+        // ⚠ Persist only settled successes — a restored error entry renders as
+        // a phantom failure.
         dehydrateOptions: {
           shouldDehydrateQuery: (query) => query.state.status === "success",
         },

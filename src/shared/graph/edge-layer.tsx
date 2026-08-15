@@ -4,9 +4,7 @@ import type { ReactNode } from "react";
 import { labelAnchor } from "./route-edges";
 import type { EdgeSide, NodeRect, Point, SceneEdge } from "./types";
 
-/** Visual style for one edge kind — resolved by the caller and keyed by
- *  `SceneEdge.kind`. `marker` is a `url(#id)` referencing a def the caller
- *  supplies via the `markers` prop. */
+/** Style per `SceneEdge.kind`. `marker` = `url(#id)` into a `markers` def. */
 export interface EdgeStyle {
   stroke: string;
   dash?: string;
@@ -33,7 +31,7 @@ function isHorizontalExit(side: EdgeSide): boolean {
   return side === "left" || side === "right";
 }
 
-/** Fallback sides when an edge carries no routing hints: dominant axis. */
+/** No routing hints → sides from the dominant axis. */
 function inferSides(a: NodeRect, b: NodeRect): [EdgeSide, EdgeSide] {
   const dx = b.x + b.width / 2 - (a.x + a.width / 2);
   const dy = b.y + b.height / 2 - (a.y + a.height / 2);
@@ -43,14 +41,8 @@ function inferSides(a: NodeRect, b: NodeRect): [EdgeSide, EdgeSide] {
   return dy > 0 ? ["bottom", "top"] : ["top", "bottom"];
 }
 
-/**
- * Orthogonal waypoints for one edge — straight H/V segments only.
- *  - opposite vertical sides  → H-V-H through `mid` x
- *  - same vertical side       → loop out to `mid` x
- *  - opposite horizontal      → V-H-V through `mid` y
- *  - same horizontal side     → loop out to `mid` y
- *  - mixed axes               → single L corner
- */
+/** Orthogonal waypoints (straight H/V only). Opposite sides → 3-segment jog
+ *  through `mid`; same side → loop out past `mid`; mixed axes → one L. */
 function routePoints(a: NodeRect, b: NodeRect, edge: SceneEdge): Point[] {
   const [inferredFrom, inferredTo] = inferSides(a, b);
   const fromSide = edge.fromSide ?? inferredFrom;
@@ -78,7 +70,7 @@ function routePoints(a: NodeRect, b: NodeRect, edge: SceneEdge): Point[] {
     const midY = edge.mid ?? (p0.y + p1.y) / 2;
     return [p0, { x: p0.x, y: midY }, { x: p1.x, y: midY }, p1];
   }
-  // Mixed axes: one corner, placed on the exit axis of the source.
+  // Mixed axes: one corner, on the source's exit axis.
   return fromH ? [p0, { x: p1.x, y: p0.y }, p1] : [p0, { x: p0.x, y: p1.y }, p1];
 }
 
@@ -134,17 +126,14 @@ interface Props {
 const FALLBACK_STYLE: EdgeStyle = { stroke: "var(--text-muted)", width: 1.5 };
 
 /**
- * World-space SVG under the node cards. Orthogonal edges (straight
- * segments, rounded elbows) styled per kind by the caller-supplied
- * `styles` map; label pills are HTML siblings so they pick up the kit
- * type tokens. Domain-agnostic: the ontology graph and any future
- * graph pass their own styles + markers.
+ * World-space SVG under the node cards: orthogonal edges (rounded elbows)
+ * styled per kind from the caller's `styles` map. Label pills are HTML
+ * siblings so they pick up the kit type tokens. Domain-agnostic.
  */
 export function EdgeLayer({ edges, rects, focusId, styles, defaultStyle, markers }: Props) {
   const drawn = edges
     .map((edge) => {
-      // A router-supplied polyline wins; otherwise fall back to the
-      // hint-based single-mid geometry (needs both rects).
+      // Router polyline wins; else hint-based single-mid (needs both rects).
       let points: Point[] | null = null;
       if (edge.points && edge.points.length >= 2) {
         points = simplify(edge.points);

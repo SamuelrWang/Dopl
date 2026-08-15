@@ -1,9 +1,9 @@
 /**
- * Knowledge-base method group (Item 4) — link 3 of the chain documented in
- * `client-base.ts`. Pure delegation to `knowledge.ts`; no HTTP here.
+ * Knowledge-base method group — link 3 of the chain in `client-base.ts`. Pure
+ * delegation to `knowledge.ts`; no HTTP here.
  *
- * User-authored, editable knowledge bases. Path-based methods accept a base
- * id and a "/"-separated path; the server resolves to folder/entry rows.
+ * Path-based methods take a base id and a "/"-separated path; the server
+ * resolves to folder/entry rows.
  */
 
 import { WorkspaceMethods } from "./client-workspaces.js";

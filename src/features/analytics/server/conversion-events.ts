@@ -1,8 +1,8 @@
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Append-only funnel event log. Fire-and-forget — never throws. Feeds
- * the admin analytics dashboard.
+ * Append-only funnel event log. Fire-and-forget, never throws. Feeds the admin
+ * analytics dashboard.
  */
 
 export type ConversionEventType =
@@ -29,7 +29,7 @@ export async function logConversionEvent(params: {
       metadata: params.metadata ?? {},
     });
   } catch (err) {
-    // Fire-and-forget. Never break the caller.
+    // Never break the caller.
     console.error(
       `[conversion-events] log failed for ${params.eventType}:`,
       err instanceof Error ? err.message : String(err)
@@ -38,10 +38,8 @@ export async function logConversionEvent(params: {
 }
 
 /**
- * Check if a user has ever fired a given event. Used to avoid duplicate
- * first-time events (e.g. "first_ingest_completed") on the 2nd+ occurrence.
- * ("first_cluster_built" rows survive in the table as history; the event
- * type lost its emitter when clusters were removed 2026-08-11.)
+ * Has a user ever fired a given event? Guards duplicate first-time events
+ * (e.g. "first_ingest_completed") on the 2nd+ occurrence.
  */
 export async function hasFiredEvent(
   userId: string,

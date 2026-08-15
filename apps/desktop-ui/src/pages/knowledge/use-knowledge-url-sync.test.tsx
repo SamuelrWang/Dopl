@@ -6,20 +6,18 @@ import type { KnowledgeUrlSync } from "@/features/knowledge/components/knowledge
 import { useKnowledgeUrlSync } from "./use-knowledge-url-sync";
 
 /**
- * The adapter's two invariants, pinned directly rather than through the page.
- *
- * They pull in opposite directions and that tension is the whole design: the
- * object must NOT be rebuilt when the URL changes (the knowledge controller
- * lists it in an effect's deps, so a new identity re-runs that effect with the
- * pre-change selection and writes the old URL back over the new one), yet
- * `current`/`read` must still see the URL that just changed. Satisfying one by
- * sacrificing the other is the failure mode this file exists to catch.
+ * ⚠ The adapter's two invariants, which pull in opposite directions:
+ *   1. The object must NOT be rebuilt when the URL changes — the knowledge
+ *      controller lists it in an effect's deps, so a new identity re-runs that
+ *      effect with the pre-change selection and writes the old URL back.
+ *   2. `current`/`read` must still see the URL that just changed.
+ * Satisfying one by sacrificing the other is the failure mode pinned here.
  */
 
 const SEGMENT = "acme-ab12cd34ef56";
 
-/** A CHILD of the hook's host, reading the sync from its own passive effect —
- *  which is exactly where the knowledge controller reads it. */
+/** ⚠ A CHILD of the hook's host, reading the sync from its own passive effect
+ *  — exactly where the knowledge controller reads it. */
 function ChildReader({ sync, seen }: { sync: KnowledgeUrlSync; seen: string[] }) {
   const location = useLocation();
   useEffect(() => {
@@ -53,9 +51,7 @@ describe("useKnowledgeUrlSync", () => {
 
     await act(() => router.navigate(`/${SEGMENT}/knowledge/specs-aaaaaaaaaaaa?entryId=e1`));
 
-    // Stable: every render handed out the same object.
     expect(new Set(seen).size).toBe(1);
-    // …and that one object sees the new URL, not the one it was built on.
     expect(first.current()).toBe(
       `/${SEGMENT}/knowledge/specs-aaaaaaaaaaaa?entryId=e1`
     );
@@ -71,9 +67,9 @@ describe("useKnowledgeUrlSync", () => {
   });
 
   it("is already current when a CHILD's effect reads it on the same commit", async () => {
-    // The controller lives one level below the hook's host, so its effects run
-    // BEFORE the host's passive effects. A ref refreshed passively would still
-    // hold the previous URL at that moment; a layout effect has already run.
+    // ⚠ Controller lives one level below the host, so its effects run BEFORE
+    // the host's passive effects. A passively-refreshed ref would still hold
+    // the previous URL there; a layout effect has already run.
     const readsFromChild: string[] = [];
     const hosted: KnowledgeUrlSync[] = [];
     function Host() {

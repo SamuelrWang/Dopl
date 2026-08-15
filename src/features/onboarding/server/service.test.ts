@@ -1,26 +1,14 @@
 /**
- * THE THIRD HAND COPY OF THE WORKSPACE HOME PATH — and the drift alarm it
- * was missing.
+ * ⚠ DRIFT ALARM — `WORKSPACE_HOME_PATH` is hand-copied in 3 places. Source of
+ * truth: `apps/desktop-ui/src/routes.tsx`. Other copies + their alarms:
+ * `apps/desktop-ui/src/routes.test.tsx` (pins the constant),
+ * `dopl-desktop-app/main/deep-link-target.js` › WORKSPACE_HOME_PAGE, and
+ * `./service.ts` › completeOnboarding (the hardcoded "/overview" this pins).
+ * Repointing the SPA home would drop every newly onboarded user on "Not found"
+ * with the suite green.
  *
- * `completeOnboarding` returns the URL a brand-new user is redirected to the
- * instant they finish signup. It builds that URL from a hardcoded
- * `"/overview"`, which is a hand copy of `WORKSPACE_HOME_PATH` in
- * `apps/desktop-ui/src/routes.tsx` — the SPA's index-redirect target and the
- * one place that string is defined.
- *
- * Two other copies of it exist and BOTH have this alarm:
- *   • `apps/desktop-ui/src/routes.test.tsx` pins the constant itself.
- *   • `dopl-desktop-app/main/deep-link-target.js` (`WORKSPACE_HOME_PAGE`) is
- *     regex-compared against routes.tsx by its own test.
- *
- * This one had none, on the newest-user funnel. Repointing the SPA home page
- * (say `overview` → `home`) would leave this string behind and drop every
- * newly onboarded user on the "Not found" route — with the whole suite green,
- * because the only coverage of the value mocked it.
- *
- * Server code cannot IMPORT the constant: `routes.tsx` is a different npm
- * workspace, uses `#/` aliases, and pulls in every page component. So the test
- * reads the source and compares, exactly like the deep-link test does.
+ * Server code cannot IMPORT the constant (different npm workspace, `#/`
+ * aliases, pulls in every page component) — so read the source and compare.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -85,9 +73,7 @@ beforeEach(() => {
 
 describe("completeOnboarding redirect target", () => {
   it("lands the new user on the SPA's real workspace home page", async () => {
-    // NOT `toBe("/acme-a1b2c3d4e5f6/overview")`: a literal here would be a
-    // FOURTH hand copy and would keep passing after a repoint. The expected
-    // value is read out of routes.tsx.
+    // ⚠ Not a literal path — that would be a FOURTH copy, passing after a repoint.
     const { redirectPath } = await completeOnboarding("user-1", {
       mcpConnected: true,
       name: "Acme",
@@ -96,9 +82,7 @@ describe("completeOnboarding redirect target", () => {
   });
 
   it("routes to a page the SPA actually has (not the catch-all)", async () => {
-    // A correct-looking path is still a 'Not found' if no route serves it —
-    // pin the page against the route table too, the way the deep-link test
-    // pins its page map.
+    // Correct-looking path is still "Not found" if no route serves it.
     const { redirectPath } = await completeOnboarding("user-1", {
       mcpConnected: false,
     });

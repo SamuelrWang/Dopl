@@ -17,12 +17,10 @@ import {
 } from "./knowledge-shared";
 
 /**
- * Write confirmations read back the STORED value, not the argument: a base
- * name the server canonicalised, an entry title derived from a path. Every one
- * of them is spliced into a line of our own narration, and a path can carry a
- * backtick (`NAME_RE` bans control and zero-width characters, not markdown),
- * which escapes the very code span we wrap it in. Same rule as everywhere else:
- * a name is a value.
+ * ⚠ Write confirmations read back the STORED value, not the argument (a
+ * canonicalised base name, a title derived from a path), spliced into our own
+ * narration — and a path can carry a backtick, since `NAME_RE` bans control and
+ * zero-width characters, NOT markdown. A name is a VALUE.
  */
 const NO_NAME = "`(unnamed)`";
 const NO_PATH = "`(unreadable path)`";
@@ -49,12 +47,11 @@ export async function opUpdateBase(client: DoplClient, ref: string, name?: strin
       slug,
     });
   } catch (e) {
-    // F-10b: read-only-to-agents base — surface the clean message the
-    // delete ops use, not a raw AGENT_WRITE_DISABLED dump.
+    // Read-only-to-agents base — the clean message, not a raw
+    // AGENT_WRITE_DISABLED dump.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
-    // F-18: name the field + rule instead of surfacing a raw
-    // "VALIDATION_FAILED: Request body failed validation".
+    // ⚠ Name the field + rule, never a raw "VALIDATION_FAILED".
     const mapped = updateBaseValidationError(e);
     if (mapped) return mapped;
     throw e;
@@ -76,8 +73,7 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
   try {
     updated = await client.updateKbBase(base.id, { visibility: "public" });
   } catch (e) {
-    // F-10b: read-only-to-agents base — surface the clean message the other
-    // write ops use, not a raw AGENT_WRITE_DISABLED dump.
+    // Read-only-to-agents base — the clean message, not a raw dump.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     throw e;
@@ -94,8 +90,7 @@ export async function opCreateFolder(client: DoplClient, ref: string, path: stri
   try {
     folder = await client.createKbFolderByPath(base.id, path, description);
   } catch (e) {
-    // F-10b: read-only-to-agents base — clean message, not a raw
-    // AGENT_WRITE_DISABLED dump.
+    // Read-only-to-agents base — clean message, not a raw dump.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     throw e;
@@ -111,8 +106,7 @@ export async function opMoveFolder(client: DoplClient, ref: string, from_path: s
   try {
     result = await client.moveKbByPath(base.id, from_path, to_path);
   } catch (e) {
-    // F-10b: read-only-to-agents base — clean message, not a raw
-    // AGENT_WRITE_DISABLED dump.
+    // Read-only-to-agents base — clean message, not a raw dump.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     throw e;
@@ -148,20 +142,17 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
         `An entry titled ${inlineOr(title ?? path.split("/").filter(Boolean).pop(), NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
       );
     }
-    // F-10b: read-only-to-agents base — clean message, not a raw dump.
+    // Read-only-to-agents base — clean message, not a raw dump.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
-    // F-18: name the failing field + rule instead of surfacing a raw
-    // "VALIDATION_FAILED: Request body failed validation".
+    // ⚠ Name the failing field + rule, never a raw "VALIDATION_FAILED".
     const mapped = writeFileValidationError(e, title);
     if (mapped) return mapped;
     throw e;
   }
-  // The addressable path's leaf is the entry's title (not the input
-  // path's leaf segment). Print it so callers can read the entry
-  // back without guessing. When `title` was passed and the slug-of-
-  // title differs from the input path's leaf, surface the canonical
-  // form explicitly.
+  // ⚠ The addressable path's leaf is the entry's TITLE, not the input path's
+  // leaf segment — print it, and surface the canonical form when a passed
+  // `title` slugs differently from the input leaf.
   const parentSegments = path.split("/").slice(0, -1).filter(Boolean);
   const canonicalPath = [...parentSegments, entry.title].join("/");
   const note =
@@ -180,8 +171,7 @@ export async function opMoveFile(client: DoplClient, ref: string, from_path: str
   try {
     result = await client.moveKbByPath(base.id, from_path, to_path);
   } catch (e) {
-    // F-10b: read-only-to-agents base — clean message, not a raw
-    // AGENT_WRITE_DISABLED dump.
+    // Read-only-to-agents base — clean message, not a raw dump.
     const denied = agentWriteDenied(e);
     if (denied) return denied;
     throw e;

@@ -1,39 +1,27 @@
 /**
- * WHAT TO DO ABOUT THE REPLY — the ONE place that decides whether this tool
+ * WHAT TO DO ABOUT THE REPLY — ⚠ the ONE place that decides whether this tool
  * promises a wake, for every op that says anything about waiting.
  *
- * WHY IT EXISTS. `post`, `create_thread` and both `await` branches each ended
- * with the same unconditional sentence — "that call can keep running after your
- * turn ends, and its result will wake you when the reply lands" — said to every
- * caller. It is true of one kind of caller and it was told to all of them.
- * Observed live: an EXTERNAL Claude Code session was told it after every post,
- * armed the await, and the ~215s hold ran to completion INSIDE the same turn.
- * A pending call is what keeps a turn ALIVE; it cannot end one. Backgrounding a
- * still-pending call is a CLIENT behaviour (§8, WAKE-V1 — some Claude Code
- * clients background a call pending past ~2 minutes and deliver its result as a
- * task notification, which wakes an idle session), and this server cannot see
- * whether the caller's client does it. So it must not claim it does.
+ * ⚠ NEVER promise unconditionally that "the call keeps running after your turn
+ * ends and wakes you". A pending call KEEPS a turn alive; it cannot end one.
+ * Backgrounding a still-pending call is a CLIENT behaviour (some Claude Code
+ * clients background past ~2 min and deliver the result as a task notification)
+ * and this server cannot see whether the caller's client does it.
  *
- * WHAT IT CAN SEE is `CallerIdentity.runtime`, and only as an OBSERVATION —
- * `identity.ts` owns that discipline and it is copied here rather than eroded:
- * `desktop-session` means the request CARRIED the Dopl desktop's stamp;
- * absence is `unstamped`, which is usually an external client but is also how a
- * desktop spawn on an older build looks. Never "external". So:
+ * ⚠ All it can see is `CallerIdentity.runtime`, and only as an OBSERVATION
+ * (`identity.ts` owns that discipline): `desktop-session` means the request
+ * CARRIED the stamp; absence is `unstamped`, usually an external client but
+ * also how a desktop spawn on an older build looks. Never "external".
+ *   - stamped   → a session this product spawned, fed replies as new turns.
+ *                 Awaiting is the wrong primitive, so the wake promise is
+ *                 DROPPED and the caller is told not to arm.
+ *   - unstamped → nothing promised. The hold is described as what it provably
+ *                 is — a synchronous wait returning in this turn — plus the
+ *                 CONDITIONAL wake, stated as a client property.
  *
- *   - stamped   → a session this product spawned, which is fed the
- *                 counterparty's replies as new turns (§8 v1.9). Awaiting is
- *                 the wrong primitive there, so the wake promise is not
- *                 softened, it is DROPPED, and the caller is told not to arm.
- *   - unstamped → nothing is promised. The hold is described as what it
- *                 provably is — a synchronous wait that returns in this turn —
- *                 plus the CONDITIONAL wake, stated as a property of the
- *                 client rather than of this call.
- *
- * WHAT THIS MODULE DOES NOT OWN: the stop conditions. "Re-arm" with no exit is
- * an unbounded loop over an abandoned exchange, and that rule is the caller's
- * own text (`rearmStopRule` and its siblings) — it rides in beside these lines
- * unchanged, and is dropped only where we are no longer telling anyone to
- * re-arm at all.
+ * ⚠ Stop conditions are NOT owned here: "re-arm" with no exit is an unbounded
+ * loop over an abandoned exchange, and that rule is the caller's own text
+ * (`rearmStopRule` and siblings), dropped only where nobody is told to re-arm.
  */
 
 import { AWAIT_HOLD_DEFAULT_MS } from "./channel-await-budget";
@@ -43,12 +31,9 @@ import { DESKTOP_SESSION_RUNTIME } from "./identity";
 const HOLD_SECONDS = Math.round(AWAIT_HOLD_DEFAULT_MS / 1000);
 
 /**
- * Did the request carry the desktop's runtime stamp? An observation, and the
- * only thing that branches the text below. Nothing here gates access — the
- * header grants nothing (`src/shared/auth/runtime-header.ts`).
- *
- * MODULE-PRIVATE: the four tier builders below are its only callers, and they are what the
- * rest of the package imports.
+ * Did the request carry the desktop's runtime stamp? ⚠ An observation, and the
+ * only thing branching the text below — it gates nothing
+ * (`src/shared/auth/runtime-header.ts` grants nothing). Module-private.
  */
 function isDesktopRuntime(runtime: string | null | undefined): boolean {
   return runtime === DESKTOP_SESSION_RUNTIME;
@@ -58,38 +43,28 @@ function isDesktopRuntime(runtime: string | null | undefined): boolean {
 const DESKTOP_OBSERVED = `This request carried the Dopl desktop's runtime stamp: a desktop-run session, which is fed the counterparty's replies as new turns.`;
 
 /**
- * TIER 1 — the wake an EXTERNAL session can build for itself, said as one
- * conditional sentence and no more.
- *
- * The unstamped caller's problem is structural: `await` returns inside the turn
- * it was armed in, so being woken depends on a client behaviour this server
- * cannot see. A harness that runs background shell tasks does not have that
- * problem — it already delivers task completion as a wake — so the poll can be
- * moved OUT of the MCP call and into that task, and the turn can simply end.
- *
- * Kept honest, which is the whole point of this module: it is CONDITIONAL on a
- * capability we cannot observe, it promises nothing about this call, and it
- * names a script rather than implying the server provides one.
+ * The wake an EXTERNAL session can build for itself — ⚠ one CONDITIONAL
+ * sentence, no more. `await` returns inside the turn it was armed in, so being
+ * woken depends on an unobservable client behaviour; a harness with background
+ * shell tasks already delivers completion as a wake, so the poll can move OUT
+ * of the MCP call. Promises nothing about THIS call, and names a script rather
+ * than implying the server provides one.
  */
 const BACKGROUND_TASK_HINT = `If your harness can run background shell tasks, a stronger pattern is to run the channel-wait poll there (scripts/dopl-channel-wait.sh in the Dopl repo, or any loop on the await route) and END your turn — the task's completion is a wake your client already delivers.`;
 
 /**
- * What the hold ACTUALLY does, for a caller whose client we cannot see. Every
- * clause is checkable: the hold length is this server's, "returns inside your
- * turn" is what a pending tool call does everywhere, and the wake is stated as
- * the client-side conditional it is.
- *
- * {@link BACKGROUND_TASK_HINT} rides on the end so it reaches every unstamped
- * branch from ONE place — post, create_thread, and both await results say the
- * same thing about waiting, and a fourth copy is a fourth thing to drift.
+ * What the hold ACTUALLY does for a caller whose client we cannot see. ⚠ Every
+ * clause checkable: hold length is this server's, "returns inside your turn" is
+ * what a pending tool call does everywhere, and the wake is stated as the
+ * client-side conditional it is. {@link BACKGROUND_TASK_HINT} rides on the end
+ * so every unstamped branch gets it from ONE place.
  */
 const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s passes, and it RETURNS INSIDE your current turn — a pending call keeps a turn alive, it cannot end one. Some MCP clients background a call still pending past ~2 minutes and deliver its result as a wake: if yours does, an armed await can wake you later; if it does not, the await is a synchronous wait, so re-arm it while the exchange is alive. ${BACKGROUND_TASK_HINT}`;
 
 /**
- * Kept for the UNSTAMPED branch only. An unstamped caller may still BE a
- * desktop session (an older build), and that session is the one case where
- * arming is simply wrong — so the escape hatch stays where the server cannot
- * tell, and is replaced by the real instruction where it can.
+ * ⚠ UNSTAMPED branch only. An unstamped caller may still BE a desktop session
+ * (older build), the one case where arming is simply wrong — so the escape
+ * hatch stays where the server cannot tell, and is replaced where it can.
  */
 const SKIP_CLAUSE = `Skip the await if this session already receives the counterparty's replies as new turns (a desktop-run session window feeds them in) — then just keep responding.`;
 
@@ -113,11 +88,9 @@ export function postReplyLines(
 }
 
 /**
- * After `create_thread`: the same decision, with the addressee named — the
- * requester's own session is the one that has to come back for the answer.
- * `cursor` is the pre-built await call (the opening seq rides back on the
- * create, so there is no follow-up read); `who` is the already-neutralized
- * member label.
+ * After `create_thread`: same decision with the addressee named. `cursor` is
+ * the pre-built await call (the opening seq rides back on the create, so no
+ * follow-up read); `who` is the ALREADY-neutralized member label.
  */
 export function createThreadReplyLines(
   cursor: string,

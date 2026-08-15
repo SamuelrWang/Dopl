@@ -21,12 +21,11 @@ interface Props {
   bases: KnowledgeBase[];
   /** Display names for foreign base owners, keyed by user id. */
   ownerNames?: Record<string, string>;
-  /** `{entryCount, lastEntryUpdatedAt, storageBytes}` keyed by base id — the
-   *  home cards' meta line + storage bar, folded into the same list response as
-   *  `ownerNames`. */
+  /** Keyed by base id; home cards' meta line + storage bar. Same list
+   *  response as `ownerNames`. */
   baseStats?: Record<string, KnowledgeBaseStats>;
-  /** The workspace's per-base storage cap in bytes, same response. Read by
-   *  BOTH modes: the home cards and the selected base's overview. */
+  /** Per-base storage cap in bytes, same response. Read by BOTH modes: home
+   *  cards and the selected base's overview. */
   kbStorageLimit?: number | null;
   currentUserId: string;
   role: Role;
@@ -48,19 +47,16 @@ interface Props {
 /**
  * Knowledge V2 root — TWO MODES over one controller, picked by the selection:
  *
- *   - **no selection → HOME** (`/knowledge`): the card grid over every visible
- *     base, with search + scope pills. Mounts no trees.
- *   - **a selection → BASE DETAIL** (`/knowledge/{base}`): the two-pane
- *     list+detail view, the list pane scoped to that ONE base's tree.
+ *   - no selection → HOME (`/knowledge`): card grid, mounts no trees.
+ *   - a selection → BASE DETAIL (`/knowledge/{base}`): two-pane list+detail,
+ *     list pane scoped to that ONE base's tree.
  *
- * The selection is the mode because the selection is already what the URL
- * encodes, in both directions (`use-knowledge-v2-controller` § URL ↔ selection
- * sync). Reading `useParams` here instead would fork that agreement and put
- * the mode one render behind the view.
+ * ⚠ Selection is the mode because selection is what the URL encodes in both
+ * directions (`use-knowledge-v2-controller` § URL ↔ selection sync). Reading
+ * `useParams` here forks that agreement and puts the mode one render behind.
  *
- * All state + URL sync + tree mutations live in the controller hook; this
- * composes the modes and the root-mounted delete/move dialogs. The far-left
- * workspace rail + nav are the shell's.
+ * State + URL sync + tree mutations live in the controller hook; this composes
+ * the modes and the root-mounted delete/move dialogs.
  */
 export function KnowledgeV2({
   workspaceId,
@@ -88,8 +84,8 @@ export function KnowledgeV2({
     urlSync,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // ONE name for the base this view is on. Non-null below the home
-  // early-return, which is what makes the detail branch's props total.
+  // Non-null below the home early-return; that is what makes the detail
+  // branch's props total.
   const openBase = c.selection?.base ?? null;
 
   if (!openBase) {
@@ -101,10 +97,9 @@ export function KnowledgeV2({
           baseStats={baseStats}
           kbStorageLimit={kbStorageLimit}
           ownerNames={ownerNames}
-          // Stars come from the CONTROLLER, not from a prop: they are per-user
-          // and ride the same live base-list query the controller already owns,
-          // so threading them through the host page would only give the grid a
-          // second, staler copy.
+          // ⚠ Stars come from the CONTROLLER, not from a prop: per-user, and
+          // riding the same live base-list query the controller already owns.
+          // A host-page prop would only give the grid a second, staler copy.
           starredBaseIds={c.starredBaseIds}
           currentUserId={currentUserId}
           query={c.query}
@@ -117,9 +112,7 @@ export function KnowledgeV2({
           heroImageSrc={heroImageSrc}
         />
 
-        {/* Home has no base selected, so the base-scoped dialogs below have
-            nothing to act on — only the create flow (owned by the caller)
-            is reachable from here. */}
+        {/* No base selected: base-scoped dialogs have nothing to act on. */}
       </div>
     );
   }
@@ -134,11 +127,10 @@ export function KnowledgeV2({
         editingNodeId={c.editingNodeId}
         treeHandlers={c.treeHandlers}
         onSelectEntry={c.handleSelectEntry}
-        // A REAL navigation, not a local state flip: leaving a base is the
-        // one move here that changes which route matches, and routing it
-        // through `goToBase` keeps history honest (Back returns to the base)
-        // and lets the URL→selection handler clear the selection, exactly as
-        // it does for a delete.
+        // ⚠ A REAL navigation, not a local state flip: leaving a base is the
+        // one move here that changes which route matches. Routing it through
+        // `goToBase` keeps history honest (Back returns to the base) and lets
+        // the URL→selection handler clear the selection, as it does on delete.
         onGoHome={() => routing.goToBase(null, "push")}
       />
       <DetailPanel
@@ -154,10 +146,9 @@ export function KnowledgeV2({
         canEditBase={c.canEdit(openBase.id)}
         onTreeRefresh={c.refreshTree}
         onBaseSaved={() => {
-          // The bases list is a live query now — refetch it so the local
-          // user's own base rename/description edit reflects immediately;
-          // refreshServerData() still repulls the owner/team pills, which
-          // this tree renders but does not fetch.
+          // Refetch the live bases query so an own rename/description shows
+          // immediately; refreshServerData() repulls the owner/team pills,
+          // which this tree renders but does not fetch.
           c.refetchBases();
           routing.refreshServerData();
         }}
@@ -202,9 +193,9 @@ export function KnowledgeV2({
         />
       ) : null}
 
-      {/* Mounted for the whole life of the detail mode, not gated on
-          `settingsOpen`: ModalShell drives its enter transition off the
-          `open` prop changing after mount. */}
+      {/* ⚠ Mounted for the whole detail mode, NOT gated on `settingsOpen`:
+          ModalShell drives its enter transition off `open` changing after
+          mount. */}
       <BaseSettingsModal
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

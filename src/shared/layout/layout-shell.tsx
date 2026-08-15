@@ -4,27 +4,19 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { FlushGrid } from "@/shared/design";
 
-// Top-level routes that are NOT a workspace slug. Anything else is a
-// workspace route, where the new-design AppShell (app) group layout owns
-// all chrome and this legacy shell renders nothing.
-//
-// `canvas` used to be listed here for the top-level `/canvas` legacy redirect.
-// That page is gone and the proxy answers the URL before routing does
-// (`RETIRED_TOP_LEVEL` in `shared/lib/url/website-retirement.ts` 302s it to
-// `/get-started`), so the entry could only ever have described a request that
-// never arrives.
+// ⚠ Top-level routes that are NOT a workspace slug. Anything absent from this
+// set is treated as a workspace route, where the (app) group AppShell owns all
+// chrome and this legacy shell renders nothing.
 const NON_WORKSPACE_ROOTS = new Set([
   "admin",
   "auth",
-  // The post-retirement billing + account surface (`/billing/{segment}`). The
-  // segment is the SECOND path part here, not the first, so without this entry
-  // `isAppShellRoute` reads "billing" as a workspace slug and dresses the page
-  // as app chrome. Same reason `get-started` is listed below.
+  // `/billing/{segment}` — segment is the SECOND path part, so without this
+  // entry `isAppShellRoute` reads "billing" as a workspace slug and dresses the
+  // page as app chrome.
   "billing",
   "design",
-  // The post-auth download page. It draws its own full-viewport surface (like
-  // login), but it must be listed here or `isAppShellRoute` reads it as a
-  // workspace slug and paints the app's dark rail colour behind it.
+  // Post-auth download page. Draws its own full-viewport surface, but must be
+  // listed or `isAppShellRoute` paints the app's dark rail behind it.
   "get-started",
   "invite",
   "join",
@@ -39,12 +31,10 @@ const NON_WORKSPACE_ROOTS = new Set([
 ]);
 
 /**
- * Legacy chrome shell. After the new-design rollout it only dresses
- * non-workspace pages (login, pricing, /workspaces, /settings, admin,
- * invite, oauth, legal) with the dark centered-column look; the marketing
- * landing passes through with no chrome at all. Every workspace
- * route is dressed by the (app) group AppShell layout and bypasses this
- * component entirely.
+ * Legacy chrome shell — dresses only non-workspace pages (login, pricing,
+ * /workspaces, /settings, admin, invite, oauth, legal) in the dark
+ * centered-column look. Marketing landing passes through bare; every workspace
+ * route is dressed by the (app) group AppShell and bypasses this entirely.
  */
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -55,8 +45,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const isAppShellRoute =
     segments.length >= 1 && !NON_WORKSPACE_ROOTS.has(segments[0]);
 
-  // Body background: landing manages its own; app-shell routes get
-  // the new dark rail color; legacy routes keep the flat dark frame.
   useEffect(() => {
     if (isNoChrome) {
       document.body.classList.remove("mosaic-bg");
@@ -82,7 +70,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Legacy non-workspace pages: centered content column on the dark frame.
   return (
     <>
       <FlushGrid />

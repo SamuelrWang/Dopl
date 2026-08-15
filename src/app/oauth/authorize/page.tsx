@@ -8,19 +8,13 @@ import { AuthSplitLayout } from "@/shared/layout/auth-split";
 export const dynamic = "force-dynamic";
 
 /**
- * OAuth 2.1 authorization endpoint (consent screen) for the remote MCP
- * server. MCP clients redirect the user's browser here after discovery +
- * dynamic client registration. Flow:
- *   1. Validate client_id / redirect_uri (exact match) / response_type / PKCE.
- *      Invalid client or redirect ⇒ render an error (never redirect to an
- *      unverified URI).
- *   2. Require a logged-in Dopl user — bounce through /login and return here.
- *   3. Render a consent form. Approve POSTs to /api/oauth/authorize, which
- *      issues the authorization code and redirects back to the client.
- *
- * Shares the light split layout with /login + onboarding (left form column,
- * right banner panel). Server component with a plain HTML form — no client
- * JS required.
+ * OAuth 2.1 consent screen for the remote MCP server. Clients redirect here after discovery +
+ * dynamic client registration.
+ *   1. Validate client_id / redirect_uri (EXACT match) / response_type / PKCE.
+ *      ⚠ Invalid client or redirect ⇒ render an error; NEVER redirect to an unverified URI.
+ *   2. Require a logged-in user — bounce through /login and return here.
+ *   3. Render a consent form; Approve POSTs to /api/oauth/authorize.
+ * Server component with a plain HTML form — no client JS.
  */
 
 function first(v: string | string[] | undefined): string {
@@ -59,7 +53,6 @@ export default async function AuthorizePage({
     return <Screen title="Authorization error" body={<ErrorList errors={errors} />} />;
   }
 
-  // Require a logged-in user; bounce through login and return to this exact URL.
   const user = await getUser();
   if (!user) {
     const qs = new URLSearchParams({
@@ -74,19 +67,15 @@ export default async function AuthorizePage({
     redirect(`/login?redirectTo=${encodeURIComponent(`/oauth/authorize?${qs.toString()}`)}`);
   }
 
-  // Offer write access when the client requested it, or when it requested no
-  // specific scope (default full). Read is always granted.
+  // Write offered when requested or when no scope was named (default full); read always granted.
   const requestsWrite =
     scope.trim() === "" || scope.split(/\s+/).includes("dopl.write");
   const clientLabel = client?.client_name || "An MCP client";
 
-  // VERIFICATION (anti-phishing). `client_name` is attacker-controllable — DCR
-  // is an open endpoint, so anyone can register a client called "Dopl Official
-  // Desktop" and send this /authorize link to a victim. A client is treated as
-  // verified only if it's the reserved first-party device client, or the user
-  // has connected THIS client before (a prior `mcp_tokens` row). A first-time
-  // client is marked unverified and its self-reported name is framed as a
-  // claim, never rendered as a trusted first-party label.
+  // ⚠ ANTI-PHISHING. `client_name` is attacker-controllable — DCR is open, so anyone can register
+  // "Dopl Official Desktop" and send this /authorize link to a victim. Verified ONLY for the
+  // reserved first-party device client or a client the user has connected before (a prior
+  // `mcp_tokens` row). Otherwise the self-reported name renders as a CLAIM, never a label.
   const verified =
     clientId === DEVICE_CLIENT_ID || (await userHasPriorGrant(user.id, clientId));
 
@@ -197,8 +186,7 @@ export default async function AuthorizePage({
   );
 }
 
-/** Light split surface shared with /login: brand + title in the left column,
- *  banner panel on the right (collapses on mobile). */
+/** Light split surface shared with /login (banner panel collapses on mobile). */
 function Screen({ title, body }: { title: string; body: React.ReactNode }) {
   return (
     <AuthSplitLayout>

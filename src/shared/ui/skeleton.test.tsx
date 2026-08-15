@@ -11,17 +11,10 @@ import {
 } from "./skeleton";
 
 /**
- * The loading kit. Two properties matter and neither is cosmetic:
- *
- *  1. ONE pulse recipe. Every ghost in the app must come out of `Skeleton`,
- *     because the two hand-rolled `animate-pulse` clones this kit replaced
- *     (channels-skeleton, doc-pane-chrome) had drifted to different surface
- *     tints — which is exactly what the file's own header and DESIGN-SYSTEM
- *     forbid.
- *  2. Every loading surface ANNOUNCES itself. The visuals are `aria-hidden`
- *     shimmer, so without a live region a screen reader gets silence where
- *     the old text loaders at least said "Loading". `CheckoutSkeleton`
- *     (billing) is the quality bar: `aria-busy` + an `sr-only` label.
+ * Two non-cosmetic properties: (1) ONE pulse recipe — every ghost comes out of
+ * `Skeleton`, since hand-rolled clones drift to different surface tints;
+ * (2) every loading surface ANNOUNCES itself — visuals are `aria-hidden`
+ * shimmer, so without `aria-busy` + `sr-only` a screen reader gets silence.
  */
 
 /** Every ghost block the kit emits, by its stable data-slot marker. */
@@ -42,7 +35,6 @@ describe("TwoPaneListSkeleton", () => {
   it("paints the elevated two-pane surface, not flat panels", () => {
     const html = renderToStaticMarkup(<TwoPaneListSkeleton />);
     expect(html).toContain("page-float");
-    // list pane + detail pane
     expect(html).toContain("border-r border-border-default");
     expect(html).toContain("max-w-[760px]");
   });
@@ -65,7 +57,6 @@ describe("TwoPaneListSkeleton", () => {
       <TwoPaneListSkeleton detail={<div id="mine" />} />
     );
     expect(html).toContain('id="mine"');
-    // the default document ghost's framed meta-card is gone
     expect(html).not.toContain("border-border-strong");
   });
 
@@ -93,7 +84,6 @@ describe("SkeletonRow", () => {
 describe("TranscriptSkeleton", () => {
   it("alternates agent and user bubbles, mirroring the loaded list", () => {
     const html = renderToStaticMarkup(<TranscriptSkeleton bubbles={4} />);
-    // user turns indent right on the subtle card surface
     expect(html.match(/ml-12/g)).toHaveLength(2);
     expect(html.match(/bg-bg-elevated/g)).toHaveLength(2);
   });
@@ -133,7 +123,6 @@ describe("PageShellSkeleton", () => {
     const html = renderToStaticMarkup(<PageShellSkeleton label="Starting Dopl" />);
     expect(html).toContain('<span class="sr-only">Starting Dopl</span>');
     expect(html).toContain('aria-busy="true"');
-    // the old text loader rendered the label as visible muted copy
     expect(html).not.toContain("text-caption text-text-muted");
   });
 });

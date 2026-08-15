@@ -5,8 +5,8 @@ import { buildSeedSkills } from "./seed";
 
 export interface SeedSkillsResult {
   skillsCreated: number;
-  /** slug → { id, name } for the seeded skills, so the ontology and
-   *  later seeds can point their skill references at real ids. */
+  /** slug → { id, name }, so the ontology and later seeds can point their
+   *  skill references at real ids. */
   skillIdBySlug: Record<string, { id: string; name: string }>;
 }
 
@@ -16,9 +16,8 @@ export async function seedWorkspace(
   const existing = await repo.listSkillsForWorkspace(ctx.workspaceId);
   if (existing.length > 0) return { skillsCreated: 0, skillIdBySlug: {} };
 
-  // ONE insert, not one per fixture. This runs inside the post-signup
-  // redirect (auth/callback → seedNewWorkspace), where every serial
-  // round-trip is latency the user watches.
+  // ⚠ ONE insert, not one per fixture: this runs inside the post-signup
+  // redirect, where every serial round-trip is latency the user watches.
   const skills = await repo.insertSkills(
     buildSeedSkills().map((fixture) => ({
       workspaceId: ctx.workspaceId,
@@ -30,14 +29,12 @@ export async function seedWorkspace(
       connectors: fixture.connectors,
       status: fixture.status,
       folder: fixture.folder,
-      // Seeded fixtures are starter content — public so every member
-      // can see and run them. Owner-explicit `createSkill` defaults
-      // to private; only the seed path overrides.
+      // Starter content: public so every member can see and run it.
+      // `createSkill` defaults private; only the seed path overrides.
       visibility: "public" as const,
-      // Starter skills are onboarding scaffold: read-only to AGENTS (the
-      // human owner can still edit them in the web UI), mirroring the seeded
-      // "Dopl Guide" knowledge base. Set explicitly so it doesn't depend on
-      // the insertSkill default (audit F-10b).
+      // ⚠ Read-only to AGENTS (humans still edit in the web UI), mirroring
+      // the seeded "Dopl Guide" KB. Set EXPLICITLY so it can't ride on the
+      // insertSkill default.
       agentWriteEnabled: false,
       body: fixture.body,
       createdBy: ctx.userId,

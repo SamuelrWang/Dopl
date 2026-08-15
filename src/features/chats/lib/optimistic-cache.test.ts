@@ -1,11 +1,6 @@
-/**
- * The rules that decide whether an optimistic chat write leaves a lie behind.
- *
- * Each case here is a way the pending row and the saved row could both end up
- * in a cache, or a way a patch could quietly widen past the row it was aimed
- * at. They are pure functions on the RAW response bodies, so none of this
- * needs React, a DOM or a network.
- */
+/** Rules deciding whether an optimistic chat write leaves a lie behind:
+ *  duplicate pending + saved rows, or a patch widening past its target. Pure
+ *  functions on the RAW response bodies — no React, DOM or network. */
 
 import { describe, expect, it } from "vitest";
 import type { Chat, ChatDetail, ChatFolder } from "../types";
@@ -68,8 +63,8 @@ describe("scope mapping", () => {
   it("resolves the same columns the server writes", () => {
     expect(scopeFields("private", ["t-1"])).toEqual({
       visibility: "private",
-      // `updateChatForUser` lands anything that is not public+teams on
-      // 'workspace' with no grants — a private chat keeps none.
+      // `updateChatForUser` lands anything not public+teams on 'workspace'
+      // with no grants.
       accessMode: "workspace",
       grantedTeamIds: [],
     });
@@ -117,9 +112,8 @@ describe("pending folders", () => {
   });
 
   it("DECLINES TO SEED a cache that has no data", () => {
-    // A folders read still in flight has nothing for the write to append to;
-    // seeding it would render a one-folder archive and then have the landing
-    // read replace it.
+    // ⚠ An in-flight folders read has nothing to append to; seeding renders a
+    // one-folder archive until the landing read replaces it.
     expect(addFolderRow(undefined, buildPendingFolder("pending:x", "Mid"))).toBeUndefined();
   });
 
@@ -196,8 +190,8 @@ describe("transcript cache", () => {
   };
 
   it("MERGES header fields and keeps the transcript", () => {
-    // The chat PATCH answers with the LIST-level `Chat` — no `messages`.
-    // Assigning it here would evict a 200-message transcript on a pin toggle.
+    // ⚠ The chat PATCH answers with the LIST-level `Chat` (no `messages`);
+    // assigning it evicts the transcript on a pin toggle.
     const next = mergeChatDetail({ chat: detail }, chat({ pinned: true }));
     expect(next?.chat.pinned).toBe(true);
     expect(next?.chat.messages).toHaveLength(2);

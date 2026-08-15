@@ -3,12 +3,8 @@ import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { requireSkillSlug, toSkillErrorResponse } from "@/shared/api/skill-route";
 import { buildSkillContext, getSkillHistory } from "@/features/skills/server/service";
 
-/**
- * GET /api/skills/[skillSlug]/history — version metadata (no bodies) +
- * structural events for the skill, newest first. `?limit=` caps each
- * stream (default 100, max 500). The history panel merges the two
- * streams by createdAt.
- */
+/** GET — version metadata (no bodies) + structural events, newest first. `?limit=` caps each
+ *  stream (default 100, max 500); the history panel merges them by createdAt. */
 export const GET = withWorkspaceAuth(async (request: NextRequest, auth) => {
   try {
     const slug = requireSkillSlug(auth.params);

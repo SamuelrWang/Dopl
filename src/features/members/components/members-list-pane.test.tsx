@@ -4,13 +4,9 @@ import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type { WorkspaceMemberView } from "../types";
 import { MembersListPane } from "./members-list-pane";
 
-/**
- * The console used to render the REAL list with `members = []` while the
- * roster query was still in flight, so a cold arrival claimed "No members
- * yet." in a workspace that always contains at least the person reading it.
- * An unanswered query is not an empty workspace — while loading the pane
- * ghosts rows instead.
- */
+/** ⚠ An unanswered query is not an empty workspace: with `members = []` in
+ *  flight the pane must ghost rows, not claim "No members yet." in a workspace
+ *  that always contains at least the reader. */
 
 function member(over: Partial<WorkspaceMemberView> = {}): WorkspaceMemberView {
   return {

@@ -1,13 +1,7 @@
 /**
- * `POST /api/oauth/token` — the OAuth 2.1 token endpoint.
- *
- * Its codes/tokens are 256-bit single-use, so unlike /register it mints nothing
- * on a bad guess (cost-only). These tests pin the per-IP ceiling that now caps a
- * brute-force sweep, and that it runs BEFORE any grant work — while the
- * legitimate authorization_code exchange still returns a token when within it.
- *
- * The real `enforceOAuthIpRateLimit` runs; only its underlying RPC and the
- * grant helpers are stubbed.
+ * `POST /api/oauth/token`. Pins the per-IP ceiling and that it runs BEFORE any grant work, while
+ * a legitimate authorization_code exchange still returns a token within it.
+ * The real `enforceOAuthIpRateLimit` runs; only its RPC and the grant helpers are stubbed.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

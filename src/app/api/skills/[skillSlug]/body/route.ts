@@ -10,12 +10,8 @@ import {
 import { SkillFileWriteSchema } from "@/features/skills/schema";
 
 /**
- * Read / write the skill's single SKILL.md body.
- *
- * Skills are single-file: this replaces the old per-file-name
- * `/files/[fileName]` surface. GET returns the SKILL.md row (body +
- * `updatedAt` version token); PUT overwrites it with the same
- * optimistic-concurrency precondition (X-Updated-At → 412 on mismatch).
+ * Read / write the skill's single SKILL.md body. GET returns the row (body + `updatedAt` version
+ * token); PUT overwrites under the X-Updated-At precondition (→ 412 on mismatch).
  */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -31,9 +27,7 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildSkillContext(auth);
     const input = await parseJson(request, SkillFileWriteSchema);
-    // Optimistic-concurrency precondition on the SKILL.md row's
-    // updated_at. Mismatch → 412 SKILL_STALE_VERSION; client surfaces
-    // conflict resolution.
+    // Precondition on the row's updated_at. Mismatch → 412 SKILL_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const { file, skillUpdatedAt } = await writeBody(
       ctx,
@@ -41,9 +35,8 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
       input,
       expectedUpdatedAt
     );
-    // `skillUpdatedAt` is the row's metadata-CAS clock post-write — the web
-    // editor threads it as its metadata precondition (see F-038 D10). MCP
-    // clients ignore the extra field.
+    // `skillUpdatedAt` is the row's metadata-CAS clock post-write; the web editor threads it as
+    // its metadata precondition. MCP clients ignore the extra field.
     return NextResponse.json({ file, skillUpdatedAt });
   } catch (err) {
     return toSkillErrorResponse(err);

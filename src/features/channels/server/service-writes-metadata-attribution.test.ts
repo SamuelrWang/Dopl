@@ -1,39 +1,18 @@
 /**
- * F-145 — THE AGENT-ATTRIBUTION STRIP, which was the only defence and had no
- * test at all.
+ * ⚠ THE AGENT-ATTRIBUTION STRIP — `resolvePostMetadata` deletes
+ * `to_agent_id` / `to_agent_ids` / `author_agent_id` from caller metadata and
+ * never re-stamps them. Do NOT remove those `delete` lines as dead code.
  *
- * `resolvePostMetadata` deletes three keys from caller metadata and never
- * re-stamps any of them:
+ * The WRITE path for named agents is gone; the READ path is deliberately alive,
+ * because stored rows still carry `author_agent_id` and the transcript renders
+ * them (`lib/agent-display.ts`, `channel-transcript.tsx`: "quartz · Ada's
+ * agent"). So the key is a display credential with a live reader and NO
+ * legitimate writer, which makes the strip the ENTIRE boundary: a caller able to
+ * set it attributes their own words to somebody's retired agent on the other
+ * member's screen. `to_agent_id` / `to_agent_ids` are a forged addressee.
  *
- *   delete metadata.to_agent_id;
- *   delete metadata.to_agent_ids;
- *   delete metadata.author_agent_id;
- *
- * MUTATION-PROVEN GAP. Removing each of those three lines individually left all
- * 2109 root tests green. Every sibling reserved key — `intent`, `handoff`,
- * `to_user_id`, `session_id`, `summary`, `runtime`, `appVersion` — has a firing
- * SECURITY test; these three had theirs inside
- * `service-writes-metadata-agents.test.ts`, which was DELETED whole with the
- * named-agent feature in rollback §1. The feature went; the key did not, and
- * neither did the reason it is stripped.
- *
- * WHY IT STILL MATTERS WITH THE FEATURE GONE — and this is the part the deletion
- * missed. The WRITE path for named agents is gone; the READ path is deliberately
- * alive, because stored rows still carry `author_agent_id` and the transcript
- * still has to render them (`lib/agent-display.ts`, `channel-transcript.tsx`:
- * "quartz · Ada's agent"). So the key is now a display credential with a live
- * reader and NO legitimate writer — which makes the strip the entire boundary.
- * A caller who could set it on a NEW post would attribute their own words to
- * somebody's retired agent, on the other member's screen, with the server's
- * own byline. `to_agent_id` / `to_agent_ids` are the same shape one lane over:
- * a forged addressee on a stored row.
- *
- * A KEY WITH NO WRITER IS THE EASIEST THING IN A CODEBASE TO DELETE BY MISTAKE
- * — it reads as dead code, and the strip does not fail loudly when it goes. So
- * this file drives the real `postMessage` and asserts the ABSENCE, per key,
- * across every shape a caller can send one in. Harness copied from
- * `service-writes-metadata-session.test.ts`, whose key is stripped on identical
- * terms.
+ * Drives the real `postMessage` and asserts the ABSENCE per key, across every
+ * shape a caller can send one in.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -158,18 +137,16 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
 
       const meta = capturedMetadata();
       expect(has(meta, key)).toBe(false);
-      // The STORED message, not just the insert argument: the row the peer
-      // eventually renders is the thing that must not carry it.
+      // ⚠ The STORED message, not just the insert argument — the row the peer
+      // renders is what must not carry it.
       expect(has(msg.metadata as Record<string, unknown>, key)).toBe(false);
-      // Only the reserved key is taken — unrelated caller metadata survives, so
-      // the strip is a scalpel and a broad wipe would not pass this.
+      // Scalpel, not a broad wipe — unrelated caller metadata survives.
       expect(meta.keep).toBe(1);
     });
   }
 
   it("SECURITY: all three at once, on one post", async () => {
-    // The realistic forgery is not one key: an old client (or a model that read
-    // stale docs) sends the whole named-agent envelope together.
+    // The realistic forgery sends the whole named-agent envelope together.
     await postMessage(ctx, "dm", {
       body: "answering as your agent",
       metadata: {
@@ -186,8 +163,8 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
   });
 
   it("SECURITY: the strip does not care what the value LOOKS like", async () => {
-    // A `delete` is type-blind and must stay that way: a guard that only
-    // stripped "valid-looking" ids would leave the shapes a renderer coerces.
+    // ⚠ `delete` is type-blind and must stay so — a guard stripping only
+    // "valid-looking" ids leaves the shapes a renderer coerces.
     for (const value of [
       AGENT,
       "",
@@ -222,9 +199,8 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
   });
 
   it("SECURITY: nothing re-stamps them either — a clean post grows no agent key", async () => {
-    // The other half of "stripped and NEVER re-stamped". A future stamp added
-    // beside `runtime` / `session_id` would make the strip pointless, and this
-    // is what would notice.
+    // ⚠ The "NEVER re-stamped" half — a future stamp added beside `runtime` /
+    // `session_id` makes the strip pointless.
     await postMessage(
       { ...ctx, runtime: "desktop-session", appVersion: "1.9.0" },
       "dm",
@@ -233,16 +209,14 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
 
     const meta = capturedMetadata();
     for (const [key] of AGENT_KEYS) expect(has(meta, key)).toBe(false);
-    // …and the stamps that ARE legitimate still landed, so this is proving an
-    // absence in a metadata object that is otherwise populated.
+    // Absence proven inside metadata that is otherwise populated.
     expect(meta.runtime).toBe("desktop-session");
     expect(meta.to_user_id).toBe(PEER);
   });
 
   it("SECURITY: a USER-credentialed caller gets the same strip as an agent one", async () => {
-    // The web and the desktop listener post on the operator's cookies
-    // (`source: "user"`). Attribution is not a scope question — nobody may
-    // author as somebody's agent — so the strip must not be source-conditional.
+    // ⚠ Attribution is not a scope question — nobody may author as somebody's
+    // agent — so the strip must NOT be source-conditional.
     await postMessage({ ...ctx, source: "user" }, "dm", {
       body: "from the app",
       metadata: { author_agent_id: AGENT },
@@ -253,23 +227,10 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
 });
 
 /**
- * F-110 residual (d) / F-111 residual (a), open 2026-07-31 → 2026-08-06.
- *
- * `to_user_notify` was declared reserved in `docs/MULTIPLAYER-PLAN.md` and in
- * this module's own docblock, and was never actually in the strip — so the ONE
- * caller who read those docs and believed them could set it and have it persist
- * verbatim. Both residuals carried the same standing instruction: the consumer
- * and the strip must ship in the SAME change. That instruction is now
- * unfollowable — the consumer it named (the agent→human escalation verdict) is
- * deleted with rollback §1 and nobody will build it — so the key was going to
- * stay caller-settable forever on a promise nobody could keep.
- *
- * Stripped unconditionally instead, and pinned HERE rather than beside the
- * agent keys because the failure mode is the opposite one: those keys have a
- * live reader, this one has none, which is exactly why a future edit would read
- * the `delete` as dead code and remove it. The reason to keep it is that the
- * name is documented as server-owned, so the day something does read it, it
- * must not already be full of values a caller chose.
+ * ⚠ `to_user_notify` is stripped unconditionally and has NO reader at all — the
+ * failure mode is a future edit reading the `delete` as dead code. Keep it: the
+ * name is documented as server-owned, so the day something does read it, it must
+ * not already be full of values a caller chose.
  */
 describe("SECURITY: the documented-but-unbuilt `to_user_notify` is stripped", () => {
   it("SECURITY: a caller-supplied metadata.to_user_notify never reaches the row", async () => {
@@ -283,7 +244,7 @@ describe("SECURITY: the documented-but-unbuilt `to_user_notify` is stripped", ()
     expect(has(msg.metadata as Record<string, unknown>, "to_user_notify")).toBe(
       false
     );
-    // Scalpel, not a wipe — the same property the agent-key strip is held to.
+    // Scalpel, not a wipe.
     expect(meta.keep).toBe(1);
   });
 
@@ -315,7 +276,6 @@ describe("SECURITY: the documented-but-unbuilt `to_user_notify` is stripped", ()
 
     const meta = capturedMetadata();
     expect(has(meta, "to_user_notify")).toBe(false);
-    // Proving an absence inside metadata that is otherwise populated.
     expect(meta.to_user_id).toBe(PEER);
   });
 });

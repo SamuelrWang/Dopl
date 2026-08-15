@@ -1,15 +1,10 @@
 "use client";
 
 /**
- * ConnectClients — per-client MCP setup cards for the overview page.
- *
- * One card per agent (Claude Code, Codex CLI, Claude Desktop / claude.ai)
- * with the exact command or URL to copy, the 2-3 steps that follow, and a
- * link to the client's official setup docs. Auth is OAuth — the browser
- * opens once to sign in; no API keys.
- *
- * Light-token styling to match the members/KB pages (card-surface +
- * border-border-default).
+ * Per-client MCP setup cards: one per agent (Claude Code, Codex CLI, Claude
+ * Desktop / claude.ai) with the command or URL to copy, the following steps,
+ * and a link to that client's setup docs. Auth is OAuth — browser sign-in once,
+ * no API keys.
  */
 
 import { useEffect, useState } from "react";

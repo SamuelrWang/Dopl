@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-// Deep import, not the `settings-modal` barrel — the barrel drags
-// SettingsModal (and its `next/navigation` tree) into the desktop SPA's
-// members-page bundle, where any `next/*` module fails the vite build.
+// ⚠ Deep import, not the `settings-modal` barrel: the barrel drags
+// SettingsModal and its `next/navigation` tree into the desktop SPA bundle,
+// where any `next/*` module fails the vite build.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { cn } from "@/shared/lib/utils";
 import type { AccessMatrixResource } from "@/features/teams/types";
@@ -25,12 +25,9 @@ interface Props {
   onCreated: () => void;
 }
 
-/**
- * Create-team flow: name, color swatch, member multi-pick, and initial
- * per-resource access levels. `resources` arrives already filtered by
- * `use-workspace-resources` (retired types never reach this dialog), so
- * the grant rows render whatever grantable resources survive.
- */
+/** Create-team flow: name, color swatch, member multi-pick, initial
+ *  per-resource access levels. `resources` arrives already filtered by
+ *  `use-workspace-resources`, so retired types never reach this dialog. */
 export function CreateTeamDialog({
   workspaceSlug,
   open,
@@ -92,8 +89,8 @@ export function CreateTeamDialog({
         color,
         memberIds: [...selected],
         grants: [...grants.entries()].map(([key, level]) => {
-          // Key is `${resourceType}|${resourceId}` from the row above, so the
-          // cast just re-splits what this component encoded.
+          // Key is `${resourceType}|${resourceId}` from the row above — the
+          // cast re-splits what this component encoded.
           const [resourceType, resourceId] = key.split("|") as [
             TeamResourceType,
             string,

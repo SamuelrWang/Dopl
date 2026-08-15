@@ -11,20 +11,11 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[workspaceSlug]/overview-counts — everything the
- * overview page's header needs in one round trip: the three head-counts
- * behind the stat cards plus the agent-connected badge. Any active
- * member can read (same gate as the sibling members / teams routes:
- * `resolveApiWorkspace` is membership-scoped, so a non-member 404s).
- *
- * Shape: `{ knowledgeBases, skills, members, isMcpConnected }`.
- *
- * The alternative — counting three list endpoints client-side — is three
- * full payloads for three integers.
- *
- * `isMcpConnected` failures degrade to `false` (and count failures to 0
- * inside the service), matching the RSC page: a stale badge beats a 500
- * on the workspace home.
+ * GET — the overview header in one round trip: `{ knowledgeBases, skills, members,
+ * isMcpConnected }`. Any active member; `resolveApiWorkspace` is membership-scoped so a
+ * non-member 404s. The alternative is three full payloads for three integers.
+ * `isMcpConnected` failures degrade to `false` (counts to 0 in the service): a stale badge beats
+ * a 500 on the workspace home.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
@@ -59,8 +50,7 @@ export const GET = withUserAuth(
         isMcpConnected(userId).catch(() => false),
       ]);
 
-      // Per-user data (the MCP badge is the caller's, not the
-      // workspace's) — never let a CDN cache it by URL alone.
+      // ⚠ Per-user data (the MCP badge is the caller's) — never CDN-cacheable by URL alone.
       return NextResponse.json(
         { ...counts, isMcpConnected: connected },
         { headers: { "Cache-Control": "private, no-store" } }

@@ -16,11 +16,8 @@ export interface ObjectAttribute {
   value: AttributeValue;
 }
 
-/**
- * One field of a column's object template: a label + kind with no
- * value. New children of the column are born with these as empty
- * attributes, ready to fill.
- */
+/** One field of a column's object template: label + kind, no value. New
+ *  children are born with these as empty attributes. */
 export interface TemplateField {
   key: string;
   label: string;
@@ -51,17 +48,11 @@ export interface OntologyObject {
   methods: ObjectMethod[];
   /** Contained objects. Columns are objects too — their children are the cards. */
   childIds: string[];
-  /**
-   * Column-only: default fields for new children. The column's own
-   * `type` doubles as the default type of new children.
-   */
+  /** Column-only: default fields for new children. */
   template: TemplateField[];
-  /**
-   * Optimistic-concurrency token — the row's `updated_at`. Read paths
-   * surface it so an edit can pass it back (as the `X-Updated-At`
-   * precondition) and be rejected with 412 if the object changed
-   * underneath. Optional so existing object literals stay valid.
-   */
+  /** Optimistic-concurrency token (row's `updated_at`). Passed back as the
+   *  `X-Updated-At` precondition → 412 if the object changed underneath.
+   *  Optional so existing object literals stay valid. */
   updatedAt?: string;
 }
 

@@ -19,21 +19,18 @@ import { PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
 export type { CheckoutPlan };
 
 export interface PlansBillingCoreProps {
-  /** Set when opened from a Stripe redirect — polls the subscription status
-   *  until the state settles. "success" (checkout) celebrates + finalizes;
-   *  "return" (portal cancel/downgrade) polls quietly so a stale Pro
-   *  doesn't linger. */
+  /** Set from a Stripe redirect — polls status until it settles. "success"
+   *  (checkout) celebrates + finalizes; "return" (portal cancel/downgrade)
+   *  polls quietly so a stale Pro doesn't linger. */
   billingReturn?: "success" | "return" | null;
   role: Role;
   workspaceId?: string;
-  /** Start a purchase of `plan`. The ONLY Stripe-shaped action in this pane:
-   *  the web binding mounts embedded checkout in place, the desktop binding
-   *  opens the web billing surface in the user's browser (the packaged
-   *  renderer's CSP refuses the Stripe script and every network origin). */
+  /** ONLY Stripe-shaped action here: web mounts embedded checkout in place,
+   *  desktop opens the web billing surface in the browser (packaged CSP
+   *  refuses the Stripe script and every network origin). */
   onUpgrade: (plan: CheckoutPlan) => void;
-  /** Open the Stripe billing portal. Owned by the binding because reaching it
-   *  means leaving this document — a same-tab redirect on the web, an
-   *  `openExternal` of the same Stripe-hosted URL on the desktop. */
+  /** Stripe billing portal. Binding-owned because reaching it leaves this
+   *  document — same-tab redirect on web, `openExternal` on desktop. */
   onManage: () => void;
   /** Portal request state, owned by whoever owns `onManage`. */
   portalLoading?: boolean;
@@ -41,21 +38,13 @@ export interface PlansBillingCoreProps {
 }
 
 /**
- * Plans & Billing — Starter / Pro ($5.99 flat, single member) / Team
- * ($7.99 per seat). Shows the current plan, the per-plan price line, an
- * object usage meter when the free workspace is capped, the
- * chats-window note, and the right action: admins/owners upgrade
- * (`onUpgrade` with an explicit plan), switch a live Solo subscription to
- * Team in place (`/api/billing/upgrade-to-team` — no second checkout), or
- * manage billing (portal); everyone else sees plan info with an "ask an
- * admin" note. A past_due workspace keeps its paid plan but surfaces a
- * warning banner. `workspaceId` scopes every read/checkout/portal call to
- * the workspace whose settings are open — without it the default workspace
- * would leak in.
- *
- * Next-free and Stripe-free core: everything both apps render lives here, and
- * the two actions that hand off to Stripe arrive as props. `./plans-billing`
- * is the web binding (embedded checkout in-pane); the desktop renderer's is
+ * Plans & Billing — Starter / Pro ($5.99 flat, single member) / Team ($7.99 per
+ * seat). Admins/owners upgrade, switch a live Solo sub to Team in place
+ * (`/api/billing/upgrade-to-team`, no second checkout), or open the portal.
+ * ⚠ `workspaceId` scopes every read/checkout/portal call to the workspace whose
+ * settings are open — without it the DEFAULT workspace leaks in.
+ * Next- and Stripe-free core; Stripe hand-offs arrive as props.
+ * `./plans-billing` = web binding, desktop's is
  * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`.
  */
 export function PlansBillingCore({
@@ -94,8 +83,8 @@ export function PlansBillingCore({
     if (ent.isPaid) setFinalizing(false);
   }, [ent.isPaid]);
 
-  // Live Solo → Team, swapped in place on the existing subscription. Pure
-  // API — no checkout — so it runs identically over either transport.
+  // Live Solo → Team, swapped in place on the existing subscription. Pure API,
+  // no checkout, so it runs identically over either transport.
   async function handleSwitchToTeam() {
     setSwitching(true);
     setSwitchError(null);
@@ -284,9 +273,8 @@ function BillingSummary({
         </>
       )}
 
-      {/* Credits are metered on EVERY plan — free, Pro and Team all have a
-          monthly MCP allowance — so this sits outside the plan branch above,
-          unlike the object cap, which only exists for capped free workspaces. */}
+      {/* Outside the plan branch on purpose: credits are metered on EVERY plan,
+          unlike the object cap (capped free workspaces only). */}
       <UsageMeter
         label="MCP credits"
         used={ent.credits.used}

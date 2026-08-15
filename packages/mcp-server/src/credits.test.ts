@@ -1,24 +1,18 @@
 /**
- * INVARIANT SUITE — MCP credits at the registrar seam.
+ * INVARIANT SUITE — MCP credits at the registrar seam. ⚠ The registrar's
+ * `wrapped` is the ONLY exactly-once-per-tool-call seam (one tool call makes
+ * 0..N loopback requests), so the three ways the charge can be wrong:
  *
- * The registrar's `wrapped` is the ONLY exactly-once-per-tool-call seam in the
- * product (a single tool call makes 0..N loopback requests), so the three
- * things pinned here are the three ways the charge can be wrong:
- *
- *   1. EXACTLY ONCE, on BOTH terminal paths — the session-default branch and
- *      the `workspace=`-arg branch — and against the RIGHT workspace id.
+ *   1. EXACTLY ONCE on BOTH terminal paths (session-default branch and
+ *      `workspace=`-arg branch), against the RIGHT workspace id.
  *   2. EXHAUSTION HARD-BLOCKS: the handler never runs, and the refusal names
  *      the upgrade URL the server handed back.
- *   3. INFRASTRUCTURE FAILURE FAILS OPEN: a throwing consume call allows the
- *      tool call. A gate that failed closed here would brick every agent in
- *      the product on a transient blip.
+ *   3. INFRASTRUCTURE FAILURE FAILS OPEN — a closed gate here bricks every
+ *      agent in the product on a transient blip.
  *
- * Plus the deliberate exemptions: meta-tools are never charged, and a call
- * refused by an earlier gate (M-3, a blank/unknown `workspace=`) is not
- * charged either — ordering is load-bearing, and a refusal must cost nothing.
- *
- * Same SDK mock as `server.test.ts`: `registerTool` only, deliberately not
- * `tool` (F-145).
+ * ⚠ Plus the exemptions: meta-tools are never charged, and a call refused by an
+ * earlier gate is not charged either — ordering is load-bearing and a refusal
+ * must cost nothing.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -209,14 +203,11 @@ describe("fail direction", () => {
   });
 
   /**
-   * ONLY AN EXPLICIT `allowed === false` REFUSES.
-   *
-   * The fail-open promise above covers a THROWN error. A 200 with a body that
-   * does not parse into our shape — a proxy's JSON error page, a truncated
-   * response, a future shape change — is the more likely failure, and the
-   * original `outcome.allowed ? null : refuse` read `undefined` as a refusal:
-   * fail-OPEN on the rare path and fail-CLOSED on the common one. A body that
-   * does not say "no" is not a no.
+   * ⚠ ONLY AN EXPLICIT `allowed === false` REFUSES. The fail-open promise covers
+   * a THROWN error; a 200 whose body does not parse into our shape (proxy error
+   * page, truncated response, future shape change) is the MORE likely failure,
+   * and a truthiness test reads `undefined` as a refusal — fail-OPEN on the
+   * rare path, fail-CLOSED on the common one.
    */
   it.each([
     ["a body with no `allowed` key", { used: 1, limit: 500, upgradeUrl: UPGRADE }],
@@ -267,9 +258,9 @@ describe("what is NOT charged", () => {
   });
 
   it("an app-only DELETE refusal (§10) fires first and costs nothing", async () => {
-    // The ordering claim, made executable: the delete block is unconditional
-    // and must not become reachable only after some other gate — or after a
-    // billing round trip — lets the call through.
+    // ⚠ ORDERING, made executable: the delete block is unconditional and must
+    // never become reachable only after another gate — or a billing round trip
+    // — lets the call through.
     const { client } = build({ sole: true });
     const res = await tool("dopl_kb_admin")({ op: "delete_base", baseId: "b-1" });
     expect(res.isError).toBe(true);

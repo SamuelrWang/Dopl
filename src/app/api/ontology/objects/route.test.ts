@@ -1,11 +1,5 @@
-/**
- * INVARIANT SUITE — ontology object create route: over-free-cap 403 body.
- *
- * When the service throws EntitlementError, the POST handler must answer
- * HTTP 403 with the friendly upgrade envelope ({ error: "over_free_cap",
- * message, upgrade_url }) rather than a generic 500. Auth + service are
- * mocked so this exercises the route's error mapping in isolation.
- */
+/** INVARIANT SUITE — an `EntitlementError` from the service must map to 403 with the upgrade
+ *  envelope (`{ error: "over_free_cap", message, upgrade_url }`), never a generic 500. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";

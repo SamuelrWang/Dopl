@@ -7,8 +7,8 @@ import { Popover } from "@/shared/ui/popover-menu";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import { DEFAULT_TEAM_COLOR, TEAM_COLORS } from "../constants";
 
-/** Tinted chip with the team's color dot. Hex text on both themes is
- *  unreliable, so identity is carried by the tinted bg + dot only. */
+/** ⚠ Identity is carried by the tinted bg + dot only — hex text doesn't hold
+ *  up across both themes. */
 export function TeamChip({
   name,
   color,
@@ -51,7 +51,7 @@ export function TeamChip({
   );
 }
 
-/** Square color tile with the Users glyph — team cards + drawer headers. */
+/** Square color tile with the Users glyph. */
 export function TeamColorTile({
   color,
   size = "md",
@@ -83,8 +83,8 @@ const SCOPE_LABEL: Record<"edit" | "read" | "none", string> = {
   none: "No access",
 };
 
-/** Read/edit/none pill — same base styling as RolePill. Interactive
- *  variant cycles none → read → edit on click (Access tab cells). */
+/** Read/edit/none pill, same base styling as RolePill. Interactive variant
+ *  cycles none → read → edit on click. */
 export function ScopePill({
   level,
   onClick,
@@ -125,7 +125,7 @@ export function ScopePill({
   );
 }
 
-/** None / Read / Edit segmented control (team drawer + create flow). */
+/** None / Read / Edit segmented control. */
 export function AccessLevelControl({
   value,
   onChange,
@@ -171,7 +171,7 @@ export function AccessLevelControl({
   );
 }
 
-/** Preset hex swatch row for the create/edit team flow. */
+/** Preset hex swatch row. */
 export function ColorSwatchPicker({
   value,
   onChange,

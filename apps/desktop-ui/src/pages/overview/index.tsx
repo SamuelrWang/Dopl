@@ -11,15 +11,11 @@ import { PageError, PageLoading } from "#/components/page-states";
 import { RouterLink, useWorkspaceRoute } from "#/components/app-shell";
 
 /**
- * /:workspaceSegment/overview — workspace overview / home page. Port of
- * `src/app/[workspaceSlug]/(app)/overview/page.tsx` (docs/migration-research/
- * web-pages.md §4).
- *
- * The RSC's three `supabaseAdmin()` head-counts + `isMcpConnected` are one
- * client read here: `GET /api/workspaces/{segment}/overview-counts`. The stat
- * row and the members panel are the web app's own components, imported through
- * `@/` as their Next-free cores with the SPA's router and transport injected;
- * `ConnectClients` / `AgentSkillCard` are reused verbatim (they never fetch).
+ * /:workspaceSegment/overview — workspace home. Three head-counts +
+ * `isMcpConnected` in one read: `GET /api/workspaces/{segment}/overview-counts`.
+ * Stat row and members panel are the shared Next-free cores with the SPA's
+ * router/transport injected; `ConnectClients` / `AgentSkillCard` reused verbatim
+ * (they never fetch).
  */
 
 /** `GET /api/workspaces/[workspaceSlug]/overview-counts`. */
@@ -60,9 +56,8 @@ export default function OverviewPage() {
     );
   }
 
-  // Counts degrade to zeros rather than replacing the page with an error — the
-  // RSC does the same (`.catch(() => 0)` per count), and the connect-an-agent
-  // half of this page is useful without them.
+  // Counts degrade to zeros instead of erroring the page: the connect-an-agent
+  // half is useful without them.
   const counts = countsQuery.data ?? ZERO_COUNTS;
   const connected = counts.isMcpConnected;
 

@@ -1,22 +1,14 @@
 "use client";
 
 /**
- * AvatarWithPresence — an {@link Avatar} wrapped in a presence ring: a
- * success-token ring when the member's agent is online / listening, a muted
- * ring when it is offline. The ring sits just outside the avatar via a
- * transparent `p-0.5` gap, so it reads as a floating ring on ANY surface
- * (including row-hover states) without needing a ring-offset color that must
- * match the background.
+ * AvatarWithPresence — {@link Avatar} in a `ring-success` (online) /
+ * `ring-text-disabled` (offline) ring. Status tokens only, no hardcoded green.
+ * The transparent `p-0.5` gap floats the ring so it reads on ANY surface
+ * (row-hover included) with no background-matched ring-offset colour.
+ * Prefer over the standalone `PresenceDot` wherever an avatar is shown.
  *
- * Design-system recipe: `ring-2 ring-success` (online) / `ring-text-disabled`
- * (offline) — status tokens only, no hardcoded green. Prefer this over the
- * standalone `PresenceDot` wherever an avatar is present; the dot stays as a
- * fallback for dense, avatar-less spots (e.g. the composer's "To" chip).
- *
- * The presence ring is a colour cue, so the wrapper also carries a non-colour
- * accessible name (`role="img"` + `aria-label`) that states the member and
- * their online / offline state. That keeps presence perceivable without relying
- * on the ring colour anywhere this component is used (session card included).
+ * a11y: ring colour is the only visual cue, so the wrapper carries `role="img"`
+ * + an `aria-label` naming the member and their online state.
  */
 
 import { cn } from "@/shared/lib/utils";

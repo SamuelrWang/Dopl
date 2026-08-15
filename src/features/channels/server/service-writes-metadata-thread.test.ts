@@ -1,26 +1,19 @@
 /**
- * THREAD PARTICIPATION on a post — both id shapes, and the calm-terminal flags
- * that ride on the same decision.
+ * THREAD PARTICIPATION on a post — both id shapes, plus the calm-terminal flags
+ * riding on the same decision.
  *
- * WHY IT MATTERS (F-083 bullet 3 / audit Q10). A stamped `metadata.taskId` is
- * what puts a message inside a thread's card and routes it to the responder's
- * session window, and every channel member can SEE every thread id (reads are
- * channel-transparent by design). The first-class UUID shape has been gated
- * since v2.9, but the legacy `task-{channelId}-{seq}` shape — the one the
- * installed desktop still posts its lifecycle events with — skipped the gate
- * entirely and was stored verbatim: a third member could stamp another pair's
- * exchange and have their message land in that pair's card, or flip its
- * outcome with a lifecycle kind.
+ * ⚠ A stamped `metadata.taskId` puts a message inside a thread's card AND routes
+ * it to the responder's session window, and every channel member can SEE every
+ * thread id (reads are channel-transparent by design). Ungated, the legacy
+ * `task-{channelId}-{seq}` shape lets a third member stamp another pair's
+ * exchange, land a message in their card, or flip its outcome via a lifecycle
+ * kind.
  *
- * The decision this file pins: VALIDATE VIA THE OPENER, STRIP ON FAIL, NEVER
- * 403. A legacy id is checked against its opening request's
- * {author, to_user_id} pair; a caller outside that pair loses the TAG, not the
- * message. The strip (rather than the UUID branch's 403) is wire compat —
- * desktop 1.7.16 is in the field posting these ids, some against pre-v1.6
- * openers that carry no addressee at all.
- *
- * Kept out of `service-writes-metadata.test.ts` only because that file is at
- * the §2 size cap; the harness below is the same one, trimmed to this fold.
+ * ⚠ The rule: VALIDATE VIA THE OPENER, STRIP ON FAIL, NEVER 403. A legacy id is
+ * checked against its opening request's {author, to_user_id} pair; a caller
+ * outside that pair loses the TAG, not the message. Strip rather than the UUID
+ * branch's 403 is wire compat — installed desktops post these ids, some against
+ * openers carrying no addressee at all.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -59,21 +52,12 @@ const ctx: ChannelContext = {
 };
 
 /**
- * P0-2 (2026-08-04) — THE CTX A LIFECYCLE POST REALLY ARRIVES ON.
- *
- * `postMessage` now refuses `task_started` / `task_finished` / `task_failed` from
- * an AGENT-TOKEN caller (`source: "agent"`, i.e. every MCP `op="post"`), because
- * those three state a fact about a RUNTIME and an agent is not in a position to
- * state it. The fixtures below were written before that rule and used the agent
- * ctx for everything, including the desktop's own lifecycle echoes — which is not
- * how they arrive: `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the
- * Electron session's SUPABASE COOKIES, so `buildChannelContext` resolves
- * `source: "user"` and the body declares `authorKind: "agent"`.
- *
- * So the lifecycle cases move to this ctx. That is not a workaround for the guard;
- * it makes the fixture match the lane it is describing, and it is what lets these
- * suites go on pinning what they are actually about — the legacy-tag strip and the
- * calm-flag entitlement — which are DESKTOP behaviours end to end.
+ * The ctx a lifecycle post really arrives on. `postMessage` refuses
+ * `task_started` / `task_finished` / `task_failed` from an AGENT-TOKEN caller,
+ * and the desktop's own echoes are not that lane:
+ * `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the Electron
+ * session's Supabase cookies, so ctx is `source: "user"` with the body declaring
+ * `authorKind: "agent"`.
  */
 const desktopCtx: ChannelContext = { ...ctx, source: "user" };
 
@@ -201,7 +185,7 @@ describe("postMessage — legacy thread tag, kept for the exchange's own pair", 
     expect(capturedMetadata().taskId).toBe(LEGACY_ID);
     expect(repoMessages.findMessageBySeq).toHaveBeenCalledWith("chan-1", 7);
     // No task row exists for a legacy id, so none of the four server-stamped
-    // task keys appear — a legacy card renders titleless, and that is the tell.
+    // task keys appear — a titleless legacy card is the tell.
     expect(has(capturedMetadata(), "taskTitle")).toBe(false);
   });
 
@@ -219,8 +203,8 @@ describe("postMessage — legacy thread tag, kept for the exchange's own pair", 
   });
 
   it("keeps it on a LIFECYCLE post — the compat case the strip exists to protect", async () => {
-    // Installed desktop 1.7.16 posts legacy ids for task_started/finished/failed.
-    // These must keep threading, which is why the gate strips instead of 403ing.
+    // ⚠ Installed desktops post legacy ids for task_started/finished/failed and
+    // must keep threading — which is why the gate strips instead of 403ing.
     await postMessage(desktopCtx, "dm", {
       body: "Session ended",
       kind: "task_finished",
@@ -235,22 +219,21 @@ describe("postMessage — legacy thread tag, kept for the exchange's own pair", 
 describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", () => {
   /** Every strip case must still deliver the message, untagged. */
   async function expectStripped(taskId: string, body = "landing elsewhere") {
-    // Usage data only — the harness implementations survive (mockClear, not
-    // mockReset), so a case may assert over several ids in a row.
+    // Usage data only — mockClear, not mockReset, so a case may assert over
+    // several ids in a row.
     vi.mocked(repoMessages.insertMessage).mockClear();
 
     await postMessage(ctx, "dm", { body, metadata: { taskId } });
 
     const meta = capturedMetadata();
     expect(has(meta, "taskId")).toBe(false);
-    // The post is never blocked — it stays visible and attributable.
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
     return meta;
   }
 
   it("SECURITY: a third member cannot stamp another pair's exchange", async () => {
-    // The forgery: C posts `kind:"task_failed"` carrying A-and-B's legacy id and
-    // the row lands inside their card / flips their session status.
+    // The forgery: C posts `task_failed` carrying A-and-B's legacy id, landing
+    // in their card and flipping their session status.
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
       opener({ author_user_id: PEER, metadata: { to_user_id: THIRD } })
     );
@@ -262,8 +245,8 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
     await expectStripped("task-chan-2-7");
     await expectStripped(`task-${TASK_ID}-7`);
 
-    // Prefix mismatch is decided from the id alone — a foreign id can never be
-    // used to probe this channel's seq space.
+    // ⚠ Prefix mismatch decided from the id ALONE — a foreign id can never probe
+    // this channel's seq space.
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 
@@ -279,7 +262,7 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
     ]) {
       await expectStripped(bad);
     }
-    // None of them was worth a read: the shape decides.
+    // The shape decides — no read.
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 
@@ -290,7 +273,7 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
   });
 
   it("SECURITY: fails closed when the opener is UNADDRESSED and someone else wrote it", async () => {
-    // A pre-v1.6 row: no `to_user_id`, so the only known party is its author.
+    // Old row with no `to_user_id` — the only known party is its author.
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
       opener({ author_user_id: PEER, metadata: {} })
     );
@@ -312,7 +295,6 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
 
     const meta = await expectStripped(LEGACY_ID);
 
-    // Auto-addressing, the anti-spoof strip and unrelated caller keys all hold.
     expect(meta.to_user_id).toBe(PEER);
     expect(has(meta, "taskMode")).toBe(false);
   });
@@ -332,7 +314,6 @@ describe("postMessage — first-class (UUID) thread tag is unchanged", () => {
     ).rejects.toBeInstanceOf(TaskForbiddenError);
 
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    // The legacy resolver is never consulted for a UUID.
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 
@@ -348,10 +329,9 @@ describe("postMessage — first-class (UUID) thread tag is unchanged", () => {
 });
 
 /**
- * The calm-terminal flags (declined/dropped/interrupted/capped/ended) decide
- * whether the OTHER side's card reads as a calm, operator-chosen ending or a
- * red failure. They are reserved keys, and since the legacy gate closed they
- * ride on exactly one question: did the thread tag survive?
+ * Calm-terminal flags (declined/dropped/interrupted/capped/ended) decide whether
+ * the OTHER side's card reads as a calm, operator-chosen ending or a red
+ * failure. Reserved keys riding on one question: did the thread tag survive?
  */
 describe("postMessage — calm-terminal flags follow the tag decision", () => {
   it("stamps the flag for a participant of a LEGACY exchange (the decline echo)", async () => {
@@ -364,7 +344,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
     const meta = capturedMetadata();
     expect(meta.declined).toBe(true);
     expect(meta.taskId).toBe(LEGACY_ID);
-    // ONE resolver, ONE read: the tag gate and the flags share the lookup.
+    // One resolver, one read — tag gate and flags share the lookup.
     expect(repoMessages.findMessageBySeq).toHaveBeenCalledTimes(1);
   });
 
@@ -383,10 +363,9 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
   });
 
   it("SECURITY: strips the flags WITH the tag when the exchange is two OTHER people's", async () => {
-    // The spoof: a third member stamps someone else's exchange id with
-    // `declined: true`, and their card renders "This request was declined."
-    // for work that was never declined. Now the tag goes too, so there is
-    // nothing left for the flag to attach to.
+    // ⚠ The spoof: a third member stamps someone else's exchange id with
+    // `declined: true` and their card reads "This request was declined." The tag
+    // goes too, so the flag has nothing left to attach to.
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
       opener({ author_user_id: PEER, metadata: { to_user_id: THIRD } })
     );
@@ -401,7 +380,7 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
     expect(has(meta, "declined")).toBe(false);
     expect(has(meta, "dropped")).toBe(false);
     expect(has(meta, "taskId")).toBe(false);
-    // Stripped, but the message itself still posts (visible, attributable).
+    // Stripped, but the message still posts (visible, attributable).
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -431,14 +410,13 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
     const meta = capturedMetadata();
     expect(meta.capped).toBe(true);
     expect(meta.taskTitle).toBe("Wire the listener");
-    // A first-class id the poster does NOT participate in never gets this far —
-    // the post is refused above.
+    // A first-class id the poster does not participate in is refused above.
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 
   it("strips a truthy-but-not-true flag even from a participant", async () => {
-    // The renderers read `=== true`; normalizing here keeps the stored wire
-    // clean instead of relying on every reader staying strict.
+    // ⚠ Renderers read `=== true`; normalizing here keeps the stored wire clean
+    // rather than relying on every reader staying strict.
     await postMessage(desktopCtx, "dm", {
       body: "Crashed",
       kind: "task_failed",

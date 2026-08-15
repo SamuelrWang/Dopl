@@ -1,39 +1,18 @@
 /**
- * THE SWEEP INTO THE REST OF THE MCP SURFACE — part 1 of 2.
+ * NARRATION SAFETY ACROSS THE WHOLE MCP SURFACE — part 1 of 2 (with
+ * `tool-narration.test.ts`). Pinned here:
  *
- * Two earlier passes hardened `dopl_channel`: first its read ops, then (after a
- * reviewer found the enumeration itself was the bug) its write ops, its member
- * resolver, and a class nobody had named. Both passes stopped at the channel
- * files. Every other tool splices the same kind of string into the same kind of
- * line, and this file plus `tool-narration.test.ts` pin what changed.
- *
- * What is pinned HERE:
- *
- *   1. ONE DEFINITION. The neutralizer moved out of `channel-shared.ts` into
- *      `narration.ts` so nine tools could reach it without importing from the
- *      channel module. The mechanical guard is that `channel-shared` re-exports
- *      the SAME function object and that no second declaration exists anywhere
- *      in the tree — a copied neutralizer is the failure mode the helper's own
- *      note warns about, and the copy that drifts is the one that stops
- *      neutralizing.
- *
- *   2. THE WORKSPACE NAME — the widest reach found in this sweep, and it is
- *      wider than the channel's. `workspaces.name` / `.description` are bounded
- *      by LENGTH ONLY (`z.string().min(1).max(120)` / `.max(2000)`,
- *      features/workspaces/schema.ts) — no charset rule, unlike the
- *      `display_name` regex added for profiles. They are set by whoever OWNS
- *      each workspace, and a workspace enters your directory the moment you
- *      accept an invitation or a join link, so the author need share no other
- *      context with you at all.
- *
- *      And they landed in the two most trusted surfaces in the protocol: the
- *      MCP `instructions` block (the server's own briefing, read before every
- *      tool result) and the `_dopl_status` footer appended to EVERY successful
- *      tool response — the line the instructions themselves tell the agent to
- *      read to confirm where a call landed.
- *
- * The SDK `McpServer` is mocked exactly as in `server.test.ts`; nothing
- * transports.
+ *   1. ⚠ ONE DEFINITION. `channel-shared` re-exports the SAME function object
+ *      and no second declaration exists anywhere in the tree — a copied
+ *      neutralizer is the failure mode, and the copy that drifts is the one
+ *      that stops neutralizing.
+ *   2. ⚠ THE WORKSPACE NAME, the widest reach in the surface.
+ *      `workspaces.name` / `.description` are LENGTH-bounded only
+ *      (features/workspaces/schema.ts), set by whoever OWNS each workspace,
+ *      and a workspace enters your directory the moment you accept an invite or
+ *      join link. They land in the two most trusted surfaces in the protocol:
+ *      the `instructions` block and the `_dopl_status` footer on EVERY
+ *      successful response.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -67,7 +46,7 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
     constructor(_info: unknown, opts: { instructions?: string }) {
       registry.instructions = opts?.instructions ?? "";
     }
-    // `registerTool`, not `tool` — see server.test.ts's note (F-145).
+    // ⚠ `registerTool`, not `tool` — see server.test.ts.
     registerTool(
       name: string,
       _config: { description?: string; inputSchema?: unknown },
@@ -84,8 +63,8 @@ import { createServer, buildInstructions } from "../server.js";
 
 describe("the neutralizer has exactly ONE definition", () => {
   it("channel-shared re-exports narration's functions, it does not redeclare them", () => {
-    // Identity, not equivalence: a copied implementation would pass a
-    // behavioural test and fail this one, which is the point.
+    // ⚠ IDENTITY, not equivalence — a copied implementation passes a
+    // behavioural test and fails this one.
     expect(channelNeutralize).toBe(neutralizeInline);
     expect(channelInlineOr).toBe(inlineOr);
   });
@@ -159,12 +138,11 @@ describe("the MCP instructions block — a workspace name from whoever invited y
 
     expectContained(out);
     expectNoForgedStructure(out);
-    // The framing is a HEADER: read before the stranger's text, not after it.
+    // ⚠ Framing is a HEADER — read before the stranger's text.
     expect(out).toContain("typed by whoever owns each workspace");
     expect(out.indexOf("typed by whoever owns each workspace")).toBeLessThan(
       out.indexOf(MARKER),
     );
-    // The legitimate half of the directory is still readable.
     expect(out).toContain("`Alpha`");
     expect(out).toContain("slug: `alpha`");
   });
@@ -180,8 +158,7 @@ describe("the MCP instructions block — a workspace name from whoever invited y
     const out = buildInstructions([GOOD, HOSTILE], {
       pin: { name: FORGERY, slug: "beta" },
     });
-    // Once in the "pinned to X" sentence, once in the `current_workspace` line,
-    // plus the directory row — every one of them a span, none of them a line.
+    // Three occurrences, every one a span and none of them a line.
     expectNoForgedStructure(out);
     for (const line of out.split("\n")) {
       if (!line.includes(MARKER)) continue;
@@ -209,14 +186,12 @@ describe("the _dopl_status footer — on EVERY successful tool response", () => 
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // The payload carried a fake `  workspace_source: operator override` line.
-    // Exactly ONE workspace_source key survives, and it is ours.
+    // ⚠ Exactly ONE workspace_source key survives a forged one, and it is ours.
     const sources = text
       .split("\n")
       .filter((l) => l.trimStart().startsWith("workspace_source:"));
     expect(sources).toHaveLength(1);
     expect(sources[0]).toContain("sole membership");
-    // And exactly one active_workspace line.
     expect(
       text.split("\n").filter((l) => l.trimStart().startsWith("active_workspace:")),
     ).toHaveLength(1);
@@ -230,7 +205,7 @@ describe("the _dopl_status footer — on EVERY successful tool response", () => 
       workspaceSource: "sole membership",
     });
     const text = textOf(await tools.get("dopl_map")!({}));
-    // A slug is renameable (WorkspaceUpdateSchema accepts one); the id is not.
+    // ⚠ A slug is renameable (WorkspaceUpdateSchema accepts one); the id is not.
     expect(text).toContain("active_workspace: `Alpha` (slug=`alpha`, id=`id-1`");
   });
 });
@@ -251,7 +226,6 @@ describe("the workspace-directory tools", () => {
     expect(text.indexOf("typed by whoever owns each workspace")).toBeLessThan(
       text.indexOf(MARKER),
     );
-    // The row still carries both handles, so a pick is still possible.
     expect(text).toContain("slug: `beta` · id: `id-2`");
   });
 
@@ -264,8 +238,7 @@ describe("the workspace-directory tools", () => {
     });
     const text = textOf(await tools.get("current_workspace")!({}));
 
-    // Named twice — in the answer and in the footer appended to it — so both
-    // occurrences are checked rather than one.
+    // Named twice (answer + appended footer), so both are checked.
     expectEveryHitContained(text);
     expectNoForgedStructure(text);
     expect(text).toContain("- id: `id-2`");
@@ -285,7 +258,6 @@ describe("the workspace-directory tools", () => {
     expectContained(text);
     expectNoForgedStructure(text);
     expect(text).toContain("typed by whoever owns each workspace");
-    // The instruction the refusal exists to give is intact underneath it.
     expect(text).toContain("no default workspace");
     expect(text).toContain("`beta`");
   });

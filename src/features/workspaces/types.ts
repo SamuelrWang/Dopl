@@ -50,18 +50,17 @@ export interface Workspace {
 }
 
 /**
- * Workspace row paired with the calling user's effective role on it.
- * Used by `GET /api/workspaces` and the MCP `list_workspaces` tool so
- * the agent can pick a workspace to switch into without a second query.
+ * Workspace row + the caller's effective role. Read by `GET /api/workspaces`
+ * and the MCP `list_workspaces` tool, so an agent can switch without a second
+ * query.
  */
 export interface WorkspaceWithRole extends Workspace {
   role: Role;
 }
 
 /**
- * Head-counts behind the overview page's stat cards. Read by the
- * `/overview` server component and by
- * `GET /api/workspaces/[workspaceSlug]/overview-counts` (the SPA's twin).
+ * Head-counts behind the overview stat cards. Read by the `/overview` server
+ * component and `GET /api/workspaces/[workspaceSlug]/overview-counts` (SPA twin).
  */
 export interface WorkspaceOverviewCounts {
   knowledgeBases: number;
@@ -82,8 +81,8 @@ export interface WorkspaceMembership {
 }
 
 /**
- * Numeric ranking used by `withWorkspaceAuth({ minRole })` to gate routes.
- * Higher = more privileges. owner > admin > member > viewer.
+ * Ranking `withWorkspaceAuth({ minRole })` gates on.
+ * Higher = more privileges: owner > admin > member > viewer.
  */
 export const ROLE_RANK: Record<Role, number> = {
   viewer: 0,

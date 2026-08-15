@@ -22,7 +22,6 @@ describe("SendButton (the one shared send affordance)", () => {
 
   it("shows the up-arrow glyph at rest and the pause bars while running", () => {
     const send = renderToStaticMarkup(<SendButton onClick={noop} />);
-    // The arrow path, identical to the session window's inline glyph.
     expect(send).toContain("M8 13V3.6M8 3.2 3.9 7.3M8 3.2l4.1 4.1");
     expect(send).not.toContain("<rect");
 
@@ -48,7 +47,6 @@ describe("SendButton (the one shared send affordance)", () => {
   it("disables through the native attribute, so the kit's :disabled state applies", () => {
     const markup = renderToStaticMarkup(<SendButton onClick={noop} disabled />);
     expect(markup).toContain("disabled");
-    // No hand-rolled disabled tint: `.auth-btn-3d:disabled` owns it.
     expect(markup).not.toContain("text-text-disabled");
   });
 

@@ -48,10 +48,9 @@ export function resolveJoinRequestConfig(
         memberKeys.joinRequests(workspaceSlug).all,
         (cache) => dropJoinRequest(cache, draft.requestId)
       ),
-    // An approval mints a `workspace_members` row this client cannot compose
-    // (server-assigned join time, hydrated profile, seat gate) — the roster is
-    // the one cache the write may not reconcile. A decline touches nothing but
-    // the queue it already patched.
+    // ⚠ An approval mints a `workspace_members` row this client can't compose
+    // (server join time, hydrated profile, seat gate), so the roster is the one
+    // cache it may not reconcile. A decline touches only the queue.
     invalidate: (draft) =>
       draft.action === "approve" ? [memberKeys.members(workspaceSlug).all] : [],
     onSuccess: (_data, draft) => {
@@ -62,20 +61,12 @@ export function resolveJoinRequestConfig(
 
 /**
  * Pending join-link requests + the approve/decline decision.
- *
- * WHAT CHANGED (launch audit §5, "zero-feedback controls"): the cache write
- * that drops the resolved row already existed — it just ran AFTER the await, so
- * for the length of the PATCH the row stayed on screen with both of its buttons
- * live, and a second click fired a second decision. Moving the drop into
- * `onMutate` is the whole fix: the row is gone one frame after the click, which
- * removes the double-fire by removing the buttons, and a failure restores the
- * queue verbatim from the layer's snapshot instead of leaving it wrong.
- *
- * F-045: an APPROVAL adds a member, and Team bills per seat, so it invalidates
- * the billing status on success. A decline adds nobody and does not.
- *
- * Fetches only when `enabled` (the endpoint is admin-gated server-side);
- * disabled callers get an empty list and no network traffic.
+ * ⚠ The row drop must stay in `onMutate`: dropping after the await leaves both
+ * buttons live for the length of the PATCH, and a second click fires a second
+ * decision. A failure restores the queue from the layer's snapshot.
+ * An APPROVAL adds a member and Team bills per seat, so it invalidates billing
+ * status on success; a decline adds nobody and does not.
+ * Fetches only when `enabled` (endpoint is admin-gated server-side).
  */
 export function useJoinRequests(workspaceSlug: string, enabled: boolean) {
   const invalidateBilling = useInvalidateBillingStatus();
@@ -91,10 +82,8 @@ export function useJoinRequests(workspaceSlug: string, enabled: boolean) {
   return {
     requests: enabled ? (query.data ?? []) : [],
     refresh: query.refetch,
-    /**
-     * Rejects with the transport's `ApiError`, so callers keep matching
-     * `SOLO_MEMBER_LIMIT` to offer the in-place Team upgrade.
-     */
+    /** Rejects with the transport's `ApiError` so callers can still match
+     *  `SOLO_MEMBER_LIMIT` and offer the in-place Team upgrade. */
     resolve: (
       requestId: string,
       action: "approve" | "decline",

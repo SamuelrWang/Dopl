@@ -1,12 +1,7 @@
 /**
- * `GET /api/cron/oauth-cleanup` — the orphan-client reaper (P1 2026-08-08).
- *
- * `/api/oauth/register` is unauthenticated, so the second half of bounding its
- * table growth is this cron reaping `oauth_clients` rows that never completed a
- * grant (zero associated `mcp_tokens`) and are older than the grace window.
- * These tests pin: only token-less, old clients are reaped; the reserved
- * first-party device client is excluded from the scan; clients that have any
- * token survive; and the pre-existing code/token/rate-limit purges still run.
+ * `GET /api/cron/oauth-cleanup` — the orphan-client reaper. Pins: only token-less, old clients are
+ * reaped; the reserved first-party device client is excluded from the scan; clients with any token
+ * survive; the pre-existing code/token/rate-limit purges still run.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -21,10 +16,10 @@ vi.mock("@/features/analytics/server/system-events", () => ({
 }));
 
 const db = vi.hoisted(() => ({
-  /** Responses keyed `${table}:${select|delete}`; each is a FIFO queue so the
-   *  two mcp_tokens deletes (expired, then revoked) return distinct data. */
+  /** Responses keyed `${table}:${select|delete}`; FIFO so the two mcp_tokens deletes
+   *  (expired, then revoked) return distinct data. */
   responses: {} as Record<string, { data: unknown[] }[]>,
-  /** Every method call, in order, for asserting the SQL the route issued. */
+  /** Every method call in order, for asserting the SQL issued. */
   ops: [] as { table: string; method: string; args: unknown[] }[],
 }));
 
@@ -60,7 +55,7 @@ import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 
 const request = () => new NextRequest("https://dopl.test/api/cron/oauth-cleanup");
 
-/** Seed the four pre-existing purges with something so their counts are nonzero. */
+/** Seed the four pre-existing purges so their counts are nonzero. */
 function seedBasePurges() {
   db.responses["oauth_authorization_codes:delete"] = [{ data: [{ code_hash: "c" }] }];
   db.responses["mcp_tokens:delete"] = [{ data: [{ id: "t1" }] }, { data: [{ id: "t2" }] }];
@@ -92,14 +87,12 @@ describe("orphan-client reaping", () => {
 
     expect(res.status).toBe(200);
     expect(body.deleted.orphan_clients).toBe(1);
-    // Only the orphan is handed to the delete — never c-keep.
     expect(op("oauth_clients", "delete")[0]).toBeTruthy();
     expect(op("oauth_clients", "in")).toContainEqual({
       table: "oauth_clients",
       method: "in",
       args: ["client_id", ["c-orphan"]],
     });
-    // Pre-existing purges still ran.
     expect(body.deleted).toMatchObject({
       codes: 1,
       expired_tokens: 1,
@@ -118,7 +111,6 @@ describe("orphan-client reaping", () => {
       method: "neq",
       args: ["client_id", DEVICE_CLIENT_ID],
     });
-    // Aged bound + a per-run cap are both present on the candidate scan.
     expect(op("oauth_clients", "lt")[0].args[0]).toBe("created_at");
     expect(op("oauth_clients", "limit")[0].args[0]).toBe(500);
   });

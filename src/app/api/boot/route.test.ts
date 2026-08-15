@@ -1,24 +1,10 @@
 /**
- * `POST /api/boot` — the one round trip a desktop launch costs.
- *
- * WHAT THIS FILE EXISTS FOR. The endpoint's whole value is that it answers
- * four questions at once, and its whole RISK is that answering them at once
- * makes it easy to answer one of them loosely. The properties pinned here are
- * the ones that would turn a performance fix into a correctness bug:
- *
- *   1. A `segment` is RESOLVED, never guessed. A segment that does not
- *      resolve is a plain 404 — the resolver is membership-scoped, so
- *      "not a member" and "does not exist" arrive identically and must not be
- *      split back apart, and there is NO fallback to a default workspace
- *      (ENGINEERING §9 "Workspace resolution", MCP-2 fail-closed). A boot
- *      endpoint that guesses a workspace is a cross-tenant bug.
- *   2. Provisioning stays gated on onboarding. The boot page used to gate
- *      `ensure-default` client-side (`enabled: signedIn && onboarded`);
- *      folding the two hops together must not provision a workspace
- *      underneath a user who has not finished onboarding.
- *   3. The payload carries `role`, `userId` and `myAccess`, because deleting
- *      the `me` and `my-access` hops is the point.
- *   4. Per-caller data is never CDN-cacheable (Audit A-010).
+ * `POST /api/boot` — the properties that turn a performance fix into a correctness bug:
+ *   1. a `segment` is RESOLVED, never guessed; a miss is a plain 404 with NO default fallback
+ *      (a boot endpoint that guesses a workspace is a cross-tenant bug);
+ *   2. provisioning stays gated on onboarding;
+ *   3. the payload carries `role`, `userId` and `myAccess`;
+ *   4. per-caller data is never CDN-cacheable.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -89,7 +75,6 @@ describe("POST /api/boot", () => {
     const res = await POST(postReq());
     expect(res.status).toBe(200);
     const body = await res.json();
-    // Every field a page used to pay a separate hop for.
     expect(body).toMatchObject({
       isOnboarded: true,
       userId: "user-1",
@@ -97,7 +82,7 @@ describe("POST /api/boot", () => {
       role: "owner",
       myAccess: { defaultLevel: "edit", overrides: [] },
     });
-    // No body = the launch mode, NOT a validation failure.
+    // No body = launch mode, not a validation failure.
     expect(mockBoot).toHaveBeenCalledWith("user-1", null);
   });
 

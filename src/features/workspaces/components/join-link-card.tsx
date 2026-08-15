@@ -13,34 +13,28 @@ interface Props {
 }
 
 /**
- * `POST /api/join/[token]`'s answer, structurally. `RequestJoinResult` in
- * `../server/join-links` is the authority, but that module is `server-only` and
- * this is a client component — so the shape is restated rather than imported.
+ * `POST /api/join/[token]`'s answer. ⚠ `RequestJoinResult` in
+ * `../server/join-links` is the authority but is `server-only`, so the shape is
+ * restated here and must be kept in sync.
  */
 type JoinOutcome =
   | { outcome: "already_member"; workspaceSlug: string; workspacePublicId: string }
   | { outcome: "requested" | "already_pending" };
 
 /**
- * Join-link landing card. Mirrors the accept-invite card, but joining
- * files an admin-approval request instead of granting membership:
- *   - signed out → sign-in CTA bouncing through /login back to this page
- *   - signed in  → "Request to join"; on success the card says the request
- *     is with an admin and to open the desktop app once it lands
- *   - already a member → the desktop handoff, straight into the workspace
+ * Join-link landing card. Mirrors accept-invite, but joining files an
+ * admin-approval request instead of granting membership:
+ *   - signed out → sign-in CTA bouncing through /login back here
+ *   - signed in  → "Request to join"; success says it is with an admin
+ *   - already a member → desktop handoff, straight into the workspace
  *
- * NOTHING HERE NAVIGATES ANY MORE. Both branches used to `router.push` an SPA
- * path — `/{slug}-{publicId}` and the post-auth landing — and the first of
- * those is a URL the retirement map 302s to `/get-started`, so a member
- * arriving through this card was shown a download page instead of their
- * workspace. The product lives in the desktop app; the outcome of a join is a
- * `dopl://` handoff (`desktop-handoff-panel.tsx`), not a page.
+ * ⚠ NOTHING HERE NAVIGATES. Both branches used to `router.push` an SPA path,
+ * and `/{slug}-{publicId}` is 302'd to `/get-started`. The outcome of a join is
+ * a `dopl://` handoff (`desktop-handoff-panel.tsx`), not a page.
  *
- * THE ALREADY-MEMBER BRANCH IS ALSO THE APPROVED-REQUEST BRANCH. A requester
- * who comes back to the same link after an admin approves them clicks the same
- * button, and `requestJoin` answers `already_member` — so the approved moment
- * needs no new endpoint and no polling, only this card being honest about the
- * answer it already gets.
+ * The already-member branch is ALSO the approved-request branch: a requester
+ * returning after approval gets `already_member` from `requestJoin`, so the
+ * approved moment needs no new endpoint and no polling.
  */
 export function JoinLinkCard({
   workspaceName,

@@ -1,41 +1,23 @@
 /**
- * F-146 — THE META REGISTRATION PATH IS GATED, AND THIS IS THE ONLY PROOF.
+ * THE META REGISTRATION PATH IS GATED, AND THIS IS THE ONLY PROOF.
  *
- * THE HOLE IN THE TEST SUITE, not in the code. `registerMetaTool` publishes
- * STRAIGHT onto the SDK server, bypassing `registerTool`'s wrapper by
- * construction, so `registrar.ts` calls the gates explicitly on its own two
- * lines — the suppression check at registration and the `opRefusal` check per
- * call. Both lines could be DELETED and all 548 tests still passed, because
- * they are inert for today's two meta-tools: `list_workspaces` and
- * `current_workspace` are neither hidden, nor blocked, nor carry an `op`. A
- * gate nothing exercises is a gate nobody will notice losing, and the comment
- * above those lines says "do not make it worse" — which is only enforceable if
- * something breaks when someone does.
+ * `registerMetaTool` publishes STRAIGHT onto the SDK server, bypassing
+ * `registerTool`'s wrapper by construction, so `registrar.ts` calls the gates
+ * explicitly on two of its own lines. ⚠ Both lines are INERT for today's two
+ * meta-tools (neither is hidden, blocked, or carries an `op`), so without this
+ * file they could be deleted with every other test still green.
  *
- * SO THIS FILE MAKES THEM NON-INERT, with the REAL gate tables rather than a
- * mock of them: it registers synthetic meta-tools whose names and ops land in
- * the gating tables and the §2b delete policy, and asks a real MCP `Client`
- * over a real `InMemoryTransport` what it can see and call. Delete either line
- * in `registrar.ts` and a test here goes red naming which gate went missing.
+ * ⚠ SYNTHETIC NAMES on purpose: the gates do not fire on `list_workspaces`,
+ * which is the whole problem. The subject is the PATH, not today's two tools.
+ * Registered against the REAL gate tables and driven through a real MCP
+ * `Client` over `InMemoryTransport`.
  *
  * ⚠ THE SUPPRESSION LEG DRIVES `READ_ONLY_BLOCKED_TOOLS`, NOT `HIDDEN_TOOLS`.
- * It used to use a `HIDDEN_TOOLS` name (`dopl_workflow`), and that table is
- * EMPTY as of 2026-08-11 — workflows and clusters were its only entries and
- * they were deleted outright. An empty table cannot suppress anything, so
- * pinning the gate against it would be exactly the vacuous pass this file
- * exists to prevent. `isSuppressedTool` is ONE function reading BOTH tables on
- * the same line of `registrar.ts`, so driving it through the non-empty one
- * proves the same line still runs. The empty state of `HIDDEN_TOOLS` is pinned
- * separately, as a value, in `tools/delete-block.test.ts`.
- *
- * WHY SYNTHETIC NAMES. Pinning the behavior against `list_workspaces` is
- * impossible — the gates do not fire on it, which is the whole problem. The
- * subject under test is the PATH, not the two tools that happen to use it
- * today, and the next meta-tool is exactly the one nobody will re-audit.
- *
- * NOT MOCKED, following `strict-args.test.ts`: `createGates` is the real one
- * reading the real `HIDDEN_TOOLS` / `DELETE_BLOCKED_OPS` / `WRITE_OPS` tables,
- * so a table edit that silently un-hides a tool is caught here too.
+ * `HIDDEN_TOOLS` is empty, and an empty table cannot suppress anything —
+ * pinning against it is the vacuous pass this file exists to prevent.
+ * `isSuppressedTool` reads BOTH tables on ONE line, so the non-empty one proves
+ * the line still runs. `HIDDEN_TOOLS`'s emptiness is pinned as a value in
+ * `tools/delete-block.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -62,15 +44,14 @@ const unusedDirectory = {
 } as unknown as WorkspaceDirectory;
 
 /**
- * A name `READ_ONLY_BLOCKED_TOOLS` suppresses. Registered below through the
- * READ-ONLY registrar, which is the posture in which that table bites; the
- * fixture is asserted against the real table before it is trusted.
+ * A name `READ_ONLY_BLOCKED_TOOLS` suppresses, registered through the READ-ONLY
+ * registrar (the posture in which that table bites). ⚠ Asserted against the
+ * real table before it is trusted.
  */
 const SUPPRESSED_NAME = "dopl_kb_admin";
 /**
- * An `_admin` name that is NOT in any table, so only `DELETE_OP_SHAPE` — the
- * fail-closed half of §2b — can refuse it. That is the half a future meta-tool
- * would actually rely on.
+ * An `_admin` name in NO table, so only `DELETE_OP_SHAPE` — the fail-closed
+ * half — can refuse it. That is the half a future meta-tool relies on.
  */
 const ADMIN_NAME = "synthetic_admin";
 /** A name no gate touches: the control that proves the path works at all. */
@@ -86,9 +67,8 @@ const handlers = {
 
 beforeAll(async () => {
   const server = new McpServer({ name: "dopl-test", version: "0.0.0" });
-  // A WRITE-CAPABLE session on purpose: the delete refusal is unconditional
-  // (§2b), so gating it behind a read-only session would prove the weaker
-  // thing. The read-only leg gets its own registrar below.
+  // ⚠ WRITE-CAPABLE on purpose: the delete refusal is unconditional, so gating
+  // it behind a read-only session proves the weaker thing.
   const { registerMetaTool } = createToolRegistrars({
     server,
     gates: createGates(true),
@@ -106,9 +86,8 @@ beforeAll(async () => {
   );
   registerMetaTool(OPEN_NAME, "an ungated meta-tool", { op: z.string() }, handlers.open);
 
-  // A second registrar on the SAME server for the read-only scope gate — a
-  // meta-tool carrying a WRITE op must be refused when the token lacks
-  // `dopl.write`, exactly as a domain tool would be.
+  // Second registrar on the SAME server for the read-only scope gate: a
+  // meta-tool carrying a WRITE op must be refused without `dopl.write`.
   const readOnly = createToolRegistrars({
     server,
     gates: createGates(false),
@@ -123,8 +102,7 @@ beforeAll(async () => {
     { op: z.string() },
     handlers.writeGated,
   );
-  // The suppression leg: a READ_ONLY_BLOCKED_TOOLS name on the read-only
-  // registrar must not publish at all.
+  // Suppression leg: a READ_ONLY_BLOCKED_TOOLS name must not publish at all.
   readOnly.registerMetaTool(
     SUPPRESSED_NAME,
     "should never be published",
@@ -146,15 +124,14 @@ afterAll(async () => {
 
 describe("registerMetaTool runs isSuppressedTool (registrar.ts:299)", () => {
   it("the table this pins against is real and still suppresses the name", () => {
-    // A test whose fixture drifted out of the table would pass vacuously.
+    // ⚠ A fixture that drifted out of the table would pass vacuously.
     expect(READ_ONLY_BLOCKED_TOOLS.has(SUPPRESSED_NAME)).toBe(true);
   });
 
   it("HIDDEN_TOOLS is empty, which is WHY this drives the other table", () => {
-    // Stated here as well as in `delete-block.test.ts`, because this is the
-    // file whose fixture choice depends on it: the day a name goes back into
-    // `HIDDEN_TOOLS`, this expectation fails and the failure is the prompt to
-    // add a second suppression leg driving that table too.
+    // ⚠ This file's fixture choice depends on it: the day a name goes back
+    // into `HIDDEN_TOOLS`, this fails, and that is the prompt to add a second
+    // suppression leg driving that table too.
     expect([...HIDDEN_TOOLS]).toEqual([]);
   });
 
@@ -164,10 +141,9 @@ describe("registerMetaTool runs isSuppressedTool (registrar.ts:299)", () => {
   });
 
   it("…and it is not merely unlisted: calling it fails as an UNKNOWN tool", async () => {
-    // "Suppress, don't refuse" means the tool does not EXIST — the failure
-    // names it as not found, which is a different sentence from a policy
-    // refusal. If suppression were dropped the call would succeed and
-    // `handlers.hidden` would run.
+    // ⚠ "Suppress, don't refuse" means the tool does not EXIST — not-found, a
+    // different sentence from a policy refusal. Drop suppression and the call
+    // succeeds with `handlers.hidden` running.
     const res = await client.callTool({ name: SUPPRESSED_NAME, arguments: {} });
     expect(res.isError).toBe(true);
     expect(
@@ -191,8 +167,7 @@ describe("registerMetaTool runs opRefusal (registrar.ts:303)", () => {
     expect(res.isError).toBe(true);
     const text = (res.content as Array<{ text: string }>).map((c) => c.text).join("");
     expect(text).toContain(DELETE_REFUSAL);
-    // The refusal is the POINT: it fires before the handler, so a refused
-    // delete cannot half-happen.
+    // ⚠ Fires BEFORE the handler, so a refused delete cannot half-happen.
     expect(handlers.admin).not.toHaveBeenCalled();
   });
 

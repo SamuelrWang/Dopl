@@ -4,11 +4,8 @@ import { revokeGrant } from "@/shared/auth/mcp-oauth";
 
 export const dynamic = "force-dynamic";
 
-/**
- * DELETE /api/oauth/grants/[id] — revoke a connected app. Scoped to the
- * owner (revokeGrant filters by user_id), so a user can only revoke their
- * own grants. The client's next /api/mcp call then 401s and it re-auths.
- */
+/** DELETE — revoke a connected app. Owner-scoped (`revokeGrant` filters by user_id); the
+ *  client's next /api/mcp call 401s and it re-auths. */
 export const DELETE = withUserAuth(
   async (_request, { userId, params }) => {
     const id = params?.id;
@@ -18,8 +15,6 @@ export const DELETE = withUserAuth(
     await revokeGrant(id, userId);
     return NextResponse.json({ ok: true });
   },
-  // sessionOnly: revoking an OAuth grant is a connected-app access-control
-  // mutation — an agent token must never be able to revoke grants (including
-  // its own or a sibling's). Session (cookie) callers only.
+  // ⚠ sessionOnly: an agent token must never revoke grants — its own or a sibling's.
   { sessionOnly: true }
 );

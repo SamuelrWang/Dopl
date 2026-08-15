@@ -1,11 +1,9 @@
 import "server-only";
 import { NextResponse } from "next/server";
 
-/**
- * Gate for /api/cron/* routes: CRON_SECRET bearer, fail-closed (503 when
- * the secret is unset so a misconfigured deploy can't run crons openly).
- * Returns null when authorized, otherwise the response to return.
- */
+/** Gate for /api/cron/*: CRON_SECRET bearer. ⚠ Fail-closed — 503 when the secret
+ *  is unset, so a misconfigured deploy cannot run crons openly. Returns null
+ *  when authorized, else the response to return. */
 export function requireCronSecret(request: Request): NextResponse | null {
   const secret = process.env.CRON_SECRET;
   if (!secret) {

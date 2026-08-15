@@ -19,9 +19,8 @@ import {
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const params = request.nextUrl.searchParams;
-    // `thread` scopes the read to one exchange (metadata.taskId). It is a
-    // filter, not a lookup: an id nothing carries returns []. The await path
-    // deliberately has no counterpart — a thread-scoped hold is its own design.
+    // `thread` is a FILTER on metadata.taskId, not a lookup: an id nothing carries returns [].
+    // The await path deliberately has no counterpart.
     const parsed = MessageReadQuerySchema.safeParse({
       since: params.get("since") ?? undefined,
       limit: params.get("limit") ?? undefined,
@@ -42,11 +41,8 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMessageCreateSchema);
     const ctx = buildChannelContext(auth);
-    // F6 — `threadClosed` is a notice about THIS POST, not a field of the
-    // message, so it rides in the ENVELOPE beside it (the shape `echoSeq` uses
-    // on the close route) rather than inside the message object a read would
-    // never carry it in. Additive on the wire: an older deployment omits the key
-    // and every existing client reads exactly what it read before.
+    // ⚠ `threadClosed` is a notice about THIS POST, not a field of the message, so it rides in
+    // the ENVELOPE (like `echoSeq` on the close route) — a read would never carry it. Additive.
     const { threadClosed, ...message } = await postMessage(
       ctx,
       requireChannelId(auth.params),

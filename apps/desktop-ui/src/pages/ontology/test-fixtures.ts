@@ -2,22 +2,14 @@ import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import type { OntologyObject, OntologySnapshot } from "@/features/ontology/types";
 import { ok, noContent, workspaceRoutes } from "#/test-utils/bridge";
 
-// The workspace half of this table (resolve + me) and the canonical fixtures
-// live in `#/test-utils/bridge`; only the ontology-specific payloads are here.
+// Workspace half (resolve + me) + canonical fixtures live in
+// `#/test-utils/bridge`; only ontology-specific payloads are here.
 export { ok } from "#/test-utils/bridge";
 export { SEGMENT, WORKSPACE_ID } from "#/test-utils/bridge";
 
 /**
- * The one ontology bridge stub, shared by the canvas and ontology smoke tests.
- *
- * Shared on purpose rather than as convenience: `/canvas` and `/ontology` are
- * two renderings of ONE store (`useOntology` + `OntologyResourcesProvider` +
- * the billing entitlements read), so a divergent fixture would let one page's
- * test pass against a snapshot shape the other page never sees. The port
- * playbook treats them as a single slice for exactly this reason.
- *
- * Lives here (not in a test file) so both suites import it without one test
- * file importing another.
+ * The one ontology bridge stub. Lives here, not in a test file, so suites
+ * import it without one test file importing another.
  */
 
 export const CLUSTER_ID = "cluster-1";
@@ -43,8 +35,7 @@ export const SNAPSHOT: OntologySnapshot = {
       name: "Revenue",
       purpose: "How money reaches the business.",
       columnIds: [COLUMN_ID],
-      // `{}` = pure auto-layout, the state every cluster starts in. The stored
-      // -override path belongs to use-graph-positions' own unit tests.
+      // `{}` = pure auto-layout, the state every cluster starts in.
       layout: {},
     },
     {
@@ -68,8 +59,8 @@ export const SNAPSHOT: OntologySnapshot = {
 };
 
 /**
- * Every path the canvas/ontology tree reads or writes. Anything else rejects
- * loudly — an unexpected request is a port defect, not a fixture gap.
+ * Every path the ontology tree reads or writes. ⚠ Anything else rejects loudly:
+ * an unexpected request is a defect, not a fixture gap.
  */
 export function ontologyBridge(
   path: string,

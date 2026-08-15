@@ -125,8 +125,8 @@ describe("deriveMessageReceipt", () => {
 
   // (6)
   it("links a legacy task-{ch}-{N} start by the opener's seq (working, then replied)", () => {
-    // The desktop spawner mints `task-{channelId}-{seq}` for the opener at seq N;
-    // the receipt reconstructs that id from the message's own channelId + seq.
+    // Desktop spawner mints `task-{channelId}-{seq}` for the opener at seq N;
+    // the receipt reconstructs it from the message's own channelId + seq.
     const mine = msg({
       seq: 500,
       kind: "message",
@@ -307,9 +307,8 @@ describe("deriveMessageReceipt", () => {
   });
 
   it("binds a no-taskId pair-reply to the NEAREST preceding ask only (stacked asks stay 'sent')", () => {
-    // Two quick asks to the same peer, then one agent reply: the reply answers
-    // the SECOND ask. The first must stay "sent" — one reply must never light
-    // up "Replied" on every stacked ask before it.
+    // ⚠ One reply answers the SECOND ask only — it must never light up
+    // "Replied" on every stacked ask before it.
     const askX = msg({
       kind: "message",
       authorKind: "user",
@@ -336,11 +335,10 @@ describe("deriveMessageReceipt", () => {
     expect(deriveMessageReceipt(askY, thread, ME)).toBe("replied");
   });
 
-  // Q10 (web-render half) — the legacy `task-{channelId}-{seq}` id is DERIVABLE
-  // by any channel member (the DTO exposes `seq`), and the server does not gate
-  // a non-UUID taskId on participation (F-083 / P2). Linking on string equality
-  // alone therefore let any third member stamp a chip on someone else's request.
-  // Every fixture below is a 3-party channel: ME, PEER, and THIRD.
+  // ⚠ The legacy `task-{channelId}-{seq}` id is DERIVABLE by any channel member
+  // (the DTO exposes `seq`) and the server does not gate a non-UUID taskId on
+  // participation, so linking on string equality alone lets any third member
+  // stamp a chip on someone else's request. Fixtures below are 3-party.
   const THIRD = "third";
 
   it("ignores a THIRD member's task_failed carrying my legacy id (no forged 'Failed')", () => {
@@ -395,8 +393,8 @@ describe("deriveMessageReceipt", () => {
   });
 
   it("still reports the addressee's own legacy-linked lifecycle (gate is party-scoped, not a blanket drop)", () => {
-    // Same 3-party channel, but the events come from PEER — the addressee whose
-    // desktop mints that id. These must keep working exactly as before.
+    // Same 3-party channel, events from PEER — the addressee whose desktop mints
+    // that id. Must keep working.
     const mine = msg({
       seq: 700,
       kind: "message",

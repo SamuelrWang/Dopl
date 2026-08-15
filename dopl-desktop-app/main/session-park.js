@@ -1,21 +1,15 @@
-// session-park.js — idle-park + resume machinery (v1.7.4 Session Window, Track D).
+// session-park.js — idle-park + resume machinery.
 //
-// Extracted from session-engine.js to hold that AT-CAP file (§O-7 / F-09c) under the
-// 500-line cap while P1 (idle parks) + P2 (reopen fallback) add resume paths. Leaf
-// deps (io / store / diag / Notification) are required at the top exactly like
-// session-dispatch.js; the ENGINE-specific handles (the live registry, the SDK loader,
-// the shared option assembly, the consumer loop, dispatch, startSession) are injected
-// via bind(). The BEGIN/END PURE block references those as free vars, so
-// test/session-park.test.mjs slices it, proves it is electron/require-free, and drives
-// it with fakes — pinning the resume/recreate contract without an electron require.
+// Leaf deps (io / store / diag / Notification) required at the top; ENGINE handles (live
+// registry, SDK loader, option assembly, consumer loop, dispatch, startSession) injected via
+// bind(). The BEGIN/END PURE block references those as free vars, so
+// test/session-park.test.mjs slices it and drives it with fakes.
 //
-// SECURITY: a parked resume and a recreated-shell resume BOTH assemble their SDK
-// options through the engine's OWN buildSdkOptions (deps.buildSdkOptions) — the SAME
-// path a fresh launch uses (allowedTools shadow rule, canUseTool gate, scrubbed env,
-// disallowedTools, settingSources:[], permissionMode 'default'). There is NO divergent
-// option assembly and NO new auto-approval; options.resume = the retained sdkSessionId
-// is the only difference from a cold launch. feedInbound stays bound to the stored
-// counterparty (a recreated shell restores counterpartyId from the durable record).
+// ⚠ SECURITY: parked resume and recreated-shell resume BOTH assemble SDK options through the
+// engine's OWN buildSdkOptions — the SAME path a fresh launch uses (allowedTools shadow rule,
+// canUseTool gate, scrubbed env, disallowedTools, settingSources:[], permissionMode 'default').
+// NO divergent option assembly, NO new auto-approval; `options.resume = retained sdkSessionId`
+// is the only difference from a cold launch. feedInbound stays bound to the stored counterparty.
 
 const io = require('./session-io');
 const store = require('./session-store');
@@ -26,35 +20,29 @@ const { diag } = require('./diag');
 
 let deps = null;
 
-// The engine binds its internals here at load (sessions, getSdk, buildSdkOptions,
-// consume, dispatch, startSession, hasLiveSession, windowFactoryReady, atWindowCap,
-// loadHistory, settleSession). The functions below read them at CALL time, so bind order
-// at module load does not matter.
+// The engine binds its internals here at load (sessions, getSdk, buildSdkOptions, consume,
+// dispatch, startSession, hasLiveSession, windowFactoryReady, atWindowCap, loadHistory,
+// settleSession). Read at CALL time, so bind order at module load does not matter.
 function bind(d) {
   deps = d || null;
 }
 
-// FIX #8: profiles a persisted record may legitimately carry. Anything else (missing,
-// corrupt, or from a future version) recreates as read_only — fail restrictive.
+// ⚠ Profiles a persisted record may legitimately carry. Anything else (missing, corrupt, from a
+// future version) recreates as read_only — fail restrictive.
 const KNOWN_PROFILES = new Set(['full', 'dopl_only', 'read_only']);
 
 function knownProfile(p) {
   return KNOWN_PROFILES.has(p) ? p : 'read_only';
 }
 
-// v1.7.5 D1: rebuild the session CONTEXT from a durable record. A recreate/resume used
-// to pass context:{}, so the reopened window lost its identity (no peer name, no channel,
-// no task title) and the header fell back to a bare "Session". The record now persists
-// those three fields (session-io.baseRecord + the store whitelist), so the shape the
-// engine reads is restored verbatim: `authorName` is the field startSession derives
-// counterpartyName from, so the peer name survives a reopen too. Display-only strings —
-// they never re-enter the prompt (a resume passes its own rawFirstTurn).
-//
-// v2.x: the two ID fields are the exception — channelId / workspaceId (already on the
-// durable record at the record level) ARE prompt input, because a recreated shell with
-// nothing to resume builds its first turn from this context (io.takeFraming ->
-// prompt-framing.deliverySection), and without them the reopened session was told the
-// channel's display name only and could not address dopl_channel.
+// Rebuild the session CONTEXT from a durable record so a reopened window keeps its identity
+// (peer name, channel, task title) instead of a bare "Session" header. `authorName` is what
+// startSession derives counterpartyName from. Display-only strings — they never re-enter the
+// prompt (a resume passes its own rawFirstTurn).
+// ⚠ EXCEPT channelId / workspaceId, which ARE prompt input: a recreated shell with nothing to
+// resume builds its first turn from this context (io.takeFraming -> prompt-framing
+// .deliverySection), and without them the session knows only the channel's display name and
+// cannot address dopl_channel.
 function contextFromRecord(rec) {
   const r = rec || {};
   return {
@@ -66,34 +54,27 @@ function contextFromRecord(rec) {
   };
 }
 
-// P1 — resume a PARKED session IN PLACE. The session object survived park (still in
-// the registry, window alive); only its live SDK query was torn down. Rebuild the
-// abort controller + push iterator SYNCHRONOUSLY here so the pushInbound / pushTurn
-// effect the reducer queues right after this one lands on the FRESH iterator (a push
-// queues until the async consumer attaches). resumeSdkId feeds options.resume, so the
-// run continues the SAME sdk session; lastTotalCost resets to 0 because the resumed
-// query counts its own cost from 0 (state.costUsd carries the running cap total, which
-// startSession now rehydrates from the durable record on a crash/resume too — AUDIT D3).
+// Resume a PARKED session IN PLACE: the session object survived park (registry entry and
+// window alive), only its live SDK query was torn down.
+// ⚠ Rebuild the abort controller + push iterator SYNCHRONOUSLY so the pushInbound / pushTurn
+// effect the reducer queues right after lands on the FRESH iterator. resumeSdkId feeds
+// options.resume, continuing the SAME sdk session.
 function resumeParked(s) {
   if (!deps || !s || s.settled || s.resuming) return;
   s.resuming = true;
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
   s.resumeSdkId = s.sdkSessionId || s.resumeSdkId || null;
-  // FIX #2: a resumed query mints a FRESH sdkSessionId at its own system/init. Drop the
-  // old one now so a pre-init crash's lifecycle clientMsgId falls back to the (distinct
-  // per session-object) sessionId, not the prior cycle's sdk id — which would collide with
-  // the prior cycle's terminal event and hide a post-cap crash.
+  // ⚠ A resumed query mints a FRESH sdkSessionId at its own system/init. Drop the old one now
+  // so a pre-init crash's lifecycle clientMsgId falls back to the per-session-object sessionId
+  // instead of colliding with the prior cycle's terminal event and hiding a post-cap crash.
   s.sdkSessionId = null;
-  // FIX #1b: SYNCHRONOUSLY supersede the torn-down query's consume loop. Its `s.query !== q`
-  // guard now trips, so a late non-abort rejection from the OLD query cannot crash this
-  // freshly-resumed session (its own new query is attached below, post-await).
+  // ⚠ SYNCHRONOUSLY supersede the torn-down query's consume loop so its `s.query !== q` guard
+  // trips — otherwise a late non-abort rejection from the OLD query crashes this session.
   s.query = null;
-  // FIX #10: ASSUMPTION — the SDK restarts total_cost_usd from 0 on a resumed query, so
-  // resetting the delta baseline here preserves the running cap total carried in
-  // state.costUsd (the cap keeps enforcing across park AND crash/resume cycles — AUDIT D3
-  // made startResume carry the counters too). Revisit if the SDK ever continues the
-  // cumulative total across a resume.
+  // ⚠ ASSUMPTION: the SDK restarts total_cost_usd from 0 on a resumed query, so resetting the
+  // delta baseline preserves the running cap total in state.costUsd (the cap keeps enforcing
+  // across park AND crash/resume). Revisit if the SDK ever continues the cumulative total.
   s.lastTotalCost = 0;
   startResumedConsumer(s);
 }
@@ -125,99 +106,74 @@ async function startResumedConsumer(s) {
   }
 }
 
-// P2 — the reopenByTask fallback: no live session exists for (channel,task), so
-// recreate a PARKED SHELL in the registry from the durable record. startSession opens a
-// fresh window, shows a one-line note, and leaves the session dormant until a lazy wake
-// (P1). One shell per key: a Map hit (a shell from a prior click) returns ok:true
-// WITHOUT a second window — startSession sets the Map entry synchronously before its
-// first await, so a rapid second call sees it.
-//
-// v2.5 D3 (ALWAYS-OPEN WINDOW): a retained sdkSessionId is NO LONGER required. A record
-// with no resumable sdk session still opens — it shows the channel history (deps.
-// loadHistory) and, when the operator types, starts a FRESH session for the task seeded
-// with that history as fenced context (session-history + io.withSeed). Q6b finished that
-// intent: a thread with NO durable record here opens too, from the channel (openFromChannel).
+// The reopenByTask fallback: no live session for (channel,task), so recreate a PARKED SHELL in
+// the registry from the durable record. startSession opens a fresh window and leaves the
+// session dormant until a lazy wake. One shell per key — startSession sets the Map entry
+// synchronously before its first await, so a rapid second call sees it and opens no second
+// window. A retained sdkSessionId is NOT required: a record with no resumable sdk session still
+// opens, shows the channel history, and starts a FRESH seeded session on the first typed turn.
 async function recreateParkedShell(a) {
   if (!deps || !deps.windowFactoryReady()) return { ok: false };
-  // FIX N2: the record's OWN slot, exactly as startResume resolves it. Keying on
-  // (channel, thread) alone meant a TEAM record — agentId set, taskId '' — was looked up
-  // under `channelId + ':'`, where its record has never been written, so a summoned agent's
-  // shell could never be reopened and the lookup could collide with a real thread's record.
-  // slotKey is byte-for-byte sessionKey(channelId, taskId) when no agentId is present, so
-  // every existing caller is unchanged.
+  // ⚠ The record's OWN slot, exactly as startResume resolves it. Keying on (channel, thread)
+  // alone looks a TEAM record (agentId set, taskId '') up under `channelId + ':'`, where its
+  // record was never written — and can collide with a real thread's record. slotKey is
+  // byte-for-byte sessionKey(channelId, taskId) when no agentId is present.
   const key = store.slotKey(a);
   const existing = deps.sessions.get(key);
   if (existing && !existing.settled) return { ok: true };
   const rec = store.getRecord(key);
   const sdkId = store.getSdkSessionId(key);
-  // Q6b (ALWAYS OPEN): for an operator CLICK (`fromChannel`), no durable record is no longer a
-  // dead end — this machine simply never worked this thread, and the operator still wants to READ
-  // it — so the shell is built from the CHANNEL instead. The INBOUND GATE deliberately does NOT
-  // pass that flag: a peer whose thread has no record here must never pop a window on this Mac.
+  // No durable record + an operator CLICK (`fromChannel`) => build the shell from the CHANNEL.
+  // ⚠ The INBOUND GATE deliberately does NOT pass that flag: a peer whose thread has no record
+  // here must never pop a window on this Mac.
   if (!rec && a && a.fromChannel === true) return openFromChannel(a, key);
   if (!rec) return { ok: false };
-  // FIX #4: apply the SAME shared window budget launch()/openConsentWindow() enforce
-  // (sessions + open consent windows vs MAX_WINDOWS) — a reopen must not blow the cap.
-  // FIX #7 (see atCapAfterEvict): at the cap, try to free one slot first, fail-restrictive.
+  // ⚠ Same shared window budget launch() / openConsentWindow() enforce; at the cap, free one
+  // slot first, then fail restrictive.
   if (atCapAfterEvict()) return { ok: false, reason: 'busy' };
   const s = await deps.startSession({
     key, channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
-    // FIX #8: a shell recreated purely from a persisted record must FAIL RESTRICTIVE —
-    // a missing/unknown stored profile resumes as read_only, never the permissive
-    // `full` that normalizeProfile would pick (its global fallback is unchanged).
+    // ⚠ FAIL RESTRICTIVE: a missing/unknown stored profile resumes read_only, never the
+    // permissive `full` normalizeProfile would pick.
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
-    // FIX N2 (with the slotKey above, and mirroring startResume): a reopened TEAM record has
-    // to come back AS its agent and with its room binding, or the shell would re-key onto the
-    // thread slot and its next saveRecord would erase the record's own agent identity.
+    // ⚠ A reopened TEAM record must come back AS its agent with its room binding, or the shell
+    // re-keys onto the thread slot and its next saveRecord erases the record's agent identity.
     agentId: rec.agentId || null, bind: rec.bind === 'room' ? 'room' : 'pair',
-    counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // FIX L1 binding + (H2) the DM flag the outbound card names from
-    context: contextFromRecord(rec), resumeSdkId: sdkId || null, // D1: restore the header identity
-    // FIX #9: rehydrate the running cap budget so a turn/cost-capped session reopened via
-    // P2 continues from where it capped instead of getting a fresh budget.
+    counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // L1 binding + the DM flag the outbound card names from
+    context: contextFromRecord(rec), resumeSdkId: sdkId || null,
+    // Rehydrate the running cap budget so a turn/cost-capped session continues from where it
+    // capped instead of getting a fresh budget.
     turns: rec.turns, costUsd: rec.costUsd,
-    // 2026-08-02: and the MODEL the operator picked. Carrying it is not a widening — a model
-    // is not a permission and reaches no gate — so unlike a posture it rides every recreate.
-    // startSession coerces it against the frozen enum: a corrupt record reopens on the CLI
-    // default, never on junk, and never on something a hand-edited store chose.
+    // The operator's model pick. Not a widening — a model is not a permission and reaches no
+    // gate — so unlike a posture it rides every recreate. startSession coerces it against the
+    // frozen enum, so a corrupt record reopens on the CLI default, never on junk.
     model: rec.model,
-    parkedShell: true, // startSession opens the window but starts NO query (lazy resume)
+    parkedShell: true, // window opens, NO query starts (lazy resume)
   }, null);
   if (!s) return { ok: false };
-  // FIX F4: record the body that POPPED this gate on the shell BEFORE the read. The
-  // listener advanced its cursor to that message's seq before dispatching it, so the
-  // fetch window always contains it — recording it here keeps it out of BOTH the rendered
-  // history (session-history filters the entries) and the fresh run's seed (io.withSeed),
-  // so it appears exactly once: as the actionable Accept / Decline card. Idempotent with
-  // session-gate.enqueue's own noteGatedBody.
+  // ⚠ Record the body that POPPED this gate BEFORE the read. The listener advanced its cursor
+  // past that message, so the fetch window always contains it; recording here keeps it out of
+  // BOTH the rendered history and the fresh run's seed, so it appears exactly once — as the
+  // actionable Accept/Decline card. Idempotent with session-gate.enqueue's own noteGatedBody.
   if (a && a.holdBody) io.noteGatedBody(s, a.holdBody);
-  // D3: paint the channel history into the empty replay ring. FIX F3: this is AWAITED, not
-  // fire-and-forget. Unawaited, an operator who typed first got a cold fresh run and saw
-  // the thread arrive as turn 2 BELOW their own bubble, and a fetch that resolved after a
-  // racing system/init dropped the seed on the floor. A failed fetch still just shows one
-  // calm notice. Guarded so a mid-wave engine that has not wired it opens the shell as before.
+  // ⚠ AWAITED, not fire-and-forget: unawaited, an operator who types first gets a cold fresh
+  // run with the thread arriving as turn 2 BELOW their own bubble, and a fetch resolving after
+  // a racing system/init drops the seed. A failed fetch is one calm notice. Guarded so a
+  // mid-wave engine that has not wired it opens the shell as before.
   if (deps.loadHistory) {
     try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
   }
   return { ok: true };
 }
 
-// Q6b — the RECORD-LESS shell. Everything a durable record would have carried is resolved from
-// the channel itself (channel-context.resolve, injected): the workspace the history read needs,
-// the header name, and — for a DIRECT channel only — the counterparty the FIX L1 binding and the
-// history lanes require. A group channel resolves no counterparty, and this passes that null
-// through unchanged: the shell is never bound to a guessed peer.
-//
-// FIX N1 (2026-07-31): that null no longer means an EMPTY window. session-history reads the
-// channel either way and paints the side it can attribute (the operator's own rows), with copy
-// naming what it is not showing and why. Nothing changed on this path — the fix was entirely in
-// what the consumer does with `counterpartyId: null` — but the old comment here claimed the
-// opposite outcome, and a stale claim in the file the next agent reads is its own defect.
-//
-// FAIL RESTRICTIVE, deliberately: no record means no stored profile, so knownProfile(undefined)
-// resolves READ_ONLY (the same rule a corrupt record gets) and `side` is 'requester' — the
-// operator is the one opening this window, so anything they type is their own goal, addressed to
-// the peer. NO query runs here either (parkedShell), so opening still starts nothing and posts
-// nothing: no session record the peer can see, no lifecycle event, no task_started.
+// The RECORD-LESS shell. Everything a durable record would carry is resolved from the channel
+// (channel-context.resolve, injected): workspace, header name, and — for a DIRECT channel ONLY
+// — the counterparty the L1 binding and the history lanes need. ⚠ A group channel resolves no
+// counterparty and that null passes through unchanged; the shell is never bound to a guess.
+// ⚠ FAIL RESTRICTIVE: no record means no stored profile, so knownProfile(undefined) resolves
+// READ_ONLY. `side` is 'requester' — the operator opened this window, so what they type is
+// their own goal. NO query runs (parkedShell), so opening posts nothing: no session record the
+// peer can see, no lifecycle event, no task_started.
 async function openFromChannel(a, key) {
   if (!deps.resolveChannelContext) return { ok: false }; // mid-wave engine: fail closed
   if (atCapAfterEvict()) return { ok: false, reason: 'busy' }; // the SAME shared window budget
@@ -228,11 +184,11 @@ async function openFromChannel(a, key) {
   const s = await deps.startSession({
     key, channelId, taskId: String((a && a.taskId) || ''), workspaceId: ctx.workspaceId,
     side: 'requester', profile: knownProfile(undefined), mode: 'interactive',
-    counterpartyId: ctx.counterpartyId || null, direct: ctx.direct === true, // H2: channel-context reads is_direct off the DTO
+    counterpartyId: ctx.counterpartyId || null, direct: ctx.direct === true, // channel-context reads is_direct off the DTO
     context: { channelName: ctx.channelName || null, taskTitle: null, authorName: ctx.counterpartyName || null,
       channelId: channelId, workspaceId: ctx.workspaceId },
     resumeSdkId: null, turns: 0, costUsd: 0,
-    parkedShell: true, // the window opens; the agent starts on the first turn the operator types
+    parkedShell: true, // the window opens; the agent starts on the first typed turn
   }, null);
   if (!s) return { ok: false };
   if (deps.loadHistory) {
@@ -241,47 +197,36 @@ async function openFromChannel(a, key) {
   return { ok: true };
 }
 
-// ── THE REQUEST LIFECYCLE STRIP (2026-08-02) ─────────────────────────────────────
-// What happened to the request the operator sent, as one line in the window chrome. Every
-// state is read off events ALREADY on the wire and none of them starts anything: the request
-// is 'sent' the moment its window opens, the peer's task_started is 'accepted', a task_failed
-// carrying the calm `declined` flag is 'declined', and the peer's first reply is 'replied'.
-// The value rides the session object and leaves as a display payload — no reducer event — so
-// nothing on this path can wake a parked shell, push a turn or resolve a permission.
+// ── THE REQUEST LIFECYCLE STRIP ──────────────────────────────────────────────────
+// What happened to the request the operator sent, as one line in the window chrome. Every state
+// is read off events ALREADY on the wire and none starts anything: 'sent' when the window
+// opens, the peer's task_started is 'accepted', a task_failed carrying the calm `declined` flag
+// is 'declined', the peer's first reply is 'replied'. ⚠ Rides the session object and leaves as
+// a DISPLAY payload, never a reducer event, so nothing here can wake a parked shell, push a
+// turn or resolve a permission.
+// It exists because the session cannot answer this: Accept and Decline arrive as task_started /
+// task_failed MILESTONES, and every listener route gates on kind === 'message'.
 //
-// IT OUTLIVED THE SHELL IT SHIPPED ON (2026-08-05, rollback plan §3.4). The strip was armed by
-// `openRequesterShell`, which opened a DORMANT window for the request the operator typed in the
-// app's own UI because that post carried no runtime stamp and could not be told from an external
-// agent's. The app stamps its own posts now, so that request opens a FULL requester session and
-// the shell entry point is deleted. The line stays because the question it answers is one the
-// session cannot: Accept and Decline reach this machine as task_started / task_failed MILESTONES,
-// and every listener route gates on kind === 'message', so the running agent never sees either.
-//
-// MONOTONIC, never a downgrade. Messages are read a page at a time and a milestone can be
-// seen after the reply that followed it, so an out-of-order task_started must not walk the
-// strip back from "Reply received". Only a strictly higher rank paints.
-//
-// ARMED, NOT AMBIENT. `requestStatus` is set ONLY by {@link armRequestStatus}, whose ONE caller
-// is the requester route's `desktop-ui` arm (session-dispatch) — so a responder session, a
-// summoned team shell, a plain reopened thread and a requester session a SPAWNED session's
-// create opened all read undefined here and note nothing. That is what keeps the line meaning
-// "the request I typed".
+// ⚠ MONOTONIC, never a downgrade. Messages are read a page at a time, so an out-of-order
+// task_started must not walk the strip back from "Reply received". Only a strictly higher rank
+// paints.
+// ⚠ ARMED, NOT AMBIENT. `requestStatus` is set ONLY by armRequestStatus, whose one caller is
+// the requester route's `desktop-ui` arm — every other session reads undefined and notes
+// nothing. That is what keeps the line meaning "the request I typed".
 const REQUEST_STATUS_RANK = { sent: 0, accepted: 1, declined: 2, replied: 3 };
 
-// The rank of a status word, or undefined for anything that is not one of the four. Read through
-// an OWN-PROPERTY check, not a bare index: a plain object literal answers a FUNCTION for
-// 'constructor' / 'toString', and a function is neither undefined nor `<=` any number, so a bare
-// lookup let those two words through the monotonic guard and stamp themselves onto the strip.
+// Rank of a status word, else undefined. ⚠ OWN-PROPERTY check, never a bare index: a plain
+// object literal answers a FUNCTION for 'constructor' / 'toString', which is neither undefined
+// nor `<=` any number, so both would pass the monotonic guard and stamp themselves on the strip.
 function requestRank(status) {
   if (typeof status !== 'string') return undefined;
   return Object.prototype.hasOwnProperty.call(REQUEST_STATUS_RANK, status) ? REQUEST_STATUS_RANK[status] : undefined;
 }
 
-// Open the strip at 'sent' on the session occupying this (channel, thread) slot. SLOT-KEYED
-// rather than handed a session object, because its caller is the listener route and the route
-// has the slot, not the registry entry. TRUE only when a strip was actually armed: no live
-// session, or one already armed, changes nothing and says so — re-arming would walk an
-// 'accepted' line back to 'sent' on a message read twice.
+// Open the strip at 'sent' on the session in this (channel, thread) slot. SLOT-KEYED because
+// the caller is the listener route, which has the slot and not the registry entry. TRUE only
+// when a strip was actually armed — ⚠ re-arming would walk an 'accepted' line back to 'sent' on
+// a message read twice.
 function armRequestStatus(a) {
   if (!deps || !deps.sessions) return false;
   const key = store.sessionKey(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
@@ -293,9 +238,8 @@ function armRequestStatus(a) {
   return true;
 }
 
-// Advance the strip on a session that has one. TRUE only when it actually moved, so the
-// caller can log a transition and nothing else; an unarmed session, a settled one, an unknown
-// status and a backwards one all answer false and change nothing.
+// Advance the strip on a session that has one. TRUE only when it moved; an unarmed session, a
+// settled one, an unknown status and a backwards one all answer false and change nothing.
 function noteRequestStatus(a, status) {
   if (!deps || !deps.sessions) return false;
   const next = requestRank(status);
@@ -310,38 +254,29 @@ function noteRequestStatus(a, status) {
   return true;
 }
 
-// FIX #7 — the shared cap-relief check: TRUE when the window budget is still spent after an
-// eviction attempt, so every caller keeps its existing fail-restrictive skip. A recreated shell
-// never leaves the registry on its own (only settle / a window-factory failure delete it) and the
-// gate now creates shells from an inbound message alone, so six peer replies to six old tasks
-// used to own the whole budget permanently — after which launches and consent windows degraded to
-// cap-skips. AUDIT D4: that degradation was the whole point of FIX #7, yet eviction was wired ONLY
-// into recreateParkedShell (the path that CREATES the starvation). The engine's launch() and
-// openConsentWindow() — a real inbound trigger and its pre-consent window, the two paths the
-// comment named — call this too, so a genuine trigger no longer falls back to headless.
-// Not at the cap -> no eviction is attempted at all.
+// Shared cap-relief check: TRUE when the window budget is still spent after an eviction
+// attempt, so every caller keeps its fail-restrictive skip. ⚠ Must be called by launch() and
+// openConsentWindow() as well as recreateParkedShell — a recreated shell never leaves the
+// registry on its own, and the gate creates shells from an inbound message alone, so a handful
+// of peer replies to old tasks can own the whole budget permanently and starve real triggers
+// down to headless. Not at the cap => no eviction attempted at all.
 function atCapAfterEvict() {
   if (!deps || !deps.atWindowCap || !deps.atWindowCap()) return false;
   if (!evictIdleShell()) return true;
   return deps.atWindowCap() === true;
 }
 
-// FIX #7 — free ONE window slot by settling the least-recently-created PARKED shell the
-// operator never interacted with. The evicted task stays fully reopenable — its durable
-// record survives and `settle` retains the sdkSessionId for every outcome but
-// completed/failed — so this drops a dormant window, never a conversation. NEVER takes a
-// shell that is live, is holding an inbound card, or that the operator has touched
-// (session-ipc stamps operatorTouched on every renderer-driven handler). Returns false when
-// nothing qualifies.
-//
-// C-5 (2026-08-08) — IT GOES THROUGH THE REDUCER NOW, and that is the whole fix. It used to
-// call `deps.settleSession(victim, 'interrupted')`, which is the engine's `settle()` —
-// teardown ONLY. `settle` runs no reducer and emits no lifecycle, so an eviction was one of
-// the three terminals that posted NOTHING: the requester on the other machine went on
-// watching a card that said "Working…" for a session this Mac had already reclaimed. The
-// `inactive` event runs the ordinary `endEffects` set — abort, the calm `task_progress`
-// status note, the `ended` emit, then that same `settle` — so eviction now ends a session the
-// way every other terminal path does, through one path rather than beside it.
+// Free ONE window slot by settling the least-recently-created PARKED shell the operator never
+// interacted with. The evicted task stays fully reopenable (durable record survives, settle
+// retains the sdkSessionId for every outcome but completed/failed), so this drops a dormant
+// window, never a conversation. ⚠ NEVER takes a shell that is live, is holding an inbound card,
+// or that the operator has touched (session-ipc stamps operatorTouched on every renderer-driven
+// handler).
+// ⚠ MUST go through the REDUCER (`dispatch({type:'inactive'})`), never `deps.settleSession` —
+// settle is teardown only, runs no reducer and emits no lifecycle, so an eviction would post
+// NOTHING and leave the requester on the other machine watching "Working…" forever. The
+// `inactive` event runs the ordinary endEffects set: abort, calm task_progress note, `ended`
+// emit, then settle.
 function evictIdleShell() {
   if (!deps || !deps.sessions || !deps.dispatch) return false;
   let victim = null;
@@ -349,8 +284,8 @@ function evictIdleShell() {
     if (!s || s.settled || !s.state) continue;
     if (s.state.parked !== true) continue; // only a dormant shell is evictable
     if (s.operatorTouched === true) continue; // never close a window the operator used
-    // Nor one with ANY unanswered message on it: the head's card (hasPendingInbound) or a
-    // reply queued behind it. The queue is memory-only, so evicting would lose them.
+    // ⚠ Nor one with ANY unanswered message: the head's card (hasPendingInbound) or a reply
+    // queued behind it. The queue is memory-only, so evicting loses them.
     if (s.state.hasPendingInbound === true) continue;
     if (s.pendingInbound && s.pendingInbound.length) continue;
     if (!victim || (s.startedAt || 0) < (victim.startedAt || 0)) victim = s;
@@ -364,41 +299,29 @@ function evictIdleShell() {
   return true;
 }
 
-// P2: paint a recreated parked shell. No SDK system/init lands (no query runs), so we
-// synthesize the init the renderer needs from the durable record, drop a one-line note
-// pointing at the channel thread, and show the Paused pill. textContent-only, plain copy.
+// Paint a recreated parked shell. No SDK system/init lands (no query runs), so the init the
+// renderer needs is synthesized from the durable record. textContent-only, plain copy.
 function emitParkedShell(s) {
   deps.emit(s, {
     type: 'init', sessionId: s.sessionId, side: s.side, profile: s.profile, mode: s.mode,
     profileLabel: s.profileLabel || null, model: null, channelName: (s.context && s.context.channelName) || null,
-    // D1: the synthesized init carries the SAME identity a live system/init would (the
-    // context was restored from the durable record by contextFromRecord).
+    // Same identity a live system/init would carry (contextFromRecord restored it).
     taskTitle: (s.context && s.context.taskTitle) || null,
     from: s.counterpartyName || null, selfAvatar: s.selfAvatar || null,
     fromAvatar: s.peerAvatar || null, cwdLabel: null,
   });
-  // FIX #14: the old copy ("The earlier transcript is in the channel thread.") now
-  // contradicts the window itself — D3 PAINTS that transcript a moment later, so it read
-  // as "look elsewhere" directly above the thread. This line states the shell's actual
-  // state instead; session-history owns the two cases where no history lands (no bound
-  // counterparty / a failed fetch) and says where to read it there.
-  // D2: a SUMMONED team shell is not a REOPEN. It was never open before, nothing was
-  // interrupted, and `session-team.js` emitted its own line naming the handle and the law, so
-  // saying "Reopened" over it would have described a restore that did not happen.
-  //
-  // THE BRANCH IS NOW UNREACHABLE AND STAYS ANYWAY. `session-team.js` was deleted with summoning
-  // (channels rollback §1) and nothing constructs a `bind: 'room'` session, so `s.bind !== 'room'`
-  // is true on every path that gets here. It is kept because the room-vs-pair SLOT SHAPE
-  // deliberately survived the rollback as inert scaffolding (ENGINEERING §18, "WHAT DELIBERATELY
-  // SURVIVED") — deleting the guard would be the one edit that makes the shape wrong the day
-  // anything sets it again. Read it as "the pair case, stated by exclusion", not as live routing.
+  // ⚠ The `bind !== 'room'` guard is UNREACHABLE today (nothing constructs a room-bound
+  // session) and stays anyway: the room-vs-pair SLOT SHAPE deliberately survived the channels
+  // rollback as inert scaffolding (ENGINEERING §18), and deleting the guard is the one edit
+  // that makes the shape wrong the day anything sets it again. Read as "the pair case, stated
+  // by exclusion", not live routing. A room shell is not a REOPEN — nothing was interrupted.
   if (s.bind !== 'room') deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. Nothing is running yet, so send a message to continue.' });
   deps.emit(s, { type: 'status', phase: 'parked' });
 }
 
-// ── Shared resume machinery (moved verbatim from session-engine.js) ───────────────
+// ── Shared resume machinery ──────────────────────────────────────────────────────
 
-// Offer an opt-in resume from the startup interrupted-notice (init crash scan). Never
+// Offer an opt-in resume from the startup interrupted-notice (init crash scan). ⚠ Never
 // auto-reopens — a user click drives the resume.
 function offerResume(rec, sdkSessionId) {
   try {
@@ -415,38 +338,34 @@ function offerResume(rec, sdkSessionId) {
 
 // Shared resume: reopen a settled task resuming its SDK session with a given first turn.
 async function startResume(rec, sdkSessionId, rawFirstTurn) {
-  // D2: the record's OWN slot. A team record carries an agentId and an empty taskId, so
-  // re-deriving the key from (channel, task) alone would resume it onto the thread slot —
-  // a different session from the one that crashed. `slotKey` reads the record's agentId
-  // when there is one and is byte-for-byte `sessionKey(channelId, taskId)` when there is not.
+  // ⚠ The record's OWN slot. A team record carries an agentId and an empty taskId, so
+  // re-deriving the key from (channel, task) resumes it onto the THREAD slot — a different
+  // session from the one that crashed. slotKey is byte-for-byte sessionKey(channelId, taskId)
+  // when there is no agentId.
   const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: rec.agentId || null };
   if (!deps.windowFactoryReady() || deps.hasLiveSession(slot)) return false;
   let sdk;
   try { sdk = await deps.getSdk(); } catch (_) { return false; }
-  // FIX #7: re-check AFTER the await — a reopen shell (or a racing launch/resume) may have
-  // created this (channel,task) during getSdk; bail so startSession does not overwrite the
-  // Map entry and orphan that window (startSession sets the Map before its own first await).
+  // ⚠ Re-check AFTER the await: a reopen shell or racing launch may have created this slot
+  // during getSdk, and startSession would overwrite the Map entry and orphan that window.
   if (deps.hasLiveSession(slot)) return false;
   const s = await deps.startSession({
     key: store.slotKey(slot),
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
-    // D2: a resumed TEAM session keeps its identity and its room binding, or it would come
-    // back as a pair-bound responder with no agent to post as.
+    // ⚠ A resumed TEAM session keeps its identity and room binding, else it returns as a
+    // pair-bound responder with no agent to post as.
     agentId: rec.agentId || null, bind: rec.bind === 'room' ? 'room' : 'pair',
-    // C7 (MEDIUM-4): FAIL RESTRICTIVE, matching recreateParkedShell. This path passed the
-    // stored profile RAW, so a missing / corrupt / future-version value fell through
-    // normalizeProfile's global fallback and resumed the session at FULL access — the most
-    // permissive profile, from the least trustworthy input (a durable record on disk).
+    // ⚠ FAIL RESTRICTIVE, matching recreateParkedShell. A raw stored profile lets a missing /
+    // corrupt / future-version value fall through normalizeProfile's global fallback and resume
+    // at FULL access — the most permissive profile, from the least trustworthy input.
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
-    counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // FIX L1 binding + (H2) the DM flag
-    context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId, // D1: restore the header identity
-    // AUDIT D3: rehydrate the running cap budget, exactly like recreateParkedShell. This path
-    // passed NEITHER counter, so a session that burned 23 of its 24 turns, crashed, and was
-    // resumed from the startup interrupted-notice started again at zero: every crash then
-    // opt-in resume minted a fresh turn AND cost budget. The durable record already held the
-    // real totals. (startSession applies these on every shape now, not only a parked shell.)
+    counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // L1 binding + the DM flag
+    context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId,
+    // ⚠ Rehydrate the running cap budget like recreateParkedShell does. Without both counters a
+    // session that burned 23 of 24 turns, crashed and was resumed starts again at zero, so
+    // every crash+resume mints a fresh turn AND cost budget.
     turns: rec.turns, costUsd: rec.costUsd,
-    model: rec.model, // 2026-08-02: the operator's model pick, coerced by startSession
+    model: rec.model, // the operator's model pick, coerced by startSession
   }, sdk);
   return !!s;
 }
@@ -456,11 +375,9 @@ async function resume(rec, sdkSessionId) { // opt-in resume from the interrupted
   return startResume(rec, sdkSessionId, nudge);
 }
 
-// v2.5 D1: `resumeRequesterForReply` (the v2.2 item-3 bounded auto-continuation — reopen
-// a settled requester and feed the peer's reply as its first turn) is GONE. A peer reply
-// no longer resumes anything on its own: session-dispatch routes it to the engine's
-// inbound gate, which recreates this same parked shell and HOLDS the reply for the
-// operator's Accept. The accept then takes the ordinary lazy-resume path above.
+// ⚠ A peer reply NEVER resumes a session on its own. session-dispatch routes it to the engine's
+// inbound gate, which recreates a parked shell and HOLDS the reply for the operator's Accept;
+// the accept then takes the ordinary lazy-resume path above.
 
 // ─── END SESSION-PARK-PURE ────────────────────────────────────────────────────────
 
@@ -468,11 +385,11 @@ module.exports = {
   bind,
   resumeParked,
   recreateParkedShell,
-  openFromChannel, // Q6b: the record-less shell (exported for the test; recreateParkedShell is the caller)
-  armRequestStatus, // 2026-08-05: the lifecycle strip, opened at 'sent' by the requester route
+  openFromChannel, // record-less shell (exported for the test; recreateParkedShell is the caller)
+  armRequestStatus, // lifecycle strip, opened at 'sent' by the requester route
   noteRequestStatus, // ...and advanced by the listener's wire observations
-  evictIdleShell, // FIX #7: LRU relief for the shared window budget
-  atCapAfterEvict, // AUDIT D4: the engine's launch / openConsentWindow cap branches use it too
+  evictIdleShell, // LRU relief for the shared window budget
+  atCapAfterEvict, // the engine's launch / openConsentWindow cap branches use it too
   emitParkedShell,
   offerResume,
   startResume,

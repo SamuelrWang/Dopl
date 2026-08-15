@@ -21,31 +21,19 @@ export interface ChannelContext {
   source: "user" | "agent";
   /** Caller's workspace role; null when the auth layer didn't resolve one. */
   role: Role | null;
-  /**
-   * Which Dopl runtime the request speaks for — `desktop-session` for a session
-   * the desktop app spawned, `desktop-ui` for the operator typing in the app's
-   * own UI window, undefined for everything else (an external Claude Code
-   * session, a script, a browser). Server-resolved from the `X-Dopl-Runtime`
-   * header by the auth layer and bounded by the credential; the write path
-   * stamps it onto a message as the reserved `metadata.runtime` key.
-   */
+  /** Which Dopl runtime the request speaks for: `desktop-session` (spawned
+   *  session), `desktop-ui` (operator typing in the app), undefined for
+   *  everything else. ⚠ Server-resolved from `X-Dopl-Runtime` and bounded by the
+   *  credential; stamped as the reserved `metadata.runtime` key. */
   runtime?: DoplRuntime;
-  /**
-   * Which BUILD of the desktop app the request speaks for (`1.7.15`), or
-   * undefined for everything else. Server-resolved from the
-   * `X-Dopl-App-Version` header by the auth layer; the write path stamps it
-   * onto a message as the reserved `metadata.appVersion` key so the OTHER
-   * machine can explain a behavior gap instead of guessing at one (Q10).
-   */
+  /** Which BUILD of the desktop app the request speaks for. Server-resolved from
+   *  `X-Dopl-App-Version`; stamped as reserved `metadata.appVersion` so the OTHER
+   *  machine can explain a behaviour gap instead of guessing. */
   appVersion?: string;
-  /**
-   * WHICH SESSION of an agent this request speaks for (the desktop's slot key),
-   * or undefined for a caller that sends no stamp. Server-resolved from the
-   * `X-Dopl-Session-Id` header by the auth layer; the write path stamps it onto
-   * a message as the reserved `metadata.session_id` key so a reader can tell two
-   * concurrent sessions of ONE agent handle apart (F2). A LABEL, never a lock —
-   * nothing enforces one live session per agent.
-   */
+  /** Which SESSION this request speaks for (the desktop's slot key), undefined
+   *  when unstamped. Server-resolved from `X-Dopl-Session-Id`; stamped as
+   *  reserved `metadata.session_id` so a reader can tell two concurrent sessions
+   *  of ONE handle apart. ⚠ A LABEL, never a lock. */
   sessionId?: string;
 }
 
@@ -65,19 +53,17 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
-    // Re-narrowed here rather than trusted as-is: the auth layer already
-    // exact-matches the header AND applies the credential bound, and a second
-    // check through the SAME predicate means no other construction path can
-    // widen what counts as a desktop runtime — in particular, no ctx built off
-    // an agent token can arrive claiming `desktop-ui`.
+    // ⚠ Re-narrowed rather than trusted: a second check through the SAME
+    // predicate means no other construction path can widen what counts as a
+    // desktop runtime — no ctx off an agent token can claim `desktop-ui`.
     runtime: narrowRuntime(auth.runtime, {
       agentCredential: !!auth.agentTokenId,
     }),
-    // Same reason, same shape: re-run the header's own predicate so a version
-    // that reaches an operator's screen is a version, whatever built this ctx.
+    // Same shape: re-run the header's own predicate so a version reaching an
+    // operator's screen IS a version, whatever built this ctx.
     appVersion: narrowAppVersion(auth.appVersion),
-    // And again for the session stamp (F2) — it is rendered into a message line
-    // on the OTHER member's screen, so it is an id-shaped token or it is nothing.
+    // And again for the session stamp — rendered into a message line on the
+    // OTHER member's screen, so it is id-shaped or it is nothing.
     sessionId: narrowSessionId(auth.sessionId),
   };
 }
@@ -87,11 +73,9 @@ export const UNIQUE_VIOLATION = "23505";
 const NUL = String.fromCharCode(0);
 
 /**
- * Strip NUL (U+0000) from every string in a payload before it reaches
- * Postgres (mirrors the chats write boundary): Postgres text/jsonb reject
- * the NUL code point, so an agent posting a stray one would otherwise 500
- * the whole write. NUL carries no meaning in a channel message, so it is
- * stripped rather than rejected.
+ * ⚠ Strip NUL (U+0000) from every string before it reaches Postgres — text/jsonb
+ * reject the code point, so a stray one 500s the whole write. Stripped rather
+ * than rejected: NUL carries no meaning in a channel message.
  */
 export function stripNulDeep<T>(value: T): T {
   if (typeof value === "string") {
@@ -110,10 +94,8 @@ export function stripNulDeep<T>(value: T): T {
   return value;
 }
 
-// MODULE-PRIVATE (channels rollback, 2026-08-05). Both of these were exported for the deleted
-// agent / participant services; the only callers left are `canManageChannel` and
-// `loadVisibleChannel` below, and unexporting them keeps the RAW resolve — the one that skips
-// the visibility gate — from being reachable outside this file.
+// ⚠ MODULE-PRIVATE. Keeping the RAW resolve — the one that SKIPS the visibility
+// gate — unexported is what stops it being reachable outside this file.
 function isWorkspaceAdmin(ctx: ChannelContext): boolean {
   return ctx.role !== null && meetsMinRole(ctx.role, "admin");
 }
@@ -131,10 +113,9 @@ async function resolveChannelRef(
 }
 
 /**
- * Resolve a channel the caller may READ: public channels are visible to
- * any workspace member; a private channel reads as not-found unless the
- * caller is a member (so its existence never leaks). Returns the row plus
- * the caller's membership (null for a non-member viewing a public channel).
+ * Resolve a channel the caller may READ. Public = any workspace member;
+ * ⚠ a private channel reads as NOT-FOUND to a non-member, so its existence never
+ * leaks. Returns the row plus membership (null for a public-channel non-member).
  */
 export async function loadVisibleChannel(
   ctx: ChannelContext,

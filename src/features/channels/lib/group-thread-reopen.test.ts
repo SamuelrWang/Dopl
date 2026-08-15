@@ -1,31 +1,24 @@
 /**
- * F-176 (2026-08-08) — A REOPENED THREAD MUST NOT ANNOUNCE ITSELF WITH A ✓.
+ * ⚠ A REOPENED THREAD MUST NOT ANNOUNCE ITSELF WITH A ✓.
  *
- * `reopenTask` posts an echo so the peer's surfaces learn about a status change
- * that reaches them no other way (`channel_tasks` is in neither realtime table
- * set; close survived only by accident of posting its terminal marker). The echo
- * is `kind:"task_progress"` BY CONSTRUCTION — it must never become an `endEvent`,
- * and `task_started` would take over `draft.head` and open the fallback window.
+ * `reopenTask` posts an echo so the peer learns of a status change that reaches
+ * them no other way (`channel_tasks` is in neither realtime table set). The echo
+ * is `kind:"task_progress"` BY CONSTRUCTION — it must never become an
+ * `endEvent`, and `task_started` would take over `draft.head` and open the
+ * fallback window.
  *
- * That construction is right and this file does not touch it. What it fixes is
- * one layer up: `splitSessionEntries` routed EVERY `task_progress` to the
- * milestones lane, and the card draws that lane as a green-checked accomplishment
- * list under the heading "Milestones". So the thread that had just come back to
- * LIFE rendered its resumption as a completed item — the single glyph on the card
- * saying "done" about the one state that is defined by not being done.
+ * ⚠ `splitSessionEntries` routing EVERY `task_progress` to the milestones lane
+ * renders a resumption as a green-checked completed item — a ✓ about the one
+ * state defined by not being done. `notices` is the status lane instead: a calm
+ * one-liner with a neutral dot.
  *
- * THE FIX IS A LANE, DRAWN BY FLAG. `notices` is the status lane: rendered as a
- * calm one-liner with a neutral dot, the same treatment the calm terminal/end
- * notes already get, because it is the same kind of thing. Drawn by the reserved
- * `threadReopened` marker and never by matching the body text — `substantiveEndBody`
- * draws that same status/content line by flag first for the same reason, and the
- * echo's copy already has two forms (with and without a prior outcome), so a
- * string match would regress to the ✓ the first time somebody improved the wording.
+ * ⚠ Drawn by the reserved `threadReopened` marker, NEVER by matching body text —
+ * the echo's copy already has two forms, so a string match regresses to the ✓ the
+ * first time somebody improves the wording.
  *
- * WHAT MUST NOT MOVE, and is pinned below: the echo stays an ordinary ENTRY (a
- * marker whose fallback rendering is invisible is worse than none), it never
- * becomes an outcome, it never sets `calmEndStatus` (a reopen is the OPPOSITE
- * signal to a session end), and an ordinary agent milestone is untouched.
+ * ⚠ Pinned below: the echo stays an ordinary ENTRY (an invisible marker is worse
+ * than none), never becomes an outcome, never sets `calmEndStatus` (a reopen is
+ * the OPPOSITE signal to a session end), and ordinary milestones are untouched.
  */
 
 import { describe, expect, it } from "vitest";
@@ -77,17 +70,14 @@ function onlySession(items: ReturnType<typeof groupThread>): SessionGroup {
 }
 
 describe("the reopen marker", () => {
-  // THE KEY IS A WIRE CONTRACT, SO IT IS PINNED AS A LITERAL — deliberately not
-  // as `THREAD_REOPENED_KEY`, which every other assertion in this file uses to
-  // build its fixtures. A test that spells the key the same way on both sides
-  // moves WITH a rename and proves nothing: renaming the constant here would
-  // silently stop matching the server's `REOPEN_MARKER_KEY`, every reopen echo
-  // would fall back into the milestones lane, and the whole suite would stay
-  // green. (Found by mutation, not by inspection — the first version of this
-  // file survived exactly that edit.)
+  // ⚠ WIRE CONTRACT, so pinned as a LITERAL — deliberately NOT
+  // `THREAD_REOPENED_KEY`, which the rest of this file uses for fixtures. A test
+  // spelling the key the same way on both sides moves WITH a rename and proves
+  // nothing: the constant could drift from the server's `REOPEN_MARKER_KEY`,
+  // every echo would fall back to the milestones lane, and the suite stays green.
   it("spells the key exactly as the server stamps it", () => {
     expect(THREAD_REOPENED_KEY).toBe("threadReopened");
-    // And the predicate reads THAT key off the wire, not merely its own name.
+    // ⚠ The predicate reads THAT key off the wire, not merely its own name.
     expect(
       isThreadReopenedMarker(
         msg({ kind: "task_progress", metadata: { taskId: THREAD, threadReopened: true } })
@@ -96,9 +86,8 @@ describe("the reopen marker", () => {
   });
 
   it("routes the SERVER'S echo shape to notices, spelled out verbatim", () => {
-    // The echo exactly as `service-tasks-lifecycle.reopenTask` writes it, with
-    // no constant of ours in the fixture. This is the end-to-end pin: if the key
-    // drifts from the server's, this lands back under the green ✓.
+    // The echo exactly as `service-tasks-lifecycle.reopenTask` writes it, with no
+    // constant of ours in the fixture — the end-to-end pin.
     const wireEcho = msg({
       kind: "task_progress",
       body: "Thread reopened (was closed as completed).",
@@ -111,9 +100,8 @@ describe("the reopen marker", () => {
 
   it("is recognised only as a task_progress carrying the flag strictly", () => {
     expect(isThreadReopenedMarker(reopenEcho())).toBe(true);
-    // A TERMINAL kind carrying the same key is not this signal. The whole point
-    // of the echo riding task_progress is that it can never be an outcome;
-    // reading the flag off a terminal kind would launder exactly that shape.
+    // ⚠ A TERMINAL kind carrying the same key is NOT this signal — reading the
+    // flag off a terminal kind launders exactly the shape task_progress prevents.
     for (const kind of ["task_failed", "task_finished", "message"] as const) {
       expect(
         isThreadReopenedMarker(
@@ -121,8 +109,7 @@ describe("the reopen marker", () => {
         )
       ).toBe(false);
     }
-    // Strict `=== true`, like every other reserved marker: an
-    // attacker-influenceable truthy value must not pass.
+    // ⚠ Strict `=== true` — an attacker-influenceable truthy value must not pass.
     for (const value of ["yes", 1, {}, "true"]) {
       expect(
         isThreadReopenedMarker(

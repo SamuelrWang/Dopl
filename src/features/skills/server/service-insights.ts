@@ -3,20 +3,11 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { SkillContext, SkillUsage } from "../types";
 import { getSkillBySlug } from "./service-reads";
 
-/**
- * Skill insights — agent read activity (`getSkillUsage`).
- *
- * There was a second reader here, `getSkillUsedBy`, answering "what is this
- * skill attached to". Its only answer came from `workflow_skills`, so it went
- * with workflows on 2026-08-11; nothing rendered it.
- */
+/** Skill insights — agent read activity (`getSkillUsage`). */
 
-/**
- * Agent read activity from mcp_events (workspace-scoped via the
- * workspace_id column added in the phase-3 migration; rows logged
- * before that migration have NULL workspace_id and are excluded).
- * Matches both the skill read and its file reads.
- */
+/** Agent read activity from mcp_events, workspace-scoped. ⚠ Rows logged
+ *  before `workspace_id` existed have NULL and are excluded. Matches both the
+ *  skill read and its file reads. */
 export async function getSkillUsage(
   ctx: SkillContext,
   slug: string

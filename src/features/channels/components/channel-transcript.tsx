@@ -20,9 +20,9 @@ import { ActivityEventRow } from "./activity-event-row";
 import { SessionCard } from "./session-card";
 
 /**
- * Turn a {@link ChannelThread} row into the authoritative render overlay: an
- * open thread is `active`, a closed one is `done` (completed) or `failed` —
- * status the lifecycle-only heuristic can't derive on its own.
+ * Turn a {@link ChannelThread} row into the authoritative render overlay: open →
+ * `active`, closed → `done` / `failed`. ⚠ Status the lifecycle-only heuristic
+ * cannot derive on its own.
  */
 function threadOverlayFrom(thread: ChannelThread): ThreadOverlay {
   const status =
@@ -40,22 +40,17 @@ function threadOverlayFrom(thread: ChannelThread): ThreadOverlay {
 }
 
 /**
- * The channel transcript. One THREAD (the messages/events sharing a
- * `metadata.taskId` — the storage name for a thread id) collapses into a single
- * {@link SessionCard}, its status + title overlaid from the authoritative
- * `channel_tasks` rows; standalone human
+ * The channel transcript. One THREAD (messages/events sharing a
+ * `metadata.taskId`) collapses into a single {@link SessionCard}, status + title
+ * overlaid from the authoritative `channel_tasks` rows. Standalone human
  * messages and plain agent chat render as bordered bubbles (agent = elevated
- * surface, human = subtle card surface), and `system` rows as flat centered
- * activity lines via `ActivityEventRow`. A message carrying addressing metadata
- * shows who it was directed at + why, so a human can tell why only one agent
- * answered.
+ * surface, human = subtle card surface); `system` rows are flat centered
+ * activity lines. Addressing metadata shows who a message was directed at + why.
  *
- * Plain chat bubbles are SIDED like a messaging app: the viewer's own human
- * message hugs the right, everyone else's (teammate or agent) hugs the left, both
- * capped at ~2/3 of the column so a bubble never spans the full width and the
- * side stays legible. Only those bubbles are sided — session cards, activity
- * lines, and the pending-request cards below the transcript stay full width,
- * because they are shared state rather than someone's turn in the conversation.
+ * ⚠ Only plain chat bubbles are SIDED (viewer's own right, everyone else's left,
+ * capped at ~2/3 of the column). Session cards, activity lines and the
+ * pending-request cards stay FULL WIDTH — they are shared state, not someone's
+ * turn in the conversation.
  */
 export function ChannelTranscript({
   messages,
@@ -70,31 +65,20 @@ export function ChannelTranscript({
   messages: ChannelMessage[];
   /** userId -> display name, for rendering addressing targets. */
   memberNames: Map<string, string>;
-  /**
-   * The channel's agents, for attributing an agent-authored message to the
-   * agent that wrote it. Omitted / unresolvable falls back to today's plain
-   * "agent" pill.
-   */
+  /** Attribution for agent-authored messages. Omitted / unresolvable falls back
+   *  to the plain "agent" pill. */
   agents?: ChannelAgent[];
   /** The channel's first-class threads — the status / title / mode overlay. */
   threads: ChannelThread[];
   /** True while the thread overlay is still loading (see the flicker note below). */
   threadsLoading: boolean;
-  /**
-   * The viewer's user id — gates the outgoing-message receipt line to the
-   * current user's own standalone bubbles.
-   */
+  /** Gates the outgoing-message receipt line to the viewer's own bubbles. */
   currentUserId: string;
-  /**
-   * The thread the thread panel navigated to; its {@link SessionCard} shows a
-   * transient highlight ring. Null / undefined highlights nothing.
-   */
+  /** Thread the panel navigated to — its {@link SessionCard} shows a transient
+   *  ring. Null / undefined highlights nothing. */
   highlightedThreadId?: string | null;
-  /**
-   * Close mutation for the card's thread control (see SessionCard). Reopening a
-   * closed thread is the thread panel's job, so no reopen callback comes
-   * through the transcript.
-   */
+  /** ⚠ Close only — reopen is the thread panel's job, so no reopen callback
+   *  comes through the transcript. */
   onCloseThread?: (
     threadId: string,
     outcome: "completed" | "failed",

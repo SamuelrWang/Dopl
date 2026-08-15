@@ -3,21 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ComposerIntentPill } from "@/features/channels/components/composer-intent-pill";
 
 /**
- * THE MESSAGE / REQUEST PILL, exercised where it actually runs.
+ * MESSAGE / REQUEST PILL. DOM half pinned HERE: the root suite runs in the node
+ * environment with no DOM, so a menu that only exists after a click cannot be
+ * opened there; the root suite pins the closed first-paint SSR markup.
  *
- * The component lives in the WEB tree because this renderer bundles that tree,
- * and its DOM half is pinned HERE for the reason `session-pills-bar.test.tsx`
- * gives: the root suite runs in the node environment with no DOM, so a menu that
- * only exists after a click cannot be opened there. The root suite pins the
- * closed, first-paint surface (SSR markup); these cases pin what happens when
- * the operator uses it.
- *
- * WHAT THESE CASES ARE ABOUT. Rollback §3.2 replaces discoverability-by-syntax
- * with discoverability-by-control, so the two facts worth pinning are that BOTH
- * options are visible once the menu is open (a click-through toggle would show
- * one), and that each row states its CONSEQUENCE rather than repeating its name
- * — starting somebody else's agent is the option that must never be picked by
- * accident.
+ * Two facts worth pinning: BOTH options are visible once the menu is open (a
+ * click-through toggle would show one), and each row states its CONSEQUENCE,
+ * because starting somebody else's agent must never be picked by accident.
  */
 
 function open() {
@@ -58,10 +50,8 @@ describe("ComposerIntentPill", () => {
   });
 
   /**
-   * The mode decides what an in-flight send WAS, so flipping it mid-send left
-   * the help line below describing a consequence that matched nothing. The old
-   * `SegmentedControl` had no `disabled` prop and had to be neutralised by a
-   * `pointer-events-none` wrapper; a plain button says it properly.
+   * ⚠ Mode decides what an in-flight send WAS, so flipping it mid-send leaves
+   * the help line describing a consequence that matches nothing.
    */
   it("cannot be opened while a send is in flight", () => {
     render(<ComposerIntentPill mode="chat" onChange={vi.fn()} disabled />);

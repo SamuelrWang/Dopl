@@ -9,11 +9,8 @@ import {
 
 const MAX_IDS = 100;
 
-/**
- * Parses `?ids=<comma-separated>` into a deduped id list. Empty/absent
- * → no ids (service returns `[]`). Over `MAX_IDS` → 400 rather than a
- * silent truncation, so callers page or trim client-side.
- */
+/** `?ids=<comma-separated>` → deduped id list. Empty/absent → no ids (service returns `[]`).
+ *  ⚠ Over `MAX_IDS` is a 400, never a silent truncation. */
 function parseIds(url: URL): string[] {
   const raw = url.searchParams.get("ids");
   if (!raw) return [];

@@ -6,23 +6,19 @@ import type { Channel, ChannelMember } from "@/features/channels/types";
 import { installBridge } from "#/test-utils/bridge";
 
 /**
- * THE CHANNEL SETTINGS POPOVER, exercised where its two arm controls actually
- * exist.
+ * CHANNEL SETTINGS POPOVER, exercised where its two arm controls exist.
  *
- * Permissions and Sends are the desktop permission ARM (`main/channel-prefs.js`),
- * reached over `window.dopl.channels.get/setPermissionPreset`. Tools is a cloud
- * write and works in a browser; the arm does not exist there at all. So the copy
- * and the pure panel are pinned in the ROOT suite (static renders), and the two
- * things that need a real bridge and a real DOM are pinned here:
+ * Permissions and Sends are the desktop permission ARM
+ * (`main/channel-prefs.js`) over `window.dopl.channels.get/setPermissionPreset`;
+ * Tools is a cloud write. Copy + pure panel are pinned in the ROOT suite; the
+ * two things needing a real bridge and DOM are pinned here:
  *
- *  1. the arm section appears only WITH the bridge, and drilling into it writes;
- *  2. TWO surfaces showing one channel's arm cannot revert each other. The
- *     settings popover and an inbound request card are both mounted on the same
- *     channel in the ordinary case, and each used to hold a private snapshot taken
- *     at its own mount — so the second one to write sent `{...staleSnapshot,
- *     ...patch}` and walked the other's axis back, while continuing to display the
- *     value it no longer had. The card's whole contract is that Allow launches
- *     what the card SHOWS.
+ *  1. the arm section appears only WITH the bridge, and drilling in writes;
+ *  2. ⚠ TWO surfaces showing one channel's arm must not revert each other. A
+ *     per-mount private snapshot makes the second writer send
+ *     `{...staleSnapshot, ...patch}`, walking the other's axis back while still
+ *     displaying the value it no longer has. The card's contract is that Allow
+ *     launches what the card SHOWS.
  */
 
 const CHANNEL = "44444444-4444-4444-8444-444444444444";
@@ -74,9 +70,9 @@ function member(over: Partial<ChannelMember> = {}): ChannelMember {
 }
 
 /**
- * A `window.dopl` carrying the permission-preset half of the channels bridge, over
- * a real in-memory store — so a write is observable the way main stores it and a
- * later read sees it, which is the whole point of the second suite below.
+ * `window.dopl` carrying the permission-preset half of the channels bridge over
+ * a real in-memory store, so a write is observable the way main stores it and a
+ * later read sees it — the point of the second suite below.
  */
 function bridge(opts: { present?: boolean; ok?: boolean } = {}) {
   const stored: { value: unknown } = { value: null };
@@ -131,7 +127,6 @@ describe("the arm section exists only where the arm does", () => {
   });
 
   it("shows neither in a plain browser, and still shows Tools", async () => {
-    // No bridge at all: the arm is a local-machine concept with nothing to set.
     render(
       <ChannelSettingsPopover
         channel={channel()}
@@ -214,8 +209,7 @@ describe("drilling in and choosing", () => {
 describe("two surfaces, one arm", () => {
   it("does not let the settings popover revert the request card's axis", async () => {
     const b = bridge();
-    // Both mounted on the same channel — the ordinary case: a pending inbound
-    // request is showing while the operator opens channel settings.
+    // Both on the same channel — the ordinary case.
     render(
       <>
         <RequestPermissionRow channelId={CHANNEL} />
@@ -230,7 +224,6 @@ describe("two surfaces, one arm", () => {
         />
       </>
     );
-    // Card sets the TOOLS axis.
     await waitFor(() =>
       expect(screen.getByLabelText("What this thread's agent may do")).toBeInTheDocument()
     );
@@ -238,14 +231,14 @@ describe("two surfaces, one arm", () => {
     fireEvent.click(row(/^Bypass/));
     await waitFor(() => expect(b.setPermissionPreset).toHaveBeenCalledTimes(1));
 
-    // Popover then sets the MESSAGES axis, from a component that mounted before
-    // the card's write existed.
+    // Popover sets the MESSAGES axis, from a component mounted before the
+    // card's write existed.
     fireEvent.click(screen.getByLabelText("Channel settings"));
     await waitFor(() => expect(queryRow(/^Sends/)).not.toBeNull());
     fireEvent.click(row(/^Sends/));
     fireEvent.click(row(/^Automatic/));
 
-    // Both axes survive. The old code sent { tools: "manual", messages: "auto_both" }.
+    // Both axes survive.
     await waitFor(() =>
       expect(b.setPermissionPreset).toHaveBeenLastCalledWith(CHANNEL, {
         tools: "bypass",
@@ -275,8 +268,8 @@ describe("two surfaces, one arm", () => {
     fireEvent.click(row(/^Permissions/));
     fireEvent.click(row(/^Bypass/));
 
-    // The card's pill names the current value; it must not still read "Ask each
-    // time" after the popover armed something else.
+    // Card's pill names the current value; must not still read "Ask each time"
+    // after the popover armed something else.
     await waitFor(() =>
       expect(screen.getByLabelText("What this thread's agent may do").textContent).toContain(
         "Bypass"

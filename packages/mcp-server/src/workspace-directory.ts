@@ -1,19 +1,13 @@
 /**
  * workspace-directory.ts — the session's view of WHICH workspaces exist and
- * which one a call lands in.
+ * which one a call lands in: membership caching, slug→id resolution, and the
+ * "you must pass `workspace=`" refusal.
  *
- * Split out of `server.ts` (§2, the layer rule): membership caching,
- * slug→id resolution and the "you must pass `workspace=`" refusal are one
- * responsibility — resolving a target — distinct from registering tools
- * (`registrar.ts`), gating ops (`gating.ts`) or writing the briefing
- * (`instructions.ts`).
- *
- * FAIL-CLOSED IS THE POINT AND IT DID NOT MOVE. A blank `workspace=` is
- * rejected by the caller in `registrar.ts`; a caller with 0 or 2+ memberships
- * and no pin gets {@link WorkspaceDirectory.noWorkspaceError} rather than a
- * guessed workspace; and a boot directory load that FAILED does not seed the
- * cache, so the first resolution retries instead of serving a bogus empty list
- * for a full TTL.
+ * ⚠ FAIL-CLOSED throughout. A blank `workspace=` is rejected by the caller in
+ * `registrar.ts`; 0 or 2+ memberships with no pin gets
+ * {@link WorkspaceDirectory.noWorkspaceError}, never a guessed workspace; and a
+ * FAILED boot directory load does not seed the cache, so the first resolution
+ * retries instead of serving a bogus empty list for a full TTL.
  */
 
 import type { DoplClient, WorkspaceListItem, WorkspaceRole } from "@dopl/client";
@@ -22,12 +16,10 @@ import { inlineOr } from "./tools/narration.js";
 import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
 
 /**
- * Snapshot of the session's default workspace, resolved once at boot from
- * the caller's membership directory (a request X-Workspace-Id pin, else the
- * sole membership). Read by `appendDoplStatus`. Null when the caller has 0
- * or 2+ memberships and sent no pin — in that state a no-arg tool call is
- * refused (the wrapper demands `workspace=`), so nothing is silently
- * routed to a guessed workspace.
+ * Session default workspace, resolved once at boot (X-Workspace-Id pin, else
+ * the sole membership). Read by `appendDoplStatus`. ⚠ Null on 0 or 2+
+ * memberships with no pin — a no-arg tool call is then REFUSED, so nothing is
+ * silently routed to a guessed workspace.
  */
 export interface ActiveWorkspaceState {
   id: string;
@@ -37,8 +29,8 @@ export interface ActiveWorkspaceState {
 }
 
 /**
- * How the workspace a call actually hit was chosen — surfaced verbatim in
- * the `_dopl_status` footer so the agent can positively confirm targeting.
+ * How the workspace a call hit was chosen — surfaced verbatim in the
+ * `_dopl_status` footer so the agent can confirm targeting.
  */
 export type WorkspaceSource = "per-call arg" | "sole membership" | "header pin";
 
@@ -49,16 +41,14 @@ export interface EffectiveWorkspace extends ActiveWorkspaceState {
 /** The boot-resolved directory state this module is constructed from. */
 export interface WorkspaceDirectoryOptions {
   /**
-   * The caller's full active-membership directory, from the boot
-   * `listWorkspaces()` call. Seeds the cache so per-call `workspace=`
-   * resolution needs no extra loopback.
+   * Caller's full active-membership directory from the boot `listWorkspaces()`.
+   * Seeds the cache so per-call `workspace=` needs no extra loopback.
    */
   directory?: WorkspaceListItem[];
   /**
-   * True when the boot `listWorkspaces()` call FAILED (transient), as opposed
-   * to a genuine empty directory. Steers the refusal copy toward "couldn't
-   * load — retry" instead of "you have none", and suppresses seeding the cache
-   * with a bogus empty directory so a later `workspace=` resolution retries.
+   * ⚠ True when the boot `listWorkspaces()` FAILED, as opposed to a genuine
+   * empty directory: steers the copy to "couldn't load — retry", and suppresses
+   * seeding a bogus empty cache so a later resolution retries.
    */
   directoryLoadFailed?: boolean;
 }
@@ -72,19 +62,16 @@ export interface WorkspaceDirectory {
   noWorkspaceError(): Promise<ToolResponse>;
 }
 
-/**
- * Cache TTL for the user's workspace memberships (slug→id resolution).
- * Seeded from the boot `listWorkspaces()` call; refreshed on demand after it.
- */
+/** Membership cache TTL (slug→id). Seeded at boot, refreshed on demand. */
 const WORKSPACE_CACHE_TTL_MS = 60_000;
 
 export function createWorkspaceDirectory(
   client: DoplClient,
   options: WorkspaceDirectoryOptions = {},
 ): WorkspaceDirectory {
-  // Seed from the boot directory — but NOT when the boot load failed, or we'd
-  // cache a bogus empty list for the full TTL and mask the failure. Leaving it
-  // null lets the first `workspace=` / no-default path retry the load.
+  // ⚠ Seed from the boot directory, but NOT when the boot load FAILED — that
+  // caches a bogus empty list for a full TTL and masks the failure. Null lets
+  // the first `workspace=` / no-default path retry.
   let workspaceListCache: { workspaces: WorkspaceListItem[]; loadedAt: number } | null =
     options.directory && !options.directoryLoadFailed
       ? { workspaces: options.directory, loadedAt: Date.now() }
@@ -108,15 +95,12 @@ export function createWorkspaceDirectory(
   async function resolveWorkspaceRef(
     ref: string,
   ): Promise<WorkspaceListItem | null> {
-    // Audit B11: a workspace slug shaped like a UUID (lowercase hex
-    // with hyphens) is theoretically possible. Matching on id alone
-    // would miss the slug, forcing a wasteful refresh on the second
-    // pass. Cheap to try both id and slug on the first pass.
+    // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
+    // first pass — id alone forces a wasteful refresh.
     let list = await getWorkspaceList();
     let match = list.find((w) => w.id === ref || w.slug === ref);
     if (match) return match;
-    // Force-refresh once — covers the case where the user was added to
-    // a new workspace mid-session and the cache hasn't ticked over.
+    // Force-refresh once — covers a mid-session membership add.
     workspaceListCache = null;
     list = await getWorkspaceList();
     match = list.find((w) => w.id === ref || w.slug === ref);
@@ -124,17 +108,15 @@ export function createWorkspaceDirectory(
   }
 
   /**
-   * The isError response for a no-`workspace=` call that has no session
-   * default (M-3). Lists the caller's workspaces so the agent can retry
-   * with an explicit `workspace=`; mirrors the backend WORKSPACE_REQUIRED
-   * envelope in intent. Reads the boot-seeded directory (cached — no extra
-   * loopback on the happy path).
+   * isError for a no-`workspace=` call with no session default. Lists the
+   * caller's workspaces so the agent can retry explicitly; mirrors the backend
+   * WORKSPACE_REQUIRED envelope. Reads the boot-seeded cache — no extra
+   * loopback on the happy path.
    */
   async function noWorkspaceError(): Promise<ToolResponse> {
     let list: WorkspaceListItem[];
-    // Start from the boot-time load state; a fresh successful load below
-    // supersedes it (the cache is left unseeded when boot failed, so this
-    // actually retries rather than returning a stale empty list).
+    // Start from the boot-time load state; a fresh successful load supersedes
+    // it (an unseeded cache after a failed boot means this really retries).
     let loadFailed = options.directoryLoadFailed ?? false;
     try {
       list = await getWorkspaceList();

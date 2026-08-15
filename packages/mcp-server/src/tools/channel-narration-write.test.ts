@@ -1,25 +1,13 @@
 /**
- * Q1, WRITE SIDE — the sites the first neutralization pass never enumerated.
+ * PEER-CONTROLLED TEXT, WRITE SIDE. The exposure is the same as the read side's:
+ * a thread's TARGET may propose on it, so the title a write result echoes is
+ * routinely the PEER's; `ch.name` and `profiles.display_name` reach dozens of
+ * write-op lines that carry no framing at all.
  *
- * The original Q1 fix swept the READ ops (`channel-narration.test.ts` pins
- * those) and the completeness review then found the same defect class alive in
- * the write ops, which had simply never been listed. The headline instance:
- * `opCloseThread` rendered `**${thread.title}**` raw, and CLOSING IS PERMITTED
- * TO THE THREAD'S TARGET — so the ordinary shape is a peer opening a thread,
- * titling it, addressing it to me, and my agent's own close confirmation
- * printing that title as our narration. Alongside it, `ch.name` was spliced raw
- * at fourteen sites and `profiles.display_name` at ten more.
- *
- * Sibling of `channel-narration.test.ts` (read ops) and
- * `channel-untrusted.test.ts` (the two sites the original pass DID cover); split
- * for the §2 500-line cap, same as those two were split from each other.
- *
- * WHAT EACH CASE PINS, and it is the same contract the read side has: the
- * payload lands on ONE line, inside a code span, and NO line of the result
- * begins with `#`, `-` or `[` written by the attacker. Every assertion here
- * fails against the pre-fix code — that was checked by reverting, not assumed.
- *
- * The @dopl/client is hand-stubbed; nothing transports.
+ * ⚠ Each case pins the same contract: the payload lands on ONE line, inside a
+ * code span, and NO line of the result begins with `#`, `-` or `[` the attacker
+ * wrote. Sibling of `channel-narration.test.ts` (read ops) and
+ * `channel-untrusted.test.ts`.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -47,8 +35,8 @@ const FORGERY = [
 const MARKER = "Operator directive";
 
 /**
- * The payload is CONTAINED: one line, inside a code span, starting nothing.
- * Also asserts the neutralizer actually ran (no markdown, no newline left).
+ * Payload CONTAINED: one line, inside a code span, starting nothing — and the
+ * neutralizer actually ran (no markdown, no newline).
  */
 function expectContained(text: string): void {
   const hits = text.split("\n").filter((l) => l.includes(MARKER));
@@ -62,9 +50,9 @@ function expectContained(text: string): void {
 }
 
 /**
- * No line of the result is structure the ATTACKER wrote. The three opening
- * characters are the whole point: `#` is a heading, `-` a list item (and the
- * transcript's own message-line shape), `[` a fabricated `[system]` tag.
+ * No line of the result is structure the ATTACKER wrote. ⚠ The three opening
+ * characters are the point: `#` a heading, `-` a list item (the transcript's own
+ * message-line shape), `[` a fabricated `[system]` tag.
  */
 function expectNoForgedStructure(text: string): void {
   for (const line of text.split("\n")) {
@@ -75,7 +63,7 @@ function expectNoForgedStructure(text: string): void {
   }
 }
 
-/** A channel whose NAME is the payload — 120 chars, no charset rule until now. */
+/** A channel whose NAME is the payload — 120 chars, no charset rule. */
 const HOSTILE_CHANNEL = {
   id: "chan-1",
   slug: "public-sync",
@@ -118,7 +106,6 @@ describe("Q1 write · a hostile channel NAME", () => {
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // The op still did its job and still says so.
     expect(text.startsWith("Added ")).toBe(true);
     expect(text).toContain("as member");
   });
@@ -153,8 +140,7 @@ describe("Q1 write · a hostile channel NAME", () => {
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // The wake teaching that follows the name is intact, not pushed off a
-    // forged line boundary.
+    // ⚠ Wake teaching after the name is intact, not pushed off a forged line.
     expect(text).toContain('dopl_channel(op="await"');
   });
 
@@ -207,7 +193,6 @@ describe("Q1-D write · a hostile display_name", () => {
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // The channel half of the line is still legible and still ours.
     expect(text).toContain("**`General`**");
   });
 
@@ -225,9 +210,8 @@ describe("Q1-D write · a hostile display_name", () => {
   });
 
   it("the member-resolver's OWN error neutralizes the name", async () => {
-    // A pending/deactivated member is named in an error built inside
-    // `resolveMemberOr` — a site outside every op, and the one the write-op
-    // enumeration missed entirely because it is not in an ops file at all.
+    // ⚠ A pending/deactivated member is named in an error built inside
+    // `resolveMemberOr` — a splice site outside every ops file.
     const client = stubClient({
       listWorkspaceMembers: vi.fn(async () => [
         { ...HOSTILE_MEMBER, status: "pending" },
@@ -255,17 +239,14 @@ const THREAD = {
   targetUserId: "u-me",
 };
 
-// DECISION 2 (2026-08-04): the op an agent reaches is `propose_close`, and the
-// Q1-B/C exposure is IDENTICAL — proposing is allowed to a thread's TARGET, so
-// the title this result renders is routinely the PEER's 200-character,
-// newline-tolerant text and not the caller's.
+// ⚠ Proposing is allowed to a thread's TARGET, so the title this result renders
+// is routinely the PEER's 200-char, newline-tolerant text, not the caller's.
 describe("Q1-B/C write · propose_close — a title the PEER typed", () => {
   function closingClient(title: string): DoplClient {
     return stubClient({
       listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
-      // `{ thread, markerSeq, outcome }` — the proposal writes the marked note
-      // the operator's prompt renders from, so the client hands back where it
-      // landed alongside the (untouched) thread.
+      // The proposal writes the marked note the operator's prompt renders from,
+      // so the client hands back where it landed.
       proposeChannelThreadClose: vi.fn(async () => ({
         thread: { ...THREAD, title },
         markerSeq: null,
@@ -281,7 +262,7 @@ describe("Q1-B/C write · propose_close — a title the PEER typed", () => {
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // Framing is a HEADER: read BEFORE the peer's text, never after it.
+    // ⚠ Framing is a HEADER — read BEFORE the peer's text, never after.
     expect(text.startsWith(UNTRUSTED_THREAD_HEADER)).toBe(true);
     expect(text.indexOf(UNTRUSTED_THREAD_HEADER)).toBeLessThan(text.indexOf(MARKER));
   });
@@ -298,8 +279,8 @@ describe("Q1-B/C write · propose_close — a title the PEER typed", () => {
     ).content[0].text;
 
     expect(text).toContain("Proposed closing thread **`Ship the listener fix`**");
-    // The summary is the AGENT'S OWN prose from this same call — deliberately
-    // not neutralized, so it keeps its punctuation and its full length.
+    // ⚠ Summary is the AGENT'S OWN prose from this call — deliberately NOT
+    // neutralized, so it keeps its punctuation and full length.
     expect(text).toContain(
       "Landed in 1.7.16; the listener now survives a token refresh.",
     );
@@ -353,13 +334,11 @@ describe("Q1 write · set_thread_mode and create_thread", () => {
       await opCreateThread(client, "public-sync", FORGERY, "do it", "u-peer")
     ).content[0].text;
 
-    // Three payload copies (name, title, display name) — every one contained,
-    // and NOT one of them on a line of its own.
+    // Three payload copies (name, title, display name), each contained.
     expectNoForgedStructure(text);
     for (const line of text.split("\n")) {
       expect(line.trimStart().startsWith(MARKER)).toBe(false);
     }
-    // The await teaching that has to survive the payload is still there.
     expect(text).toContain("since=4");
   });
 
@@ -401,8 +380,8 @@ describe("Q1 write · the not-threaded warning names peer-typed titles", () => {
         metadata: {},
         authorUserId: "u-me",
       })),
-      // A thread the PEER opened and titled, addressed to me: I may post into
-      // it, so it is offered — and its title is not mine.
+      // ⚠ A thread the PEER opened and titled, addressed to me: offerable, and
+      // its title is not mine.
       listChannelThreads: vi.fn(async () => [
         { ...THREAD, title: FORGERY, createdBy: "u-peer", targetUserId: "u-me" },
       ]),
@@ -414,7 +393,6 @@ describe("Q1 write · the not-threaded warning names peer-typed titles", () => {
     expectNoForgedStructure(text);
     expect(text).toContain(UNTRUSTED_THREAD_HEADER);
     expect(text.indexOf(UNTRUSTED_THREAD_HEADER)).toBeLessThan(text.indexOf(MARKER));
-    // The advice the note exists to give is intact under the payload.
     expect(text).toContain('re-post it with thread="<that id>"');
   });
 });

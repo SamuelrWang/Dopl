@@ -2,17 +2,13 @@ import crypto from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Analytics logger for MCP-originated tool calls.
+ * Analytics logger for MCP-originated tool calls → `mcp_events` (migration
+ * 032). Complements `api_key_usage` (rate limits) by capturing the full request
+ * payload: for natural-language tools the arguments ARE the user's intent.
  *
- * Writes to the `mcp_events` table (migration 032). This complements
- * `api_key_usage` (rate limits) by capturing the full request payload —
- * for natural-language tools (`search_setups`, `build_solution`,
- * `query_cluster`, `ingest_url`, `save_cluster_memory`) the arguments
- * ARE the user's intent, verbatim.
- *
- * MCP is a tool protocol, not a conversation protocol — the server cannot
- * see the user's prompt to their LLM or the LLM's response. Tool arguments
- * are the richest signal we can capture at this boundary.
+ * MCP is a tool protocol, not a conversation protocol — the server cannot see
+ * the user's prompt or the LLM's response, so tool arguments are the richest
+ * signal available at this boundary.
  */
 
 export interface McpEventInput {
@@ -30,8 +26,8 @@ export interface McpEventInput {
   error?: string | null;
 }
 
-// Keep JSONB columns reasonable. ~8KB per field is plenty for analytics
-// without bloating the DB on a large ingest response.
+// ~8KB per JSONB field: enough for analytics without bloating the DB on a
+// large ingest response.
 const MAX_PAYLOAD_CHARS = 8_000;
 
 function truncate(value: unknown): unknown {
@@ -50,11 +46,9 @@ function truncate(value: unknown): unknown {
 }
 
 /**
- * Derive a best-effort session_id from the agent (OAuth) token id + a 1-hour
- * time bucket. Groups tool calls made from the same token within a sliding hour
- * window so an admin UI can stitch them back into a pseudo-transcript. Not
- * perfect (calls spanning an hour boundary get split), but avoids
- * protocol-level session tracking the MCP transport doesn't expose.
+ * Best-effort session_id from the agent (OAuth) token id + a 1-hour bucket, so
+ * an admin UI can stitch calls into a pseudo-transcript. ⚠ Calls spanning an
+ * hour boundary get split — the MCP transport exposes no real session id.
  */
 function deriveSessionId(agentTokenId: string | null): string | null {
   if (!agentTokenId) return null;
@@ -66,17 +60,14 @@ function deriveSessionId(agentTokenId: string | null): string | null {
     .slice(0, 32);
 }
 
-/**
- * Fire-and-forget logger. Never throws — analytics must not break a
- * user-facing request. Errors swallowed silently.
- */
+/** Fire-and-forget. Never throws — analytics must not break a request. */
 export async function logMcpEvent(event: McpEventInput): Promise<void> {
   try {
     const supabase = supabaseAdmin();
     await supabase.from("mcp_events").insert({
-      // Legacy column that FK'd to the removed api_keys table. Agent identity
-      // now lives in session_id (derived from the OAuth token id). Kept null so
-      // the insert is valid both before and after the api_keys drop migration.
+      // ⚠ Legacy column that FK'd to the removed api_keys table; must stay
+      // null so the insert is valid before and after that drop migration.
+      // Agent identity lives in session_id.
       api_key_id: null,
       user_id: event.userId,
       workspace_id: event.workspaceId,

@@ -4,33 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 
 interface Props {
-  /** Authoritative title from the server. Used to seed the input and
-   *  to revert when the user blurs without committing. */
+  /** Authoritative server title. Seeds the input; reverted to on cancel. */
   value: string;
-  /**
-   * Called with the new title when the user commits (Enter or blur
-   * with a non-empty change). Returning a Promise lets the caller
-   * surface server errors back via the optional onError callback.
-   */
+  /** Fires on commit (Enter, or blur with a non-empty change). Reject to
+   *  surface a server error through `onError`. */
   onSave: (next: string) => Promise<void> | void;
-  /** Optional handler invoked when onSave throws. Defaults to a console
-   *  warning. The component reverts the input to `value` on error. */
+  /** Called when onSave throws; defaults to a console warning. Either way the
+   *  input reverts to `value`. */
   onError?: (err: unknown) => void;
-  /** Placeholder shown when the value is empty. */
   placeholder?: string;
   className?: string;
 }
 
 /**
- * Inline-editable title rendered as a single text input that mimics
- * the surrounding heading style. Click to start editing — the input
- * is always focusable, so a single click positions the caret. Press
- * Enter to commit, Escape to revert, or click away to commit on blur.
- *
- * The component owns local typing state and only fires `onSave` when
- * the value actually changes, so empty / unchanged blurs don't
- * round-trip a save. Server-side rename errors revert the displayed
- * text to the last known good value via an effect on the `value` prop.
+ * Inline-editable title. Enter commits, Escape reverts, blur commits.
+ * `onSave` fires only on an actual change, so empty/unchanged blurs don't
+ * round-trip.
  */
 export function EditableTitle({
   value,
@@ -41,14 +30,11 @@ export function EditableTitle({
 }: Props) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
-  // Latest value from props — used to revert on Escape / blur-without-
-  // change and to keep the input in sync with external updates while
-  // the field isn't focused.
   const valueRef = useRef(value);
   useEffect(() => {
     valueRef.current = value;
-    // Sync from prop only when the input isn't focused — avoids
-    // clobbering the user's mid-type characters when the row refetches.
+    // ⚠ Sync from prop ONLY when unfocused — otherwise a background refetch
+    // clobbers the user's mid-type characters.
     if (
       typeof document !== "undefined" &&
       document.activeElement !== inputRef.current
@@ -62,7 +48,6 @@ export function EditableTitle({
   async function commit() {
     const next = draft.trim();
     if (!next || next === valueRef.current) {
-      // No-op — revert to canonical value.
       setDraft(valueRef.current);
       return;
     }
@@ -70,7 +55,6 @@ export function EditableTitle({
     try {
       await onSave(next);
     } catch (err) {
-      // Revert + notify caller.
       setDraft(valueRef.current);
       if (onError) {
         onError(err);
@@ -103,8 +87,6 @@ export function EditableTitle({
       onBlur={() => {
         void commit();
       }}
-      // Click on the input naturally positions the caret; no extra
-      // handling needed.
       className={cn(
         "min-w-0 truncate bg-transparent px-1 -mx-1 rounded",
         "text-title font-medium text-text-primary placeholder:text-text-secondary/40",

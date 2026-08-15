@@ -1,30 +1,23 @@
 /**
- * INVARIANT SUITE — MCP tool parity (packages/mcp-server).
+ * INVARIANT SUITE — MCP tool parity. Guards the "drift between parallel
+ * declarations" bug class:
+ *   1. a param validated server-side but MISSING from the published zod
+ *      inputSchema, so agents cannot pass it → "handler reads only declared
+ *      params" below;
+ *   2. `WRITE_OPS` drifting from a tool's op enum after an op rename, a latent
+ *      read-only-token write hole → WRITE_OPS ⊆ enum + completeness below.
  *
- * This suite mechanically guards the "drift between parallel declarations"
- * bug class that motivated the whole effort. Two real bugs it targets:
- *
- *   1. `dopl_kb` get_tree validated an `entry_limit` param server-side that
- *      was MISSING from the published zod inputSchema — agents couldn't
- *      call it. → guarded by "handler reads only declared params" below.
- *   2. `WRITE_OPS.dopl_skill` in server.ts drifted from the tool's op enum
- *      after an op rename (a latent read-only-token write hole). → guarded
- *      by the WRITE_OPS ⊆ enum + write-op-completeness tests below.
- *
- * Mechanism lives in `parity-harness.ts`: every domain tool is captured by
- * calling its registrar with a recording `register` and a stub client, and
- * WRITE_OPS + READ_ONLY_BLOCKED_TOOLS are parsed out of server.ts source text
- * so the tests check the REAL gating tables, not a copy that could itself
- * drift. The retirement (HIDDEN_TOOLS) and app-only-deletion (§2b) suites read
- * the same harness from `delete-block.test.ts` — they moved there when this
- * file crossed the §2 500-line cap.
+ * ⚠ Mechanism in `parity-harness.ts`: tools are captured through their real
+ * registrars, and `WRITE_OPS` / `READ_ONLY_BLOCKED_TOOLS` are PARSED out of
+ * source text so the tests check the REAL tables, not a copy that can drift.
+ * `delete-block.test.ts` reads the same harness for HIDDEN_TOOLS and the
+ * app-only-deletion suites.
  */
 
 import { describe, it, expect } from "vitest";
-// The auto-discovering "which files make up one tool" scan. It lived here and
-// moved to its own module when `channel-deadlines.test.ts` needed the same
-// discovery (it had hardcoded its file list, which a §2 split would have
-// silently truncated). ONE definition, two suites.
+// ⚠ ONE definition of the "which files make up one tool" scan, shared with
+// `channel-deadlines.test.ts` — a hardcoded file list is silently truncated by
+// the next module split.
 import { toolGroupSource } from "./tool-group-files.js";
 import {
   DELETE_BLOCKED_OPS,
@@ -37,33 +30,22 @@ import {
   opEnum,
 } from "./parity-harness.js";
 
-// ── Curated READ-OPS allowlist (THE SECURITY REVIEW) ─────────────────
-// Per tool, the ops that ONLY read (no client write call in the handler).
-// Derived by reading every op handler in the tool sources. Every op in a
-// tool's enum must be classified as either a WRITE op (server.ts WRITE_OPS)
-// or a read op (here). An op in neither fails the completeness test and
-// forces a conscious classification — that failure IS the security review
-// for the new op. Human-audit this list against the sources.
+// ⚠ CURATED READ-OPS ALLOWLIST — THE SECURITY REVIEW. Per tool, the ops that
+// ONLY read (no client write call in the handler), derived by reading every op
+// handler. Every enum op must be classified as WRITE (gating.ts WRITE_OPS) or
+// read (here); an op in neither fails the completeness test, and that failure
+// IS the security review for the new op. Human-audit against the sources.
 const READ_OPS: Record<string, string[]> = {
   dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "search"],
   dopl_skill: ["list", "get", "read", "authoring_guide"],
   dopl_chats: ["list", "get", "folders", "guide"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
   dopl_ontology: ["map", "anchor", "resolve", "get"],
-  // `members` is a roster READ: `opMembers` calls only `listChannelMembers`
-  // (GET /api/channels/[id]/members) and renders it. Channel membership is
-  // changed by op="invite" (a write, gated below) and in the web UI.
-  // `agents` is a roster READ, exactly like `members`: `opAgents` calls only
-  // `listChannelAgents` (GET /api/channels/[id]/agents) plus the fail-soft
-  // member-name enrichment, and renders them. The roster is CHANGED by
-  // op="summon_agent" / "rename_agent" / "set_agent_status" /
-  // "disengage_agent" — all gated as writes in server.ts.
-  //
-  // `disengage_agent` IS A WRITE despite being the one agent op a non-owner may
-  // call: it PATCHes `channel_agents` (clearing `engaged_at` / `engaged_by`).
-  // "who may call it" and "does it write" are different questions, and answering
-  // the second with the first is how a write op ends up callable from a
-  // read-only token.
+  // `members` is a roster READ: `opMembers` calls only `listChannelMembers` and
+  // renders it. Membership changes via op="invite" (gated as a write) and the
+  // web UI. ⚠ "who may call it" and "does it write" are different questions —
+  // answering the second with the first is how a write op becomes callable
+  // from a read-only token.
   dopl_channel: [
     "list",
     "read",
@@ -71,22 +53,16 @@ const READ_OPS: Record<string, string[]> = {
     "members",
     "list_threads",
     "get_thread",
-    // read-session-state (rollback §3.5): `opReadSessions` calls only
-    // `listChannelSessions` (GET /api/channels/sessions) and renders it —
-    // own-scoped, no write. The desktop WRITE that feeds it (F-147) posts
-    // straight to the route from the main process; it is not an MCP op and
-    // must not become one — an external agent does not get to say what a
-    // session on somebody's machine is doing.
+    // `opReadSessions` calls only `listChannelSessions` — own-scoped, no write.
+    // ⚠ The desktop WRITE that feeds it posts straight to the route from the
+    // main process and must NOT become an MCP op: an external agent does not
+    // get to say what a session on somebody's machine is doing.
     "read_sessions",
   ],
 };
 
-// ── KNOWN DRIFT ledger ────────────────────────────────────────────────
-// Write ops absent from server.ts WRITE_OPS (read-only-token write holes)
-// discovered by this suite get listed here until fixed. 2026-07-11: the
-// original three (dopl_chats.update_folder, dopl_ontology.set_template_field
-// + remove_template_field) were fixed in server.ts — the set is empty and
-// the security tripwire below enforces it stays empty.
+// KNOWN DRIFT ledger — write ops absent from WRITE_OPS (read-only-token write
+// holes) get listed here until fixed. Empty; the tripwire below keeps it empty.
 const KNOWN_WRITE_OPS_DRIFT: Record<string, string[]> = {};
 
 const NON_ADMIN_OP_TOOLS = TOOLS.filter(
@@ -122,14 +98,10 @@ describe("tool capture", () => {
   });
 
   it("parsed the HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
-    // A parse that silently returned {} would turn every assertion below into
-    // a vacuous pass, which is the failure mode this whole file exists to
-    // avoid. DELETE_BLOCKED_OPS is checked by SIZE. HIDDEN_TOOLS cannot be:
-    // it is legitimately empty since workflows and clusters were deleted
-    // (2026-08-11), so the parse itself is the assertion — `parseToolSet`
-    // THROWS when the constant is missing or renamed and returns an empty set
-    // only when the table really is empty. `delete-block.test.ts` pins the
-    // emptiness as a value.
+    // ⚠ A parse silently returning {} makes every assertion below a vacuous
+    // pass. DELETE_BLOCKED_OPS is checked by SIZE; HIDDEN_TOOLS cannot be
+    // (legitimately empty), so the parse IS the assertion — `parseToolSet`
+    // THROWS when the constant is missing or renamed.
     expect(HIDDEN_TOOLS).toBeInstanceOf(Set);
     expect(Object.keys(DELETE_BLOCKED_OPS).length).toBeGreaterThan(0);
   });
@@ -180,11 +152,9 @@ describe("write-op completeness", () => {
   });
 
   it("the discovered WRITE_OPS drift is EXACTLY the known set (tripwire for any change)", () => {
-    // computedDrift = enum ops that are neither gated by WRITE_OPS nor
-    // marked read in the allowlist. Must equal KNOWN_WRITE_OPS_DRIFT.
-    // Grows if a new write op is added un-gated; shrinks when server.ts
-    // is fixed — either way this fails and forces the constant/source in
-    // sync.
+    // Enum ops neither gated by WRITE_OPS nor marked read. Grows when a new
+    // write op is added un-gated, shrinks when the table is fixed — either way
+    // this fails and forces constant and source back in sync.
     const computed: Record<string, string[]> = {};
     for (const tool of NON_ADMIN_OP_TOOLS) {
       const enumOps = opEnum(tool)!;
@@ -201,22 +171,11 @@ describe("write-op completeness", () => {
   });
 
   it("SECURITY: the removed agent-state ops are gone from BOTH gate lists", () => {
-    // They were named explicitly here rather than left to the completeness scan
-    // above, because the tempting mistake with `disengage_agent` was specific:
-    // it was the only agent op the server allowed to somebody who did not own
-    // the agent, which read like "not really a write" right up until a
-    // read-only token cleared somebody's engagement. The ops are gone (channels
-    // rollback §1), so what has to hold now is that neither list still claims
-    // to gate them — a stale WRITE_OPS entry for a non-existent op is dead law
-    // that reads as coverage.
-    // BOTH ASSERTIONS READ PRODUCTION SOURCE, and the second one did not used to
-    // (F-146). `WRITE_OPS` is PARSED out of `server.ts`, so checking it is real
-    // coverage; `READ_OPS` is a LITERAL declared at `:141` of this very file, so
-    // `READ_OPS.dopl_channel.includes(op)` was asking whether a list 170 lines
-    // above contained something the same author had just not written into it —
-    // it could not fail, and it could not notice the op coming back. The honest
-    // second check is against the tool's OWN op enum, which is the thing that
-    // would have to change for these to exist again.
+    // ⚠ A stale WRITE_OPS entry for a non-existent op is dead law that reads as
+    // coverage. ⚠ BOTH assertions must read PRODUCTION source: `WRITE_OPS` is
+    // parsed out of gating.ts, and the second check goes against the tool's OWN
+    // op enum — asserting against `READ_OPS` (a literal in this file) cannot
+    // fail and cannot notice an op coming back.
     const write = WRITE_OPS.dopl_channel ?? new Set<string>();
     const channelEnum = opEnum(
       TOOLS.find((t) => t.name === "dopl_channel")!,
@@ -253,9 +212,8 @@ describe("write-op completeness", () => {
 
 // ── 1c. Schema / description parity ──────────────────────────────────
 
-// ── KNOWN DRIFT ledger: enum ops missing from the tool description ────
-// 2026-07-11: dopl_kb.set_visibility was undocumented; fixed in
-// KB_DESCRIPTION. Empty set enforced by the test below.
+// KNOWN DRIFT ledger: enum ops missing from the tool description. Empty set
+// enforced by the test below.
 const KNOWN_DESCRIPTION_DRIFT: Record<string, string[]> = {};
 
 describe("schema / description parity", () => {
@@ -289,8 +247,8 @@ describe("schema / description parity", () => {
 
   it("every declared schema param is referenced in the tool's source", () => {
     for (const tool of TOOLS) {
-      // Scan the registrar AND its split-out ops/render/shared modules — a
-      // param consumed only in a sibling handler must still count as used.
+      // ⚠ Scan the registrar AND its split-out modules — a param consumed only
+      // in a sibling handler still counts as used.
       const src = toolGroupSource(tool.sourceFile);
       for (const key of Object.keys(tool.schema)) {
         if (key === "op") continue;
@@ -304,13 +262,10 @@ describe("schema / description parity", () => {
   });
 
   it("every param the handler reads (args.X) is a declared schema param", () => {
-    // The `dopl_kb get_tree` bug class: a handler validated `entry_limit`
-    // that was absent from the published schema, so agents couldn't pass
-    // it. Here: no handler may read an arg the schema doesn't publish.
-    // `keysByFile` is keyed by the REGISTRAR file (every tool's sourceFile),
-    // and the union of its tools' schema keys is the allowed set for the whole
-    // group — including handlers now living in split-out ops/render/shared
-    // modules, which we scan via toolGroupSource so their args.X are covered.
+    // ⚠ No handler may read an arg the schema does not publish. `keysByFile` is
+    // keyed by the REGISTRAR file; the union of its tools' schema keys is the
+    // allowed set for the whole group, including split-out modules scanned via
+    // `toolGroupSource`.
     const keysByFile = new Map<string, Set<string>>();
     for (const tool of TOOLS) {
       const set = keysByFile.get(tool.sourceFile) ?? new Set<string>();

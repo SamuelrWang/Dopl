@@ -13,18 +13,16 @@ import type {
 } from "@/features/channels/types";
 
 /**
- * Smoke test for the ported channels page: the REAL `ChannelsViewCore` tree
- * (reused from the web app) over a mocked data layer. `fetch` is the mock point
- * because it is the seam both clients share — the SPA's `#/lib/api` transport
- * and `@/shared/api/api-client`, which the channels feature client calls
- * directly for every mutation.
+ * Channels page smoke test: REAL `ChannelsViewCore` tree over a mocked data
+ * layer. `fetch` is the mock point — the seam both clients share (SPA's
+ * `#/lib/api` and `@/shared/api/api-client`, which the channels feature client
+ * calls directly for every mutation).
  *
- * Supabase is stubbed at the browser-client module: in jsdom there is no
- * `window.dopl`, so the realtime registry does NOT take its SPA short-circuit
- * and would otherwise reach for a Supabase config the renderer has none of.
- * The stub keeps the four subscriptions wiring for real without a websocket.
- * The assertions below deliberately do NOT depend on a realtime event — the
- * point of this port is that every surface loads from its own fetch.
+ * ⚠ Supabase stubbed at the browser-client module: jsdom has no `window.dopl`,
+ * so the realtime registry does NOT take its SPA short-circuit and would reach
+ * for a Supabase config the renderer has none of. Stub keeps the four
+ * subscriptions wiring for real without a websocket. Assertions deliberately do
+ * NOT depend on a realtime event — every surface loads from its own fetch.
  */
 
 vi.mock("@/shared/supabase/browser", () => {
@@ -37,7 +35,7 @@ vi.mock("@/shared/supabase/browser", () => {
       channel: () => channel,
       removeChannel: () => {},
       // `CreateChannelDialog` mounts `useAuthUserState`, which falls through to
-      // the Supabase client when there is no `window.dopl` bridge (jsdom).
+      // the Supabase client without a `window.dopl` bridge (jsdom).
       auth: {
         getUser: async () => ({ data: { user: null } }),
         onAuthStateChange: () => ({
@@ -50,9 +48,9 @@ vi.mock("@/shared/supabase/browser", () => {
 
 const CHANNEL_ID = "ch-1";
 
-/** Fresh per test: the realtime registry shares one channel per workspace id
- *  across mounts (module singleton with a teardown grace window), so a reused
- *  id would hand the second test the first test's already-connected entry. */
+/** ⚠ Fresh per test: realtime registry shares one channel per workspace id
+ *  across mounts (module singleton + teardown grace window), so a reused id
+ *  hands the second test the first test's already-connected entry. */
 let workspaceId = "";
 let workspaceSeq = 0;
 
@@ -173,7 +171,7 @@ interface FetchCall {
 
 let calls: FetchCall[];
 /** Flipped by the consent PATCH so the follow-up inbox read comes back empty,
- *  as the real service does (it returns `pending` rows only). */
+ *  as the real service does (`pending` rows only). */
 let consentDecided = false;
 
 function json(body: unknown) {
@@ -198,8 +196,8 @@ beforeEach(() => {
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
     });
 
-    // ONE read for workspace + role + caller id (P0-2) — `resolve` and `me`
-    // are seeded from it, so the page never waits on them in series.
+    // ONE read for workspace + role + caller id; `resolve` and `me` seeded
+    // from it, so the page never waits on them in series.
     if (path === "/api/boot") {
       return json({
         isOnboarded: true,
@@ -263,19 +261,16 @@ describe("channels page", () => {
     expect(
       await screen.findByText("Picked it up, wiring the client queries now.")
     ).toBeInTheDocument();
-    // Twice on purpose: once in the transcript, once as the consent card's
-    // body preview at the end of the chain.
+    // Twice on purpose: transcript + consent card body preview.
     expect(
       screen.getAllByText("Can your agent take the channels port?")
     ).toHaveLength(2);
 
-    // The RSC's two server calls, now ONE client query (P0-2).
     expect(requestsTo("/api/boot", "POST")[0].body).toEqual({ segment: SEGMENT });
     expect(requestsTo("/api/workspaces/me")).toHaveLength(0);
 
-    // Every live surface has its OWN initial fetch — this is what makes the
-    // page correct on first paint with realtime no-op'd (Phase 3 owns the
-    // refresh, not the load).
+    // ⚠ Every live surface needs its OWN initial fetch: that is what keeps the
+    // page correct on first paint with realtime no-op'd.
     for (const path of [
       "/api/channels",
       `/api/channels/${CHANNEL_ID}/messages`,
@@ -293,8 +288,7 @@ describe("channels page", () => {
   it("renders the roster presence strip from the members read", async () => {
     renderPage();
 
-    // One of the two members' agents is online (`agentOnline`), which the
-    // header derives from the roster rather than from `onlineMemberCount`.
+    // Header derives `agentOnline` from the roster, not `onlineMemberCount`.
     expect(await screen.findByText("1 online")).toBeInTheDocument();
   });
 
@@ -313,8 +307,6 @@ describe("channels page", () => {
     expect(patch.body).toEqual({ decision: "allow" });
     expect(patch.headers["x-workspace-id"]).toBe(workspaceId);
 
-    // The card leaves on the local decision and stays gone once the refetched
-    // inbox agrees.
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Allow" })).not.toBeInTheDocument()
     );

@@ -1,20 +1,18 @@
 import { getBridge, type BridgeResponse } from "./dopl-bridge";
 
 /**
- * The two ways bytes leave this renderer — and the ONLY two. Nothing outside
- * this file may call `fetch` (see CONVENTIONS.md).
+ * The ONLY two ways bytes leave this renderer. ⚠ Nothing outside this file may
+ * call `fetch` (see CONVENTIONS.md).
  *
- *   IPC   (default in Electron): `window.dopl.apiRequest` → main process →
- *         HTTPS. Main owns the origin, the auth header, and the connection
- *         pool; the renderer never sees a token and the packaged page ships
- *         with `connect-src 'none'`.
- *   fetch (dev-in-browser): `npm run dev` in a normal browser, where there is
- *         no bridge. `VITE_API_BASE_URL` points at an API origin; empty means
- *         same-origin.
+ *   IPC   (default in Electron): `window.dopl.apiRequest` → main → HTTPS. Main
+ *         owns origin, auth header and connection pool; the renderer never sees
+ *         a token and the packaged page ships `connect-src 'none'`.
+ *   fetch (dev-in-browser, no bridge): `VITE_API_BASE_URL` names the API
+ *         origin; empty = same-origin.
  *
- * Both return the same `BridgeResponse`; both throw a plain `Error` (never
- * `ApiError`) when the request does not complete. `../lib/api.ts` owns every
- * decision above that line.
+ * Both return `BridgeResponse`; both throw a plain `Error` (never `ApiError`)
+ * when the request does not complete. `../lib/api.ts` owns everything above
+ * that line.
  */
 
 export interface TransportRequest {
@@ -40,7 +38,7 @@ async function fetchTransport(req: TransportRequest): Promise<BridgeResponse> {
     headers,
     body: req.body !== undefined ? JSON.stringify(req.body) : undefined,
     // Cross-origin dev needs the cookie sent explicitly; same-origin keeps the
-    // web client's stricter default.
+    // stricter default.
     credentials: API_BASE_URL ? "include" : "same-origin",
     signal: req.signal,
   });
@@ -57,10 +55,8 @@ async function fetchTransport(req: TransportRequest): Promise<BridgeResponse> {
 }
 
 /**
- * Cancellation is BEST-EFFORT over IPC: aborting rejects this promise, but the
- * main-process request runs to completion and its result is dropped. Nothing
- * user-visible depends on the difference today; when the sync engine lands in
- * main (Phase 3) it can carry a real cancel channel.
+ * ⚠ Cancellation is BEST-EFFORT over IPC: aborting rejects this promise, but
+ * the main-process request runs to completion and its result is dropped.
  */
 function ipcTransport(req: TransportRequest): Promise<BridgeResponse> {
   const bridge = getBridge();

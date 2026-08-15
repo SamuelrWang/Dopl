@@ -9,7 +9,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** DELETE /api/workspaces/[workspaceSlug]/teams/[teamId]/members/[userId] — remove from team. Admin+ only. */
+/** DELETE — remove from team. Admin+. */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -24,7 +24,6 @@ export const DELETE = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/teams/[teamId]/members/[userId]", err);
     }
   },
-  // sessionOnly: removing a team member is an admin access-control action, not
-  // an agent one — same class as changing a member's role.
+  // sessionOnly: an access-control action, same class as a role change.
   { sessionOnly: true }
 );

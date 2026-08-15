@@ -7,16 +7,13 @@ import type { BridgeResponse } from "#/lib/dopl-bridge";
 import { AppShellLayout, canonicalPath } from "./index";
 
 /**
- * Shell smoke test: rail + sidebar nav render off `/api/workspaces`, the
- * stale-segment rewrite that replaces the web app's 301 (web-pages.md §1.5)
- * actually lands on the canonical URL, and the web layout's guidance + notice
- * layer (journey-audit GAP-3 / GAP-7) is mounted and wired to the SPA router.
+ * Shell smoke test: sidebar nav renders off `/api/workspaces`, the
+ * stale-segment rewrite lands on the canonical URL, and the guidance + notice
+ * layer is mounted and wired to the SPA router.
  *
- * TWO transports are stubbed because the shell reads over both: the SPA's own
- * `#/lib/api-transport` (`#/hooks/use-api-query` — the workspace resolve +
- * list) and the WEB `apiRequest` via `window.dopl` (every reused feature hook:
- * consent inbox, access matrix, join notices, MCP status). Both funnel into
- * the same bridge in the packaged app.
+ * ⚠ TWO transports stubbed because the shell reads over both: `#/lib/api-
+ * transport` and the WEB `apiRequest` via `window.dopl`. Both funnel into the
+ * same bridge in the packaged app.
  */
 
 const { sendRequest } = vi.hoisted(() => ({ sendRequest: vi.fn() }));
@@ -43,8 +40,7 @@ function ok(body: unknown): BridgeResponse {
 function mockApi() {
   sendRequest.mockImplementation(
     ({ path, body }: { path: string; body?: unknown }) => {
-      // ONE read for the shell (P0-2): the segment resolve, the caller's role
-      // and id, and the access matrix, in a single answer.
+      // ONE read for the shell: segment resolve + role + id + access matrix.
       if (path === "/api/boot") {
         const segment = (body as { segment?: string } | undefined)?.segment;
         return Promise.resolve(
@@ -102,8 +98,7 @@ function renderShell(path: string) {
         element: <AppShellLayout />,
         children: [
           { path: "overview", element: <p>page body</p> },
-          // Tour step 1's destination — the shell navigates here on "Walk me
-          // through", so the router needs it to exist.
+          // Tour step 1's destination; the router needs it to exist.
           { path: "ontology", element: <p>ontology body</p> },
         ],
       },
@@ -125,8 +120,7 @@ describe("app shell", () => {
     window.localStorage.clear();
     mockApi();
     mockBridge();
-    // Nothing in the shell may reach the network directly (`connect-src
-    // 'none'` in the packaged renderer).
+    // Nothing may reach the network directly (`connect-src 'none'`).
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   });
 
@@ -142,8 +136,7 @@ describe("app shell", () => {
       "href",
       "/acme-ab12cd/channels"
     );
-    // The brand pill names the open workspace (the rail was removed
-    // 2026-08-11 — switching lives in this pill's popover).
+    // Brand pill names the open workspace; switching lives in its popover.
     expect(screen.getByRole("button", { name: /Acme/ })).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -154,9 +147,8 @@ describe("app shell", () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/acme-ab12cd/overview")
     );
-    // The redirect key-switch once stranded the canonical resolve at
-    // pending+idle (fixed by the use-api-query-core self-heal) — this
-    // findBy is the regression tripwire.
+    // ⚠ Regression tripwire: the redirect key-switch once stranded the
+    // canonical resolve at pending+idle.
     expect(await screen.findByText("page body")).toBeInTheDocument();
   });
 
@@ -166,8 +158,8 @@ describe("app shell", () => {
     );
   });
 
-  // GAP-7: the terminal step of the join-approval loop. Without this mount an
-  // approved requester is never told they're in.
+  // Terminal step of the join-approval loop: without this mount an approved
+  // requester is never told they're in.
   it("shows an approved join notice, acks it over the bridge and routes in", async () => {
     joinNotices = [
       {
@@ -206,8 +198,7 @@ describe("app shell", () => {
     expect(screen.queryByRole("button", { name: "Go to workspace" })).toBeNull();
   });
 
-  // GAP-3: first-run guidance. The banner only appears for a caller with no
-  // active MCP token; a connected caller must never see it.
+  // Banner appears only for a caller with NO active MCP token.
   it("nudges an unconnected caller to connect their agent", async () => {
     mcpConnected = false;
     renderShell("/acme-ab12cd/overview");
@@ -231,8 +222,7 @@ describe("app shell", () => {
     ).toBeNull();
   });
 
-  // GAP-3: onboarding writes `dopl:welcome` right before redirecting into the
-  // workspace; before this mount the SPA wrote the flag and never read it.
+  // Onboarding writes `dopl:welcome` right before redirecting in.
   it("shows the welcome popup after onboarding and starts the tour from it", async () => {
     window.localStorage.setItem("dopl:welcome", "1");
     const router = renderShell("/acme-ab12cd/overview");
@@ -241,14 +231,14 @@ describe("app shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Walk me through" }));
 
-    // The tour is mounted and listening: step 1 navigates to its section.
+    // Tour mounted and listening: step 1 navigates to its section.
     expect(
       await screen.findByRole("dialog", { name: "Product tour" })
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/acme-ab12cd/ontology")
     );
-    // Dismissal clears the flag so it is a one-shot.
+    // Dismissal clears the flag: one-shot.
     expect(window.localStorage.getItem("dopl:welcome")).toBeNull();
   });
 

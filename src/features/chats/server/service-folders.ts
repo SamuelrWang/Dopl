@@ -25,11 +25,9 @@ import {
   type ChatContext,
 } from "./service-shared";
 
-/**
- * Folder-side chats service: personal folder CRUD plus the authoritative
- * scope propagation — re-scoping a folder aligns the sharing columns and
- * replaces the grant set of every chat filed in it.
- */
+/** Personal folder CRUD plus authoritative scope propagation: re-scoping a
+ *  folder aligns the sharing columns and replaces the grant set of every chat
+ *  filed in it. */
 
 export async function listFolders(ctx: ChatContext): Promise<ChatFolder[]> {
   const rows = await repo.listFolders(ctx.workspaceId, ctx.userId);
@@ -60,13 +58,10 @@ export async function createFolder(ctx: ChatContext, rawName: string): Promise<C
   }
 }
 
-/**
- * Rename and/or re-scope a folder. The folder's scope is authoritative,
- * so a scope change propagates to every chat filed in it: sharing
- * columns are aligned and each chat's grant set is replaced with the
- * folder's. Team-grant permission mirrors the chat rule (non-admins
- * grant only teams they belong to, plus already-granted ones).
- */
+/** Rename and/or re-scope a folder. ⚠ Scope is authoritative: the change
+ *  propagates to every filed chat — columns aligned, grant sets replaced.
+ *  Team-grant permission mirrors the chat rule (non-admins grant only teams
+ *  they belong to, plus already-granted ones). */
 export async function updateFolderForUser(
   ctx: ChatContext,
   folderId: string,
@@ -114,8 +109,8 @@ export async function updateFolderForUser(
   }
 
   if (patch.visibility !== undefined) {
-    // Folder grants are replace-set, then the scope + grants propagate
-    // to every filed chat so the invariant holds.
+    // Folder grants are replace-set, then scope + grants propagate to every
+    // filed chat.
     await deleteGrantsForResource(ctx.workspaceId, "chat_folder", row.id);
     if (grantTeamIds && grantTeamIds.length > 0) {
       await insertReadGrantsIfMissing(
@@ -126,11 +121,10 @@ export async function updateFolderForUser(
       );
     }
     await repo.updateChatsScopeInFolder(row.id, row.visibility, row.access_mode);
-    // SET-AT-A-TIME, not row-at-a-time. This used to loop delete+insert per
-    // filed chat — 2N serial round-trips on one save, unbounded in N, which
-    // put a 200-chat folder past the gateway timeout. The grant set is the
-    // same for every chat in the folder, so it is one `.in()` delete plus one
-    // array upsert (chunked only to keep the request itself bounded).
+    // ⚠ SET-AT-A-TIME, not row-at-a-time: per-chat delete+insert is 2N serial
+    // round-trips on one save, unbounded in N (a 200-chat folder timed the
+    // gateway out). The grant set is identical for every chat, so it is one
+    // `.in()` delete plus one array upsert, chunked to bound the request.
     const chatIds = await repo.listChatIdsInFolder(row.id);
     await deleteGrantsForResources(ctx.workspaceId, "chat", chatIds);
     if (grantTeamIds && grantTeamIds.length > 0) {

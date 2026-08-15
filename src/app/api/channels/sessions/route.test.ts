@@ -1,23 +1,12 @@
 /**
- * `/api/channels/sessions` — read-session-state's two halves (rollback §3.5).
- *
- * WHAT THIS FILE IS FOR. The handler is thin by design, and the two things it
- * does are exactly the two that have already gone wrong on this surface:
- *
- *   - IT VALIDATES BEFORE IT TOUCHES THE DATABASE. `?channelId=` went straight
- *     into `.eq()` and a non-uuid came back as a 500 (F-145). The POST body has
- *     the same shape of hazard with more surface — a `name` or a `state` the
- *     column's CHECK refuses is a constraint violation surfacing as a 500, and
- *     a `channel_name` carrying a newline is a forged line in the server
- *     narration of `read_sessions`.
- *   - IT NEVER TAKES AN IDENTITY FROM THE CALLER. Both halves build their
- *     context from `withWorkspaceAuth` and pass it to the service, which is
- *     what makes the write scoped to the caller's own rows on a table whose
- *     writes are REVOKEd from `authenticated` (so the statement runs with RLS
- *     bypassed and the service IS the fence).
- *
- * Auth is mocked at the wrapper (the `api/knowledge/bases/route.test.ts`
- * idiom) — what is under test is the composition, not `withWorkspaceAuth`.
+ * `/api/channels/sessions` — the two things that have already gone wrong on this surface:
+ *   - IT VALIDATES BEFORE TOUCHING THE DATABASE. `?channelId=` went straight into `.eq()` and a
+ *     non-uuid came back as a 500; the POST body has the same hazard with more surface (a CHECK
+ *     violation as a 500, and a `channel_name` newline forging a line in `read_sessions`).
+ *   - IT NEVER TAKES AN IDENTITY FROM THE CALLER. Both halves build context from
+ *     `withWorkspaceAuth`; the table REVOKEs writes from `authenticated`, so the service IS the
+ *     fence.
+ * Auth is mocked at the wrapper: what is under test is the composition.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -123,9 +112,8 @@ describe("POST — the write", () => {
   });
 
   it("a caller-supplied user id is not in the parsed input at all", async () => {
-    // The schema is strict about what it KEEPS, and the service reads the ids
-    // off `ctx`. Even a body that names another member reaches the service as
-    // the caller's own report.
+    // The service reads ids off `ctx`, so even a body naming another member arrives as the
+    // caller's own report.
     await post({
       sessions: [{ ...entry(), userId: "someone-else", workspaceId: "not-mine" }],
     });
@@ -174,10 +162,8 @@ describe("POST — the write", () => {
   });
 
   it("a service failure is a failure — the write never degrades to a shrug", async () => {
-    // The READ degrades a missing relation to `[]` because the answer is the
-    // same either way. A write that swallowed one would report a store that did
-    // not happen, and `read_sessions` would then be honestly empty about a
-    // machine that is honestly working.
+    // ⚠ The READ may degrade a missing relation to `[]`; a WRITE may not — swallowing one
+    // reports a store that did not happen.
     vi.mocked(reportSessionStates).mockRejectedValue(
       Object.assign(new Error("relation missing"), { code: "PGRST205" })
     );

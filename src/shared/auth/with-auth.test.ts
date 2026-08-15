@@ -1,26 +1,20 @@
 /**
- * H-3 — OAuth write-scope + session-only gates inside `withUserAuth`.
+ * OAuth write-scope + session-only gates inside `withUserAuth`. Drives the REAL
+ * wrapper with a stubbed `validateAccessToken` and a stubbed Supabase auth
+ * client, exercising the actual discriminator: an `Authorization` header selects
+ * the token branch, its absence the session branch.
  *
- * Drives the REAL `withUserAuth` with a stubbed `validateAccessToken` (the
- * bearer branch) and a stubbed Supabase auth client (the cookie/session branch),
- * so this exercises the actual discriminator: presence of an `Authorization`
- * header selects the token branch; its absence selects the session branch.
- *
- * The session branch also carries Q11: it resolves the caller from LOCALLY
- * verified claims (`getClaims()`), never a network `getUser()`. The last block
- * pins that, and the failure modes that swap could have turned into an outage.
- *
- * Guarantees pinned here:
- *   - a read-only OAuth token (scopes lack `dopl.write`) is refused on every
- *     write method (fail-closed on missing/empty scopes too), with the
- *     `WWW-Authenticate: insufficient_scope` challenge, and the handler never
- *     runs;
+ * Pinned:
+ *   - a read-only token is refused on every write method (fail-closed on
+ *     missing/empty scopes) with the `insufficient_scope` challenge, handler
+ *     never runs;
  *   - a `dopl.write` token passes writes; any token passes reads;
- *   - a SESSION (cookie) caller is NEVER scope- or session-gated — the
- *     "don't lock out the web app" guarantee;
+ *   - ⚠ a SESSION caller is NEVER scope- or session-gated (the "don't lock out
+ *     the web app" guarantee);
  *   - `writeScopeExempt` lets the read-only liveness ping through;
- *   - `sessionOnly` refuses EVERY OAuth token (even `dopl.write`) but admits a
- *     session caller.
+ *   - `sessionOnly` refuses EVERY OAuth token but admits a session caller;
+ *   - the session branch resolves from LOCALLY verified claims, never a network
+ *     `getUser()`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,17 +23,15 @@ import { NextRequest, NextResponse } from "next/server";
 const state = vi.hoisted(() => ({
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
   sessionUser: null as { id: string } | null,
-  /** OAuth-bearer rate limiter: whether the caller is within its ceiling, and a
-   *  record of every (subject, rpm, endpoint) the wrapper checked. */
+  /** Rate limiter: within-ceiling flag + every (subject, rpm, endpoint) checked. */
   rateLimitWithin: true as boolean,
   rateLimitCalls: [] as { subject: string; rpm: number; endpoint: string }[],
-  /** Phase 2 bearer-JWT branch: user resolved from a Supabase JWT presented
-   *  as `Authorization: Bearer <jwt>` (no dopl_at_ prefix). */
+  /** Bearer-JWT branch: user from a Supabase JWT (no dopl_at_ prefix). */
   jwtUser: null as { id: string } | null,
   calls_jwtGetClaims: [] as string[],
-  /** Q11: `getClaims()` re-throws plain (non-Auth) Errors at the caller. */
+  /** ⚠ `getClaims()` re-throws plain (non-Auth) Errors at the caller. */
   claimsThrows: null as Error | null,
-  /** Q11: a bad signature comes back as `{ data: null, error }`. */
+  /** A bad signature comes back as `{ data: null, error }`. */
   claimsError: null as Error | null,
   calls: { getUser: 0, getClaims: 0 },
 }));
@@ -55,7 +47,7 @@ vi.mock("./mcp-session", () => ({
 }));
 vi.mock("./mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
-  // Real predicate, not a stub — the bearer-kind router depends on it.
+  // ⚠ Real predicate, not a stub — the bearer-kind router depends on it.
   isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
 }));
 vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
@@ -63,12 +55,9 @@ vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
     auth: {
-      /**
-       * Mirrors the real `getClaims()`: local ES256 verification, and the trap —
-       * auth-js `validateExp` throws a PLAIN Error which `getClaims()` re-throws
-       * (only `AuthError`s become `{ data: null, error }`). See
-       * `proxy-claims.test.ts` for the proof against the real client.
-       */
+      /** ⚠ Mirrors the real `getClaims()`: local ES256 verification, and the
+       *  trap — auth-js `validateExp` throws a PLAIN Error which `getClaims()`
+       *  re-throws (only `AuthError`s become `{ data: null, error }`). */
       getClaims: async () => {
         state.calls.getClaims++;
         if (state.claimsThrows) throw state.claimsThrows;
@@ -84,7 +73,7 @@ vi.mock("@supabase/ssr", () => ({
           error: null,
         };
       },
-      /** The network path (≈5 Postgres queries). Reaching it is the Q11 regression. */
+      /** ⚠ The network path (≈5 Postgres queries). Reaching it is a regression. */
       getUser: async () => {
         state.calls.getUser++;
         return { data: { user: state.sessionUser } };
@@ -94,7 +83,6 @@ vi.mock("@supabase/ssr", () => ({
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
-  // The bare cookie-less client the bearer-JWT branch verifies against.
   createClient: () => ({
     auth: {
       getClaims: async (jwt?: string) => {
@@ -127,7 +115,7 @@ function handlerSpy() {
   return vi.fn<RouteHandler>(async () => NextResponse.json({ ok: true }));
 }
 
-/** Request carrying an OAuth bearer (routes to the token branch). */
+/** OAuth bearer → token branch. */
 function bearerReq(method: string): NextRequest {
   return new NextRequest("http://localhost/api/x", {
     method,
@@ -135,15 +123,14 @@ function bearerReq(method: string): NextRequest {
   });
 }
 
-/** Request with no Authorization header (routes to the session branch). */
+/** No Authorization header → session branch. */
 function sessionReq(method: string): NextRequest {
   return new NextRequest("http://localhost/api/x", { method });
 }
 
-/** Request carrying a Supabase JWT bearer (routes to the JWT-session branch). */
-/** A structurally valid ES256+kid JWT header (the pre-check in
- *  bearer-jwt.ts requires alg === "ES256" and a kid BEFORE getClaims is
- *  consulted — anything else must never reach the network). */
+/** Supabase JWT bearer → JWT-session branch. ⚠ bearer-jwt.ts requires
+ *  alg === "ES256" and a kid BEFORE getClaims; anything else must never reach
+ *  the network. */
 const ES256_JWT =
   Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT", kid: "kid-1" }))
     .toString("base64url") + ".payload.sig";
@@ -202,7 +189,6 @@ describe("write-scope gate — read-only OAuth token", () => {
   it("missing scopes (undefined) + POST → 403 (fail-closed)", async () => {
     state.token = {
       userId: "u1",
-      // simulate a token row with no scopes array
       scopes: undefined as unknown as string[],
       tokenId: "t1",
     };
@@ -235,7 +221,6 @@ describe("write-scope gate — session (cookie) caller is never restricted", () 
       const res = await withUserAuth(handler)(sessionReq(method));
       expect(res.status).toBe(200);
       expect(handler).toHaveBeenCalledOnce();
-      // the session user id is injected, and the agent marker is absent
       const ctx = handler.mock.calls[0][1];
       expect(ctx.userId).toBe("web-user");
       expect(ctx.agentTokenId).toBeUndefined();
@@ -294,13 +279,10 @@ describe("sessionOnly gate — destructive admin surface", () => {
   });
 });
 
-// ── Q11 — the session branch is LOCAL, and fails closed ─────────────────────
-//
-// `getSessionUser` is composed by every `/api/channels/**` route (through
-// `withWorkspaceAuth`). It used to make an uncached network `getUser()` per
-// request — one idle focused tab was ~900 consent-inbox polls/hour, ~4,500
-// GoTrue-side Postgres queries/hour at zero user activity. A mistake in the swap
-// is an outage on every API route, so each failure mode is pinned separately.
+// ── The session branch is LOCAL, and fails closed ──────────────────────────
+// ⚠ `getSessionUser` is composed by every `/api/channels/**` route (through
+// `withWorkspaceAuth`), so a mistake here is an outage on EVERY API route.
+// Each failure mode is pinned separately.
 describe("session branch resolves the caller locally (Q11)", () => {
   it("a session request makes ZERO network getUser() calls", async () => {
     state.sessionUser = { id: "web-user" };
@@ -335,8 +317,8 @@ describe("session branch resolves the caller locally (Q11)", () => {
   });
 
   it("an EXPIRED token (getClaims throws a plain Error) → 401, not a 500", async () => {
-    // THE TRAP: `validateExp` throws a plain Error that `getClaims()` re-throws.
-    // Unwrapped, this is a 500 on every API route the wrapper composes.
+    // ⚠ THE TRAP: `validateExp` throws a plain Error `getClaims()` re-throws.
+    // Unwrapped it is a 500 on every API route the wrapper composes.
     state.sessionUser = { id: "web-user" };
     state.claimsThrows = new Error("JWT has expired");
     const handler = handlerSpy();
@@ -372,11 +354,10 @@ describe("session branch resolves the caller locally (Q11)", () => {
 });
 
 describe("MCP read op is not falsely blocked", () => {
-  // The `/api/mcp` JSON-RPC envelope is authenticated by a SEPARATE transport
-  // wrapper (authenticateMcpRequest) and never reaches `withUserAuth`, so its
-  // POST envelope is never method-gated. The per-op loopback call a READ op
-  // makes is a GET (e.g. dopl_search → GET /api/knowledge/search), which a
-  // read-only token is allowed to make — verified here at the wrapper level.
+  // ⚠ The `/api/mcp` JSON-RPC envelope is authenticated by a SEPARATE wrapper
+  // (authenticateMcpRequest) and never reaches `withUserAuth`, so its POST is
+  // never method-gated. A READ op's loopback call is a GET, which a read-only
+  // token may make.
   it("read-only token + GET loopback (shape of an MCP read op) → handler runs", async () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "t1" };
     const handler = handlerSpy();
@@ -387,12 +368,10 @@ describe("MCP read op is not falsely blocked", () => {
 });
 
 /**
- * Phase 2 (desktop migration) — a Supabase access JWT presented as a
- * Bearer credential is a SESSION caller: the bundled SPA's main process
- * holds the Supabase session and attaches the JWT to API calls. Pins:
- * session semantics (no agentTokenId, no scope gate, sessionOnly admits),
- * exact-prefix routing (dopl_at_ still goes to the OAuth branch), and
- * fail-closed 401 with no cookie fallthrough.
+ * ⚠ A Supabase access JWT presented as a Bearer credential is a SESSION caller.
+ * Pins: session semantics (no agentTokenId, no scope gate, sessionOnly admits),
+ * exact-prefix routing (dopl_at_ still goes to the OAuth branch), and a
+ * fail-closed 401 with NO cookie fallthrough.
  */
 describe("bearer Supabase JWT (desktop SPA)", () => {
   it("valid JWT reaches the handler with session semantics", async () => {
@@ -403,7 +382,6 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
     const ctx = handler.mock.calls[0][1];
     expect(ctx.userId).toBe("user-jwt");
     expect(ctx.agentTokenId).toBeUndefined(); // NOT an agent
-    // The JWT itself was what got verified.
     expect(state.calls_jwtGetClaims).toEqual([ES256_JWT]);
   });
 
@@ -436,9 +414,9 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
   it("non-ES256 / kid-less bearers are 401 WITHOUT consulting the verifier (no GoTrue amplifier)", async () => {
     state.jwtUser = { id: "user-jwt" }; // verifier would accept if reached
     const bad = [
-      // HS256 (legacy alg — auth-js would fall back to network getUser)
+      // HS256 (legacy alg — auth-js falls back to network getUser)
       Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url") + ".p.s",
-      // ES256 but no kid (same network fallback)
+      // ES256, no kid (same network fallback)
       Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT" })).toString("base64url") + ".p.s",
       "not-a-jwt",
       "", // empty bearer

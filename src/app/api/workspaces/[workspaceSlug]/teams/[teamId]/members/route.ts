@@ -11,7 +11,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** POST /api/workspaces/[workspaceSlug]/teams/[teamId]/members — add members. Admin+ only. */
+/** POST — add team members. Admin+. */
 export const POST = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -26,7 +26,6 @@ export const POST = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/teams/[teamId]/members", err);
     }
   },
-  // sessionOnly: adding team members is an admin access-control action, not an
-  // agent one — same class as changing a member's role.
+  // sessionOnly: an access-control action, same class as a role change.
   { sessionOnly: true }
 );

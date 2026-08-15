@@ -16,11 +16,10 @@ import type {
 } from "../types";
 
 /**
- * DB row shapes for the channels tables. Hand-written (rather than pulled
- * from the generated `Database` type) because the generated
- * `src/shared/supabase/types.ts` is not regenerated for this migration —
- * the same cast pattern the chats feature uses for its newer columns. The
- * repository casts Supabase results to these shapes at the boundary.
+ * DB row shapes for the channels tables. Hand-written because
+ * `src/shared/supabase/types.ts` is not regenerated for this migration — the
+ * same cast pattern chats uses for its newer columns. The repository casts
+ * Supabase results to these shapes at the boundary.
  */
 export type ChannelRow = {
   id: string;
@@ -112,7 +111,7 @@ export interface MemberPresence {
 /** Everything the member mapper needs beyond the row + profile. */
 export interface MapMemberOptions {
   /**
-   * The caller. REQUIRED (not optional) so the privacy rule can't be
+   * The caller. ⚠ REQUIRED, not optional, so the privacy rule cannot be
    * forgotten at a call site: `notifyScope` / `agentToolProfile` are personal
    * preferences and render only on the viewer's OWN row.
    */
@@ -129,10 +128,9 @@ export function mapChannelRow(
   state: ChannelViewerState
 ): Channel {
   const isMember = state.role !== null;
-  // Compare instants, not raw ISO strings: `lastMessageAt` (from Postgres,
-  // `+00:00` offset, microseconds) and `lastReadAt` (a JS `toISOString()`,
-  // `Z`, milliseconds) are differently formatted, so a lexicographic `>`
-  // gives wrong answers. Date.parse normalizes both to epoch ms.
+  // ⚠ Compare INSTANTS, not raw ISO strings: `lastMessageAt` (Postgres,
+  // `+00:00`, microseconds) and `lastReadAt` (JS `toISOString()`, `Z`,
+  // milliseconds) are formatted differently, so lexicographic `>` is wrong.
   const unread =
     isMember &&
     state.lastMessageAt !== null &&
@@ -184,29 +182,26 @@ export function mapMessageRow(
 }
 
 /**
- * Member row -> DTO. The privacy scrub lives HERE rather than at each caller:
- * `notify_scope` and `agent_tool_profile` are the member's own preferences
- * (who muted the channel, how tightly their agent is scoped) and are nulled
- * for everyone but the viewer. Doing it at the mapper makes the invariant
- * hold for every path — the roster read, and the single-row returns from
- * addMember / updateMyMemberSettings, which previously bypassed it.
- * Presence IS public to the workspace: you need it to know whether the agent
- * you are addressing is live.
+ * Member row → DTO. The privacy scrub lives HERE, not at each caller:
+ * `notify_scope` and `agent_tool_profile` are the member's own preferences and
+ * are nulled for everyone but the viewer, so the roster read AND the single-row
+ * returns from addMember / updateMyMemberSettings all get it. Presence IS
+ * public to the workspace — you need it to know whether the agent you are
+ * addressing is live.
  *
- * ⚠ THIS SCRUB IS NO LONGER THE ONLY LINE OF DEFENCE, AND IT WAS NEVER
- * SUFFICIENT ON ITS OWN (C-15, Samuel's decision 2026-08-10: role is public,
- * per-member settings are not). "It holds for every path" was false: this DTO
- * is not on every path. `channel_members` is in the realtime publication and
- * `authenticated` held table-wide SELECT, so the RAW row reached any channel
- * member over CDC and over direct PostgREST with the anon key. The enforcement
- * now lives in the DATABASE — column-level privileges, so it binds both of
- * those consumers (`supabase/migrations/20260810120000_channel_members_column_privileges.sql`:
+ * ⚠ THIS SCRUB IS NOT THE ONLY LINE OF DEFENCE AND NEVER WAS SUFFICIENT ALONE:
+ * this DTO is not on every path. `channel_members` is in the realtime
+ * publication, so the RAW row reaches any channel member over CDC and over
+ * direct PostgREST. Enforcement lives in the DATABASE — column-level privileges
+ * bind both consumers
+ * (`supabase/migrations/20260810120000_channel_members_column_privileges.sql`:
  * `agent_tool_profile` is service_role-only; `role`, `user_id`, `channel_id`,
  * `workspace_id`, `last_read_at`, `added_by`, `joined_at` stay readable).
- * KEEP THIS SCRUB: it is defence in depth, and it is what shapes the API
- * response — the server reads as service_role, so the column privilege does
- * not redact anything on THIS path. Adding a new per-member SETTING means
- * adding it to the scrub AND leaving it out of that migration's GRANT list.
+ *
+ * ⚠ KEEP THIS SCRUB — defence in depth, and it is what shapes the API response
+ * (the server reads as service_role, so the column privilege redacts nothing on
+ * THIS path). A new per-member SETTING must be added to the scrub AND left out
+ * of that migration's GRANT list.
  */
 export function mapMemberRow(
   row: ChannelMemberRow,

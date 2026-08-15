@@ -6,11 +6,9 @@ import type { GraphState } from "../graph-state";
 import { PickMenu, type PickMenuItem } from "./pick-menu";
 
 /**
- * THE object picker — the same click-driven grouped menu the
- * knowledge/skill attribute pickers use (PickMenu), fed from the graph:
- * columns under a "Columns" group, cards grouped by their column's
- * name. Every place that links objects (relationship targets, ref
- * attributes) renders this, never a bespoke dropdown.
+ * THE object picker — `PickMenu` fed from the graph: columns under a "Columns"
+ * group, cards grouped by their column's name. ⚠ Every place that links objects
+ * (relationship targets, ref attributes) renders this, never a bespoke dropdown.
  */
 export function ObjectPickMenu({
   graph,

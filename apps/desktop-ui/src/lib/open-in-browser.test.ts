@@ -1,13 +1,7 @@
 /**
- * THE TWO URLS THAT TETHERED THE DESKTOP APP TO THE WEB APP TREE.
- *
- * Both used to name `/{segment}/canvas` — one to open Plans & Billing in a
- * settings modal, one to open the Account pane of the same modal — and both are
- * the reason the retirement plan's §2.3 could not just delete
- * `src/app/[workspaceSlug]` (docs/migration-research/website-retirement-plan.md).
- * They now name the standalone `/billing/{segment}` page, and this pins that:
- * these strings are minted inside a shipped desktop build, so a wrong one
- * cannot be fixed by a deploy.
+ * The two URLs the desktop app hands to the browser, pinned to the standalone
+ * `/billing/{segment}` page. ⚠ These strings are minted inside a SHIPPED
+ * desktop build, so a wrong one cannot be fixed by a deploy.
  */
 
 import { describe, it, expect } from "vitest";

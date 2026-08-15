@@ -1,26 +1,19 @@
 /**
- * The install, drawn: a browser hands over the dmg, the volume mounts, the
- * app is dragged into Applications. Loops with a beat of rest.
+ * The install, drawn: browser hands over the dmg, volume mounts, app dragged
+ * into Applications. Loops with a beat of rest.
  *
- * TWO ANCHORS, ONE CURSOR. The browser fragment is pinned to the top of the
- * field and cropped by two of its edges; the volume window sits in the lower
- * right; the cursor is the only thing that visits both. Every position is a
- * literal coordinate in the 640×660 space the stylesheet scales as a whole —
- * `install-animation.css` is where the composition and its clock are argued.
+ * ⚠ TIMELINE LIVES IN THE STYLESHEET, not here — every node below is static
+ * with a class; ten keyframe tracks share one `--gs-dur` clock so they cannot
+ * drift. No JS, so it costs nothing on the main thread during the download.
+ * Positions are literal coords in a 640×660 space; composition + clock argued
+ * in `install-animation.css`.
  *
- * THE TIMELINE LIVES IN THE STYLESHEET, NOT HERE. Every element below is a
- * static node with a class; ten independent keyframe tracks share the single
- * `--gs-dur` clock so they cannot drift apart. There is no JS driving it,
- * which means it costs nothing on the main thread while the download is
- * starting.
- *
- * DECORATIVE. `aria-hidden` — every fact it depicts is also written out in
- * the numbered steps beside it, which is the version a screen reader gets.
+ * Decorative: `aria-hidden`, every fact restated in the numbered steps.
  */
 
 import type { ReactNode } from "react";
 
-/** The one real asset in the drawing: the same mark the dock will show. */
+/** Only real asset in the drawing — same mark the dock shows. */
 const APP_ICON = "/favicons/android-chrome-512x512.png";
 
 export function InstallAnimation() {
@@ -36,11 +29,8 @@ export function InstallAnimation() {
   );
 }
 
-/**
- * The top anchor: a browser window with only its toolbar row on screen. The
- * live part is the downloads button, which is drawn already highlighted —
- * the file has just arrived — and pressed on the click beat.
- */
+/** Top anchor: browser window, toolbar row only. Live part is the downloads
+ *  button — drawn pre-highlighted, pressed on the click beat. */
 function BrowserFragment() {
   return (
     <div className="gs-browser">
@@ -68,12 +58,8 @@ function BrowserFragment() {
   );
 }
 
-/**
- * The download row that drops out of the toolbar. The name here is the
- * VERSION-LESS one on purpose: this is a drawing, it loops forever, and it
- * must not be able to contradict the real file name resolved for the copy
- * beside it.
- */
+/** Download row dropping out of the toolbar. ⚠ Name stays VERSION-LESS — it
+ *  loops forever and must not contradict the resolved file name beside it. */
 function DownloadChip() {
   return (
     <div className="gs-chip">
@@ -89,7 +75,7 @@ function DownloadChip() {
   );
 }
 
-/** The mounted volume: the app on the left, the Applications alias on the right. */
+/** Mounted volume: app left, Applications alias right. */
 function VolumeWindow() {
   return (
     <div className="gs-dmg">
@@ -138,7 +124,7 @@ function CursorIcon() {
   );
 }
 
-/** Shared geometry for the small stroked toolbar glyphs. */
+/** Shared geometry for the stroked toolbar glyphs. */
 function ToolGlyph({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -232,7 +218,7 @@ function ArrowIcon() {
   );
 }
 
-/** The Applications alias — a filled macOS folder, painted in the page accent. */
+/** Applications alias — filled macOS folder in the page accent. */
 function FolderIcon() {
   return (
     <svg className="gs-folder-icon" viewBox="0 0 24 20" fill="currentColor" aria-hidden="true">

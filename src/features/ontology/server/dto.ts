@@ -3,10 +3,9 @@ import type { GraphLayout } from "@/shared/graph";
 import type { OntologyObject } from "../types";
 
 /**
- * Row interfaces and row→domain mappers for the ontology tables. Row
- * shapes mirror the snake_case Postgres columns; assembly into the
- * graph shape (childIds, relationships) happens in service.ts because
- * it spans tables.
+ * Row interfaces + row→domain mappers. Row shapes mirror the snake_case
+ * Postgres columns; assembly into the graph shape (childIds, relationships)
+ * happens in service.ts because it spans tables.
  */
 
 export const ONTOLOGY_CLUSTER_COLS =
@@ -22,47 +21,30 @@ export const ONTOLOGY_RELATIONSHIP_COLS =
   "id, workspace_id, source_object_id, label, target_object_id, position";
 
 /**
- * THE SUMMARY PROJECTION — the same graph SHAPE with every JSONB column left
- * in the database (P0-3).
+ * THE SUMMARY PROJECTION — same graph SHAPE, every JSONB column left in the DB.
  *
- * `ONTOLOGY_OBJECT_COLS` ships `attributes`, `methods` and `template`; the
- * schema caps each at 100 entries and a text attribute at 4000 chars, so one
- * object's ceiling is measured in hundreds of KB and a whole-workspace pull has
- * no ceiling at all. `ONTOLOGY_CLUSTER_COLS` ships `layout`, one x/y pair per
- * node in the cluster. NONE of it reaches a map-shaped render: `dopl_map` — the
- * call the server instructions mandate before every agent's first reply — turns
- * this graph into cluster names and column names and throws the rest away.
+ * The wide sets ship `attributes`/`methods`/`template` (schema caps: 100
+ * entries, 4000 chars per text attribute → hundreds of KB per object) and
+ * `layout`. A map-shaped render reads none of it. Anything that genuinely needs
+ * a JSONB column takes the DETAIL path (`findObjectById`, object PATCH
+ * response, anchor read), which selects `ONTOLOGY_OBJECT_COLS` for ONE row.
  *
- * So the map-shaped reads select these columns instead. Everything a router
- * needs (who exists, what it is called, what contains it), nothing a router
- * reads past. Anything that genuinely needs a JSONB column goes to the DETAIL
- * path — `findObjectById` / the object PATCH response / the anchor read — which
- * still selects `ONTOLOGY_OBJECT_COLS` in full, for ONE row.
- *
- * `position` / `created_at` are absent on purpose: PostgREST orders on columns
- * it does not have to return.
+ * `position`/`created_at` absent on purpose: PostgREST orders on columns it
+ * doesn't have to return.
  */
 export const ONTOLOGY_CLUSTER_SUMMARY_COLS = "id, slug, name, purpose";
 
 export const ONTOLOGY_OBJECT_SUMMARY_COLS = "id, name, subtitle";
 
 /**
- * Hard row ceilings for the whole-workspace list reads.
+ * Hard row ceilings for the whole-workspace list reads. Set well above any
+ * workspace shape the product produces (free multi-member cap is 100 objects;
+ * a heavy paid board is in the hundreds), so hitting one means a runaway agent
+ * loop, an import, or a bug.
  *
- * Every one of these queries used to be `select(...).eq("workspace_id", …)`
- * with no `limit` — the row count was whatever the workspace happened to hold,
- * on a paid plan with no object cap, on a path any member can hit repeatedly.
- * An unbounded read is not a slow read, it is an unpriced one: nothing in the
- * system says how large the response CAN get.
- *
- * The values are set well above any workspace shape the product produces (the
- * free multi-member cap is 100 objects; a heavily-used paid board is in the
- * hundreds), so hitting one means something has gone wrong — a runaway agent
- * loop, an import, a bug — which is exactly the case an unbounded query serves
- * worst. Reads that clip are REPORTED, never silently short: `getSummary`
- * returns `truncated: true` and `dopl_map` renders a line saying so. A cap that
- * renders identically to an exhausted list is the bug this file already fixed
- * once for `op="resolve"`.
+ * ⚠ A clipped read is REPORTED, never silently short: `getSummary` returns
+ * `truncated: true` and `dopl_map` renders a line saying so. A cap that renders
+ * identically to an exhausted list is the bug.
  */
 export const ONTOLOGY_READ_LIMITS = {
   clusters: 500,
@@ -130,12 +112,11 @@ export interface OntologyObjectSummaryRow {
 }
 
 /**
- * The summary wire shapes. Structurally a SUBSET of `OntologyObject` /
- * `OntologyCluster`, so the same render code reads either — but a DISTINCT
- * type, deliberately, rather than a snapshot with `attributes: []` filled in.
- * An empty array is a claim ("this object has no attributes"); an absent field
- * is the truth ("this view did not ask"). The mirror of these lives in
- * `packages/dopl-client/src/ontology-types.ts`.
+ * Summary wire shapes. Structurally a SUBSET of `OntologyObject` /
+ * `OntologyCluster` so the same render code reads either, but a DISTINCT type
+ * on purpose — an empty array claims "no attributes", an absent field says
+ * "this view didn't ask".
+ * ⚠ Mirror lives in `packages/dopl-client/src/ontology-types.ts` — sync both.
  */
 export interface OntologyObjectSummary {
   id: string;
@@ -155,11 +136,8 @@ export interface OntologyClusterSummary {
 export interface OntologySummary {
   clusters: OntologyClusterSummary[];
   objects: Record<string, OntologyObjectSummary>;
-  /**
-   * True when one of the `ONTOLOGY_READ_LIMITS` ceilings clipped this view, so
-   * a caller can say "there is more" instead of presenting a partial graph as
-   * the whole one.
-   */
+  /** True when an `ONTOLOGY_READ_LIMITS` ceiling clipped this view — caller
+   *  must say "there is more", not present a partial graph as the whole. */
   truncated: boolean;
 }
 
@@ -170,8 +148,8 @@ export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
     name: row.name,
     subtitle: row.subtitle,
     attributes: row.attributes ?? [],
-    // Backfill fields added after rows were written (additive-only —
-    // never assume stored JSON has the newest shape).
+    // ⚠ Backfill fields added after rows were written — never assume stored
+    // JSON has the newest shape.
     methods: (row.methods ?? []).map((m) => ({ ...m, tools: m.tools ?? "" })),
     template: row.template ?? [],
     relationships: [],

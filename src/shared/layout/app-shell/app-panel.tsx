@@ -4,20 +4,18 @@ import styles from "./app-shell.module.css";
 interface Props {
   children: React.ReactNode;
   /**
-   * Wrap children in an internal scroll container (default). Pages that
-   * manage their own scrolling/layout (e.g. the KB tree + doc split)
-   * pass false and receive the raw flex-column panel.
+   * Wrap children in an internal scroll container (default). Pages owning their
+   * own scroll/layout (e.g. the KB tree + doc split) pass false for the raw
+   * flex-column panel.
    */
   scroll?: boolean;
   className?: string;
 }
 
 /**
- * The white main content panel of the AppShell, with the light
- * semantic-token scope applied so existing token-based feature
- * components render light inside the new chrome. Every workspace
- * sub-page renders inside one of these — single source of truth for
- * the panel geometry + theming.
+ * AppShell's white content panel, carrying the light token scope so token-based
+ * feature components render light inside the chrome. Single source of truth for
+ * panel geometry + theming — every workspace sub-page renders inside one.
  */
 export function AppPanel({ children, scroll = true, className }: Props) {
   return (

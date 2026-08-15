@@ -1,13 +1,10 @@
 /**
- * The knowledge seed's WRITE SHAPE and the cross-reference map it hands
- * back. It runs inside the post-signup redirect, so the awaited round-trip
- * count is the point: it used to be one insert per base plus one insert
- * PLUS one `maxEntryPositionIn` read per entry (the fixtures don't pin
- * `position`), all serial. It is now two statements.
+ * The seed's WRITE SHAPE and cross-reference map. ⚠ It runs inside the
+ * post-signup redirect, so the awaited round-trip count is the point: two
+ * statements total, whatever the corpus size.
  *
  * `entryIdByKey` is what the ontology seed's knowledge attributes resolve
- * against, so the map has to stay complete and correct — that is asserted
- * here rather than only in the orchestrator test, which mocks this module.
+ * against, asserted here because the orchestrator test mocks this module.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -62,15 +59,15 @@ describe("knowledge seed — write shape", () => {
     const expected = FIXTURES.reduce((n, f) => n + f.rootEntries.length, 0);
     const rows = insertedEntries();
     expect(rows).toHaveLength(expected);
-    // Explicit positions are what let the batch skip the per-entry
-    // max-position read; index order reproduces the old max+1 sequence.
+    // Explicit positions let the batch skip the per-entry max-position read;
+    // index order reproduces the max+1 sequence.
     expect(rows.map((r) => r.position)).toEqual(
       FIXTURES.flatMap((f) => f.rootEntries.map((_, i) => i))
     );
     for (const row of rows) {
       expect(row.workspaceId).toBe(WS);
       expect(row.createdBy).toBe(USER);
-      // Seed rows are system-origin even when an agent triggered the seed.
+      // System-origin even when an agent triggered the seed.
       expect(row.source).toBe("user");
     }
   });
@@ -102,8 +99,7 @@ describe("knowledge seed — the cross-reference map", () => {
     expect(Object.keys(result.guide!.entryIdByKey).sort()).toEqual(
       [...authoredKeys].sort()
     );
-    // Every value in the map is a row the seed really wrote — the failure
-    // this guards is a dangling ref reaching the ontology attributes.
+    // Guards against a dangling ref reaching the ontology attributes.
     for (const key of authoredKeys) {
       const ref = result.guide!.entryIdByKey[key];
       expect(insertedIds.has(ref.id)).toBe(true);
@@ -140,8 +136,7 @@ describe("knowledge seed — the cross-reference map", () => {
 
     const inserted = vi.mocked(repo.insertBases).mock.calls[0][0];
     expect(inserted[0].slug).not.toBe(DOPL_GUIDE_SLUG);
-    // …and the entries still land under the base that was actually created
-    // under the de-conflicted slug.
+    // …and entries land under the base created with the de-conflicted slug.
     expect(result.guide?.slug).toBe(inserted[0].slug);
     expect(insertedEntries()[0].knowledgeBaseId).toBe("base-0");
   });

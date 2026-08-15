@@ -1,42 +1,30 @@
 /**
- * WHICH HALF OF THE BILLING PAGE A URL OPENS ON.
+ * Which half of the billing page a URL opens on.
  *
- * `/billing/[segment]` carries two tabs — Usage and Billing — behind ONE route,
- * because `[segment]` is the WORKSPACE segment and a second path level would
- * mean re-deriving every helper in `./url.ts`, the `upgrade_url` envelopes
- * already in the wild, and the desktop's hand-copied deep-link table. The tab
- * is therefore a `?tab=` query param.
+ * Both tabs sit behind ONE route (`[segment]` = WORKSPACE segment); a second
+ * path level would mean re-deriving every `./url.ts` helper, the `upgrade_url`
+ * envelopes in the wild, and the desktop's hand-copied deep-link table. Hence
+ * a `?tab=` query param.
  *
- * NOT IN `./url.ts` DELIBERATELY. That module is the money-URL BUILDER — every
- * Stripe `return_url` and 402 envelope resolves through it, and `?tab=` is not
- * part of any of them. This is the read side of one optional param, and it
- * lives apart so nothing here can change what a `return_url` looks like.
+ * ⚠ Kept OUT of `./url.ts` — that is the money-URL builder (Stripe
+ * `return_url`, 402 envelopes); `?tab=` is part of none of them.
  *
- * Pure — no React, no `next/*`, no `server-only`: the RSC page resolves the tab
- * for the first paint and the client shell holds it as state from there.
+ * ⚠ Must stay pure — no React, no `next/*`, no `server-only`: RSC page resolves
+ * first paint, client shell holds it as state after.
  */
 
 export type BillingTab = "usage" | "billing";
 
 /**
- * A `?billing=` intent WINS. Upgrade / success / return all mean the visitor
- * arrived MID-TRANSACTION (a 402 envelope, a checkout return, a portal return)
- * and the plan cards are what they were sent for. Only then does `?tab=`
- * decide; a bare visit opens on Usage — the question a member has.
+ * `?billing=` intent WINS; then `?tab=`; bare visit opens Usage.
  *
- * WHY THE INTENT OUTRANKS AN EXPLICIT `?tab=`, WHICH IS NOT THE OBVIOUS ORDER.
- * The pair is not a user preference against a hint — it is a URL that has been
- * EDITED after the fact. The shell writes `?tab=` on every tab click with
- * `replaceState`, so `?billing=success&tab=usage` is what a checkout return
- * becomes the moment someone glances at Usage, and reloading or sharing that
- * URL used to resolve to Usage — where the post-payment poll
- * (`plans-billing-core`, the ONLY consumer of `billing=success`) never mounts,
- * so a paying customer sits on a stale Starter plan with nothing scheduled to
- * correct it. Ordering the other way makes the money path the one that cannot
- * be lost to a stray param. The shell closes the pair from its side too: a
- * manual tab click DROPS `billing` from the URL, because that click is what
- * consumes the intent — so the two are never both present for long enough for
- * this precedence to override a live choice.
+ * ⚠ Intent outranking explicit `?tab=` is not obvious — do not flip it. Shell
+ * writes `?tab=` on every tab click via `replaceState`, so a checkout return
+ * becomes `?billing=success&tab=usage` the moment someone glances at Usage;
+ * resolving that to Usage never mounts the post-payment poll
+ * (`plans-billing-core`, only consumer of `billing=success`), stranding a payer
+ * on a stale plan. Shell DROPS `billing` on manual tab click, so the pair never
+ * coexists long enough to override a live choice.
  */
 export function resolveBillingTab(
   tabParam: string | null | undefined,

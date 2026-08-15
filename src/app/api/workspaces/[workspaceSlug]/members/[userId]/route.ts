@@ -18,10 +18,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * PATCH /api/workspaces/[workspaceSlug]/members/[userId] — change a member's role.
- * Admin+ only. Last-owner protection enforced inside `updateMemberRole`.
- */
+/** PATCH — change a member's role. Admin+; last-owner protection inside `updateMemberRole`. */
 export const PATCH = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -41,14 +38,11 @@ export const PATCH = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/members/[userId]", err);
     }
   },
-  // sessionOnly: changing a member's role is an admin action, not an agent one.
+  // sessionOnly: admin action, not an agent one.
   { sessionOnly: true }
 );
 
-/**
- * DELETE /api/workspaces/[workspaceSlug]/members/[userId] — remove a member.
- * Admin+ only. Cannot remove last owner.
- */
+/** DELETE — remove a member. Admin+; cannot remove the last owner. */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -67,6 +61,6 @@ export const DELETE = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/members/[userId]", err);
     }
   },
-  // sessionOnly: removing a member is an admin action, not an agent one.
+  // sessionOnly: admin action, not an agent one.
   { sessionOnly: true }
 );

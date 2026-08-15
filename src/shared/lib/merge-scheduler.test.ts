@@ -1,8 +1,5 @@
-/**
- * Unit tests for the debounced merging save scheduler. Fake timers drive the
- * debounce window; each run records the payload it was flushed with so we can
- * assert merges, cancels, and forced flushes.
- */
+/** Debounced merging save scheduler. Fake timers drive the debounce window;
+ *  each run records its flushed payload. */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMergeScheduler } from "./merge-scheduler";
@@ -26,7 +23,7 @@ describe("createMergeScheduler", () => {
     const s = createMergeScheduler(DELAY);
     const { calls, run } = recorder();
 
-    // Edit title, then description within the window — the classic lost-field bug.
+    // Two fields inside one window — the classic lost-field bug.
     s.schedule("step:wf:n1", { title: "Hi" }, run);
     vi.advanceTimersByTime(200);
     s.schedule("step:wf:n1", { description: "There" }, run);
@@ -96,7 +93,6 @@ describe("createMergeScheduler", () => {
     await s.flush("step:wf:n1");
 
     expect(calls).toEqual([{ title: "T", userInput: "U" }]);
-    // Timer is disarmed after a manual flush — no double-run.
     vi.advanceTimersByTime(DELAY);
     expect(calls).toHaveLength(1);
   });

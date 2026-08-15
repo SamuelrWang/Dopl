@@ -38,35 +38,31 @@ const ICON_BTN =
 interface Props {
   selection: Selection | null;
   workspaceId: string;
-  /** Tree of the selected base — for the breadcrumb folder chain. */
+  /** Selected base's tree, for the breadcrumb folder chain. */
   selectedTree?: BaseTree;
-  /** Full body of the open entry (controller-owned fetch). */
+  /** Controller-owned fetch: FULL body, not the tree's stripped copy. */
   openEntry: KnowledgeEntry | null;
   openEntryStatus: "idle" | "loading" | "success" | "error";
   refetchOpenEntry: () => void;
   /** Admin-only: kbId → teams granted, surfaced in the base overview. */
   kbTeams?: Record<string, KbTeamRef[]>;
-  /** Per-base counters from the list response — the overview reads the
-   *  selected base's `storageBytes` from it. Absent = unknown, no bar. */
+  /** Per-base counters from the list response; overview reads `storageBytes`
+   *  from it. Absent = unknown, no bar. */
   baseStats?: Record<string, KnowledgeBaseStats>;
-  /** The workspace's per-base storage cap in bytes, same response. */
+  /** Per-base storage cap in bytes, same response. */
   kbStorageLimit?: number | null;
-  /** Whether the current user may edit the selected base's name/description. */
   canEditBase: boolean;
-  /** Refresh a base's tree after an entry save. */
   onTreeRefresh: (baseId: string) => void;
-  /** Re-pull the SSR base list after a base name/description save. */
+  /** Re-pull the base list after a name/description save. */
   onBaseSaved: () => void;
-  /** Open a content-search hit (entry within a base). */
   onSelectSearchEntry: (entryId: string, baseId: string) => void;
-  /** Breadcrumb navigation: jump to the first entry in a folder (null = base). */
+  /** Jump to the first entry in a folder; null = the base itself. */
   onCrumbSelect: (base: KnowledgeBase, folderId: string | null) => void;
-  /** Download the whole base as a zip. */
+  /** Zip the whole base. */
   onExportBase: (baseId: string) => void;
-  /** Open the base settings modal for the selected base. */
   onOpenSettings: () => void;
-  /** Router bindings — the toolbar delete leaves this base's URL behind
-   *  (see ../routing.ts). */
+  /** Router bindings; the toolbar delete leaves this base's URL behind
+   *  (../routing.ts). */
   routing: KnowledgeRouting;
 }
 
@@ -89,12 +85,10 @@ function folderChainOf(
 }
 
 /**
- * Right detail pane. Shared chrome (breadcrumb top bar, title); when an entry
- * is selected a slim header band hosts the rich-text formatting toolbar (the
- * DocEditor publishes its live instance up via `onEditor`, and its own
- * floating pill is suppressed). The body is the file's real editor for an
- * entry (DocPane owns its own title), or the base overview when a whole
- * knowledge base is selected.
+ * Right detail pane. With an entry selected, a slim header band hosts the
+ * rich-text toolbar: DocEditor publishes its live instance up via `onEditor`
+ * and its own floating pill is suppressed. Body = the entry's editor (DocPane
+ * owns its title) or the base overview.
  */
 export function DetailPanel({
   selection,
@@ -117,15 +111,14 @@ export function DetailPanel({
 }: Props) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // Live editor instance for the currently open entry, published by
-  // EntryView's DocEditor. Drives the header-band formatting toolbar;
-  // null while a base is selected or a file body is still loading.
+  // Published by EntryView's DocEditor; drives the header-band toolbar. Null
+  // while a base is selected or a body is still loading.
   const [entryEditor, setEntryEditor] = useState<Editor | null>(null);
   const queryClient = useQueryClient();
 
-  // Mirrors the settings form's danger-zone delete (base-settings-form.tsx):
-  // same `deleteBase` call, then navigate to the base-less knowledge root so
-  // the view drops to an empty selection and the list is re-pulled.
+  // ⚠ Must mirror base-settings-form.tsx's danger-zone delete: same
+  // `deleteBase` call, then navigate to the base-less knowledge root so the
+  // view drops to an empty selection and the list is re-pulled.
   async function handleDeleteBase() {
     if (!selection) return;
     const base = selection.base;
@@ -240,10 +233,9 @@ export function DetailPanel({
       </div>
 
       {selection.kind === "entry" && (
-        // Slim header band where the dead tabs used to be — hosts the
-        // rich-text toolbar (entries only). Always visible above the scroll
-        // body, so formatting stays reachable in long documents. Empty until
-        // the editor mounts, keeping its height stable.
+        // Rich-text toolbar band (entries only). Always above the scroll
+        // body so formatting stays reachable in long documents; empty until
+        // the editor mounts, keeping height stable.
         <div className={styles.detailToolbarBand}>
           {entryEditor && <Toolbar editor={entryEditor} variant="header" />}
         </div>
@@ -251,7 +243,7 @@ export function DetailPanel({
 
       <div className={styles.detailBody}>
         {selection.kind === "entry" ? (
-          // DocPane renders the (editable) title itself — no static title here.
+          // DocPane renders the editable title itself.
           <EntryView
             key={selection.entry.id}
             base={selection.base}

@@ -3,41 +3,22 @@
  * params, plus the `op` discriminator, with the per-op requirements enforced at
  * runtime by `missingParams` in the registrar.
  *
- * Split out of `channel.ts` at the §2 500-line cap alongside
- * `channel-description.ts`. The seam is the same one: this is the DECLARED
- * SURFACE an MCP client introspects (names, types, caps, and the prose that
- * teaches each param), while the registrar is routing. The parity suite reads
- * both — every declared param must be referenced by some handler in the
- * `channel-*` group, and no handler may read an arg that is not declared here.
+ * This is the DECLARED SURFACE an MCP client introspects (names, types, caps,
+ * per-param teaching); the registrar is routing. ⚠ The parity suite reads both:
+ * every declared param must be referenced by some handler in the `channel-*`
+ * group, and no handler may read an arg not declared here.
  *
- * The caps below MIRROR the routes' own zod schemas
- * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (the
- * tighter 200 applies to a post's summary), client_msg_id 200. Declared here
- * they are published in the tool's inputSchema (the model sees a maxLength) and
- * enforced before the call is made at all. `.trim()` where — and only where —
- * the route trims before measuring, so the two agree on what "200 characters"
- * counts.
+ * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
+ * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (a
+ * post's summary is 200), client_msg_id 200, `.min(1)` on body /
+ * client_msg_id / title. Declared here they publish as maxLength and are
+ * enforced before the call; omit one and the route rejects it as an opaque 400
+ * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
+ * before measuring, so the two agree on what "200 characters" counts.
  *
- * F5 (2026-08-01) — THE MINIMUMS MIRROR TOO. `body` / `client_msg_id` / `title`
- * carried a maximum and no minimum while the route required `.min(1)` on all
- * three, so an empty body, a blank idempotency key and a whitespace-only title
- * each passed the tool and died at the route as an opaque 400 that the write ops
- * then mis-narrated (see `channel-errors.ts`). A client-side refusal is a -32602
- * that names the field.
- *
- * THE NAMED-AGENT PARAMS ARE GONE (channels rollback §1, 2026-08-05):
- * `to_agent` / `to_agents` / `as_agent` / `participants` / `status`, and the
- * seven ops that read them. They are DROPPED FROM THE ENUM rather than kept for
- * a teaching refusal, unlike `close_thread` below — a removed op whose
- * capability is genuinely gone gets a plain "invalid enum value", which is the
- * honest answer, where `close_thread`'s capability moved and its refusal names
- * where it moved to.
- *
- * `summary` IS DELIBERATELY NOT SPLIT and its declared 2000 stays. One param
- * serves two routes with two caps (post 200, close_thread 2000) and this schema
- * declares the LOOSER one so a legitimate close summary is never refused
- * client-side; the tighter number is stated in its `.describe()`. See the note
- * above the field.
+ * ⚠ `summary` is deliberately NOT split: one param serves two routes with two
+ * caps, and this declares the LOOSER so a legitimate close summary is never
+ * refused client-side. The tighter number is stated in its `.describe()`.
  */
 
 import { z } from "zod";
@@ -53,25 +34,21 @@ export const CHANNEL_INPUT_SHAPE = {
       "open",
       "invite",
       "post",
-      // P0-3 (2026-08-04) — the MILESTONE gets its own op rather than staying a
-      // `kind` an agent has to pick on `post`. See the `kind` field below for
-      // what that choice cost.
+      // ⚠ MILESTONE is its own op rather than a `kind` an agent picks on
+      // `post` — see the `kind` field below.
       "milestone",
       "read",
       "await",
       "members",
       "list_threads",
       "get_thread",
-      // READ-SESSION-STATE (rollback §3.5) — "what is flint doing?" answered
-      // over MCP: the CALLER'S OWN live sessions, each with its handle, its
-      // state (working/idle/ended) and the thread it is on. Read-only and
-      // own-scoped; `channel` narrows it to one channel.
+      // The CALLER'S OWN live sessions: handle, state (working/idle/ended) and
+      // thread. Read-only and own-scoped; `channel` narrows to one channel.
       "read_sessions",
       "create_thread",
-      // DECISION 2 (2026-08-04) — an agent PROPOSES a close and a human confirms
-      // it. `close_thread` is kept in the enum so the call an older agent makes
-      // gets a teaching refusal that names its replacement, rather than an
-      // opaque "unknown op".
+      // ⚠ An agent PROPOSES a close and a human confirms. `close_thread` stays
+      // in the enum so an older agent gets a teaching refusal naming its
+      // replacement rather than an opaque "unknown op".
       "propose_close",
       "close_thread",
       "set_thread_mode",
@@ -117,23 +94,9 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="post" (optional, default "request"): what this message IS. "request" is the working message: it may address a PERSON with `to`, and in a DIRECT (1:1) channel the server addresses it to the other member for you, which is what puts it in front of their side. "chat" is PEOPLE TALKING: it addresses nobody, starts nobody, and the direct-channel auto-address is skipped entirely, so two people can talk in a DM without each line poking the other side\'s machine. "chat" together with `to` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".',
     ),
-  // Q9 — the caps below MIRROR the routes' own zod schemas
-  // (src/features/channels/schema.ts): title 200, body 16000, summary 2000
-  // (the tighter 200 applies to a post's summary), client_msg_id 200. They
-  // lived only in `.describe()` prose, so an over-length field was rejected
-  // by the ROUTE, as an opaque 400 the write ops then mis-narrated. Declared
-  // here they are published in the tool's inputSchema (the model sees a
-  // maxLength) and enforced before the call is made at all.
-  //
-  // `.trim()` where — and only where — the route trims before measuring, so
-  // the two agree on what "200 characters" counts.
   body: z
     .string()
-    // F5 — `.min(1)` mirrors the route (`body: z.string().min(1).max(16000)`,
-    // on BOTH the post and the create_thread schemas). Without it an empty body
-    // passed the tool and died at the route as a 400 the caller then read as a
-    // membership or thread problem; refused here it is a plain -32602 naming
-    // the field.
+    // ⚠ `.min(1)` mirrors the route on BOTH the post and create_thread schemas.
     .min(1)
     .max(16000)
     .optional()
@@ -146,11 +109,9 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post it makes the message a REQUEST that triggers that member\'s listener and can start their agent, so name someone only when you are asking for their machine. Omit it for talk nobody must act on — and say so outright with `intent`="chat", which addresses nobody even in a direct channel. A channel reaches PEOPLE: there is no way to address an agent by name. For create_thread, it is the member the thread is for.',
     ),
-  // One param, two routes, two caps: a post's summary is capped at 200 and a
-  // close summary at 2000. The schema declares the LOOSER of the two so a
-  // legitimate close summary is never refused client-side; a 201-character
-  // POST summary is still the route's to reject, and Q9's code mapping now
-  // reports that honestly instead of blaming the addressee.
+  // ⚠ One param, two routes, two caps (post 200, close 2000). Declares the
+  // LOOSER so a legitimate close summary is never refused client-side; an
+  // over-length POST summary stays the route's to reject.
   summary: z
     .string()
     .trim()
@@ -159,20 +120,14 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="post": a short one-line intent (<=200 chars — the post route enforces 200, not 2000). ALWAYS set it — it becomes the notification the receiving member sees. op="propose_close" (optional): the one-line reason you think the thread is done (<=2000 chars). It is the BODY of the proposal your operator reads before deciding, and it is carried into the close summary if they confirm — so write the outcome, not "done".',
     ),
-  // P0-3 / DECISION 1 (2026-08-04) — WHAT THIS FIELD USED TO SAY, AND WHAT IT
-  // COST. It read: "message (default, chat) or a structured activity event
-  // (task_started / task_progress / task_finished / task_failed)". Five names,
-  // one list, no rule about which is which — so a responder that had finished
-  // its work posted the ANSWER as `task_finished`, and the answer appeared
-  // nowhere: `lib/group-thread.ts` folds a terminal marker into `endEvent` and
-  // never renders its body. The kinds are not a vocabulary to pick from, and the
-  // describe now says whose each one is.
+  // ⚠ The kinds are NOT a vocabulary to pick from — the describe must say whose
+  // each one is. Listing five names with no rule gets a finished responder to
+  // post its ANSWER as `task_finished`, which appears nowhere:
+  // `lib/group-thread.ts` folds a terminal marker into `endEvent` and never
+  // renders its body.
   //
-  // THE ENUM KEEPS ALL FIVE ON PURPOSE. Narrowing it would turn the mistake into
-  // an opaque -32602 from zod ("invalid enum value") at exactly the moment the
-  // agent needs to be told what to do instead; `channel-ops-write.ts` refuses
-  // the three lifecycle kinds with a sentence, and the server refuses them again
-  // for anything that skips this tool.
+  // ⚠ The enum keeps all five ON PURPOSE — narrowing turns the mistake into an
+  // opaque zod -32602 exactly when the agent needs telling what to do instead.
   kind: z
     .enum([
       "message",
@@ -193,9 +148,8 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
   client_msg_id: z
     .string()
-    // F5 — `.min(1)` mirrors the route. An idempotency key of "" is not a key:
-    // the route refuses it, and a client-side refusal keeps the caller from
-    // believing a blank key deduped anything.
+    // ⚠ `.min(1)` mirrors the route — a blank idempotency key is not a key, and
+    // a client-side refusal keeps the caller from believing it deduped anything.
     .min(1)
     .max(200)
     .optional()
@@ -205,10 +159,8 @@ export const CHANNEL_INPUT_SHAPE = {
   title: z
     .string()
     .trim()
-    // F5 — `.min(1)` mirrors the route (`title: z.string().trim().min(1)
-    // .max(200)`), and it is measured AFTER the trim on both sides, so a
-    // whitespace-only title is refused here rather than 400ing at the route
-    // with a thread half-implied.
+    // ⚠ `.min(1)` mirrors the route and is measured AFTER the trim on both
+    // sides, so a whitespace-only title is refused here rather than 400ing.
     .min(1)
     .max(200)
     .optional()
@@ -239,8 +191,8 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="propose_close" (required): the outcome you are PROPOSING — "completed" or "failed". Your operator sees it prefilled on the confirm and can change it; nothing is closed until they do.',
     ),
-  // coerce: MCP clients sometimes send numbers as strings; strict
-  // z.number() rejects them with an opaque -32602.
+  // ⚠ coerce: MCP clients sometimes send numbers as strings, and strict
+  // z.number() rejects those with an opaque -32602.
   since: z.coerce
     .number()
     .int()

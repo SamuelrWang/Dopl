@@ -8,15 +8,13 @@ import type {
 } from "../types";
 
 /**
- * The pure half of the channels optimistic layer: what a not-yet-saved row
- * LOOKS like, and how a cache absorbs one.
- *
- * Split from the hooks so every rule here is testable with no React, no DOM
- * and no network — which matters because these are the rules that decide
+ * The pure half of the channels optimistic layer: what a not-yet-saved row LOOKS
+ * like, and how a cache absorbs one. Split from the hooks so every rule is
+ * testable with no React, DOM or network — these are the rules that decide
  * whether a retry duplicates a message.
  *
- * THE CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
- * endpoint returned and applies `select` on read, so a patch operates on
+ * ⚠ THE CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
+ * endpoint returned and applies `select` on READ, so a patch operates on
  * `{ messages: [...] }` / `{ tasks: [...] }`, never on the selected array.
  */
 
@@ -33,17 +31,16 @@ export function isPendingId(id: string): boolean {
 }
 
 /**
- * The idempotency key the server has always accepted and no client ever sent
- * (`channel_messages.client_msg_id`, unique per channel; `channel_tasks`
- * likewise). It is what makes a retry safe: the second POST returns the FIRST
- * one's row instead of creating a second, so a user hammering Send cannot
- * double-post and a rolled-back optimistic row can be resent verbatim.
+ * Idempotency key (`channel_messages.client_msg_id`, unique per channel; same
+ * for `channel_tasks`). It is what makes a retry safe: the second POST returns
+ * the FIRST one's row, so hammering Send cannot double-post and a rolled-back
+ * optimistic row can be resent verbatim.
  */
 export function newClientMsgId(): string {
   const cryptoRef = globalThis.crypto;
   if (cryptoRef?.randomUUID) return cryptoRef.randomUUID();
-  // Non-secure contexts and older runtimes: uniqueness per channel is all the
-  // unique index asks for, and the key is never a security boundary.
+  // Non-secure contexts and older runtimes: per-channel uniqueness is all the
+  // unique index asks for, and ⚠ this key is never a security boundary.
   return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -79,17 +76,17 @@ export interface PendingMessageInput {
   authorName?: string | null;
   authorAvatarUrl?: string | null;
   /** `taskId` binds the row into a session card; `to_user_id` renders the
-   *  addressee line. Both are the wire spellings the transcript already reads. */
+   *  addressee line. ⚠ Wire spellings, as the transcript reads them. */
   metadata?: Record<string, unknown>;
   /** Injected in tests; defaults to now. */
   createdAt?: string;
 }
 
 /**
- * The row the transcript renders one frame after the click. It is a real
- * {@link ChannelMessage} — same shape, same renderer, no parallel "draft"
- * concept — carrying a pending id and the `clientMsgId` the server will echo
- * back, which is the pair that lets {@link reconcileMessage} recognise it.
+ * The row the transcript renders one frame after the click. ⚠ A real
+ * {@link ChannelMessage} — same shape, same renderer, NO parallel "draft"
+ * concept — carrying a pending id plus the `clientMsgId` the server echoes back,
+ * the pair {@link reconcileMessage} matches on.
  */
 export function buildPendingMessage(
   cache: MessagesCache | undefined,
@@ -112,14 +109,13 @@ export function buildPendingMessage(
 }
 
 /**
- * Append a pending row, IDEMPOTENTLY. A repeat of the same `clientMsgId`
- * replaces the existing row rather than adding a second one, so a resend after
- * a rolled-back failure — the exact retry the server's idempotency key exists
- * for — reads as one message on both sides of the wire.
+ * Append a pending row, IDEMPOTENTLY — a repeat `clientMsgId` REPLACES the
+ * existing row rather than adding a second, so a resend after a rolled-back
+ * failure reads as one message on both sides of the wire.
  *
- * An undefined cache stays undefined: writing a one-message list into a query
- * that has never loaded would render a transcript of exactly that message and
- * then flip to the full page when the read lands.
+ * ⚠ An undefined cache stays undefined: writing a one-message list into a query
+ * that never loaded renders a transcript of exactly that message and then flips
+ * when the read lands.
  */
 export function appendPendingMessage(
   cache: MessagesCache | undefined,
@@ -138,10 +134,9 @@ export function appendPendingMessage(
 }
 
 /**
- * Fold the POST's own answer in — the whole reason the response stopped being
- * discarded. The saved row replaces its pending twin in place (matched on
- * `clientMsgId`), so the message keeps its position and the transcript does
- * not jump; a saved row with no pending twin is appended once.
+ * Fold the POST's own answer in. ⚠ The saved row replaces its pending twin IN
+ * PLACE (matched on `clientMsgId`), so the message keeps its position and the
+ * transcript does not jump. A saved row with no pending twin is appended once.
  */
 export function reconcileMessage(
   cache: MessagesCache | undefined,
@@ -177,12 +172,9 @@ export function retagPendingMessage(
 
 /**
  * The thread row that makes a pending session card read as ACTIVE.
- *
- * Without it the card is derived from its messages alone, and a lone human
- * message with no agent reply and no lifecycle marker computes to "done" —
- * i.e. a request would appear as "Thread complete" the instant it was sent.
- * The overlay is authoritative (`channel-transcript.tsx`), so an open pending
- * thread row is what makes the card say the true thing.
+ * ⚠ Without it the card derives from messages alone, and a lone human message
+ * with no agent reply and no lifecycle marker computes to "done" — a request
+ * would read "Thread complete" the instant it was sent.
  */
 export function buildPendingThread(input: {
   id: string;
@@ -256,10 +248,9 @@ export function setToolProfile(
 }
 
 /**
- * Trust is rendered from the RULE LIST, so the optimistic add needs a row and
- * not just a flag. Only `trustedUserId` is read by the view's lens; the rest
- * is filled so the row is a valid `AgentTrustRule` and the settings list can
- * render it without a special case.
+ * Trust renders from the RULE LIST, so the optimistic add needs a ROW, not a
+ * flag. Only `trustedUserId` is read by the view's lens; the rest is filled so
+ * the row is a valid `AgentTrustRule` needing no special case.
  */
 export function addTrustRuleRow(
   cache: TrustCache | undefined,
@@ -299,9 +290,9 @@ export function removeTrustRuleRow(
 }
 
 /**
- * A decided consent request leaves the inbox at once. The inbox only ever
- * holds `pending` rows, so dropping it IS the decided state — and a failure
- * rolls the whole list back, which is what puts the card back.
+ * A decided consent request leaves the inbox at once. The inbox only holds
+ * `pending` rows, so dropping it IS the decided state; a failure rolls the whole
+ * list back, which puts the card back.
  */
 export function dropConsentRequest(
   cache: ConsentCache | undefined,

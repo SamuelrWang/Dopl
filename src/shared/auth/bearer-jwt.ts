@@ -2,16 +2,14 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Bearer Supabase-JWT verification for `withUserAuth` (desktop migration
- * Phase 2 — see docs/migration-research/auth-flows.md). The bundled
- * desktop SPA's main process holds the Supabase session and presents the
- * access JWT as `Authorization: Bearer <jwt>`; a valid one is a SESSION
- * caller with cookie-identical semantics. Split from with-auth.ts for the
- * 500-line cap (§2).
+ * Bearer Supabase-JWT verification for `withUserAuth`. The bundled SPA's main
+ * process holds the session and presents the access JWT as
+ * `Authorization: Bearer <jwt>`; a valid one is a SESSION caller with
+ * cookie-identical semantics.
  */
 
-/** Bare (cookie-less) client for verifying bearer Supabase JWTs. Lazy
- *  singleton so the JWKS cache inside auth-js is shared process-wide. */
+/** Bare (cookie-less) client. ⚠ Lazy singleton so auth-js's JWKS cache is
+ *  shared process-wide. */
 let _jwtClient: SupabaseClient | null = null;
 function jwtClient(): SupabaseClient {
   if (!_jwtClient) {
@@ -25,21 +23,17 @@ function jwtClient(): SupabaseClient {
 }
 
 /**
- * Verify a Supabase access JWT presented as a Bearer credential (the
- * bundled desktop SPA path). Same verification authority as
- * `getSessionUser` — `getClaims(jwt)` checks the signature locally against
- * the cached ES256 JWKS; nothing is trusted on decode alone — and the same
- * load-bearing try/catch: auth-js re-throws plain Errors for expired/
- * malformed tokens, and every road must end at null → 401, never a 500.
+ * Verify a Supabase access JWT presented as a Bearer credential. Same authority
+ * as `getSessionUser`: `getClaims(jwt)` verifies the signature locally against
+ * the cached ES256 JWKS, nothing trusted on decode alone.
+ * ⚠ Same load-bearing try/catch — auth-js re-throws plain Errors for
+ * expired/malformed tokens, and every road must end at null → 401, never 500.
  */
 export async function getBearerJwtUser(token: string): Promise<{ id: string } | null> {
-  // PRE-CHECK before getClaims: auth-js falls back to a NETWORK
-  // `getUser()` against this project's GoTrue whenever the (unsigned)
-  // header lacks a `kid` or claims an HS* alg — meaning any junk bearer
-  // would buy an unauthenticated /auth/v1/user round-trip, the exact
-  // amplifier Q11 exists to prevent. Only a well-formed ES256+kid token —
-  // the only shape this project's GoTrue mints — may proceed to local
-  // JWKS verification. Everything else is rejected here for free.
+  // ⚠ PRE-CHECK before getClaims: auth-js falls back to a NETWORK `getUser()`
+  // whenever the (unsigned) header lacks a `kid` or claims an HS* alg, so any
+  // junk bearer would buy an unauthenticated /auth/v1/user round-trip. Only a
+  // well-formed ES256+kid token may reach local JWKS verification.
   if (!isEs256JwtWithKid(token)) return null;
   try {
     const { data } = await jwtClient().auth.getClaims(token);
@@ -50,9 +44,9 @@ export async function getBearerJwtUser(token: string): Promise<{ id: string } | 
   }
 }
 
-/** Cheap structural check on the JWT header: three segments, `alg` exactly
- *  "ES256", `kid` present. Signature verification happens in getClaims —
- *  this only decides whether getClaims may be consulted at all. */
+/** Structural check only: three segments, `alg` exactly "ES256", `kid` present.
+ *  ⚠ Signature verification happens in getClaims; this decides only whether
+ *  getClaims may be consulted at all. */
 function isEs256JwtWithKid(token: string): boolean {
   if (!token) return false;
   const parts = token.split(".");

@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * AgentSkillCard — "teach your agent Dopl" block for the overview page.
- *
- * Offers the ready-made SKILL.md (built by skill-template.ts) as a
- * one-click copy plus the exact install path. Local skills load at
- * session boot, so the agent knows the Dopl tools and when to reach for
- * each before its first tool call — instead of learning them
- * mid-conversation from server instructions alone.
+ * "Teach your agent Dopl" block: one-click copy of the ready-made SKILL.md
+ * (skill-template.ts) plus the install path. Local skills load at session boot,
+ * so the agent knows the Dopl tools before its first tool call.
  */
 
 import { useEffect, useState } from "react";

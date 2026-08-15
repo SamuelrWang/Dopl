@@ -4,25 +4,15 @@ import type { Team } from "../types";
 import { mapTeamRow, type TeamRow } from "./dto";
 
 /**
- * THE `teams` TABLE ITSELF — and the entry point for the rest of the teams
- * repository.
- *
- * SPLIT 2026-08-08 (§2 cap; the row that had said "509, just over: watch it"
- * while the file reached 625). Four reasons to change had accumulated in one
- * file and are now four files, on the seams the data already had — one table
- * group each, no behavior touched and not a single query altered:
- *
- *   repository.ts            the `teams` rows (here)
+ * The `teams` table itself, and the barrel for the rest of the repository:
+ *   repository.ts            `teams` rows (here)
  *   repository-members.ts    `team_members` + `workspace_invitation_teams`
  *   repository-grants.ts     `team_resource_access`
- *   repository-resources.ts  the five tables a grant can point AT
- *
- * The re-exports below are the `session-io.js` precedent (§2): this module
- * stays the address every caller already imports — `teams/server/service.ts`,
- * `access.ts`, `invariant.ts`, and five call sites in other features plus the
- * `vi.mock("@/features/teams/server/repository")` in the chats tests — so the
- * split moved code without moving anyone's import. New call sites inside
- * `teams/server/` should import the concern directly.
+ *   repository-resources.ts  the tables a grant can point AT
+ * ⚠ Keep the re-exports: this module is the address outside callers import,
+ * including `vi.mock("@/features/teams/server/repository")` in the chats
+ * tests. New call sites inside `teams/server/` should import the concern
+ * module directly.
  */
 export * from "./repository-members";
 export * from "./repository-grants";

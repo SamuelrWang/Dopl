@@ -1,12 +1,9 @@
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Admin health dashboard aggregation.
- *
- * All queries run on-demand when the admin loads /admin/health. No cron,
- * no stored alert state — derive everything from raw system_events,
- * mcp_events, and entries. Thresholds live in code so they're easy to
- * tweak.
+ * Admin health dashboard aggregation. All queries run on-demand at
+ * /admin/health — no cron, no stored alert state; everything derives from raw
+ * system_events, mcp_events and entries. Thresholds live in code.
  */
 
 export interface AlertGroup {
@@ -48,8 +45,8 @@ function iso(msAgo: number): string {
 }
 
 /**
- * Group recent system_events by fingerprint. Sort newest-first by last_seen.
- * Returns only severities >= warn (unless `includeInfo` is true).
+ * Recent system_events grouped by fingerprint, newest-first by last_seen.
+ * Severities >= warn only, unless `includeInfo`.
  */
 export async function getRecentAlerts(opts?: {
   sinceMs?: number;
@@ -75,7 +72,7 @@ export async function getRecentAlerts(opts?: {
 
   if (!data || data.length === 0) return [];
 
-  // Group by fingerprint. Keep the most severe seen and the newest sample.
+  // Keep the most severe seen and the newest sample per fingerprint.
   const severityRank = { info: 0, warn: 1, error: 2, critical: 3 };
   const groups = new Map<string, AlertGroup>();
 
@@ -117,9 +114,8 @@ export async function getRecentAlerts(opts?: {
 }
 
 /**
- * Success/error/latency stats per external API, last 24h.
- * Sources are expected to use dotted prefixes like "anthropic.messages" —
- * we split on `.` to get the provider name.
+ * Success/error/latency per external API, last 24h. ⚠ Sources must use dotted
+ * prefixes like "anthropic.messages" — split on `.` gives the provider name.
  */
 export async function getExternalApiHealth(): Promise<ExternalApiHealth[]> {
   const db = supabaseAdmin();
@@ -164,9 +160,6 @@ export async function getExternalApiHealth(): Promise<ExternalApiHealth[]> {
   );
 }
 
-/**
- * MCP call health from the existing mcp_events table.
- */
 export async function getMcpHealth(): Promise<McpHealth> {
   const db = supabaseAdmin();
   const since = iso(DAY_MS);
@@ -198,15 +191,12 @@ export async function getMcpHealth(): Promise<McpHealth> {
   };
 }
 
-/**
- * Roll up into a top-line red/yellow/green signal.
- */
 export function computeOverallStatus(inputs: {
   alerts: AlertGroup[];
   mcp: McpHealth;
   external: ExternalApiHealth[];
 }): OverallStatus {
-  // Red: any critical alert or auth failure against an external API.
+  // Red: critical alert or auth failure against an external API.
   const hasCritical = inputs.alerts.some((a) => a.severity === "critical");
   const externalAuthFailed = inputs.external.some((p) => p.criticals_24h > 0);
 

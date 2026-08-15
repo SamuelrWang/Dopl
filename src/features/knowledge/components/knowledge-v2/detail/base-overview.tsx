@@ -14,26 +14,25 @@ interface Props {
   workspaceId: string;
   /** Owners/editors can edit name + description; viewers are read-only. */
   canEdit: boolean;
-  /** Re-pull the SSR base list after a save so the list + toolbar stay in sync. */
+  /** Re-pull the base list after a save so list + toolbar stay in sync. */
   onSaved?: () => void;
   /** Teams granted on this base (admin view); undefined for members. */
   teams?: MetaTeamRef[];
-  /** This base's stored bytes; `null` = unknown (no bar). */
+  /** Stored bytes; `null` = unknown (no bar). */
   storageBytes?: number | null;
-  /** The workspace's per-base cap in bytes; `null` = unknown (no bar). */
+  /** Per-base cap in bytes; `null` = unknown (no bar). */
   storageLimit?: number | null;
-  /** The selected base's tree — feeds the Contents section (no extra fetch). */
+  /** Selected base's tree; feeds Contents with no extra fetch. */
   tree?: BaseTree;
   /** Refresh the base's tree after a folder-description / entry-excerpt save. */
   onTreeRefresh: (baseId: string) => void;
 }
 
 /**
- * Base overview — the meta card shown when a whole knowledge base (not a
- * file) is selected. Name + description are editable and persist live; the
- * dates, visibility, access, and teams are read-only real values. Below it,
- * the Contents tree exposes each folder/entry's short description for inline
- * editing (the summaries agents read via MCP get_tree / list_dir).
+ * Meta card shown when a whole base (not a file) is selected. Name +
+ * description persist live; dates/visibility/access/teams are read-only.
+ * Below, the Contents tree inline-edits each folder/entry description — the
+ * summaries agents read via MCP get_tree / list_dir.
  */
 export function BaseOverview({
   base,

@@ -1,16 +1,9 @@
 /**
- * GET /api/billing/payment-method — the card, and who may see it.
- *
- * Three properties, all of which have a wrong answer that looks fine:
- *   - the ROLE gate is admin (a viewer reading the workspace's card is a leak,
- *     and nothing in the markup would show it happened);
- *   - Stripe's DEFAULT method wins over the newest attached card, because that
- *     is the one Stripe will actually charge;
- *   - no key / no customer answers `null`, not an error — "this workspace has
- *     never paid" is a state.
- *
- * The Stripe SDK is faked at the module boundary (same shape as
- * `features/billing/server/stripe.test.ts`). Nothing here touches the network.
+ * GET /api/billing/payment-method — three properties whose wrong answers all look fine:
+ *   - the ROLE gate is admin (a viewer reading the card is a leak nothing in the markup shows);
+ *   - Stripe's DEFAULT method wins over the newest attached card — that is what Stripe charges;
+ *   - no key / no customer answers `null`, not an error.
+ * The Stripe SDK is faked at the module boundary; nothing touches the network.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,7 +21,7 @@ const AUTH: WorkspaceAuthContext = {
   apiKeyWorkspaceId: null,
 };
 
-/** The wrapper's option bag is not exported; this is the half we assert on. */
+/** The wrapper's option bag is not exported; this is the half asserted on. */
 interface GateOptions {
   minRole?: string;
   sessionOnly?: boolean;
@@ -120,8 +113,7 @@ describe("who may read the card", () => {
   });
 
   it("is a READ, so it is not sessionOnly", () => {
-    // The session gate exists for mutations. Pinning the absence keeps a
-    // copy-paste from a cancel/portal route from silently locking the SPA out.
+    // ⚠ Pinning the ABSENCE of sessionOnly: a copy-paste from cancel/portal locks the SPA out.
     expect(gate.opts?.sessionOnly).toBeUndefined();
   });
 });
@@ -139,13 +131,11 @@ describe("which method is reported", () => {
       expMonth: 4,
       expYear: 2029,
     });
-    // The fallback list was never even asked for.
     expect(stripeCalls.listedFor).toBeNull();
   });
 
   it("falls back to the attached card when no default is set", async () => {
-    // The normal state after an embedded checkout: a card is attached and
-    // `invoice_settings.default_payment_method` was never written.
+    // Normal after an embedded checkout: card attached, `default_payment_method` never written.
     stripeCalls.cards = [card("1111")];
     const body = await (await GET(request())).json();
     expect(body.paymentMethod.last4).toBe("1111");
@@ -177,8 +167,7 @@ describe("when there is no Stripe account", () => {
   });
 
   it("answers null with no Stripe key configured", async () => {
-    // Preview/test environments have no key. The pane renders its empty state
-    // rather than the page erroring.
+    // Preview/test environments have no key; the pane renders its empty state.
     vi.stubEnv("STRIPE_SECRET_KEY", "");
     const res = await GET(request());
     expect(res.status).toBe(200);

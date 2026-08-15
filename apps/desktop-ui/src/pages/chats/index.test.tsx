@@ -8,15 +8,13 @@ import type { Chat, ChatDetail, ChatFolder } from "@/features/chats/types";
 import { SEGMENT } from "#/test-utils/bridge";
 
 /**
- * Smoke test for the ported chats page: the REAL `ChatsView` tree (reused from
- * the web app) over a mocked data layer. `fetch` is the mock point because it
- * is the one seam both clients share — the SPA's `#/lib/api` transport and the
- * web feature client's `@/shared/api/api-client`, which `ChatsView` calls
- * directly for its mutations.
+ * Chats page smoke test: REAL `ChatsView` tree over a mocked data layer.
+ * `fetch` is the mock point — the one seam both clients share (SPA `#/lib/api`
+ * and web `@/shared/api/api-client`, which `ChatsView` calls for mutations).
  *
- * Supabase is stubbed at the browser-client module so the realtime hook wires
- * for real (registry included) without a websocket; the stub hands back the
- * status callback so the SUBSCRIBED catch-up refetch can be driven explicitly.
+ * Supabase stubbed at the browser-client module so the realtime hook wires for
+ * real (registry included) without a websocket; the stub hands back the status
+ * callback so the SUBSCRIBED catch-up refetch can be driven explicitly.
  */
 
 const realtime = vi.hoisted(() => ({
@@ -40,9 +38,9 @@ vi.mock("@/shared/supabase/browser", () => {
 });
 
 
-/** Fresh per test: the realtime registry shares one channel per workspace id
- *  across mounts (module singleton with a teardown grace window), so a reused
- *  id would hand the second test the first test's already-connected entry. */
+/** ⚠ Fresh per test: realtime registry shares one channel per workspace id
+ *  across mounts (module singleton + teardown grace window), so a reused id
+ *  hands the second test the first test's already-connected entry. */
 let workspaceId = "";
 let workspaceSeq = 0;
 
@@ -157,7 +155,6 @@ describe("chats page", () => {
       await screen.findByRole("heading", { name: "Port the chats page" })
     ).toBeInTheDocument();
 
-    // The RSC's four server reads, now client queries.
     expect(requestsTo("/api/workspaces/resolve")[0].url).toContain(
       `segment=${SEGMENT}`
     );
@@ -165,7 +162,6 @@ describe("chats page", () => {
     expect(requestsTo("/api/chats")[0].headers["x-workspace-id"]).toBe(workspaceId);
     expect(requestsTo("/api/chats/folders")).toHaveLength(1);
 
-    // Folder grouping and the per-selection transcript both render.
     expect(
       screen.getByRole("button", { name: "Folder sharing: private" })
     ).toBeInTheDocument();

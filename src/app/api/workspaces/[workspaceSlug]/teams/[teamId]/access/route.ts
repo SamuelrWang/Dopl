@@ -15,7 +15,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** GET /api/workspaces/[workspaceSlug]/teams/[teamId]/access — list grants. Any active member. */
+/** GET — a team's grants. Any active member. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -31,10 +31,7 @@ export const GET = withUserAuth(
   }
 );
 
-/**
- * PUT /api/workspaces/[workspaceSlug]/teams/[teamId]/access — set or remove
- * one grant. `level: null` removes. Admin+ only.
- */
+/** PUT — set or remove one grant; `level: null` removes. Admin+. */
 export const PUT = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -66,8 +63,7 @@ export const PUT = withUserAuth(
       return toErrorResponse(err);
     }
   },
-  // sessionOnly: setting/removing a team's resource grant is an admin
-  // access-control mutation, not an agent one — same class as a role change.
+  // sessionOnly: an access-control mutation, same class as a role change.
   { sessionOnly: true }
 );
 

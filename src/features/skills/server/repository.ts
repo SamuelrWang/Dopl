@@ -19,9 +19,8 @@ import {
 } from "./dto";
 
 /**
- * Raw I/O for the skills feature. Service-role client bypasses RLS, so
- * every query takes a `workspaceId` filter that the service is
- * responsible for setting from the auth context.
+ * Raw I/O for skills. ⚠ Service-role client bypasses RLS — every query
+ * takes a `workspaceId` filter the service sets from the auth context.
  */
 
 // ─── Skills ─────────────────────────────────────────────────────────
@@ -30,17 +29,14 @@ export async function listSkillsForWorkspace(
   workspaceId: string,
   opts: { includeConnectors?: boolean } = {}
 ): Promise<Skill[]> {
-  // The summary projection drops the connectors JSONB to keep the MCP
-  // skill_list payload lean; callers that render connector chips (the
-  // index page) opt into the full row. mapSkillSummaryRow fills
-  // `connectors: []` for the lean shape.
+  // Summary projection drops the connectors JSONB to keep skill_list lean;
+  // mapSkillSummaryRow fills `connectors: []` for that shape.
   const includeConnectors = opts.includeConnectors ?? false;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("skills")
-    // Dynamic projection: cast to the full-col string so PostgREST's
-    // literal-type inference doesn't explode into a giant union; the
-    // row casts below carry the real shape per branch.
+    // ⚠ Cast to the full-col string so PostgREST's literal-type inference
+    // doesn't explode into a giant union; row casts below carry real shapes.
     .select((includeConnectors ? SKILL_COLS : SKILL_SUMMARY_COLS) as typeof SKILL_COLS)
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
@@ -124,19 +120,19 @@ export interface InsertSkillArgs {
   connectors?: unknown[];
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
-  /** Defaults to `'public'` (matches DB column default). App-level
-   *  `createSkill` passes `'private'` for new items. */
+  /** Defaults `'public'` (DB column default); `createSkill` passes
+   *  `'private'`. */
   visibility?: "public" | "private";
-  /** Optional organizing label; null/omitted = unfiled. */
+  /** null/omitted = unfiled. */
   folder?: string | null;
-  /** Initial SKILL.md body (F-029: body is a column on the skill row). */
+  /** Initial SKILL.md body (a column on the skill row). */
   body?: string;
   createdBy: string | null;
   source: SkillWriteSource;
 }
 
-/** The row shape for one skill insert — shared by the single and batch forms
- *  so the column defaults can never drift between them. */
+/** Shared by the single and batch inserts so column defaults can't drift
+ *  between them. */
 function skillInsertRow(args: InsertSkillArgs) {
   return {
     workspace_id: args.workspaceId,
@@ -148,10 +144,9 @@ function skillInsertRow(args: InsertSkillArgs) {
     when_not_to_use: args.whenNotToUse ?? null,
     connectors: args.connectors ?? [],
     status: args.status ?? "active",
-    // Default writable-by-agents, matching knowledge_bases + createSkill's
-    // `?? true`. Callers that want a resource read-only to agents (the seed)
-    // pass `false` EXPLICITLY so the intent is legible and can't be flipped
-    // by a default change (audit F-10b consistency).
+    // Agent-writable by default, matching knowledge_bases + createSkill's
+    // `?? true`. Callers wanting agent-read-only (the seed) pass `false`
+    // EXPLICITLY so a default change can't silently flip them.
     agent_write_enabled: args.agentWriteEnabled ?? true,
     visibility: args.visibility ?? "public",
     folder: args.folder ?? null,
@@ -175,12 +170,8 @@ export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
   return mapSkillRow(data as SkillRow);
 }
 
-/**
- * Insert many skills in ONE statement. For the new-workspace seed, which
- * inserted its starter skills one awaited round-trip at a time on the
- * post-signup redirect path. Rows come back in insert order (`RETURNING`),
- * but callers should key off `slug` rather than index.
- */
+/** Insert many skills in ONE statement — the seed sits on the post-signup
+ *  redirect path. ⚠ Key off `slug`, not insert order. */
 export async function insertSkills(argsList: InsertSkillArgs[]): Promise<Skill[]> {
   if (argsList.length === 0) return [];
   const db = supabaseAdmin();
@@ -200,25 +191,24 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
-  /** Full three-way sharing since skill_team_sharing — the service
-   *  enforces who may change it; this repo trusts whatever it gets. */
+  /** ⚠ Repo trusts whatever it gets — the service enforces who may
+   *  re-scope. */
   visibility?: "public" | "private";
   accessMode?: "workspace" | "teams";
-  /** Organizing label; null clears it (unfiled). */
+  /** null clears it (unfiled). */
   folder?: string | null;
-  /** Display metadata (JSONB) — set by seed and duplicate, never by
-   *  the REST/MCP update surface. */
+  /** Display metadata (JSONB). Set by seed and duplicate, never by the
+   *  REST/MCP update surface. */
   connectors?: unknown[];
   lastEditedBy?: string | null;
   lastEditedSource?: SkillWriteSource;
 }
 
-// CAS caveat: since F-029, body writes also UPDATE this row, so the
-// skills_touch_updated_at trigger bumps `updated_at` on every body save.
-// A client holding an `expectedUpdatedAt` metadata token across a body
-// autosave would falsely 412. No caller passes it today — if metadata
-// optimistic concurrency is ever adopted, key it on a dedicated clock
-// (as body writes do with body_updated_at), not `updated_at`.
+// ⚠ CAS caveat: body writes UPDATE this row too, so skills_touch_updated_at
+// bumps `updated_at` on every body save. An `expectedUpdatedAt` metadata
+// token held across a body autosave would falsely 412. No caller passes one
+// today — if metadata CAS is ever adopted, give it a dedicated clock (as
+// body writes have body_updated_at), not `updated_at`.
 export async function updateSkillRow(
   id: string,
   patch: UpdateSkillPatch
@@ -250,9 +240,8 @@ export async function updateSkillRow(
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
-  // Optimistic concurrency: when expectedUpdatedAt is supplied, the
-  // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
-  // the row changed since the caller read it → return null (stale).
+  // With expectedUpdatedAt the `updated_at` filter makes this an atomic CAS.
+  // 0 rows → row changed since the caller read it → null (stale).
   let query = db.from("skills").update(update).eq("id", id);
   if (expectedUpdatedAt !== undefined) {
     query = query.eq("updated_at", expectedUpdatedAt);
@@ -267,10 +256,9 @@ export async function updateSkillRow(
 }
 
 /**
- * PERMANENTLY delete a skill. Deletion is immediate and irreversible —
- * there is no trash (2026-08-07). Workspace-scoped as defense-in-depth.
- * The SKILL.md body lives in columns on this row (F-029); skill_versions,
- * and skill_events cascade via `ON DELETE CASCADE`.
+ * ⚠ PERMANENT delete — no trash, no restore. Workspace-scoped as
+ * defense-in-depth. Body lives in columns on this row; skill_versions and
+ * skill_events go via `ON DELETE CASCADE`.
  */
 export async function hardDeleteSkill(
   workspaceId: string,
@@ -285,13 +273,10 @@ export async function hardDeleteSkill(
   if (error) throw error;
 }
 
-// ─── Skill body (the single SKILL.md, now columns on the skill row) ──
+// ─── Skill body (the single SKILL.md, columns on the skill row) ──────
 
-/**
- * Read a live skill's SKILL.md body, synthesized as a `SkillFile` from
- * the body columns. `updatedAt` is `body_updated_at` — the CAS clock /
- * version token. Null when the skill is missing or trashed.
- */
+/** Body synthesized as a `SkillFile` from the body columns. `updatedAt` is
+ *  `body_updated_at` — the CAS clock. Null when missing or trashed. */
 export async function readSkillBody(
   workspaceId: string,
   skillId: string
@@ -329,14 +314,11 @@ export async function updateSkillBody(
   expectedBodyUpdatedAt?: string
 ): Promise<SkillFile | null> {
   const db = supabaseAdmin();
-  // body_updated_at is the CAS clock. A dedicated BEFORE-UPDATE trigger
-  // (skills_touch_body_updated_at) stamps it with Postgres `now()` —
-  // microsecond precision — whenever `body` changes, so two writes in the
-  // same JS millisecond can't mint colliding tokens and defeat the CAS
-  // (F-25). It fires ONLY on a body change, keeping this clock independent
-  // of skills.updated_at (moved by skills_touch_updated_at on metadata
-  // edits): metadata PATCHes never touch it, and a body write never
-  // false-412s a metadata precondition.
+  // ⚠ body_updated_at is the CAS clock. skills_touch_body_updated_at
+  // (BEFORE UPDATE) stamps Postgres `now()` — microsecond precision, so two
+  // writes in the same JS millisecond can't mint colliding tokens. Fires
+  // ONLY on a body change, keeping it independent of skills.updated_at:
+  // metadata PATCHes never touch it, body writes never false-412 metadata.
   const update = {
     body: patch.body,
     body_edited_by: patch.editedBy,
@@ -357,12 +339,8 @@ export async function updateSkillBody(
 
 // ─── Knowledge bases (cross-feature avoiding) ───────────────────────
 
-/**
- * Lightweight existence check used by the chip resolver.
- *
- * Owns its own query rather than importing from features/knowledge so
- * skills doesn't take a cross-feature dependency (ENGINEERING.md §16).
- */
+/** Existence check for the chip resolver. Queried here rather than imported
+ *  from features/knowledge to avoid a cross-feature dependency. */
 export async function knowledgeBaseSlugExists(
   workspaceId: string,
   slug: string
@@ -379,10 +357,6 @@ export async function knowledgeBaseSlugExists(
   return data !== null;
 }
 
-/**
- * Lists active workspace KBs as `{slug, name}` pairs for the detail-page
- * picker.
- */
 export async function listWorkspaceKnowledgeBases(
   workspaceId: string
 ): Promise<Array<{ slug: string; name: string }>> {

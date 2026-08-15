@@ -1,23 +1,13 @@
 /**
- * INVARIANT SUITE — the MCP credit consume path.
+ * INVARIANT SUITE — MCP credit consume path (runs ONCE PER TOOL CALL). Pins:
+ *   1. QUERY BUDGET — three round trips (billing row, member count, RPC); NO
+ *      `COUNT(*)` over `ontology_objects`, NO second `workspace_billing` read.
+ *      Mock CALL COUNTS are the only way to state that.
+ *   2. WHICH WINDOW IT CHARGES — verdict read first, FREE verdict ignores a
+ *      subscription anchor (self-heal for mid-period cancellation).
  *
- * This function runs ONCE PER MCP TOOL CALL, so two things are pinned that a
- * behavioural test would normally not bother with:
- *
- *   1. ITS QUERY BUDGET. Three round trips: the billing row, the member count,
- *      the RPC — and specifically NO `COUNT(*)` over `ontology_objects`, and
- *      NO second read of `workspace_billing`. It used to do five because it
- *      called `getWorkspaceEntitlements` (which fans out to the object count
- *      for a cap this path does not consult) and then re-read billing for the
- *      period anchor. Mock CALL COUNTS are the only way to state that.
- *   2. WHICH WINDOW IT CHARGES. The plan verdict is read first, and a FREE
- *      verdict ignores a subscription anchor outright — the self-heal for a
- *      workspace canceled mid-period, which otherwise stays locked out of MCP
- *      until the dead anchor expires.
- *
- * The repository is mocked; `entitlements.ts` is REAL, because the whole point
- * of the lean verdict helper is that it is the same `paidEntitlement` logic
- * and not a second copy of it.
+ * ⚠ Repository mocked; `entitlements.ts` is REAL, so the lean verdict helper
+ * is proven to be the same `paidEntitlement` logic, not a copy.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -41,7 +31,7 @@ import {
 const mockRepo = vi.mocked(repo);
 const WS = "ws-1";
 
-/** 2026-08-11, mid-month — the anchor fixtures below straddle it. */
+/** 2026-08-11, mid-month — anchor fixtures below straddle it. */
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 const CALENDAR_START = "2026-08-01T00:00:00.000Z";
 const CALENDAR_END = "2026-09-01T00:00:00.000Z";
@@ -55,7 +45,6 @@ function billing(overrides: Partial<WorkspaceBillingRow> = {}): WorkspaceBilling
     stripeSubscriptionId: "sub_1",
     stripePriceId: "price_seat",
     seatCount: 3,
-    // A LIVE anchor: started before `NOW`, ends after it.
     currentPeriodStart: "2026-07-21T09:30:00.000Z",
     currentPeriodEnd: "2026-08-21T09:30:00.000Z",
     cancelAtPeriodEnd: false,
@@ -137,9 +126,8 @@ describe("consumeMcpCredits — the limit is the ENTITLED plan, never the raw co
   });
 
   it("a DEGRADED solo (2 members) gets the FREE limit and the calendar month", async () => {
-    // Same backstop `entitlements.ts › paidEntitlement` applies to the object
-    // cap — reading `workspace_billing.plan` here would hand this workspace
-    // 10,000 credits it is not entitled to, on the subscription's own window.
+    // Reading `workspace_billing.plan` here would hand 10,000 credits it is
+    // not entitled to, on the subscription's own window.
     setup({ billing: billing({ plan: "solo", seatCount: 1 }), members: 2 });
     const res = await consumeMcpCredits(WS);
     expect(res.limit).toBe(500);
@@ -158,14 +146,10 @@ describe("consumeMcpCredits — the limit is the ENTITLED plan, never the raw co
 });
 
 /**
- * B2 — THE CANCELLATION LOCKOUT, end to end.
- *
- * The stuck state: a team workspace spent 8,000 credits this period, then
- * canceled mid-period. The row still carries a period anchor ending in the
- * FUTURE. Honouring it would charge the next call to `2026-07-21…` — the key
- * that already holds 8,000 used against a NEW limit of 500 — and MCP would
- * refuse every call for the rest of the dead period. This heals on the next
- * consume, with no webhook and no cron.
+ * Cancellation lockout, end to end. Team workspace spent 8,000 credits, then
+ * canceled mid-period; row keeps a FUTURE-ending anchor. Honouring it charges
+ * the next call to a key already at 8,000 used against a NEW 500 limit. Heals
+ * on the next consume — no webhook, no cron.
  */
 describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", () => {
   const CANCELED = () =>
@@ -174,7 +158,6 @@ describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", (
       status: "canceled",
       stripeSubscriptionId: null,
       seatCount: null,
-      // The anchor a pre-fix cancellation left behind, still live.
       currentPeriodStart: "2026-07-21T09:30:00.000Z",
       currentPeriodEnd: "2026-08-21T09:30:00.000Z",
     });
@@ -201,8 +184,8 @@ describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", (
   });
 
   it("holds even when the sub row was NOT cleaned up (status canceled, plan still team)", async () => {
-    // The rows a webhook never reached: `plan` still reads "team". The VERDICT
-    // is what the period rule consults, and a canceled status is not entitled.
+    // Webhook never reached: `plan` still "team". Period rule consults the
+    // VERDICT, and canceled is not entitled.
     setup({
       billing: billing({ plan: "team", status: "canceled" }),
       members: 3,
@@ -213,7 +196,6 @@ describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", (
   });
 
   it("a still-LIVE paid workspace keeps its own billing-date window", async () => {
-    // The other half of the rule: this must not become "everyone gets the 1st".
     setup({ billing: billing(), members: 3 });
     expect((await consumeMcpCredits(WS)).periodStart).toBe(
       "2026-07-21T09:30:00.000Z"
@@ -228,13 +210,11 @@ describe("the settings meter resolves the SAME window as enforcement", () => {
     mockRepo.getWorkspaceCreditsUsed.mockResolvedValue(12);
 
     const charged = await consumeMcpCredits(WS);
-    // `status-service.ts` passes the ENTITLED plan, which is "free" here.
     const metered = await summarizeCredits(WS, "free", row);
 
     expect(metered.periodStart).toBe(charged.periodStart);
     expect(metered.periodEnd).toBe(charged.periodEnd);
     expect(metered.limit).toBe(charged.limit);
-    // And the meter read the counter under the window the gate charged.
     expect(mockRepo.getWorkspaceCreditsUsed).toHaveBeenCalledWith(
       WS,
       charged.periodStart

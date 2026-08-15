@@ -1,24 +1,17 @@
 /**
- * INVARIANT SUITE — knowledge deletes are PERMANENT (soft-delete removal,
- * 2026-08-07, RETIREMENT-UNWIRING-PLAN §2b / D6).
- *
- * Trash, restore and purge are gone as product behaviour. `deleteBase` /
- * `deleteFolder` / `deleteEntry` (and the path-addressed `deleteByPath` the
- * MCP kb ops used to flow through) remove rows immediately. What these pin:
- *
- *   - each delete calls the workspace-scoped HARD-delete repo fn, never a
- *     `deleted_at` stamp — the `mark*Deleted` / `restore*Row` exports are gone
- *     from the repository, so the factory mock below cannot declare them and a
- *     reintroduced soft-delete call would fail to resolve;
- *   - the F-10 agent gate still refuses an agent on an `agent_write_enabled=false`
- *     base, on every one of the four delete paths (the destructive path must not
- *     become more permissive than content writes just because it got simpler);
+ * INVARIANT SUITE — knowledge deletes are PERMANENT. Pins:
+ *   - every delete calls the workspace-scoped HARD-delete repo fn, never a
+ *     `deleted_at` stamp. `mark*Deleted` / `restore*Row` no longer exist, so
+ *     the factory mock can't declare them and a reintroduced soft-delete fails
+ *     to resolve;
+ *   - the F-10 agent gate refuses an agent on an `agent_write_enabled=false`
+ *     base across all four delete paths — the destructive path must not become
+ *     more permissive than content writes;
  *   - `deleteByPath` routes folder vs. entry to the right hard delete.
  *
- * The subtree semantics of a folder delete (entries removed rather than
- * SET-NULL-orphaned at the base root) live in SQL-adjacent repo code and are
- * covered by `scripts/smoke-knowledge-audit-probes.ts` PROBE 7 against a real
- * database; here the repo is mocked, so only the wiring is in scope.
+ * ⚠ Folder-delete SUBTREE semantics (entries removed, not SET-NULL-orphaned)
+ * are NOT covered here — the repo is mocked. See
+ * `scripts/smoke-knowledge-audit-probes.ts` PROBE 7 against a real database.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -77,7 +70,7 @@ function base(overrides: Partial<KnowledgeBase> = {}): KnowledgeBase {
     slug: "base",
     publicId: "pub-1",
     description: null,
-    // Agent-writable by default so the F-10 gate is opt-in per test.
+    // Agent-writable by default: F-10 gate is opt-in per test.
     agentWriteEnabled: true,
     visibility: "public",
     accessMode: "workspace",

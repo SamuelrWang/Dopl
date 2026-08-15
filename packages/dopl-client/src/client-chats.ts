@@ -1,9 +1,9 @@
 /**
- * Chats (archive) method group — link 5 of the chain documented in
- * `client-base.ts`. Pure delegation to `chats.ts`; no HTTP here.
+ * Chats (archive) method group — link 5 of the chain in `client-base.ts`. Pure
+ * delegation to `chats.ts`; no HTTP here.
  *
- * Agent-exported conversation archive. Reads return the caller's own chats
- * plus workspace-public ones; writes are owner-scoped server-side.
+ * Reads return the caller's own chats plus workspace-public ones; writes are
+ * owner-scoped server-side.
  */
 
 import { OntologyMethods } from "./client-ontology.js";

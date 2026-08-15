@@ -1,16 +1,8 @@
-/*
- * Knowledge V2 — self-contained styles for the three-pane redesign.
- *
- * Deliberately isolated from app-shell.module.css and the global token
- * system so the rework can iterate without touching the live knowledge
- * page. Palette + type scale are tuned to match the reference mock
- * (small fonts, hairline rules, neutral greys). Promote to global tokens
- * only when v2 ships and replaces v1.
- */
+/* Knowledge V2 styles. Isolated from app-shell.module.css + global token
+   system on purpose. Promote to global tokens only when v2 replaces v1. */
 
 .shell {
-  /* All values alias the global design tokens (docs/DESIGN-SYSTEM.md);
-     the --kv-* names are kept so the rules below stay readable. */
+  /* --kv-* alias global design tokens (docs/DESIGN-SYSTEM.md). */
   --kv-panel: var(--panel-surface);
   --kv-border: var(--border-default);
   --kv-border-strong: var(--border-strong);
@@ -21,8 +13,8 @@
   --kv-row-hover: var(--surface-raised-1);
   --kv-row-active: var(--surface-raised-3);
 
-  /* Surface geometry (margins/border/shadow/radius) comes from the global
-     .page-float composed alongside this class in knowledge-v2.tsx. */
+  /* Surface geometry (margin/border/shadow/radius) from global .page-float,
+     composed alongside this class in knowledge-v2.tsx. */
   display: flex;
   font-family: var(--font-app), system-ui, sans-serif;
   color: var(--kv-text);
@@ -46,9 +38,8 @@
   border-right: 1px solid var(--kv-border);
 }
 
-/* Breadcrumb bar at the top of the base-detail list pane: "Knowledge ›
-   {base}". Small text on purpose — the base's name is the DETAIL pane's
-   header, so a second title here would read as a second page. */
+/* Small text on purpose: base name is the DETAIL pane header, so a second
+   title here reads as a second page. */
 .paneCrumbs {
   display: flex;
   align-items: center;
@@ -60,14 +51,10 @@
 .headSpacer {
   flex: 1;
 }
-/* The search well lives in the shared <SearchField> primitive
-   (src/shared/ui/search-field.tsx) — concave well + leading icon. */
+/* Search well: shared <SearchField> (src/shared/ui/search-field.tsx). */
+/* Filter tabs: shared <SegmentedControl> (src/shared/ui/segmented-control.tsx).
+   Home mode only. */
 
-/* Filter tabs live in the shared <SegmentedControl> primitive
-   (src/shared/ui/segmented-control.tsx) — a trackless row of stadium
-   pills. Home mode only; the base-detail pane has one base to show. */
-
-/* Scrolling tree body. Top hairline closes off the breadcrumb zone. */
 .listBody {
   flex: 1;
   min-height: 0;
@@ -135,7 +122,6 @@
   font-size: var(--text-caption);
   color: var(--kv-text-3);
 }
-/* Hover-revealed row actions (+entry / +folder / more). */
 .treeRowGroup {
   padding-right: 8px;
 }
@@ -171,7 +157,6 @@
   opacity: 0.4;
   cursor: default;
 }
-/* Base-root create affordance. */
 .addRow {
   display: flex;
   align-items: center;
@@ -213,7 +198,6 @@
   background: var(--kv-panel);
 }
 
-/* Detail top bar: close / nav / title / actions */
 .detailTop {
   display: flex;
   align-items: center;
@@ -238,7 +222,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Breadcrumb in the detail top bar (entry selection). */
 .crumbs {
   display: inline-flex;
   align-items: center;
@@ -280,10 +263,8 @@
   margin: 0 4px;
 }
 
-/* Toolbar band — the slim header strip below the breadcrumb that hosts the
-   rich-text formatting toolbar for an open entry (replaces the old dead
-   Overview/Messages/Attachments tab row). Sits above the scroll body so
-   formatting controls stay reachable while a long document scrolls. */
+/* Entry formatting toolbar. Sits above the scroll body so controls stay
+   reachable while a long document scrolls. */
 .detailToolbarBand {
   display: flex;
   align-items: center;
@@ -292,7 +273,6 @@
   border-bottom: 1px solid var(--kv-border);
 }
 
-/* Scroll body — generous padding so content sits well off the edges. */
 .detailBody {
   flex: 1;
   min-height: 0;
@@ -303,8 +283,6 @@
   width: 0;
 }
 
-/* Nested meta card — framed like the study-notes intro panel: strong
-   hairline, 14px radius, uppercase label strip over the body. */
 .metaCard {
   border: 1px solid var(--kv-border-strong);
   border-radius: 14px;
@@ -333,9 +311,8 @@
   gap: 18px;
 }
 
-/* Editable fields — concave wells in the study-notes language. The global
-   .concave-field kit recipe (composed alongside these in meta-card.tsx)
-   supplies the pressed-in surface; these add layout + type only. */
+/* Global .concave-field kit recipe (composed in meta-card.tsx) supplies the
+   pressed-in surface; these add layout + type only. */
 .fieldGroup {
   display: flex;
   flex-direction: column;
@@ -411,7 +388,7 @@
   color: var(--kv-text);
   font-weight: 500;
 }
-/* Variant for rows whose value wraps (team chips) — key stays top-aligned. */
+/* Wrapping values (team chips): key stays top-aligned. */
 .metaRowTop {
   display: flex;
   align-items: flex-start;
@@ -426,7 +403,6 @@
   gap: 6px;
 }
 
-/* Visibility pill — the real scope label (Private / Team / Workspace). */
 .pillBlue {
   display: inline-flex;
   align-items: center;
@@ -438,8 +414,8 @@
   color: var(--link);
 }
 
-/* Shrink the shared DocEditor's prose to the v2 type scale (its defaults are
-   16px). Scoped to this wrapper so v1 KB detail keeps its larger size. */
+/* Shrink shared DocEditor prose to v2 type scale (defaults 16px). Scoped to
+   this wrapper so v1 KB detail keeps its larger size. */
 .editorScope :global(.ProseMirror) {
   font-size: var(--text-lead);
   line-height: 1.625;
@@ -488,19 +464,15 @@
 }
 
 /* ═════════════════════ KNOWLEDGE HOME (the card grid) ═════════════════════
-   The `/knowledge` mode: one page-wide column instead of the two panes.
-   `.shell` still applies — it carries the --kv-* aliases these rules read —
-   so only the axis changes. */
+   `/knowledge` mode: one page-wide column instead of two panes. `.shell` still
+   applies — it carries the --kv-* aliases these rules read. */
 
 .shellHome {
   flex-direction: column;
   min-height: 0;
 }
-/* THE WHOLE COLUMN SCROLLS, not an inner region. With the hero + assistant
-   box above the grid, an inner-only scroller (the old .homeBody overflow)
-   left the wheel dead over the hero and squeezed the grid into whatever
-   sliver remained — scrolling the page is what reveals the cards, so the
-   hero must scroll away with it. */
+/* ⚠ WHOLE COLUMN SCROLLS, not an inner region. Inner-only scroller leaves the
+   wheel dead over the hero and squeezes the grid into the leftover sliver. */
 .home {
   display: flex;
   flex-direction: column;
@@ -517,13 +489,9 @@
   gap: 12px;
   padding: 18px 22px 12px;
 }
-/* Hero banner — image band above the scope pills, glass panel overlaid by
-   the TSX (shared LiquidGlass), and the chat panel attached under it.
-   ONE ROUNDED CONTAINER, TWO BANDS: the border and the 14px radius live here
-   and `overflow:hidden` clips both children, so the image owns the top
-   corners and the chat panel owns the bottom ones with no seam, no gap and
-   no second border between them. Height is now auto — the chat panel grows
-   the hero, and everything below it (pills, grid) is in normal flow. */
+/* ONE ROUNDED CONTAINER, TWO BANDS (image + chat panel): border and radius
+   live here, `overflow:hidden` clips both children, so no seam/gap/second
+   border between them. Height auto — chat panel grows the hero. */
 .homeHero {
   position: relative;
   display: flex;
@@ -534,9 +502,8 @@
   overflow: hidden;
   border: 1px solid var(--kv-border-strong);
 }
-/* The image band. It is the LiquidGlass panel's containing block — the glass
-   is positioned against this fixed 210px, so attaching the chat below can
-   never stretch it. The image still crops via cover. */
+/* LiquidGlass panel's containing block: glass positions against this fixed
+   210px, so attaching the chat below can never stretch it. */
 .homeHeroBand {
   position: relative;
   flex: 0 0 auto;
@@ -548,17 +515,16 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Decorative: no native image drag-ghost, no selection, no cursor story. */
+  /* Decorative: no drag-ghost, no selection. */
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
 }
-/* HERO CHAT — the height animation, and nothing else. Everything the panel
-   looks like is kit + tokens in `home/hero-chat.tsx`; what cannot be
-   expressed there is this: `grid-template-rows` interpolating 0fr→1fr over an
-   `overflow:hidden` child is the auto-height transition that needs no
-   measurement — no ResizeObserver, and no max-height guess that either clips
-   a long conversation or eases against a number the content never reaches. */
+/* HERO CHAT height animation only; the panel's look is kit + tokens in
+   home/hero-chat.tsx. `grid-template-rows` 0fr→1fr over an `overflow:hidden`
+   child = auto-height transition with no measurement: no ResizeObserver, no
+   max-height guess that clips long conversations or eases to an unreached
+   number. */
 .heroChatReveal {
   display: grid;
   grid-template-rows: 0fr;
@@ -567,16 +533,14 @@
 .heroChatReveal[data-open="true"] {
   grid-template-rows: 1fr;
 }
-/* Both are load-bearing: without `overflow:hidden` the content ignores the
-   0fr track, and without `min-height:0` the grid item refuses to shrink
-   below its content. */
+/* ⚠ Both load-bearing: without `overflow:hidden` content ignores the 0fr
+   track; without `min-height:0` the grid item won't shrink below content. */
 .heroChatRevealInner {
   overflow: hidden;
   min-height: 0;
 }
-/* The conversation log caps at roughly ten body lines and scrolls inside
-   itself past that — the box never grows beyond this, the reveal animation
-   eases to the capped height, and the input row stays put below. */
+/* Log caps at ~10 body lines then scrolls itself, so the reveal animation
+   eases to a capped height and the input row stays put below. */
 .heroChatLog {
   max-height: calc(var(--text-body) * 1.625 * 10);
   overflow-y: auto;
@@ -596,8 +560,7 @@
   }
 }
 
-/* Hairline sits ABOVE the filters (between the hero and the pills), not
-   between the pills and the grid. */
+/* Hairline sits ABOVE the filters (hero↔pills), not between pills and grid. */
 .homeFilters {
   padding: 14px 22px;
   border-top: 1px solid var(--kv-border);
@@ -607,9 +570,8 @@
   padding: 4px 22px 26px;
 }
 
-/* Fixed-size cells: `1fr` columns + a fixed row height, so every card is
-   the same size no matter how long its description is. Three across at the
-   desktop width the app opens at, two below it. */
+/* Fixed-size cells: `1fr` columns + fixed row height, so card size is
+   independent of description length. */
 .cardGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -634,23 +596,17 @@
   border-radius: 12px;
   background: var(--bg-elevated);
   cursor: pointer;
-  /* Elevated resting face — the bento float recipe (soft double shadow),
-     so cards sit OFF the panel instead of flat on it. */
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 6px 18px rgba(0, 0, 0, 0.05);
   transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
 
-  /* THE CARD'S SCOPE HUE, set once here and read by the two places that must
-     agree: the visibility pill top-right and the description's accent sliver.
-     One variable rather than two colour rules, so "the line matches the pill"
-     cannot drift — a scope modifier below rebinds it and both move together.
-     The neutral default stands in for a card whose scope has no modifier. */
+  /* Card scope hue, read by both places that must agree: `.cardScope` pill and
+     `.cardAccent` sliver. One variable so they cannot drift; scope modifiers
+     below rebind it. Neutral default = scope with no modifier. */
   --kv-scope: var(--kv-text-3);
 }
-/* Scope hues, from the global status/link palette — no local colours.
-   Public reads as the permissive/"shared with everyone" green, Team as the
-   palette's one blue, Private as the neutral ink it already used. */
+/* Scope hues from the global status/link palette — no local colours. */
 .scopePrivate {
   --kv-scope: var(--text-secondary);
 }
@@ -682,9 +638,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Visibility pill — same recipe as the base overview's `.pillBlue`, but the
-   hue comes from `--kv-scope` so each level is its own colour: a soft tint of
-   the hue behind the word, the hue itself as the ink. */
+/* Same recipe as `.pillBlue`, but hue comes from `--kv-scope`. */
 .cardScope {
   flex: 0 0 auto;
   display: inline-flex;
@@ -697,11 +651,9 @@
   color: var(--kv-scope);
 }
 
-/* The nested inset panel: a step darker than the card face, with a
-   vertical accent sliver down the left of the description. */
-/* The inset well spans everything below the name — description, meta and the
-   Open row are ROWS inside it, fenced by hairlines. The description row
-   flexes so the foot stays pinned to the card's bottom on fixed heights. */
+/* Inset well spans everything below the name; description/meta/Open are rows
+   fenced by hairlines. Description row flexes so the foot stays pinned to the
+   card bottom at fixed heights. */
 .cardInset {
   display: flex;
   flex-direction: column;
@@ -718,8 +670,8 @@
   min-height: 0;
   padding: 9px 10px;
 }
-/* Divider rows: the hairline is inset from the well's edges (margin carries
-   the horizontal inset, so the border stops short of the rounded corners). */
+/* Margin carries the horizontal inset so the hairline stops short of the
+   well's rounded corners. */
 .cardMetaRow {
   display: flex;
   flex-direction: column;
@@ -727,9 +679,7 @@
   padding: 7px 0;
   border-top: 1px solid var(--kv-border);
 }
-/* Carries the SAME hue as the visibility pill (see `--kv-scope` on `.card`),
-   so the sliver beside the description restates the card's scope rather than
-   being one more hairline. */
+/* Same hue as the visibility pill (`--kv-scope` on `.card`). */
 .cardAccent {
   flex: 0 0 2px;
   align-self: stretch;
@@ -742,8 +692,7 @@
   font-size: var(--text-caption);
   font-style: italic;
   line-height: 1.45;
-  /* Reserve three lines even when the row is squeezed by the fixed card
-     height — the clamp below caps at 3, this floors at 3. */
+  /* Floors at 3 lines; the -webkit-line-clamp below caps at 3. */
   min-height: calc(var(--text-caption) * 1.45 * 3);
   color: var(--kv-text-2);
   display: -webkit-box;
@@ -757,14 +706,14 @@
 
 .cardMeta {
   font-size: var(--text-micro);
-  /* Same gray as the storage meter's label (text-secondary), not muted. */
+  /* Same gray as storage-meter label (text-secondary), not muted. */
   color: var(--kv-text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Star on the left, Open on the right — two real <button>s now that the card
-   itself is an <article> rather than one big button (see base-card.tsx). */
+/* Card is an <article>, not one big button (base-card.tsx), so the foot holds
+   two real <button>s. */
 .cardFoot {
   display: flex;
   align-items: center;
@@ -774,13 +723,10 @@
   border-top: 1px solid var(--kv-border);
 }
 
-/* The per-user star. Unstarred is a MUTED OUTLINE — the same faint grey the
-   card uses for a missing description, so an unstarred grid reads as unmarked
-   rather than as N disabled controls. Starred swaps to the global `--warning`
-   token, which is the palette's gold: it exists in all four token copies
-   (globals.css, apps/desktop-ui tokens.css, dopl-desktop-app session
-   tokens.css, and the .lightScope block in app-shell.module.css), so no new
-   token was minted for one icon. */
+/* Starred uses global `--warning` (palette gold) rather than a new token: it
+   already exists in all four token copies — globals.css, apps/desktop-ui
+   tokens.css, dopl-desktop-app session tokens.css, and the .lightScope block
+   in app-shell.module.css. */
 .cardStar {
   display: inline-flex;
   align-items: center;
@@ -804,9 +750,7 @@
   color: var(--warning);
 }
 
-/* Composed onto the kit's .btn-light face. Stadium ends (the `.seg-pill`
-   geometry), so the one CTA on the card reads as a button rather than as
-   another rounded rectangle among the card's 12/9/7px corners. */
+/* Composed onto the kit's .btn-light face; stadium ends (`.seg-pill`). */
 .cardOpen {
   display: inline-flex;
   align-items: center;
@@ -819,7 +763,6 @@
   color: var(--kv-text);
 }
 
-/* Trailing dashed cell — create. */
 .cardNew {
   display: flex;
   flex-direction: column;

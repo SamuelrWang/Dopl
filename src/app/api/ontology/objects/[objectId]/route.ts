@@ -19,8 +19,7 @@ function objectIdOf(auth: WorkspaceAuthContext): string {
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, OntologyObjectUpdateSchema);
-    // Optional `X-Updated-At` precondition — the object's `updatedAt` from a
-    // prior read. Mismatch → 412 ONTOLOGY_STALE_VERSION (mirrors KB/skills).
+    // Optional `X-Updated-At` precondition. Mismatch → 412 ONTOLOGY_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const object = await updateObject(
       buildOntologyContext(auth),

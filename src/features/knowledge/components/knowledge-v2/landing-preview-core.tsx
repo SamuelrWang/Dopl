@@ -14,11 +14,10 @@ export interface KnowledgeV2PreviewCoreProps {
   bases: KnowledgeBase[];
   /** Display names for foreign base owners, keyed by user id. */
   ownerNames?: Record<string, string>;
-  /** `{entryCount, lastEntryUpdatedAt, storageBytes}` keyed by base id — the
-   *  home grid's card meta line + storage bar. Same list response as
-   *  `ownerNames`. */
+  /** Keyed by base id; home card meta line + storage bar. Same list response
+   *  as `ownerNames`. */
   baseStats?: Record<string, KnowledgeBaseStats>;
-  /** The workspace's per-base storage cap in bytes, same response. */
+  /** Per-base storage cap in bytes, same response. */
   kbStorageLimit?: number | null;
   currentUserId: string;
   role: Role;
@@ -30,22 +29,17 @@ export interface KnowledgeV2PreviewCoreProps {
   initialTrees?: Record<string, BaseTree>;
   /** Bundled hero image for the home banner — injected by the host app. */
   heroImageSrc?: string;
-  /** The two router-shaped dependencies, injected (./routing.ts). */
+  /** Router-shaped dependencies, injected (./routing.ts). */
   routing: KnowledgeRouting;
   urlSync?: KnowledgeUrlSync;
 }
 
 /**
- * Knowledge V2 entry point. Mounts the two-mode view (home card grid /
- * base detail) plus the shared create-base dialog, which the home grid's
- * trailing "+ New knowledge base" cell opens. The surrounding app shell is
- * mounted by the host app's layout.
+ * Knowledge V2 entry point: the two-mode view plus the create-base dialog the
+ * home grid's trailing cell opens. App shell is the host layout's.
  *
- * ⚠ THE FILE NAME IS A FOSSIL, not a description: the web app's
- * `./landing-preview.tsx` wrapper (and every `/knowledge` RSC behind it) was
- * deleted with the website, so this "-core" half is now the ONE knowledge
- * entry point and its only caller is the desktop SPA
- * (apps/desktop-ui/src/pages/knowledge/index.tsx). Still Next-free by
+ * ⚠ FILE NAME IS A FOSSIL. This is the ONE knowledge entry point; its only
+ * caller is apps/desktop-ui/src/pages/knowledge/index.tsx. Next-free by
  * construction — `routing`/`urlSync` are injected (./routing.ts).
  */
 export function KnowledgeV2PreviewCore({

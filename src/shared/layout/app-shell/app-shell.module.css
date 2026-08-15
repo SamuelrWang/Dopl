@@ -1,23 +1,13 @@
-/*
- * Scoped, fixed-colorway preview for the Knowledge landing page.
- * Ported from the "Transforms" mockup. Deliberately self-contained and
- * isolated from the global dark/light token system so it can be previewed
- * without touching the canvas colorway or the rest of the app. When this
- * design language is rolled out site-wide, promote these into the global
- * tokens. Fonts reference the already-loaded globals:
- *   --font-geist-sans  = Hanken Grotesk
- *   --font-playfair    = Newsreader
- */
+/* App-shell chrome. Self-contained, isolated from the global dark/light token
+   system. */
 
 .root {
-  /* Palette promoted to globals.css :root — inherited here, not redefined. */
+  /* Palette lives in globals.css :root — inherited, never redefined here. */
   position: fixed;
   inset: 0;
   z-index: 30;
-  /* Dark window frame removed (2026-08-11): the root paints the SAME gray as
-     `.surface`, so the surface's margins read as breathing room instead of a
-     navy border. `--rail` is still defined (other features use it) — it is
-     simply no longer the app frame. */
+  /* Root paints the SAME gray as `.surface`, so surface margins read as
+     breathing room, not a frame. */
   background: var(--shell-surface);
   color: var(--ink);
   font-family: var(--font-app), system-ui, sans-serif;
@@ -31,10 +21,8 @@
 
 .serif { font-family: var(--font-app), system-ui, sans-serif; }
 
-/* ---------- Body layout ---------- */
 .body { flex: 1; display: flex; min-height: 0; }
 
-/* ---------- Surface (rounded panel group) ---------- */
 .surface {
   flex: 1;
   min-width: 0;
@@ -42,22 +30,14 @@
   border-radius: 8px;
   overflow: hidden;
   margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
-  /* Neutral gray frame behind the sidebar + content panels. */
   background: var(--shell-surface);
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Sidebar — the canonical skin for every workspace page (Folkd-style,
-   2026-08-11): gray surface, hug-width gray nav chips (every item carries
-   a resting fill), the active chip RAISED via the kit's .raised-tab
-   recipe, the Pro card under the nav, and the footer pinned to the
-   bottom. Brand is a raised workspace-switcher pill with the glyph.
-   ───────────────────────────────────────────────────────────────────── */
-/* Padding-top is load-bearing, not taste: the brand pill's top edge must land
-   on the page card's top edge. Page card = `.page-float`, whose margin-top is
-   7px inside `.surface`; the sidebar shares that same surface top, so
+/* ⚠ Padding is load-bearing, not taste. Brand pill's top edge must land on the
+   page card's top edge: page card = `.page-float`, margin-top 7px inside
+   `.surface`; sidebar shares that surface top, so
    `padding-top + .brand padding-top` must equal 7px (7 + 0 here).
-   Left/right padding are equal (12px) so the pill's gap to the window edge
+   Left/right equal (12px) so pill's gap to window edge
    (--shell-gap-left 8 + 12 = 20) equals its gap to the page card
    (12 + .page-float margin-left 8 = 20). */
 .sidebar {
@@ -69,22 +49,15 @@
   flex-direction: column;
 }
 
-/* Brand → bordered raised workspace pill (avatar + name + chevrons).
-   Zero padding: every inset the pill has comes from `.sidebar`, so the two
-   alignment equations above are read in one place. */
+/* Zero padding: every inset comes from `.sidebar`, so the alignment equations
+   above are read in one place. */
 .brand { padding: 0; margin-bottom: 14px; }
-/* Resting face is `.auth-btn-3d-light` (globals.css), value for value — the
-   landing/auth white button, the sidebar's active `.raised-tab` chip and this
-   trigger are ONE elevation. It had its own flatter recipe (#e2e2e0 hairline,
-   a single 3px/8px drop) and read as a different, shallower object sitting
-   directly above chips that did not. A real `border` is safe here where it is
-   not on `.raised-tab`: this pill is `width: 100%`, so the extra 2px comes out
-   of the content box, not the layout.
-
-   NO hover/press TRANSFORM, unlike `.auth-btn-3d-light`: the pill's top edge
-   is aligned to the page card's top edge by the padding equation above, and a
-   1px lift is exactly the misalignment that equation exists to prevent. The
-   states are the same shadow family, held in place. */
+/* Resting face = `.auth-btn-3d-light` (globals.css) value for value — that
+   button, the active `.raised-tab` chip and this trigger are ONE elevation.
+   `border` is safe here but not on `.raised-tab`: pill is `width: 100%`, so the
+   extra 2px comes out of the content box, not the layout.
+   ⚠ NO hover/press TRANSFORM, unlike `.auth-btn-3d-light`: a 1px lift is
+   exactly the misalignment the padding equation above exists to prevent. */
 .brandPill {
   display: inline-flex;
   align-items: center;
@@ -149,10 +122,8 @@
 }
 .brandChevron { color: #9a9ea4; flex: 0 0 auto; }
 
-/* Nav group — a left-aligned column of hug-width chips. LAYOUT ONLY: the chip
-   recipe itself (fill, ink, metrics, icon sizing, hover, and the active ink
-   that pairs with `.raised-tab`) is the global kit's `.nav-chip` /
-   `.nav-chip-active`, composed in the TSX. Never re-declare it here — the
+/* LAYOUT ONLY. Chip recipe is the global kit's `.nav-chip` /
+   `.nav-chip-active`, composed in the TSX. ⚠ Never re-declare it here — the
    settings-modal nav renders the same chip off the same two classes. */
 .nav {
   display: flex;
@@ -162,7 +133,6 @@
   padding: 12px 0;
 }
 
-/* Pro upsell card — seated in the open space right under the nav divider. */
 .wordsCard {
   margin-top: 16px;
   background: var(--bg-inset);
@@ -212,9 +182,8 @@
     0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Footer — pinned to the bottom; LAYOUT ONLY, exactly like `.nav`. Its rows
-   are the same kit `.nav-chip` (a <button> instead of an <a>), which is why
-   there is no `.footItem` recipe to keep in sync any more. */
+/* LAYOUT ONLY, like `.nav`. Rows are the same kit `.nav-chip` (<button>, not
+   <a>) — no `.footItem` recipe to keep in sync. */
 .foot {
   margin-top: auto;
   display: flex;
@@ -224,7 +193,6 @@
   padding-top: 12px;
 }
 
-/* ---------- Main panel ---------- */
 .main {
   flex: 1;
   min-width: 0;
@@ -238,10 +206,8 @@
 .scroll { flex: 1; overflow-y: auto; padding-right: 38px; padding-bottom: 40px; }
 .scroll::-webkit-scrollbar { width: 0; }
 
-/* ---------- KB detail panel ----------
-   White main panel hosting the existing KnowledgeBaseView (tree + doc
-   pane). No padding — the view fills the panel edge-to-edge and draws
-   its own in-panel header. */
+/* KB detail panel. No padding — the view fills edge-to-edge and draws its own
+   in-panel header. */
 .mainDetail {
   flex: 1;
   min-width: 0;
@@ -253,9 +219,8 @@
   color: var(--text-primary);
 }
 
-/* Redundant since the real palette became the global :root — this now
-   re-declares the exact same values it would already inherit, so it's a
-   no-op. Kept to avoid churn; safe to delete with its ~11 usages later. */
+/* No-op: re-declares the exact values it already inherits from the global
+   :root. Kept to avoid churn; deletable together with its usages. */
 .lightScope {
   color-scheme: light;
   --bg-base: #f5f7fa;
@@ -276,9 +241,8 @@
   --border-default: oklch(0 0 0 / 8%);
   --border-strong: oklch(0 0 0 / 12%);
   --border-highlight: oklch(0 0 0 / 16%);
-  /* Panel header — the app's dark frame/ink color (var(--surface-cta) =
-     #1c2127, same dark surface as the shell background) with white text,
-     instead of the faint cyan tint inherited from the dark :root. */
+  /* Panel header: app's dark frame ink (--surface-cta = #1c2127) + white text,
+     not the faint cyan tint the dark :root would give. */
   --panel-header-surface: var(--surface-cta);
   --panel-header-border: rgba(255, 255, 255, 0.12);
   --panel-header-text: #ffffff;

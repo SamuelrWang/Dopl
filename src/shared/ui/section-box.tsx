@@ -7,18 +7,15 @@ import { cn } from "@/shared/lib/utils";
 const MIN_BODY_H = 56;
 
 /**
- * The concave-body recipe SectionBox seats its children in — exported so
- * sibling section patterns (e.g. the chats header-card disclosures) use
- * the identical inset instead of forking the shadow stack.
+ * SectionBox's concave-body recipe. Exported so sibling section patterns (e.g.
+ * chats header-card disclosures) reuse it instead of forking the shadow stack.
  */
 export const SECTION_BOX_INSET =
   "border-t border-border-subtle bg-bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]";
 
 /**
- * Bordered section — the study-notes intro-panel, verbatim: uppercase
- * label strip (card-2) over a concave inset body, with the corner grip
- * to drag-resize the body (clamped to its content height). Promoted from
- * ontology-bits when a second feature needed it.
+ * Bordered section — uppercase label strip over a concave inset body, with a
+ * corner grip that drag-resizes the body (clamped to its content height).
  */
 export function SectionBox({
   label,
@@ -92,10 +89,7 @@ export function SectionBox({
   );
 }
 
-/**
- * Diagonal corner grip (study-notes resize-grip): two slanted lines
- * whose flat side faces up-left from the bottom-right corner.
- */
+/** Diagonal corner grip — two slanted lines facing up-left. */
 function ResizeGrip() {
   return (
     <svg

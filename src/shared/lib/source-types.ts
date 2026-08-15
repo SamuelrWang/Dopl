@@ -1,9 +1,5 @@
-/**
- * Source-provider types — canonical home. Consumed by the shared
- * SourceIcon, the skills feature (connector chips), and the knowledge
- * overview badges. Cross-feature, so it lives in shared/ (moved out of
- * features/knowledge in the skills phase-3 pass).
- */
+/** Source-provider types — canonical home. Cross-feature: shared SourceIcon,
+ *  skills connector chips, knowledge overview badges. */
 
 export type SourceProvider =
   | "slack"

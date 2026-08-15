@@ -1,11 +1,10 @@
 /**
- * Slugify a workspace name into a URL-safe handle. Slug uniqueness is
- * not enforced at this layer — `public_id` is the unique routing key
- * — so this is a pure name → kebab-case transform with no I/O.
+ * Slugify a workspace name into a URL-safe handle. Uniqueness is NOT enforced
+ * here — `public_id` is the unique routing key — so this is a pure
+ * name → kebab-case transform with no I/O.
  *
- * Audit fix S-16: NFKC-normalize before the strip so full-width or
- * confusable characters produce the same slug as their ASCII analogs
- * instead of collapsing to the fallback.
+ * ⚠ NFKC-normalize before the strip so full-width/confusable characters produce
+ * the same slug as their ASCII analogs instead of collapsing to the fallback.
  */
 export function slugifyWorkspaceName(name: string): string {
   return (

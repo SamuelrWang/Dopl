@@ -1,6 +1,6 @@
 /**
- * Ontology methods for `DoplClient` — reads plus the full authoring
- * surface, so an agent can build ontologies without the web UI.
+ * Ontology methods for `DoplClient` — reads plus the full authoring surface, so
+ * an agent can build ontologies without the web UI.
  */
 
 import type { DoplTransport } from "./transport.js";
@@ -24,10 +24,9 @@ export async function getOntology(t: DoplTransport): Promise<OntologySnapshot> {
 }
 
 /**
- * The cheap projection of the same endpoint — names and containment, no JSONB.
- * See {@link OntologySummary} for what it drops and why. Distinct `toolName` so
- * the two reads are separable in the `mcp_tool_calls` telemetry that the
- * payload work is judged on.
+ * Cheap projection of the same endpoint — names and containment, no JSONB. See
+ * {@link OntologySummary}. Distinct `toolName` so the two reads stay separable
+ * in `mcp_tool_calls` telemetry.
  */
 export async function getOntologySummary(
   t: DoplTransport
@@ -74,8 +73,8 @@ export async function deleteOntologyCluster(
   t: DoplTransport,
   clusterId: string
 ): Promise<void> {
-  // The route replies 204 No Content — request<T>() would choke on the
-  // empty body ("Unexpected end of JSON input") AFTER the delete applied.
+  // ⚠ Route replies 204 — request<T>() chokes on the empty body ("Unexpected
+  // end of JSON input") AFTER the delete applied.
   await t.requestNoContent(
     `/api/ontology/clusters/${enc(clusterId)}`,
     "DELETE",
@@ -100,11 +99,10 @@ export async function updateOntologyObject(
   patch: OntologyObjectPatch,
   expectedVersion?: string
 ): Promise<OntologyObject> {
-  // Optional optimistic-concurrency precondition. When the caller passes a
-  // version (an object's `updatedAt` from a prior read), it rides as the
-  // `X-Updated-At` header — the same wire convention KB/skills writes use —
-  // and the server rejects the PATCH with 412 if the row moved since. Omit
-  // it to keep the legacy last-writer-wins behaviour.
+  // Optional optimistic-concurrency precondition: a version (the object's
+  // `updatedAt` from a prior read) rides as `X-Updated-At` — same wire
+  // convention as KB/skills writes — and the server 412s if the row moved.
+  // Omitted = legacy last-writer-wins.
   const data = await t.request<{ object: OntologyObject }>(
     `/api/ontology/objects/${enc(objectId)}`,
     {

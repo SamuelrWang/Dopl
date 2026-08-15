@@ -15,7 +15,7 @@ export function reportError(err: unknown, fallback: string): void {
   });
 }
 
-/** Stable per-scope tile tint for KB / entry icons (purely decorative). */
+/** Stable per-scope tile tint for KB / entry icons. Decorative. */
 const SCOPE_TINT: Record<KbScope, string> = {
   private: "#8b7cf0",
   team: "#e0894a",

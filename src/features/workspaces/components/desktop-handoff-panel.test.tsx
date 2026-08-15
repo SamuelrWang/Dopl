@@ -1,21 +1,16 @@
 // @vitest-environment jsdom
 /**
- * THE HANDOFF, AND THE TWO WAYS IT CAN QUIETLY STOP WORKING.
+ * Two ways the handoff quietly stops working:
  *
- * 1. THE LINK SHAPE. `dopl://open/{segment}` is read by
- *    `dopl-desktop-app/main/deep-link-target.js`, a hand-written grammar in
- *    another language in another process. Nothing type-checks that seam, so the
- *    exact string is pinned here and the desktop half pins the same string
+ * 1. ⚠ LINK SHAPE. `dopl://open/{segment}` is parsed by
+ *    `dopl-desktop-app/main/deep-link-target.js` — another language, another
+ *    process, nothing type-checks the seam. Exact string pinned here and
  *    against its own parser (`dopl-desktop-app/test/deep-link-target.test.mjs`).
+ * 2. ⚠ THE BUTTON is the contract; auto-open is best effort (browsers refuse
+ *    protocol launches with no user gesture). Effect-only would pass locally
+ *    and strand stricter browsers.
  *
- * 2. THE BUTTON. The auto-open is best effort — a browser may refuse a protocol
- *    launch that no user gesture asked for — so the ANCHOR is the contract. A
- *    change that left only the effect would pass on the author's machine and
- *    strand everyone whose browser is stricter.
- *
- * Plus the property that made this component necessary at all: nothing it
- * renders is an in-app web path, every one of which the retirement map 302s to
- * `/get-started`.
+ * Plus: nothing rendered is an in-app web path (all 302 to `/get-started`).
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -26,8 +21,8 @@ const WORKSPACE = { slug: "acme", publicId: "a1b2c3d4e5f6" };
 const SEGMENT = "acme-a1b2c3d4e5f6";
 
 /**
- * jsdom cannot perform a `dopl:` navigation and only logs that it did not, so
- * `window.location` is swapped for something that RECORDS the assignment.
+ * jsdom cannot perform a `dopl:` navigation, so `window.location` is swapped
+ * for something that RECORDS the assignment.
  */
 let navigated: string | null;
 let realLocation: PropertyDescriptor | undefined;

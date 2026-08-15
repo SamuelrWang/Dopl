@@ -20,46 +20,35 @@ import type { Channel, ChannelVisibility } from "../types";
 
 /**
  * The channel LIFECYCLE writes — archive, visibility, delete, join, leave — on
- * `useApiMutation` (F-159's remainder; the SEND path and the thread writes went
- * first). There were never six: notify scope left the product with F-170.
+ * `useApiMutation`.
  *
- * WHY THIS CONVERSION IS NOT COSMETIC (audit C-27). The refetch coordinator
- * used to cover two of six mutation families: only the send and the thread ops
- * incremented the busy counter, so all five writes below raced the realtime
- * doorbell's four refetches and survived ONLY because some other surface
- * shadowed the server value. Every config here therefore carries
- * `settleWith: gate` — the same `useRefetchGate` gate the send and the thread
- * ops hold — which is what makes the protection structural instead of
- * incidental. `onSettled` releases it on the throwing path too, so a failed
- * archive cannot strand a deferred refetch.
+ * ⚠ Every config carries `settleWith: gate` (the same `useRefetchGate` gate the
+ * send and thread ops hold), or the write races the realtime doorbell's four
+ * refetches and survives only because some other surface shadows the server
+ * value. `onSettled` releases it on the THROWING path too, so a failed archive
+ * cannot strand a deferred refetch.
  *
- * WHY EACH DRAFT CARRIES ITS OWN `channelId` (§7 rule 4, audit C-21). The three
- * per-channel reads use `keepPreviousData`, so a channel switch keeps rendering
- * the previous channel under the new header. Every value a write needs is
- * snapshotted into the draft AT THE CLICK and every cache key downstream is
- * built from `draft.channelId` — nothing here re-reads the selection.
+ * ⚠ Every draft carries its own `channelId`, snapshotted AT THE CLICK, and every
+ * cache key downstream is built from `draft.channelId` — the three per-channel
+ * reads are `keepPreviousData`, so a channel switch keeps rendering the previous
+ * channel under the new header. Nothing here re-reads the selection.
  *
- * THE TWO LIST VARIANTS ARE PATCHED SEPARATELY, and only the archive toggle
- * needs it. `/api/channels` is cached twice — the default list holds ACTIVE
- * channels only, `?include=archived` holds everything — so archiving is a row
- * LEAVING one cache entry and changing state in the other. One update function
- * cannot say two things, so the toggle names both entries exactly
- * (`channelListKey`) rather than patching the prefix. **The two keys are
- * disjoint on purpose**: `onMutate` snapshots per patch in order, so an
- * overlapping pair (a prefix plus one of its members) would snapshot the
- * already-patched entry and roll back to the optimistic value.
+ * ⚠ The two list variants are patched SEPARATELY (archive toggle only).
+ * `/api/channels` is cached twice — default holds ACTIVE only,
+ * `?include=archived` holds everything — so archiving is a row LEAVING one entry
+ * and changing state in the other. The keys are DISJOINT on purpose: `onMutate`
+ * snapshots per patch in order, so an overlapping pair (a prefix plus one of its
+ * members) snapshots the already-patched entry and rolls back to the optimistic
+ * value.
  *
- * DELETE IS TWO MECHANICS BEHIND ONE VERB (ENGINEERING §7, "channels.deleted_at
- * … IS A DM-ONLY MECHANIC" — C-16 / F-173), and the branch survives the
- * conversion intact:
- *  - a DM SOFT-closes. `channels.deleted_at` is the close half of close/reopen;
- *    either side's next open revives the SAME row with its full history, so the
- *    transcript, roster and threads MUST stay cached. It only leaves the list.
- *  - anything else HARD-deletes, cascading. That is a CACHE EVICTION, not just
- *    a write: the query cache is IndexedDB-persisted with a 24h `gcTime`, so an
- *    invalidated entry for a deleted channel still renders it across relaunches.
- *    `evictChannel` therefore `removeQueries` the messages, members and threads
- *    of the deleted channel — and never for a DM.
+ * ⚠ DELETE IS TWO MECHANICS BEHIND ONE VERB:
+ *  - a DM SOFT-closes — either side's next open revives the SAME row with its
+ *    history, so transcript, roster and threads MUST stay cached. It only leaves
+ *    the list.
+ *  - anything else HARD-deletes, cascading, which is a CACHE EVICTION: the query
+ *    cache is IndexedDB-persisted with a 24h `gcTime`, so an invalidated entry
+ *    for a deleted channel still renders it across relaunches. `evictChannel`
+ *    `removeQueries` messages/members/threads — and NEVER for a DM.
  */
 
 export interface ArchiveDraft {
@@ -87,17 +76,17 @@ export interface JoinDraft {
 export interface LeaveDraft {
   channelId: string;
   userId: string;
-  /** A private channel leaves the caller's list entirely; a public one stays,
-   *  read-only. Captured at the click for the same reason as `channelId`. */
+  /** Private leaves the caller's list entirely; public stays read-only.
+   *  Captured at the click, like `channelId`. */
   visibility: ChannelVisibility;
 }
 
 /** What the five configs need from their host, transport aside. */
 export interface LifecycleWriteDeps {
   workspaceId: string;
-  /** Holds realtime refetches open for the life of each write. REQUIRED, not
-   *  optional: C-27 is exactly the state where some of these writes had a gate
-   *  and some did not, so a config that can be built without one re-opens it. */
+  /** Holds realtime refetches open for the life of each write. ⚠ REQUIRED, not
+   *  optional — a config buildable without a gate re-opens the race where some
+   *  writes are protected and some are not. */
   gate: MutationGate;
   /** The selected channel is gone — clear the explicit selection. */
   onDeselect: () => void;
@@ -138,12 +127,10 @@ export function archiveConfig(
       workspaceId: deps.workspaceId,
       body: { archived: draft.archived },
     }),
-    // Archiving REMOVES the row from the active list (that read excludes
-    // archived channels), and STAMPS it in the archived list (that read holds
-    // both, and the archived tab filters on `archivedAt !== null`). Unarchiving
-    // is the mirror: clearing the stamp drops it out of the archived tab, and
-    // the active list gets it back from the settle-time invalidate rather than
-    // from a row this client would have to invent in the server's sort order.
+    // Archiving REMOVES the row from the active list and STAMPS it in the
+    // archived one. Unarchiving mirrors that: clearing the stamp drops it from
+    // the archived tab, and the active list gets it back from the settle-time
+    // invalidate rather than a row invented in the server's sort order.
     optimistic: (draft) => [
       patchCache<ChannelsCache>(
         channelListKey(deps.workspaceId, false),
@@ -155,16 +142,15 @@ export function archiveConfig(
         })
       ),
     ],
-    // The PATCH answers with the caller-relative channel (`updateChannel` ends
-    // in `getChannel`), so the true `archivedAt` / `updatedAt` land without a
-    // read. `patchChannel` maps over rows that EXIST, so this cannot re-add the
-    // row the optimistic patch just dropped.
+    // PATCH answers with the caller-relative channel, so true `archivedAt` /
+    // `updatedAt` land without a read. ⚠ `patchChannel` maps over rows that
+    // EXIST, so this cannot re-add the row the optimistic patch just dropped.
     reconcile: (data) =>
       patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
         patchChannel(cache, data.channel.id, data.channel)
       ),
-    // Ordering (`updated_at` desc) and the row's membership of the OTHER
-    // variant are the two things this write changes and cannot compute.
+    // Ordering (`updated_at` desc) and membership of the OTHER variant are the
+    // two things this write changes and cannot compute.
     invalidate: () => [channelKeys.list().all],
     settleWith: deps.gate,
     onError: (err) => failed(err, "Couldn't update the channel"),
@@ -181,9 +167,9 @@ export function visibilityConfig(
       workspaceId: deps.workspaceId,
       body: { visibility: draft.visibility },
     }),
-    // THE HEADER PILL AND THE MENU LABEL BOTH READ `channel.visibility` off the
-    // list row, so this one patch is what stops them sitting on the old value
-    // for two network hops — the pane holds no lens of its own.
+    // ⚠ Header pill and menu label both read `channel.visibility` off the list
+    // row, so this patch is what stops them sitting on the old value for two
+    // network hops — the pane holds no lens of its own.
     optimistic: (draft) =>
       patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
         patchChannel(cache, draft.channelId, { visibility: draft.visibility })
@@ -207,16 +193,15 @@ export function deleteConfig(
       method: "DELETE",
       workspaceId: deps.workspaceId,
     }),
-    // Both branches leave the list: a hard-deleted channel is gone, and a
-    // soft-closed DM is excluded by `deleted_at IS NULL` until it is reopened.
+    // Both branches leave the list: hard-deleted is gone, soft-closed DM is
+    // excluded by `deleted_at IS NULL` until reopened.
     optimistic: (draft) =>
       patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
         dropChannelRow(cache, draft.channelId)
       ),
-    // EVICTION IS DELIBERATELY ON SUCCESS, not in `optimistic`: a removed query
-    // has no snapshot, so evicting before the server answers would make a
-    // failed delete unrecoverable. A rolled-back delete puts the row back and
-    // the transcript is still cached behind it.
+    // ⚠ Eviction is deliberately ON SUCCESS, not in `optimistic` — a removed
+    // query has no snapshot, so evicting before the server answers makes a
+    // failed delete unrecoverable.
     onSuccess: (_data, draft) => {
       if (!draft.isDirect) deps.evictChannel(draft.channelId);
       deps.onDeselect();
@@ -237,18 +222,16 @@ export function joinConfig(
       workspaceId: deps.workspaceId,
       body: { userId: draft.userId },
     }),
-    // `isMember` is what swaps the read-only "Join channel" bar for the
-    // composer, so the pane converts on the click rather than after the roster
-    // round trip.
+    // `isMember` swaps the read-only "Join channel" bar for the composer, so the
+    // pane converts on the click rather than after the roster round trip.
     optimistic: (draft) =>
       patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
         patchChannel(cache, draft.channelId, { isMember: true, role: "member" })
       ),
-    // NO ROSTER RECONCILE from the 201's `{ member }`: a non-member's roster
-    // read may never have loaded (there is nothing to append to), and
-    // `memberCount` / presence hydration are the server's to compute. The
-    // transcript is invalidated for the same reason — it is the first read this
-    // caller is entitled to.
+    // ⚠ NO roster reconcile from the 201's `{ member }` — a non-member's roster
+    // read may never have loaded (nothing to append to), and `memberCount` /
+    // presence hydration are the server's to compute. Transcript invalidated for
+    // the same reason: it is the first read this caller is entitled to.
     invalidate: (draft) => [
       channelKeys.list().all,
       channelKeys.messages(draft.channelId).all,
@@ -269,10 +252,9 @@ export function leaveConfig(
       workspaceId: deps.workspaceId,
       body: { userId: draft.userId },
     }),
-    // A PRIVATE channel leaves the caller's world entirely (`listChannels`
-    // returns public channels plus the ones you belong to), so the row goes. A
-    // PUBLIC one stays visible and read-only, which is exactly `isMember:false`
-    // — the same shape a never-joined public channel already has.
+    // A PRIVATE channel leaves the caller's world entirely, so the row goes. A
+    // PUBLIC one stays visible and read-only — exactly `isMember:false`, the
+    // shape a never-joined public channel already has.
     optimistic: (draft) =>
       patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
         draft.visibility === "private"
@@ -311,7 +293,7 @@ export function useChannelLifecycleWrites({
   onDeselect,
 }: ChannelLifecycleParams) {
   const client = useQueryClient();
-  // Rebuilt every render on purpose: `useApiMutationWith` reads its config
+  // ⚠ Rebuilt every render on purpose — `useApiMutationWith` reads its config
   // through a ref, so these closures are always the current render's.
   const deps: LifecycleWriteDeps = {
     workspaceId,
@@ -353,8 +335,8 @@ export function useChannelLifecycleWrites({
         archived: channel.archivedAt === null,
       });
     },
-    // A DM is always private (DB CHECK) and the menu hides the item for one;
-    // guarded here too so nothing can send a request the server must 400.
+    // ⚠ A DM is always private (DB CHECK). Guarded here as well as in the menu,
+    // so nothing can send a request the server must 400.
     toggleVisibility: () => {
       if (!channel || channel.isDirect) return;
       visibility.mutate({
@@ -370,10 +352,9 @@ export function useChannelLifecycleWrites({
       if (!channel) return;
       joinChannel.mutate({ channelId: channel.id, userId: currentUserId });
     },
-    // Never leave a DM (Q2): dropping one of the pair's two membership rows
-    // destroys it permanently, so the server refuses and the menu offers the
-    // reversible "Delete conversation" instead. Guarded here too — nothing may
-    // send the destructive request for a direct channel.
+    // ⚠ Never leave a DM: dropping one of the pair's two membership rows
+    // destroys it permanently. The server refuses and the menu offers the
+    // reversible "Delete conversation"; guarded here too.
     leave: () => {
       if (!channel || channel.isDirect) return;
       leaveChannel.mutate({

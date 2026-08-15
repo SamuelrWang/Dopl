@@ -4,53 +4,30 @@ import { RouterLink } from "#/components/app-shell";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
- * /:workspaceSegment/channels — the agent-to-agent collaboration surface.
- * Port of `src/app/[workspaceSlug]/(app)/channels/page.tsx`
- * (docs/migration-research/web-pages.md §12).
+ * /:workspaceSegment/channels — agent-to-agent collaboration surface. Only a
+ * seam: the whole channels tree is REUSED by import, already client-side over
+ * `apiRequest`, which transports over the Electron IPC bridge unchanged.
  *
- * The RSC fetched no data: it resolved the workspace + the caller's membership
- * and handed `ChannelsView` four props. Everything below that — the channel
- * list, transcript, roster, threads, consent inbox, trust rules, agent roster
- * and every mutation in `channels/client/api.ts` — was already client-side over
- * `apiRequest`, which transports over the Electron IPC bridge here unchanged.
- * So this file is only the seam that replaces the two server calls, and the
- * whole channels tree is REUSED by import.
+ * `ChannelsViewCore`, not `ChannelsView`: the latter is the `next/link` binding
+ * for the first-run explainer's step cards; pass `RouterLink` instead.
  *
- * `ChannelsViewCore` rather than `ChannelsView`: the web file is the
- * `next/link` binding for the first-run explainer's step cards, and this app
- * passes its own `RouterLink` instead. Nothing else in the tree touched Next.
+ * ⚠ REALTIME IS OFF HERE. `useChannelsRealtime` / `useConsentRealtime` /
+ * `usePresenceRealtime` are no-ops in the bundled SPA —
+ * `shared-channel-registry.ts` short-circuits on `window.dopl`. Consequences:
  *
- * WHAT DEGRADES HERE, AND WHAT DOES NOT (the three realtime subscriptions the
- * web page opens — `useChannelsRealtime` / `useConsentRealtime` /
- * `usePresenceRealtime` — are deliberate no-ops in the bundled SPA —
- * `shared-channel-registry.ts` short-circuits on `window.dopl`, Phase 3 owns
- * the replacement):
- *
- * - **Consent inbox** — unaffected in practice. It fetches on mount and the
- *   page passes `CONSENT_INBOX_POLL_MS` (30 s), so a request raised elsewhere
- *   still lands within 30 s, and a decision made here refetches immediately.
+ * - **Consent inbox** — fine: page passes `CONSENT_INBOX_POLL_MS` (30 s), and a
+ *   decision made here refetches immediately.
  * - **Message list / channel list / threads** — fetch on mount, then refresh
- *   only on this window's own writes and on TanStack focus revalidation. An
- *   INBOUND message from a teammate's agent is stale until one of those fires.
- *   This is the one real live-ness loss and it is Phase 3's to fix, not this
- *   port's. (Since 2026-08-07 those writes no longer AWAIT a refetch: they are
- *   `useApiMutation`s that patch the cache optimistically and reconcile from
- *   the POST's own response — F-159 / roadmap P0-1. Nothing about the
- *   liveness gap changed; the sentence describing the old shape did.)
- * - **Roster / presence** — same: initial fetch is real, the "N online" strip
- *   and the online rings go stale between refetches (the 90 s freshness window
- *   is client-side arithmetic over `lastSeenAt`, so a stale roster reads as
- *   offline rather than as falsely online — it fails safe).
- *   (There was a fourth bullet here — **agent chips**, whose `useEngagementClock`
- *   scheduled its own wake for the 60 min engagement TTL. The chips bar, the
- *   clock and engagement itself went with named agents in the channels rollback
- *   (§1); the roster read that survived is the historical ATTRIBUTION one, which
- *   renders old rows and has nothing to keep fresh.)
+ *   only on this window's own writes and TanStack focus revalidation. An
+ *   INBOUND message from a teammate's agent stays stale until one fires. This
+ *   is the one real liveness loss.
+ * - **Roster / presence** — "N online" strip and rings go stale between
+ *   refetches. Fails safe: the 90 s freshness window is client-side arithmetic
+ *   over `lastSeenAt`, so a stale roster reads offline, not falsely online.
  *
- * NOT WIRED, and not wireable from here: the consent card's desktop-only rows
- * (working folder, permission preset) feature-detect `window.dopl.channels`,
- * which the SPA preload does not expose — see the report accompanying this
- * port. They render nothing, exactly as they do in a plain browser.
+ * NOT WIRED: consent card's desktop-only rows (working folder, permission
+ * preset) feature-detect `window.dopl.channels`, which the SPA preload does not
+ * expose. They render nothing, as in a plain browser.
  */
 export default function ChannelsPage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();

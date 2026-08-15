@@ -26,16 +26,10 @@ function requireBaseId(auth: WorkspaceAuthContext): string {
 const FolderIdSchema = z.string().uuid();
 
 /**
- * Parses `?folderId=` and `?includeBody=` query params.
- *   - folderId not present  → don't filter by folder.
- *   - folderId=null (literal) → root entries only (folder_id IS NULL).
- *   - folderId=<uuid>       → that folder.
- *   - includeBody=true      → include entry bodies. Default is STRIPPED:
- *     shipping every body in a list response is a payload footgun, so
- *     bodies are opt-in (single-entry reads use /api/knowledge/entries/[id]).
- *
- * Throws `HttpError.badRequest` if `folderId` is neither "null" nor a
- * valid UUID — without this guard a non-UUID value gets forwarded to
+ * `?folderId=`: absent → no folder filter; literal `null` → root only (folder_id IS NULL);
+ * `<uuid>` → that folder. `?includeBody=true` opts INTO bodies — the default is STRIPPED,
+ * because shipping every body in a list response is a payload footgun.
+ * ⚠ `folderId` that is neither "null" nor a valid UUID is a 400; without the guard it reaches
  * Postgres and surfaces as a 500.
  */
 function parseListOpts(url: URL): ListEntriesOpts {

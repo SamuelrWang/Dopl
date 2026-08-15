@@ -7,16 +7,15 @@ import type { KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import { reportError } from "../utils";
 
 /**
- * Inline-edit persistence for a base's folder descriptions + entry
- * excerpts (Feature B "Contents" tree). Reuses the existing by-id PATCH
- * routes (`updateFolder` carries `description`, `updateEntry` carries
- * `excerpt` — both session-authenticated, so `last_edited_source`
- * stays `'user'`), then asks the controller to refresh the base's tree
- * so the change flows back down through props.
+ * Inline-edit persistence for folder descriptions + entry excerpts (the
+ * "Contents" tree). Uses the by-id PATCH routes (`updateFolder.description`,
+ * `updateEntry.excerpt`) — both session-authenticated, so `last_edited_source`
+ * stays `'user'` — then refreshes the base's tree so the change flows back
+ * down through props.
  *
- * Optimistic: a committed value shows immediately via a per-node override
- * that self-clears once the refreshed tree carries the same value (or on
- * error, reverts). Node ids are UUIDs, so folder + entry ids never collide.
+ * Optimistic per-node overrides that self-clear once the refreshed tree
+ * carries the same value (or revert on error). ⚠ Node ids are UUIDs, so
+ * folder and entry ids never collide in one override map.
  */
 export type ContentNodeType = "folder" | "entry";
 
@@ -40,9 +39,8 @@ export function useContentDescriptions({
   );
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Drop an override once the refreshed tree carries the same value — our
-  // save landed, so the prop tree is now authoritative. Depends only on the
-  // incoming props (never on `overrides`) so it can't loop.
+  // Drop an override once the refreshed tree carries the same value: our save
+  // landed. ⚠ Depends only on incoming props (never `overrides`) or it loops.
   useEffect(() => {
     const actual = new Map<string, string | null>();
     for (const f of folders) actual.set(f.id, f.description);

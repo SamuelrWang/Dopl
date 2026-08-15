@@ -37,37 +37,31 @@ import type { MessagePayload } from "./repository";
 
 /**
  * Write-side chats service: agent-facing export (create / idempotent
- * re-export) plus the owner-only mutations (append transcript, update
- * header + sharing/folder, delete). Reads back through `readChatDetail`
- * (visibility-filtered, but WITHOUT the retention window) so echoing a
- * just-written chat never 403s on a backfilled old session.
+ * re-export) plus owner-only mutations. Echoes through `readChatDetail`
+ * — visibility-filtered but WITHOUT the retention window — so a
+ * just-written backfilled old session never 403s on its own response.
  */
 
 // ─── Export (create / idempotent re-export) ─────────────────────────
 
 /**
- * Agent-facing export. When `clientSessionId` matches one of the caller's
- * earlier exports, the chat is UPDATED in place, PRESERVING BY DEFAULT
- * (F-8 / F-9): a header field is overwritten only when the caller passes
- * it (an omitted field keeps its stored value instead of being cleared),
- * and the transcript is reconciled — messages are upserted by position
- * and any added via op="append" are kept — so a re-export never wipes
- * history. A fresh export inserts header + transcript in ONE transaction
- * (F-12), so a failed write can't leave a 0-message orphan. All incoming
- * text is stripped of NUL first (F-7). `format` is derived from the
- * messages, never taken from the caller.
+ * Agent-facing export. `clientSessionId` matching an earlier export →
+ * UPDATE in place, PRESERVING BY DEFAULT: an omitted header field keeps
+ * its stored value rather than clearing, and the transcript is reconciled
+ * (upsert by position, keep op="append" additions), so a re-export never
+ * wipes history. Fresh export writes header + transcript in ONE
+ * transaction — a failed write can't leave a 0-message orphan. All text
+ * is NUL-stripped first. ⚠ `format` is derived, never taken from caller.
  */
 export async function exportChat(
   ctx: ChatContext,
   rawInput: ChatExportInput
 ): Promise<ChatDetail> {
-  // Drop any NUL (U+0000) before it reaches Postgres — a stray one used to
-  // 500 the whole export (and orphan a header pre-F-12).
+  // ⚠ NUL (U+0000) 500s Postgres — strip before anything else.
   const input = stripNulDeep(rawInput);
 
-  // Filing into a folder means inheriting the folder's sharing — the
-  // folder's scope is authoritative, so any caller-passed visibility is
-  // superseded when a folder is named.
+  // Folder scope is authoritative: filing into a folder supersedes any
+  // caller-passed visibility.
   const folderRow = input.folder
     ? await resolveOrCreateFolderRow(ctx, input.folder)
     : null;
@@ -122,25 +116,17 @@ export async function exportChat(
     throw err;
   }
 
-  // Inheritance covers grants too: a chat filed into a team-scoped folder
-  // gets the folder's team grant set (replace-set).
+  // Inheritance covers grants too — replace-set from the folder.
   if (folderRow) {
     await syncChatGrantsToFolder(ctx, chat.id, folderRow);
   }
 
-  // Echo back the owner's just-written chat without the retention window —
-  // a backfilled old session must not 403 on the response.
   return readChatDetail(ctx, chat.id);
 }
 
-/**
- * Idempotent re-export of an existing chat: overwrite only the header
- * fields the caller actually passed (preserve the rest), reconcile the
- * transcript non-destructively (upsert by position, keep appended
- * history), and revive a legacy tombstone if it hit one. `format` is
- * recomputed from the reconciled transcript so a partial re-export can't
- * leave it stale.
- */
+/** Idempotent re-export: overwrite only passed header fields, reconcile the
+ *  transcript non-destructively, revive a legacy tombstone. `format` is
+ *  recomputed so a partial re-export can't leave it stale. */
 async function reexportChat(
   ctx: ChatContext,
   existing: ChatRow,
@@ -156,10 +142,9 @@ async function reexportChat(
   const chat = await repo.updateChat(existing.id, {
     title: input.title,
     exported_at: new Date().toISOString(),
-    // Legacy tombstones only: nothing is soft-deleted any more (deletes are
-    // permanent as of 2026-08-07), but the (workspace, owner, session)
-    // uniqueness index still spans rows tombstoned before the switch, so a
-    // re-export of one of those revives it rather than colliding.
+    // ⚠ Legacy tombstones only — nothing soft-deletes now, but the
+    // (workspace, owner, session) unique index still spans rows tombstoned
+    // before the switch; re-export revives one rather than colliding.
     deleted_at: null,
     ...(input.overview !== undefined ? { overview: input.overview } : {}),
     ...(input.source !== undefined ? { source: input.source } : {}),
@@ -172,7 +157,7 @@ async function reexportChat(
 
   await repo.mergeMessages(chat.id, ctx.workspaceId, payload);
 
-  // Keep format honest against the reconciled transcript (re-sent ∪ kept).
+  // Re-derive format over the reconciled transcript (re-sent ∪ kept).
   const all = await repo.listMessages(chat.id);
   const format = deriveFormat(all.map((m) => ({ verbatim: m.verbatim ?? undefined })));
   if (format !== chat.format) {
@@ -195,7 +180,7 @@ export async function appendMessages(
   const input = stripNulDeep(rawInput);
   const chat = await requireOwnChat(ctx, chatId, "append to it");
   await repo.appendMessagesTx(chat.id, ctx.workspaceId, messagePayload(input.messages));
-  // The transcript's verbatim mix may have changed — keep format honest.
+  // Verbatim mix may have changed — re-derive format.
   const allMessages = await repo.listMessages(chat.id);
   const format = deriveFormat(
     allMessages.map((m) => ({ verbatim: m.verbatim ?? undefined }))
@@ -208,12 +193,10 @@ export async function appendMessages(
     resolveChatsWindow(ctx.workspaceId),
     readChatDetail(ctx, chat.id),
   ]);
-  // The append itself is always allowed, but the echo must not become a
-  // retention-window bypass: appending one message to a >90-day chat on a
-  // free workspace can't be used to read the whole hidden transcript back.
-  // `messageCount` stays honest (set inside readChatDetail); only the
-  // transcript body is withheld. Consumers (MCP `op=append`) read the count,
-  // not the messages, so this stays compatible.
+  // ⚠ Append is always allowed, but the echo must not become a
+  // retention-window bypass: appending to a >90-day chat on a free
+  // workspace can't read the hidden transcript back. `messageCount` stays
+  // honest; only the body is withheld, and MCP `op=append` reads the count.
   if (since !== null && detail.sessionDate < since) {
     return { ...detail, messages: [] };
   }
@@ -228,8 +211,8 @@ export async function updateChatHeader(
   const patch = stripNulDeep(rawPatch);
   const chat = await requireOwnChat(ctx, chatId, "update it");
 
-  // Resolve the folder move first — inheritance and the filed-chat
-  // sharing guard both depend on where the chat ends up.
+  // Resolve the folder move FIRST — inheritance and the filed-chat sharing
+  // guard both depend on where the chat ends up.
   let folderPatch: { folder_id: string | null } | undefined;
   let targetFolder: ChatFolderRow | null = null;
   if (patch.folderId !== undefined) {
@@ -245,9 +228,9 @@ export async function updateChatHeader(
     folderPatch = { folder_id: targetFolder?.id ?? null };
   }
 
-  // Filed chats inherit their folder's sharing — a direct visibility
-  // change is rejected unless this same patch unfiles the chat. (The
-  // schema already blocks visibility combined with filing INTO a folder.)
+  // Filed chats inherit folder sharing: a direct visibility change is
+  // rejected unless this same patch unfiles. (Schema already blocks
+  // visibility combined with filing INTO a folder.)
   if (
     patch.visibility !== undefined &&
     chat.folder_id !== null &&
@@ -261,11 +244,10 @@ export async function updateChatHeader(
     throw new ChatFolderScopeError(currentFolder?.name ?? "its folder");
   }
 
-  // Sharing scope. Going team-scoped replaces the grant set wholesale;
-  // any other scope drops all grants. Non-admin owners may only grant
-  // teams they belong to (plus already-granted teams, which the share
-  // UI renders locked) — mirrors the KB rule. Moving into a folder
-  // instead inherits the folder's scope + grants.
+  // Team-scoped replaces the grant set wholesale; any other scope drops all
+  // grants. Non-admin owners may grant only teams they belong to, plus
+  // already-granted teams (share UI renders those locked). Mirrors the KB
+  // rule. Moving into a folder inherits the folder's scope + grants instead.
   let sharingPatch: { visibility?: string; access_mode?: string } = {};
   let grantTeamIds: string[] | null = null;
   if (targetFolder) {
@@ -308,10 +290,9 @@ export async function updateChatHeader(
   });
 
   if (targetFolder) {
-    // Inheritance covers grants too — the chat adopts the folder's set.
     await syncChatGrantsToFolder(ctx, chat.id, targetFolder);
   } else if (patch.visibility !== undefined) {
-    // Replace-set semantics: clear, then re-insert the new grant set.
+    // Replace-set: clear, then re-insert.
     await deleteGrantsForResource(ctx.workspaceId, "chat", chat.id);
     if (grantTeamIds && grantTeamIds.length > 0) {
       await insertReadGrantsIfMissing(ctx.workspaceId, "chat", chat.id, grantTeamIds);
@@ -322,7 +303,7 @@ export async function updateChatHeader(
     repo.countMessages(row.id),
     profilesById([row.owner_id]),
   ]);
-  // Keep the returned grant set honest even when sharing wasn't touched.
+  // Grant set must be returned even when sharing wasn't touched.
   const teamIds =
     grantTeamIds ??
     (row.access_mode === "teams"
@@ -339,13 +320,10 @@ export async function updateChatHeader(
 }
 
 /**
- * PERMANENTLY delete a chat (owner-only, no recovery). Deletion is
- * immediate and irreversible — there is no trash and no restore
- * (2026-08-07). `requireOwnChat` is the unchanged gate: an unknown,
- * cross-workspace or someone-else's chat is refused, and a
- * workspace-scoped API-key caller is refused too. The physical delete
- * cascades `chat_messages` via FK and drops team grants via trigger (see
- * `hardDeleteChat`).
+ * ⚠ PERMANENT delete, owner-only, no trash/restore. `requireOwnChat` is
+ * the gate: unknown, cross-workspace, someone-else's, or workspace-scoped
+ * API-key callers are all refused. Physical delete cascades
+ * `chat_messages` via FK and drops team grants via trigger.
  */
 export async function deleteChat(ctx: ChatContext, chatId: string): Promise<void> {
   const chat = await requireOwnChat(ctx, chatId, "delete it");

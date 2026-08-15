@@ -3,12 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Live per-node height measurement for graph cards. Both graph views need the
- * real rendered height of every node card so a text edit re-flows the layout
- * and re-routes edges immediately — the identical ResizeObserver block used to
- * live in each. `registerRef` is the card's `ref` callback (id → element);
- * heights update as cards resize, and a removed node's stale height is pruned
- * so it can't linger in the map.
+ * Live per-node height measurement for graph cards — real rendered height, so
+ * a text edit re-flows the layout and re-routes edges immediately.
+ * `registerRef` is the card's `ref` callback (id → element); a removed node's
+ * stale height is pruned.
  */
 export function useMeasuredHeights(): {
   heights: Record<string, number>;
@@ -43,7 +41,6 @@ export function useMeasuredHeights(): {
         observerRef.current.unobserve(element);
         idByEl.current.delete(element);
       }
-      // Drop the removed node's stale height so it can't linger in the map.
       setHeights((prev) => {
         if (!(id in prev)) return prev;
         const next = { ...prev };

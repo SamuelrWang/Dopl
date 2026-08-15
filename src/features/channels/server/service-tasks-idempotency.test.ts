@@ -1,16 +1,11 @@
 /**
- * Unit tests for `createTask`'s IDEMPOTENCY ENVELOPE (`client_msg_id`) — the
- * v3.1 atomicity-by-convergence rule. Split out of `service-tasks.test.ts` (§2
- * cap) when the self-target guard was added: the thread row and its initiating
- * message are two writes with no transaction around them, and making that pair
- * converge is its own lane with its own failure modes.
+ * `createTask`'s IDEMPOTENCY ENVELOPE (`client_msg_id`) — atomicity by
+ * convergence. ⚠ The thread row and its initiating message are two writes with
+ * NO transaction around them.
  *
- * The repositories are mocked; `service-shared` runs for real. `service-reads`
- * is mocked so these tests don't drag in the whole read hydration.
- *
- * Focus (the load-bearing rule): a failed post must be REPAIRED by the retry
- * instead of being swallowed forever by the `client_msg_id` short-circuit, and
- * nothing may land twice — not the thread row, not the opening request.
+ * ⚠ The load-bearing rule: a failed post must be REPAIRED by the retry, not
+ * swallowed forever by the `client_msg_id` short-circuit, and nothing may land
+ * twice — neither the thread row nor the opening request.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -106,7 +101,7 @@ beforeEach(() => {
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  // C-20: addressing also asserts active workspace membership; default true.
+  // Addressing also asserts active workspace membership; default true.
   vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
     id: "msg-1",
@@ -121,7 +116,6 @@ beforeEach(() => {
     client_msg_id: row.client_msg_id,
     created_at: "2026-07-27T00:00:00Z",
   }));
-  // The create paths finish with getChannel; a stub is enough for these tests.
   vi.mocked(reads.getChannel).mockResolvedValue(
     {} as Awaited<ReturnType<typeof reads.getChannel>>
   );
@@ -149,7 +143,6 @@ describe("createTask — idempotency (client_msg_id)", () => {
   }
 
   beforeEach(() => {
-    // PEER is a channel member so the addressee check passes.
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
@@ -158,7 +151,6 @@ describe("createTask — idempotency (client_msg_id)", () => {
 
   it("returns the already-created task and does NOT re-insert or re-post", async () => {
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
-    // The initiating message already landed on the first send.
     vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
       storedOpening()
     );
@@ -172,10 +164,10 @@ describe("createTask — idempotency (client_msg_id)", () => {
 
     expect(repoTasks.findTaskByClientId).toHaveBeenCalledWith("chan-1", "dedupe-1");
     expect(task.id).toBe(TASK_ID);
-    // The re-driven post dedups to the STORED opening message, so the retry
+    // ⚠ Re-driven post dedups to the STORED opening message, so the retry
     // reports that message's seq — never a fresh one.
     expect(openingSeq).toBe(1);
-    // No second task row and no second initial message (→ no double spawn).
+    // No second task row, no second initial message → no double spawn.
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
     expect(repoMessages.findMessageByClientId).toHaveBeenCalledWith(
@@ -204,8 +196,8 @@ describe("createTask — idempotency (client_msg_id)", () => {
     expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0]).toMatchObject({
       client_msg_id: "dedupe-2",
     });
-    // The initial request is posted exactly once, under its own derived key —
-    // that key is what makes the create+post pair convergent.
+    // Posted exactly once under its own derived key — that key is what makes the
+    // create+post pair convergent.
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
     expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].client_msg_id).toBe(
       `task-open-${TASK_ID}`
@@ -218,7 +210,6 @@ describe("createTask — idempotency (client_msg_id)", () => {
       .mockResolvedValueOnce(ownTask()); // post-race winner
     vi.mocked(repoTasks.insertTask).mockRejectedValue({ code: "23505" });
     vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
-    // The winner already posted the request under the derived key.
     vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
       storedOpening()
     );
@@ -231,17 +222,16 @@ describe("createTask — idempotency (client_msg_id)", () => {
     });
 
     expect(task.id).toBe(TASK_ID);
-    // The loser re-drives the post but nothing lands twice.
+    // Loser re-drives the post; nothing lands twice.
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("REGRESSION (B1): a post that fails is repaired by the retry — the request exists exactly once", async () => {
-    // The row-then-post pair has no transaction around it. Before the fix, an
-    // insert that landed followed by a post that threw left a thread with NO
-    // message: the retry hit the client_msg_id short-circuit, returned the
-    // stored task and never posted, so the responder's desktop had nothing to
-    // route and no session ever spawned (there is a live example of this in
-    // prod). Now the initiating post is re-driven on the short-circuit path.
+    // ⚠ No transaction around row-then-post: an insert that lands followed by a
+    // post that throws leaves a thread with NO message, and the retry hits the
+    // client_msg_id short-circuit and never posts — the responder's desktop has
+    // nothing to route and no session spawns. The post is re-driven on the
+    // short-circuit path.
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValueOnce(null);
     vi.mocked(repoTasks.insertTask).mockResolvedValue(ownTask());
     vi.mocked(repoMessages.insertMessage).mockRejectedValueOnce(
@@ -256,25 +246,22 @@ describe("createTask — idempotency (client_msg_id)", () => {
         clientMsgId: "dedupe-4",
       });
 
-    // First send: the thread row lands, the request post blows up.
     await expect(send()).rejects.toThrow("connection reset");
     expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
 
-    // Retry with the SAME key: the task short-circuits, the missing request is
-    // posted. The stored message is still absent, so this is a real insert.
+    // Retry with the SAME key: task short-circuits, missing request is posted.
+    // The stored message is still absent, so this is a real insert.
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
     const { thread: task } = await send();
 
     expect(task.id).toBe(TASK_ID);
-    // Exactly one task row, and exactly one initiating message across both
-    // attempts (the failed one never landed).
+    // One task row, one initiating message across both attempts.
     expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
     const posts = vi
       .mocked(repoMessages.insertMessage)
       .mock.calls.filter((c) => c[0].client_msg_id === `task-open-${TASK_ID}`);
     expect(posts).toHaveLength(2); // one rejected, one stored
     expect(posts[1][0].metadata.taskId).toBe(TASK_ID);
-    // A third send finds the stored message and inserts nothing more.
     vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
       storedOpening()
     );
@@ -284,8 +271,8 @@ describe("createTask — idempotency (client_msg_id)", () => {
   });
 
   it("does not post into a thread the colliding key belongs to someone else", async () => {
-    // A client_msg_id collision from another member returns their task (the
-    // pre-existing dedup), but must not put a message into their thread.
+    // ⚠ A collision from another member returns their task but must NOT put a
+    // message into their thread.
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(
       taskRow({ created_by: PEER, target_user_id: PEER })
     );
@@ -298,10 +285,9 @@ describe("createTask — idempotency (client_msg_id)", () => {
     });
 
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    // No post happened. The seq that comes back is the OTHER thread's stored
-    // opening message, READ under its derived key — and it is null here because
-    // no such message exists in this fixture, never because a number was
-    // guessed. (`service-tasks-handshake-room.test.ts` pins the read itself.)
+    // ⚠ No post happened. The seq is the OTHER thread's stored opening message
+    // READ under its derived key — null here because none exists in this
+    // fixture, never because a number was guessed.
     expect(openingSeq).toBeNull();
   });
 });

@@ -12,10 +12,8 @@ import {
 } from "@/features/channels/server/service";
 import { ConsentDecisionSchema } from "@/features/channels/schema";
 
-// Single consent request: GET is the desktop's status poll; PATCH records the
-// operator's decision. Both operator-only (enforced in the service, which 404s
-// a foreign / missing id rather than leaking it).
-//
+// Single consent request: GET is the desktop's status poll, PATCH records the operator's
+// decision. Both operator-only (the service 404s a foreign/missing id rather than leaking it).
 // PATCH is `sessionOnly` — see the export at the bottom of this file.
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -45,20 +43,15 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
 
 export const GET = withWorkspaceAuth(handleGet);
 /**
- * H-1 — `sessionOnly`: answering a consent request is the human-in-the-loop
- * gate itself, so it must come from a human's interactive session and never
- * from an agent token.
+ * ⚠ `sessionOnly`: answering a consent request IS the human-in-the-loop gate, so it must come
+ * from an interactive session and never an agent token.
  *
- * The threat is concrete and local. The session this gate exists to contain
- * is spawned with `--mcp-config` pointing at a file that holds a 90-day
- * `dopl.read`+`dopl.write` device token, its entire job is to process an
- * untrusted teammate's message (a prompt-injection target), and it has Bash.
- * Without this flag it can read that token and PATCH `{decision:'allow'}` on
- * its OWN outbound review — approving its reply out of the machine with no
- * human in the loop, which is precisely the thing approve-out prevents.
- * Device tokens go through `validateAccessToken`, so `sessionOnly` refuses
- * them; the desktop app authenticates with the Electron session's Supabase
- * cookies, which pass untouched.
+ * The threat: the contained session is spawned with `--mcp-config` holding a 90-day
+ * `dopl.read`+`dopl.write` device token, processes an untrusted teammate's message, and has Bash.
+ * Ungated it reads that token and PATCHes `{decision:'allow'}` on its OWN outbound review —
+ * approving its reply out of the machine with no human, which is exactly what approve-out
+ * prevents. Device tokens go through `validateAccessToken`, so `sessionOnly` refuses them; the
+ * desktop's Electron Supabase cookies pass untouched.
  *
  * GET stays open: polling a status decides nothing.
  */

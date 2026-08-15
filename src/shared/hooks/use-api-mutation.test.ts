@@ -1,15 +1,13 @@
 /**
- * The mutation layer's three load-bearing behaviours, driven through
- * TanStack's own framework-free `MutationObserver` — the same machinery
- * `useMutation` runs, minus React. That is deliberate: the ORDER of
- * onMutate → mutationFn → onSuccess/onError → onSettled is the contract being
- * pinned, and a hand-rolled runner would pin a re-implementation of it instead.
+ * The mutation layer's three load-bearing behaviours, driven through TanStack's
+ * framework-free `MutationObserver`. ⚠ Deliberate: the contract is the ORDER
+ * onMutate → mutationFn → onSuccess/onError → onSettled, and a hand-rolled
+ * runner would pin a re-implementation instead.
  *
- * WHAT IS BEING PROVEN, in the terms of the launch blocker:
- *  1. the optimistic row is in the cache BEFORE the network settles;
- *  2. a failure restores the exact bytes that were there before;
- *  3. the settle gate opens for the realtime coordinator exactly once, on both
- *     paths, so a write that throws cannot strand a deferred refetch forever.
+ * Proven: (1) the optimistic row is in the cache BEFORE the network settles;
+ * (2) a failure restores the exact prior bytes; (3) the settle gate opens
+ * exactly once on BOTH paths, so a throwing write cannot strand a deferred
+ * refetch forever.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -46,12 +44,8 @@ function read(client: QueryClient): Cache | undefined {
   return client.getQueryData<Cache>(KEY);
 }
 
-/**
- * A transport whose promise the test resolves by hand, and which records the
- * cache AS THE REQUEST LEAVES. That snapshot is the deterministic proof the
- * blocker asks for: the optimistic row is on screen before the network is even
- * spoken to, not merely before it answers.
- */
+/** Transport resolved by hand, recording the cache AS THE REQUEST LEAVES — the
+ *  proof that the optimistic row lands before the network is even spoken to. */
 function deferredRequest(observe?: () => unknown) {
   let settle!: (value: unknown) => void;
   let fail!: (error: unknown) => void;
@@ -115,15 +109,12 @@ describe("useApiMutation — optimistic writes", () => {
 
     const inFlight = observer.mutate({ body: "second" });
     await flush();
-    // The network has NOT answered — `settle` has not been called — and the
-    // transport saw the pending row already in the cache when it was called.
     expect((seen[0] as Cache).rows.map((r) => r.id)).toEqual(["a", "pending:1"]);
     expect(read(client)?.rows.map((r) => r.id)).toEqual(["a", "pending:1"]);
     expect(read(client)?.rows[1].body).toBe("second");
 
     settle({ row: { id: "real-1", body: "second" } });
     await inFlight;
-    // The RESPONSE is what replaces it — no refetch was asked for.
     expect(read(client)?.rows.map((r) => r.id)).toEqual(["a", "real-1"]);
   });
 
@@ -173,8 +164,7 @@ describe("useApiMutation — optimistic writes", () => {
       client,
       buildApiMutationOptions<void, unknown>(client, request, {
         request: () => ({ path: PATH }),
-        // The prefix key is the point: a writer does not know which query-param
-        // variants a reader mounted.
+        // ⚠ Prefix key: a writer does not know which variants a reader mounted.
         optimistic: () =>
           patchCache<Cache>(apiPathKey(PATH), (cache) =>
             cache ? { rows: [{ id: "pending:1", body: "x" }] } : cache
@@ -216,11 +206,10 @@ describe("useApiMutation — optimistic writes", () => {
     const filters = cancel.mock.calls[0][0] as {
       predicate: (q: { state: { data: unknown } }) => boolean;
     };
-    // A first load has nothing for this write to clobber, and cancelling it
-    // would leave the surface empty with nothing scheduled to fill it.
+    // ⚠ A first load has nothing to clobber; cancelling it leaves the surface
+    // empty with nothing scheduled to fill it.
     expect(filters.predicate({ state: { data: { rows: [] } } })).toBe(true);
     expect(filters.predicate({ state: { data: undefined } })).toBe(false);
-    // And the patch declines to seed an unloaded entry in the first place.
     expect(client.getQueryData(firstLoad)).toBeUndefined();
   });
 

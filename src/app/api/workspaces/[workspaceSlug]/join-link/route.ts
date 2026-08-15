@@ -12,7 +12,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** GET /api/workspaces/[workspaceSlug]/join-link — the standing shareable link token. Admin+. */
+/** GET — the standing shareable link token. Admin+. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -28,7 +28,7 @@ export const GET = withUserAuth(
   }
 );
 
-/** POST /api/workspaces/[workspaceSlug]/join-link — rotate (invalidate + remint). Admin+. */
+/** POST — rotate (invalidate + remint). Admin+. */
 export const POST = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -42,8 +42,7 @@ export const POST = withUserAuth(
       return toErrorResponse(err);
     }
   },
-  // sessionOnly: rotating the shareable join link is an admin access-control
-  // action (mints/invalidates workspace-entry credentials), not an agent one.
+  // sessionOnly: mints/invalidates workspace-entry credentials.
   { sessionOnly: true }
 );
 

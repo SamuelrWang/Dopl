@@ -8,19 +8,16 @@ import { SEGMENT, installBridge } from "#/test-utils/bridge";
 import OnboardingPage from "./index";
 
 /**
- * Smoke test for the ported /onboarding flow.
+ * /onboarding flow smoke test.
  *
- * The data layer is stubbed at `window.dopl.apiRequest` — the Electron bridge —
- * because the page's own gate reads through the SPA client while every step of
- * the reused `OnboardingFlowCore` (survey POST, MCP status poll, complete POST)
- * reads through the WEB `apiRequest`. Both funnel into the same bridge in the
- * packaged app, so stubbing it exercises the real path once. `fetch` is a
- * never-resolving tripwire — the flow used to call it directly, and the
- * packaged renderer ships `connect-src 'none'`.
+ * ⚠ Stubbed at `window.dopl.apiRequest` (the Electron bridge): the page's gate
+ * reads through the SPA client while every step of the reused
+ * `OnboardingFlowCore` (survey POST, MCP status poll, complete POST) reads
+ * through the WEB `apiRequest`. Both funnel into the same bridge in the
+ * packaged app. `fetch` is a never-resolving tripwire (`connect-src 'none'`).
  *
- * `AuthSplitLayout` is mocked to a passthrough: its right pane is purely
- * decorative (a bundled banner under a LiquidGlass slab) and no assertion here
- * touches it.
+ * `AuthSplitLayout` mocked to a passthrough — its right pane is decorative and
+ * nothing here asserts on it.
  */
 
 vi.mock("@/shared/layout/auth-split", () => ({
@@ -85,7 +82,6 @@ describe("onboarding page", () => {
 
     expect(await screen.findByText("About You")).toBeInTheDocument();
 
-    // The Continue button is gated on at least one descriptor.
     fireEvent.click(screen.getByRole("button", { name: "Engineering" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
@@ -112,8 +108,8 @@ describe("onboarding page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("Connect Your Agent")).toBeInTheDocument();
-    // The MCP URL is built from the bridge's appOrigin, never window.location
-    // (which is a file:// document in the packaged app).
+    // ⚠ MCP URL comes from the bridge's appOrigin, NEVER window.location —
+    // that is a file:// document in the packaged app.
     expect(
       await screen.findByText("https://www.usedopl.com/api/mcp")
     ).toBeInTheDocument();
@@ -149,10 +145,9 @@ describe("onboarding page", () => {
   });
 
   /**
-   * This route lives OUTSIDE the workspace shell, so its states render on the
-   * raw body — `mosaic-bg`, the dark landing backdrop, where token text is
-   * near-black on near-black. And a 401 here used to be a generic error card
-   * whose "Try again" only 401s again (fleet audit 2026-08-03).
+   * ⚠ Outside the workspace shell, so states render on the raw body
+   * (`mosaic-bg`, dark) where token text is near-black on near-black. A 401 must
+   * not become a generic error card whose "Try again" only 401s again.
    */
   it("routes a 401 to the sign-in screen, not a dead-end error card", async () => {
     apiRequest.mockResolvedValue({
@@ -164,8 +159,6 @@ describe("onboarding page", () => {
 
     renderPage();
 
-    // "Log In" since 2026-08-13 — the shared form's heading and submit label
-    // are one string, and both took the landing page's wording.
     expect(await screen.findByRole("heading", { name: "Log In" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
@@ -180,7 +173,7 @@ describe("onboarding page", () => {
   });
 
   it("a non-401 error still offers a retry, on that same cover", async () => {
-    // 404, not 500: the shared retry predicate retries 5xx, so a server error
+    // ⚠ 404, not 500: the shared retry predicate retries 5xx, so a server error
     // would still be in flight here.
     apiRequest.mockResolvedValue({
       status: 404,

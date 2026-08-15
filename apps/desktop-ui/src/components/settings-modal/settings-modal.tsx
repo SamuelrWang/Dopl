@@ -21,28 +21,22 @@ interface Props {
   /** Canonical `{slug}-{publicId}` segment of the open workspace. */
   workspaceSegment: string;
   workspaceId: string;
-  /** The rail's role for this workspace — the seed for gating until
-   *  `/api/workspaces/me` answers with the authoritative one. */
+  /** Seed for gating until `/api/workspaces/me` answers authoritatively. */
   role: Role;
-  /** The shell's workspaces refetch, so the rail and switcher pick up a
-   *  rename immediately. */
+  /** Shell's workspaces refetch, so the switcher picks up a rename at once. */
   onWorkspaceChanged: () => void;
 }
 
 /**
- * Settings modal — the DESKTOP binding of
- * `@/shared/layout/settings-modal/settings-modal-core`.
+ * DESKTOP binding of `@/shared/layout/settings-modal/settings-modal-core` —
+ * gear opens a modal over the current page (the `/settings` route still works
+ * for deep links).
  *
- * Restores the web app's gear-opens-a-modal-over-the-current-page behaviour in
- * the SPA (the port had replaced it with a navigate to `/settings`, a
- * different and narrower surface; that route still works for deep links).
- *
- * Three panes come from the shared cores unchanged — General, Members and the
- * Account profile form, all of which read through `apiRequest`, i.e. the IPC
- * bridge. What the renderer cannot do arrives as slots: the multipart icon
- * upload is simply absent (the bridge carries JSON), account deletion links
- * out, and Plans & Billing renders in full off `PlansBillingCore` with only
- * its two Stripe-shaped actions rerouted to the browser (see `./billing-pane`).
+ * General, Members and the Account profile form come from the shared cores
+ * unchanged. What the renderer cannot do arrives as SLOTS: multipart icon
+ * upload absent (the bridge carries JSON only), account deletion links out,
+ * Plans & Billing reroutes its two Stripe actions to the browser
+ * (`./billing-pane`).
  */
 export function SettingsModal({
   open,
@@ -57,18 +51,17 @@ export function SettingsModal({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // The web shell reads the caller from the Supabase session; here main owns
-  // it, so the id comes off the membership endpoint — the SAME cache entry
-  // `useWorkspaceAccess` fills for the members and skills pages, and only
-  // while the modal is open (it is the Members pane that needs it).
+  // Main owns the session here, so the caller id comes off the membership
+  // endpoint — the SAME cache entry `useWorkspaceAccess` fills, and only while
+  // the modal is open (the Members pane needs it).
   const me = useApiQuery<{ role: Role; userId: string }>("/api/workspaces/me", {
     workspaceId,
     enabled: open && Boolean(workspaceId),
   });
 
-  // Re-reading the keys a workspace write invalidates is `#/lib/workspace-cache`'s
-  // job — the SAME helper the /settings page calls, so the two surfaces can no
-  // longer disagree about what a rename or a delete makes stale.
+  // ⚠ Invalidation lives in `#/lib/workspace-cache` — the SAME helper the
+  // /settings page calls, so the two surfaces cannot disagree about what a
+  // rename or delete makes stale.
   const invalidate = () => invalidateWorkspaceReads(queryClient, workspaceSegment);
 
   return (
@@ -92,8 +85,8 @@ export function SettingsModal({
             invalidate();
             onWorkspaceChanged();
             onOpenChange(false);
-            // Falling back to BootPage, which provisions via ensure-default or
-            // routes to /onboarding — mirrors the web's post-delete convergence.
+            // "/" = BootPage, which provisions via ensure-default or routes to
+            // /onboarding — mirrors the web's post-delete convergence.
             navigate(next ? `/${canonicalSegment(next)}` : "/", { replace: true });
           }}
         />

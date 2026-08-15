@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_COMPOSER_LINES, growHeight } from "./auto-grow-textarea";
 
-// A realistic composer: 12.5px text at leading-relaxed (1.625) = 20.3px per line,
-// plus py-1 = 8px of vertical padding.
+// Real composer: 12.5px text at leading-relaxed (1.625) = 20.3px/line, py-1 = 8px.
 const LH = 20.3;
 const PAD = 8;
 const line = (n: number) => LH * n + PAD;
@@ -18,7 +17,6 @@ describe("growHeight (shared with the desktop session window's D7 math)", () => 
   });
 
   it("stops at exactly three lines and then scrolls", () => {
-    // Everything past the cap returns the SAME height — the overflow scrolls.
     expect(growHeight(line(4), LH, MAX_COMPOSER_LINES, PAD)).toBeCloseTo(line(3));
     expect(growHeight(line(40), LH, MAX_COMPOSER_LINES, PAD)).toBeCloseTo(line(3));
   });
@@ -34,7 +32,7 @@ describe("growHeight (shared with the desktop session window's D7 math)", () => 
   });
 
   it("falls back to the raw scrollHeight when the line-height is degenerate", () => {
-    // `line-height: normal` parses to NaN; growing is better than collapsing.
+    // `line-height: normal` parses to NaN.
     expect(growHeight(120, Number.NaN, MAX_COMPOSER_LINES, PAD)).toBe(120);
     expect(growHeight(120, 0, MAX_COMPOSER_LINES, PAD)).toBe(120);
   });

@@ -1,21 +1,12 @@
 /**
  * `GET /api/workspaces/resolve?segment=...` — the SPA router's face on
- * `resolveWorkspaceSegmentForUser`.
- *
- * THE PROPERTY THIS FILE EXISTS FOR: on the web, a stale `{slug}` in the URL
- * is corrected by an RSC `redirect()` the user never sees. The SPA has no such
- * hook, so the whole slug-vs-publicId disambiguation has to cross the wire —
- * and it has to cross it INTACT:
- *
- *   1. `needsRedirect` must be reported verbatim from the resolver, both
- *      directions. Swallowing a `true` leaves the SPA sitting on a legacy URL
- *      forever (and the `legacy_slug_redirect` telemetry that gates deleting
- *      the legacy path never drops to zero); inventing a `true` bounces the
- *      router on every canonical navigation.
- *   2. A miss must be a plain 404. The resolver is membership-scoped, so
- *      "not a member" and "does not exist" arrive identically — the route must
- *      not split them back apart into 403-vs-404 and turn workspace existence
- *      into an oracle.
+ * `resolveWorkspaceSegmentForUser`. The SPA has no RSC `redirect()`, so the slug-vs-publicId
+ * disambiguation crosses the wire and must cross INTACT:
+ *   1. ⚠ `needsRedirect` reported VERBATIM, both directions. Swallowing a `true` strands the SPA
+ *      on a legacy URL (and `legacy_slug_redirect` telemetry never drops to zero); inventing one
+ *      bounces the router on every canonical navigation.
+ *   2. A miss is a plain 404 — the resolver is membership-scoped, so non-member and nonexistent
+ *      arrive identically and must not be split into 403-vs-404.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -96,8 +87,7 @@ describe("GET /api/workspaces/resolve", () => {
   });
 
   it("passes needsRedirect: true through on a legacy slug-only segment", async () => {
-    // The web path 301s here; the SPA replaces history instead. Either way it
-    // needs to be TOLD, and it needs the canonical to rewrite to.
+    // The SPA replaces history rather than 301ing, but it still needs the canonical.
     mockResolve.mockResolvedValue({
       workspace: WORKSPACE,
       canonical: CANONICAL,
@@ -161,8 +151,7 @@ describe("GET /api/workspaces/resolve", () => {
   });
 
   it("surfaces a resolver failure as a 500 envelope, never as a 404", async () => {
-    // A 404 here would make the SPA render "workspace not found" for what is
-    // actually a transient DB fault.
+    // A 404 would render "workspace not found" for a transient DB fault.
     mockResolve.mockRejectedValue(new Error("db down"));
 
     const res = await GET(getReq(`?segment=${CANONICAL}`));

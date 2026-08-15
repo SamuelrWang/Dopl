@@ -3,22 +3,16 @@
 import { useEffect, useState } from "react";
 
 /**
- * The wait at the end of onboarding, as a stepped checklist instead of a
- * spinner (LAUNCH-READINESS-ROADMAP §5 "Spinners → skeletons": a spinner over
- * a multi-second provisioning call tells the user nothing except that time is
- * passing).
+ * End-of-onboarding wait as a stepped checklist, not a spinner
+ * (LAUNCH-READINESS-ROADMAP §5).
  *
- * The three rows are the real stages of `POST /api/onboarding/complete` —
- * the survey/MCP answers are already saved, the call names the default
- * workspace and stamps `onboarded_at`, and then the app navigates to the
- * workspace overview. There are no progress events on the wire, so the first
- * two tick on a timer and the LAST one never self-completes: it stays active
- * until this component unmounts, which happens when the navigation it names
- * actually lands. Nothing here can claim to be done when it isn't.
+ * Rows are the real stages of `POST /api/onboarding/complete`. ⚠ No progress
+ * events on the wire: first two tick on a timer, the LAST never self-completes
+ * — it stays active until unmount, i.e. until the navigation it names lands.
+ * Nothing may claim done when it isn't.
  *
- * Onboarding is exempt from the token/type scale (DESIGN-SYSTEM: "Exempt:
- * marketing pages and auth + onboarding (their own glass/3D kit)"), so the
- * px/hex values here match the sibling steps rather than the app tokens.
+ * px/hex here, not tokens: auth + onboarding are DESIGN-SYSTEM-exempt (own
+ * glass/3D kit), and these match the sibling steps.
  */
 
 const STEPS = [
@@ -27,7 +21,7 @@ const STEPS = [
   "Opening Dopl",
 ] as const;
 
-/** Roughly the cadence of the two serial writes behind the call. */
+/** ~cadence of the two serial writes behind the call. */
 const STEP_MS = 850;
 
 export function ProvisioningChecklist() {
@@ -65,11 +59,8 @@ export function ProvisioningChecklist() {
   );
 }
 
-/**
- * Done = filled tick. Active = the pulsing dot the connect step already uses
- * for "Waiting for your agent…" (a status indicator, deliberately not a
- * spinner). Pending = hollow ring.
- */
+/** Done = filled tick. Active = pulsing dot (same status indicator the connect
+ *  step uses — deliberately not a spinner). Pending = hollow ring. */
 function Marker({ done, active }: { done: boolean; active: boolean }) {
   if (done) {
     return (

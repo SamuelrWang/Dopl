@@ -13,12 +13,9 @@ export interface UseCopyToClipboardResult {
   copy: (text: string, id?: string) => Promise<boolean>;
 }
 
-/**
- * Copy-to-clipboard with the transient "copied" flash — the single
- * implementation behind every Copy→Check affordance. Guards missing
- * `navigator.clipboard` (SSR, insecure contexts) and resets after
- * `resetMs`.
- */
+/** Copy-to-clipboard with the transient "copied" flash — the one implementation
+ *  behind every Copy→Check affordance. Guards missing `navigator.clipboard`
+ *  (SSR, insecure contexts); resets after `resetMs`. */
 export function useCopyToClipboard(
   resetMs: number = RESET_MS
 ): UseCopyToClipboardResult {

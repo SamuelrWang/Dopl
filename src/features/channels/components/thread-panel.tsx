@@ -31,7 +31,7 @@ function displayStatus(thread: ChannelThread): ThreadDisplayStatus {
 }
 
 interface Props {
-  /** The channel's threads, newest-first (server `created_at DESC`; no re-sort). */
+  /** ⚠ Newest-first from the server (`created_at DESC`) — do not re-sort. */
   threads: ChannelThread[];
   /** True while the first threads read is still resolving. */
   threadsLoading: boolean;
@@ -39,19 +39,13 @@ interface Props {
   members: ChannelMember[];
   /** userId -> display name, for the creator / target labels. */
   memberNames: Map<string, string>;
-  /**
-   * The latest `task_progress` milestone per thread id (derived from the loaded
-   * messages), shown as a one-line accomplishment under the title. Absent map
-   * or missing entry renders nothing.
-   */
+  /** Latest `task_progress` per thread id, derived from loaded messages, shown
+   *  as a one-liner under the title. Absent map / entry renders nothing. */
   latestMilestone?: Map<string, ChannelMessage>;
   /** Navigate to the thread's grouped card (scroll + transient highlight). */
   onSelectThread: (threadId: string) => void;
-  /**
-   * The viewer's user id — gates the per-row Close / Reopen controls to a
-   * thread's creator or target. Absent (until the integration pass threads it
-   * in) hides the controls entirely.
-   */
+  /** ⚠ Gates the per-row Close / Reopen controls to a thread's creator or
+   *  target. Absent hides the controls entirely. */
   currentUserId?: string;
   /** Close a thread with an outcome + optional summary. Absent hides Close. */
   onCloseThread?: (
@@ -64,21 +58,16 @@ interface Props {
 }
 
 /**
- * The channel's thread list, shown in a header popover (the Bell-popover
- * sibling). Each row carries the thread title, its status chip (Thread active /
- * complete / failed), a mode badge, the pair the thread runs between as small
- * avatars, and the created (plus closed) time. Clicking a row scrolls its
- * grouped card into view and briefly rings it. Renders the shared
- * {@link EmptyState} when the channel has no threads yet.
+ * The channel's thread list, shown in a header popover. Each row carries the
+ * title, status chip, mode badge, the pair as small avatars, and created (plus
+ * closed) time. Clicking scrolls the grouped card into view and rings it.
  *
- * A channel holds MANY threads, and from three members up they run between
- * DIFFERENT pairs, so every row states whose exchange it is rather than leaving
- * the reader to assume it is theirs: the viewer reads as "You" wherever they
- * appear in the pair, a thread whose addressee is gone says so instead of
- * rendering a lone creator, and a thread the viewer is not party to carries a
- * read-only marker — reads are channel-transparent by design, but the server
- * refuses that member's writes (see {@link isThreadParty}). Only a party gets
- * the Close / Reopen strip, which was already true and is now stated.
+ * ⚠ A channel holds MANY threads, and from three members up they run between
+ * DIFFERENT pairs, so every row states WHOSE exchange it is: the viewer reads as
+ * "You" wherever they appear, a thread with no addressee says so rather than
+ * rendering a lone creator, and a non-party thread carries a read-only marker.
+ * Reads are channel-transparent by design, but the server refuses that member's
+ * writes ({@link isThreadParty}), and only a party gets Close / Reopen.
  */
 export function ThreadPanel({
   threads,
@@ -105,9 +94,8 @@ export function ThreadPanel({
       avatarUrl: member?.avatarUrl ?? null,
     };
   };
-  // The viewer reads as "You" wherever they appear in a pair. In a channel
-  // running several threads between different pairs, that is the fastest way to
-  // tell which rows are yours; it is also the only place the panel speaks about
+  // The viewer reads as "You" wherever they appear in a pair — the fastest way
+  // to tell which rows are yours, and the only place the panel speaks about
   // a specific person, so it never says "the peer" or "them".
   const nameFor = (userId: string) => {
     if (userId === currentUserId) return "You";

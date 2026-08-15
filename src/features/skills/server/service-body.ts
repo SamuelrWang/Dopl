@@ -8,13 +8,9 @@ import * as history from "./history";
 import { assertAgentWriteAllowed, stripNullBytes } from "./service-shared";
 import { getSkillBySlug } from "./service-reads";
 
-/**
- * Body read / write for the single SKILL.md — now columns on the skill
- * row (F-029). `writeBody` preserves the optimistic-versioning CAS (on
- * `body_updated_at`, surfaced as the version token) + history
- * snapshotting via the single `./history` choke-point. The public
- * contract is unchanged: it still returns the `SkillFile` shape.
- */
+/** Body read / write for the single SKILL.md (columns on the skill row).
+ *  `writeBody` holds the CAS on `body_updated_at` — surfaced as the version
+ *  token — plus history snapshotting via the `./history` choke-point. */
 
 /** Fetch the skill's SKILL.md body + version token. */
 export async function readBody(
@@ -28,16 +24,12 @@ export async function readBody(
 }
 
 /**
- * Overwrite the skill's SKILL.md body (PUT semantics). Preserves the
- * optimistic-versioning CAS + history snapshotting.
- *
- * `skillUpdatedAt` is the skill row's `updated_at` AFTER the write — the
- * separate metadata-CAS clock. A body write bumps it (the skills touch
- * trigger fires on the same UPDATE), so returning the fresh value lets the
- * web editor keep its metadata precondition current; otherwise the next
- * name/folder/sharing PATCH would false-412 (F-038 D10). The body's own CAS
- * clock stays `file.updatedAt` (= body_updated_at), which metadata writes
- * never move.
+ * Overwrite the SKILL.md body (PUT semantics), with CAS + history snapshot.
+ * ⚠ `skillUpdatedAt` is the post-write row `updated_at` — the METADATA CAS
+ * clock, which a body write bumps via the touch trigger. Returning it keeps
+ * the editor's metadata precondition current; without it the next
+ * name/folder/sharing PATCH false-412s. The body's own clock stays
+ * `file.updatedAt` (= body_updated_at), which metadata writes never move.
  */
 export async function writeBody(
   ctx: SkillContext,
@@ -52,12 +44,11 @@ export async function writeBody(
   if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
   }
-  // Strip U+0000 (unstorable in Postgres text) before both the no-op compare
-  // and the write, so a NUL-bearing body reconciles cleanly against stored
-  // content instead of 500-ing at the DB boundary (F-7).
+  // ⚠ Strip U+0000 before BOTH the no-op compare and the write, so a
+  // NUL-bearing body reconciles against stored content instead of 500-ing.
   const body = stripNullBytes(input.body);
-  // No-op saves (autosave echoes, agent re-writes of identical content)
-  // neither touch the row nor mint a version — so updated_at is unchanged.
+  // No-op saves (autosave echoes, identical agent re-writes) neither touch
+  // the row nor mint a version, so updated_at is unchanged.
   if (body === file.body) {
     return { file, skill, skillUpdatedAt: skill.updatedAt };
   }
@@ -83,10 +74,9 @@ export async function writeBody(
     skillId: skill.id,
     body: saved.body,
   });
-  // Re-read the row's post-write updated_at (the metadata clock the touch
-  // trigger just bumped). Falls back to the pre-write value only if the row
-  // vanished mid-write (deleted concurrently) — a later metadata edit would
-  // then 412 and reconcile.
+  // Re-read the post-write updated_at (metadata clock the touch trigger just
+  // bumped). Falls back to the pre-write value only if the row vanished
+  // mid-write; a later metadata edit then 412s and reconciles.
   const fresh = await repo.findSkillById(ctx.workspaceId, skill.id);
   return {
     file: saved,

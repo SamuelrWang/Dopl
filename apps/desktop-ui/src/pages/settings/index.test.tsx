@@ -14,16 +14,14 @@ import {
 import SettingsPage from "./index";
 
 /**
- * Smoke test for the ported settings page.
+ * Settings page smoke test.
  *
- * Fixtures, bridge stub and render harness come from `#/test-utils/bridge` —
- * the resolve/me wire shapes are the SPA's most load-bearing contract and are
- * declared once for every suite.
+ * Fixtures, bridge stub and harness come from `#/test-utils/bridge`: the
+ * resolve/me wire shapes are declared once for every suite.
  *
- * This page reads over BOTH clients: the seam (`useWorkspaceRoute`,
- * `useApiQuery`) uses the SPA transport while every reused section (connected
- * apps and the shared workspace-settings body) uses the WEB `apiRequest`. Both
- * land on the same bridge in the packaged app.
+ * ⚠ This page reads over BOTH clients — `useWorkspaceRoute`/`useApiQuery` via
+ * the SPA transport, reused sections (connected apps, shared workspace-settings
+ * body) via the WEB `apiRequest`. Both land on the same bridge when packaged.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -40,7 +38,6 @@ const GRANTS = [
 
 /** Routes every path this page reads; anything else fails the test loudly. */
 function defaultBridge(path: string, role = "owner"): Promise<BridgeResponse> {
-  // The page resolves its workspace through the shell's boot read now (P0-2).
   if (path === "/api/boot") return Promise.resolve(ok(bootBody({ role })));
   if (path.startsWith("/api/workspaces/resolve")) {
     return Promise.resolve(ok(resolveBody()));
@@ -87,11 +84,9 @@ describe("settings page", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  // Trash is gone app-wide (soft-delete removal). Only the ENDPOINT half is
-  // asserted: `workspace-trash-section.tsx` is deleted, so a re-imported
-  // section fails tsc long before it could render a "Trash" heading, but a
-  // stray `/trash` read is a runtime-only regression that nothing else
-  // catches — the bridge stub rejects unknown paths, and this pins that the
+  // ⚠ Trash is gone app-wide. Only the ENDPOINT half is asserted: a re-imported
+  // section fails tsc, but a stray `/trash` read is a runtime-only regression
+  // nothing else catches — this pins that the bridge stub's unknown-path
   // rejection is never even reached.
   it("never reads the trash endpoint", async () => {
     renderPage();

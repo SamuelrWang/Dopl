@@ -1,24 +1,13 @@
 "use client";
 
 /**
- * SelectMenu — the design-system dropdown for picking ONE value from a small,
- * fixed set of options where each option needs a plain-words explanation.
+ * SelectMenu — pick ONE value from a small fixed set where each option needs a
+ * plain-words explanation. Composes `Popover` + `MenuItem`. Use anywhere a
+ * native `<select>` would go: native can't show per-option descriptions.
  *
- * It is NOT a new primitive: it composes the kit's `Popover` + `MenuItem`
- * (popover-menu.tsx) so the backdrop / Escape / viewport-clamp behavior and the
- * option-row styling stay in one place. What it adds is the SELECT shape the kit
- * was missing — a pill trigger that names the current value, and options that
- * carry a `description` line, so an operator can read what a setting actually
- * does before choosing it instead of decoding a bare enum name.
- *
- * Use this anywhere a bare native `<select>` would otherwise appear: a native
- * select cannot show per-option descriptions, and it renders OS chrome that has
- * nothing to do with the kit.
- *
- * The panel opens in the Popover's COORDINATE mode (measured off the trigger on
- * open) rather than the trigger-anchored mode, because these controls sit inside
- * scrolling, overflow-clipping panes (the channel transcript, a `.page-float`)
- * where an anchored panel would render as a clipped sliver.
+ * ⚠ Opens in Popover COORDINATE mode, not trigger-anchored: these controls sit
+ * inside scrolling, overflow-clipping panes (channel transcript, `.page-float`)
+ * where an anchored panel renders as a clipped sliver.
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -28,7 +17,6 @@ import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 
 export interface SelectMenuOption<T extends string> {
   value: T;
-  /** Short name shown on the trigger and as the option's title. */
   label: string;
   /** Plain-words second line: what choosing this actually does. */
   description?: string;
@@ -50,7 +38,6 @@ export function SelectMenu<T extends string>({
   onChange: (next: T) => void;
   /** Muted leading word inside the pill ("Tools", "Messages"). */
   prefix?: string;
-  /** Optional leading icon inside the pill. */
   icon?: ReactNode;
   /** Accessible name for the trigger. */
   ariaLabel: string;

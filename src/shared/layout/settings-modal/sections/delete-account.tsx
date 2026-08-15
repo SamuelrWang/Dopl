@@ -13,20 +13,18 @@ export function DeleteAccount() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Rejecting keeps the ConfirmDialog open so the user can retry or cancel
-  // (its onConfirm contract, which also expects the caller to toast) — the
-  // same shape skill-view's permanent delete uses. Everything after the
-  // account is actually gone is best-effort local cleanup and must not
-  // re-open the dialog.
+  // ConfirmDialog `onConfirm` contract: rejecting keeps the dialog open for
+  // retry/cancel, and the caller toasts. ⚠ Everything after the account is
+  // actually gone is best-effort cleanup and must NOT re-open the dialog.
   async function handleDelete() {
     setError(null);
 
     try {
       const res = await fetch("/api/user/delete", { method: "DELETE" });
       if (!res.ok) {
-        // This route predates §9's `{ error: { code, message } }` envelope
-        // and still answers with a flat `{ error: string }` on every failure
-        // branch (src/app/api/user/delete/route.ts).
+        // ⚠ Predates §9's `{ error: { code, message } }` envelope — answers a
+        // flat `{ error: string }` on every failure branch
+        // (src/app/api/user/delete/route.ts).
         const data = (await res
           .json()
           .catch(() => null)) as { error?: string } | null;
@@ -43,7 +41,6 @@ export function DeleteAccount() {
     }
 
     try {
-      // Clear all app-related localStorage before signing out
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -57,13 +54,12 @@ export function DeleteAccount() {
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
 
-      // Sign out client-side and redirect
       await getSupabaseBrowser().auth.signOut();
       router.push("/login");
       router.refresh();
     } catch {
-      // localStorage may be unavailable, or sign-out may fail — the account
-      // is already gone either way, so let the dialog close.
+      // localStorage unavailable or sign-out failed — account is gone either
+      // way, so let the dialog close.
     }
   }
 

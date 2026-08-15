@@ -14,17 +14,15 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { LinkLike } from "@/shared/ui/link-like";
-// Type-only: erased at compile time, so the Next-coupled settings modal never
-// enters the SPA's import graph.
+// ⚠ Type-only import — erased at compile time, so the Next-coupled settings
+// modal never enters the SPA's import graph.
 import type { SettingsSection } from "@/shared/layout/settings-modal";
 import styles from "./app-shell.module.css";
 
 /**
- * RETIRED (2026-08-07), then DELETED (2026-08-11): `canvas`, `workflows` and
- * `configuration` are gone from this union, from `NAV`, and from the tree — no
- * page remains behind any of the three names. Adding a section back means a
- * route row in `apps/desktop-ui/src/routes.tsx` AND the hand copy in
- * `dopl-desktop-app/main/deep-link-target.js`.
+ * ⚠ Adding a section = a member here + a `NAV` row + a route row in
+ * `apps/desktop-ui/src/routes.tsx` + the hand copy in
+ * `dopl-desktop-app/main/deep-link-target.js`. All four, or it half-lands.
  */
 export type NavSection =
   | "overview"
@@ -54,12 +52,10 @@ export function sectionPath(segment: string, section: NavSection): string {
 }
 
 /**
- * Which nav row a path highlights (null = none). Path shape:
- * `/{wsSegment}/{section}/...` — the bare workspace root (which redirects
- * to /overview, `WORKSPACE_HOME_PATH`) highlights Overview; a non-nav route
- * like /settings highlights NOTHING (falling back to the home row made
- * Settings look like it lived under that page). Both apps derive it from
- * their own router's path, so the rule lives here.
+ * Which nav row a path highlights (null = none). Path shape
+ * `/{wsSegment}/{section}/...`. Bare workspace root → Overview; a non-nav route
+ * like /settings → NOTHING (falling back to the home row made Settings look
+ * like it lived under that page). Shared so both routers derive it identically.
  */
 export function activeSectionFromPath(pathname: string): NavSection | null {
   const segments = pathname.split("/").filter(Boolean);
@@ -71,23 +67,20 @@ export function activeSectionFromPath(pathname: string): NavSection | null {
 
 export interface AppSidebarCoreProps {
   workspaceSegment: string;
-  /** Highlighted row — `activeSectionFromPath(currentPath)` in both apps.
-   *  Null on non-nav routes (e.g. /settings): no row highlights. */
+  /** `activeSectionFromPath(currentPath)`; null on non-nav routes. */
   activeSection: NavSection | null;
-  /** Pending consent requests badged on Channels; 0 hides the badge. */
+  /** Pending consents badged on Channels; 0 hides the badge. */
   consentCount: number;
   onOpenSettings: (section: SettingsSection) => void;
-  /** The brand slot — the workspace switcher, injected because it routes. */
+  /** Workspace switcher — injected because it routes. */
   brand: ReactNode;
-  /** Router-agnostic link — `next/link` in the web app, react-router in the SPA. */
+  /** `next/link` on the web, react-router in the SPA. */
   Link: LinkLike;
 }
 
 /**
- * The sidebar's Next-free core (see `./app-sidebar` for the web binding):
- * brand slot, section nav with the sliding thumb, upgrade card, footer.
- * Everything router- or fetch-shaped is a prop so the desktop renderer can
- * mount the same sidebar on the SPA router.
+ * Next-free sidebar core (`./app-sidebar` = web binding). Router- and
+ * fetch-shaped things are props so the SPA mounts the same sidebar.
  */
 export function AppSidebarCore({
   workspaceSegment,
@@ -107,9 +100,8 @@ export function AppSidebarCore({
             key={section}
             href={sectionPath(workspaceSegment, section)}
             className={cn(
-              // The kit's ONE nav-chip recipe (globals.css / kit.css); the
-              // module contributes column layout only. Active chip = darker
-              // ink + the kit's raised white face over the chip's radius.
+              // Kit's ONE nav-chip recipe (globals.css / kit.css); the module
+              // contributes column layout only.
               "nav-chip",
               section === activeSection && "nav-chip-active raised-tab"
             )}

@@ -8,20 +8,17 @@ import * as repo from "./repository";
 import { getBaseById, getEntry } from "./service";
 
 /**
- * Knowledge export — turns a base / folder subtree into a downloadable
- * zip whose directory layout mirrors the KB tree, and a single entry
- * into a `.md` file. Each entry becomes `<slugified-title>.md`
- * (`entryToMarkdown`); folders become directories. The whole thing is
- * wrapped in one top-level dir named after the base/folder so it
- * extracts cleanly into a single directory.
+ * Export a base / folder subtree as a zip mirroring the KB tree, or one entry
+ * as `.md`. Entries become `<slugified-title>.md` (`entryToMarkdown`), folders
+ * become directories, all wrapped in one top-level dir so it extracts cleanly.
  *
- * Access is enforced through `getBaseById` (workspace + private/teams
- * visibility), which every entry/folder transitively belongs to — so a
- * caller who can't read the base can't export any slice of it.
+ * ⚠ Access rides `getBaseById` (workspace + private/teams visibility), which
+ * every entry/folder transitively belongs to — a caller who can't read the
+ * base can't export any slice of it.
  */
 
 export interface KnowledgeArchive {
-  /** ASCII-safe download filename (slugged), e.g. `my-base.zip`. */
+  /** ASCII-safe slugged filename, e.g. `my-base.zip`. */
   filename: string;
   data: Uint8Array;
 }
@@ -51,7 +48,7 @@ export async function buildFolderArchive(
   if (!folder || folder.workspaceId !== ctx.workspaceId) {
     throw new FolderNotFoundError(folderId);
   }
-  // Enforce base-level visibility (private / teams) before exporting.
+  // Base-level visibility (private / teams) before exporting.
   await getBaseById(ctx, folder.knowledgeBaseId);
   const { folders, entries } = await loadTree(folder.knowledgeBaseId);
   const data = buildZip(folder.name, folder.id, folders, entries, folder.description);
@@ -63,8 +60,8 @@ export async function buildEntryFile(
   entryId: string
 ): Promise<KnowledgeFile> {
   const entry = await getEntry(ctx, entryId);
-  // `getEntry` only checks the workspace; gate on base visibility too so
-  // a private base's entry can't be pulled by id.
+  // ⚠ `getEntry` only checks workspace — gate on base visibility too, else a
+  // private base's entry is pullable by id.
   await getBaseById(ctx, entry.knowledgeBaseId);
   return {
     filename: `${slugify(entry.title, "entry")}.md`,
@@ -85,11 +82,8 @@ async function loadTree(baseId: string): Promise<{
   return { folders, entries };
 }
 
-/**
- * Walks the (already-loaded) flat folder/entry arrays starting at
- * `rootFolderId` (null = base root) and produces a zip whose paths
- * mirror the tree, rooted under a `<rootName>/` directory.
- */
+/** Walks the already-loaded flat folder/entry arrays from `rootFolderId`
+ *  (null = base root) into zip paths under `<rootName>/`. */
 function buildZip(
   rootName: string,
   rootFolderId: string | null,
@@ -124,9 +118,8 @@ function buildZip(
   }
 
   function walk(parentId: string | null, dir: string): void {
-    // One namespace per directory: dedup entry filenames and folder
-    // names together so two items that slug to the same string don't
-    // overwrite each other on extraction.
+    // ⚠ ONE namespace per directory — dedup entry filenames and folder names
+    // together, else two items slugging alike overwrite on extraction.
     const used: string[] = [];
     for (const e of entriesByFolder.get(parentId) ?? []) {
       const name = slugify(e.title, "untitled", used);
@@ -139,8 +132,7 @@ function buildZip(
       const childDir = `${dir}${name}/`;
       const before = Object.keys(files).length;
       walk(f.id, childDir);
-      // Empty folder: emit a bare directory entry so the structure
-      // stays faithful even with no files beneath it.
+      // Bare directory entry keeps empty folders in the structure.
       if (Object.keys(files).length === before) files[childDir] = new Uint8Array(0);
     }
   }

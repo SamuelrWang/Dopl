@@ -7,16 +7,11 @@ import {
 } from "@/features/workspaces/server/service";
 
 /**
- * GET /api/workspaces/me — return the workspace the caller is currently
- * scoped to (resolved by the X-Workspace-Id header, else auto-targeted when
- * the caller has exactly one active membership; 0 or 2+ with no header →
- * 400 WORKSPACE_REQUIRED) plus their role on it.
- *
- * Used by the MCP server's startup handshake to confirm the requested
- * workspace exists and the caller is an active member, and to print the
- * workspace name in stderr boot output. `userId` lets MCP tools
- * self-identify the caller (e.g. dopl_members whoami) without a
- * separate lookup.
+ * GET — the workspace the caller is scoped to, plus their role. Resolved by X-Workspace-Id, else
+ * auto-targeted when the caller has exactly ONE active membership; 0 or 2+ with no header →
+ * 400 WORKSPACE_REQUIRED.
+ * Used by the MCP startup handshake to confirm membership. `userId` lets MCP tools self-identify
+ * (e.g. dopl_members whoami) without a second lookup.
  */
 export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
   try {

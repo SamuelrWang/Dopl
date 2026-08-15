@@ -2,15 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the ref-counted shared realtime channel registry (Phase 0 of
- * docs/DESKTOP-MIGRATION-PLAN.md). The mock mirrors the dangerous parts of
- * the realtime-js v2 contract the registry must respect:
- *   - `.on("postgres_changes", …)` after `.subscribe()` throws;
- *   - `client.channel(topic)` RETURNS THE EXISTING channel object for a
- *     topic the client still remembers (it does NOT mint a fresh one);
- *   - `removeChannel()` is async — the topic is only forgotten after the
- *     leave settles, and the removed channel's status callback receives a
- *     late CLOSED.
+ * Ref-counted shared realtime channel registry. ⚠ The mock mirrors the dangerous
+ * parts of the realtime-js v2 contract the registry must respect:
+ *   - `.on("postgres_changes", …)` after `.subscribe()` THROWS;
+ *   - `client.channel(topic)` RETURNS THE EXISTING channel object for a topic
+ *     the client still remembers (it does NOT mint a fresh one);
+ *   - `removeChannel()` is async — the topic is forgotten only after the leave
+ *     settles, and the removed channel's status callback gets a late CLOSED.
  */
 
 interface MockChannel {
@@ -37,7 +35,6 @@ function makeChannel(topic: string): MockChannel {
     lastStatus: null,
     on(_type, cfg, handler) {
       if (chan.subscribed) {
-        // The exact Supabase v2 failure mode this design must never hit.
         throw new Error(`tried to bind after subscribe on ${topic}`);
       }
       chan.bindings.push({ table: cfg.table, handler });
@@ -45,9 +42,7 @@ function makeChannel(topic: string): MockChannel {
     },
     subscribe(cb) {
       if (chan.subscribed) {
-        // Real realtime-js silently no-ops here (returns without
-        // registering the callback) — model the observable outcome: the
-        // new callback is NOT stored.
+        // ⚠ Real realtime-js silently no-ops (callback NOT stored).
         return chan;
       }
       chan.subscribed = true;
@@ -66,18 +61,16 @@ function makeChannel(topic: string): MockChannel {
 vi.mock("@/shared/supabase/browser", () => ({
   getSupabaseBrowser: () => ({
     channel: (topic: string) =>
-      // Dedupe by topic, exactly like RealtimeClient.channel().
       liveByTopic.get(topic) ?? makeChannel(topic),
     removeChannel: (chan: MockChannel) => {
       removed.push(chan);
       if (chan.lastStatus === "CHANNEL_ERROR" || chan.lastStatus === "TIMED_OUT") {
-        // Phoenix leave() on a channel that can't push (errored state)
-        // triggers the leave-ok SYNCHRONOUSLY — the close lands before
-        // removeChannel even returns. This is the common reconnect path.
+        // ⚠ Phoenix leave() on a channel that can't push fires leave-ok
+        // SYNCHRONOUSLY — close lands before removeChannel returns. Common
+        // reconnect path.
         if (liveByTopic.get(chan.topic) === chan) liveByTopic.delete(chan.topic);
         chan.statusCb?.("CLOSED");
       } else {
-        // Joined channel: real leave push, async ack + late CLOSED.
         queueMicrotask(() => {
           if (liveByTopic.get(chan.topic) === chan) liveByTopic.delete(chan.topic);
           chan.statusCb?.("CLOSED");
@@ -100,7 +93,7 @@ function lastChannel(): MockChannel {
   return channels[channels.length - 1];
 }
 
-/** Run pending microtasks (the mock's async removeChannel settlement). */
+/** Run pending microtasks (mock's async removeChannel settlement). */
 async function settle(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -127,8 +120,6 @@ describe("subscribeSharedWorkspaceTables", () => {
 
     expect(channels).toHaveLength(1);
     expect(__sharedChannelCountForTests()).toBe(1);
-    // One binding per table, attached before subscribe (the mock throws
-    // otherwise).
     expect(lastChannel().bindings.map((x) => x.table)).toEqual([...TABLES]);
   });
 
@@ -165,8 +156,6 @@ describe("subscribeSharedWorkspaceTables", () => {
 
     const late = vi.fn();
     subscribeSharedWorkspaceTables("ws1", TABLES, "knowledge", late);
-    // Late joiner gets its catch-up immediately; the early one is not
-    // re-fired.
     expect(late).toHaveBeenCalledTimes(1);
     expect(early).toHaveBeenCalledTimes(1);
     expect(channels).toHaveLength(1);
@@ -185,7 +174,7 @@ describe("subscribeSharedWorkspaceTables", () => {
     vi.advanceTimersByTime(1_001);
     expect(removed).toHaveLength(1);
     expect(__sharedChannelCountForTests()).toBe(0);
-    // The removed channel's late CLOSED must not resurrect anything.
+    // ⚠ The removed channel's late CLOSED must not resurrect anything.
     await settle();
     expect(__sharedChannelCountForTests()).toBe(0);
   });
@@ -193,7 +182,6 @@ describe("subscribeSharedWorkspaceTables", () => {
   it("revives within the grace window without re-joining (StrictMode)", () => {
     const off = subscribeSharedWorkspaceTables("ws1", TABLES, "k", vi.fn());
     off();
-    // Remount before the grace elapses — same channel object survives.
     subscribeSharedWorkspaceTables("ws1", TABLES, "k", vi.fn());
     vi.advanceTimersByTime(5_000);
     expect(removed).toHaveLength(0);
@@ -210,11 +198,9 @@ describe("subscribeSharedWorkspaceTables", () => {
     await settle();
     expect(channels).toHaveLength(2); // fresh channel object
     expect(removed).toContain(first); // old one released
-    // Topic reuse would have returned the old subscribed channel (mock
-    // dedupes by topic) and thrown on .on() — fresh topic proves the fix.
+    // ⚠ Topic reuse returns the old subscribed channel and throws on .on().
     expect(lastChannel().topic).not.toBe(first.topic);
 
-    // Escalating delay on repeat failure.
     lastChannel().statusCb?.("TIMED_OUT");
     vi.advanceTimersByTime(999);
     expect(channels).toHaveLength(2);
@@ -230,10 +216,8 @@ describe("subscribeSharedWorkspaceTables", () => {
     const second = lastChannel();
     second.statusCb?.("SUBSCRIBED");
 
-    // The async removal of `first` now settles and fires its late CLOSED.
     await settle();
-    // A healthy second channel must be left alone: no new channel, no
-    // pending reconnect that would tear it down.
+    // ⚠ A healthy second channel must be left alone.
     vi.advanceTimersByTime(60_000);
     expect(channels).toHaveLength(2);
     expect(second.subscribed).toBe(true);
@@ -246,7 +230,6 @@ describe("subscribeSharedWorkspaceTables", () => {
     chan.statusCb?.("CHANNEL_ERROR"); // arms 500ms retry
     chan.statusCb?.("SUBSCRIBED"); // realtime-js recovered on its own
     vi.advanceTimersByTime(60_000);
-    // No retry fired — the healthy channel was never torn down.
     expect(channels).toHaveLength(1);
     expect(removed).toHaveLength(0);
   });
@@ -258,7 +241,6 @@ describe("subscribeSharedWorkspaceTables", () => {
     await settle();
     lastChannel().statusCb?.("SUBSCRIBED");
     lastChannel().statusCb?.("CLOSED");
-    // Back to the first rung (500ms), not the second.
     vi.advanceTimersByTime(500);
     await settle();
     expect(channels).toHaveLength(3);
@@ -269,12 +251,10 @@ describe("subscribeSharedWorkspaceTables", () => {
     const chan = lastChannel();
     chan.statusCb?.("SUBSCRIBED");
     off();
-    // Channel dies while nobody is listening (grace window).
     chan.statusCb?.("CHANNEL_ERROR");
     vi.advanceTimersByTime(999); // would be within backoff rung anyway
     expect(channels).toHaveLength(1); // no join for a doomed entry
 
-    // Revive before grace elapses: connection must be re-established.
     subscribeSharedWorkspaceTables("ws1", TABLES, "k", vi.fn());
     await settle();
     expect(channels).toHaveLength(2);

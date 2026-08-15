@@ -12,23 +12,19 @@ import { ChatForbiddenError, ChatNotFoundError } from "./errors";
 import type { ChatFolderRow, ChatRow, ProfileRef } from "./dto";
 import * as repo from "./repository";
 
-/**
- * Shared internals for the chats service: the `ChatContext` construction
- * + the cross-cutting helpers (visibility gates, ownership guard, folder
- * inheritance, format derivation, profile hydration) used by more than
- * one of the per-domain service modules (`service-reads`,
- * `service-writes`, `service-folders`).
- */
+/** Shared chats-service internals: `ChatContext` construction plus the
+ *  cross-cutting helpers (visibility gates, ownership guard, folder
+ *  inheritance, format derivation, profile hydration). */
 
 export interface ChatContext {
   workspaceId: string;
   userId: string;
   source: "user" | "agent";
-  /** Caller's workspace role; null when the auth layer didn't resolve one
-   *  (treated as non-admin — team-scoped chats then require a grant). */
+  /** Null when auth didn't resolve one → treated as non-admin, so
+   *  team-scoped chats require a grant. */
   role: Role | null;
-  /** Set when the caller authenticated with a workspace-scoped API key
-   *  (shared credential) — private chats are hidden entirely (M-10). */
+  /** Set for workspace-scoped API keys (shared credential). ⚠ Private chats
+   *  are hidden entirely from these callers. */
   apiKeyWorkspaceId: string | null;
 }
 
@@ -56,15 +52,9 @@ export const UNIQUE_VIOLATION = "23505";
 
 const NUL = String.fromCharCode(0);
 
-/**
- * Strip NUL (U+0000) from every string in a payload before it reaches
- * Postgres (F-7). Postgres text/jsonb reject the NUL code point, so an
- * agent that exports a transcript carrying a stray NUL used to blow up with
- * an INTERNAL_ERROR 500 (and, pre-F-12, orphan a header row). NUL carries no
- * meaning in a chat summary, so it is stripped rather than rejected — the
- * export still lands. Applied at the chat write boundary (export / append /
- * update / folder writes).
- */
+/** ⚠ Postgres text/jsonb reject U+0000, so a transcript carrying a stray NUL
+ *  500s. Stripped rather than rejected (it carries no meaning) so the export
+ *  still lands. Applied at every chat write boundary. */
 export function stripNulDeep<T>(value: T): T {
   if (typeof value === "string") {
     return value.includes(NUL)
@@ -92,8 +82,8 @@ interface GrantCtx {
 
 const EMPTY_GRANTS: GrantCtx = { myTeamIds: new Set(), byChat: new Map() };
 
-/** Fetch the caller's teams + chat grants — but only when some row is
- *  team-scoped and not the caller's own (fixed query count per request). */
+/** Caller's teams + chat grants, fetched only when some row is team-scoped
+ *  and not the caller's own. Fixed query count per request. */
 export async function grantsForRows(
   ctx: ChatContext,
   rows: ChatRow[]
@@ -121,13 +111,12 @@ export async function grantsForRows(
 }
 
 /**
- * M-10 visibility filter, extended for team scoping:
- *   - Public + workspace mode: always.
- *   - Public + teams mode: owner, workspace admins, or members of a
- *     granted team. Never via a workspace-scoped API key (shared
- *     credential — same conservatism as private).
- *   - Private via session or personal credential: owner-only.
- *   - Private via workspace-scoped API key: never.
+ * Visibility filter:
+ *   - public + workspace mode: always
+ *   - public + teams mode: owner, workspace admins, or a granted team's
+ *     members. Never via a workspace-scoped API key (shared credential).
+ *   - private via session / personal credential: owner-only
+ *   - private via workspace-scoped API key: never
  */
 export function canSeeChat(ctx: ChatContext, chat: ChatRow, grants: GrantCtx): boolean {
   if (chat.visibility === "public" && chat.access_mode !== "teams") return true;
@@ -139,8 +128,8 @@ export function canSeeChat(ctx: ChatContext, chat: ChatRow, grants: GrantCtx): b
   return granted.some((teamId) => grants.myTeamIds.has(teamId));
 }
 
-/** Grant set for the DTO — owners (and admins) see it; other viewers get
- *  an empty list so team composition doesn't leak through a shared chat. */
+/** ⚠ Grant set for the DTO: owners and admins only. Other viewers get an
+ *  empty list — team composition must not leak through a shared chat. */
 export function grantedTeamIdsFor(
   ctx: ChatContext,
   row: ChatRow,
@@ -167,8 +156,8 @@ export async function requireOwnChat(
   return chat;
 }
 
-/** Folders are personal — a foreign folder id means nothing to the
- *  viewer of a public chat and shouldn't leak. */
+/** ⚠ Folders are personal: a foreign folder id means nothing to the viewer
+ *  of a public chat and must not leak. */
 export function withFolderPrivacy(ctx: ChatContext, row: ChatRow, chat: Chat): Chat {
   if (row.owner_id === ctx.userId) return chat;
   return { ...chat, folderId: null };
@@ -183,7 +172,7 @@ export async function resolveOrCreateFolderRow(
   try {
     return await repo.insertFolder(ctx.workspaceId, ctx.userId, name);
   } catch (err) {
-    // Lost a create race — the concurrent winner is the folder we want.
+    // Lost a create race — converge on the winner.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
       const winner = await repo.findFolderByName(ctx.workspaceId, ctx.userId, name);
       if (winner) return winner;

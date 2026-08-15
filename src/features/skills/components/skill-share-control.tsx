@@ -8,11 +8,8 @@ import { useTeams } from "@/features/members/hooks/use-teams";
 import { skillScope, type SkillScope } from "../scope";
 import type { Skill } from "../types";
 
-/**
- * Skill sharing control — thin wrapper over the shared ScopeSharePopover.
- * Editable by the owner or a workspace admin; everyone else gets a
- * read-only scope pill.
- */
+/** Sharing control over the shared ScopeSharePopover. Owner or workspace
+ *  admin edits; everyone else gets a read-only scope pill. */
 export function SkillShareControl({
   skill,
   workspaceSlug,

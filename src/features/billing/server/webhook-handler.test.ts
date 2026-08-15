@@ -1,9 +1,6 @@
 /**
- * INVARIANT SUITE — Stripe webhook handler.
- *
- * Drives `processStripeEvent` with the billing repository, Stripe client,
- * seat-sync, and idempotency table all mocked (no network, no DB). Locks the
- * adversarial-review fixes:
+ * INVARIANT SUITE — Stripe webhook handler. Drives `processStripeEvent` with
+ * repository, Stripe client, seat-sync and idempotency table mocked. Locks:
  *   - status mapping: incomplete/unpaid/incomplete_expired -> canceled
  *   - event-ordering watermark: a stale (older event.created) replay no-ops
  *   - invoice.payment_succeeded recovers ONLY on a matching subscription
@@ -61,7 +58,7 @@ vi.mock("./workspace-billing", () => ({
   findWorkspaceIdByStripeSubscription: vi.fn(),
 }));
 
-// Keep the real selectSeatItem (finding #5) while stubbing the Stripe client.
+// Keep the real selectSeatItem; stub the Stripe client.
 vi.mock("./stripe", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./stripe")>();
   return {
@@ -177,9 +174,8 @@ describe("mapStatus (via subscription.updated)", () => {
   });
 
   it("a canceled write via updated NULLS the sub pointers, like deleted", async () => {
-    // Retaining sub_1 here would let a later invoice.payment_succeeded
-    // match it and restore status=active without the plan — stranding a
-    // paying workspace at free/active and 409-blocking re-checkout.
+    // Retaining sub_1 lets a later invoice.payment_succeeded restore
+    // status=active without the plan — free/active, 409-blocked re-checkout.
     await processStripeEvent(
       event("customer.subscription.updated", sub({ status: "unpaid" }))
     );
@@ -197,16 +193,12 @@ describe("mapStatus (via subscription.updated)", () => {
 });
 
 /**
- * B2a — EVERY CANCEL PATH NULLS THE PERIOD ANCHOR.
- *
- * A retained anchor whose end is still in the FUTURE keeps the MCP credit
- * window on the key the paid plan had been spending against, so the first
- * free-plan call is charged to a counter already past the 500 free limit and
- * the workspace is refused every tool call until the dead period expires.
- * `credits.ts › resolveCreditPeriod` also ignores the anchor on a free verdict
- * — that half heals rows nobody's webhook reaches; this half stops the bad
- * state being written in the first place, and keeps the row honest for
- * anything else that reads it (`subscription_period_end` is on the wire).
+ * EVERY CANCEL PATH NULLS THE PERIOD ANCHOR. A retained future anchor keeps the
+ * MCP credit window on the key the paid plan spent against, refusing every tool
+ * call until the dead period expires. `credits.ts › resolveCreditPeriod` also
+ * ignores the anchor on a free verdict — that half heals unreached rows; this
+ * half stops the bad state being written and keeps
+ * `subscription_period_end` (on the wire) honest.
  */
 describe("cancellation clears the MCP credit period anchor (B2a)", () => {
   it("customer.subscription.deleted nulls BOTH period columns", async () => {
@@ -298,7 +290,6 @@ describe("event-ordering watermark", () => {
   });
 
   it("a late updated(active) after a deleted(canceled) cannot resurrect Pro", async () => {
-    // deleted at t=300 wins; the redelivered older active update at t=250 is stale.
     mockRepo.getStripeEventWatermark.mockResolvedValue(300);
     await processStripeEvent(
       event("customer.subscription.updated", sub({ status: "active" }), 250)
@@ -325,9 +316,8 @@ describe("event-ordering watermark", () => {
 
 describe("period START + cancel_at_period_end (the MCP credits anchor)", () => {
   it("writes current_period_start, preferring the sub level over the item", async () => {
-    // Without the START stored, a paid workspace's credit window falls back to
-    // the calendar month and its credits reset on the 1st, not on its own
-    // billing date (`features/billing/credits.ts › resolveCreditPeriod`).
+    // Without the START stored, credits reset on the 1st rather than the
+    // workspace's billing date (`features/billing/credits.ts › resolveCreditPeriod`).
     const s = sub({
       status: "active",
       current_period_start: 1_700_000_000,
@@ -368,8 +358,8 @@ describe("period START + cancel_at_period_end (the MCP credits anchor)", () => {
       expect.objectContaining({ cancelAtPeriodEnd: true })
     );
 
-    // Always written, never omitted: an omitted key would leave the old `true`
-    // standing and tell a resumed customer their plan is still ending.
+    // Omitted key leaves the old `true` standing — a resumed customer would
+    // still be told their plan is ending.
     await processStripeEvent(
       event("customer.subscription.updated", sub({ status: "active" }), 2000)
     );
@@ -480,8 +470,6 @@ describe("invoice.payment_succeeded", () => {
       stripeSubscriptionId: "sub_1",
     } as never);
     await processStripeEvent(event("invoice.payment_succeeded", invoice()));
-    // Recovery flips status back to active and leaves the derived plan
-    // (solo/team) untouched.
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
       WS,
       expect.objectContaining({ status: "active" })
@@ -573,10 +561,8 @@ describe("checkout.session.completed", () => {
       expect.objectContaining({ plan: "team", status: "active" })
     );
     expect(syncSeatQuantity).toHaveBeenCalledWith(WS);
-    // The webhook must NOT touch the checkout claim — the route already
-    // released it in its `finally` when the create-session section ended.
-    // (A prior version released it here, redundantly and before persisting
-    // the sub id.)
+    // Webhook must NOT touch the checkout claim — the route released it in its
+    // `finally` when the create-session section ended.
     expect(mockRepo.releaseWorkspaceCheckout).not.toHaveBeenCalled();
   });
 
@@ -594,9 +580,8 @@ describe("checkout.session.completed", () => {
   });
 
   it("a retried checkout older than the watermark is dropped (no resurrection after a cancel)", async () => {
-    // First delivery failed and was released; the sub was then canceled
-    // (deleted stamped watermark=300). Stripe's retry of the original
-    // checkout event (created=200) must not re-write billing state.
+    // First delivery failed and released; sub then canceled (watermark=300).
+    // Stripe's retry of the checkout event (created=200) must not re-write.
     mockRepo.getStripeEventWatermark.mockResolvedValue(300);
     const session = {
       metadata: { workspace_id: WS },
@@ -609,13 +594,11 @@ describe("checkout.session.completed", () => {
   });
 
   /**
-   * B3 — the period spreads are conditioned on `canceled` LIKE EVERY OTHER
-   * PAID FIELD in this branch. They were not: plan, sub id, price, seats and
-   * `cancelAtPeriodEnd` all had the ternary and the two anchors were written
-   * unconditionally, so a checkout event landing on an already-canceled sub
-   * (Stripe retries, or a sub canceled between session and delivery) wrote a
-   * live future anchor onto a free row — the B2 lockout, arriving by a path
-   * neither cancel handler covers.
+   * Period spreads must be conditioned on `canceled` like every other paid
+   * field in this branch — otherwise a checkout event landing on an
+   * already-canceled sub (Stripe retry, or cancellation between session and
+   * delivery) writes a live future anchor onto a free row: the credit lockout,
+   * by a path neither cancel handler covers.
    */
   it("a checkout whose subscription is already canceled writes NULL anchors", async () => {
     retrieveSub.mockResolvedValue(

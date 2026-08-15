@@ -1,13 +1,8 @@
 /**
- * `GET /api/cron/reconcile-seats` — the FAN-OUT bound.
- *
- * The sweep's per-workspace unit is 2 DB reads + 2 Stripe calls + a write.
- * It used to open one of those per live Team workspace in the same tick,
- * which trips Stripe's per-second limit and saturates the pooler long before
- * anything surfaces as a useful error — and a 429 here is indistinguishable
- * from a genuinely failed true-up. These tests pin the cap, and pin that
- * capping it did not cost the two properties the sweep already had: every
- * workspace is visited exactly once, and one failure never aborts the rest.
+ * `GET /api/cron/reconcile-seats` — the FAN-OUT bound. Each unit is 2 DB reads + 2 Stripe calls +
+ * a write; uncapped it trips Stripe's per-second limit and saturates the pooler, and a 429 is
+ * indistinguishable from a genuinely failed true-up. Pins the cap plus the two properties it must
+ * not cost: every workspace visited exactly once, and one failure never aborts the rest.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -35,7 +30,7 @@ import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { listReconcilableTeamWorkspaceIds } from "@/features/billing/server/workspace-billing";
 import { GET } from "./route";
 
-/** The cap the route is expected to hold to. */
+/** The cap the route must hold to. */
 const CONCURRENCY = 5;
 
 const request = () =>
@@ -45,18 +40,14 @@ function workspaces(n: number): string[] {
   return Array.from({ length: n }, (_, i) => `ws-${i}`);
 }
 
-/**
- * A `syncSeatQuantity` that records the high-water mark of overlapping
- * calls — the number the cap is actually about.
- */
+/** A `syncSeatQuantity` recording the high-water mark of overlapping calls. */
 function peakTracker() {
   let active = 0;
   let peak = 0;
   vi.mocked(syncSeatQuantity).mockImplementation(async () => {
     active += 1;
     peak = Math.max(peak, active);
-    // Yield across a few microtask turns so an unbounded fan-out would
-    // have every call overlapping here.
+    // Yield across microtask turns so an unbounded fan-out would overlap every call.
     for (let i = 0; i < 3; i++) await Promise.resolve();
     active -= 1;
   });
@@ -125,8 +116,7 @@ describe("reconcile-seats — isolation survives the cap", () => {
 
     expect(res.status).toBe(200);
     expect(body).toMatchObject({ scanned: 12, succeeded: 11, failed: 1 });
-    // Index alignment is the property the pool has to preserve — a
-    // mis-aligned result set would blame the wrong workspace.
+    // ⚠ Index alignment: a mis-aligned result set blames the wrong workspace.
     expect(body.failures).toEqual([
       { workspaceId: "ws-7", error: "stripe 429" },
     ]);

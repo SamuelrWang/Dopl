@@ -6,70 +6,46 @@ import { evaluatePassword, PASSWORD_REQUIREMENT_MESSAGE } from "../password-poli
 export type SocialProvider = "google" | "github";
 
 /**
- * What every injected action answers.
- *
- * `error` — shown in the form's red banner (and, for a password sign-in, it is
- * what reveals the "Forgot password?" link).
- * `message` — overrides the core's default success copy. Only the web app's
- * desktop-OAuth handoff needs its own line; everything else takes the default.
+ * `error` — red banner; on password sign-in also reveals "Forgot password?".
+ * `message` — overrides default success copy (only web desktop-OAuth handoff).
  */
 export type LoginActionResult = { error?: string; message?: string };
 
 /**
- * The login form's whole outside world, injected.
+ * Login form's outside world, injected. Web binding `./use-login`
+ * (supabase-browser); desktop SPA over Electron bridge (`window.dopl`).
  *
- * The web binding (`./use-login`) implements these with `supabase-browser`; the
- * desktop SPA implements them over the Electron bridge (`window.dopl`), where
- * there is no supabase client and no `next/navigation` to redirect with. An
- * ABSENT member means "this app cannot do that" — the form disables that
- * control and explains why, instead of shipping a button that does nothing.
- * (Desktop: an older main process without the matching IPC op.)
- *
- * An action never throws for an expected failure; it answers `{ error }`. A
- * thrown error is still caught by the core and shown, so a binding may be
- * sloppy without breaking the screen.
+ * ABSENT member = "this app cannot do that" — form disables that control and
+ * says why (desktop: older main process lacking the IPC op).
+ * Expected failures answer `{ error }`, never throw; throws still caught.
  */
 export interface LoginActions {
-  /** Resolving without an error means signed in. Navigation, if the host needs
-   *  any, belongs to the binding — the desktop SPA needs none (main pushes the
-   *  auth transition and the boot screen swaps itself out). */
+  /** Resolve without error = signed in. Navigation belongs to the binding;
+   *  desktop SPA needs none (main pushes the auth transition). */
   signInWithPassword?(email: string, password: string): Promise<LoginActionResult>;
   signUpWithPassword?(email: string, password: string): Promise<LoginActionResult>;
-  // THERE IS NO `sendMagicLink` HERE ANY MORE, and re-adding one would put a
-  // fourth credential path back on a screen that now has three. The form's
-  // "Email me a sign-in link instead" control was deleted with it (2026-08-13).
-  // The desktop MAIN process still implements the op (`main/auth-password.js`,
-  // reachable over the bridge) — what went is the login form's use of it.
   oauth?(provider: SocialProvider): Promise<LoginActionResult>;
   resetPassword?(email: string): Promise<LoginActionResult>;
 }
 
-/** Which credential flow the screen is showing. The HOST picks the starting
- *  one — the web has a ROUTE per mode (`/signup` and `/login`), the desktop SPA
- *  opens on sign-in — and the switch under the submit control flips it: by
- *  navigation on the web, in place on the desktop (see `LoginFormCoreProps`). */
+/** Credential flow on screen. HOST picks the starting one (web: route per
+ *  mode; desktop: sign-in). Switch flips it — by navigation on web, in place
+ *  on desktop (`LoginFormCoreProps`). */
 export type LoginMode = "signin" | "signup";
 
-/** Which action is in flight — one at a time, and it names the button's label. */
+/** Action in flight — one at a time; names the button's label. */
 export type LoginPending = null | "password" | "signup" | "reset" | SocialProvider;
 
 const SIGNUP_SENT = "Check your email to confirm your account.";
 const RESET_SENT = "Check your email to reset your password.";
 
 /**
- * The login form's state machine, free of `next/*` and of supabase.
+ * Login form state machine. ⚠ Must stay free of `next/*` and supabase — both
+ * apps share it; host-specific work arrives through `actions`.
  *
- * Everything host-specific arrives through `actions`; what stays here is the
- * part both apps must agree on — field state, the mode, the single in-flight
- * slot, the error/message banner, the password policy gate on sign-up, and the
- * "email first" guards. See `./use-login` for the web binding.
- *
- * THERE IS NO "remember me" STATE, and re-adding one would be a lie: neither
- * binding has a non-remembered path to choose. The web client persists the
- * session in cookies (`shared/supabase/browser.ts` › getSupabaseBrowser, a
- * `@supabase/ssr` browser client) and the desktop app stores the credential on
- * disk in MAIN (`dopl:password-sign-in` → authTokens). Sessions are ALWAYS
- * remembered; the checkbox that used to sit here reached no auth call.
+ * No "remember me" state: sessions are ALWAYS persisted (web = cookies via
+ * `shared/supabase/browser.ts` › getSupabaseBrowser; desktop = on disk in main,
+ * `dopl:password-sign-in` → authTokens). Neither binding has an opt-out path.
  */
 export function useLoginCore(actions: LoginActions, defaultMode: LoginMode) {
   const [mode, setModeState] = useState<LoginMode>(defaultMode);
@@ -78,13 +54,11 @@ export function useLoginCore(actions: LoginActions, defaultMode: LoginMode) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<LoginPending>(null);
-  // True after a failed password sign-in — used to surface the otherwise-hidden
-  // "Forgot password?" link only when it's actually relevant.
+  // Gates the otherwise-hidden "Forgot password?" link.
   const [signInFailed, setSignInFailed] = useState(false);
 
-  /** Switching modes clears the banner: a sign-in failure ("Invalid login
-   *  credentials") left standing under a "Sign up" heading reads as a
-   *  complaint about the form the user has not submitted yet. */
+  /** Mode switch clears banner — a stale sign-in failure under a "Sign up"
+   *  heading reads as a complaint about an unsubmitted form. */
   function setMode(next: LoginMode) {
     setModeState(next);
     setError(null);
@@ -126,8 +100,8 @@ export function useLoginCore(actions: LoginActions, defaultMode: LoginMode) {
     if (!ok) setSignInFailed(true);
   }
 
-  /** Both credential flows are the FORM's submit handler now (one per mode),
-   *  so this takes the same optional event as its sign-in twin. */
+  /** Form submit handler in signup mode — hence the optional event, matching
+   *  its sign-in twin. */
   async function signUpWithPassword(e?: React.FormEvent) {
     e?.preventDefault();
     const signUp = actions.signUpWithPassword;
@@ -135,8 +109,7 @@ export function useLoginCore(actions: LoginActions, defaultMode: LoginMode) {
     await run(
       "signup",
       async () => {
-        // Only the surfaces that SET a password enforce the policy; sign-in
-        // just has to match whatever the account already has.
+        // Only SET-password surfaces enforce policy; sign-in just matches.
         if (!evaluatePassword(password).valid) {
           return { error: PASSWORD_REQUIREMENT_MESSAGE };
         }

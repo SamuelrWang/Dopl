@@ -1,14 +1,13 @@
 /**
- * Locked tour copy — 5 step cards + the finish card. Titles match the
- * sidebar labels; `section` is the route section each step navigates to
- * (reused with the `sectionPath` helper). Pure data — no React.
+ * Tour copy — 5 step cards + finish card. Titles match the sidebar labels;
+ * `section` = route section each step navigates to (via `sectionPath`). Pure
+ * data, no React.
  *
- * Copy here is FINAL and verbatim. No em dashes anywhere in this file's
- * user-facing strings (owner explicitly banned them).
+ * ⚠ Copy is FINAL and verbatim. NO em dashes in any user-facing string here.
  */
 
-// Deep import, never the `app-shell` barrel: the barrel re-exports the
-// Next-bound `AppShell`, and this module is in the desktop renderer's graph.
+// ⚠ Deep import, never the `app-shell` barrel — it re-exports the Next-bound
+// `AppShell`, and this module is in the desktop renderer's graph.
 import type { NavSection } from "@/shared/layout/app-shell/app-sidebar-core";
 
 export type TourStep = {

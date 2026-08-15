@@ -15,7 +15,6 @@ function edge(from: string, to: string, kind = "sequence", label?: string): Scen
   return { id: `${from}->${to}`, kind, from, to, label };
 }
 
-/** First straight run off the source node (points[0] → first turn). */
 function firstStubLen(points: Point[]): number {
   return Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
 }
@@ -54,7 +53,6 @@ describe("chooseRouting", () => {
   });
 
   it("keeps horizontal for a slight vertical offset (hysteresis)", () => {
-    // Target mostly to the right, only a little below — stays horizontal.
     expect(chooseRouting(rect(0, 0), rect(200, 20)).orient).toBe("H");
   });
 });
@@ -81,7 +79,6 @@ describe("routeEdges", () => {
       C: rect(300, 140),
     };
     const routed = routeEdges([edge("A", "B"), edge("A", "C")], rects);
-    // The vertical riser x of each route differs (distinct lanes).
     const riserX = (e: SceneEdge) => e.points![1].x;
     expect(riserX(routed[0])).not.toBe(riserX(routed[1]));
   });
@@ -92,8 +89,6 @@ describe("routeEdges", () => {
       card1: rect(10, 120, 80, 50),
       card2: rect(10, 240, 80, 50),
     };
-    // col → card2 would cut straight through card1: exit the left side and
-    // drop down a side corridor to the left of both nodes instead.
     const [routed] = routeEdges([edge("col", "card2")], rects);
     const pts = routed.points!;
     expect(pts[0].x).toBe(0); // exits the column's LEFT border

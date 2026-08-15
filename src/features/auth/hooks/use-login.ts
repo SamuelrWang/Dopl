@@ -11,44 +11,34 @@ import type { LoginActions, SocialProvider } from "./use-login-core";
 
 export type { SocialProvider };
 
-/** Origin Supabase sends auth emails / OAuth callbacks back to. Pinned to the
- *  canonical NEXT_PUBLIC_APP_URL in prod so links never embed a preview or
- *  localhost origin; local dev keeps window.location.origin. The deployed
- *  callback must also be allowlisted in Supabase Auth → URL Configuration. */
+/** Origin Supabase sends auth emails / OAuth callbacks to. ⚠ Pinned to
+ *  NEXT_PUBLIC_APP_URL in prod so links never embed a preview or localhost
+ *  origin; dev keeps window.location.origin. Deployed callback must also be
+ *  allowlisted in Supabase Auth → URL Configuration. */
 function authOrigin(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
   if (configured && process.env.NODE_ENV === "production") return configured;
   return window.location.origin;
 }
 
-/**
- * The WEB binding of `LoginActions` — supabase-browser plus the Next router's
- * query string. Everything else about the login form (field state, the
- * in-flight slot, the banner, the password policy gate) lives in
- * `./use-login-core`, which the desktop SPA reuses with bridge-backed actions.
- */
+/** WEB binding of `LoginActions` — supabase-browser + Next query string. Rest
+ *  of the form lives in `./use-login-core` (desktop SPA reuses it). */
 export function useLoginActions(): LoginActions {
   const searchParams = useSearchParams();
-  // A deep link overrides the destination via `?redirectTo=`, same-origin only
-  // (open-redirect guard). Absent one, a web sign-in lands on the post-auth
-  // download page — see `shared/lib/url/post-auth-landing.ts` for why, and for
-  // what it deliberately leaves alone.
+  // `?redirectTo=` overrides destination, same-origin only (open-redirect
+  // guard). See `shared/lib/url/post-auth-landing.ts`.
   const explicitTarget = explicitPostAuthTarget(searchParams.get("redirectTo"));
   const redirectTo = explicitTarget ?? WEB_POST_AUTH_LANDING;
-  // Optional "install this cluster after sign-in" intent, threaded through to
-  // /auth/callback so OAuth + email flows can run the fork server-side.
+  // "install this cluster after sign-in" intent, threaded to /auth/callback so
+  // OAuth + email flows fork server-side.
   const installCluster = searchParams.get("installCluster");
 
   function buildCallbackUrl(): string {
     const params = new URLSearchParams();
-    // ONLY when the URL actually named a target. The callback reads the presence
-    // of this param as "this sign-in came from somewhere and owes it a return
-    // trip", and a deep link OVERRIDES the download-page landing on the strength
-    // of it. Threading the DEFAULT through here would make every plain signup
-    // look like a deep link, which is how `redirectTo=/canvas` on every callback
-    // URL used to defeat the landing change. (It also used to force the web
-    // onboarding detour; that detour is gone with F-136, but the signal still
-    // has to mean what it says.)
+    // ⚠ ONLY when the URL named a target. /auth/callback reads this param's
+    // PRESENCE as "sign-in owes a return trip" and lets it override the
+    // download-page landing — threading the default here makes every plain
+    // signup look like a deep link.
     if (explicitTarget) params.set("redirectTo", explicitTarget);
     if (installCluster) params.set("installCluster", installCluster);
     const qs = params.toString();
@@ -61,7 +51,6 @@ export function useLoginActions(): LoginActions {
     async signInWithPassword(email, password) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { error: error.message };
-      // Session persisted by the browser client; land on the resolved destination.
       window.location.assign(redirectTo);
       return {};
     },
@@ -75,15 +64,9 @@ export function useLoginActions(): LoginActions {
       return error ? { error: error.message } : {};
     },
 
-    // NO `sendMagicLink`. `signInWithOtp` was the form's third credential path
-    // ("Email me a sign-in link instead"); the control and the action member
-    // both went on 2026-08-13, leaving password + OAuth. A pre-password user
-    // with no password on file still has a road in: "Forgot password?" (which
-    // is the same email round-trip, ending on a page that SETS one) and Google
-    // or GitHub, which auto-provision on first sign-in.
     async resetPassword(email) {
-      // Route the recovery link through /auth/callback (which exchanges the code
-      // into a live session) and forward to the set-new-password page.
+      // Recovery link goes through /auth/callback (exchanges code → session),
+      // then forwards to the set-new-password page.
       const params = new URLSearchParams({ redirectTo: "/auth/reset-password" });
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${authOrigin()}/auth/callback?${params.toString()}`,
@@ -92,10 +75,9 @@ export function useLoginActions(): LoginActions {
     },
 
     async oauth(provider) {
-      // Desktop app: OAuth can't run in the wrapper window (Supabase PKCE needs
-      // the code-verifier in the same context that exchanges the code). Open the
-      // system browser; it hands the session back via a dopl:// deep link. Only
-      // Google has the desktop handoff today.
+      // ⚠ Desktop: OAuth cannot run in the wrapper window — Supabase PKCE needs
+      // the code-verifier in the context that exchanges the code. System browser
+      // hands the session back via dopl:// deep link. Google only, today.
       if (isDesktopApp() && provider === "google") {
         window.open(`${window.location.origin}/auth/desktop-start`, "_blank");
         return {

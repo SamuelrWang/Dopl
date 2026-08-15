@@ -16,14 +16,11 @@ import {
   ConsentListQuerySchema,
 } from "@/features/channels/schema";
 
-// The consent surface is per-machine (the operator's own): a workspace viewer
-// who is a channel member still receives / decides requests, so the floor is
-// viewer. The service enforces operator-only + channel membership.
-//
-// Neither verb here is `sessionOnly` (unlike PATCH /consent/[id]): GET is a
-// read, and POST only RAISES a prompt for the human — it decides nothing, and
-// the desktop legitimately calls it on every trigger. The decisive verbs are
-// the ones that are gated.
+// Per-machine consent surface (the operator's own): a workspace viewer who is a channel member
+// still receives/decides requests, so the floor is viewer. The service enforces operator-only +
+// channel membership.
+// Neither verb is `sessionOnly` (unlike PATCH /consent/[id]): GET is a read and POST only RAISES
+// a prompt — it decides nothing, and the desktop calls it on every trigger.
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const parsed = ConsentListQuerySchema.safeParse({

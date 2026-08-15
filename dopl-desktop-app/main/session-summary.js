@@ -1,110 +1,67 @@
-// SESSION SUMMARIES — the ONE projection from this machine's live session state to
-// the thing a human (or, in phase 5, an MCP caller) is shown about it.
+// SESSION SUMMARIES — the ONE projection from this machine's live session state to what a
+// human (or an MCP caller) is shown about it: one pill per LIVE SESSION in a channel or DM.
 //
-// WHAT REPLACED WHAT. `agent-chips-bar.tsx` showed one chip per SUMMONED NAMED AGENT
-// and read its state off a server column. Both are gone (F-141). Rollback plan §3.3
-// puts SESSION PILLS in that spot instead: one pill per LIVE SESSION this operator has
-// running in that channel or DM, named from the surviving handle pool, and still called
-// "agents" in UI copy because a session IS an agent session.
+// ⚠ ONE MODULE, ONE DERIVATION. Three surfaces want the same sentence about a session (channel
+// pane pills, the tray, "what is flint doing?" over MCP). The predecessor's defect was two
+// readers deriving state their own way and disagreeing in production. Every consumer is handed
+// the RESULT; do not add a second derivation.
 //
-// WHY ONE MODULE. Three surfaces want the same sentence about a session — the channel
-// pane's pills (this phase), the tray, and rollback §3.5's "what is flint doing?" over
-// MCP (phase 5). The chips bar's defect was that its two readers each derived state
-// their own way and disagreed in production ("the web chip shows Idle while the desktop
-// works", plan §2). So the mapping is written ONCE, here, and every consumer is handed
-// the RESULT. Phase 5 lifts `list()` to MCP and adds no second derivation.
-//
-// THIS MODULE STILL REACHES NO NETWORK. ~~This phase adds no server write.~~ **F-147
-// added one — SOMEWHERE ELSE.** `channel_sessions` now holds a row per live session so
-// §3.5's "what is flint doing?" can be answered over MCP, and the writer is
-// `main/session-state-push.js`, which SUBSCRIBES to `subscribe()` below. Separate ON
-// PURPOSE: this file is the ONE place engine state becomes a pill state (F-142), it is
-// import-free below the sentinel, and every one of its tests reads it as SOURCE — an HTTP
-// call here would end all three. `agent_presence` is still untouched (plan §5 / item 7:
-// its retirement is to be MEASURED against that store).
-//
-// THE TRIGGER IS THE DIGEST, and there is only one. `flush()` already coalesces a burst of
-// engine dispatches into one comparison and fires only when the projection really moved,
-// so a server write costs a state CHANGE and never a turn. Do not add a second derivation,
-// a second timer, or a heartbeat.
+// ⚠ THIS MODULE REACHES NO NETWORK. The `channel_sessions` writer is
+// main/session-state-push.js, which SUBSCRIBES to `subscribe()` below. Separate on purpose:
+// this file is import-free below the sentinel and every one of its tests reads it as SOURCE —
+// an HTTP call here would end both.
+// ⚠ THE TRIGGER IS THE DIGEST, and there is only one. `flush()` coalesces a burst of engine
+// dispatches into one comparison and fires only when the projection moved, so a server write
+// costs a state CHANGE and never a turn. No second timer, no heartbeat.
 //
 // ── THE STATE MAPPING ────────────────────────────────────────────────────────────────
-// The engine's own vocabulary is two fields wide (`session-state.js` / `session-reducer.js`):
-// a PHASE (launching / running / awaiting_permission / awaiting_inbound / interrupted /
-// parked / ended) and an ACTIVITY (working / idle / awaiting_peer / awaiting_permission /
-// awaiting_inbound / parked). A pill has THREE states, and the reduction is:
+// Engine vocabulary is two fields (session-state.js / session-reducer.js): PHASE (launching /
+// running / awaiting_permission / awaiting_inbound / interrupted / parked / ended) and ACTIVITY
+// (working / idle / awaiting_peer / awaiting_permission / awaiting_inbound / parked). A pill
+// has THREE states:
 //
-//   ENGINE                                        PILL      WHY
-//   phase 'ended'                                 ended     terminal at the top of the
-//                                                           reducer; nothing wakes it
-//   parked === true  (or phase 'parked')          idle      the query is torn down; the
-//                                                           session is resumable, not gone
-//   activity 'working'                            working   mid-turn, running tools
-//   activity 'awaiting_permission'                working   ALSO mid-turn — the turn has
-//                                                           not ended, the SDK is blocked
-//                                                           on a canUseTool promise. Calling
-//                                                           that "idle" would say nothing is
-//                                                           happening while the agent is one
-//                                                           click from continuing.
-//   activity 'idle'                               idle      between turns
-//   activity 'awaiting_peer'                      idle      posted; the other machine has it
-//   activity 'awaiting_inbound'                   idle      a reply is HELD for an Accept;
-//                                                           this session is running nothing
-//   activity 'parked'                             idle      (the parked branch above wins,
-//                                                           and this agrees with it)
-//   anything else / absent                        idle      see the fallback note below
+//   ENGINE                                  PILL      WHY
+//   phase 'ended'                           ended     terminal; nothing wakes it
+//   parked === true (or phase 'parked')     idle      query torn down; resumable, not gone
+//   activity 'working'                      working   mid-turn, running tools
+//   activity 'awaiting_permission'          working   ALSO mid-turn — the SDK is blocked on a
+//                                                     canUseTool promise, one click from
+//                                                     continuing. "idle" would be a lie.
+//   activity 'idle'                         idle      between turns
+//   activity 'awaiting_peer'                idle      posted; the other machine has it
+//   activity 'awaiting_inbound'             idle      reply HELD for an Accept; running nothing
+//   activity 'parked'                       idle      (the parked branch above wins)
+//   anything else / absent                  idle      fallback
 //
-// PRECEDENCE IS PHASE-FIRST for the two terminal-ish answers and ACTIVITY-SECOND for the
-// rest, because `phase` and `activity` deliberately disagree in normal operation: FIX #6
-// keeps a still-pending gate card's phase while the activity moves, and a park lands with
-// phase 'awaiting_inbound' when a message is held. Reading only one field is how the old
-// chip got it wrong.
+// ⚠ PRECEDENCE IS PHASE-FIRST for the two terminal-ish answers, ACTIVITY-SECOND for the rest:
+// `phase` and `activity` deliberately disagree in normal operation (a still-pending gate card
+// keeps its phase while activity moves; a park lands with phase 'awaiting_inbound' when a
+// message is held). Reading one field is how the predecessor got it wrong.
+// ⚠ FALLBACK IS 'idle' BY CHOICE. "working" over a dead session makes the operator wait with no
+// natural end and no feedback; "idle" over a working one only makes them re-ask.
 //
-// THE FALLBACK DIRECTION IS 'idle', AND THAT IS A CHOICE. Both lies cost something: a pill
-// saying "working" over a dead session makes the operator wait for nothing, and a pill
-// saying "idle" over a working one makes them re-ask. The first is worse — waiting has no
-// natural end and no feedback — so an activity this table does not know reads as idle.
-//
-// THERE IS NO 'thinking' PILL, AND THE REASON IS NOT "no stream". Plan §3.3 lists the state
-// and its dependency note blames `includePartialMessages: false`, which is off (LOAD-BEARING
-// for the outbound card, FIX F4). That is not the whole truth, and stating it that way has
-// already misled a reviewer: the SESSION WINDOW ships a Thinking chip TODAY, derived with no
-// token stream at all — `renderer/session/session-chrome.js` `thinkingVisible` is "a turn is in
-// flight AND the last transcript item is not agent output".
-//
-// THE REAL OBSTACLE IS WHERE THE FACT LIVES. That chip reads the WINDOW'S OWN item list. This
-// projection reads `pillState`, whose entire input is the reducer's `{ phase, activity, parked }`
-// — three fields that say what the SESSION is doing and nothing about what has been RENDERED for
-// the current turn. So a fourth pill state needs the "nothing yet" fact lifted into the reducer,
-// or a second source spliced into this projection. Both are real work with a real cost (the
-// reducer would gain a field every suite pins), and neither is blocked on a stream.
-//
-// WHAT A STREAM WOULD BUY is a *finer* signal — thinking vs. tool-running vs. drafting — not the
-// binary one. Do not re-derive "we cannot" from the dependency note.
+// NO 'thinking' PILL, and the reason is NOT "no token stream" (`includePartialMessages: false`
+// is LOAD-BEARING for the outbound card, but the session window's Thinking chip is derived
+// without a stream — session-chrome.js `thinkingVisible` = "turn in flight AND last transcript
+// item is not agent output"). The real obstacle is WHERE THE FACT LIVES: `pillState`'s entire
+// input is the reducer's `{ phase, activity, parked }`, which says nothing about what has been
+// RENDERED this turn. A fourth state needs that fact lifted into the reducer or a second source
+// spliced in here. A stream would buy a FINER signal (thinking vs tool-running vs drafting),
+// not this one.
 //
 // ── ENDED SESSIONS: THE RETENTION RULE ───────────────────────────────────────────────
-// An ended session's pill survives exactly as long as its WINDOW does, and no longer.
-//
-// `session-engine.settle` deletes the registry entry on every end and destroys the window
-// on all but one: M2b keeps it for an ABANDONMENT, because that end fires hours later with
-// nobody present and a transcript vanishing off the desktop of someone who stepped away is
-// indistinguishable from a crash. So the abandoned session is the case that has something
-// left to open, and it is the case whose pill stays — as `ended`, openable, landing in that
-// painted transcript. Every other end (operator End, turn/cost cap, completed, crash) takes
-// its window with it and its pill leaves at the same moment.
-//
-// WHY NOT A TIMED TOMBSTONE. A pill is a HANDLE, not a log: its whole affordance is "click
-// to open this". A pill for a session with no window would answer that click by recreating
-// a fresh parked shell — a different session wearing a dead one's name — or by doing
-// nothing. The channel transcript already carries the record of what happened. So the rule
-// needs no TTL, no ring to prune and no persistence: the retained set is bounded by the
-// window budget itself (MAX_SESSION_WINDOWS), the operator closing the window is the
-// removal, and a destroyed window is swept on the next projection.
+// ⚠ An ended session's pill survives exactly as long as its WINDOW does, and no longer.
+// session-engine.settle destroys the window on every end but ABANDONMENT (which fires hours
+// later with nobody present, where a vanishing transcript is indistinguishable from a crash).
+// So the abandoned session is the only one with something left to open, and the only one whose
+// pill stays. NO TIMED TOMBSTONE: a pill is a HANDLE ("click to open this"), and a pill with no
+// window answers that click by recreating a fresh shell wearing a dead session's name. The
+// channel transcript already carries the record. Needs no TTL, ring or persistence — the
+// retained set is bounded by MAX_SESSION_WINDOWS and swept on the next projection.
 
-// The module's ONLY two dependencies, and they are both above the sentinel below on
-// purpose: everything from there to `module.exports` is import-free, so
-// test/session-summary.test.mjs evaluates the real code verbatim with these two injected —
-// no window layer, no file log, no Electron of any kind (the session-reopen idiom).
+// ⚠ The module's only two dependencies, both ABOVE the sentinel: everything from there to
+// `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
+// verbatim with these two injected.
 const { pickAgentName } = require('./agent-names');
 const { diag } = require('./diag');
 
@@ -116,9 +73,8 @@ const PILL_IDLE = 'idle';
 const PILL_ENDED = 'ended';
 const PILL_STATES = [PILL_WORKING, PILL_IDLE, PILL_ENDED];
 
-// The activity half of the table above. Written out in full — including the rows that
-// agree with the fallback — so the mapping is READABLE as a list of the engine's real
-// activities rather than as a couple of special cases over a default.
+// Activity half of the table above, written out in full (including rows agreeing with the
+// fallback) so it reads as the engine's real activity list, not special cases over a default.
 const ACTIVITY_PILL = {
   working: PILL_WORKING,
   awaiting_permission: PILL_WORKING,
@@ -130,11 +86,8 @@ const ACTIVITY_PILL = {
 
 /**
  * Engine state -> pill state. The whole mapping, and the only place it is made.
- *
- * The activity lookup goes through an OWN-PROPERTY check rather than a bare index: a
- * plain object literal answers a FUNCTION for 'constructor' / 'toString', and a function
- * is truthy, so a bare lookup would let those two words through as a pill state
- * (session-park's `requestRank` was fixed for exactly this).
+ * ⚠ OWN-PROPERTY check, never a bare index: a plain object literal answers a FUNCTION for
+ * 'constructor' / 'toString', and a function is truthy, so both would pass as pill states.
  */
 function pillState(state) {
   const st = state || {};
@@ -144,9 +97,9 @@ function pillState(state) {
   return known ? ACTIVITY_PILL[st.activity] : PILL_IDLE;
 }
 
-// A display string for the wire: one line, whitespace collapsed, bounded, or null.
-// Same discipline as session-store's `durableName` and for the same reason — a channel
-// name and a thread title are counterparty-influenced text on their way to a renderer.
+// Display string for the wire: one line, whitespace collapsed, bounded, or null. ⚠ Same
+// discipline as session-store's `durableName`: channel name and thread title are
+// counterparty-influenced text on their way to a renderer.
 function displayText(value) {
   if (typeof value !== 'string') return null;
   const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
@@ -155,14 +108,11 @@ function displayText(value) {
 
 /**
  * THE NAME LEDGER. `sessionKey -> { channelId, name }`.
- *
- * PER CHANNEL, not global (plan §3.3: "Per channel / DM (not global)"), so `taken` is the
- * names held in THIS channel and two channels may each run a `flint`.
- *
- * KEYED BY SESSION KEY — (channel, thread) — which is what makes the name survive the
- * things that replace the session OBJECT while the operator's mental model does not
- * change: an idle park and its lazy resume, a P2 recreate from the durable record, a crash
- * resume. The internal `sessionId` is minted fresh by each of those; the key is not.
+ * PER CHANNEL, not global: `taken` is the names held in THIS channel, so two channels may each
+ * run a `flint`.
+ * ⚠ KEYED BY SESSION KEY (channel, thread), never `sessionId` — a park+lazy resume, a recreate
+ * from the durable record and a crash resume all mint a fresh sessionId while the operator's
+ * mental model does not change. The key is what makes the name survive them.
  */
 function nameFor(ledger, key, channelId) {
   const held = ledger.get(key);
@@ -176,15 +126,14 @@ function nameFor(ledger, key, channelId) {
   return name;
 }
 
-/** One LIVE session object -> its summary. `name` is handed in (the ledger is the
- *  caller's), so this stays a pure shape. */
+/** One LIVE session object -> its summary. `name` is handed in (the ledger is the caller's). */
 function liveSummary(s, name) {
   const ctx = (s && s.context) || {};
   return {
     sessionId: String((s && s.sessionId) || ''),
     channelId: String((s && s.channelId) || ''),
-    // Wire name `task` == domain name `thread` (the v3.0 vocabulary boundary). '' is a
-    // real value: a responder with no first-class thread collapses it.
+    // Wire name `task` == domain name `thread`. '' is a real value: a responder with no
+    // first-class thread collapses it.
     taskId: String((s && s.taskId) || ''),
     name: name,
     state: pillState(s && s.state),
@@ -193,8 +142,8 @@ function liveSummary(s, name) {
   };
 }
 
-/** One RETAINED ENDED entry -> its summary. Nothing is re-derived: the state is `ended`
- *  by construction, and the identity was frozen when the session settled. */
+/** One RETAINED ENDED entry -> its summary. Nothing re-derived: state is `ended` by
+ *  construction and the identity was frozen when the session settled. */
 function endedSummary(e, name) {
   return {
     sessionId: String((e && e.sessionId) || ''),
@@ -208,14 +157,11 @@ function endedSummary(e, name) {
 }
 
 /**
- * ONE ENTRY, WIDENED WITH THE TWO FACTS A SERVER ROW CANNOT DO WITHOUT (F-147).
- * `channel_sessions` keys on `(user_id, session_key)` and fences on `workspace_id`, and
- * the wire shape carries neither — `sessionId` is the EPHEMERAL internal id (a park or a
- * recreate mints a new one), so it is the wrong upsert key. Both are facts this module
- * ALREADY holds (`s.key` keys the name ledger; `s.workspaceId` rides the session object),
- * so threading them derives nothing new. They do NOT go on the wire: `wireSummary` takes
- * them back off, so the IPC payload and `DesktopSessionSummary` are byte-unchanged. One
- * derivation, two projections.
+ * One entry widened with the two facts a SERVER ROW needs: `channel_sessions` keys on
+ * `(user_id, session_key)` and fences on `workspace_id`.
+ * ⚠ `sessionId` is EPHEMERAL (a park or recreate mints a new one) — the wrong upsert key.
+ * ⚠ Neither field goes on the wire: `wireSummary` strips them, so the IPC payload and
+ * `DesktopSessionSummary` stay byte-unchanged. One derivation, two projections.
  */
 function reportEntry(wire, key, workspaceId) {
   return { ...wire, key: String(key || ''), workspaceId: String(workspaceId || '') };
@@ -230,13 +176,11 @@ function wireSummary(entry) {
 }
 
 /**
- * Have the summaries actually changed? The engine dispatches on EVERY SDK event, so
- * without this the renderer would be woken by a message it cannot see the effect of —
- * a tool result, a token count, a cost delta — dozens of times per turn.
- *
- * Compared as a stable string rather than field-by-field so a member added to the shape
- * is compared automatically instead of being silently dropped from the check. Order is
- * already stable (the registry preserves insertion, and the ended list is append-only).
+ * Have the summaries actually changed? The engine dispatches on EVERY SDK event, so without
+ * this the renderer is woken dozens of times per turn by effects it cannot see.
+ * ⚠ Compared as a stable string, not field-by-field, so a member added to the shape is checked
+ * automatically instead of silently dropped. Order is already stable (registry preserves
+ * insertion; the ended list is append-only).
  */
 function summariesDigest(list) {
   return JSON.stringify(list || []);
@@ -248,15 +192,12 @@ function summariesDigest(list) {
 
 const SESSIONS_EVENT = 'dopl:sessions';
 
-// A burst of engine dispatches — one turn is many — must cost ONE render. 200ms is below
-// the threshold where a state flip reads as laggy and well above one turn's event storm.
-// Mirrors ui-sync's COALESCE_MS reasoning.
+// A burst of engine dispatches (one turn is many) must cost ONE render. 200ms is below where a
+// state flip reads as laggy and above one turn's event storm. Mirrors ui-sync's COALESCE_MS.
 const PUSH_COALESCE_MS = 200;
 
-// Belt for the retention rule. The rule itself is self-bounding (an entry lives only while
-// its window does, and windows are capped by MAX_SESSION_WINDOWS), so this can only ever
-// bite if that invariant breaks; it drops the OLDEST, which is the least likely to still
-// be on screen.
+// Belt for the retention rule, which is already self-bounding (an entry lives only while its
+// window does, capped by MAX_SESSION_WINDOWS). Drops the OLDEST — least likely still on screen.
 const MAX_ENDED = 12;
 
 const ledger = new Map(); // sessionKey -> { channelId, name }
@@ -265,17 +206,17 @@ let deps = { sessions: null };
 let getWindowFn = null;
 let pushTimer = null;
 let lastDigest = null;
-// F-147: the SERVER writer's gate, separate from the window's — see `subscribe`.
+// ⚠ The SERVER writer's gate, separate from the window's — see `subscribe`.
 const changeSubscribers = new Set();
 let lastChangeDigest = null;
 
-/** The engine binds its in-memory registry here at load (the session-reopen idiom). */
+/** The engine binds its in-memory registry here at load. */
 function bind(d) {
   deps = { sessions: (d && d.sessions) || null };
 }
 
-/** Arm the push. `getWindow()` returns the live SPA BrowserWindow (or null) and is called
- *  at SEND time, never captured — the window is rebuilt on reopen. Idempotent. */
+/** Arm the push. ⚠ `getWindow()` is called at SEND time, never captured — the window is rebuilt
+ *  on reopen. Idempotent. */
 function start(opts) {
   getWindowFn = opts && typeof opts.getWindow === 'function' ? opts.getWindow : null;
   lastDigest = null; // a fresh window has seen nothing; the next touch must reach it
@@ -295,16 +236,12 @@ function sweepEnded() {
 }
 
 /**
- * EVERY pill this machine can show, live first, then the retained ended ones. Every
- * consumer filters this by channel itself — the list is bounded by the window budget, so
- * there is nothing to page and no watch handshake to get wrong.
- *
- * Names are assigned HERE, lazily, which is what keeps the ledger from growing with every
- * session that ever ran: a key that has left both the registry and the ended set is
- * released below and its handle goes back to the pool.
- *
- * THE ONE PASS BEHIND BOTH CONSUMERS (F-147): this builds REPORT entries, `list()` narrows
- * them for the renderer, and the server writer takes them whole.
+ * EVERY pill this machine can show, live first, then retained ended ones. Consumers filter by
+ * channel themselves — the list is bounded by the window budget, so nothing to page.
+ * Names are assigned HERE, lazily; a key that has left both the registry and the ended set is
+ * released below and its handle returns to the pool.
+ * ONE PASS BEHIND BOTH CONSUMERS: builds REPORT entries, `list()` narrows for the renderer, the
+ * server writer takes them whole.
  */
 function reportList() {
   const out = [];
@@ -318,8 +255,8 @@ function reportList() {
     }
   }
   for (const e of sweepEnded()) {
-    // A key that is BOTH live and retained-ended means the thread was reopened after an
-    // abandonment. The live session wins: it is the one the pill should open.
+    // Both live and retained-ended => the thread was reopened after an abandonment. The live
+    // session wins; it is the one the pill should open.
     if (seen.has(e.key)) continue;
     seen.add(e.key);
     out.push(reportEntry(endedSummary(e, nameFor(ledger, e.key, e.channelId)), e.key, e.workspaceId));
@@ -336,19 +273,12 @@ function list() {
 }
 
 /**
- * THE HANDLE ONE SESSION IS WEARING, for a caller that has the session in hand.
- *
- * §3.2 gives the session WINDOW's composer a pill whose resting row reads "Message <name>",
- * and that name has to be the SAME one the channel pane's pill shows for the same session —
- * a window calling itself `flint` while its pill says `onyx` is the two-readers-one-fact
- * defect this module exists to prevent (F-142), reproduced inside one feature. So the window
- * asks main, and main answers out of the ledger `list()` already writes.
- *
- * ASSIGNS ON DEMAND, like `list()` does, which is safe for exactly one reason: the caller
- * holds a LIVE session resolved from its own window, so the key is in the registry and the
- * next `list()` keeps it. A key that is in neither the registry nor the ended set is released
- * on the next projection, so naming something this module cannot see would mint a handle and
- * then lose it — never call this with anything but a live session.
+ * The handle one session is wearing, for a caller holding the session. The session window's
+ * composer ("Message <name>") must show the SAME name as the channel pane's pill, so the
+ * window asks main and main answers out of the ledger `list()` already writes.
+ * ⚠ ASSIGNS ON DEMAND — only safe for a LIVE session, whose key is in the registry and survives
+ * the next `list()`. A key in neither the registry nor the ended set is released on the next
+ * projection, so naming anything else mints a handle and loses it.
  */
 function nameForSession(s) {
   if (!s || !s.key) return null;
@@ -356,9 +286,9 @@ function nameForSession(s) {
 }
 
 /**
- * A session ENDED. Retain it only when its window survived — see the retention rule in
- * the header. Returns whether a pill was kept, which is what the engine's own reasoning
- * (`keepWindow` is the abandonment case alone) is worth asserting against.
+ * A session ENDED. Retain only when its window survived (retention rule, header). Returns
+ * whether a pill was kept — worth asserting the engine's `keepWindow` (abandonment only)
+ * against.
  */
 function noteEnded(s, keepWindow) {
   const kept = keepWindow === true && windowAlive(s && s.win);
@@ -368,8 +298,8 @@ function noteEnded(s, keepWindow) {
       key: s.key,
       sessionId: s.sessionId,
       channelId: String(s.channelId || ''),
-      // F-147: frozen with the rest of the identity, because a retained ended entry is
-      // no longer in the registry and there is nowhere else left to read it from.
+      // ⚠ Frozen with the rest of the identity: a retained ended entry has left the registry
+      // and there is nowhere else to read this from.
       workspaceId: String(s.workspaceId || ''),
       taskId: String(s.taskId || ''),
       channelName: ctx.channelName || null,
@@ -382,12 +312,10 @@ function noteEnded(s, keepWindow) {
 }
 
 /**
- * The window of a RETAINED ENDED session for (channel, thread), or null.
- *
- * `session-reopen.reopenByTask` consults this between its live-session branch and its
- * recreate fallback, so the pill's "Open" reuses the one reopen path rather than growing
- * a second one — and an abandoned session opens the transcript it actually left behind
- * instead of a fresh parked shell wearing its name.
+ * Window of a RETAINED ENDED session for (channel, thread), or null.
+ * `session-reopen.reopenByTask` consults this between its live-session branch and its recreate
+ * fallback, so an abandoned session opens the transcript it left behind rather than a fresh
+ * parked shell wearing its name.
  */
 function keptWindow(channelId, taskId) {
   const key = String(channelId || '') + ':' + String(taskId || '');
@@ -397,8 +325,8 @@ function keptWindow(channelId, taskId) {
   return null;
 }
 
-// The ONE place a summaries frame crosses into the renderer, modelled on ui-sync's
-// sendToWindow: the window is resolved at send time and a dead one fails closed.
+// ⚠ The ONE place a summaries frame crosses into the renderer (modelled on ui-sync's
+// sendToWindow): window resolved at send time, a dead one fails closed.
 function sendToWindow(payload) {
   let win = null;
   try { win = getWindowFn ? getWindowFn() : null; } catch (_err) { return false; }
@@ -415,18 +343,14 @@ function sendToWindow(payload) {
 }
 
 /**
- * THE CHANGE SUBSCRIPTION (F-147) — "the projection moved", for a consumer that is not a
- * window. Its one subscriber today is `main/session-state-push.js`.
- *
- * IT IS NOT THE WINDOW'S GATE, and the two must not be merged back. `start()` resets
- * `lastDigest` so a REBUILT renderer is repainted with a frame it has not seen — a rebuilt
- * renderer is not a state change and must not cost a server write. `lastChangeDigest` is
- * therefore its own, is never reset, and records WHETHER OR NOT anything consumed the
- * frame: delivery is the subscriber's problem.
- *
- * A THROWING SUBSCRIBER CANNOT BREAK THE ENGINE — `touch()` is called from `dispatch`, so
- * an exception here would unwind into the SDK event loop (the argument `emitAuthState`
- * makes about the refresh loop).
+ * "The projection moved", for a consumer that is not a window. One subscriber today:
+ * main/session-state-push.js.
+ * ⚠ NOT THE WINDOW'S GATE — never merge the two. `start()` resets `lastDigest` so a REBUILT
+ * renderer gets a frame it has not seen, but a rebuilt renderer is not a state change and must
+ * not cost a server write. `lastChangeDigest` is separate, never reset, and records regardless
+ * of whether anything consumed the frame; delivery is the subscriber's problem.
+ * ⚠ A THROWING SUBSCRIBER MUST NOT BREAK THE ENGINE — `touch()` is called from `dispatch`, so
+ * an exception here unwinds into the SDK event loop.
  */
 function subscribe(fn) {
   if (typeof fn !== 'function') return () => {};
@@ -450,8 +374,8 @@ function flush() {
     emitChange(entries);
   }
   if (digest === lastDigest) return; // nothing a pill could show has moved
-  // Only record the frame as delivered when it really was: a send into a window that is
-  // not there yet must not suppress the next identical one.
+  // ⚠ Record delivered only when it really was: a send into a window that is not there yet
+  // must not suppress the next identical frame.
   if (sendToWindow({ sessions: entries.map(wireSummary) })) lastDigest = digest;
 }
 

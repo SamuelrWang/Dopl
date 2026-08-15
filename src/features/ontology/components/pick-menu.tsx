@@ -22,11 +22,8 @@ interface Props {
   triggerClassName?: string;
 }
 
-/**
- * Small click-driven picker: the trigger opens a compact menu of groups;
- * clicking a group expands its items beneath it; clicking an item picks
- * it. No hover-expansion — every level opens on click.
- */
+/** Click-driven picker: trigger opens a menu of groups, group expands its
+ *  items, item picks. ⚠ No hover-expansion — every level opens on click. */
 export function PickMenu({
   items,
   onPick,

@@ -1,18 +1,13 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
-/**
- * Shared MCP-session helpers used by the OAuth auth path. Split out of the
- * old api-keys module (removed with the npx/stdio + API-key install path) so
- * the OAuth transport keeps its rate limiter and "MCP connected" indicator.
- */
+/** Shared MCP-session helpers for the OAuth auth path: the rate limiter and the
+ *  "MCP connected" indicator. */
 
 /**
- * Atomic rate-limit check + record keyed by an arbitrary text subject, backed
- * by `check_and_record_rate_limit_subject` + the FK-free `rate_limit_events`
- * table. Used for OAuth access tokens ("mcp:<token_id>").
- *
- * Fails closed — if the DB call errors, the request is rejected.
+ * Atomic rate-limit check + record keyed by an arbitrary text subject, backed by
+ * `check_and_record_rate_limit_subject` + the FK-free `rate_limit_events` table.
+ * ⚠ FAILS CLOSED — a DB error rejects the request.
  */
 export async function checkAndRecordRateLimitSubject(
   subject: string,
@@ -34,16 +29,12 @@ export async function checkAndRecordRateLimitSubject(
 }
 
 /**
- * Refresh profiles.mcp_connected_at for an MCP user. Fire-and-forget.
+ * Refresh profiles.mcp_connected_at, fire-and-forget. Every authenticated MCP
+ * call touches it; the settings card polls `/api/user/mcp-status` and flips to
+ * "connected" as soon as the agent does anything real.
  *
- * Every authenticated MCP call touches this timestamp. The settings
- * connection card polls `/api/user/mcp-status` to detect when the user has
- * connected their agent — any tool call advances the timestamp, so the card
- * flips to "connected" as soon as the agent does anything real.
- *
- * In-process debounce: only writes once every 30s per user. The debounce map
- * is intentionally unbounded-but-small (one entry per active user); process
- * restarts clear it harmlessly.
+ * In-process debounce, one write per 30s per user. The map is
+ * unbounded-but-small (one entry per active user); restarts clear it harmlessly.
  */
 const mcpStatusLastTouched = new Map<string, number>();
 const MCP_STATUS_TOUCH_INTERVAL_MS = 30_000;

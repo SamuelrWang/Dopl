@@ -1,17 +1,13 @@
 /**
- * INVARIANT SUITE — `dopl_map` fetches the SUMMARY, never the graph (P0-3).
+ * INVARIANT SUITE — ⚠ `dopl_map` fetches the SUMMARY, never the graph. The
+ * instructions send every agent here before its first substantive reply, so it
+ * is the most-executed read in the product, and a bare `getOntology()` pulls
+ * every JSONB column across the wire to render cluster and column names.
  *
- * The server instructions tell every agent to call `dopl_map` before its first
- * substantive reply, so this is the single most-executed read in the product.
- * It used to call `client.getOntology()` — four whole-table pulls carrying
- * every JSONB column the ontology has — and then render cluster names and
- * column names. The payload never reached the output. It only crossed the wire.
- *
- * The regression this pins is invisible by every other means: swapping
- * `{ view: "summary" }` back to a bare `getOntology()` renders a byte-identical
- * result, passes every existing map test, and quietly restores the blocker. So
- * the assertion is on the CALL, and the second test proves the tool cannot be
- * reading the heavy fields even when a client hands them over.
+ * ⚠ The regression is invisible by every other means: swapping back renders a
+ * BYTE-IDENTICAL result and passes every existing map test. So the assertion is
+ * on the CALL, and the second test proves the tool cannot be reading the heavy
+ * fields even when a client hands them over.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -54,9 +50,9 @@ describe("dopl_map asks for the cheap projection", () => {
   });
 
   it("renders names and containment only — heavy fields change nothing", async () => {
-    // Same graph, handed over as a FULL snapshot with the JSONB attached. If
-    // the render ever starts reading those fields the two results diverge, and
-    // the tool stops being safe to feed the summary.
+    // ⚠ Same graph as a FULL snapshot with JSONB attached — if the render ever
+    // starts reading those fields the two results diverge and the tool stops
+    // being safe to feed the summary.
     const heavy = {
       clusters: [{ ...SUMMARY.clusters[0], layout: { "o-1": { x: 40, y: 80 } } }],
       objects: {
@@ -80,8 +76,6 @@ describe("dopl_map asks for the cheap projection", () => {
       {},
     );
     expect(fat).toBe(lean);
-    // Names arrive through `inlineOr`, which wraps member-typed text in a code
-    // span — the manifest's own neutralizer, unchanged by this work.
     expect(lean).toContain("`Dopl Playbook`");
     expect(lean).toContain("(columns: `Surfaces`)");
   });
@@ -89,9 +83,8 @@ describe("dopl_map asks for the cheap projection", () => {
 
 describe("dopl_map reports a clipped ontology read", () => {
   it("says nothing extra when the read was complete", async () => {
-    // The healthy result must stay byte-identical to the one before the row
-    // ceilings existed — a warning that also fires on the happy path teaches
-    // agents to skip it.
+    // ⚠ The healthy result must stay byte-identical — a warning that also fires
+    // on the happy path teaches agents to skip it.
     const text = await callTool(registerMapTool, client(), "dopl_map", {});
     expect(text).not.toContain("CLIPPED");
   });
@@ -104,7 +97,7 @@ describe("dopl_map reports a clipped ontology read", () => {
       {},
     );
     expect(text).toContain("CLIPPED");
-    // It must not read as an empty or complete workspace either way.
+    // ⚠ Must not read as an empty OR a complete workspace.
     expect(text).toContain("`Dopl Playbook`");
   });
 });

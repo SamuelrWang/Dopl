@@ -11,9 +11,8 @@ import {
 } from "@/features/channels/server/service";
 import { PresenceHeartbeatSchema } from "@/features/channels/schema";
 
-// Desktop heartbeat. Upserts (user_id, workspace_id) with a fresh last_seen_at
-// so web reflects the listener as online. Any signed-in workspace member may
-// beat (viewer floor); always keyed to ctx.userId.
+// Desktop heartbeat: upserts (user_id, workspace_id) with a fresh last_seen_at. Viewer floor;
+// always keyed to ctx.userId.
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, PresenceHeartbeatSchema);

@@ -30,16 +30,14 @@ interface Params {
 /**
  * Every write to a skill's BODY, serialized.
  *
- * Two saves must never be in flight together: the second would carry a
- * stale baseline and 412 against our own write — the "someone else is
- * editing" banner with only one editor in the room. So the debounced
- * autosave, the unmount flush and the conflict overwrite all queue on one
- * promise chain, and the optimistic-concurrency baseline moves only on the
- * chain.
+ * ⚠ Two saves must never be in flight together: the second carries a stale
+ * baseline and 412s against our own write — "someone else is editing" with
+ * one editor in the room. Debounced autosave, unmount flush and conflict
+ * overwrite all queue on one promise chain, and the CAS baseline moves only
+ * on that chain.
  *
- * The caller owns the skill's METADATA clock (a separate `updated_at`); the
- * `skillUpdatedAt` handed to `onAutosaved` / `onOverwritten` is what keeps it
- * current after a body write (F-038 D10).
+ * Caller owns the skill's METADATA clock (a separate `updated_at`);
+ * `skillUpdatedAt` on `onAutosaved` / `onOverwritten` keeps it current.
  */
 export function useSkillSaveChain({
   slug,
@@ -52,12 +50,11 @@ export function useSkillSaveChain({
 }: Params) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
-  // Debounce timer + pending-body cache. Held in refs so the unmount
-  // cleanup can flush the in-flight edit without stale React state.
+  // Refs, not state, so the unmount cleanup can flush the in-flight edit
+  // without reading stale React state.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingBodyRef = useRef<string | null>(null);
-  // Baseline `updatedAt` for the optimistic-concurrency precondition;
-  // updated on every successful save.
+  // CAS precondition; moves on every successful save.
   const baselineRef = useRef(initialUpdatedAt);
   const slugRef = useRef(slug);
   const saveStatusRef = useRef<SaveStatus>(saveStatus);
@@ -66,9 +63,8 @@ export function useSkillSaveChain({
     saveStatusRef.current = saveStatus;
   }, [slug, saveStatus]);
 
-  // Latest-ref for the callbacks. The save jobs must stay identity-stable —
-  // if they changed with every render the unmount-flush effect below would
-  // tear down and re-run on every keystroke.
+  // ⚠ Latest-ref: save jobs must stay identity-stable, or the unmount-flush
+  // effect below tears down and re-runs on every keystroke.
   const handlersRef = useRef({ captureConflict, onAutosaved, onOverwritten });
   useEffect(() => {
     handlersRef.current = { captureConflict, onAutosaved, onOverwritten };
@@ -77,8 +73,8 @@ export function useSkillSaveChain({
   const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const enqueueSave = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
     const next = saveChainRef.current.then(job, job);
-    // Park a swallowed tail so an unawaited failing job can't surface as
-    // an unhandled rejection; callers that await `next` still see it.
+    // Swallowed tail: an unawaited failing job must not become an unhandled
+    // rejection. Callers awaiting `next` still see it.
     saveChainRef.current = next.then(
       () => undefined,
       () => undefined
@@ -114,9 +110,8 @@ export function useSkillSaveChain({
           markSaved();
         } catch (err) {
           if (err instanceof SkillApiError && err.status === 412) {
-            // Re-buffer the losing body ONLY if nothing newer was typed
-            // while the PUT was in flight — never stomp fresher keystrokes
-            // with an older snapshot.
+            // ⚠ Re-buffer the losing body ONLY if nothing newer was typed
+            // mid-PUT — never stomp fresher keystrokes with an older snapshot.
             if (pendingBodyRef.current === null) pendingBodyRef.current = body;
             const fresh = await handlersRef.current.captureConflict();
             if (fresh) {
@@ -151,10 +146,9 @@ export function useSkillSaveChain({
     [flushSave]
   );
 
-  // Cleanup any pending timer on unmount, then flush the last edit
-  // through the save chain (so it runs AFTER any in-flight save and
-  // carries a fresh baseline). A 412 here has no editor left to show a
-  // banner in — surface a toast instead of dropping silently. Skipped
+  // Unmount: clear the timer, then flush the last edit THROUGH the chain so
+  // it runs after any in-flight save with a fresh baseline. A 412 here has no
+  // editor left for a banner — toast instead of dropping silently. Skipped
   // mid-conflict.
   useEffect(() => {
     return () => {
@@ -180,11 +174,9 @@ export function useSkillSaveChain({
     };
   }, [enqueueSave, peekConflict, workspaceId]);
 
-  /**
-   * Conflict resolution "Save mine": keep the local edits and force-save
-   * over the server using the conflict snapshot's precondition. Another
-   * racing writer re-triggers the conflict — never silently overwrite.
-   */
+  /** "Save mine": force-save local edits using the conflict snapshot's
+   *  precondition. Another racing writer re-triggers the conflict — never
+   *  silently overwrite. */
   const saveOverriding = useCallback(
     () =>
       enqueueSave(async () => {
@@ -206,8 +198,8 @@ export function useSkillSaveChain({
           markSaved();
         } catch (err) {
           if (err instanceof SkillApiError && err.status === 412) {
-            // A failed re-pull is a network blip — leave the existing
-            // conflict snapshot in place so the user can retry.
+            // Failed re-pull = network blip. Leave the existing conflict
+            // snapshot in place so the user can retry.
             const fresh = await handlersRef.current.captureConflict();
             if (fresh) baselineRef.current = fresh.serverUpdatedAt;
             setSaveStatus("error");
@@ -220,11 +212,8 @@ export function useSkillSaveChain({
     [enqueueSave, markSaved, peekConflict, workspaceId]
   );
 
-  /**
-   * Drop the buffered autosave AND its timer. The delete flow must call this
-   * before the DELETE: otherwise the unmount flush above PUTs the body into a
-   * row that no longer exists.
-   */
+  /** Drop the buffered autosave AND its timer. ⚠ Delete flow must call this
+   *  BEFORE the DELETE, or the unmount flush PUTs into a deleted row. */
   const cancelPendingSave = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -233,12 +222,9 @@ export function useSkillSaveChain({
     pendingBodyRef.current = null;
   }, []);
 
-  /**
-   * Conflict resolution "Discard mine": drop the buffered body and adopt the
-   * server's clock. The timer is deliberately left alone — it fires into an
-   * empty buffer and no-ops, and clearing it would let a focus/realtime pull
-   * land earlier than it does today.
-   */
+  /** "Discard mine": drop the buffered body, adopt the server clock. ⚠ Timer
+   *  deliberately left alone — it fires into an empty buffer and no-ops;
+   *  clearing it would let a focus/realtime pull land earlier. */
   const discardPending = useCallback((serverUpdatedAt: string) => {
     pendingBodyRef.current = null;
     baselineRef.current = serverUpdatedAt;

@@ -1,22 +1,11 @@
 // @vitest-environment jsdom
 /**
- * THE TAB SWITCHER AS A HAZARD, NOT A DECORATION.
- *
- * Two tabs behind one route means a tab click UNMOUNTS the other pane, and the
- * Billing pane is the one that can be holding Stripe's embedded card form. A
- * live switcher over a mounted checkout throws away the card someone is halfway
- * through typing and the session it was collected under, with no warning and
- * nothing to restore — so while checkout is up the control is inert and says
- * why (H1).
- *
- * The same click also EDITS THE URL, and that is the second property here. The
- * shell writes `?tab=` with `replaceState`, so one glance at Usage turns a
- * checkout return into `?billing=success&tab=usage` — a URL that, on reload,
- * has to resolve somewhere. It resolves to Billing (the intent outranks the
- * tab, pinned in `billing-page-screen.test.tsx`), and the click that made it
- * DROPS the intent, because that click is what consumed it (H2). Together those
- * two are what keep the post-payment poll — which only ever mounts inside the
- * Billing pane — from being lost to a stray param.
+ * Tab switcher as a hazard. A tab click UNMOUNTS the other pane, and Billing
+ * can be holding Stripe's embedded card form — so while checkout is up the
+ * control is inert and says why (H1). The same click also edits the URL:
+ * `?tab=` written via `replaceState`, and the `?billing=` intent DROPPED
+ * because the click consumed it (H2). Together they keep the post-payment poll
+ * (mounts only in the Billing pane) from being lost to a stray param.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,8 +16,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
 }));
 
-// Stripe's form is not what is under test — mounting it would pull the Stripe
-// script and a client-secret fetch into a test about a segmented control.
+// Mounting the real form pulls the Stripe script + a client-secret fetch.
 vi.mock("./embedded-checkout", () => ({
   EmbeddedCheckoutForm: () => <div data-testid="embedded-checkout" />,
 }));
@@ -77,8 +65,6 @@ function mount(
 ) {
   window.history.replaceState(null, "", url);
   const client = new QueryClient({
-    // Seeded and never stale: the panes render their loaded state and nothing
-    // in this file is waiting on a network hop.
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   client.setQueryData([BILLING_STATUS_PATH, "ws-1", undefined], FREE);
@@ -107,7 +93,6 @@ describe("the switcher while checkout is mounted", () => {
     await waitFor(() => expect(view.getByTestId("embedded-checkout")).toBeTruthy());
     expect(tabButton(view, "Usage").disabled).toBe(true);
     expect(tabButton(view, "Billing").disabled).toBe(true);
-    // Inert with no explanation is a broken control, not a safe one.
     expect(view.getByRole("status").textContent).toContain(
       "before switching tabs"
     );
@@ -126,9 +111,7 @@ describe("the switcher while checkout is mounted", () => {
   });
 
   it("is live again once checkout is left", async () => {
-    // "← Back to plans" is the sanctioned exit, and it must hand the switcher
-    // back — a control that never re-enables is worse than one that never
-    // disabled.
+    // "← Back to plans" is the sanctioned exit; it must re-enable the switcher.
     const view = mount({ initialCheckoutPlan: "team" });
     await waitFor(() => expect(view.getByTestId("embedded-checkout")).toBeTruthy());
 
@@ -160,8 +143,7 @@ describe("what a manual tab switch does to the URL", () => {
     const params = new URLSearchParams(window.location.search);
     expect(params.get("tab")).toBe("usage");
     // Left in place, `?billing=success` outranks `?tab=` on the next load and
-    // drags the visitor back to Billing — re-running a poll for a payment they
-    // already watched land, on a tab they explicitly left.
+    // re-runs the poll on a tab the visitor explicitly left.
     expect(params.get("billing")).toBeNull();
     expect(params.get("session_id")).toBeNull();
   });

@@ -24,7 +24,7 @@ export type ChatMessage = {
   /** 1-based position in the transcript. */
   index: number;
   role: MessageRole;
-  /** Concise agent-written summary — the default export form. */
+  /** Agent-written summary — the default export form. */
   summary: string;
   /** Exact original text; present only when the user asked for verbatim. */
   verbatim: string | null;
@@ -35,12 +35,9 @@ export type Deliverable = {
   done: boolean;
 };
 
-/**
- * A personal folder whose sharing scope is AUTHORITATIVE for the chats
- * filed in it: chats inherit the folder's visibility/access on move and
- * whenever the folder's scope changes. Filed chats can't be shared
- * individually — unfile first or change the folder's scope.
- */
+/** ⚠ Personal folder whose scope is AUTHORITATIVE for its chats: they inherit
+ *  visibility/access on move and on every folder scope change, and can't be
+ *  shared individually — unfile first, or change the folder. */
 export type ChatFolder = {
   id: string;
   name: string;
@@ -55,7 +52,7 @@ export type Chat = {
   id: string;
   folderId: string | null;
   title: string;
-  /** One-paragraph agent-written framing of what the session was about. */
+  /** Agent-written framing of what the session was about. */
   overview: string;
   pinned: boolean;
   visibility: ChatVisibility;
@@ -79,11 +76,8 @@ export type Chat = {
 export type ChatDetail = Chat & { messages: ChatMessage[] };
 
 
-/**
- * List read result: the visible chats plus how many the free-plan
- * retention window excluded (0 on Pro / full-history plans). `hiddenCount`
- * lets UIs surface the "N older chats hidden — upgrade" affordance.
- */
+/** Visible chats + how many the retention window excluded (0 on full-history
+ *  plans). `hiddenCount` drives the "N older chats hidden" affordance. */
 export type ChatList = {
   chats: Chat[];
   hiddenCount: number;

@@ -21,19 +21,15 @@ interface Props {
   currentUserId: string;
   role: Role;
   /** Scope changes move a KB in and out of other members' lists, which the
-   *  page's owner/team data is derived from — see ./knowledge-v2/routing.ts. */
+   *  page's owner/team data derives from (./knowledge-v2/routing.ts). */
   routing: KnowledgeRouting;
 }
 
 /**
- * Settings → Sharing: the three-way scope picker + per-team grant
- * editor. Editable by the KB owner or a workspace admin (mirrors the
- * service-side `ScopeChangeForbiddenError` rule); everyone else gets a
+ * Settings → Sharing: three-way scope picker + per-team grant editor.
+ * ⚠ Editable by the KB owner or a workspace admin only — mirrors the
+ * service-side `ScopeChangeForbiddenError` rule; everyone else gets a
  * read-only summary.
- *
- * Narrowing used to be able to 409 against the workflow↔KB invariant, opening
- * a shared conflict dialog. Workflows were deleted on 2026-08-11 and that was
- * the status's only producer, so a save now either applies or fails as itself.
  */
 export function KbSharingSection({
   workspaceId,
@@ -53,8 +49,8 @@ export function KbSharingSection({
   const [grantsSeeded, setGrantsSeeded] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Current grants live on TeamView.grants — seed the draft once the
-  // teams fetch lands (the modal mounts this section only while open).
+  // Grants live on TeamView.grants; seed the draft once the teams fetch
+  // lands (the modal mounts this section only while open).
   const currentGrants = useMemo<TeamGrantDraft[]>(
     () =>
       (teams ?? []).flatMap((t) =>
@@ -74,8 +70,8 @@ export function KbSharingSection({
     }
   }, [teams, grantsSeeded, currentGrants]);
 
-  // Members may add/raise only their own teams; admin-granted foreign
-  // teams render locked. Admins see and edit everything.
+  // Members may add/raise only their OWN teams; admin-granted foreign teams
+  // render locked. Admins edit everything.
   const myTeamIds = useMemo(
     () =>
       new Set(

@@ -28,10 +28,9 @@ const INVITATION_COLS =
 const DEFAULT_TTL_DAYS = 7;
 
 /**
- * Generate a URL-safe random token for an invitation. 32 bytes of
- * entropy → 43 base64url chars; ample for a non-guessable single-use
- * token. We store it in cleartext because the table is service-role
- * scoped and the token's existence is intentionally tied to the email.
+ * URL-safe random invitation token. 32 bytes → 43 base64url chars. Stored in
+ * cleartext: the table is service-role scoped and the token's existence is
+ * deliberately tied to the email.
  */
 function generateToken(): string {
   return randomBytes(32).toString("base64url");
@@ -52,20 +51,18 @@ export interface CreateInvitationInput {
 }
 
 /**
- * Create a pending invitation. Caller must be admin or owner of the
- * workspace. Idempotent on (workspace_id, email): if a non-revoked, non-
- * expired invitation already exists for this email, return it instead
- * of creating a duplicate. The invitee picks up the invite via the
- * sidebar (email-matched) — no email send is wired.
+ * Create a pending invitation. Admin/owner only. Idempotent on
+ * (workspace_id, email): a live non-revoked invitation is returned instead of
+ * duplicated. ⚠ No email send is wired — the invitee picks it up via the
+ * email-matched sidebar.
  */
 export async function createInvitation(
   input: CreateInvitationInput
 ): Promise<Invitation> {
   await requireWorkspaceRole(input.workspaceId, input.invitedBy, "admin");
 
-  // Solo plan is single-member — every member-add path must gate. Fail
-  // fast here so the owner gets the 402 on click, before we mint or reuse
-  // a token that could never be accepted.
+  // ⚠ Solo is single-member — EVERY member-add path must gate. Fail fast so
+  // the 402 lands on click, before minting a token that could never be used.
   await assertCanAddMember(input.workspaceId);
 
   const normalizedEmail = input.email.trim().toLowerCase();
@@ -75,8 +72,7 @@ export async function createInvitation(
 
   const db = supabaseAdmin();
 
-  // Reuse a still-live invitation rather than spamming new tokens for
-  // the same email. Only re-issue if the previous one is gone.
+  // Reuse a still-live invitation; only re-issue when the previous is gone.
   const { data: existing } = await db
     .from("workspace_invitations")
     .select(INVITATION_COLS)
@@ -90,8 +86,8 @@ export async function createInvitation(
   const teamIds = await validateInvitationTeams(input.workspaceId, input.teamIds);
 
   if (existing) {
-    // Reusing a live invitation: refresh its team pre-assignment when the
-    // caller specified one (an omitted teamIds leaves the prior set alone).
+    // Reused invitation: refresh team pre-assignment only when specified
+    // (omitted teamIds leaves the prior set alone).
     const inv = mapInvitationRow(existing as InvitationRow);
     if (input.teamIds !== undefined) {
       await replaceInvitationTeams(inv.id, teamIds);
@@ -204,10 +200,8 @@ export async function revokeInvitation(
 }
 
 /**
- * Look up an invitation by token + return enough context for the
- * accept-invite page to render: workspace name, inviter email, expiry,
- * etc. Does NOT require auth — anyone with the token can read its
- * status (the security property is the token's unguessability).
+ * Invitation by token + context for the accept-invite page. ⚠ Does NOT require
+ * auth — the security property is the token's unguessability.
  */
 export async function getInvitationByToken(
   token: string
@@ -225,8 +219,7 @@ export async function getInvitationByToken(
   const workspace = await findWorkspaceById(invitation.workspaceId);
   if (!workspace) return null;
 
-  // Inviter's email — fetch via auth admin to avoid exposing more than
-  // the email address (no metadata, no roles).
+  // Auth admin fetch so nothing but the email address is exposed.
   let inviterEmail: string | null = null;
   try {
     const { data: userRes } = await db.auth.admin.getUserById(
@@ -257,10 +250,9 @@ export async function getInvitationByToken(
 }
 
 /**
- * Accept an invitation. The caller must be authenticated; we use their
- * authenticated identity to populate `accepted_by` and the resulting
- * `workspace_members` row. Returns `{ workspaceSlug, workspacePublicId }`
- * so the caller can build the canonical `/<slug>-<publicId>` redirect.
+ * Accept an invitation, using the caller's AUTHENTICATED identity for
+ * `accepted_by` and the `workspace_members` row. Returns
+ * `{ workspaceSlug, workspacePublicId }` for the canonical redirect.
  */
 export async function acceptInvitationByToken(
   token: string,
@@ -277,8 +269,7 @@ export async function acceptInvitationByToken(
     throw new HttpError(410, "INVITATION_EXPIRED", "Invitation has expired");
   }
   if (status.alreadyAccepted) {
-    // Already accepted — if the caller is the same user, treat as a
-    // no-op success so a duplicate click doesn't 410.
+    // Same user re-accepting: no-op success so a duplicate click doesn't 410.
     if (status.invitation.acceptedBy === userId) {
       return {
         workspaceSlug: status.workspace.slug,
@@ -294,8 +285,7 @@ export async function acceptInvitationByToken(
 
   const db = supabaseAdmin();
 
-  // Existing membership (e.g. invited user happens to already be the
-  // owner) — promote silently to active and return.
+  // Existing membership (e.g. invitee is already the owner) — activate.
   const existingMembership = await findMembership(
     status.invitation.workspaceId,
     userId
@@ -315,16 +305,13 @@ export async function acceptInvitationByToken(
     };
   }
 
-  // Solo plan is single-member — every member-add path must gate. Re-check
-  // at accept time (not just at invite time): an invite sent while the
-  // workspace was free/team survives a later downgrade to Solo, so this
-  // closes the stale-invite hole. The already-active-member no-op above is
-  // intentionally NOT gated — re-accepting an existing membership adds no seat.
+  // ⚠ Re-check at ACCEPT time, not just invite time: an invite sent while
+  // free/team survives a later downgrade to Solo. The already-active no-op
+  // above is deliberately NOT gated — it adds no seat.
   await assertCanAddMember(status.invitation.workspaceId);
 
-  // Insert (or revive) the membership row. Use upsert keyed on
-  // (workspace_id, user_id) so a previously-revoked member rejoining
-  // doesn't trip the unique constraint.
+  // Upsert on (workspace_id, user_id) so a rejoining revoked member does not
+  // trip the unique constraint.
   const { error: memberError } = await db.from("workspace_members").upsert(
     {
       workspace_id: status.invitation.workspaceId,
@@ -351,9 +338,8 @@ export async function acceptInvitationByToken(
   // Membership is active now, so the team_members trigger accepts the rows.
   await joinInvitationTeams(status.invitation.id, status.invitation.workspaceId, userId);
 
-  // Seat count changed — reconcile the Pro subscription quantity (no-op on
-  // free workspaces / when Stripe is unconfigured). Best-effort: a billing
-  // hiccup must not fail the join.
+  // Reconcile the Pro subscription quantity. Best-effort: a billing hiccup
+  // must not fail the join.
   await syncSeatQuantity(status.invitation.workspaceId).catch((err) => {
     console.error(
       `[invitations] syncSeatQuantity failed for workspace ${status.invitation.workspaceId}:`,
@@ -369,8 +355,8 @@ export async function acceptInvitationByToken(
 
 /**
  * Best-effort: add the accepting user to the invite's pre-assigned teams.
- * Teams deleted since the invite cascade off the junction automatically;
- * a residual failure logs and never blocks the accept.
+ * Deleted teams cascade off the junction; a residual failure never blocks
+ * the accept.
  */
 async function joinInvitationTeams(
   invitationId: string,
@@ -391,13 +377,10 @@ async function joinInvitationTeams(
 }
 
 /**
- * MEMBER ADMINISTRATION MOVED, THE IMPORT PATH DID NOT (§2 split, 2026-08-10).
- * `updateMemberRole` / `removeMember` now live in `membership-admin.ts` — this
- * file was 534 lines and exempt-listed, so the C-20 departure sweep had to
- * split it rather than grow it. Kept as a re-export because every caller
- * already imports them from here (`api/workspaces/[workspaceSlug]/members/
- * [userId]/route.ts`), the same barrel shape `teams/server/repository.ts` kept
- * through its own split.
+ * `updateMemberRole` / `removeMember` live in `membership-admin.ts` (§2 split).
+ * Re-exported here because callers import them from this path
+ * (`api/workspaces/[workspaceSlug]/members/[userId]/route.ts`) — same barrel
+ * shape as `teams/server/repository.ts`.
  */
 export { updateMemberRole, removeMember } from "./membership-admin";
 

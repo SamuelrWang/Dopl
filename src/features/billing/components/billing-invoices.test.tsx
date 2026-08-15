@@ -1,11 +1,7 @@
 /**
- * THE INVOICE TABLE — the one surface on this page that renders MONEY.
- *
- * A meter that is wrong looks wrong. An amount that is wrong looks fine, which
- * is why the pins here are about the two decisions that pick a number: WHICH
- * amount a row shows (paid vs. due), and how a minor-unit integer becomes a
- * string. The `formatInvoiceAmount` cases are unit-level on purpose — a
- * zero-decimal currency is the case that only a division by 100 gets wrong.
+ * Invoice table — the one surface here that renders MONEY. Pins the two
+ * decisions that pick a number: WHICH amount a row shows (paid vs. due), and
+ * how a minor-unit integer becomes a string.
  */
 
 import { describe, it, expect } from "vitest";
@@ -25,7 +21,7 @@ function invoice(overrides: Partial<InvoiceDto> = {}): InvoiceDto {
   return {
     id: "in_1",
     number: "DOPL-0001",
-    // Midday UTC: `formatDate` renders in the runner's timezone.
+    // ⚠ Midday UTC: `formatDate` renders in the runner's timezone.
     created: "2026-07-04T12:00:00.000Z",
     amountPaid: 3196,
     amountDue: 3196,
@@ -69,7 +65,6 @@ describe("what a row says", () => {
   });
 
   it("shows what is DUE on an unpaid one", () => {
-    // `$0.00 paid` on an open invoice reads as free rather than outstanding.
     const markup = table([
       invoice({ status: "open", amountPaid: 0, amountDue: 799 }),
     ]);
@@ -106,10 +101,8 @@ describe("a status Stripe invented after we shipped", () => {
   });
 
   it("renders an unrecognised one in the NEUTRAL tone, not untoned", () => {
-    // The DTO calls this field an `InvoiceStatus` on the strength of a cast at
-    // the Stripe boundary. A sixth value can land in a live payload with no
-    // deploy on our side, and `STATUS_TONE[it]` is `undefined` — a pill with no
-    // colour class at all, silently.
+    // Sixth Stripe value can land with no deploy here; `STATUS_TONE[it]` is
+    // then `undefined` — a pill with no colour class, silently.
     const markup = table([
       invoice({ status: "disputed" as InvoiceDto["status"] }),
     ]);
@@ -121,9 +114,8 @@ describe("a status Stripe invented after we shipped", () => {
 
 describe("a row that has to hold a long number", () => {
   it("keeps the whole amount rather than clipping it to a fixed column", () => {
-    // `w-20` fits "$1,234.56" and nothing wider. A zero-decimal currency has no
-    // subunit to hide behind, so a real ¥ invoice is exactly the case that
-    // overflowed. `min-w-20` holds the alignment edge; the date gives up space.
+    // `w-20` fits "$1,234.56" and nothing wider; a zero-decimal ¥ invoice
+    // overflowed it.
     const markup = table([
       invoice({ currency: "jpy", amountPaid: 123456789, amountDue: 123456789 }),
     ]);
@@ -134,8 +126,7 @@ describe("a row that has to hold a long number", () => {
 
   it("renders every row even when the DTO degraded the id away", () => {
     // `toInvoiceDto` falls back to `invoice.id ?? invoice.number ?? ""`, so two
-    // draft-ish rows can arrive sharing the empty-string id — one React key for
-    // two rows. The index-composed fallback is what keeps them separate.
+    // rows can share the empty-string id — one React key for two rows.
     const markup = table([
       invoice({ id: "", number: null, amountPaid: 100, amountDue: 100 }),
       invoice({ id: "", number: null, amountPaid: 200, amountDue: 200 }),
@@ -152,8 +143,7 @@ describe("formatInvoiceAmount", () => {
   });
 
   it("does NOT divide a zero-decimal currency by 100", () => {
-    // ¥600 is six hundred yen, not six. A blanket /100 is the bug this exists
-    // to prevent.
+    // ¥600 is six hundred yen, not six. Blanket /100 is the bug.
     expect(formatInvoiceAmount(600, "jpy")).toBe("¥600");
   });
 

@@ -24,23 +24,19 @@ interface Props {
   onDeleteObject: (id: string) => void;
   onClose: () => void;
   /**
-   * The object was created optimistically and its POST has not answered, so
-   * `objectId` is provisional. The panel opens on it immediately (that is the
-   * point — the create is visible at once) but stays inert for the round trip:
-   * every control in here writes AT the id, and a PATCH, a DELETE or a
-   * relationship target aimed at a provisional id has nowhere to land.
+   * `objectId` is provisional (create POST unanswered). Panel opens on it at
+   * once but stays inert for the round trip — ⚠ every control here writes AT
+   * the id, and a PATCH/DELETE/relationship target aimed at a provisional id
+   * has nowhere to land.
    */
   pending?: boolean;
-  /** Member+ — viewers read the panel but see no edit/delete affordances:
-   *  inputs go read-only, Delete hides, child editors drop add/remove. */
+  /** Member+ — viewers see no edit/delete affordances: inputs read-only,
+   *  Delete hidden, child editors drop add/remove. */
   canEdit?: boolean;
 }
 
-/**
- * Right-side editor panel for the selected object (card or column) —
- * identity header, then attribute / relationship / action editors.
- * Everything edits in place.
- */
+/** Right-side editor panel for the selected object (card or column): identity
+ *  header, then attribute / relationship / action editors, all in place. */
 export function ObjectPanel({
   objectId,
   graph,
@@ -56,7 +52,6 @@ export function ObjectPanel({
   if (!object) return null;
 
   const isColumn = graph.clusters.some((c) => c.columnIds.includes(objectId));
-  // What the object IS = the name of the column (or object) it lives in.
   const containerName = containerNameOf(graph, objectId);
 
   return (
@@ -169,14 +164,12 @@ export function ObjectPanel({
 }
 
 /**
- * Confirm copy for an object delete. `count` is the number of objects that
- * become unreachable with it — descendants that hang under no other parent.
- * Mirrors `delete-cluster-dialog.tsx`'s shape: without the count, a card that
- * silently takes a subtree with it reads identical to one that takes nothing.
+ * Confirm copy for an object delete. `count` = objects left unreachable
+ * (descendants under no other parent) — without it, a card that silently takes
+ * a subtree reads identical to one that takes nothing.
  *
- * Exported for the kanban column header's own delete confirm: the same delete
- * is reachable from the lane's kebab menu, and two spellings of this sentence
- * would drift.
+ * ⚠ Exported and shared with `kanban-column-header.tsx` (same delete, lane
+ * kebab menu) — two spellings would drift.
  */
 export function deleteObjectMessage(label: string, count: number): string {
   if (count === 0) {

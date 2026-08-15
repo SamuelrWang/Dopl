@@ -31,9 +31,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = requireEntryId(auth);
     const patch = await parseJson(request, KnowledgeEntryUpdateSchema);
-    // Optional `X-Updated-At` precondition — clients pass the entry's
-    // current `updatedAt` to enable optimistic-concurrency rejection.
-    // Mismatch → 412 KNOWLEDGE_STALE_VERSION (Item 5.A.3).
+    // Optional `X-Updated-At` precondition. Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt =
       request.headers.get("x-updated-at") ?? undefined;
     const ctx = buildKnowledgeContext(auth);

@@ -1,20 +1,17 @@
 /**
  * The five channel LIFECYCLE writes, driven through TanStack's own
- * framework-free `MutationObserver` — the same runner
- * `shared/hooks/use-api-mutation.test.ts` uses, and for the same reason: the
- * order onMutate → mutationFn → onSuccess/onError → onSettled IS the contract,
- * and a hand-rolled runner would pin a re-implementation of it. `npm test` has
- * no DOM (component tests are `renderToStaticMarkup`), which is why the configs
- * are exported apart from the hook that wires them.
+ * `MutationObserver` — the order onMutate → mutationFn → onSuccess/onError →
+ * onSettled IS the contract, and a hand-rolled runner pins a re-implementation
+ * of it. `npm test` has no DOM, which is why the configs are exported apart
+ * from the hook that wires them.
  *
- * WHAT THESE CASES PROTECT, in audit terms:
- *  - C-27: every config hands the refetch coordinator's gate to `settleWith`,
- *    and releases it on the THROWING path too. Losing that silently re-opens
- *    the race the deleted override maps used to hide.
- *  - C-21 / §7 rule 4: every cache key is built from the draft's own
- *    `channelId`, so a write cannot land in the channel the user switched to.
- *  - C-16 / F-173: delete keeps TWO mechanics. A DM soft-closes and MUST keep
- *    its transcript cached; anything else hard-deletes and MUST evict.
+ * What these protect:
+ *  - every config hands the refetch coordinator's gate to `settleWith`, and
+ *    releases it on the THROWING path too;
+ *  - every cache key is built from the draft's own `channelId`, so a write
+ *    cannot land in the channel the user switched to;
+ *  - ⚠ delete keeps TWO mechanics: a DM soft-closes and MUST keep its
+ *    transcript cached; anything else hard-deletes and MUST evict.
  */
 
 import { describe, expect, it } from "vitest";
@@ -87,8 +84,8 @@ function channel(over: Partial<Channel> = {}): Channel {
   };
 }
 
-/** A transport the test settles by hand, so "before the network answers" is a
- *  real assertion rather than a timing hope. */
+/** Transport settled by hand, so "before the network answers" is a real
+ *  assertion rather than a timing hope. */
 function deferredRequest() {
   let settle!: (value: unknown) => void;
   let fail!: (error: unknown) => void;
@@ -198,17 +195,16 @@ describe("dropChannelRow", () => {
     expect(dropChannelRow(cache, CHANNEL)?.channels.map((c) => c.id)).toEqual([
       OTHER,
     ]);
-    // Seeding a one-row list into a query that never loaded would render
-    // exactly that row and then flip when the read lands.
+    // ⚠ Seeding a one-row list into a query that never loaded renders that row
+    // and then flips when the read lands.
     expect(dropChannelRow(undefined, CHANNEL)).toBeUndefined();
   });
 
   /**
-   * THE ROLLBACK CASES ABOVE CANNOT SEE THIS FAIL. `onMutate` snapshots the
-   * cache object by reference and `onError` writes that same reference back,
-   * so an in-place edit would "restore" the optimistic value and every
-   * `toEqual(before)` in this file would still pass — `before` is that same
-   * live object. So the purity is asserted directly, once.
+   * ⚠ The rollback cases above CANNOT see this fail: `onMutate` snapshots the
+   * cache by reference and `onError` writes that same reference back, so an
+   * in-place edit "restores" the optimistic value and every `toEqual(before)`
+   * still passes. Purity is asserted directly, once.
    */
   it("never edits the input cache in place — the rollback is a reference restore", () => {
     const rows = [channel(), channel({ id: OTHER })];
@@ -218,7 +214,7 @@ describe("dropChannelRow", () => {
     expect(next).not.toBe(cache);
     expect(next?.channels).not.toBe(cache.channels);
     expect(cache.channels.map((c) => c.id)).toEqual([CHANNEL, OTHER]);
-    // The surviving row is the SAME object, so nothing else re-renders.
+    // Surviving row is the SAME object, so nothing else re-renders.
     expect(next?.channels[0]).toBe(rows[1]);
   });
 });
@@ -332,8 +328,8 @@ describe("delete — one verb, two mechanics (C-16 / F-173)", () => {
 
     expect(calls[0].opts).toMatchObject({ method: "DELETE" });
     expect(activeIds(h)).toEqual([OTHER]);
-    // NOT evicted yet: a removed query has no snapshot, so evicting before the
-    // server says yes would make a failed delete unrecoverable.
+    // ⚠ Not evicted yet — a removed query has no snapshot, so evicting before
+    // the server says yes makes a failed delete unrecoverable.
     expect(h.evicted).toEqual([]);
     expect(h.client.getQueryData(MESSAGES_KEY)).toBeDefined();
 
@@ -358,8 +354,8 @@ describe("delete — one verb, two mechanics (C-16 / F-173)", () => {
 
     settle(undefined);
     await inFlight;
-    // Reopening revives the SAME row with its full history, so evicting here
-    // would throw away live product state.
+    // ⚠ Reopening revives the SAME row with its history — evicting here throws
+    // away live product state.
     expect(h.evicted).toEqual([]);
     expect(h.client.getQueryData(MESSAGES_KEY)).toBeDefined();
     expect(h.deselects()).toBe(1);

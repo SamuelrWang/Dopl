@@ -1,11 +1,7 @@
-/**
- * Members feature — view models for the workspace members page.
- *
- * Source-of-truth tables (`workspace_members`, `workspace_invitations`)
- * are owned by the workspaces feature. We re-export the role/status
- * types from there to keep one definition; types here are the hydrated
- * shapes the API returns to the UI (with email + display name + avatar).
- */
+/** View models for the members page. The source-of-truth tables
+ *  (`workspace_members`, `workspace_invitations`) belong to the workspaces
+ *  feature, whose role/status types are re-exported to keep one definition;
+ *  these are the hydrated shapes the API returns. */
 
 import type { Role, InvitedRole, MembershipStatus } from "@/features/workspaces/types";
 import type { MemberTeamRef } from "@/features/teams/types";
@@ -32,13 +28,10 @@ export interface WorkspaceMemberView {
   teams: MemberTeamRef[];
 }
 
-/**
- * One pending join-link request in the admin approval queue.
- *
- * Lives here rather than in `hooks/use-join-requests.ts` (which still
- * re-exports it) because the optimistic cache module patches this row and must
- * not import a hook — the hook imports the cache module.
- */
+/** One pending join-link request. ⚠ Declared here, not in
+ *  `hooks/use-join-requests.ts` (which re-exports it): the optimistic cache
+ *  module patches this row and must not import a hook — the hook imports the
+ *  cache module. */
 export interface JoinRequestView {
   id: string;
   userId: string;

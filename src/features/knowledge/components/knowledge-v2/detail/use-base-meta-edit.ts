@@ -15,15 +15,13 @@ interface Draft {
 }
 
 /**
- * Editable name/description for the base overview card. Holds optimistic
- * local state, debounces persistence through the existing base PATCH route
- * (`updateBase`), and flushes any pending edit on blur or unmount so a save
- * inside the debounce window survives switching bases. `onSaved` fires after
- * a successful write so the caller can re-pull the SSR base list (keeping the
- * list row + toolbar title in sync, and pulling in concurrent agent edits).
+ * Editable name/description for the base overview card: optimistic local
+ * state, debounced `updateBase` PATCH, ⚠ flushed on blur AND unmount so an
+ * edit inside the debounce window survives a base switch. `onSaved` lets the
+ * caller re-pull the base list (list row + toolbar title in sync).
  *
- * Seeds once from `base`; the overview keys this component by base id so a
- * base switch remounts with fresh values rather than reconciling in place.
+ * Seeds once from `base`; the overview keys by base id, so a base switch
+ * remounts with fresh values rather than reconciling in place.
  */
 export function useBaseMetaEdit(
   base: KnowledgeBase,
@@ -116,7 +114,7 @@ export function useBaseMetaEdit(
     [schedule]
   );
 
-  // Flush a pending save when the card unmounts (base switch / navigation).
+  // Flush pending save on unmount (base switch / navigation).
   useEffect(() => {
     return () => {
       if (timerRef.current) {

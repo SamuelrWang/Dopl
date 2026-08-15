@@ -3,10 +3,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Centered pane placeholder — ghost icon over a title, with an optional
- * explainer paragraph (and optional action children). THE empty-detail
- * treatment for two-pane browsers (chats / members / skills): a bare
- * hint line stays muted; a title over a description gets the emphasis.
+ * THE empty-detail treatment for two-pane browsers (chats / members / skills).
+ * Bare hint line stays muted; a title over a description gets the emphasis.
  */
 export function EmptyState({
   icon: Icon,

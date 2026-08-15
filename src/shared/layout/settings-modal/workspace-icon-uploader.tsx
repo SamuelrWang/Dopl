@@ -12,10 +12,9 @@ interface Props {
 }
 
 /**
- * Upload or remove a workspace icon image. POSTs multipart to
- * `/api/workspaces/[segment]/icon` and DELETEs to clear. Optimistically
- * reflects the new URL on success and bubbles `onChanged` so the switcher
- * avatar updates everywhere.
+ * Upload/remove a workspace icon. POSTs multipart to
+ * `/api/workspaces/[segment]/icon`, DELETEs to clear; bubbles `onChanged` so
+ * the switcher avatar updates everywhere.
  */
 export function WorkspaceIconUploader({ workspace, onChanged }: Props) {
   const segment = workspaceSegment(workspace);

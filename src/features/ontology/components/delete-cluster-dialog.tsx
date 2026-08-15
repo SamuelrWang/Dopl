@@ -13,11 +13,9 @@ interface Props {
 }
 
 /**
- * Confirm gate for a cascade cluster delete. Shared by the two renderings of
- * the ontology store (the kanban tab strip and the graph view) so both name
- * the cluster AND the exact number of objects that go with it — the count is
- * the only thing that tells the user a "cluster" delete is really a board
- * delete, and it must not drift between the two surfaces.
+ * Confirm gate for a cascade cluster delete. ⚠ Must name the cluster AND the
+ * exact object count — the count is the only thing telling the user a "cluster"
+ * delete is really a board delete.
  */
 export function DeleteClusterDialog({
   open,
@@ -42,11 +40,8 @@ export function DeleteClusterDialog({
   );
 }
 
-/**
- * Confirm copy for a cascade cluster delete — names the cluster and how many
- * objects go with it (its columns + all nested cards). `count` is the same
- * cascade set the server deletes.
- */
+/** Confirm copy: names the cluster + how many objects go with it (columns +
+ *  nested cards). `count` = the same cascade set the server deletes. */
 function deleteClusterMessage(name: string, count: number): string {
   const label = name || "this cluster";
   if (count === 0) {

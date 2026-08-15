@@ -25,18 +25,13 @@ interface Params {
 }
 
 /**
- * The skill header's metadata: the displayed name / folder / sharing, and
- * every PATCH that changes them.
- *
- * Metadata rides its OWN optimistic-concurrency clock — the skill row's
- * `updated_at`, separate from the body's `body_updated_at`. Body saves move
- * it too (the touch trigger fires on any `skills` UPDATE), so the caller
- * feeds every `skillUpdatedAt` it sees back through `adoptBaseline`; that is
- * what stops a name/folder/sharing edit from false-412-ing right after a
- * body autosave (F-038 D9/D10).
- *
- * The mirrors track the props until the user commits a change, then drive the
- * bar locally so it updates without a route reload.
+ * Skill header metadata: displayed name / folder / sharing and every PATCH
+ * that changes them.
+ * ⚠ Metadata rides its OWN CAS clock — the skill row's `updated_at`, not the
+ * body's `body_updated_at`. Body saves bump it too (touch trigger fires on
+ * any `skills` UPDATE), so the caller must feed every `skillUpdatedAt` back
+ * through `adoptBaseline` or a metadata edit false-412s after a body autosave.
+ * Mirrors track the props until the user commits, then drive the bar locally.
  */
 export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) {
   const [name, setName] = useState(skill.name);
@@ -48,8 +43,7 @@ export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) 
   });
   const metaBaselineRef = useRef(skill.updatedAt);
 
-  // Re-sync the mirrors when the server prop changes (sanctioned
-  // adjust-state-during-render pattern — no effect round-trip).
+  // Re-sync mirrors on prop change (adjust-state-during-render, no effect).
   const sharingKey = `${skill.visibility}:${skill.accessMode}:${skill.grantedTeamIds.join(",")}`;
   const [lastProps, setLastProps] = useState({
     name: skill.name,
@@ -73,13 +67,9 @@ export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) 
 
   const slug = skill.slug;
 
-  /**
-   * Pull the freshest skill, adopt its metadata clock, and sync the bar —
-   * remote renames / refolders / reshares from another tab or an MCP agent
-   * surface here. Returns the full payload so the caller can also re-seed the
-   * body editor (only ever when the editor is at rest). Never reseeds
-   * anything itself, so it is safe to call mid-edit.
-   */
+  /** Pull the freshest skill, adopt its metadata clock, sync the bar. Returns
+   *  the full payload so the caller can re-seed the body editor (only at
+   *  rest). Reseeds nothing itself, so it is safe mid-edit. */
   const pullLatest = useCallback(async (): Promise<ResolvedSkill | null> => {
     const fresh = await fetchSkill(slug, workspaceId).catch(() => null);
     if (!fresh) return null;
@@ -94,13 +84,9 @@ export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) 
     return fresh;
   }, [slug, workspaceId]);
 
-  /**
-   * Single choke-point for metadata PATCHes: sends the metadata precondition
-   * and, on a 412, refreshes the bar + baseline and surfaces the conflict as a
-   * toast (the discrete-field analogue of the body editor's "Edited
-   * elsewhere" banner) rather than silently overwriting. Returns null when
-   * the 412 path swallowed the edit; other failures throw.
-   */
+  /** Choke-point for metadata PATCHes: sends the precondition and, on 412,
+   *  refreshes bar + baseline and toasts rather than overwriting. Returns null
+   *  when the 412 path swallowed the edit; other failures throw. */
   const commit = useCallback(
     async (patch: UpdateSkillPatch): Promise<Skill | null> => {
       try {
@@ -128,14 +114,13 @@ export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) 
     [slug, workspaceId, pullLatest]
   );
 
-  // Throws on failure so EditableTitle's own onError handler can toast it.
+  // Throws so EditableTitle's onError can toast it.
   const rename = useCallback(
     async (next: string) => {
       const saved = await commit({ name: next });
       if (!saved) return;
       setName(saved.name);
-      // The browser's list pane renders server-fetched names — refresh so
-      // the row matches the new title.
+      // List pane renders server-fetched names — refresh so the row matches.
       onListChanged?.();
     },
     [commit, onListChanged]
@@ -147,7 +132,7 @@ export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) 
         const saved = await commit({ folder: next });
         if (!saved) return;
         setFolder(saved.folder);
-        // Left list groups by folder — refresh so the row re-homes.
+        // List groups by folder — refresh so the row re-homes.
         onListChanged?.();
       } catch (err) {
         toast({ title: "Couldn't change folder", description: errMessage(err) });
@@ -179,7 +164,7 @@ export function useSkillMetadata({ skill, workspaceId, onListChanged }: Params) 
     [commit]
   );
 
-  /** Adopt a `skills.updated_at` seen on a body-save response (F-038 D10). */
+  /** Adopt a `skills.updated_at` seen on a body-save response. */
   const adoptBaseline = useCallback((skillUpdatedAt: string) => {
     metaBaselineRef.current = skillUpdatedAt;
   }, []);

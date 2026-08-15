@@ -1,17 +1,10 @@
 /**
- * INVARIANT SUITE — the ontology create ORDER, and what a failure puts back.
+ * INVARIANT SUITE — ontology create ORDER, and what a failure puts back.
  *
- * The launch blocker this pins (roadmap §5): "New cluster" used to fire three
- * serial POSTs and dispatch nothing until each answered, so the click changed
- * no pixel for three round trips. The assertion that catches a regression is
- * therefore not "the cluster ends up on the board" — it always did — but WHEN:
- * the reducer state is snapshotted INSIDE the transport, i.e. at the instant
- * each request leaves, and the tab, its column and its first card must already
- * be there in the first one.
- *
- * The sequences run against the REAL `graphReducer`, so the rollback paths are
- * checked as board states rather than as dispatch logs: a failed create must
- * leave the board byte-identical to what it was before the click.
+ * ⚠ The assertion is WHEN, not whether: reducer state is snapshotted INSIDE the
+ * transport (at the instant each request leaves), and the tab + column + first
+ * card must already be there in the first one. Runs against the REAL
+ * `graphReducer`, so rollbacks are checked as board states, not dispatch logs.
  */
 
 import { describe, expect, it } from "vitest";
@@ -46,7 +39,6 @@ function deferred<T>(): Deferred<T> {
     settle = resolve;
     fail = reject;
   });
-  // Nothing else attaches a handler until the sequence awaits it.
   promise.catch(() => undefined);
   return { promise, settle, fail };
 }
@@ -76,10 +68,8 @@ const savedObject = (id: string, over: Partial<OntologyObject> = {}): OntologyOb
   ...over,
 });
 
-/**
- * A sink over the real reducer, plus the transport it drives. Every request
- * records the board AS IT LEFT — that snapshot is the whole proof.
- */
+/** Sink over the real reducer + the transport it drives. Every request records
+ *  the board AS IT LEFT — that snapshot is the proof. */
 function harness() {
   let state: GraphState = EMPTY_GRAPH;
   const pending = new Set<string>();
@@ -187,7 +177,6 @@ describe("createClusterOptimistic — ordering", () => {
     const h = harness();
     const { row } = createClusterOptimistic(h.api, h.sink);
 
-    // Synchronous: no await has happened yet, and the request is already out.
     expect(h.sent).toHaveLength(1);
     const atSubmit = h.sent[0]!.board;
     expect(atSubmit.clusters.map((c) => c.id)).toEqual([row.id]);
@@ -252,12 +241,10 @@ describe("createClusterOptimistic — resolve", () => {
 
     const cluster = h.board.clusters[0]!;
     expect(cluster.id).toBe("cluster-real");
-    // The slug is server-minted (uniqueness is table-wide) — the optimistic
-    // cluster has none, and the address bar needs this one.
+    // Slug is server-minted; optimistic cluster has none.
     expect(cluster.slug).toBe("new-cluster");
     expect(cluster.columnIds).toEqual(["column-real"]);
     expect(h.board.objects["column-real"]!.childIds).toEqual(["card-real"]);
-    // Nothing is left addressable by a provisional id.
     for (const gone of [row.id, column.id, card.id]) {
       expect(h.board.objects[gone]).toBeUndefined();
     }
@@ -275,8 +262,7 @@ describe("createClusterOptimistic — resolve", () => {
     h.objectCalls[1]!.settle(savedObject("card-real"));
     await done;
 
-    // A row un-dimmed before its id is real is a row inviting a write that
-    // would 404 — the order here is the guarantee against it.
+    // Un-dimming before the id is real invites a write that 404s.
     expect(h.order.indexOf("resolve")).toBeLessThan(h.order.indexOf("clearPending"));
     expect(h.pending.size).toBe(0);
     expect(h.writesInFlight).toBe(0);
@@ -297,10 +283,8 @@ describe("createClusterOptimistic — rollback", () => {
     h.objectCalls[0]!.fail(boom);
     expect(await done).toBeNull();
 
-    // Board back to nothing — column and card go with the cluster, or a
-    // half-created cluster survives as a ghost tab (F-031).
+    // Column + card go with the cluster, else a ghost tab survives (F-031).
     expect(h.board).toEqual(EMPTY_GRAPH);
-    // And the server half: the cluster row DID get created, so it is deleted.
     expect(h.deletedClusters).toEqual(["cluster-real"]);
     expect(h.failures).toEqual([{ what: "create cluster", err: boom }]);
     expect(h.pending.size).toBe(0);
@@ -365,8 +349,7 @@ describe("createObjectOptimistic", () => {
     expect(h.sent).toHaveLength(1);
     const atSubmit = h.sent[0]!.board;
     expect(atSubmit.objects.col1!.childIds).toEqual([row.id]);
-    // Columns act as templates server-side; the pending card renders COMPLETE
-    // rather than rearranging itself when the POST answers.
+    // Columns are templates server-side → pending card renders COMPLETE.
     expect(row.attributes).toEqual([
       { key: "owner", label: "Owner", value: { kind: "text", value: "" } },
       { key: "docs", label: "Docs", value: { kind: "knowledge", value: [] } },

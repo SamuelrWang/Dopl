@@ -12,13 +12,12 @@ import {
 import { ArrowUpRight, MenuIcon, SearchIcon } from "./icons";
 import { Logo } from "./logo";
 
-/** Exit animation length for the menu card — the card stays mounted this long
- * after a close so `lpMenuOut` can run. Keep in sync with marketing.css. */
+/** Card stays mounted this long after close so `lpMenuOut` can run.
+ *  ⚠ Keep in sync with marketing.css. */
 const MENU_EXIT_MS = 140;
 
-/** Read at event time rather than subscribed to: the only thing it gates is
- * whether a close waits for an animation, and the OS setting changing
- * mid-interaction is not a case worth a listener. */
+/** Read at event time, not subscribed: only gates whether a close waits for an
+ *  animation. */
 function prefersReducedMotion() {
   return (
     typeof window !== "undefined" &&
@@ -31,22 +30,12 @@ type MenuState = "closed" | "open" | "closing";
 
 /** Top bar: brand left · links + Get Started centered · search + Menu right.
  *
- * "Pricing" is a plain link to the standalone `/pricing` page — it used to
- * intercept the click and open a popup over the landing page; that popup is
- * gone and the route is the only pricing surface. The Menu dropdown's Pricing
- * row is the SAME link, for the same reason: there is nothing else to reuse.
+ * ⚠ SEARCH AND MENU ARE MUTUALLY EXCLUSIVE — opening either closes the other.
+ * Both collapse on Escape (focus returns to their button) and on outside
+ * mousedown.
  *
- * The dark button here was Login, then Download; it is the same button with the
- * same classes, now pointed at `/signup` (../constants.ts). Below 900px
- * `.lp-nav-center` is display:none, so this button is desktop-only — unchanged
- * from the Login era, and the hero's CTA is the one a phone sees. The search
- * control is hidden at that width too; the Menu is what a phone gets.
- *
- * SEARCH AND MENU ARE MUTUALLY EXCLUSIVE — opening either closes the other.
- * Both collapse on Escape (focus returns to their button) and on an outside
- * mousedown. The idle markup is deliberately the same two controls it always
- * was: the search shell composes `.lp-icon-btn`, so a closed nav is pixel-for-
- * pixel what it was before any of this existed. */
+ * Below 900px marketing.css sets `.lp-nav-center` display:none, so the dark CTA
+ * and search are desktop-only; a phone gets the hero CTA and the Menu. */
 export function SiteNav() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -59,13 +48,12 @@ export function SiteNav() {
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Mirror of `menuState` for use inside event handlers, which must not
-   * re-subscribe every time the state changes. */
+  /** Mirror of `menuState` for event handlers, which must not re-subscribe on
+   * every state change. */
   const menuStateRef = useRef<MenuState>("closed");
-  /** Which row to focus once the card has mounted — set only by ArrowDown /
-   * ArrowUp on the closed button. A mouse open leaves focus on the button,
-   * which is what a pointer user expects. A ref rather than state because the
-   * card's arrival is what consumes it; it must not cause a render of its own. */
+  /** Row to focus once the card mounts — set only by ArrowDown/ArrowUp on the
+   * closed button; a mouse open leaves focus on the button. Ref not state: the
+   * card's arrival consumes it and it must not trigger its own render. */
   const menuAutoFocus = useRef<"first" | "last" | null>(null);
 
   useEffect(() => {
@@ -113,13 +101,11 @@ export function SiteNav() {
     setSearchOpen(true);
   }, [closeMenu]);
 
-  /* Focus lands in the field as soon as the pill starts growing — waiting for
-     the animation to finish would eat the first keystrokes. */
+  /* Focus on grow-start, not animation-end — waiting eats first keystrokes. */
   useEffect(() => {
     if (searchOpen) inputRef.current?.focus();
   }, [searchOpen]);
 
-  /* Roving focus into the freshly mounted card. */
   useEffect(() => {
     const want = menuAutoFocus.current;
     if (menuState !== "open" || !want) return;
@@ -178,9 +164,8 @@ export function SiteNav() {
     moveMenuFocus(direction);
   };
 
-  /* Focus leaving the card entirely (Tab past the last row) closes it. Focus
-     moving BETWEEN rows keeps relatedTarget inside the wrapper, so this only
-     fires on a real exit. */
+  /* Tab past the last row closes. Row-to-row keeps relatedTarget inside the
+     wrapper, so this fires only on a real exit. */
   const onMenuBlur = (event: React.FocusEvent<HTMLDivElement>) => {
     const next = event.relatedTarget as Node | null;
     if (next && menuRef.current?.contains(next)) return;
@@ -217,8 +202,8 @@ export function SiteNav() {
       </div>
 
       <div className="lp-nav-right">
-        {/* The slot stays one button wide forever; the shell inside it is the
-            thing that grows, leftward, over its neighbours. */}
+        {/* Slot stays one button wide; the shell inside grows leftward over
+            its neighbours. */}
         <div className="lp-nav-search" data-open={searchOpen} ref={searchRef}>
           <div className="lp-icon-btn lp-nav-search-shell">
             <button
@@ -228,8 +213,8 @@ export function SiteNav() {
               aria-label={searchOpen ? "Close search" : "Search"}
               aria-expanded={searchOpen}
               aria-controls="lp-nav-search-field"
-              /* Suppress the focus shift while open so the input's blur does
-                 not close the pill a beat before this click reopens it. */
+              /* ⚠ Suppress focus shift while open, else the input's blur closes
+                 the pill a beat before this click reopens it. */
               onMouseDown={(event) => {
                 if (searchOpen) event.preventDefault();
               }}
@@ -250,9 +235,7 @@ export function SiteNav() {
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
-                // TODO: no search surface exists on the landing yet — wire this
-                // to it (or to /search) when there is one. Deliberately inert
-                // rather than faking a result list.
+                // TODO: no search surface exists yet — inert on purpose.
                 event.preventDefault();
               }}
               onBlur={() => {
@@ -305,8 +288,8 @@ export function SiteNav() {
               >
                 Pricing
               </Link>
-              {/* Plain anchor, not next/link: /download is a route handler that
-                  redirects to the dmg, not a page to client-navigate into. */}
+              {/* ⚠ Plain anchor, not next/link: /download is a route handler
+                  redirecting to the dmg, not a page. */}
               <a
                 role="menuitem"
                 className="lp-nav-menu-item"

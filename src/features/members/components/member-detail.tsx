@@ -27,13 +27,10 @@ import {
 } from "./member-bits";
 import { ScopePill } from "./team-bits";
 
-/**
- * Workflow rows leave here for the same reason they leave
- * `use-workspace-resources` (retirement D7): the server still resolves and
- * returns them — grants stay valid in the DB — but nothing in the UI may
- * render the word. This endpoint is NOT the access matrix, so the filter in
- * that hook does not cover these rows.
- */
+/** ⚠ Workflow rows are filtered here as well as in
+ *  `use-workspace-resources`: the server still resolves and returns them
+ *  (grants stay valid in the DB) but nothing may render the word, and this
+ *  endpoint is NOT the access matrix, so that hook's filter misses these. */
 const selectAccessRows = (body: { rows: EffectiveAccessRow[] }) =>
   withoutRetiredResources(body.rows ?? []);
 
@@ -47,11 +44,8 @@ interface Props {
   onRemoved: () => void;
 }
 
-/**
- * Member detail — the right pane of the members console: crumb top bar
- * with the role control, an identity header box, then Teams and
- * Effective-access section boxes. Replaces the old slide-out drawer.
- */
+/** Member detail, right pane of the members console: crumb bar with role
+ *  control, identity header, Teams + Effective-access sections. */
 export function MemberDetail({
   workspaceSlug,
   member: m,
@@ -69,10 +63,8 @@ export function MemberDetail({
   const busy = memberWrites.pending || teamWrites.pending;
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  // The team a "Remove" click is asking about — every destructive action in
-  // this console gets an are-you-sure, and dropping a team membership is one:
-  // it revokes every resource that team was the member's only path to, with
-  // nothing to undo it from.
+  // Team a "Remove" click is asking about. Confirmed because it revokes every
+  // resource that team was the member's only path to, with no undo.
   const [confirmLeaveTeam, setConfirmLeaveTeam] = useState<TeamView | null>(null);
   const [teamPickerOpen, setTeamPickerOpen] = useState(false);
 
@@ -85,17 +77,15 @@ export function MemberDetail({
     [teams, m.userId]
   );
 
-  // Server-resolved effective access — same implementation as the
-  // enforcement path. Admin-only for others (the hook just gets a 404).
+  // Server-resolved effective access, same implementation as enforcement.
+  // Admin-only for other members (the hook gets a 404).
   const canSeeAccess = canManage || isSelf;
   /**
-   * Nothing else refreshes this pane, and it has its OWN cache key — which is
-   * why the role and team-membership mutations name it in their `invalidate`.
-   * Since the pane never unmounts, removing someone from the team that granted
-   * them a KB used to drop the team chip and leave "Reports KB · via Growth"
-   * sitting underneath it: the console asserting access through a team the
-   * member is no longer in. The path comes from `client/query-keys` so the
-   * invalidation and this read cannot name different entries.
+   * ⚠ Own cache key, and nothing else refreshes it — the role and
+   * team-membership mutations must name it in `invalidate`, or the pane (which
+   * never unmounts) keeps asserting access through a team the member has left.
+   * Path comes from `client/query-keys` so read and invalidation can't name
+   * different entries.
    */
   const { data: access } = useApiQuery(
     memberAccessPath(workspaceSlug, m.userId),
@@ -120,9 +110,7 @@ export function MemberDetail({
         </span>
         <span className="flex-1" />
         {canEditTarget ? (
-          // The chip renders the CACHED role, which the mutation patches in
-          // `onMutate` — so the control shows the new role on the click rather
-          // than the old one for the length of the round trip.
+          // Chip renders the CACHED role, patched in `onMutate`.
           <RoleSelect
             value={m.role as AssignableRole}
             disabled={busy}
@@ -188,9 +176,9 @@ export function MemberDetail({
                         onClick={() => {
                           setTeamPickerOpen(false);
                           setError(null);
-                          // The team is captured AT SUBMIT: the roster chip it
-                          // draws needs the team's name and colour, and
-                          // re-reading them later is the wrong-target race.
+                          // ⚠ Team captured AT SUBMIT — the roster chip needs
+                          // its name and colour, and re-reading later is the
+                          // wrong-target race.
                           teamWrites.addMembers
                             .mutateAsync({ team: t, userIds: [m.userId] })
                             .catch(failed);
@@ -216,7 +204,7 @@ export function MemberDetail({
             ) : (
               <ul className="divide-y divide-border-subtle">
                 {memberTeams.map((t) => {
-                  // Same count the Teams list shows — retired types excluded.
+                  // Same count the Teams list shows; retired types excluded.
                   const scoped = scopedResourceCount(t);
                   return (
                   <li key={t.id} className="flex items-center gap-2.5 px-4 py-2.5">
@@ -294,8 +282,7 @@ export function MemberDetail({
           if (!team) return;
           setError(null);
           // Failures land in the pane's error line rather than throwing, so
-          // the dialog closes either way — same contract as the remove-member
-          // dialog below.
+          // the dialog closes either way.
           await teamWrites.removeMembers
             .mutateAsync({ team, userIds: [m.userId] })
             .catch(failed);

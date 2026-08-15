@@ -6,20 +6,17 @@ import { SkeletonBar } from "@/shared/ui/skeleton";
 import { KnowledgeApiError } from "../client/api";
 
 /**
- * Presentational chrome for DocPane — the body-loading skeleton and the
- * 412-conflict banner. Extracted from `doc-pane.tsx` for the §2 file-size
- * cap; behavior unchanged.
+ * Presentational chrome for DocPane: body-loading skeleton + 412-conflict
+ * banner. Split from `doc-pane.tsx` for the §2 file-size cap.
  */
 
 /**
- * Placeholder shown in the editor column while the per-entry body fetch
- * is in flight. Mirrors the editor's geometry (`mx-auto … max-w-3xl
- * px-6`) so the swap to real content is seamless. A 0%-width entry
- * renders as a paragraph gap.
+ * Editor-column placeholder while the per-entry body fetch is in flight.
+ * ⚠ Must mirror the editor's geometry (`mx-auto … max-w-3xl px-6`) or the swap
+ * to real content jumps. A 0%-width entry renders as a paragraph gap.
  *
- * The bars come from the shared kit (`SkeletonBar`) — this file used to
- * hand-roll `animate-pulse` + a surface tint, the local clone
- * `shared/ui/skeleton.tsx` and DESIGN-SYSTEM forbid.
+ * ⚠ Bars come from the shared kit (`SkeletonBar`) — no hand-rolled
+ * `animate-pulse` clones (shared/ui/skeleton.tsx, DESIGN-SYSTEM).
  */
 export function DocBodySkeleton() {
   return (

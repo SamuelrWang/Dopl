@@ -1,45 +1,33 @@
 /**
- * Generic graph-drawing geometry — the substrate the ontology graph and
- * the (since deleted) workflow graph both rendered on. Nothing here knows about a domain:
- * a `SceneNode<T>` carries an opaque `data` payload and a free-form
- * `kind`; edge visual style is resolved by the caller (see EdgeLayer's
- * `styles` prop), so `SceneEdge.kind` is a plain string keyed into a
- * caller-supplied style map. Layout modules (ontology's column tree,
- * a layered DAG) produce the `NodeLayout`/`SceneLayout` shapes
- * EdgeLayer consumes.
+ * Generic graph-drawing geometry. Domain-agnostic: `SceneNode<T>` carries an
+ * opaque `data` + free-form `kind`; `SceneEdge.kind` keys into a
+ * caller-supplied style map (EdgeLayer's `styles` prop). Domain layout
+ * modules produce the `NodeLayout`/`SceneLayout` shapes EdgeLayer consumes.
  */
 
 export type EdgeSide = "top" | "right" | "bottom" | "left";
 
-/** A world-space point. */
 export interface Point {
   x: number;
   y: number;
 }
 
-/**
- * A persisted node position — the `{ x, y }` a user dragged a card to.
- * Stored server-side as a JSONB map keyed by node id (see the graph
- * `layout` columns); the hybrid resolver lets a stored position win over
- * the domain auto-layout per node.
- */
+/** Persisted node positions — server-side JSONB keyed by node id (graph
+ *  `layout` columns). Stored wins over auto-layout per node. */
 export type GraphLayout = Record<string, Point>;
 
-/** A positioned card on the graph. `data` is domain payload (an ontology
- *  object, …); `kind` is a domain discriminator the
- *  renderer branches on. */
+/** Positioned card. `data` = domain payload; `kind` = domain discriminator
+ *  the renderer branches on. */
 export interface SceneNode<T = unknown> {
   id: string;
   kind: string;
   data: T;
 }
 
-/** A directed connector. Routing hints (`fromSide`…`mid`) are filled by a
- *  layout module; `kind` selects the visual style from EdgeLayer's map.
- *  `points` is a fully-computed orthogonal polyline (from the shared
- *  `routeEdges` router) that EdgeLayer renders verbatim — when present it
- *  overrides the hint-based single-mid routing, so a route can have any
- *  number of elbows. Absent → EdgeLayer falls back to the hint geometry. */
+/** Directed connector. Hints (`fromSide`…`mid`) filled by a layout module;
+ *  `kind` selects style from EdgeLayer's map. `points` = polyline from
+ *  `routeEdges`, rendered verbatim; present → overrides the single-mid hint
+ *  geometry (any number of elbows), absent → EdgeLayer falls back to it. */
 export interface SceneEdge {
   id: string;
   kind: string;
@@ -67,7 +55,7 @@ export interface SceneLayout {
   worldHeight: number;
 }
 
-/** A fully measured node box (adds the live height to a NodeLayout). */
+/** NodeLayout + the live measured height. */
 export interface NodeRect {
   x: number;
   y: number;

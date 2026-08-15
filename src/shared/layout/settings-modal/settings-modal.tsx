@@ -18,18 +18,16 @@ interface Props {
   currentUserId: string;
   role: Role;
   onWorkspaceChanged: () => void;
-  /** Set when opened from a Stripe redirect — Plans & Billing polls the
-   *  subscription status until the state settles. "success" (checkout)
-   *  celebrates + finalizes; "return" (portal cancel/downgrade) polls
-   *  quietly so a stale Pro doesn't linger. */
+  /** Set from a Stripe redirect — Plans & Billing polls until state settles.
+   *  "success" (checkout) celebrates + finalizes; "return" (portal
+   *  cancel/downgrade) polls quietly so a stale Pro doesn't linger. */
   billingReturn?: "success" | "return" | null;
 }
 
 /**
- * Settings modal — the WEB binding. Chrome, nav and the members pane live in
- * `./settings-modal-core` (shared with the desktop renderer); this file
- * supplies the three panes whose web capabilities the packaged renderer can't
- * have: the multipart icon uploader, Supabase-backed account deletion, and
+ * Settings modal — WEB binding. Chrome/nav/members live in
+ * `./settings-modal-core`; this file supplies the three panes the packaged
+ * renderer can't have: multipart icon uploader, Supabase account deletion,
  * Stripe embedded checkout.
  */
 export function SettingsModal({

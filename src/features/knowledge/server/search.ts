@@ -7,20 +7,14 @@ import * as repo from "./repository";
 import { listBases } from "./service";
 
 /**
- * Search across the workspace's knowledge entries.
+ * Search across the workspace's knowledge entries. Hybrid by default:
+ * `search_knowledge_hybrid` fuses vector similarity over
+ * `knowledge_entry_chunks` with the tsvector keyword rank (RRF). No embeddings
+ * (no key, API failure) → falls back to pure-FTS `search_knowledge_entries`;
+ * search never breaks, only gets less semantic.
  *
- * Hybrid by default: the query is embedded (OpenAI) and the
- * `search_knowledge_hybrid` RPC fuses vector similarity over
- * `knowledge_entry_chunks` with the tsvector keyword rank (RRF).
- * When embeddings are unavailable (no key, API failure), falls back
- * to the original pure full-text `search_knowledge_entries` RPC —
- * search never breaks, it just gets less semantic.
- *
- * Path: client → REST `/api/knowledge/search` → service → RPC → results.
- *
- * Keyword-hit snippets use HTML `<b>` tags around matched terms
- * (vector-only hits return plain chunk text) — strip or render at the
- * UI layer.
+ * ⚠ Keyword-hit snippets carry HTML `<b>` tags around matched terms
+ * (vector-only hits are plain text) — strip or render at the UI layer.
  */
 
 export interface SearchHit {
@@ -42,15 +36,11 @@ export interface SearchOpts {
 }
 
 /**
- * The shape of one row returned by `search_knowledge_entries`. The
- * regenerated supabase types in `src/shared/supabase/types.ts` declare
- * this RPC, but `supabaseAdmin()` returns an untyped `SupabaseClient`
- * (no `Database` generic), so every `.rpc(...)` call falls back to
- * `unknown`. Until the admin client is typed (tracked as a follow-up
- * finding — 240+ call sites would need to compile), keep this manual
- * shape for the local cast. Note: gen types declare `excerpt` /
- * `folder_id` as non-null because RETURN TABLE doesn't preserve
- * nullability — the real columns are nullable.
+ * One `search_knowledge_entries` row. Manual because `supabaseAdmin()` returns
+ * an untyped `SupabaseClient` (no `Database` generic), so `.rpc(...)` yields
+ * `unknown`; typing the admin client would need 240+ call sites to compile.
+ * ⚠ Gen types declare `excerpt` / `folder_id` non-null because RETURN TABLE
+ * loses nullability — the real columns ARE nullable.
  */
 interface RpcRow {
   entry_id: string;
@@ -71,9 +61,8 @@ export async function searchKnowledgeEntries(
   const trimmed = query.trim();
   if (trimmed.length === 0) return [];
 
-  // Visibility + team-scope gate: only search bases the caller can read.
-  // Also closes the historical gap where private bases' entries leaked
-  // into search results (the RPC itself applies no visibility filter).
+  // ⚠ Visibility + team-scope gate — the RPC applies NO visibility filter, so
+  // without this private bases' entries leak into results.
   const readable = await listBases(ctx);
   const readableIds = new Set(readable.map((b) => b.id));
   if (readableIds.size === 0) return [];
@@ -88,10 +77,9 @@ export async function searchKnowledgeEntries(
   }
 
   const db = supabaseAdmin();
-  // SECURITY: `p_workspace_id` MUST come from the auth context
-  // (`ctx.workspaceId`), never from client-controllable input. The RPCs
-  // are SECURITY INVOKER but the admin client bypasses RLS, so the
-  // functions trust whatever workspace_id we pass. Audit fix #11.
+  // ⚠ SECURITY: `p_workspace_id` MUST come from `ctx.workspaceId`, never from
+  // client input. RPCs are SECURITY INVOKER but the admin client bypasses RLS,
+  // so they trust whatever workspace_id we pass.
   const ftsArgs = {
     p_workspace_id: ctx.workspaceId,
     p_query: trimmed,
@@ -106,8 +94,8 @@ export async function searchKnowledgeEntries(
       p_embedding: queryEmbedding,
     });
     if (result.error) {
-      // Hybrid RPC missing/unhealthy (e.g. migration not applied yet) —
-      // degrade to pure full-text rather than breaking search.
+      // Hybrid RPC missing/unhealthy (migration not applied) — degrade to
+      // pure FTS rather than breaking search.
       console.error(
         "[knowledge-search] hybrid RPC failed, falling back to FTS:",
         result.error.message

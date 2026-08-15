@@ -9,24 +9,16 @@ import type { Skill } from "@/features/skills/types";
 const SKILLS_PATH = "/api/skills";
 
 /**
- * `/:workspaceSegment/skills` — the port of
- * `src/app/[workspaceSlug]/(app)/skills/page.tsx`.
+ * `/:workspaceSegment/skills`.
  *
- * The RSC did four server calls (resolve workspace → membership → skill
- * context → `listSkills`) and handed five props to `SkillsBrowser`. Here the
- * list is `GET /api/skills` (summary columns only — the body is deliberately
- * not in this payload; the detail pane pulls the full skill per slug), and the
- * membership half comes from `useWorkspaceAccess`.
+ * List = `GET /api/skills`, ⚠ summary columns only — body deliberately not in
+ * this payload; the detail pane pulls the full skill per slug. Membership half
+ * from `useWorkspaceAccess`.
  *
- * The browser itself is the SHARED component: `SkillsBrowserCore` is the
- * Next-free core of `src/features/skills/components/skills-browser.tsx`, and
- * the whole editor beneath it (`SkillView`, history rail, share control) is
- * reused by import, unmodified.
- *
- * The web page's freshness came from four `router.refresh()` calls; here they
- * become one `invalidateQueries(["/api/skills"])`, which is strictly better —
- * a rename, refolder or duplicate re-pulls the list instead of re-rendering a
- * server component.
+ * `SkillsBrowserCore` is the Next-free core of
+ * `src/features/skills/components/skills-browser.tsx`; the editor beneath it
+ * (`SkillView`, history rail, share control) is reused by import, unmodified.
+ * Freshness = one `invalidateQueries(["/api/skills"])`.
  */
 export default function SkillsPage() {
   const queryClient = useQueryClient();

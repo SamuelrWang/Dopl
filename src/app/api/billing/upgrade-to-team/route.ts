@@ -12,13 +12,11 @@ import {
 } from "@/features/billing/server/workspace-billing";
 
 /**
- * Upgrade a live Solo workspace to Team in place. Admin/owner only.
- * Swaps the subscription item's price to the per-seat Team price and sets
- * quantity = active member count, so the user keeps one subscription (no
- * cancel + re-checkout). The optimistic local upsert reflects the change
- * immediately; the authoritative `customer.subscription.updated` webhook
- * confirms it (with its own event watermark), so we do NOT stamp
- * `lastStripeEventCreated` here.
+ * Upgrade a live Solo workspace to Team in place. Admin/owner only. Swaps the item's price to the
+ * per-seat Team price with quantity = active member count, so the user keeps ONE subscription (no
+ * cancel + re-checkout).
+ * ⚠ Do NOT stamp `lastStripeEventCreated` here — the authoritative
+ * `customer.subscription.updated` webhook carries its own watermark.
  */
 export const POST = withWorkspaceAuth(
   async (_request, { workspaceId }) => {
@@ -65,9 +63,8 @@ export const POST = withWorkspaceAuth(
       );
     }
 
-    // One atomic call: swap the item price AND restamp metadata.plan, so
-    // webhook plan derivation stays correct even in an environment where
-    // the price envs are unset (derivePlan falls back to metadata).
+    // ⚠ One atomic call — price AND metadata.plan — so webhook plan derivation stays correct
+    // where the price envs are unset (derivePlan falls back to metadata).
     await stripe.subscriptions.update(billing.stripeSubscriptionId, {
       items: [{ id: item.id, price: seatPriceId, quantity: qty }],
       metadata: { ...subscription.metadata, plan: "team" },
@@ -81,7 +78,6 @@ export const POST = withWorkspaceAuth(
 
     return NextResponse.json({ ok: true, seatCount: qty });
   },
-  // sessionOnly: billing mutations must come from an interactive session, never
-  // a background MCP agent — even one holding a dopl.write token.
+  // sessionOnly: billing mutations need an interactive session, never a background MCP agent.
   { minRole: "admin", sessionOnly: true }
 );

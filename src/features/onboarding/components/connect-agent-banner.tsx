@@ -9,8 +9,8 @@ import { McpConnectStep } from "./mcp-connect-step";
 const DISMISS_KEY = "dopl:connect-banner-dismissed";
 const CONNECTED_KEY = "dopl:connect-banner-connected-seen";
 
-// localStorage can throw (private mode / storage disabled). Degrade to a
-// session-only flag rather than crashing the banner.
+// localStorage throws in private mode / storage-disabled — degrade to a
+// session-only flag rather than crash the banner.
 function readFlag(key: string): boolean {
   try {
     return window.localStorage.getItem(key) === "1";
@@ -23,22 +23,19 @@ function persistFlag(key: string): void {
   try {
     window.localStorage.setItem(key, "1");
   } catch {
-    // Storage unavailable — the flag stays in-memory for this session.
+    // Storage unavailable — flag stays in-memory this session.
   }
 }
 
 /**
- * Persistent, recoverable "connect your agent" prompt. Shows on every
- * workspace page until the caller has an active MCP token — so skipping
- * the onboarding connect step is no longer a dead end. Dismiss is sticky
- * via localStorage, and once a connection has been seen the banner stops
- * checking entirely (no status fetch for connected/dismissed users; the
- * 3.5s live poll runs only while the banner is visible and waiting).
+ * Recoverable "connect your agent" prompt — shows on every workspace page
+ * until an MCP token exists, so skipping onboarding's connect step is not a
+ * dead end. Dismiss sticky via localStorage. ⚠ Cost gate: no status fetch for
+ * connected/dismissed users; 3.5s poll runs only while visible and waiting.
  */
 export function ConnectAgentBanner() {
   const [dismissed, setDismissed] = useState(false);
-  // Until the mount-read resolves, treat as skipped so SSR/first paint
-  // never fetches or flashes the banner.
+  // Skipped until mount-read resolves: SSR/first paint must not fetch or flash.
   const [skip, setSkip] = useState(true);
   const [open, setOpen] = useState(false);
 
@@ -53,13 +50,11 @@ export function ConnectAgentBanner() {
     "/api/onboarding/mcp-status",
     { enabled: !skip }
   );
-  // Fail-open: a failed status fetch still shows the banner (the live
-  // poll below keeps retrying), matching the pre-query-layer behavior.
+  // Fail-open: failed status fetch still shows banner; live poll retries.
   const loaded = skip || statusQuery.data !== undefined || statusQuery.isError;
   const connected = !!statusQuery.data?.connected;
 
-  // Live detection so the banner + modal auto-resolve once the agent
-  // connects, without the user reloading.
+  // Auto-resolve banner + modal on connect, without a reload.
   const liveConnected = useMcpConnectionPoll(
     loaded && !skip && !connected && !dismissed
   );

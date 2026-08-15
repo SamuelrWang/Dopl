@@ -12,8 +12,8 @@ const STRENGTH_META = [
   { label: "Strong", color: "#2f7d4f", bars: 4 },
 ] as const;
 
-// zxcvbn is heavy (dictionaries); load it once, lazily, off the initial bundle.
-// Until it resolves, fall back to the policy check-count so the meter still moves.
+// zxcvbn heavy (dictionaries) — load once, lazily, off initial bundle.
+// Until resolved, fall back to policy check-count so meter still moves.
 type Scorer = (pw: string) => number;
 let scorer: Scorer | null = null;
 let loading: Promise<void> | null = null;

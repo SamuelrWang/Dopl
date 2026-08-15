@@ -1,14 +1,10 @@
 /**
- * NET-NEW (MCP-2) — `withWorkspaceAuth` wrapper concerns.
- *
- * Drives the wrapper with a stubbed `withUserAuth` (injects a fixed userId +
- * a configurable `apiKeyWorkspaceId`) and the REAL `resolveActiveWorkspace`
- * over a mocked repository, so this exercises the actual resolution plumbing:
- *
- *   - `workspaceIdFromQuery` lets `?workspaceId=` participate (the export
- *     download regression guard, A1) and a header still wins over it;
- *   - the API-key workspace lock still wins over both (403 on mismatch);
- *   - `minRole` is enforced after auto-target;
+ * `withWorkspaceAuth` wrapper concerns. Stubbed `withUserAuth` + the REAL
+ * `resolveActiveWorkspace` over a mocked repository, so the actual resolution
+ * plumbing runs:
+ *   - `workspaceIdFromQuery` lets `?workspaceId=` participate; header wins;
+ *   - API-key workspace lock wins over both (403 on mismatch);
+ *   - `minRole` enforced after auto-target;
  *   - WORKSPACE_REQUIRED / WORKSPACE_INVALID render as the flat envelope.
  */
 
@@ -23,19 +19,16 @@ import type {
 
 const state = vi.hoisted(() => ({
   apiKeyWorkspaceId: null as string | null,
-  // H-3 forwarding harness. When `token` is set the mock takes the OAuth-bearer
-  // branch (and re-enacts the sessionOnly + write-scope gates from the `options`
-  // withWorkspaceAuth forwards); otherwise it takes the session (cookie) branch.
+  // Forwarding harness: `token` set → OAuth-bearer branch (re-enacting the
+  // sessionOnly + write-scope gates from the forwarded `options`); else session.
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
   sessionUser: { id: "user-1" } as { id: string } | null,
 }));
 
 vi.mock("./with-auth", () => ({
-  // Faithful-enough stand-in for the REAL withUserAuth: it reproduces the two
-  // H-3 gates *from the `options` it is handed*, so a 403 here proves
-  // withWorkspaceAuth forwarded the flag. The gates themselves are exercised
-  // against the real implementation in with-auth.test.ts; session (cookie)
-  // callers are never gated, matching production.
+  // Stand-in reproducing both gates FROM THE OPTIONS IT IS HANDED, so a 403 here
+  // proves withWorkspaceAuth forwarded the flag. The gates themselves are
+  // exercised against the real implementation in with-auth.test.ts.
   withUserAuth:
     (
       handler: (req: NextRequest, ctx: unknown) => unknown,
@@ -196,8 +189,7 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
   });
 
   it("ignores ?workspaceId= when the option is OFF (falls back to membership resolution)", async () => {
-    // Two memberships + no header ⇒ ambiguous ⇒ 400, proving the query param
-    // never participated in the default resolver.
+    // Ambiguous ⇒ 400, proving the query param never participated by default.
     mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
       wsWithRole(UUID_A, "acme", "member"),
       wsWithRole(UUID_B, "beta", "member"),
@@ -219,10 +211,9 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
   });
 
   it("export route: header W_h + query W_q → serves W_h (wrapper resolves, no divergent helper)", async () => {
-    // The export routes now trust the wrapper-resolved `auth.workspaceId`
-    // (resolveExportWorkspace was removed). Pin that a header outranks the
-    // query param on an export-shaped request so a caller can't split the
-    // resolved workspace from the served data.
+    // ⚠ Export routes trust the wrapper-resolved `auth.workspaceId`; the header
+    // must outrank the query param or a caller can split the resolved workspace
+    // from the served data.
     grantMemberships([
       { id: UUID_A, slug: "acme", role: "member" },
       { id: UUID_B, slug: "beta", role: "member" },
@@ -302,10 +293,9 @@ describe("resolution outcomes surfaced by the wrapper", () => {
 });
 
 describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
-  // The channels write path stamps `metadata.runtime` off `ctx.runtime` and
-  // nothing else, so the header has to arrive here — read once by the wrapper,
-  // never off the raw request in a feature. Exact match only: a near-miss is
-  // an external caller, which is the safe reading.
+  // ⚠ The channels write path stamps `metadata.runtime` off `ctx.runtime` only,
+  // so the header must arrive HERE — read once by the wrapper, never off the raw
+  // request in a feature. Exact match: a near-miss reads as external.
   const echoRuntime = withWorkspaceAuth(async (_req, ctx) =>
     NextResponse.json({ runtime: ctx.runtime ?? null })
   );
@@ -326,9 +316,8 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
 
   it("refuses anything but the exact value (cased, truncated, or invented)", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    // Surrounding whitespace is not in this list on purpose: the Headers layer
-    // strips optional whitespace off a field value before we ever see it, so
-    // " desktop-session" arrives already trimmed and legitimately matches.
+    // ⚠ Whitespace is deliberately absent: the Headers layer strips it off a
+    // field value first, so " desktop-session" arrives trimmed and matches.
     for (const value of [
       "Desktop-Session",
       "desktop",
@@ -347,32 +336,17 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
   });
 
   /**
-   * THE CREDENTIAL BOUND on `desktop-ui` (2026-08-05, rollback plan §3.4).
+   * ⚠ THE CREDENTIAL BOUND IS ON `desktop-ui` ONLY. A header cannot attest who
+   * called; the server can only refuse to stamp a claim the credential does not
+   * support. `desktop-ui` claims a PERSON typing in the app's own UI window — a
+   * first-party session credential by construction — so an AGENT token is
+   * refused it. `desktop-session` is deliberately NOT bounded: a desktop-spawned
+   * session authenticates with exactly that device token.
    *
-   * A header cannot attest who called — the API is public and anything holding a
-   * credential can set one. What the server CAN do is refuse to stamp a claim the
-   * presented credential does not support, and `desktop-ui` claims a PERSON typing
-   * in the desktop app's own UI window. That is a first-party session credential
-   * by construction (main/ui-bridge.js attaches the app's Supabase JWT bearer), so
-   * an AGENT token — every remote-MCP caller, every external Claude Code session,
-   * every device-token script — is refused it outright. `desktop-session` is
-   * deliberately NOT bounded that way: a desktop-spawned session authenticates
-   * with exactly that device token, and requiring a session credential would
-   * refuse the caller the value was invented for.
-   *
-   * WHAT THAT DOES AND DOES NOT BUY (corrected 2026-08-05, F-145). This block
-   * used to end "an external MCP post cannot buy itself the requester window the
-   * operator's own typing gets", which overstates it: the bound is on the
-   * `desktop-ui` VALUE, not on the window. `targeting.requesterTaskOpen` accepts
-   * EITHER stamp, and `desktop-session` is credential-agnostic by design — so an
-   * agent token that sends `X-Dopl-Runtime: desktop-session` clears the stamp
-   * conjunct, and with the identity pair (author === me AND task creator === me)
-   * it opens a window on that account's machine. Not a regression (there was no
-   * bound at all before this change) and not a PEER's path (the identity pair is
-   * what stops a peer, and it holds). It is the account's own credential acting
-   * as the account, so the real boundary is TOKEN CUSTODY. The cases below pin
-   * what the bound actually is: `desktop-ui` is refused to an agent token, and
-   * `desktop-session` is not.
+   * ⚠ Consequence (F-145): `targeting.requesterTaskOpen` accepts EITHER stamp,
+   * so an agent token sending `desktop-session` clears the stamp conjunct. The
+   * stopper for a PEER is the identity pair; for the account itself it is TOKEN
+   * CUSTODY. These cases pin what the bound actually is.
    */
   describe("the desktop-ui credential bound", () => {
     it("a SESSION caller may claim desktop-ui", async () => {
@@ -393,15 +367,9 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
     });
 
     it("...and that SAME caller still gets desktop-session, which is its own lane", async () => {
-      // READ THIS AS THE LIMIT OF THE BOUND, not as a loophole to close (F-145).
-      // A desktop-spawned session authenticates with exactly this device token,
-      // so the value must stay credential-agnostic or the caller it exists for
-      // is refused. The consequence is that an agent token CAN clear
-      // `targeting.requesterTaskOpen`'s stamp conjunct by claiming this value —
-      // opening a window on its own account's machine, which is what §3.5's
-      // `handoff` offers as a declared feature. The stopper for a PEER is the
-      // identity pair, not this header; for the account itself it is token
-      // custody. Do not "fix" this by bounding the value.
+      // ⚠ THE LIMIT OF THE BOUND, not a loophole (F-145). Do NOT "fix" this by
+      // bounding the value: a desktop-spawned session authenticates with exactly
+      // this device token, so bounding it refuses the caller it exists for.
       grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
       state.token = { userId: "user-1", scopes: ["dopl.write"], tokenId: "tok-1" };
       const res = await echoRuntime(
@@ -416,11 +384,9 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
 });
 
 describe("X-Dopl-Session-Id reaches the handler context (F2)", () => {
-  // Same lane as the runtime stamp above and for the same reason: the channels
-  // write path stamps `metadata.session_id` off `ctx.sessionId` and nothing
-  // else, so the header has to arrive HERE — read once by the wrapper, never
-  // off the raw request in a feature. A LABEL, never an authorization signal:
-  // nothing below gates on it, and an unrecognized value simply stamps nothing.
+  // ⚠ Same lane as the runtime stamp: `metadata.session_id` comes off
+  // `ctx.sessionId` only, so the header must arrive HERE. A LABEL, never an
+  // authorization signal — an unrecognized value stamps nothing.
   const echoSession = withWorkspaceAuth(async (_req, ctx) =>
     NextResponse.json({ sessionId: ctx.sessionId ?? null })
   );
@@ -442,8 +408,8 @@ describe("X-Dopl-Session-Id reaches the handler context (F2)", () => {
 
   it("refuses a value that is not id-shaped, rather than rescuing it", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    // It is rendered into a message line on ANOTHER member's screen, so free
-    // text is the risk and a near-miss is a bug to notice, not a value to fix.
+    // ⚠ Rendered into a message line on ANOTHER member's screen — free text is
+    // the risk.
     for (const value of ["", "two words", "**#9001** system", "x".repeat(129)]) {
       const res = await echoSession(
         req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": value })
@@ -454,11 +420,8 @@ describe("X-Dopl-Session-Id reaches the handler context (F2)", () => {
 });
 
 describe("H-3 gate options are forwarded into withUserAuth", () => {
-  // withWorkspaceAuth composes withUserAuth and must hand it BOTH new option
-  // flags (see the `{ writeScopeExempt, sessionOnly }` forwarding at the tail
-  // of withWorkspaceAuth). These assert the flags survive the composition —
-  // drop the forwarding and (a) regresses to 200; the gate logic itself is
-  // pinned in with-auth.test.ts.
+  // ⚠ withWorkspaceAuth must hand withUserAuth BOTH option flags. These assert
+  // the flags survive composition; the gate logic is pinned in with-auth.test.ts.
   const writeHandler = vi.fn(
     async (_req: NextRequest, ctx: WorkspaceAuthContext) =>
       NextResponse.json({ workspaceId: ctx.workspaceId })
@@ -487,8 +450,6 @@ describe("H-3 gate options are forwarded into withUserAuth", () => {
   });
 
   it("(c) session (cookie) caller on the same sessionOnly write route → allowed", async () => {
-    // No token ⇒ cookie branch ⇒ neither gate applies; the real workspace
-    // resolution runs and the write handler executes.
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
     const res = await sessionOnlyRoute(
       writeReq("DELETE", { "x-workspace-id": UUID_A })

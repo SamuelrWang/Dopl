@@ -6,46 +6,33 @@ import { PageError, PageLoading } from "#/components/page-states";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
- * `/:workspaceSegment/ontology` AND `/:workspaceSegment/ontology/:clusterSlug`
- * — the port of both `src/app/[workspaceSlug]/(app)/ontology/page.tsx` and its
- * `[clusterSlug]/page.tsx` sibling (docs/migration-research/web-pages.md §7).
+ * `/:workspaceSegment/ontology` AND `/:workspaceSegment/ontology/:clusterSlug`.
  *
- * ONE component serves both routes: the two
- * RSCs differ only in passing `initialClusterSlug`, which here is just
- * `useParams().clusterSlug`, and registering both rows with the same component
- * type is what lets react-router reconcile them instead of remounting. That
- * matters more than it looks — the ontology store, its optimistic reducer and
- * its debounced per-object writes all live in `useOntology` inside this tree,
- * so a remount on the first cluster click would drop pending edits. `detail.tsx`
- * re-exports this rather than cloning it.
+ * ⚠ ONE component serves both routes; `detail.tsx` re-exports rather than
+ * cloning. Same component type on both rows = react-router reconciles instead
+ * of remounting, and the ontology store + optimistic reducer + debounced
+ * per-object writes all live in `useOntology` inside this tree, so a remount on
+ * the first cluster click drops pending edits.
  *
- * The RSCs fetched nothing: workspace + role, then four props. So the entire
- * kanban view — `useOntology`, `OntologyResourcesProvider`, the object panel,
- * the pick menus, the billing cap notice and upgrade modal — is REUSED BY
- * IMPORT, untouched, sharing the `["ontology-snapshot", workspaceId]` cache
- * entry with the canvas graph view.
+ * The whole kanban view is REUSED BY IMPORT, sharing the
+ * `["ontology-snapshot", workspaceId]` cache entry.
  *
- * The one seam is the URL. The web view keeps the address bar on the active
- * cluster's slug with `history.replaceState` — a path URL, which is a Chromium
- * security error on the packaged `file://` document. `OntologyView` now takes
- * that write as an injectable `replaceUrl`; the SPA hands it the hash router's
- * `navigate(..., { replace: true })`, so the same "URL follows the cluster,
- * without a history entry" behaviour survives and a reload still deep-links
- * back to the open cluster.
+ * ⚠ URL is the one seam: `history.replaceState` with a path URL is a Chromium
+ * security error on the packaged `file://` document, so `OntologyView` takes
+ * the write as an injectable `replaceUrl` and gets the hash router's
+ * `navigate(..., { replace: true })`. URL still follows the cluster with no
+ * history entry, and a reload deep-links back to the open cluster.
  *
- * Deliberately NOT added: back-button restore of the cluster. The web app has
- * no `popstate` handling and no `pushState` here, so Back does not restore
- * selection today — matching that is the port; improving it would be new
- * behaviour.
+ * Deliberately NOT added: back-button restore of the cluster (no `popstate`,
+ * no `pushState` here).
  */
 export default function OntologyPage() {
   const { clusterSlug } = useParams();
   const navigate = useNavigate();
   const { access, isPending, error, refetch } = useWorkspaceAccess();
 
-  // `replaceState`'s stand-in: same path string, no history entry, and the
-  // router's own location stays authoritative (the shell's canonical-segment
-  // redirect reads it).
+  // `replaceState` stand-in: same path string, no history entry, router's
+  // location stays authoritative (shell's canonical-segment redirect reads it).
   const replaceUrl = useCallback(
     (path: string) => navigate(path, { replace: true }),
     [navigate]

@@ -1,9 +1,3 @@
-/**
- * The pending recipe, pinned on the two properties that make an optimistic row
- * honest: it is visibly provisional, and it cannot be clicked. Plus the rule
- * docs/DESIGN-SYSTEM.md makes non-negotiable — no hex, no raw px.
- */
-
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

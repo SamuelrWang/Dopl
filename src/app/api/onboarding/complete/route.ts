@@ -6,12 +6,8 @@ import { CompleteOnboardingSchema } from "@/features/onboarding/schema";
 import { completeOnboarding } from "@/features/onboarding/server/service";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
-/**
- * POST /api/onboarding/complete — name the default workspace after the
- * user, stamp onboarded_at, and return where to land. An explicit
- * deep-link redirectTo (invite URLs etc.) wins over the workspace path,
- * after the usual open-redirect guard.
- */
+/** POST — name the default workspace after the user, stamp onboarded_at, return where to land.
+ *  An explicit `redirectTo` wins over the workspace path, after the open-redirect guard. */
 export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
   try {
     const input = await parseJson(request, CompleteOnboardingSchema);

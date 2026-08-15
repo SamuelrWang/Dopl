@@ -7,8 +7,8 @@ import { pruneLayout, resolvePositions } from "./positions";
 import type { GraphLayout, NodeLayout, Point } from "./types";
 
 const DEFAULT_DEBOUNCE_MS = 800;
-// The whole layout persists under one key — each move merges into it and a
-// single debounced write flushes the full map (the column stores one blob).
+// One key for the whole layout: the column stores one blob, so each move
+// merges in and a single debounced write flushes the full map.
 const PERSIST_KEY = "layout";
 
 export interface UseGraphPositionsParams {
@@ -27,7 +27,7 @@ export interface UseGraphPositions {
   positions: Record<string, NodeLayout>;
   /** Optimistically move a node and schedule a debounced persist. */
   moveNode: (id: string, position: Point) => void;
-  /** Clear all stored positions → back to pure auto-layout (persists `{}`). */
+  /** Clear stored positions → pure auto-layout (persists `{}`). */
   resetLayout: () => void;
   /** Force the pending persist out now (also runs on unmount). */
   flush: () => Promise<void>;
@@ -36,16 +36,12 @@ export interface UseGraphPositions {
 }
 
 /**
- * The hybrid-layout resolver + persistence bridge shared by the ontology
- * graphs. It merges the domain auto-layout with the user's
- * dragged positions (stored wins per node), exposes `moveNode` for
- * optimistic drags, and debounces the server write through the shared
- * merge-scheduler (flush-on-unmount, so a drag inside the window survives
- * navigating away). `resetLayout` drops back to pure auto-layout. A server
- * refetch is adopted only while no local edit is pending AND no persist is
- * in flight, so it never clobbers a drag mid-flight (the merge-scheduler
- * deletes its pending key before awaiting, so the in-flight PATCH is tracked
- * separately by a persist gate).
+ * Hybrid-layout resolver + persistence bridge. Auto-layout merged with the
+ * user's dragged positions (stored wins per node); `moveNode` optimistic;
+ * server write debounced via the shared merge-scheduler, flushed on unmount.
+ * ⚠ A server refetch is adopted only when no local edit is pending AND no
+ * persist is in flight — the merge-scheduler frees its pending key before
+ * awaiting, so the in-flight PATCH needs the separate persist gate.
  */
 export function useGraphPositions({
   autoPositions,
@@ -55,9 +51,8 @@ export function useGraphPositions({
 }: UseGraphPositionsParams): UseGraphPositions {
   const schedulerRef = useRef<ReturnType<typeof createMergeScheduler> | null>(null);
   const scheduler = (schedulerRef.current ??= createMergeScheduler(debounceMs));
-  // Tracks the actual persist call while it's in flight — the scheduler frees
-  // its pending key the moment the runner fires, so without this the idle
-  // guard (and resetLayout ordering) would be blind to a landing PATCH.
+  // Tracks the in-flight persist: the scheduler frees its pending key when the
+  // runner fires, blinding the idle guard + resetLayout ordering without this.
   const gateRef = useRef<ReturnType<typeof createPersistGate> | null>(null);
   const gate = (gateRef.current ??= createPersistGate());
 
@@ -68,27 +63,26 @@ export function useGraphPositions({
   const persistRef = useRef(persist);
   persistRef.current = persist;
 
-  // Latest auto-layout, read at persist/adopt time so orphan pruning always
-  // sees the live node set without re-subscribing the callbacks.
+  // Read at persist/adopt time so orphan pruning sees the live node set
+  // without re-subscribing the callbacks.
   const autoPositionsRef = useRef(autoPositions);
   autoPositionsRef.current = autoPositions;
 
-  // Adopt a fresh server layout only when idle — a pending drag write (queued
-  // OR in flight) owns the positions until it settles. Orphans (ids no longer
-  // in the auto layout) are pruned on adopt so they can't linger. Seeds
+  // Adopt a server layout only when idle — a pending drag write (queued OR in
+  // flight) owns positions until it settles. Prunes orphans; also seeds
   // overrides on mount and on workspace/entity switch.
   useEffect(() => {
     if (scheduler.pendingKeys().length > 0 || gate.busy()) return;
     const raw = storedLayout ?? {};
     const auto = autoPositionsRef.current;
-    // Skip pruning when the auto layout hasn't landed yet (transient empty
-    // scene) so a valid stored layout isn't dropped before its nodes appear.
+    // ⚠ Skip pruning while the auto layout is empty (transient) or a valid
+    // stored layout is dropped before its nodes appear.
     const next = Object.keys(auto).length > 0 ? pruneLayout(raw, auto) : raw;
     overridesRef.current = next;
     setOverrides(next);
   }, [storedLayout, scheduler, gate]);
 
-  // Flush pending drags on unmount so a move inside the debounce window lands.
+  // Flush on unmount so a move inside the debounce window lands.
   useEffect(() => {
     return () => {
       void scheduler.flushAll();
@@ -121,9 +115,9 @@ export function useGraphPositions({
     scheduler.cancel(PERSIST_KEY);
     overridesRef.current = {};
     setOverrides({});
-    // Serialize the empty-`{}` reset strictly after any drag write already in
-    // flight — the server treats `{}` as a replace (not a merge), so a late
-    // drag PATCH landing after it would otherwise resurrect a dragged card.
+    // ⚠ Serialize the `{}` reset strictly after any in-flight drag write: the
+    // server treats `{}` as replace, not merge, so a late drag PATCH landing
+    // after it resurrects a dragged card.
     void gate
       .idle()
       .then(() => gate.run(() => persistRef.current({}).catch(() => undefined)));
@@ -138,8 +132,7 @@ export function useGraphPositions({
 
   const dirty = useMemo(() => {
     const out: Record<string, boolean> = {};
-    // Only count overrides that still map to a live node — an orphan (deleted
-    // node) must not light up the Reset-layout button.
+    // Live nodes only — an orphan must not light up Reset-layout.
     for (const id of Object.keys(overrides)) if (autoPositions[id]) out[id] = true;
     return out;
   }, [overrides, autoPositions]);

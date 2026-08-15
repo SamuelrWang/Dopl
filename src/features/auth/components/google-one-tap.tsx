@@ -6,17 +6,12 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { webPostAuthDestination } from "@/shared/lib/url/post-auth-landing";
 
 /**
- * Google One Tap — the auto-appearing "Sign in with Google" prompt (top-right
- * in most browsers, or the FedCM chip). Loads Google Identity Services, then
- * exchanges the returned ID token for a Supabase session via
- * `signInWithIdToken`. A nonce is bound to the request: the SHA-256 hash goes to
- * Google, the raw value to Supabase, so the token can't be replayed.
+ * Google One Tap. ⚠ Nonce binding is anti-replay: SHA-256 hash → Google, raw
+ * value → Supabase `signInWithIdToken`. Both halves required.
  *
- * Inert until configured — renders null and does nothing unless
- * NEXT_PUBLIC_GOOGLE_CLIENT_ID is set. Setup also requires (a) that client ID's
- * authorized JavaScript origins to include this app's domains in Google Cloud,
- * and (b) the same client ID added to the Google provider's "Authorized Client
- * IDs" in the Supabase dashboard.
+ * Inert unless NEXT_PUBLIC_GOOGLE_CLIENT_ID set. Setup also needs: (a) app
+ * domains in that client ID's authorized JS origins (Google Cloud), (b) same
+ * client ID in Supabase Google provider's "Authorized Client IDs".
  */
 
 const GIS_SRC = "https://accounts.google.com/gsi/client";
@@ -98,10 +93,7 @@ export function GoogleOneTap() {
               token: response.credential,
               nonce: raw,
             });
-            // One Tap completes the session in place, so it lands the visitor
-            // itself rather than routing through /auth/callback — same rule as
-            // the password form: the deep link if there is one, else the
-            // post-auth download page.
+            // Session completes in place, so land here — never /auth/callback.
             if (!error) {
               window.location.assign(webPostAuthDestination(searchParams.get("redirectTo")));
             }

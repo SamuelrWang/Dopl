@@ -2,22 +2,16 @@ import "server-only";
 import type { SeedFixture } from "./seed-fixtures";
 
 /**
- * Canonical seed knowledge base for a brand-new workspace: the "Dopl
- * Guide" — a compact, agent-facing manual for operating this workspace
- * over MCP. Replaces the earlier generic demo bases (networking-emails,
- * competitor-intel, …) so fresh workspaces start with content the owner
- * actually wants to keep.
+ * The "Dopl Guide" — canonical seed KB for a new workspace, an agent-facing
+ * manual for operating it over MCP. Pure function, no I/O:
+ * `service-seed.ts#seedWorkspace` iterates it and records each entry's `key` →
+ * inserted uuid for the ontology seed's cross-references.
  *
- * Pure function — no I/O. `service-seed.ts#seedWorkspace` iterates this
- * and records each entry's `key` → inserted uuid so the ontology seed can
- * cross-reference specific entries.
- *
- * Two callers:
- *   1. The workspace-seed orchestrator (`features/workspaces/server/seed-workspace.ts`).
- *   2. `scripts/seed-knowledge-bases.ts` — explicit `--all` backfill.
+ * Callers: `features/workspaces/server/seed-workspace.ts`, and
+ * `scripts/seed-knowledge-bases.ts` (`--all` backfill).
  */
 
-/** Slug of the Dopl Guide base — the orchestrator's idempotency key. */
+/** ⚠ The orchestrator's idempotency key. */
 export const DOPL_GUIDE_SLUG = "dopl-guide";
 
 /** Stable entry keys — used to wire ontology cross-references. */

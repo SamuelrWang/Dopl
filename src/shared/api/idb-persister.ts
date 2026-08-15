@@ -1,21 +1,16 @@
 "use client";
 
 /**
- * Minimal IndexedDB persister for TanStack Query (Phase 1 of
- * docs/DESKTOP-MIGRATION-PLAN.md — local-first feel: a cold start renders
- * the last-known server state instantly while background refetches bring
- * it current).
+ * Minimal IndexedDB persister for TanStack Query — cold start renders
+ * last-known server state while background refetches bring it current.
  *
- * Why IndexedDB and not localStorage: the dehydrated cache can exceed the
- * ~5MB localStorage quota (chats + knowledge trees), localStorage is
- * synchronous on the main thread, and IndexedDB is what the Electron
- * renderer persists reliably per-partition.
+ * IndexedDB over localStorage: the dehydrated cache can exceed the ~5MB
+ * localStorage quota, localStorage is synchronous on the main thread, and
+ * IndexedDB is what the Electron renderer persists reliably per-partition.
  *
- * No external dependency — the three-operation surface TanStack's
- * `Persister` needs doesn't justify idb-keyval. Every operation is
- * guarded: persistence is a progressive enhancement, and a broken/absent
- * IndexedDB (SSR pass, private windows, corrupted profile) must degrade to
- * "no cache", never to a crash.
+ * ⚠ Every operation is guarded — persistence is a progressive enhancement, and a
+ * broken/absent IndexedDB (SSR pass, private windows, corrupted profile) must
+ * degrade to "no cache", never crash.
  */
 
 import type {
@@ -34,30 +29,27 @@ const KEY = "client";
 const CACHE_SCHEMA_VERSION = "1";
 
 /**
- * The persistence BUSTER — TanStack discards the whole restored snapshot when
- * this string differs from the one it was written with.
+ * Persistence BUSTER — TanStack discards the whole restored snapshot when this
+ * string differs from the one it was written with.
  *
- * Without it the snapshot survives deploys for its full `maxAge` (24h), so a
- * returning user hydrates day-old entries in the OLD response shape after any
- * non-additive API change and every consumer renders them until its background
- * refetch lands; `select()` functions and components indexing into new fields
- * see `undefined` (2026-08-03 fleet audit — the whole "works after a hard
- * reload" class of bugs). Keying it to the BUILD makes a deploy the
- * invalidation event, which is exactly the granularity of a response reshape.
+ * ⚠ Keyed to the BUILD, so a deploy is the invalidation event. Without it the
+ * snapshot survives deploys for its full `maxAge` (24h): a returning user
+ * hydrates day-old entries in the OLD response shape after any non-additive API
+ * change, and `select()` functions / components indexing new fields see
+ * `undefined` — the whole "works after a hard reload" class of bugs.
  *
- * Vercel exposes the deployment id and commit sha to the browser for Next.js
- * projects; the explicit name is the escape hatch for other hosts. Local dev
- * has no build identity and keeps today's behaviour (no cross-build
- * invalidation) — a dev restarting the server is not a deploy.
+ * Vercel exposes the deployment id and commit sha to the browser; the explicit
+ * name is the escape hatch for other hosts. Local dev has no build identity and
+ * does no cross-build invalidation — a dev restart is not a deploy.
  */
 export const QUERY_CACHE_BUSTER = [
   CACHE_SCHEMA_VERSION,
-  // `process` only exists where Next's compiler inlined these reads (the
-  // literal `process.env.NEXT_PUBLIC_*` member expressions must stay inside
-  // the branch for that inlining to fire). The Vite SPA has no Node globals —
-  // an unguarded read is an import-time ReferenceError that whites out the
-  // whole renderer — and it layers its own build identity on top
-  // (`DESKTOP_QUERY_CACHE_BUSTER`, apps/desktop-ui/src/lib/query-client.ts).
+  // ⚠ The literal `process.env.NEXT_PUBLIC_*` member expressions must stay
+  // inside this branch for Next's compiler to inline them, and the guard is
+  // required: the Vite SPA has no Node globals, so an unguarded read is an
+  // import-time ReferenceError that whites out the whole renderer. The SPA
+  // layers its own identity on top (`DESKTOP_QUERY_CACHE_BUSTER`,
+  // apps/desktop-ui/src/lib/query-client.ts).
   (typeof process !== "undefined" &&
     (process.env.NEXT_PUBLIC_QUERY_CACHE_BUSTER ||
       process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT_ID ||

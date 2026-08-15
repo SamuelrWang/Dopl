@@ -1,19 +1,14 @@
 /**
- * FIX M1 (Q9, 2026-07-31) — THE REMOTE MCP ENDPOINT STREAMS, AND KEEPS STREAMING.
+ * THE REMOTE MCP ENDPOINT STREAMS, AND KEEPS STREAMING. Losing either property
+ * silently breaks every MCP client we cannot configure:
  *
- * Two properties are pinned here, and losing either one silently breaks every
- * MCP client we cannot configure (terminal Claude Code, claude.ai connectors,
- * Claude Desktop, third-party clients):
- *
- *   1. `/api/mcp` must NOT set `enableJsonResponse`. That flag makes the SDK
- *      withhold the whole response — headers included — until the tool handler
- *      returns, which puts a long `dopl_channel(op="await")` hold inside the
- *      client's 60s TIME-TO-HEADERS abort. Every incident ended at exactly
- *      60.0s. On the default SSE path headers flush at t≈0 instead.
- *   2. A stream that flushes headers and then says nothing for ~215s is what an
- *      intermediary's idle timeout kills. `withSseKeepAlive` keeps bytes moving
- *      with SSE COMMENTS, which are ignored by every conforming parser, so the
- *      frames a client decodes are unchanged.
+ *   1. ⚠ `/api/mcp` must NOT set `enableJsonResponse` — that flag withholds the
+ *      whole response, headers included, until the tool handler returns, putting
+ *      a long `dopl_channel(op="await")` hold inside the client's 60s
+ *      TIME-TO-HEADERS abort (every incident ended at exactly 60.0s).
+ *   2. ⚠ A stream that flushes headers then says nothing for ~215s is killed by
+ *      an intermediary's idle timeout. `withSseKeepAlive` keeps bytes moving
+ *      with SSE COMMENTS, ignored by every conforming parser.
  */
 
 import { readFileSync } from "node:fs";
@@ -51,8 +46,8 @@ describe("withSseKeepAlive", () => {
       status: 406,
       headers: { "Content-Type": "application/json" },
     });
-    // Identity, not just equivalence: a 4xx JSON-RPC error must never grow a
-    // comment line, and a bodyless 202 must never grow a body.
+    // ⚠ Identity, not equivalence: a 4xx must never grow a comment line and a
+    // bodyless 202 must never grow a body.
     expect(withSseKeepAlive(json)).toBe(json);
     const accepted = new Response(null, { status: 202 });
     expect(withSseKeepAlive(accepted)).toBe(accepted);
@@ -65,7 +60,6 @@ describe("withSseKeepAlive", () => {
   });
 
   it("emits comments while the handler is slow, then the real frame", async () => {
-    // The await-hold shape: headers out immediately, one frame much later.
     const frame = `event: message\ndata: {"jsonrpc":"2.0","id":1}\n\n`;
     const source = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -78,13 +72,12 @@ describe("withSseKeepAlive", () => {
     expect(body.endsWith(frame)).toBe(true);
     const comments = body.split("\n\n").filter((l) => l.startsWith(": "));
     expect(comments.length).toBeGreaterThan(1);
-    // Comments only — nothing that a parser would decode as an event.
     for (const c of comments) expect(c).toBe(": keep-alive");
   });
 
   it("keeps the payload a client decodes byte-identical to the source", async () => {
-    // The whole safety argument: `:` lines are comments in the WHATWG event
-    // stream algorithm, so stripping them must recover the source exactly.
+    // ⚠ The safety argument: `:` lines are comments in the WHATWG event-stream
+    // algorithm, so stripping them must recover the source exactly.
     const frame = `event: message\ndata: {"jsonrpc":"2.0","id":7}\n\n`;
     const source = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -124,8 +117,7 @@ describe("withSseKeepAlive", () => {
     const reader = wrapped.body!.getReader();
     await reader.cancel("client hung up");
     expect(cancelled).toBe("client hung up");
-    // A timer left running would hold the serverless function open to its
-    // maxDuration after the client is already gone.
+    // ⚠ A leaked timer holds the function open to maxDuration after hangup.
     await sleep(20);
   });
 
@@ -138,17 +130,10 @@ describe("withSseKeepAlive", () => {
   });
 
   it("does NOT send no-transform — it would forbid compressing every MCP result", () => {
-    // This assertion used to be its inverse. `no-transform` (RFC 9111
-    // §5.2.2.6) forbids an intermediary from applying a content coding, and
-    // this is the response carrying every JSON-RPC tool result, including the
-    // ontology reads and the `dopl_map` manifest the server instructions
-    // mandate before an agent's first reply. Shipping it told the CDN not to
-    // compress the largest agent-facing payloads in the product (P0-3).
-    //
-    // The anti-BUFFERING guarantee this wrapper actually needs is
-    // `X-Accel-Buffering: no`, asserted above and untouched. Compression does
-    // not buffer SSE (codings flush per write) and the decoded frames are
-    // byte-identical, so nothing the keep-alive protects depends on it.
+    // ⚠ Never `no-transform` (RFC 9111 §5.2.2.6): it forbids intermediaries from
+    // applying a content coding, i.e. tells the CDN not to compress the largest
+    // agent-facing payloads in the product. The anti-BUFFERING guarantee is
+    // `X-Accel-Buffering: no`, asserted above.
     const wrapped = withSseKeepAlive(sseResponse("", { status: 200 }), 5);
     expect(wrapped.headers.get("cache-control")).not.toContain("no-transform");
   });
@@ -165,15 +150,14 @@ const routeSrc = readFileSync(
   path.resolve(process.cwd(), "src", "app", "api", "mcp", "route.ts"),
   "utf8"
 );
-/** Comments stripped — the file EXPLAINS the flag at length; only code counts. */
+/** ⚠ Comments stripped — the file EXPLAINS the flag; only code counts. */
 const routeCode = routeSrc.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("/api/mcp transport shape", () => {
   it("never re-enables JSON-response mode", () => {
-    // Re-adding this flag restores the 60s time-to-headers abort for every
-    // client, and no test that mocks the SDK would notice.
+    // ⚠ Re-adding this flag restores the 60s time-to-headers abort for every
+    // client, and no SDK-mocking test would notice.
     expect(routeCode).not.toMatch(/enableJsonResponse/);
-    // …and the transport really is constructed, stateless, right here.
     expect(routeCode).toMatch(
       /new WebStandardStreamableHTTPServerTransport\(\{\s*sessionIdGenerator: undefined,\s*\}\)/
     );
@@ -184,35 +168,26 @@ describe("/api/mcp transport shape", () => {
   });
 
   it("stays on the Node runtime with a 300s ceiling", () => {
-    // Edge would change the streaming/runtime story wholesale; maxDuration is
-    // mirrored into the MCP package's deadline chain and pinned from there too.
+    // ⚠ maxDuration is mirrored into the MCP package's deadline chain.
     expect(routeSrc).toMatch(/export const runtime = "nodejs"/);
     expect(routeSrc).toMatch(/export const maxDuration = 300/);
   });
 
   it("hands the caller's abort signal to the loopback client (Q14)", () => {
-    // Without this the MCP handler never learns the client hung up, so an
-    // `op="await"` hold keeps re-issuing loopback polls for its whole budget.
-    // Source-level because the behavioural path needs a full authenticated
-    // transport boot; the wiring is one argument and losing it is silent.
+    // ⚠ Without this the handler never learns the client hung up, so an
+    // `op="await"` hold re-issues loopback polls for its whole budget. Checked
+    // at source level: the wiring is one argument and losing it is silent.
     expect(routeCode).toMatch(/signal: request\.signal/);
   });
 });
 
-// ── FIX Q6: GET is 405, and is NOT the JSON-RPC handler ─────────────────────
-//
-// Routing GET to `handle` did not fail loudly, it failed by SUCCEEDING: the
-// stateless SDK transport answers a GET with 200 `text/event-stream` carrying a
-// stream nothing can ever write to or close (the transport is a per-request
-// local, so no POST invocation can reach it). While that stream was byte-silent
-// an intermediary reaped it in ~30-60s. `withSseKeepAlive` then started feeding
-// it a comment every 15s — exactly what stops it being reaped — so it survived
-// to `maxDuration`. Every SDK client opens it right after
-// `notifications/initialized` and reconnects when it ends, so the steady state
-// was one 300s function per connected client, renewed ~12x/hour, forever.
-//
-// These tests exist because nothing about that is visible from a passing suite:
-// the failure mode is a 200.
+// ── ⚠ GET is 405, and must NOT be the JSON-RPC handler ──────────────────────
+// Routing GET to `handle` fails by SUCCEEDING: the stateless SDK transport
+// answers 200 `text/event-stream` with a stream nothing can write to or close,
+// and the keep-alive comment every 15s is exactly what stops an intermediary
+// reaping it — so it survives to `maxDuration`. Every SDK client opens it after
+// `notifications/initialized` and reconnects when it ends: one 300s function per
+// connected client, renewed ~12x/hour, forever.
 
 describe("/api/mcp GET", () => {
   it("answers 405 with an Allow header, and no event stream", async () => {
@@ -220,31 +195,27 @@ describe("/api/mcp GET", () => {
     const response = GET();
     expect(response.status).toBe(405);
     expect(response.headers.get("allow")).toBe("POST, DELETE");
-    // The content type is the load-bearing half: a `text/event-stream` here is
-    // a stream that lives to maxDuration.
+    // ⚠ Load-bearing half: a `text/event-stream` here lives to maxDuration.
     expect(response.headers.get("content-type")).toContain("application/json");
   });
 
   it("is a DIFFERENT export from POST/DELETE", async () => {
-    // The exact regression: `export const GET = handle` makes these identical.
+    // ⚠ The regression: `export const GET = handle` makes these identical.
     const { GET, POST, DELETE } = await import("@/app/api/mcp/route");
     expect(GET).not.toBe(POST);
     expect(GET).not.toBe(DELETE);
-    // …while POST and DELETE do still share the one JSON-RPC handler.
     expect(POST).toBe(DELETE);
   });
 
   it("needs no request argument — it authenticates nothing", async () => {
-    // A method-level refusal that reveals nothing and costs nothing. If this
-    // ever grows a parameter it has started doing work on an unauthenticated
-    // GET, which is how the eternal stream got opened in the first place.
+    // ⚠ If this grows a parameter it has started doing work on an
+    // unauthenticated GET — how the eternal stream got opened.
     const { GET } = await import("@/app/api/mcp/route");
     expect(GET.length).toBe(0);
   });
 
   it("cannot be picked up by the keep-alive wrapper", async () => {
-    // Belt and braces on the interaction that made this expensive: the wrapper
-    // must pass a 405 straight through, identity-equal, feeding it nothing.
+    // ⚠ The wrapper must pass a 405 straight through, identity-equal.
     const { GET } = await import("@/app/api/mcp/route");
     const response = GET();
     expect(withSseKeepAlive(response)).toBe(response);

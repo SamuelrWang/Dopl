@@ -1,36 +1,29 @@
 /**
  * Channels feature — camelCase domain types.
  *
- * A CHANNEL (or DM) holds many THREADS.
- * A THREAD is ONE exchange between two members about one thing. It may be a
- * single message or a long piece of work. It is SHARED: both members see the
- * same thread, its title, and its status.
- * A SESSION is ONE member's agent run working a thread, on THAT member's
- * machine. Each side has its own session. A session pauses and resumes; a
- * thread does not. You never see the other member's session, only the
- * messages it sends.
+ * CHANNEL (or DM) holds many THREADS. A THREAD is one SHARED exchange between
+ * two members — both see the same title and status. A SESSION is ONE member's
+ * agent run working a thread on THAT member's machine; each side has its own,
+ * a session pauses/resumes, a thread does not. You never see the peer's
+ * session, only the messages it sends.
  *
- * Distinct from chats (a private per-owner archive), a channel has an
- * explicit membership set: PUBLIC channels are visible to any workspace
- * member, PRIVATE ones only to their members.
+ * Unlike chats (private per-owner archive), a channel has explicit membership:
+ * PUBLIC = any workspace member, PRIVATE = members only.
  *
- * BOUNDARY — wire/storage name `task` == domain name `thread`. The
- * `channel_tasks` table and its columns, the `metadata.taskId` / `taskMode` /
- * `taskCreatedBy` / `taskTitle` / `taskTarget` wire keys, the `task_*` message
- * kinds, and the `/api/channels/[channelId]/tasks/**` route paths all keep the
- * storage name deliberately (renaming them means a migration plus every read
- * and write path). Everything a human or an agent reads says `thread`; the
- * mapping happens at the client boundary (`client/api.ts`) and in the server
- * DTO mappers (`server/dto.ts`).
+ * ⚠ BOUNDARY — wire/storage name `task` == domain name `thread`. The
+ * `channel_tasks` table, the `metadata.taskId` / `taskMode` / `taskCreatedBy` /
+ * `taskTitle` / `taskTarget` keys, `task_*` message kinds, and the
+ * `/api/channels/[channelId]/tasks/**` routes all keep the STORAGE name
+ * (renaming = migration + every read/write path). Everything a human or agent
+ * reads says `thread`; mapping happens in `client/api.ts` and `server/dto.ts`.
  */
 
 /** Private = members only. Public = any workspace member can read/join. */
 export type ChannelVisibility = "private" | "public";
 
 /**
- * The rendered peer of a direct (1:1) channel — the OTHER member, resolved
- * live from the roster (never stored as truth, since a name/avatar can
- * change). Null on a non-direct channel.
+ * Rendered peer of a direct channel. ⚠ Resolved live from the roster, never
+ * stored as truth — a name/avatar changes.
  */
 export type ChannelDirectPeer = {
   userId: string;
@@ -48,11 +41,9 @@ export type ThreadStatus = "open" | "closed";
 export type ThreadOutcome = "completed" | "failed";
 
 /**
- * A first-class thread inside a channel: one titled, mode-tagged, queryable
- * exchange whose transcript rides on `channel_messages`
- * (`metadata.taskId = ChannelThread.id` — the wire key keeps the storage
- * name). The `channel_tasks` row is the authoritative status / mode / title
- * store, and both members see the same one.
+ * A titled, mode-tagged exchange. Transcript rides on `channel_messages` via
+ * `metadata.taskId = ChannelThread.id`; the `channel_tasks` row is the
+ * authoritative status/mode/title store, shared by both members.
  */
 export type ChannelThread = {
   id: string;
@@ -67,23 +58,18 @@ export type ChannelThread = {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
-  /** A human-readable close summary carried on the thread row; null while open
-   *  or when closed without one. */
+  /** Null while open, or when closed without one. */
   outcomeSummary: string | null;
 };
 
 /**
- * A NAMED AGENT of a channel, as it survives the rollback: an ATTRIBUTION
- * RECORD and nothing more.
+ * A named agent of a channel: an ATTRIBUTION RECORD, nothing more. Not a
+ * first-class entity — no writes, no lifecycle.
  *
- * It used to be a first-class entity — summoned by its owner, addressed by
- * handle (`@quartz`), engaged for an hour by a human, parked and renamed and
- * dismissed. All of that is gone (rollback §1) along with every write to the
- * row. `channel_agents` is now read on ONE path: a stored message stamped with
- * `metadata.author_agent_id` still has to render "quartz · Ada's agent", and
- * the handle lives only here. The lifecycle fields (`status`, `engagedAt`,
- * `engagedBy`) are dropped from the DTO because nothing reads them; the COLUMNS
- * stay, so a later cleanup migration decides their fate, not this one.
+ * `channel_agents` is read on ONE path: a stored message stamped with
+ * `metadata.author_agent_id` renders "quartz · Ada's agent", and the handle
+ * lives only here. Lifecycle columns (`status`, `engagedAt`, `engagedBy`)
+ * remain in the DB but are dropped from the DTO — nothing reads them.
  */
 export type ChannelAgent = {
   id: string;
@@ -97,20 +83,16 @@ export type ChannelAgent = {
 export type ChannelRole = "owner" | "member";
 
 /**
- * ⛔ REMOVED FROM THE PRODUCT 2026-08-08 (F-170). DO NOT BUILD ON THIS TYPE,
- * and do not restore the control it used to describe.
+ * ⛔ REMOVED FROM THE PRODUCT (F-170). DO NOT BUILD ON THIS TYPE. No UI, not on
+ * `ChannelMemberSelfUpdate`, not read in `classify` — unsettable by any route.
  *
- * There is no notify-scope UI, no `notifyScope` on `ChannelMemberSelfUpdate`,
- * and no read of it in `classify` — a member cannot set this value by any
- * route. It survives here ONLY because `server/{dto,service-reads,
- * service-writes-members,repository}.ts` still map the column and would not
- * compile without it; those files and `channel_members.notify_scope` are
- * F-170's open half. Delete this type in the same change that removes them.
+ * Survives ONLY because `server/{dto,service-reads,service-writes-members,
+ * repository}.ts` still map the column. Delete this type in the same change
+ * that removes them and `channel_members.notify_scope`.
  *
- * Why it went, so nobody re-adds it from the enum alone: `'addressed'` was
- * compared nowhere and behaved exactly like `'all'`, and `'none'` ("Muted")
- * silenced only the implicit two-member trigger — an explicitly addressed
- * message still spawned a session, which is most of what a channel carries.
+ * Why it went (don't re-add from the enum alone): `'addressed'` was compared
+ * nowhere and behaved as `'all'`; `'none'` silenced only the implicit
+ * two-member trigger, so an addressed message still spawned a session.
  */
 export type NotifyScope = "all" | "addressed" | "none";
 
@@ -118,11 +100,10 @@ export type NotifyScope = "all" | "addressed" | "none";
 export type MessageAuthorKind = "user" | "agent" | "system";
 
 /**
- * The tool scope a member's responding agent runs with in a channel (the
- * operator controls their own machine). `full` = no restriction (default,
- * preserves current behavior); `dopl_only` = only the Dopl MCP tools + safe
- * reads; `read_only` = read / safe tools only (no writes). The desktop maps
- * this to the spawned session's `--allowedTools`.
+ * Tool scope a member's responding agent runs with (operator controls their own
+ * machine). `full` = no restriction (default); `dopl_only` = Dopl MCP + safe
+ * reads; `read_only` = no writes. Desktop maps this to the spawned session's
+ * `--allowedTools`.
  */
 export type AgentToolProfile = "full" | "dopl_only" | "read_only";
 
@@ -146,60 +127,51 @@ export type ConsentStatus =
   | "auto_allowed";
 
 /**
- * Which surface recorded a HUMAN decision, persisted into `decided_by`. The
- * desktop's native dialog and the web card are equal peers (either may answer
- * a request), so the audit trail has to distinguish them. `trust` is written
- * by the server for a standing-rule auto-allow and is never caller-supplied.
+ * Which surface recorded a HUMAN decision, persisted into `decided_by`. Desktop
+ * dialog and web card are equal peers, so audit must distinguish them. `trust`
+ * is server-written for a standing-rule auto-allow, never caller-supplied.
  */
 export type ConsentDecisionSurface = "web" | "desktop";
 
 /**
- * The listener state a heartbeat reports. Closed set (schema + DB CHECK):
- * `listening` is the desktop's steady state; the rest are reserved for
- * richer listener states without another migration.
+ * Listener state a heartbeat reports. Closed set (schema + DB CHECK).
+ * `listening` is the desktop's steady state; rest reserved so richer states
+ * need no migration.
  */
 export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
 
 /**
- * SESSION PILL STATE (rollback §3.3 / §3.5). The three states the desktop's
- * `session-summary.js` reduces every engine phase/activity to, and the ONLY
- * vocabulary a session's state is ever reported in — over IPC to the desktop
- * pills, and over MCP to an external agent asking "what is flint doing?".
+ * SESSION PILL STATE. The three states desktop `session-summary.js` reduces
+ * every engine phase/activity to, and the ONLY vocabulary session state is ever
+ * reported in — over IPC to the pills, over MCP to an external agent.
  *
- * There is deliberately NO `thinking`. ~~It needs streaming
- * (`includePartialMessages`), which is off.~~ **Corrected by F-146** — that
- * reason was wrong here as it was in three other places, and this copy was
- * missed. The session WINDOW already renders a Thinking chip with no stream at
- * all (`session-chrome.js#thinkingVisible`). What blocks the PILL is its INPUT:
- * `pillState` sees only the reducer's `{ phase, activity, parked }`, never what
- * has been RENDERED for the current turn. A fourth state needs that fact lifted
- * into the reducer, not a stream.
+ * ⚠ No `thinking` state, and NOT because streaming is off (F-146 corrected that
+ * wrong reason in four places) — `session-chrome.js#thinkingVisible` renders a
+ * Thinking chip with no stream. What blocks the PILL is its INPUT: `pillState`
+ * sees only the reducer's `{ phase, activity, parked }`, never what has been
+ * RENDERED this turn. A fourth state needs that lifted into the reducer.
  */
 export type SessionPillState = "working" | "idle" | "ended";
 
 /**
- * ONE LIVE (or just-ended) session of a member's, as answered over MCP by
- * `dopl_channel(op="read_sessions")` (rollback §3.5, read-session-state). It is
- * the server-visible projection of the desktop's `session-summary.list()` shape
- * — the SAME derivation the pills use, lifted to the server so an external
- * agent can read it (F-142: "phase 5 lifts the same list() to MCP and adds no
- * second derivation").
+ * One live (or just-ended) session, as answered by
+ * `dopl_channel(op="read_sessions")`. Server-visible projection of desktop
+ * `session-summary.list()` — ⚠ the SAME derivation the pills use, lifted, never
+ * a second one (F-142).
  *
- * DELIVERY: the desktop pushes these rows to the server ON STATE CHANGE (not a
- * heartbeat) into `channel_sessions`; the read is scoped to the caller's own
- * sessions. See `session-state-service.ts`.
+ * Delivery: desktop pushes ON STATE CHANGE (not heartbeat) into
+ * `channel_sessions`; the read is scoped to the caller's own sessions. See
+ * `session-state-service.ts`.
  */
 export type ChannelSessionState = {
   channelId: string;
-  /** The thread (task) this session is working, or null for one with none. */
   threadId: string | null;
-  /** The friendly handle (flint / onyx / …) the pills show for this session. */
+  /** Friendly handle (flint / onyx / …) the pills show. */
   name: string;
   state: SessionPillState;
-  /** Counterparty-influenced display text, neutralized before storage. */
+  /** ⚠ Counterparty-influenced display text — neutralized before storage. */
   channelName: string | null;
   threadTitle: string | null;
-  /** When the desktop last reported a change for this session. */
   updatedAt: string;
 };
 
@@ -217,21 +189,17 @@ export type ChannelMessageKind =
   | "system";
 
 /**
- * Whether a post is allowed to REACH AN AGENT.
+ * Whether a post may REACH AN AGENT.
+ *  - `request` — DEFAULT: a DM post with no `to` is auto-addressed to the peer
+ *    server-side, which is what makes a reply deliverable and wakes the
+ *    receiving listener.
+ *  - `chat` — human talk; auto-address skipped entirely.
  *
- *  - `request` — the DEFAULT and the whole of today's behaviour: a post into a
- *    DM with no `to` is auto-addressed to the peer server-side, which is what
- *    makes a reply deliverable and what wakes the receiving listener.
- *  - `chat` — HUMAN TALK. The auto-address is skipped entirely, so nothing is
- *    manufactured for the far side to read as an ask. Everything else about the
- *    message is normal.
+ * Absence means `request` and stamps NO metadata key, so existing callers' wire
+ * is unchanged. `chat` + explicit address → 400 `CHANNEL_CHAT_ADDRESSED`.
  *
- * ABSENCE means `request`, and an absent field stamps NO metadata key — so an
- * existing caller's wire is unchanged. `chat` beside an explicit address is a
- * contradiction and is refused 400 `CHANNEL_CHAT_ADDRESSED`.
- *
- * ONE DEFINITION. `MessageIntentSchema` (`schema.ts`) validates against this
- * union and `client/api.ts` imports it; do not restate the two literals.
+ * ⚠ ONE DEFINITION: `MessageIntentSchema` (`schema.ts`) validates against this
+ * union and `client/api.ts` imports it — never restate the two literals.
  */
 export type MessageIntent = "chat" | "request";
 
@@ -243,32 +211,26 @@ export type Channel = {
   name: string;
   topic: string;
   visibility: ChannelVisibility;
-  /** True for a direct (1:1) channel between exactly two members. */
   isDirect: boolean;
-  /** The rendered peer for a direct channel (resolved from the roster); null
-   *  for a normal channel, which keeps its own name + hash glyph. */
+  /** Resolved from the roster; null for a normal channel, which keeps its own
+   *  name + hash glyph. */
   directPeer: ChannelDirectPeer | null;
   createdBy: string;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Count of members. */
   memberCount: number;
-  /** ISO datetime of the latest message, null when the channel is empty. */
   lastMessageAt: string | null;
-  /** The caller's channel role, null when they are not a member. */
+  /** Caller-relative; null when not a member. */
   role: ChannelRole | null;
-  /** True when the caller is a channel member. */
   isMember: boolean;
-  /** The caller's last-read watermark, null when never read / not a member. */
   lastReadAt: string | null;
-  /** True when there is a message newer than the caller's `lastReadAt`. */
+  /** Message newer than the caller's `lastReadAt`. */
   unread: boolean;
   /** ⛔ Dead since F-170 — nothing sets or reads it. See `NotifyScope`. */
   myNotifyScope: NotifyScope | null;
-  /** The caller's own agent tool profile, null when they are not a member. */
   myAgentToolProfile: AgentToolProfile | null;
-  /** Members whose agent is currently online (last heartbeat < 90s ago). */
+  /** Members whose agent heartbeat is within PRESENCE_ONLINE_WINDOW_MS. */
   onlineMemberCount: number;
 };
 
@@ -290,14 +252,12 @@ export type ChannelMessage = {
 };
 
 /**
- * A message the caller just POSTED, plus the notices that write raised. F6's
- * `threadClosed` is the first and only one.
+ * A message the caller just POSTED plus the notices that write raised.
  *
- * RESPONSE-ONLY, and never stored: nothing about the message is different for
- * having landed in a closed thread — the post is accepted, exactly as before —
- * so this rides beside the row rather than inside `metadata`. It is present only
- * when TRUE, which keeps every existing post's shape unchanged, and it never
- * appears on a READ: `mapMessageRow` has no idea a thread was ever closed.
+ * ⚠ RESPONSE-ONLY, never stored: the post is accepted unchanged whether or not
+ * the thread was closed, so this rides BESIDE the row, not inside `metadata`.
+ * Present only when true (existing post shapes unchanged) and never on a READ —
+ * `mapMessageRow` has no idea a thread was ever closed.
  */
 export type ChannelMessagePosted = ChannelMessage & {
   /** True when the post landed in a thread whose row is no longer open. */
@@ -309,16 +269,12 @@ export type ChannelMember = {
   userId: string;
   role: ChannelRole;
   lastReadAt: string | null;
-  /** ⛔ Dead since F-170 — nothing sets or reads it. Still scrubbed to null
-   *  for non-self rows by `mapMemberRow`, which is now that scrub's only
-   *  remaining subject besides `agentToolProfile`. See `NotifyScope`. */
+  /** ⛔ Dead since F-170 — nothing sets or reads it. Still scrubbed to null on
+   *  non-self rows by `mapMemberRow`. See `NotifyScope`. */
   notifyScope: NotifyScope | null;
-  /** The member's responding-agent tool profile. Private preference: present
-   *  only on the caller's own row; null for other members. */
+  /** ⚠ Private preference — present ONLY on the caller's own row. */
   agentToolProfile: AgentToolProfile | null;
-  /** True when this member's agent last sent a heartbeat < 90s ago. */
   agentOnline: boolean;
-  /** ISO datetime of this member's agent's last heartbeat, null if never. */
   lastSeenAt: string | null;
   addedBy: string | null;
   joinedAt: string;
@@ -340,22 +296,22 @@ export type ChannelConsentRequest = {
   workspaceId: string;
   /** Who must decide (the recipient / operator). */
   operatorUserId: string;
-  /** Who / whose agent asked (inbound); null for outbound. */
+  /** Inbound: who asked. Null for outbound. */
   requesterUserId: string | null;
   kind: ConsentKind;
-  /** Inbound: the seq of the triggering message. */
+  /** Inbound: seq of the triggering message. */
   messageSeq: number | null;
   summary: string;
   bodyPreview: string;
-  /** Outbound: the drafted reply awaiting Send. */
+  /** Outbound: drafted reply awaiting Send. */
   proposedReply: string | null;
   status: ConsentStatus;
-  /** Which surface / rule resolved it: 'web' | 'desktop' | 'trust'. */
+  /** 'web' | 'desktop' | 'trust'. */
   decidedBy: string | null;
   decidedAt: string | null;
   createdAt: string;
   expiresAt: string | null;
-  /** Hydrated requester display for the card (inbound); null for outbound. */
+  /** Inbound only; null for outbound. */
   requesterName: string | null;
   requesterAvatarUrl: string | null;
 };
@@ -373,7 +329,5 @@ export type AgentTrustRule = {
   trustedAvatarUrl: string | null;
 };
 
-// `ChannelDetail` (header + transcript) and `AwaitResult` (long-poll result) lived here and had
-// zero readers on the web side — the detail read hands back the two halves separately, and the
-// long poll is an MCP/SDK shape, still declared in `packages/dopl-client/src/channel-types.ts`
-// where its only callers are.
+// `AwaitResult` (long-poll) is an MCP/SDK shape and lives in
+// `packages/dopl-client/src/channel-types.ts`, where its only callers are.

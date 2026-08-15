@@ -1,17 +1,11 @@
 /**
- * TABLE + FILTER SMOKE FOR THE QUERIES THAT MOVED (2026-08-08 split).
- *
- * `repository.ts` was 625 and became four files. Nothing was rewritten, but a
- * move can still land a query on the wrong table or drop a filter, and neither
- * shows up as an error: PostgREST answers a wrong-table read with rows, and a
- * `.delete()` that matched nothing returns `{ error: null }` — the same silent
- * failure mode `repository-resources.test.ts` exists for. So these assert on
- * the TABLE NAME and on the `workspace_id` filter that §8 requires of every
- * workspace-wide query, for the grant and membership functions that moved.
- *
- * The last describe pins the re-export surface: `repository.ts` is still the
- * address other features (and the chats tests' `vi.mock`) import, so a concern
- * module dropping out of the barrel must fail here, not in another feature.
+ * Table + filter smoke for the grant/membership queries.
+ * ⚠ A query on the wrong table or a dropped filter shows up as no error at
+ * all: PostgREST answers a wrong-table read with rows and a `.delete()` that
+ * matched nothing returns `{ error: null }`. So these assert on the TABLE NAME
+ * and on the `workspace_id` filter every workspace-wide query requires.
+ * The last describe pins the re-export surface — `repository.ts` is still the
+ * address other features (and the chats tests' `vi.mock`) import.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -50,7 +44,7 @@ interface Recorded {
   deletes: number;
 }
 
-/** Chainable Supabase-builder stub; every terminal await resolves to `data`. */
+/** Chainable Supabase-builder stub; terminal awaits resolve to `data`. */
 function makeDb(data: unknown = []) {
   const calls: Recorded = {
     from: [],

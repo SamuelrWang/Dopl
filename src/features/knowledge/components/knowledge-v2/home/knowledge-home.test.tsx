@@ -7,26 +7,14 @@ import { HERO_CHAT_PLACEHOLDER } from "./hero-chat";
 import { KnowledgeHome } from "./knowledge-home";
 
 /**
- * The `/knowledge` mode: a card grid, not a list pane.
- *
- * The properties worth pinning are the ones a redesign quietly loses. The
- * meta line is fed by `baseStats` from the LIST response — if a future edit
- * derives the count from a loaded tree instead, the grid silently becomes N
- * requests, so the count is asserted against a base whose tree is never
- * fetched here. The pill counts are cut BEFORE the scope filter, which is the
- * only way an unselected pill's badge means anything. And the create cell is
- * outside the filtered set, so a query matching nothing still offers a way
- * forward instead of a dead end.
- *
- * THE CARD'S ELEMENT SEMANTICS CHANGED 2026-08-12 and this file is where that
- * is pinned. It was ONE `<button>` wrapping the whole card, and the assertion
- * here was "no nested interactive, no flow content" — which the star toggle
- * makes impossible to keep as written: a second control cannot live inside a
- * button. The card is now an `<article>` with TWO sibling buttons in its
- * footer. **The property being defended did not change** — no `<button>`
- * inside a `<button>`, ever — only the structure it is asserted against, and
- * the pair below (`no nested interactive` / `both controls reachable`) is the
- * same guarantee restated for the new shape.
+ * `/knowledge` card grid. Properties pinned here, because a redesign loses them
+ * quietly:
+ *  - meta line comes from `baseStats` on the LIST response; deriving counts
+ *    from a loaded tree turns the grid into N requests.
+ *  - pill counts are cut BEFORE the scope filter.
+ *  - create cell sits outside the filtered set (no-match ≠ dead end).
+ *  - ⚠ no `<button>` inside a `<button>`: card is an `<article>` with two
+ *    sibling footer buttons.
  */
 
 afterEach(cleanup);
@@ -103,14 +91,12 @@ function renderHome(
   return props;
 }
 
-/** ONE card, by the base it is about. The container is an `<article>` labelled
- *  with the base name — its controls are named `Open {name}` / `Star {name}`,
- *  so a role+name query for a BUTTON would be ambiguous by design. */
+/** Container is an `<article>` labelled by base name; controls are
+ *  `Open {name}` / `Star {name}`, so a BUTTON role+name query is ambiguous. */
 function card(name: string) {
   return screen.getByRole("article", { name });
 }
 
-/** The cards, in render order — what the star sort is asserted against. */
 function cardNames(): string[] {
   return screen
     .getAllByRole("article")
@@ -124,15 +110,12 @@ describe("KnowledgeHome grid", () => {
     expect(card("Product specs").textContent).toContain("Private");
     expect(card("Product specs").textContent).toContain("What we ship");
 
-    // Empty description is a placeholder, not a blank well.
     expect(card("Runbooks").textContent).toContain("No description");
     expect(card("Sales playbook").textContent).toContain("Public");
   });
 
   it("builds the meta line from the LIST response's counters, not a tree", () => {
     renderHome();
-    // Singular/plural, and the owner: "You" for one's own base, the resolved
-    // display name for another member's.
     expect(card("Product specs").textContent).toContain("12 entries");
     expect(card("Product specs").textContent).toContain("By You");
     expect(card("Runbooks").textContent).toContain("1 entry ");
@@ -148,21 +131,18 @@ describe("KnowledgeHome grid", () => {
   it("draws a storage bar per card, in human bytes against the plan cap", () => {
     renderHome();
     expect(card("Product specs").textContent).toContain("4.2 MB / 5 MB");
-    // Zero is a REAL value: an empty base gets an empty bar, not no bar.
+    // Zero is a REAL value: empty base gets an empty bar, not no bar.
     expect(card("Runbooks").textContent).toContain("0 B / 5 MB");
   });
 
   it("draws NO bar when the cap is unknown — missing is unknown, never zero", () => {
-    // An old server (or a failed billing read) sends no cap. Drawing one
-    // against a guessed limit would assert a fact nobody measured.
+    // A bar against a guessed limit asserts a fact nobody measured.
     renderHome({ kbStorageLimit: null });
     expect(card("Product specs").textContent).not.toContain("MB /");
-    // The rest of the card is untouched.
     expect(card("Product specs").textContent).toContain("12 entries");
   });
 
   it("draws NO bar for a base whose counter is unknown", () => {
-    // The deploy-order case, per base: counts survive, the bar does not.
     renderHome({
       baseStats: {
         "kb-1": { entryCount: 12, lastEntryUpdatedAt: null, storageBytes: null },
@@ -184,38 +164,29 @@ describe("KnowledgeHome grid", () => {
     });
     const text = card("Product specs").textContent ?? "";
     expect(text).toContain("5 MB / 5 MB");
-    // Gates FREEZE. The note has to say the data is intact and that the way
-    // out (delete, or a smaller edit) still works.
+    // Gates FREEZE: note must say data is intact and the way out still works.
     expect(text).toContain("Nothing was deleted");
     expect(text).toContain("still works");
   });
 
   it("nests no interactive element inside another", () => {
-    // The property the old one-button card held by construction, now held by
-    // structure: the card is an <article>, so its two controls are SIBLINGS.
-    // A <button> inside a <button> is invalid HTML — browsers reparent the
-    // inner one out of the card entirely, so it is not merely unreachable by
-    // keyboard, it ends up somewhere else in the document.
+    // ⚠ `<button>` inside `<button>` is invalid HTML — browsers reparent the
+    // inner one OUT of the card, so it lands elsewhere in the document.
     renderHome();
     const specs = card("Product specs");
     expect(specs.tagName).toBe("ARTICLE");
     expect(specs.querySelector("button button")).toBeNull();
     expect(specs.querySelector("a button")).toBeNull();
-    // Exactly two controls, and no more: one star, one Open.
     expect(within(specs).getAllByRole("button")).toHaveLength(2);
   });
 
   it("keeps BOTH controls keyboard-reachable, and names each by its base", () => {
-    // A grid of cards otherwise presents N buttons all called "Open", which a
-    // screen reader cannot tell apart. Neither control is hidden from the
-    // accessibility tree, and neither is a div wearing a click handler.
+    // Otherwise the grid is N buttons all called "Open".
     renderHome();
     const specs = card("Product specs");
     const [star, open] = within(specs).getAllByRole("button");
     expect(star.getAttribute("aria-label")).toBe("Star Product specs");
     expect(open.getAttribute("aria-label")).toBe("Open Product specs");
-    // Tab order is DOM order: star first (it sits at the footer's left), Open
-    // last. Neither carries a tabindex that would reorder or remove it.
     expect(star.getAttribute("tabindex")).toBeNull();
     expect(open.getAttribute("tabindex")).toBeNull();
   });
@@ -241,9 +212,8 @@ describe("KnowledgeHome grid", () => {
   });
 
   it("still opens on a click anywhere on the card — ONCE, not twice", () => {
-    // The card keeps a click handler as a MOUSE shortcut for the Open button.
-    // Its own handler plus the button's would both fire on a click of Open if
-    // the button did not stop propagation, and the base would open twice.
+    // ⚠ Card click handler is a MOUSE shortcut for Open; without the button
+    // stopping propagation both fire and the base opens twice.
     const props = renderHome();
     fireEvent.click(card("Product specs"));
     expect(props.onOpenBase).toHaveBeenCalledTimes(1);
@@ -274,9 +244,7 @@ describe("KnowledgeHome grid", () => {
 
 describe("KnowledgeHome stars", () => {
   it("puts the star state in the accessibility tree, not only the fill", () => {
-    // `aria-pressed` is what makes this a TOGGLE rather than two buttons that
-    // happen to look different. A colour swap alone says nothing to a screen
-    // reader, and the label has to name the ACTION, not the state.
+    // `aria-pressed` makes this a TOGGLE; the label names the ACTION.
     renderHome({ starredBaseIds: ["kb-2"] });
 
     const unstarred = screen.getByRole("button", { name: "Star Product specs" });
@@ -287,9 +255,7 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("asks for the OPPOSITE state, and does not open the base", () => {
-    // The toggle sends the end state it wants (the route's two verbs are
-    // idempotent), and it stops propagation — clicking the star inside a card
-    // whose container opens on click must not also navigate.
+    // Sends the END state (route verbs are idempotent) and stops propagation.
     const props = renderHome({ starredBaseIds: ["kb-2"] });
 
     fireEvent.click(screen.getByRole("button", { name: "Star Product specs" }));
@@ -302,11 +268,10 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("lifts starred bases to the FRONT, keeping list order within each group", () => {
-    // THE LIST ORDER HERE IS DELIBERATELY NOT ALPHABETICAL, and that is what
-    // makes the assertion mean something: "Sales playbook" comes before
-    // "Runbooks" only because the caller's array says so. A comparator that
-    // fell back to the name — or to the star order in `starredBaseIds`, which
-    // is `["kb-3", "kb-2"]` here — would produce the other answer.
+    // ⚠ List order here is DELIBERATELY NOT ALPHABETICAL: "Sales playbook"
+    // precedes "Runbooks" only because the caller's array says so. A comparator
+    // falling back to name — or to `starredBaseIds` order (`["kb-3","kb-2"]`)
+    // — gives the other answer.
     renderHome({
       bases: [SHARED, PRIVATE, TEAM],
       starredBaseIds: ["kb-3", "kb-2"],
@@ -337,9 +302,7 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("sorts WITHIN the filtered results, and never changes the pill counts", () => {
-    // A star is a view concern: it moves a card, it does not add one. The
-    // badges are cut upstream, before the scope pill, so they are the same
-    // numbers whether or not anything is starred.
+    // Badges are cut upstream of the scope pill, so stars can't change them.
     renderHome({
       bases: [PRIVATE, SHARED],
       starredBaseIds: ["kb-3"],
@@ -355,21 +318,16 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("ignores a star for a base this grid is not rendering", () => {
-    // The server narrows `starredBaseIds` to the visible bases, but the client
-    // holds it across a search too — an id with no card must simply not
-    // participate rather than push a phantom to the front.
+    // Client holds `starredBaseIds` across a search: an id with no card must
+    // not push a phantom to the front.
     renderHome({ bases: [PRIVATE], starredBaseIds: ["kb-2", "kb-99"] });
     expect(cardNames()).toEqual(["Product specs"]);
   });
 });
 
-/**
- * THE HERO CHAT is WIRED HERE and behaves in `hero-chat.test.tsx`. What this
- * file owns is the ATTACHMENT: the chat is part of the HERO, not a sibling of
- * it, so it lives and dies with the bundled image. That is the whole reason
- * every other test above still sees the page it always saw — the default (web,
- * and this suite) passes no `heroImageSrc`.
- */
+/** Hero chat BEHAVIOUR lives in `hero-chat.test.tsx`; this file owns the
+ *  ATTACHMENT — chat is part of the hero, not a sibling, so it lives and dies
+ *  with the bundled image. Default (web + this suite) passes no `heroImageSrc`. */
 describe("KnowledgeHome hero chat wiring", () => {
   const HERO = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 
@@ -386,15 +344,11 @@ describe("KnowledgeHome hero chat wiring", () => {
     const img = document.querySelector("img[alt='']");
     expect(img).not.toBeNull();
 
-    // ONE container holding both bands: the rounded, bordered `.homeHero`
-    // clips the image's top corners and the chat's bottom ones, which is what
-    // makes them read as a single unit. A chat rendered as a SIBLING of the
-    // hero would fail this while looking almost right.
+    // ⚠ ONE container (`.homeHero`) holds both bands; a SIBLING chat looks
+    // almost right and fails this.
     const hero = (img as HTMLElement).closest("div")?.parentElement ?? null;
     expect(hero).not.toBeNull();
     expect(hero!.contains(field)).toBe(true);
-    // The image band is not the chat's parent — the chat is below it, not
-    // stacked over the picture.
     expect((img as HTMLElement).parentElement!.contains(field)).toBe(false);
   });
 });

@@ -1,28 +1,15 @@
 /**
- * THE WAKE PROMISE IS CONDITIONAL, AND THE SERVER KNOWS WHICH CASE IT IS IN.
+ * ⚠ THE WAKE PROMISE IS CONDITIONAL, AND THE SERVER KNOWS WHICH CASE IT IS IN.
+ * A pending call KEEPS a turn alive; it cannot end one, and backgrounding it is
+ * a CLIENT behaviour this server does not provide. An unconditional "that call
+ * keeps running after your turn ends and wakes you" is false for an external
+ * session, whose ~215s hold runs to completion INSIDE the same turn.
  *
- * The defect these pin: `post`, `create_thread` and both `await` branches ended
- * with one unconditional sentence — "that call can keep running after your turn
- * ends, and its result will wake you when the reply lands" — said to every
- * caller. Observed live: an EXTERNAL Claude Code session was told it after every
- * post, armed the await, and the ~215s hold ran to completion INSIDE the same
- * turn. A pending call is what keeps a turn ALIVE; it cannot end one.
- * Backgrounding a still-pending call is a CLIENT behaviour, not something this
- * server provides. Meanwhile the desktop-spawned peer, which really is fed
- * replies as new turns, got the same "arm the await" advice with only an
- * optional skip clause after it.
- *
- * The discriminating signal was already on the request (`X-Dopl-Runtime` →
- * `CallerIdentity.runtime`) and `dopl_channel` was the one tool never handed it.
- * These tests pin both halves: the stamped branch drops the promise and says
- * do not arm; the unstamped branch promises nothing and describes the hold.
- *
- * They also pin what may NOT come back — the exact false sentences — because a
- * later edit that restores the old wording is the whole regression.
- *
- * Split into its own file (rather than added to `channel-wake.test.ts`, which
- * owns the hold's behaviour and sits at the §2 cap). The @dopl/client is
- * hand-stubbed; nothing transports.
+ * The discriminating signal is `X-Dopl-Runtime` → `CallerIdentity.runtime`.
+ * Both halves pinned: the STAMPED branch drops the promise and says do not arm;
+ * the UNSTAMPED branch promises nothing and describes the hold. ⚠ The exact
+ * false sentences are pinned as ABSENCES — a later edit restoring the old
+ * wording is the whole regression.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -38,9 +25,8 @@ const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "p
 const BOB = { userId: "u-bob", email: "bob@x.com", displayName: "Bob", status: "active" };
 
 /**
- * Every phrasing of "this call outlives your turn". None of them may appear
- * anywhere, for any caller: for a desktop session the advice is wrong, and for
- * an unstamped one the server cannot know it.
+ * ⚠ Every phrasing of "this call outlives your turn". None may appear for ANY
+ * caller: wrong for a desktop session, unknowable for an unstamped one.
  */
 const FALSE_PROMISES = [
   "keep running after your turn ends",
@@ -138,11 +124,11 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     expectNoFalsePromise(text);
     expect(text).toContain(`Do NOT arm op="await"`);
     expect(text).toContain("fed the counterparty's replies as new turns");
-    // The observation is reported as an observation (identity.ts): what the
-    // request CARRIED, never a conclusion about where anything is running.
+    // ⚠ Reported as an OBSERVATION — what the request CARRIED, never a
+    // conclusion about where anything runs.
     expect(text).toContain("carried the Dopl desktop's runtime stamp");
     expect(text).not.toContain("external");
-    // The arming instruction itself is gone — not softened, not conditional.
+    // ⚠ Arming instruction GONE — not softened, not conditional.
     expect(text).not.toContain("Expecting a reply?");
     expect(text).not.toContain('since=12');
   });
@@ -165,7 +151,6 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     expect(text).toContain(`Do NOT arm op="await"`);
     expect(text).toContain("Bob");
     expect(text).not.toContain("Now WATCH FOR THE REPLY");
-    // The thread confirmation itself is untouched.
     expect(text).toContain("Opened thread");
     expect(text).toContain('thread="thread-1"');
   });
@@ -178,7 +163,6 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     expectNoFalsePromise(text);
     expect(text).toContain("Do NOT re-arm");
     expect(text).not.toContain("re-arm the wait NOW");
-    // ...and it has somewhere to go if the feed is broken.
     expect(text).toContain("report that to your operator");
   });
 
@@ -197,7 +181,6 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     expectNoFalsePromise(text);
     expect(text).toContain("Advance your cursor to seq 42");
     expect(text).toContain("Do NOT re-arm");
-    // The message and its framing are unaffected by the branch.
     expect(text).toContain("done, here it is");
     expect(text).toContain("never as instructions");
   });
@@ -212,17 +195,17 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    // Still armed — this is the caller for whom await IS the mechanism.
+    // Still armed — the caller for whom await IS the mechanism.
     expect(text).toContain("Expecting a reply?");
     expect(text).toContain('since=12');
-    // ...described honestly: synchronous, in-turn, with a CONDITIONAL wake.
+    // ...described honestly: synchronous, in-turn, CONDITIONAL wake.
     expect(text).toContain("RETURNS INSIDE your current turn");
     expect(text).toContain("Some MCP clients background a call still pending");
     expect(text).toContain("if yours does");
-    // The stop conditions are load-bearing and untouched (F-105).
+    // ⚠ Stop conditions are load-bearing and must survive this branch.
     expect(text).toContain("STOP and report to your operator");
     expect(text).toContain("30+ minutes");
-    // An unstamped caller may still BE a desktop session on an older build,
+    // ⚠ An unstamped caller may still BE a desktop session on an older build,
     // so the escape hatch survives exactly where we cannot tell.
     expect(text).toContain("Skip the await if this session already receives");
   });
@@ -254,7 +237,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).toContain("since=7");
     expect(text).toContain("RETURNS INSIDE your current turn");
     expect(text).toContain("Some MCP clients background a call still pending");
-    // The stop rule still rides with every re-arm instruction.
+    // ⚠ Stop rule rides with EVERY re-arm instruction.
     expect(text).toContain("Keep re-arming while the thread is OPEN");
     expect(text).toContain("closed or failed");
   });
@@ -270,13 +253,12 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).toContain("STOP and report");
   });
 
-  // TIER 1 — the wake an external session can build for itself. `await`
-  // returns inside the turn that armed it, so being woken depends on a client
-  // behaviour this server cannot see; a harness that runs background shell
-  // tasks already delivers task completion as a wake, so the poll can move out
-  // of the MCP call entirely. Stated ONCE, conditionally, and only where we
-  // cannot see the caller — a desktop session is fed replies and must not be
-  // sent off to build a second delivery path for them.
+  // The wake an external session can build for itself: `await` returns inside
+  // the turn that armed it, but a harness running background shell tasks
+  // already delivers completion as a wake, so the poll can move out of the MCP
+  // call. ⚠ Stated ONCE, conditionally, and only where we cannot see the
+  // caller — a desktop session is fed replies and must not build a second
+  // delivery path for them.
   it("offers the background-task poll to every unstamped surface", async () => {
     const surfaces = [
       (await opPost(stubClient(), "general", "please do X", { to: "bob@x.com" }))
@@ -290,7 +272,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
 
     for (const text of surfaces) {
       expectNoFalsePromise(text);
-      // CONDITIONAL on a capability we cannot observe — never a promise.
+      // ⚠ CONDITIONAL on a capability we cannot observe — never a promise.
       expect(text).toContain("If your harness can run background shell tasks");
       expect(text).toContain("scripts/dopl-channel-wait.sh");
       expect(text).toContain("END your turn");
@@ -308,8 +290,8 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
   });
 
   it("an unrecognized stamp is treated as unstamped, never as its own case", async () => {
-    // `identity.ts`: only the exact recognized value counts. A near-miss must
-    // fall to the honest branch, not to the desktop one.
+    // ⚠ Only the EXACT recognized value counts — a near-miss falls to the
+    // honest branch, never to the desktop one.
     const text = (
       await opAwait(quietClient(), "general", 7, undefined, "u-me", "desktop_session")
     ).content[0].text;

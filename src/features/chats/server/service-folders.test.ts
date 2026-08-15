@@ -1,13 +1,9 @@
 /**
- * Folder re-scoping — the WRITE SHAPE and the authorization gate.
- *
- * The write shape is the point: a folder's grant set propagates to every
- * chat filed in it, and this used to run `delete` + `insert` per chat. That
- * is 2N serial round-trips on one "Save sharing" click, unbounded in N — a
- * 200-chat folder timed the gateway out. The assertions below pin the
- * collapsed form (one set-delete, one array upsert) so a future edit can't
- * quietly reintroduce the loop, and pin that the permission checks that
- * guard it are unchanged.
+ * Folder re-scoping: write shape + authorization gate.
+ * ⚠ A folder's grant set propagates to every filed chat. Per-chat
+ * delete+insert is 2N serial round-trips on one click, unbounded in N (a
+ * 200-chat folder timed the gateway out). These pin the collapsed form — one
+ * set-delete, one array upsert — so the loop can't come back.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -55,7 +51,7 @@ function folderRow(over: Partial<ChatFolderRow> = {}): ChatFolderRow {
   } as ChatFolderRow;
 }
 
-/** N chats filed in the folder — the loop's blast radius. */
+/** N chats filed in the folder — the blast radius. */
 function chatIds(n: number): string[] {
   return Array.from({ length: n }, (_, i) => `chat-${i}`);
 }
@@ -86,13 +82,12 @@ describe("updateFolderForUser — grant propagation is set-at-a-time", () => {
       teamIds: ["team-a"],
     });
 
-    // Every chat is covered...
     expect(deleteGrantsForResources).toHaveBeenCalledWith(WS, "chat", ids);
     expect(insertReadGrantsForResources).toHaveBeenCalledWith(WS, "chat", ids, [
       "team-a",
     ]);
-    // ...by ONE call each, not 200. The single-resource helpers are still
-    // used for the folder's own grant row, and only for that.
+    // ONE call each, not N. Single-resource helpers are used only for the
+    // folder's own grant row.
     expect(deleteGrantsForResources).toHaveBeenCalledTimes(1);
     expect(insertReadGrantsForResources).toHaveBeenCalledTimes(1);
     expect(deleteGrantsForResource).toHaveBeenCalledTimes(1);
@@ -117,7 +112,7 @@ describe("updateFolderForUser — grant propagation is set-at-a-time", () => {
     });
 
     expect(deleteGrantsForResources).toHaveBeenCalledWith(WS, "chat", chatIds(200));
-    // No grant set to write: the delete stands alone.
+    // No grant set to write — the delete stands alone.
     expect(insertReadGrantsForResources).not.toHaveBeenCalled();
   });
 
@@ -155,7 +150,7 @@ describe("updateFolderForUser — authorization is unchanged by the batching", (
       })
     ).rejects.toBeInstanceOf(ChatForbiddenError);
 
-    // The refusal happens BEFORE any write.
+    // ⚠ Refusal happens BEFORE any write.
     expect(repo.updateFolder).not.toHaveBeenCalled();
     expect(deleteGrantsForResources).not.toHaveBeenCalled();
   });

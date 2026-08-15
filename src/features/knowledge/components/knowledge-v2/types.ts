@@ -1,6 +1,6 @@
 import type { KnowledgeBase, KnowledgeEntry, KnowledgeFolder } from "../../types";
 
-/** Minimal team ref for the admin card pills (carried over from v1). */
+/** Minimal team ref for the admin card pills. */
 export interface KbTeamRef {
   teamId: string;
   name: string;

@@ -1,28 +1,19 @@
 /**
- * PARTIAL READS — "returned nothing" and "could not ask" are not the same fact.
+ * PARTIAL READS — ⚠ "returned nothing" and "could not ask" are not the same
+ * fact. `dopl_map` and `dopl_search` fan out across domains under
+ * `.catch(() => [])`; the fail-soft half is right (one broken domain must not
+ * fail the call), but an uncaught SILENCE makes a 500 render as `_None._` and
+ * an agent read the workspace as empty. So the catch stays and the domain that
+ * could not be read is NAMED, in the scope footer the reader already meets.
  *
- * `dopl_map` and `dopl_search` each fan out across four or five domains and
- * wrap every one in `.catch(() => [])`. The fail-soft half is right: one broken
- * domain must not fail the whole call, and an agent that gets four of five
- * sections is better off than one that gets an error. What was wrong is that
- * the RESULT then asserted a fact the code never established — a knowledge
- * service returning 500 rendered as `_None._` under "Knowledge bases", and an
- * agent read the workspace as empty. Two agents did exactly that.
+ * ⚠ The cause is OUR OWN vocabulary, never the error's message: a
+ * `DoplApiError` message is the API body, which for a 500 can carry SQL, a
+ * column list, or a constraint name — none of it useful, all of it internals in
+ * a string the model repeats to the user. `causeOf` maps onto a fixed set of
+ * short phrases: enough to tell a permissions problem from an outage.
  *
- * So the catch stays and the SILENCE goes: a domain that could not be read is
- * named on the result, in the scope footer the reader already meets, with a
- * short cause.
- *
- * WHY THE CAUSE IS OUR OWN VOCABULARY AND NOT THE ERROR'S MESSAGE. A
- * `DoplApiError`'s message is the API's body — for a 500 that can be a Postgres
- * error carrying SQL, a column list, or a constraint name. None of that helps
- * an agent decide what to do next, and all of it is internals in a string the
- * model will happily repeat to the user. `causeOf` maps the error onto a fixed
- * set of short phrases instead: enough to tell a permissions problem from an
- * outage, nothing that leaks the inside of the server.
- *
- * ONE definition, both tools. Two copies of a "some of this is missing" notice
- * drift, and the copy that drifts is the one that stops warning.
+ * ⚠ ONE definition, both tools — the copy that drifts is the one that stops
+ * warning.
  */
 
 import { inlineOr } from "./narration";
@@ -35,9 +26,9 @@ interface FailedRead {
 }
 
 /**
- * A short, safe cause. Deliberately a small closed vocabulary: an HTTP status
- * (the one detail that separates "you may not" from "it is broken"), or the
- * transport failure mode. Never the response body, never `e.message`.
+ * A short, safe cause. ⚠ Small CLOSED vocabulary: an HTTP status (the detail
+ * separating "you may not" from "it is broken") or the transport failure mode.
+ * NEVER the response body, never `e.message`.
  */
 export function causeOf(e: unknown): string {
   if (typeof e === "object" && e !== null) {
@@ -58,11 +49,10 @@ export interface PartialRead {
    */
   soft<T>(domain: string, read: Promise<T>, fallback: T): Promise<T>;
   /**
-   * The notice, or `""` when every read answered — so the healthy result is
-   * byte-for-byte what it was before this existed. Ends with a trailing space
-   * because it PREFIXES the scope footer rather than adding a second line: the
-   * warning that matters most should be the first thing in the footer, and a
-   * reader who skims one italic line must not be able to skim past it.
+   * The notice, or `""` when every read answered — ⚠ the healthy result must
+   * stay byte-for-byte what it was. ⚠ Trailing space: it PREFIXES the scope
+   * footer rather than adding a second line, so a reader who skims one italic
+   * line cannot skim past the warning.
    */
   notice(total: number, noun: string): string;
 }
@@ -78,9 +68,9 @@ export function partialRead(): PartialRead {
     },
     notice(total: number, noun: string): string {
       if (failed.length === 0) return "";
-      // `inlineOr` on our own vocabulary is belt-and-braces, not ceremony: it
-      // is what keeps a future `causeOf` that echoes something peer-authored
-      // from becoming an injection site in the one line agents trust most.
+      // ⚠ `inlineOr` on our own vocabulary is belt-and-braces: it keeps a
+      // future `causeOf` that echoes peer-authored text from becoming an
+      // injection site in the one line agents trust most.
       const named = failed
         .map((f) => `${f.domain} (${inlineOr(f.cause, "`read failed`")})`)
         .join(", ");

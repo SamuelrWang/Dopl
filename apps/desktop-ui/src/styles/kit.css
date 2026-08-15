@@ -1,27 +1,10 @@
-/* ─────────────────────────────────────────────────────────────────────────
-   Dopl desktop SPA — UI KIT RECIPES (VERBATIM COPY).
-
-   SOURCE OF TRUTH: `src/app/globals.css` — the auth-3D controls and the
-   `@layer components` kit (.page-float, .bento, .concave-field, .concave-sel,
-   .concave-track, .seg-pill, .raised-tab, .nav-chip, .nav-chip-active,
-   .btn-light, .auth-btn-3d, .graph-*, .kanban-substrate, .kanban-card).
-   Documented in
-   docs/DESIGN-SYSTEM.md.
-
-   ⚠ DRIFT WARNING (REFACTOR-FINDINGS F-074) — see the header of tokens.css.
-   Same copy, same rot risk, same rule: edit globals.css and this file in one
-   change until a single source is imported at build time.
-   ───────────────────────────────────────────────────────────────────────── */
-
-/* ─────────────────────────────────────────────────────────────────────
-   Auth 3D controls (login / onboarding / oauth consent / reset)
-   Raised primary button + raised light secondary + concave (indented) field.
-   Shared so every auth-adjacent surface stays consistent.
-   ───────────────────────────────────────────────────────────────────── */
+/* Dopl desktop SPA — UI KIT RECIPES. Contract: docs/DESIGN-SYSTEM.md.
+   ⚠ DRIFT (F-074): verbatim hand-copy of `src/app/globals.css` @layer
+   components kit. Edit globals.css and this file in ONE change until a single
+   source is imported at build time. */
 
 @layer components {
 
-/* Raised primary button — top highlight, bottom shade, ambient drop. */
 .auth-btn-3d {
   background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
   border: 1px solid #000;
@@ -54,7 +37,6 @@
   cursor: not-allowed;
 }
 
-/* Raised light secondary button — same volume, white face. */
 .auth-btn-3d-light {
   background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
   border: 1px solid #d4d4d4;
@@ -84,9 +66,7 @@
   cursor: not-allowed;
 }
 
-/* Concave field — pressed-in look: dark inner top, light inner bottom +
-   outer bottom highlight to seat it on the page. `.concave-field` is the
-   official kit name; `.auth-field-3d` is the legacy alias (same recipe). */
+/* `.concave-field` = official kit name; `.auth-field-3d` = legacy alias. */
 .concave-field,
 .auth-field-3d {
   background: #e9eaec;
@@ -109,8 +89,7 @@
     0 0 0 3px rgba(24, 24, 24, 0.07);
 }
 
-/* Small raised light control — toolbar buttons and other compact chrome.
-   Lighter volume than .auth-btn-3d-light (same family, less ambient drop). */
+/* Small raised light control — toolbar buttons, compact chrome. */
 .btn-light {
   background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
   border: 1px solid #d6d8db;
@@ -134,10 +113,9 @@
   cursor: not-allowed;
 }
 
-/* Concave (pressed-in) selection — the active state for .btn-light controls
-   and other selected chrome. Border drawn via box-shadow ring so toggling
-   it on borderless elements never shifts layout. `.concave-sel` is the
-   official kit name; `.btn-pressed` is the legacy alias. */
+/* Active state for .btn-light + selected chrome. ⚠ Border is a box-shadow
+   ring, not a border, so toggling on borderless elements never shifts layout.
+   `.concave-sel` = official name; `.btn-pressed` = legacy alias. */
 .concave-sel,
 .btn-pressed {
   background: #e9e9e7;
@@ -148,7 +126,6 @@
     0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
-/* Brand mark as a raised black button — top highlight, bottom shade, drop. */
 .auth-logo-3d {
   border: 1px solid rgba(0, 0, 0, 0.55);
   box-shadow:
@@ -158,14 +135,10 @@
     0 6px 14px rgba(0, 0, 0, 0.2);
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   UI kit — official global surface components (docs/DESIGN-SYSTEM.md).
-   Every page composes these; never re-hardcode their recipes locally.
-   ───────────────────────────────────────────────────────────────────── */
+/* Official global surface components. Compose these; never re-hardcode
+   their recipes locally. */
 
-/* Floating page surface — the ONE raised card a full-page view renders
-   into, sitting on the shell's sidebar panel. Margins reveal the lower
-   panel as a frame. (Knowledge + Ontology pattern.) */
+/* THE ONE raised card a full-page view renders into. */
 .page-float {
   flex: 1;
   min-width: 0;
@@ -179,7 +152,7 @@
   overflow: hidden;
 }
 
-/* Soft floating card (bento) — inner cards/tiles on a panel surface. */
+/* Inner cards/tiles on a panel surface. */
 .bento {
   background: var(--panel-surface);
   border: 1px solid var(--border-default);
@@ -189,8 +162,7 @@
     0 6px 18px rgba(0, 0, 0, 0.05);
 }
 
-/* Recessed switcher track — tab/pill groups sit inside; pair the active
-   item with .raised-tab. Same pressed-in language as .concave-field. */
+/* Recessed switcher track — pair active item with .raised-tab. */
 .concave-track {
   background: #e9eaec;
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -202,43 +174,30 @@
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
 }
 
-/* Individual segmented pill — the resting face of one stadium-shaped option
-   in a TRACKLESS segmented row (SegmentedControl): flat #e9eaec fill, fully
-   rounded ends, hairline drawn as a ring (not a border) so swapping the
-   active pill to .raised-tab never shifts layout. */
+/* Resting face of one option in a TRACKLESS segmented row (SegmentedControl).
+   ⚠ Hairline is a ring, not a border, so swapping active pill to .raised-tab
+   never shifts layout. */
 .seg-pill {
   background: #e9eaec;
   border-radius: 9999px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
-/* Raised active tab face — white gradient popping out of a concave track.
-   ONE elevation with `.auth-btn-3d-light` (the landing/auth white button):
-   same gradient stops (#fff → #f2f2f2), same hairline (#d4d4d4), same bevel
-   (white top, black bottom), same two drops. The app's raised surfaces and
-   the landing's raised button are the same object at different scales, so
-   they may not read at different depths.
+/* Raised active tab face. Must stay ONE elevation with `.auth-btn-3d-light`:
+   same gradient stops, hairline #d4d4d4, bevel, drops.
 
-   ⚠ The hairline is an INSET RING, not a real `border`, and that is
-   load-bearing: `.raised-tab` is toggled ON elements whose resting face has
-   no border (`.nav-chip` declares `border: none`, `.seg-pill` and the Switch
-   thumb draw theirs as a ring), and all of them are content-sized or
-   fixed-size. A real 1px border would make every active nav chip and
-   segmented pill 2px wider than its resting siblings and jitter the row on
-   every selection. `inset 0 0 0 1px` rasterises identically to a 1px border
-   — it fills the outermost pixel of the padding box, over the gradient —
-   while occupying no layout space.
+   ⚠ Hairline is an INSET RING, not a `border`. `.raised-tab` toggles ON
+   borderless, content-sized elements (`.nav-chip` = `border: none`; `.seg-pill`
+   + Switch thumb ring theirs). A real 1px border makes each active chip/pill
+   2px wider than resting siblings and jitters the row on every selection.
+   `inset 0 0 0 1px` rasterises identically but takes no layout space.
 
-   Shadow ORDER is the recipe, not decoration: box-shadows paint first-on-top,
-   so the hairline is declared first and the bevel insets are pushed one pixel
-   further in (`0 2px` / `0 -2px` instead of `0 1px` / `0 -1px`) so each shows
-   the second pixel, exactly as they sit inside the real border on
-   `.auth-btn-3d-light`.
+   ⚠ Shadow ORDER is the recipe: box-shadows paint first-on-top, so hairline
+   is declared first and bevel insets pushed one px further in (`0 2px` /
+   `0 -2px`) to show the second pixel.
 
-   No hover/active states here on purpose: this is a RESTING face for an
-   already-selected item, and `.auth-btn-3d-light`'s lift/press belong to a
-   control you can still press. Behavioural states stay with the consumer
-   (`.nav-chip`, SegmentedControl, Switch). */
+   No hover/active states on purpose — RESTING face only; behavioural states
+   stay with the consumer (`.nav-chip`, SegmentedControl, Switch). */
 .raised-tab {
   background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
   box-shadow:
@@ -249,16 +208,12 @@
     0 6px 14px rgba(0, 0, 0, 0.06);
 }
 
-/* Nav chip — THE hug-width nav item, ONE recipe for every nav rail in the app
-   (app-shell sidebar rows + footer button, settings-modal section list). It is
-   written for BOTH `<a>` and `<button>`: `border: none`, an explicit
-   font-size/weight (a button does not inherit them without help), inherited
-   family, `text-decoration: none` and `cursor: pointer`, so the two element
-   types render identically.
-
-   The resting fill is applied only when NOT active, so an active chip —
-   `class="nav-chip nav-chip-active raised-tab"` — has no background of its own
-   to fight `.raised-tab`'s gradient. Never fork these values into a module. */
+/* THE hug-width nav item — ONE recipe for every nav rail (app-shell sidebar
+   rows + footer button, settings-modal section list). Never fork into a module.
+   ⚠ Written for BOTH `<a>` and `<button>`: explicit font-size/weight because a
+   button does not inherit them.
+   ⚠ Resting fill applies only when NOT active, so an active chip
+   (`nav-chip nav-chip-active raised-tab`) has no bg fighting `.raised-tab`. */
 .nav-chip {
   display: inline-flex;
   align-items: center;
@@ -280,47 +235,33 @@
 .nav-chip:not(.nav-chip-active) { background: var(--shell-chip); }
 .nav-chip:not(.nav-chip-active):hover { filter: brightness(0.97); }
 
-/* Selected chip — the ink darkens here; the raised white FACE comes from
-   `.raised-tab`, composed alongside this class in the TSX. */
+/* Ink only; raised white FACE comes from `.raised-tab`, composed in the TSX. */
 .nav-chip.nav-chip-active { color: #26282c; }
 .nav-chip.nav-chip-active svg { color: #4a4d52; }
 
-/* Dotted graph substrate — the recessed world surface a graph lays its node
-   cards on. ⚠ NO CURRENT CONSUMER: the ontology graph view and the workflow
-   graph were both deleted on 2026-08-11. Kept with `.graph-node-*` and
-   `.graph-port` as one coherent recipe set for the next graph surface —
-   delete the group or none of it. */
+/* Dotted graph substrate. ⚠ NO CURRENT CONSUMER — kept with `.graph-node-*`
+   and `.graph-port` as one recipe set; delete the whole group or none of it. */
 .graph-substrate {
   background-image: radial-gradient(rgba(35, 42, 49, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-/* Ontology board substrate — a MODIFIER on `.graph-substrate`, never a second
-   dot recipe: the gradient and its ink stay defined once above, and this
-   changes only the two things the board needs.
-
-   `background-size` halves the pitch to 12px because the board's geometry has
-   to land ON the grid: lanes are 288px (24 tiles), the gutter between them is
-   12px (1 tile, with a dot dead centre) and the board's padding is 24px (2),
-   so every lane edge falls on a tile boundary. At the inherited 24px pitch a
-   12px gutter puts every second lane half a tile out.
-
-   `background-attachment: local` makes the dots cover the whole SCROLLABLE
-   area rather than the visible pane, and travel with the content — a lane
-   that starts on a dot line stays on it through a scroll. Tiles originate at
-   the scroller's PADDING edge, which is what ties the arithmetic above to
-   what is actually painted. */
+/* MODIFIER on `.graph-substrate`, never a second dot recipe.
+   12px pitch because board geometry must land ON the grid: lanes 288px (24
+   tiles), gutter 12px (1 tile), padding 24px (2). At the inherited 24px pitch
+   every second lane sits half a tile out.
+   `background-attachment: local` → dots cover the whole SCROLLABLE area and
+   travel with content; tiles originate at the scroller's PADDING edge, which
+   is what ties that arithmetic to what is painted. */
 .kanban-substrate {
   background-size: 12px 12px;
   background-attachment: local;
 }
 
-/* Graph node card surfaces — the resting / selected / drop-target elevation
-   recipes (last used by the ontology object cards and the workflow step cards,
-   both deleted 2026-08-11).
-   The card shell (layout, radius, border WIDTH, bg-elevated) stays in the
-   component; these set the border COLOR + double-shadow per state. Defined
-   before `.graph-node-lift` so that class (same layer) wins while dragging. */
+/* Graph node resting/selected/drop-target elevation. Card shell (layout,
+   radius, border WIDTH, bg) stays in the component; these set border COLOR +
+   shadow. ⚠ Must stay declared BEFORE `.graph-node-lift` so that class (same
+   layer) wins while dragging. */
 .graph-node {
   border-color: var(--border-default);
   box-shadow:
@@ -345,8 +286,8 @@
     0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
-/* While-dragging lift — a node card raised off the substrate as it moves.
-   Applied by the graph views' drag layer to the node under the pointer. */
+/* While-dragging lift — applied by a graph drag layer to the node under
+   the pointer. */
 .graph-node-lift {
   box-shadow:
     0 2px 6px rgba(0, 0, 0, 0.1),
@@ -354,12 +295,9 @@
   cursor: grabbing;
 }
 
-/* Connection port — a small raised handle sitting on a graph node's edge
-   that a drag-to-connect gesture starts from (last used by the workflow
-   graph, deleted 2026-08-11). A white
-   raised dot with a hairline ring; it scales up on hover and while a
-   connect-drag is live (driven by `data-active`). One kit recipe; the
-   feature toggles visibility with opacity utilities. */
+/* Drag-to-connect handle on a graph node edge. Scales on hover and while a
+   connect-drag is live (`data-active`). Feature toggles visibility with
+   opacity utilities. */
 .graph-port {
   width: 11px;
   height: 11px;
@@ -380,14 +318,12 @@
     0 0 0 1px rgba(35, 42, 49, 0.35),
     0 2px 5px rgba(0, 0, 0, 0.22);
 }
-/* Output handle — an inked centre dot marks the connector's drag-FROM side so
-   it never reads identical to the hollow input socket on the left edge. */
+/* Inked centre dot marks the drag-FROM side vs the hollow input socket. */
 .graph-port[data-variant="output"] {
   background:
     radial-gradient(circle at center, var(--text-secondary) 0 1.6px, transparent 2.1px),
     linear-gradient(180deg, #ffffff 0%, #eef1f5 100%);
 }
-/* Live drop target during a connect-drag — filled ink dot. */
 .graph-port[data-target="true"] {
   transform: scale(1.5);
   background: linear-gradient(180deg, #3a434c 0%, #232a31 100%);
@@ -396,15 +332,10 @@
     0 2px 6px rgba(0, 0, 0, 0.28);
 }
 
-/* Kanban card — a white card floating inside a flat inset lane (the ontology
-   board's column header card and every object card). ONE class, three states:
-   resting hairline elevation, a shallow lift on hover, and a highlight ring
-   while `data-selected="true"` (the card open in the editor panel). The shell
-   — radius, border WIDTH, bg-elevated, layout — stays in the component; this
-   sets the border COLOR and the shadow, the two things that were hardcoded as
-   `shadow-[…rgba]` recipes before. Kept deliberately flatter than `.bento` and
-   `.graph-node`: these cards sit on an inset lane, not on the page surface,
-   so a deep ambient shadow reads as dirt in the gutter. */
+/* Card floating inside a flat inset lane. Shell (radius, border WIDTH, bg,
+   layout) stays in the component; this sets border COLOR + shadow.
+   Deliberately flatter than `.bento`/`.graph-node` — on an inset lane a deep
+   ambient shadow reads as dirt in the gutter. */
 .kanban-card {
   border-color: var(--border-default);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -422,27 +353,13 @@
     0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* ── Menu card — THE dropdown surface ──────────────────────────────────
-   Ported VERBATIM from the landing Menu dropdown: the recipe originates at
-   `src/features/marketing/marketing.css › .lp-nav-menu-card` /
-   `.lp-nav-menu-item` / `.lp-nav-menu-divider` and the `lpMenuIn` /
-   `lpMenuOut` keyframes (markup: `features/marketing/components/site-nav.tsx`).
-   It lives here rather than being imported because marketing.css is a
-   page-scoped sheet neither app loads; the copies are the same design and
-   must be edited together.
-
-   The card is the raised light face at CARD scale: white-to-grey gradient,
-   hairline border, a top inset highlight for the bevel, then THREE drops — a
-   1px seat, a near shadow that ties it to its trigger, and a wide ambient one
-   that lifts it off the page. `padding: 7px` is what makes the rows read as
-   floating chips instead of a flush list; radius 16 is the card, radius 10 is
-   the row inside it.
-
-   `transform-origin` follows the side the panel hangs from, so it unfolds out
-   of its trigger rather than out of nowhere. `.menu-card` is the ONE dropdown
-   surface — see `src/shared/ui/popover-menu.tsx`, which is the only thing
-   allowed to compose it. Consumer Tailwind utilities still win (utilities
-   layer over components layer), so per-menu width/padding overrides hold. */
+/* THE ONE dropdown surface — `src/shared/ui/popover-menu.tsx` is the only
+   thing allowed to compose it. Consumer Tailwind utilities still win
+   (utilities layer > components layer), so per-menu overrides hold.
+   ⚠ Hand-copy of `src/features/marketing/marketing.css ›
+   .lp-nav-menu-card` / `.lp-nav-menu-item` / `.lp-nav-menu-divider` + the
+   `lpMenuIn`/`lpMenuOut` keyframes — marketing.css is page-scoped and neither
+   app loads it, so both copies must be edited together. */
 .menu-card {
   padding: 7px;
   border-radius: 16px;
@@ -457,19 +374,16 @@
   animation: menuCardIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .menu-card[data-origin="right"] { transform-origin: top right; }
-/* Exit: inert and unclickable while it plays out — the backdrop is already
-   gone by then, so a card that still took pointer events would eat the click
-   that follows a dismissal. */
+/* ⚠ Exit must stay pointer-events: none — backdrop is already gone, so a card
+   still taking pointer events eats the click that follows a dismissal. */
 .menu-card[data-state="closing"] {
   animation: menuCardOut 140ms ease-in forwards;
   pointer-events: none;
 }
 
-/* Menu row — the item face inside `.menu-card`. Hover/focus is "the faintest
-   possible raise": a white-gradient tint plus the button family's 1px lift;
-   press is the same pressed-in inset the kit uses everywhere. Colour, density
-   and type stay with `MenuItem` — this is elevation only, so a destructive or
-   selected row can tint itself without forking the recipe. */
+/* Item face inside `.menu-card`. Elevation ONLY — colour, density and type
+   stay with `MenuItem`, so a destructive/selected row tints itself without
+   forking the recipe. */
 .menu-row {
   border-radius: 10px;
   transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
@@ -496,8 +410,7 @@
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
 }
 
-/* Section rule inside a `.menu-card` — inset from the card's padding so it
-   stops short of the rounded corners (marketing.css › .lp-nav-menu-divider). */
+/* Inset from the card's padding so it stops short of the rounded corners. */
 .menu-divider {
   height: 1px;
   margin: 7px 2px;
@@ -506,12 +419,9 @@
 
 } /* @layer components */
 
-/* Menu-card open/close — replicated from marketing.css › `lpMenuIn` /
-   `lpMenuOut` (the landing Menu dropdown). Outside `@layer components` for the
-   same reason `loginFadeIn` is: keyframes are not layered rules.
-
-   The rotateX is 7deg and no more: enough that the card's top edge arrives
-   first — an unfold, not a fade — while the labels stay unsmeared. */
+/* ⚠ Outside `@layer components` on purpose — keyframes are not layered rules.
+   rotateX capped at 7deg: enough to read as an unfold, not enough to smear
+   the labels. */
 @keyframes menuCardIn {
   from {
     opacity: 0;
@@ -533,8 +443,7 @@
   }
 }
 
-/* Reduced motion: the card still opens and closes, instantly and in place.
-   `popover-menu.tsx` skips the closing phase entirely under the same query,
+/* ⚠ Coupled: `popover-menu.tsx` skips the closing phase under this same query,
    so nothing waits on an animation that will not run. */
 @media (prefers-reduced-motion: reduce) {
   .menu-card,
@@ -546,16 +455,10 @@
   }
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Auth-adjacent surface rules that live OUTSIDE @layer components in
-   globals.css (lines 466–478, 488–528) and therefore do here too.
-
-   Copied when /onboarding was ported into the SPA (it is the app's
-   first-run flow now, not a website page): `loginFadeIn` drives the
-   step transitions in `onboarding-flow-core`, and `.dopl-slider` is the
-   survey's team-size slider. Same F-074 drift rule as the rest of this
-   file — edit globals.css and this file in one change.
-   ───────────────────────────────────────────────────────────────────── */
+/* Auth-adjacent rules that sit OUTSIDE @layer components in globals.css and
+   therefore here too. `loginFadeIn` drives `onboarding-flow-core` step
+   transitions; `.dopl-slider` is the survey team-size slider. Same F-074
+   drift rule — edit globals.css and this file in one change. */
 
 @keyframes loginFadeIn {
   from {
@@ -568,8 +471,7 @@
   }
 }
 
-/* Onboarding size slider (light) — black fill set inline via background,
-   gray remainder, white knob. */
+/* Onboarding size slider — black fill set inline via background. */
 .dopl-slider {
   -webkit-appearance: none;
   appearance: none;

@@ -17,11 +17,9 @@ export class ChatForbiddenError extends ChatError {
   }
 }
 
-/**
- * Detail read of a chat whose session date falls outside the free-plan
- * retention window. The chat is hidden, NEVER deleted — the route turns
- * this into the friendly `chat_outside_retention` upgrade envelope.
- */
+/** Detail read of a chat outside the retention window. ⚠ Hidden, NEVER
+ *  deleted — the route turns this into the `chat_outside_retention` upgrade
+ *  envelope. */
 export class ChatOutsideRetentionError extends ChatError {
   constructor(public readonly chatId: string) {
     super(`Chat is outside the retention window: ${chatId}`);

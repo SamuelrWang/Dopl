@@ -4,43 +4,32 @@ import { useState, type ReactNode } from "react";
 import { useLoginCore, type LoginActions, type LoginMode } from "../hooks/use-login-core";
 import { PasswordRequirements } from "./password-requirements";
 
-/** Shape the ToS/Privacy links are rendered with. The web app wraps `next/link`;
- *  the desktop SPA opens the URL in the system browser (a `file://` document
- *  cannot navigate to `/terms`). */
+/** ToS/Privacy link shape. Web wraps `next/link`; desktop SPA opens system
+ *  browser — `file://` document cannot navigate to `/terms`. */
 export type LegalLinkProps = { href: string; className?: string; children: ReactNode };
 export type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
 
-/** What the mode-switch renderer is handed: the mode it must lead TO, plus the
- *  class and label the in-place fallback would have used, so a host's link is
- *  the same control rather than a lookalike. */
+/** Mode-switch renderer input: destination mode + class/label of in-place
+ *  fallback, so host's link is same control, not lookalike. */
 export type ModeSwitchProps = { to: LoginMode; className: string; children: ReactNode };
 export type ModeSwitchComponent = (props: ModeSwitchProps) => ReactNode;
 
 export interface LoginFormCoreProps {
-  /** Everything the form cannot do by itself. An absent member disables that
-   *  control and prints a one-line reason (see `LoginActions`). */
+  /** Absent member disables that control and prints one-line reason. */
   actions: LoginActions;
-  /** Brand mark above the wordmark, rendered INSIDE the form column. Omit it
-   *  and the whole lockup goes — which is what the web hosts do, because there
-   *  the brand sits in the page's upper-left corner instead
-   *  (`shared/layout/auth-split/auth-split-layout.tsx`, `brand` prop). The
-   *  packaged SPA still passes one: its window has no page chrome to put a
-   *  corner mark in, and it must pass a BUNDLED asset because an absolute
-   *  `/favicons/…` path under `file://` resolves to the filesystem root. */
+  /** Brand mark above wordmark, INSIDE form column. Web hosts omit — lockup
+   *  lives page upper-left (`shared/layout/auth-split/auth-split-layout.tsx`,
+   *  `brand` prop). ⚠ Packaged SPA must pass BUNDLED asset: absolute
+   *  `/favicons/…` under `file://` resolves to filesystem root. */
   brand?: ReactNode;
-  /** Renderer for the footer's Terms/Privacy links. Defaults to a plain `<a>`. */
+  /** Footer Terms/Privacy renderer. Defaults to plain `<a>`. */
   legalLink?: LegalLinkComponent;
-  /** Renderer for the sign-up ⇄ sign-in switch. THE WEB PASSES A LINK: each
-   *  mode is its own route (`/signup`, `/login`), so switching is a navigation
-   *  and the URL never lies about which flow is on screen. The desktop SPA
-   *  omits it — that renderer has no router and no routes — and the fallback
-   *  below toggles `mode` in place, which is why this is optional rather than
-   *  required. */
+  /** Sign-up ⇄ sign-in switch renderer. Web passes LINK — each mode own route
+   *  (`/signup`, `/login`), so URL can't lie about on-screen flow. Desktop SPA
+   *  has no router, omits it, falls back to in-place toggle — hence optional. */
   modeSwitch?: ModeSwitchComponent;
-  /** Which mode the screen OPENS on. Required, and set per host rather than
-   *  sniffed at runtime: on the web it is a property of the ROUTE (`/signup`
-   *  opens on "signup", `/login` on "signin"); the desktop app is only ever
-   *  reached by someone who already installed it, so it opens on "signin". */
+  /** Opening mode. Per host, never sniffed: web from ROUTE, desktop always
+   *  "signin" (only reachable post-install). */
   defaultMode: LoginMode;
 }
 
@@ -51,13 +40,11 @@ const DefaultLegalLink: LegalLinkComponent = ({ href, className, children }) => 
 );
 
 /**
- * Left column of the login screen: email/password form plus Google/GitHub
- * social sign-in. Light theme.
+ * Login screen left column: email/password + Google/GitHub. Light theme.
  *
- * This is the whole visual surface, free of `next/*` and of supabase, so the
- * web `/signup` + `/login` pages and the desktop app's signed-out screen render
- * the SAME pixels. `./login-form` is the web binding; the desktop SPA's binding
- * is `apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`.
+ * ⚠ Whole visual surface; must stay free of `next/*` and supabase so web
+ * `/signup` + `/login` and desktop signed-out screen render SAME pixels.
+ * Bindings: `./login-form`, `apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`.
  */
 export function LoginFormCore({
   actions,
@@ -86,8 +73,8 @@ export function LoginFormCore({
   const [showPassword, setShowPassword] = useState(false);
   const busy = pending !== null;
   const isSignUp = mode === "signup";
-  // Heading and submit label are the SAME string, so the screen can never
-  // claim one flow while running the other.
+  // Heading + submit label share one string — screen can't claim one flow
+  // while running the other.
   const title = isSignUp ? "Sign Up" : "Log In";
   const submitLabel = isSignUp
     ? pending === "signup"
@@ -97,15 +84,13 @@ export function LoginFormCore({
       ? "Signing in…"
       : title;
 
-  // Both password controls ride one host capability, so they share one note.
   const canPassword = Boolean(actions.signInWithPassword && actions.signUpWithPassword);
   const canOauth = Boolean(actions.oauth);
   const canReset = Boolean(actions.resetPassword);
 
   const LegalLink = legalLink ?? DefaultLegalLink;
 
-  // The switch names its DESTINATION, with no preamble — so its label is the
-  // OTHER mode's title, and never the current heading.
+  // Switch label = DESTINATION mode title, never current heading.
   const switchTo: LoginMode = isSignUp ? "signin" : "signup";
   const switchLabel = isSignUp ? "Log In" : "Sign Up";
   const switchClass =
@@ -113,11 +98,6 @@ export function LoginFormCore({
 
   return (
     <div className="w-full max-w-[336px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
-      {/* Brand: logo mark above wordmark — IN-FORM, and only for a host that
-          has nowhere else to put it (the desktop SPA). The web hosts pass no
-          `brand` and the layout paints the same lockup in the page's
-          upper-left corner instead, so this block disappears entirely rather
-          than doubling it. */}
       {brand && (
         <div className="mb-7 flex flex-col items-start gap-1.5">
           {brand}
@@ -130,10 +110,8 @@ export function LoginFormCore({
         </div>
       )}
 
-      {/* Landing-page display type (`features/marketing/marketing.css`
-          › .lp-mp-heading): weight 400 at a fluid clamp with tight tracking.
-          The face is inherited — `AuthSplitLayout` already scopes the same
-          Helvetica grotesk the landing page uses. */}
+      {/* Must match `features/marketing/marketing.css` › .lp-mp-heading. Face
+          inherited: `AuthSplitLayout` scopes landing grotesk. */}
       <h2
         className="text-[#181818]"
         style={{
@@ -159,22 +137,14 @@ export function LoginFormCore({
         </div>
       )}
 
-      {/* One form, two flows — the active mode picks the submit handler, so
-          Enter in a field does exactly what the button under it says. */}
       <form onSubmit={isSignUp ? signUpWithPassword : signInWithPassword}>
-        {/* Email.
-
-            THE FIELDS CARRY NO VISIBLE LABEL AND NO LEADING ICON — the
-            placeholder is the label. `aria-label` therefore does the naming
-            work the `<label htmlFor>` used to: a placeholder is not an
-            accessible name (it vanishes on the first keystroke), so dropping
-            one without the other would take the field's name away from every
-            screen reader and from every test that finds it by label. */}
+        {/* ⚠ No visible label, no leading icon — placeholder is the label, so
+            `aria-label` is the ONLY accessible name (placeholder is not one;
+            vanishes on first keystroke). Tests find fields by label. */}
         <div className="mt-7">
-          {/* `rounded-full` (not the kit's usual `rounded-[10px]`) is applied
-              HERE, at the call site: `.auth-field-3d`/`.concave-field` carries
-              no radius of its own, and every other surface using the concave
-              recipe keeps its rectangle. */}
+          {/* `rounded-full` at call site (not kit `rounded-[10px]`):
+              `.auth-field-3d`/`.concave-field` carry no radius; every other
+              concave surface keeps its rectangle. */}
           <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-full px-[16px]">
             <input
               id="login-email"
@@ -190,7 +160,6 @@ export function LoginFormCore({
           </div>
         </div>
 
-        {/* Password */}
         <div className="mt-5">
           <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-full px-[16px]">
             <input
@@ -212,9 +181,8 @@ export function LoginFormCore({
               <EyeIcon off={showPassword} />
             </button>
           </div>
-          {/* Meter only — the field doubles for sign-in, so no nagging checklist. */}
+          {/* Meter only — field doubles for sign-in, so no checklist. */}
           <PasswordRequirements password={password} showChecklist={false} />
-          {/* Forgot link appears only after a failed sign-in, to reduce clutter. */}
           {signInFailed && canReset && (
             <button
               type="button"
@@ -227,10 +195,8 @@ export function LoginFormCore({
           )}
         </div>
 
-        {/* There is no "Remember me": the session is always persisted (see
-            `../hooks/use-login-core`), so a checkbox here would be decoration. */}
+        {/* No "Remember me": session always persisted (`../hooks/use-login-core`). */}
 
-        {/* Submit — pill, per the call-site note on the fields above. */}
         <button
           type="submit"
           disabled={busy || !canPassword}
@@ -243,14 +209,8 @@ export function LoginFormCore({
         )}
       </form>
 
-      {/* Mode switch — the label is the DESTINATION, with no preamble. A host
-          that gave us `modeSwitch` renders it as a LINK to that mode's route;
-          otherwise it toggles in place.
-
-          It hangs off the RIGHT edge of the submit button (which is `w-full`,
-          so the column's right edge is the button's) at a short 12px drop, so
-          it reads as that button's alternative rather than as the first item
-          of the block below it — the socials keep their own 28px break. */}
+      {/* 12px drop + right-aligned: reads as submit's alternative, not first
+          item of socials block (28px break). */}
       <div className="mt-3 flex justify-end leading-[1.55]">
         {modeSwitch ? (
           modeSwitch({ to: switchTo, className: switchClass, children: switchLabel })
@@ -266,12 +226,6 @@ export function LoginFormCore({
         )}
       </div>
 
-      {/* THE MAGIC LINK IS GONE (2026-08-13) — the "Email me a sign-in link
-          instead" button, its unavailable note, and the action behind it. Two
-          credential paths remain, password and OAuth; a user with no password
-          on file reaches one through "Forgot password?" above. */}
-
-      {/* Socials */}
       <div className="mt-7 flex gap-5">
         <SocialButton
           label="Continue with Google"
@@ -301,7 +255,7 @@ export function LoginFormCore({
   );
 }
 
-/** Why a control is disabled — an explanation beats a dead button. */
+/** Why control disabled — beats dead button. */
 function UnavailableNote({ children }: { children: ReactNode }) {
   return <p className="mt-2 text-[12px] leading-relaxed text-[#9a9a9a]">{children}</p>;
 }
@@ -331,9 +285,6 @@ function SocialButton({
   );
 }
 
-/** The eye is the ONLY field affordance left. `MailIcon` and `LockIcon` went
- *  with the visible labels (2026-08-13): a placeholder already says what the
- *  field is, and a decorative glyph repeating it is noise inside a 46px well. */
 function EyeIcon({ off }: { off: boolean }) {
   return (
     <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

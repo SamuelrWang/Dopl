@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, X } from "lucide-react";
-// Deep import, not the `settings-modal` barrel — the barrel re-exports
+// ⚠ Deep import, not the `settings-modal` barrel: the barrel re-exports
 // SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
@@ -12,7 +12,7 @@ import type { KnowledgeFolder } from "../types";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Item being moved — used to disable invalid targets (self, descendants). */
+  /** Item being moved; disables invalid targets (self, descendants). */
   itemType: "folder" | "entry";
   itemId: string;
   /** Display label for the dialog header. */
@@ -24,12 +24,11 @@ interface Props {
 }
 
 /**
- * Modal folder picker. Shows the base's folder tree as a single
- * selectable column. The "(Base root)" option is always at the top.
+ * Modal folder picker; "(Base root)" always at the top.
  *
- * For folder moves, the source folder + its descendants are disabled
- * to prevent the user from picking a target the server would reject
- * with a cycle error. (Server still validates as a safety net.)
+ * For folder moves the source folder + descendants are disabled, so the user
+ * cannot pick a target the server would reject as a cycle. Server still
+ * validates.
  */
 export function MoveToDialog({
   open,
@@ -44,8 +43,7 @@ export function MoveToDialog({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [submitting, setSubmitting] = useState(false);
 
-  // Folders that would cause a cycle when moving a folder. Empty for
-  // entries (any folder is valid).
+  // Cycle-causing folders. Empty for entries: any folder is valid.
   const blockedIds = useMemo(() => {
     if (itemType !== "folder") return new Set<string>();
     const blocked = new Set<string>([itemId]);
@@ -90,9 +88,8 @@ export function MoveToDialog({
       await onConfirm(selected);
       onOpenChange(false);
     } catch {
-      // Caller surfaces errors via toast; keep the dialog open so the
-      // user can pick a different target rather than seeing a confusing
-      // close-then-toast sequence.
+      // Caller toasts errors; keep the dialog OPEN so the user can pick
+      // another target instead of a close-then-toast sequence.
     } finally {
       setSubmitting(false);
     }

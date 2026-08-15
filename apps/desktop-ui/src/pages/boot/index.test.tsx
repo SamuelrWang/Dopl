@@ -9,12 +9,11 @@ import { AppShellLayout } from "#/components/app-shell";
 import BootPage from "./index";
 
 /**
- * Smoke test for the boot route — the launch decision (journey-audit J1 step 9,
- * GAP-1 and G2). Every branch is asserted through the Electron bridge, because
- * boot is the one page whose inputs are the bridge itself: `getAuthState` for
- * the session and `apiRequest` (over IPC) for the two endpoints.
+ * Boot route smoke test. Asserted through the Electron bridge — boot's inputs
+ * ARE the bridge: `getAuthState` for the session, `apiRequest` (over IPC) for
+ * the endpoints.
  *
- * `fetch` is a never-resolving tripwire: nothing here may touch the network
+ * ⚠ `fetch` is a never-resolving tripwire: nothing here may touch the network
  * (`connect-src 'none'` in the packaged renderer).
  */
 
@@ -24,15 +23,8 @@ const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true }))
 // Typed as the bridge's own result so a test can answer `{ ok: false, error }`.
 const beginSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
 const passwordSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Promise.resolve({ ok: true })));
-// No `sendMagicLink` mock: the form's "Email me a sign-in link instead" control
-// and the `LoginActions` member behind it were deleted (2026-08-13). Main still
-// implements the op; nothing in this renderer calls it.
 
-// The split's right pane is decorative — a bundled banner under a LiquidGlass
-// slab that builds its displacement map on a canvas — and nothing here tests
-// it, so the layout collapses to a passthrough. Same one the onboarding suite
-// uses. (It is no longer load-bearing: `test-setup.ts` polyfills
-// ResizeObserver and `buildDisplacementMap` returns "" without a 2D context.)
+// Right pane is decorative and untested here: collapse to a passthrough.
 vi.mock("@/shared/layout/auth-split", () => ({
   AuthSplitLayout: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="auth-split">{children}</div>
@@ -61,10 +53,9 @@ const WORKSPACE = {
 };
 
 /**
- * ONE endpoint (P0-2). `onboarding-state` + `ensure-default` were two serial
- * hops here, and `resolve` + `me` two more after the navigation; `/api/boot`
- * answers all four. An un-onboarded caller still gets NO workspace — the
- * provisioning gate moved server-side, it did not disappear.
+ * ONE endpoint: `/api/boot` answers onboarding-state + ensure-default + resolve
+ * + me. An un-onboarded caller still gets NO workspace — the provisioning gate
+ * moved server-side, it did not disappear.
  */
 function bridgeFor(isOnboarded: boolean) {
   return (path: string): Promise<BridgeResponse> => {
@@ -104,8 +95,8 @@ function renderBoot(queryClient = createQueryClient()) {
 
 describe("boot page", () => {
   beforeEach(() => {
-    // `vi.hoisted` mocks sit outside vitest's restore sweep, so the call log
-    // would accumulate across tests and make every count wrong.
+    // ⚠ `vi.hoisted` mocks sit outside vitest's restore sweep, so the call log
+    // accumulates across tests and makes every count wrong.
     apiRequest.mockReset();
     getAuthState.mockResolvedValue({ signedIn: true, userId: "user-1" });
     apiRequest.mockImplementation((path: string) => bridgeFor(true)(path));
@@ -124,31 +115,22 @@ describe("boot page", () => {
 
     renderBoot();
 
-    // The web login form, not a stand-in card (Samuel's #1 complaint) — but
-    // opened on SIGN IN, which is this host's `defaultMode` (the web splits the
-    // two modes across `/signup` and `/login`). Heading and submit label agree.
     expect(await screen.findByRole("heading", { name: "Log In" })).toBeInTheDocument();
-    // The fields carry no visible label any more — the placeholder is the
-    // label and `aria-label` is the accessible name, so these still resolve.
+    // No visible label: placeholder is the label, `aria-label` the a11y name.
     expect(screen.getByLabelText("Email Address")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
-    // No "Remember me": the session is ALWAYS persisted (main stores the
-    // credential on disk), so the checkbox is gone — not hidden.
+    // Session is ALWAYS persisted (main stores the credential on disk), so the
+    // "Remember me" checkbox is gone, not hidden.
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByText("Remember me")).toBeNull();
     expect(screen.getByRole("button", { name: "Log In" })).toBeEnabled();
-    // The mode switch names its destination, with no "Don't have an account?".
-    // A BUTTON, not a link: this host passes no `modeSwitch`, because it has no
-    // routes to navigate between — the core toggles the mode in place.
     expect(screen.getByRole("button", { name: "Sign Up" })).toBeInTheDocument();
     expect(screen.queryByText(/have an account/i)).toBeNull();
-    // The magic-link fallback is GONE — password and OAuth are what is left.
     expect(screen.queryByText(/sign-in link/i)).toBeNull();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeInTheDocument();
     expect(screen.getByAltText("Dopl")).toBeInTheDocument();
 
-    // Boot must not read anything for a signed-out caller.
     expect(apiRequest).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -161,8 +143,8 @@ describe("boot page", () => {
     expect(await screen.findByText("ONBOARDING ROUTE")).toBeInTheDocument();
     const paths = apiRequest.mock.calls.map((c) => (c as unknown[])[0]);
     expect(paths).toContain("/api/boot");
-    // The workspace is not provisioned until onboarding completes — the boot
-    // answer carries a null workspace, and the SPA asks for nothing else.
+    // No provisioning until onboarding completes: boot answers a null
+    // workspace, and the SPA asks for nothing else.
     expect(paths).not.toContain("/api/workspaces/ensure-default");
   });
 
@@ -179,25 +161,21 @@ describe("boot page", () => {
         )
       ).toBe(true)
     );
-    // THE COLLAPSE, pinned: one request in front of the workspace route, not
-    // the four (`onboarding-state`, `ensure-default`, `resolve`, `me`) it
-    // replaced. Anything else here is a regression of launch-blocker P0-2.
+    // ⚠ Exactly ONE request in front of the workspace route, never the four
+    // (`onboarding-state`, `ensure-default`, `resolve`, `me`) it replaced.
     expect(
       apiRequest.mock.calls.map((c) => (c as unknown[])[0])
     ).toEqual(["/api/boot"]);
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  // THE PERSISTED-CACHE HAZARD. The query cache is written to IndexedDB now
-  // (`lib/query-client.ts`), so a relaunch restores this route's own entry and
-  // renders it before any request lands. Everywhere else that is a free first
-  // paint; here it is a ROUTING decision, and a restored segment can be a
-  // corpse — the workspace was deleted, or a different account signed in.
-  // Boot must route on the answer THIS mount fetched, never on the disk's.
+  // ⚠ PERSISTED-CACHE HAZARD. Query cache is written to IndexedDB
+  // (`lib/query-client.ts`), so a relaunch restores this route's entry and
+  // renders it before any request lands. Here that is a ROUTING decision and a
+  // restored segment can be dead (workspace deleted, account switched), so boot
+  // must route on THIS mount's answer, never the disk's.
   it("never routes on a restored answer — it waits for this mount's own", async () => {
     const queryClient = createQueryClient();
-    // What a relaunch hydrates: a settled success for a workspace that has
-    // since been deleted.
     queryClient.setQueryData(["/api/boot", undefined, undefined], {
       isOnboarded: true,
       surveyCompleted: true,
@@ -219,21 +197,16 @@ describe("boot page", () => {
 
     renderBoot(queryClient);
 
-    // The restored segment is on screen for exactly no time: the cover holds.
+    // Restored segment never paints: the cover holds.
     expect(await screen.findByText("Starting Dopl")).toBeInTheDocument();
     expect(screen.queryByText("WORKSPACE ROUTE")).toBeNull();
 
     apiRequest.mockImplementation((path: string) => bridgeFor(true)(path));
     release?.();
 
-    // …and the route that lands is the LIVE one, not the corpse.
     expect(await screen.findByText("WORKSPACE ROUTE")).toBeInTheDocument();
   });
 
-  // THE WHOLE CHAIN, end to end: launch → real shell → routed page. This is
-  // the assertion the launch-blocker is actually about — the four endpoints
-  // below were four SERIAL round trips, and the shell gated `<Outlet/>` on
-  // the third, so no page could start its own fetch until all of them landed.
   it("mounts the real shell and its page having read the API exactly once", async () => {
     const router = createMemoryRouter(
       [
@@ -248,8 +221,8 @@ describe("boot page", () => {
     );
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/boot") return bridgeFor(true)(path);
-      // The shell's chrome + notice layer. These are PARALLEL reads off the
-      // mounted shell, not links in the boot chain.
+      // Shell chrome + notice layer: PARALLEL reads off the mounted shell, not
+      // links in the boot chain.
       if (path === "/api/workspaces") {
         return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
       }
@@ -279,9 +252,9 @@ describe("boot page", () => {
       expect(paths).not.toContain(gone);
     }
     expect(paths.some((p) => p.startsWith("/api/workspaces/resolve"))).toBe(false);
-    // `my-access` is deliberately NOT asserted absent: the shell's access
-    // matrix is seeded (so it never blocks) but its own query may still
-    // revalidate in the background — beside the page, never in front of it.
+    // ⚠ `my-access` deliberately NOT asserted absent: the shell's access matrix
+    // is seeded so it never blocks, but its query may still revalidate in the
+    // background — beside the page, never in front of it.
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -295,9 +268,9 @@ describe("boot page", () => {
 });
 
 /**
- * The signed-out screen's credential ops. Every one of them runs in MAIN over
- * the bridge — the renderer has no supabase client and never sees a token — so
- * the assertions are on the bridge calls, and `fetch` stays untouched.
+ * Signed-out screen credential ops. ⚠ All run in MAIN over the bridge — the
+ * renderer has no supabase client and never sees a token — so assertions are on
+ * bridge calls and `fetch` stays untouched.
  */
 describe("signed-out login form", () => {
   beforeEach(() => {
@@ -335,16 +308,13 @@ describe("signed-out login form", () => {
         password: "hunter2-Hunter!",
       })
     );
-    // Success needs no navigation — main pushes the auth transition.
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("switching to sign up reuses passwordSignIn with mode: sign-up", async () => {
     await renderForm();
 
-    // The switch flips the whole screen IN PLACE — heading, submit label,
-    // handler — because this host passes no `modeSwitch`. On the web the same
-    // control is a link to the other route.
+    // Switch flips the screen IN PLACE: this host passes no `modeSwitch`.
     fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
     expect(await screen.findByRole("heading", { name: "Sign Up" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Log In" })).toBeInTheDocument();
@@ -361,7 +331,6 @@ describe("signed-out login form", () => {
       })
     );
 
-    // …and back, so the switch is symmetric rather than one-way.
     fireEvent.click(screen.getByRole("button", { name: "Log In" }));
     expect(await screen.findByRole("heading", { name: "Log In" })).toBeInTheDocument();
   });
@@ -378,11 +347,6 @@ describe("signed-out login form", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Invalid login credentials");
   });
 
-  // THE MAGIC-LINK TEST IS GONE (2026-08-13), with the control it covered. It
-  // asserted `sendMagicLink({ email })` off an "Email me a sign-in link instead"
-  // button; `LoginActions` no longer carries the member, so this host cannot
-  // wire the bridge op even if main still implements it.
-
   it("the social buttons start OAuth in main, per provider", async () => {
     await renderForm();
 
@@ -392,7 +356,7 @@ describe("signed-out login form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue with GitHub" }));
     await waitFor(() => expect(beginSignIn).toHaveBeenCalledWith("github"));
 
-    // A renderer-built OAuth URL would skip main's login-CSRF nonce.
+    // ⚠ A renderer-built OAuth URL would skip main's login-CSRF nonce.
     expect(openExternal).not.toHaveBeenCalled();
   });
 

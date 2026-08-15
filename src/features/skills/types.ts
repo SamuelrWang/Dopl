@@ -1,12 +1,7 @@
 /**
- * Domain types for the skills feature.
- *
- * Skills are workspace-scoped procedural prompts surfaced to a
- * connected agent over MCP. The body is markdown with `dopl://` link
- * references that the renderer / resolver pick up via `parseSkillBody`.
- *
- * Mirrors the camelCase convention from features/knowledge — the
- * snake_case row shape lives in `server/dto.ts`.
+ * Skills domain types. Workspace-scoped procedural prompts served to
+ * agents over MCP. Body markdown carries `dopl://` refs, parsed by
+ * `parseSkillBody`. camelCase here; snake_case row shape in `server/dto.ts`.
  */
 
 import type { Role } from "@/features/workspaces/types";
@@ -17,24 +12,20 @@ export type SkillStatus = "active" | "draft";
 export type SkillWriteSource = "user" | "agent";
 
 export interface SkillConnector extends SourceConnection {
-  /** Human-readable note about why this skill calls this connector. */
+  /** Why this skill calls this connector. */
   usedFor: string;
 }
 
 /**
- * Per-resource visibility. Skills use the full KB/chat three-way model
- * (since the skill_team_sharing migration):
- *
+ * Per-resource visibility. Three-way model, same as KB/chat:
  *   private   → visibility 'private'                          (owner only)
  *   team      → visibility 'public' + accessMode 'teams'      (granted teams)
  *   workspace → visibility 'public' + accessMode 'workspace'  (everyone)
- *
- * Sharing is fully re-scopable by the owner or a workspace admin — the
- * old M-10 "once public, always public" rule is retired.
+ * Re-scopable in any direction by owner or workspace admin.
  */
 export type Visibility = "public" | "private";
 
-/** Public reach: the whole workspace, or only specifically granted teams. */
+/** Public reach: whole workspace, or only granted teams. */
 export type SkillAccessMode = "workspace" | "teams";
 
 export interface Skill {
@@ -51,11 +42,10 @@ export interface Skill {
   agentWriteEnabled: boolean;
   visibility: Visibility;
   accessMode: SkillAccessMode;
-  /** Optional plain-text organizing label. Null = unfiled. Skills are
-   *  single-file and small; folders group the many. */
+  /** Plain-text organizing label. Null = unfiled. */
   folder: string | null;
-  /** Teams granted read access — populated only when accessMode is
-   *  'teams', and only for the owner / workspace admins. */
+  /** Teams granted read. Populated only when accessMode is 'teams', and
+   *  only for owner / workspace admins. */
   grantedTeamIds: string[];
   createdBy: string | null;
   lastEditedBy: string | null;
@@ -66,13 +56,10 @@ export interface Skill {
 }
 
 /**
- * The single SKILL.md procedure backing a skill. Since F-029 the body
- * lives in columns ON the skill row (no `skill_files` table); this shape
- * is synthesized from those columns (`server/dto.ts mapSkillBodyRow`)
- * and kept as the API's `file` object so the external contract is
- * unchanged. `updatedAt` is the body's CAS clock (`body_updated_at`).
- * Long reference material lives in knowledge bases, linked via
- * `dopl://kb/<slug>` refs.
+ * The single SKILL.md procedure. No `skill_files` table — body lives in
+ * columns on the skill row; this shape is synthesized by
+ * `server/dto.ts mapSkillBodyRow` and kept as the API's `file` object so
+ * the external contract holds. `updatedAt` = CAS clock (`body_updated_at`).
  */
 export interface SkillFile {
   id: string;
@@ -89,12 +76,8 @@ export interface SkillFile {
   deletedAt: string | null;
 }
 
-/**
- * One append-only snapshot of the SKILL.md body, taken after every
- * content save (user or agent). Metadata shape — the body itself is
- * fetched separately by version id (it can be large; lists never carry
- * it). Keyed off the skill alone (F-029 dropped the file linkage).
- */
+/** Append-only body snapshot after every content save. Metadata only — the
+ *  body is fetched separately by version id; lists never carry it. */
 export interface SkillVersion {
   id: string;
   skillId: string;
@@ -117,17 +100,16 @@ export type SkillEventType =
   | "file.rolled_back";
 
 /**
- * One structural change in a skill's audit timeline. Content edits are
- * NOT events — they're `SkillVersion` rows; the history UI merges both
- * streams by `createdAt`. The `file.*` variants are historic-only (the
- * app stopped emitting them at F-029) but stay in the union so old rows
- * render.
+ * One structural change in a skill's audit timeline. ⚠ Content edits are
+ * NOT events — they're `SkillVersion` rows; history UI merges both
+ * streams by `createdAt`. `file.*` variants no longer emitted; stay in
+ * the union so old rows render.
  */
 export interface SkillEvent {
   id: string;
   skillId: string;
   type: SkillEventType;
-  /** Event-specific payload, e.g. `{fields}` for metadata updates. */
+  /** e.g. `{fields}` for metadata updates. */
   detail: Record<string, unknown>;
   authorId: string | null;
   source: SkillWriteSource;
@@ -136,20 +118,15 @@ export interface SkillEvent {
 
 export const PRIMARY_SKILL_FILE_NAME = "SKILL.md";
 
-/**
- * Lightweight workspace KB row, used by the detail-page picker. Owns
- * its own type rather than importing from features/knowledge so skills
- * doesn't take a cross-feature dependency.
- */
+/** Workspace KB row for the detail-page picker. Declared here, not imported
+ *  from features/knowledge, to avoid a cross-feature dependency. */
 export interface WorkspaceKbSummary {
   slug: string;
   name: string;
 }
 
-/**
- * Cheap metadata projection used by `skill_list` and the library-card
- * row before expand. Skips the body to keep the index payload small.
- */
+/** Metadata projection for `skill_list` / library cards. No body — keeps
+ *  the index payload small. */
 export interface SkillSummary {
   id: string;
   slug: string;
@@ -166,11 +143,8 @@ export interface SkillSummary {
   updatedAt: string;
 }
 
-/**
- * Resolved view returned by `resolveSkillBody` — the markdown body plus
- * an availability check on every reference. Consumed by `skill_get` and
- * by the detail page when surfacing broken-ref badges.
- */
+/** `resolveSkillBody` output: body plus an availability check per
+ *  reference. Drives `skill_get` and the detail page's broken-ref badges. */
 export interface ResolvedSkillReference {
   kind: "kb" | "connector";
   slug?: string;
@@ -186,25 +160,20 @@ export interface ResolvedSkill {
   references: ResolvedSkillReference[];
 }
 
-/**
- * Request-scoped context. Built from auth metadata at the route layer.
- * Source comes from the auth wrapper — API-key callers are agents,
- * session callers are users. Only enforced in service.ts when the
- * skill's `agentWriteEnabled` flag matters.
- */
+/** Request-scoped context from auth metadata at the route layer. `source`:
+ *  API-key callers = agent, session callers = user; enforced only in
+ *  service.ts, where `agentWriteEnabled` matters. */
 export interface SkillContext {
   workspaceId: string;
   userId: string;
   source: SkillWriteSource;
-  /** Caller's workspace role; null when the auth layer didn't resolve
-   *  one (treated as non-admin — team-scoped skills then require a
-   *  grant). Mirrors `ChatContext.role`. */
+  /** Caller's workspace role. Null when auth didn't resolve one → treated
+   *  as non-admin, so team-scoped skills require a grant. Mirrors
+   *  `ChatContext.role`. */
   role: Role | null;
-  /**
-   * Same semantics as `KnowledgeContext.apiKeyWorkspaceId` — non-null
-   * only when the request used a workspace-scoped API key. Service
-   * layer treats these callers as "no private visibility" per M-10.
-   */
+  /** Non-null only for workspace-scoped API-key requests. Service layer
+   *  gives these callers no private visibility. Same semantics as
+   *  `KnowledgeContext.apiKeyWorkspaceId`. */
   apiKeyWorkspaceId?: string | null;
 }
 
@@ -212,7 +181,7 @@ export type { SourceProvider };
 
 /** Agent read activity for a skill, derived from mcp_events. */
 export interface SkillUsage {
-  /** MCP reads in the last 30 days (workspace-scoped attribution). */
+  /** MCP reads in the last 30 days, workspace-scoped. */
   count30d: number;
   lastUsedAt: string | null;
 }

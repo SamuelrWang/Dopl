@@ -1,22 +1,14 @@
 /**
- * buildDoplSkillMd — the copy-pastable SKILL.md the overview page offers.
+ * The copy-pastable SKILL.md the overview page offers. Users drop it into their
+ * agent's local skills directory (`~/.claude/skills/dopl/SKILL.md`) so the
+ * agent can drive the Dopl MCP server from session boot.
  *
- * Users drop this into their agent's local skills directory
- * (`~/.claude/skills/dopl/SKILL.md` for Claude Code; any Agent
- * Skills-standard runner works) so the agent knows how to drive the Dopl
- * MCP server from session boot — before it has called a single tool.
- *
- * Keep this aligned with the server-sent guidance in
- * packages/mcp-server/src/server.ts (buildInstructions): the skill is
- * the local, always-loaded summary; the server instructions are the
- * canonical over-the-wire version.
- *
- * THAT ALIGNMENT IS LOAD-BEARING, not tidiness. This file is COPIED ONTO THE
- * USER'S DISK and then never updated — a stale sentence here outlives every
- * server deploy and is read BEFORE the server's own instructions arrive. So it
- * must not name a tool the server no longer registers (an agent that reads
- * "call dopl_thing" and finds no such tool concludes the connection is
- * broken), and it must not promise a capability the server refuses.
+ * ⚠ MUST STAY ALIGNED with the server-sent guidance in
+ * `packages/mcp-server/src/server.ts › buildInstructions`. This file is COPIED
+ * ONTO THE USER'S DISK and never updated, so a stale sentence outlives every
+ * server deploy and is read BEFORE the server's instructions arrive: it must
+ * not name a tool the server no longer registers, and must not promise a
+ * capability the server refuses.
  */
 export function buildDoplSkillMd(mcpUrl: string): string {
   return `---

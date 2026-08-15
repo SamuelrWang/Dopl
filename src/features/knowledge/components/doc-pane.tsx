@@ -20,38 +20,22 @@ import { ConflictBanner, reportError } from "./doc-pane-chrome";
 const AUTOSAVE_DELAY_MS = 1500;
 
 export interface DocPaneProps {
-  /** MUST be the full entry (body + fresh `updated_at`) — never the
-   *  body-stripped tree entry, or the first autosave writes `body: ""`
-   *  over the document. EntryView gates on the per-entry fetch. */
+  /** ⚠ MUST be full entry (body + fresh `updated_at`) — body-stripped tree
+   *  entry makes first autosave write `body: ""` over document. */
   entry: KnowledgeEntry;
   workspaceId: string;
-  /** Called after a successful save — the parent refetches the tree
-   *  to pick up updated metadata (title, updated_at). */
+  /** Parent refetches tree for new title/updated_at. */
   onSaved: () => void;
-  /** Optional notification when a 412 conflict is detected. The parent
-   *  no longer drives recovery — DocPane handles it locally so unsaved
-   *  edits in the editor can never be silently overwritten. */
+  /** 412 detected. Notification only — DocPane owns recovery. */
   onStaleVersion?: () => void;
-  /** Called when the tab regains focus AND the editor has no unsaved
-   *  edits and is not in a conflict state. Parent should refetch the
-   *  tree + the active entry body so the user sees changes another
-   *  tab/agent saved while away. */
+  /** Focus regained AND editor clean AND no conflict. */
   onFocusRefetch?: () => void;
-  /** Receives the live editor instance so the host (entry view / detail
-   *  panel) can render the formatting toolbar in its header band instead
-   *  of the built-in floating pill. */
+  /** Live editor, so the host renders the toolbar in its header band. */
   onEditor?: (editor: Editor | null) => void;
 }
 
-/**
- * Snapshot of the server's current entry, captured the moment a 412
- * conflict was detected. While this is set:
- *   - autosave is paused (we'd just 412 again),
- *   - a banner above the editor surfaces the conflict and offers
- *     explicit resolution (overwrite server / discard mine and reload),
- *   - the editor stays editable so the user can keep typing while they
- *     decide.
- */
+/** Server snapshot taken at 412. While set: autosave paused (would 412 again),
+ *  banner offers explicit resolution, editor stays editable. */
 interface ConflictState {
   serverTitle: string;
   serverBody: string;
@@ -59,29 +43,19 @@ interface ConflictState {
 }
 
 /**
- * Document view of a single entry. Title + body are debounce-saved
- * to the API ~1.5s after the user stops typing. Status indicator in
- * the header transitions: idle → dirty → saving → saved → idle.
+ * One entry. Title + body debounce-saved ~1.5s after typing stops.
+ * Status: idle → dirty → saving → saved → idle.
  *
- * Concurrency model — never overwrite the editor silently:
- *   - Every PATCH carries an `X-Updated-At` precondition.
- *   - On 412, we fetch the server's current state into a local
- *     ConflictState and pause autosave. We DO NOT push the server's
- *     content into the editor — the user's unsaved edits stay intact.
- *     The user explicitly chooses to overwrite the server or to
- *     discard their edits and reload.
- *   - On tab focus while the editor is clean (and no conflict),
- *     `onFocusRefetch` pulls the latest server state.
- *   - Unmount-flush sends one final PUT IF clean OR dirty without a
- *     pending conflict. While in conflict, the user must resolve
- *     explicitly — silent unmount-saves are skipped to avoid
- *     overwriting whatever resolution the user was about to choose.
+ * ⚠ Concurrency model — never overwrite the editor silently:
+ *   - every PATCH carries the `X-Updated-At` precondition;
+ *   - on 412, fetch server state into ConflictState and pause autosave. Server
+ *     content is NOT pushed into the editor; the user picks;
+ *   - unmount-flush skipped in conflict, or a background save overwrites the
+ *     resolution the user was about to pick.
  *
- * Authoritative content displayed in the editor is owned locally as
- * `editorReloadKey` + DocEditor's `initialMarkdown`. The parent's
- * `entry` prop only reseeds local state on entry switch (parent uses
- * `key={entry.id}` so this is a remount) or on a clean focus refetch
- * — never while the user has unsaved edits.
+ * Editor content owned locally (`editorReloadKey` + `initialMarkdown`); `entry`
+ * reseeds only on entry switch (parent keys on `entry.id`) or a clean focus
+ * refetch — never over unsaved edits.
  */
 export function DocPane({
   entry,
@@ -96,44 +70,35 @@ export function DocPane({
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [resolving, setResolving] = useState(false);
-  // Agent-facing description (the entry's `excerpt` column). Saved on
-  // blur — independently of the title/body autosave, but through the
-  // same updated_at precondition so a description save can't make the
-  // next body autosave 412.
+  // Agent-facing description (`excerpt` column). Blur-saved through the same
+  // updated_at precondition so it can't 412 the next body autosave.
   const [description, setDescription] = useState(entry.excerpt ?? "");
   const lastSavedDescription = useRef(entry.excerpt ?? "");
 
-  // Authoritative markdown handed to DocEditor. Bumping `editorReloadKey`
-  // forces DocEditor to re-seed its Tiptap state with `editorMd` —
-  // we ONLY do this on entry switch (remount) and on user-driven
-  // "Discard mine, reload". Realtime echo, parent refetches, etc. do
-  // NOT touch this.
+  // ⚠ Bumping `editorReloadKey` re-seeds Tiptap from `editorMd`. ONLY on
+  // entry switch (remount) and user-driven "Discard mine, reload" — realtime
+  // echo and parent refetches must NOT touch it.
   const [editorMd, setEditorMd] = useState(entry.body);
   const [editorReloadKey, setEditorReloadKey] = useState(0);
 
-  // Last-saved snapshot — debounced autosave skips when current matches.
+  // Debounced autosave skips when current matches.
   const lastSaved = useRef({ title: entry.title, body: entry.body });
-  // The `updated_at` we last observed — `X-Updated-At` precondition.
+  // The `X-Updated-At` precondition.
   const expectedUpdatedAtRef = useRef(entry.updatedAt);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mirror of latest in-memory values for the unmount-flush path so it
-  // sees the user's most recent typing even if React state is stale
-  // inside the cleanup callback.
+  // ⚠ Unmount-flush mirror: React state is stale inside cleanup.
   const latestRef = useRef({ title, body });
   useEffect(() => {
     latestRef.current = { title, body };
   });
 
-  // Mirror conflict + status into refs so the unmount-flush callback
-  // (empty-deps useEffect) reads the freshest values without re-running
-  // the cleanup.
+  // Refs so empty-deps unmount-flush reads fresh values without re-running.
   const conflictRef = useRef<ConflictState | null>(null);
   const statusRef = useRef<SaveStatus>("idle");
   conflictRef.current = conflict;
   statusRef.current = status;
 
-  // Presence: who else has this entry open, and whether they're editing.
   const selfProfile = useCurrentProfile();
   const presencePeers = usePresence(
     `presence:kb-entry:${entry.id}`,
@@ -144,13 +109,9 @@ export function DocPane({
     (p) => p.userId !== selfProfile?.userId
   );
 
-  // Re-seed local state from the parent's `entry` prop ONLY when the
-  // editor is in a safe state (no unsaved edits, no pending conflict).
-  // Triggered by `onFocusRefetch` paths where the parent refetched a
-  // newer body — we sync title/body/baselines so the next save uses
-  // the right precondition. Parent uses `key={entry.id}` so the entry
-  // switch path remounts entirely; this effect handles in-place
-  // refreshes only.
+  // ⚠ Re-seed from `entry` prop ONLY when safe (not dirty/saving, no
+  // conflict) — otherwise it clobbers unsaved edits. Handles in-place
+  // refreshes only; entry switch remounts (parent keys on `entry.id`).
   useEffect(() => {
     if (status === "dirty" || status === "saving" || conflict) return;
     setTitle(entry.title);
@@ -163,8 +124,6 @@ export function DocPane({
     expectedUpdatedAtRef.current = entry.updatedAt;
   }, [entry.id, entry.title, entry.body, entry.excerpt, entry.updatedAt, status, conflict]);
 
-  // Tab regained focus AND the editor isn't dirty AND not resolving a
-  // conflict — pull the latest.
   useRefetchOnFocus(
     () => {
       onFocusRefetch?.();
@@ -177,12 +136,8 @@ export function DocPane({
     }
   );
 
-  // Cleanup + flush on unmount. Captures values at MOUNT time
-  // intentionally — we want a deterministic snapshot of what entry.id /
-  // workspaceId we were saving. If there are unsaved edits, fire a
-  // final save in the background. Skipped while in conflict — silent
-  // background saves while the user is mid-resolution would overwrite
-  // whatever choice they were about to make.
+  // Unmount flush. ⚠ Captures entry.id/workspaceId at MOUNT deliberately —
+  // deterministic snapshot of what was being saved. Skipped in conflict.
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -191,8 +146,8 @@ export function DocPane({
       const { title: t, body: b } = latestRef.current;
       const last = lastSaved.current;
       if (t === last.title && b === last.body) return;
-      // Through the save chain so this runs AFTER any in-flight save and
-      // reads the token that save produced — not a stale one.
+      // Via save chain: must run AFTER any in-flight save to read the token
+      // that save produced, not a stale one.
       void enqueueSave(async () => {
         try {
           await apiUpdateEntry(
@@ -203,9 +158,8 @@ export function DocPane({
           );
         } catch (err) {
           if (err instanceof KnowledgeApiError && err.status === 412) {
-            // Concurrent writer beat us and the editor is unmounted —
-            // there's nowhere to run the resolution UI. Tell the user
-            // instead of dropping the edit silently.
+            // Editor unmounted — no resolution UI. Toast beats dropping the
+            // edit silently.
             toast({
               title: "Last edit not saved",
               description: `"${t || "Untitled"}" was edited elsewhere while you navigated away — reopen it to reconcile.`,
@@ -219,11 +173,8 @@ export function DocPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Capture a fresh snapshot of the server's entry into local conflict
-   * state. Pauses autosave, surfaces the banner. Does NOT touch the
-   * editor's content.
-   */
+  /** Snapshot server entry into conflict state: pauses autosave, surfaces the
+   *  banner. ⚠ Does NOT touch editor content. */
   const enterConflict = useCallback(async (): Promise<boolean> => {
     try {
       const fresh = await apiFetchEntry(entry.id, workspaceId);
@@ -241,16 +192,15 @@ export function DocPane({
     }
   }, [entry.id, workspaceId, onStaleVersion]);
 
-  // Serialize every PATCH through one chain so two saves can never be in
-  // flight together. Body autosave, description blur, and conflict
-  // resolution all share the one `updated_at` token — an overlapping
-  // pair would 412 against our own write (a phantom "edited elsewhere"
-  // with a single editor in the room).
+  // ⚠ Serialize every PATCH through one chain — two saves must never be in
+  // flight together. Body autosave, description blur and conflict resolution
+  // share one `updated_at` token; an overlapping pair 412s against our own
+  // write (phantom "edited elsewhere" with a single editor).
   const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const enqueueSave = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
     const next = saveChainRef.current.then(job, job);
-    // Park a swallowed tail so an unawaited failing job can't surface as
-    // an unhandled rejection; callers that await `next` still see it.
+    // Swallowed tail so an unawaited failing job can't become an unhandled
+    // rejection; callers awaiting `next` still see it.
     saveChainRef.current = next.then(
       () => undefined,
       () => undefined
@@ -261,15 +211,14 @@ export function DocPane({
   const scheduleSave = useCallback(
     (nextTitle: string, nextBody: string) => {
       if (timerRef.current) clearTimeout(timerRef.current);
-      // While resolving a conflict the user MAY keep typing; surface
-      // dirty so the indicator stays correct, but do not schedule a
-      // network round-trip that would 412 again.
+      // User MAY keep typing during conflict: show dirty, but schedule no
+      // round-trip (would 412 again).
       setStatus("dirty");
       if (conflictRef.current !== null) return;
       timerRef.current = setTimeout(() => {
         void enqueueSave(async () => {
-          // Re-check inside the chain — a queued-behind save may have
-          // entered conflict or already written this exact content.
+          // Re-check inside the chain: a queued-behind save may have entered
+          // conflict or already written this content.
           if (conflictRef.current !== null) return;
           if (
             nextTitle === lastSaved.current.title &&
@@ -334,14 +283,10 @@ export function DocPane({
     });
   }, [description, entry.id, workspaceId, onSaved, enterConflict, enqueueSave]);
 
-  /**
-   * Conflict resolution: keep the user's local edits, overwrite the
-   * server's version. Uses the conflict's serverUpdatedAt as the
-   * precondition so we win on top of the freshest known server state.
-   * If yet another writer slipped in between fetch and PATCH, we
-   * 412 again and re-enter conflict — never silently overwrite a newer
-   * unseen version.
-   */
+  /** Conflict resolution: keep local edits, overwrite server. Precondition is
+   *  the conflict's serverUpdatedAt, so we win on top of the freshest known
+   *  state; a writer slipping in between fetch and PATCH 412s and re-enters
+   *  conflict — never silently overwrite a newer unseen version. */
   const handleKeepMine = useCallback(async () => {
     if (!conflict) return;
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -378,11 +323,8 @@ export function DocPane({
     }
   }, [conflict, title, body, entry.id, workspaceId, onSaved, enterConflict, enqueueSave]);
 
-  /**
-   * Conflict resolution: discard the user's local edits, reload the
-   * server's version into the editor. The user explicitly chose this,
-   * so cursor/content jump is expected.
-   */
+  /** Conflict resolution: discard local edits, reload server version into the
+   *  editor. User chose this explicitly, so cursor/content jump is expected. */
   const handleDiscardMine = useCallback(() => {
     if (!conflict) return;
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -408,10 +350,9 @@ export function DocPane({
           onDiscardMine={handleDiscardMine}
         />
       )}
-      {/* Floating header panel — the single place the file's name shows,
-          plus the agent-facing description (entry `excerpt`) that streams
-          to MCP clients in tree / directory listings. Framed like the
-          study-notes intro panel: uppercase label strip over an inset body. */}
+      {/* Header panel: the one place the file name shows, plus the
+          agent-facing description (entry `excerpt`) that MCP clients get in
+          tree / directory listings. */}
       <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-border-strong">
         <div className="flex items-center gap-3 bg-card-surface-subtle px-4 py-1.5">
           <span className="flex-1 text-label font-semibold uppercase tracking-wide text-text-secondary">

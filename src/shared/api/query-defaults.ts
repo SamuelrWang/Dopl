@@ -1,29 +1,23 @@
 import type { DefaultOptions } from "@tanstack/react-query";
 
 /**
- * The app's TanStack Query defaults, in ONE place because two clients now
- * mount them: the web `QueryProvider` (`./query-provider.tsx`) and the desktop
- * SPA (`apps/desktop-ui/src/lib/query-client.ts`, which imports this file
- * through its `@web/query-defaults` alias — the single sanctioned import from
- * this tree into the renderer, see apps/desktop-ui/CONVENTIONS.md).
+ * The app's TanStack Query defaults, in ONE place — ⚠ mounted by BOTH the web
+ * `QueryProvider` and the desktop SPA (`apps/desktop-ui/src/lib/query-client.ts`
+ * via its `@web/query-defaults` alias, the single sanctioned import from this
+ * tree into the renderer).
  *
- * Deliberately framework-free: no `"use client"`, no React, no Next, no DOM.
- * That is what makes it safe for a Vite renderer to consume directly, and it
- * is the bar any future shared module must clear.
+ * ⚠ Framework-free: no `"use client"`, no React, no Next, no DOM. That is what
+ * makes it safe for a Vite renderer, and the bar any future shared module clears.
  *
- * Defaults tuned for this app's access pattern (ENGINEERING §7) — server data
- * changes mostly through the user's own actions or realtime signals, so:
- *   - staleTime 30s: navigating back to a page within 30s renders from cache
- *     with no refetch.
- *   - refetchOnWindowFocus only when stale.
+ * Tuned for this app's access pattern (ENGINEERING §7):
+ *   - staleTime 30s: navigating back within 30s renders from cache, no refetch;
+ *   - refetchOnWindowFocus only when stale;
  *   - one retry; 4xx are not retried (ApiError carries the status).
  *
- * A DEFAULT IS ONLY A DEFAULT IF THE CALLER'S OPTIONS OMIT THE KEY. TanStack
- * merges by spread, so a key present with value `undefined` deletes the entry
- * below it — which is how every line above sat inert app-wide for the whole
- * `useApiQuery` surface until F-163. `use-api-query-core.ts` is the enforcement
- * point (`definedOnly`); anything else that builds query options from optional
- * caller input owes the same treatment.
+ * ⚠ A DEFAULT IS ONLY A DEFAULT IF THE CALLER OMITS THE KEY. TanStack merges by
+ * spread, so a key present with value `undefined` DELETES the entry below it
+ * (F-163). `use-api-query-core.ts › definedOnly` is the enforcement point;
+ * anything building query options from optional caller input owes the same.
  */
 
 /** 24h — beyond that, skeleton honestly. Also the persisted-cache `maxAge`;

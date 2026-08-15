@@ -11,42 +11,31 @@ import { KnowledgeStorageLimitError } from "./errors";
 import * as repo from "./repository";
 
 /**
- * THE PER-KB STORAGE GATE — the growth half of the storage meter.
+ * THE PER-KB STORAGE GATE. Answers one question BEFORE the write: may it grow.
  *
- * The COUNTER is not maintained here. `knowledge_bases.storage_bytes` is kept
- * in step by a row trigger on `knowledge_entries`
- * (`20260812120000_knowledge_base_storage_bytes.sql` §3), inside the same
- * transaction as the entry write, which is the only way a FK cascade — a folder
- * delete, a base delete — can be counted at all. This module owns the one
- * question that has to be answered BEFORE the write: may it grow.
+ * ⚠ The COUNTER is NOT maintained here — `knowledge_bases.storage_bytes` is
+ * kept in step by a row trigger on `knowledge_entries`
+ * (`20260812120000_knowledge_base_storage_bytes.sql` §3) in the same
+ * transaction as the write, the only way FK cascades get counted at all.
  *
- * THE PLAN IS THE ENTITLEMENT VERDICT, never `workspace_billing.plan`. A solo
- * subscription that has grown a second member is degraded to free by
- * `entitlements.ts › paidEntitlement`, and reading the raw column would hand
- * that workspace 100 MB per base it is not entitled to. Two reads, same shape
- * as the credits path (`credits-service.ts › consumeMcpCredits`), and
- * deliberately NOT `getWorkspaceEntitlements` — its third query is a `COUNT(*)`
- * over `ontology_objects` that only the object cap reads.
+ * ⚠ PLAN = ENTITLEMENT VERDICT, never `workspace_billing.plan`: a solo
+ * subscription grown to two members is degraded to free by `entitlements.ts ›
+ * paidEntitlement`, and the raw column would hand it 100 MB/base it isn't
+ * entitled to. Deliberately NOT `getWorkspaceEntitlements` — its third query is
+ * a `COUNT(*)` over `ontology_objects` only the object cap reads.
  *
- * FREEZE, NEVER DELETE. Only a POSITIVE delta is checked. A shrinking edit on a
- * base that is already over its cap MUST succeed — that is the one action that
- * gets the workspace out of the hole, and a gate that blocked it would be a
- * trap rather than a limit.
+ * FREEZE, NEVER DELETE: only POSITIVE deltas checked, so a shrinking edit on an
+ * over-cap base MUST succeed — the one action that gets the workspace out.
  *
- * IT FAILS OPEN, ON PURPOSE, and the deploy order is why. The code reads a
- * column that exists only after the migration is applied; a web deploy that
- * lands first would otherwise refuse EVERY knowledge write in the product with
- * a billing error, which is a far worse outcome than a few uncounted megabytes.
- * The same reasoning the MCP registrar applies to a failed credit loopback: a
- * meter that cannot be read is not evidence of an over-cap workspace.
+ * ⚠ FAILS OPEN on purpose — it reads a column that exists only post-migration,
+ * and a web deploy landing first would refuse EVERY knowledge write with a
+ * billing error. An unreadable meter is not evidence of an over-cap workspace.
  */
 
 /**
- * The per-base byte cap for a workspace, from its entitlement-resolved plan.
- *
- * `null` = UNKNOWN (the billing read failed), which every caller must treat as
- * "do not gate" and "do not render a bar" — never as zero and never as
- * unlimited.
+ * Per-base byte cap from the entitlement-resolved plan.
+ * ⚠ `null` = UNKNOWN (billing read failed): callers must treat as "do not
+ * gate" AND "do not render a bar" — never zero, never unlimited.
  */
 export async function resolveKbStorageLimit(
   workspaceId: string
@@ -62,19 +51,18 @@ export async function resolveKbStorageLimit(
   }
 }
 
-/** The byte weight of an entry body, in the SAME unit the counter uses —
- *  `octet_length` over a UTF-8 database is `Buffer.byteLength(s, "utf8")`. */
+/** ⚠ Must stay the SAME unit as the counter: `octet_length` over a UTF-8
+ *  database is `Buffer.byteLength(s, "utf8")`. */
 export function bodyBytes(body: string | null | undefined): number {
   return body ? Buffer.byteLength(body, "utf8") : 0;
 }
 
 /**
- * Refuse a write that would push `base` past its plan's per-base cap.
+ * Refuse a write that pushes `base` past its plan's per-base cap.
  *
- * `deltaBytes` is the NET change this write makes to the base's stored bytes:
- * `bodyBytes(next) - bodyBytes(previous)` for an edit, `bodyBytes(next)` for a
- * create. A delta of zero or less returns immediately without touching the
- * database — a rename, a move, a reposition and a shrink all cost nothing here.
+ * `deltaBytes` = NET change: `bodyBytes(next) - bodyBytes(previous)` on edit,
+ * `bodyBytes(next)` on create. Delta ≤ 0 returns without touching the DB —
+ * renames, moves, repositions and shrinks cost nothing.
  */
 export async function assertStorageHeadroom(
   ctx: KnowledgeContext,
@@ -91,8 +79,8 @@ export async function assertStorageHeadroom(
       resolveKbStorageLimit(ctx.workspaceId),
     ]);
   } catch {
-    // The column or the billing row could not be read. Fail OPEN — see the
-    // module header; the nightly re-sum is what corrects an uncounted write.
+    // Column or billing row unreadable. Fail OPEN (module header); the
+    // nightly re-sum corrects an uncounted write.
     return;
   }
   if (used === null || limit === null) return;
@@ -111,11 +99,11 @@ export async function assertStorageHeadroom(
 }
 
 /**
- * The flat plan-gate envelope for a refused write. Mirrors billing's
- * `entitlementDeniedBody` and chats' `chatRetentionDeniedBody` exactly —
- * `{ error: <code>, message, upgrade_url }` — because `@dopl/client` and the
- * MCP `respond.ts › entitlementDenied` path key off that shape, not off the
- * nested `HttpError` one.
+ * Flat plan-gate envelope for a refused write. ⚠ Must mirror billing's
+ * `entitlementDeniedBody` and chats' `chatRetentionDeniedBody` EXACTLY —
+ * `{ error, message, upgrade_url }` — because `@dopl/client` and MCP
+ * `respond.ts › entitlementDenied` key off that shape, not the nested
+ * `HttpError` one.
  */
 export function kbStorageDeniedBody(err: KnowledgeStorageLimitError) {
   return {

@@ -1,8 +1,7 @@
 /**
- * Unit tests for the new-workspace seed orchestrator. Every feature seed
- * + the KB existence check are mocked, so these assert the orchestration
- * contract itself: idempotency, dependency ordering, cross-ref threading,
- * and best-effort isolation (one surface failing doesn't stop the rest).
+ * New-workspace seed orchestrator. Feature seeds + the KB existence check are
+ * mocked, so what is asserted is the orchestration contract: idempotency,
+ * dependency ordering, cross-ref threading, best-effort isolation.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -97,7 +96,7 @@ describe("seedNewWorkspace — dependency ordering + cross-refs", () => {
     expect(mOntology).toHaveBeenCalledTimes(1);
     expect(mChat).toHaveBeenCalledTimes(1);
 
-    // knowledge + skills resolve before ontology; ontology before chat.
+    // knowledge + skills before ontology; ontology before chat.
     const kOrder = mKnowledge.mock.invocationCallOrder[0];
     const sOrder = mSkills.mock.invocationCallOrder[0];
     const oOrder = mOntology.mock.invocationCallOrder[0];
@@ -148,7 +147,7 @@ describe("seedNewWorkspace — best-effort isolation", () => {
   it("still seeds ontology + chat when knowledge produced no guide base", async () => {
     mKnowledge.mockResolvedValue({ basesCreated: 0, guide: null });
     await seedNewWorkspace(WS, USER);
-    // Ontology still runs (with empty entry refs); chat still runs.
+    // Ontology still runs (empty entry refs); chat still runs.
     expect(mOntology).toHaveBeenCalledWith(
       { workspaceId: WS, userId: USER },
       expect.objectContaining({ entryIdByKey: {} })

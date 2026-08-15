@@ -46,12 +46,10 @@ const PILL =
   "flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2.5 text-caption font-medium";
 
 /**
- * Sharing control — the KB three-way scope model on a compact popover:
- * Private / Team (pick teams) / Public (the whole workspace). `readOnly` renders a
- * plain scope pill. `locked` (inherited scope, e.g. a chat filed in a
- * folder) renders a locked pill whose popover shows the note instead of
- * the menu. Menu content comes from `children` and mounts only while
- * open, so the wrapper's team fetch stays lazy.
+ * Sharing control — KB three-way scope: Private / Team / Public (workspace).
+ * `readOnly` → plain pill. `locked` (inherited scope, e.g. a chat filed in a
+ * folder) → locked pill whose popover shows the note instead of the menu.
+ * `children` mounts only while open, keeping the wrapper's team fetch lazy.
  */
 export function ScopeSharePopover({
   scope,
@@ -107,9 +105,9 @@ export function ScopeSharePopover({
 }
 
 /**
- * The scope picker itself. Team data is supplied by the caller (each
- * feature brings its own fetch hook) so this file stays feature-free.
- * `warning` flags scope changes that propagate (e.g. folder → chats).
+ * The scope picker. Team data comes from the caller (each feature brings its own
+ * fetch hook) so this file stays feature-free. `warning` flags scope changes
+ * that propagate (e.g. folder → chats).
  */
 export function ScopeShareMenu({
   scope,
@@ -135,8 +133,8 @@ export function ScopeShareMenu({
   );
   const [saving, setSaving] = useState(false);
 
-  // Owners may grant teams they belong to; already-granted foreign teams
-  // stay visible but locked (admins edit everything) — the KB rule.
+  // KB rule: owners grant only their own teams; already-granted foreign teams
+  // stay visible but locked. Admins edit everything.
   const myTeamIds = useMemo(
     () =>
       new Set(

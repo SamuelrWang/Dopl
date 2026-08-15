@@ -19,10 +19,8 @@ import {
 } from "./service-shared";
 import { seedWorkspace } from "./service-seed";
 
-/**
- * Skill reads. `getSkillBySlug` is the foundational visibility-checked
- * lookup every other skill op funnels through (slug OR stable uuid ref).
- */
+/** Skill reads. `getSkillBySlug` is the visibility-checked lookup every other
+ *  skill op funnels through (slug OR stable uuid ref). */
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
@@ -36,13 +34,12 @@ export async function listSkills(
     .filter((s) => canSeeSkill(ctx, s, grants))
     .map((s) => withGrantSet(ctx, s, grants));
   if (visible.length > 0) return visible;
-  // CRITICAL: same reasoning as `listBases` — seed only when the
-  // workspace has NO skills at all, not when the caller sees zero.
+  // ⚠ Seed only when the workspace has NO skills at all, not when the CALLER
+  // sees zero. Same rule as `listBases`.
   if (all.length > 0) return visible;
-  // DEMO BYPASS: auto-seed disabled. Mirrors the same guard in
-  // src/features/knowledge/server/service.ts `listBases`. Flip
-  // DEMO_DISABLE_AUTO_SEED to false (or delete the guard) to restore
-  // the original onboarding-seed behavior below.
+  // DEMO BYPASS: auto-seed disabled. Mirrors the guard in
+  // src/features/knowledge/server/service.ts `listBases`. Set false to restore
+  // the onboarding seed below.
   const DEMO_DISABLE_AUTO_SEED: boolean = true;
   if (DEMO_DISABLE_AUTO_SEED) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
@@ -60,11 +57,9 @@ export async function listSkills(
   return visible;
 }
 
-/**
- * Resolve a skill by slug OR stable UUID id (MCP-14: renames change the
- * slug, so agents need an immutable handle). Every skill read/write op
- * funnels through here, so id acceptance applies uniformly.
- */
+/** Resolve by slug OR stable UUID id — renames change the slug, so agents
+ *  need an immutable handle. Every read/write op funnels through here, so id
+ *  acceptance applies uniformly. */
 export async function getSkillBySlug(
   ctx: SkillContext,
   ref: string
@@ -87,12 +82,8 @@ export async function listFiles(
   return file ? [file] : [];
 }
 
-/**
- * Resolves a skill for the agent: returns the skill record, every file,
- * and a per-reference availability check. Pointer-with-hint resolution
- * — KB content is not inlined; the agent calls `kb_read_file` if it
- * needs the actual KB content.
- */
+/** Skill record + files + per-reference availability. Pointer-with-hint:
+ *  ⚠ KB content is never inlined — the agent calls `kb_read_file` itself. */
 export async function resolveSkillBody(
   ctx: SkillContext,
   slug: string

@@ -11,22 +11,16 @@ interface Props {
 }
 
 /**
- * Plans & Billing — the DESKTOP binding of `PlansBillingCore`.
+ * Plans & Billing — the DESKTOP binding of `PlansBillingCore`. Renders in
+ * full; only the two Stripe-shaped actions differ, because the packaged CSP
+ * (`script-src 'self'`, `connect-src 'none'`) refuses Stripe and all origins:
  *
- * The pane renders in FULL: current plan, seats and price line, the usage
- * meter, the past-due banner, all three plan cards with their feature lists
- * and CTAs, and the in-place Solo→Team switch (pure API, so it runs over the
- * bridge unchanged). Only the two Stripe-shaped actions differ, because the
- * packaged page's CSP (`script-src 'self'`, `connect-src 'none'`) refuses
- * Stripe's script and every network origin:
- *
- *   - Upgrade/checkout — the web mounts Embedded Checkout in-pane; here it
- *     opens the same workspace's web billing surface in the user's browser,
- *     which lands on that identical checkout.
- *   - Manage billing — already a redirect to a Stripe-HOSTED url the API
- *     mints, so this fetches that url over the bridge and opens it externally
- *     rather than navigating this document. Free workspaces have no Stripe
- *     customer and the route 4xxs; that falls back to the web surface.
+ *   - Upgrade/checkout — web mounts Embedded Checkout in-pane; here it opens
+ *     the same workspace's web billing surface in the browser.
+ *   - Manage billing — already a redirect to a Stripe-HOSTED url the API mints,
+ *     so fetch that url over the bridge and open it externally rather than
+ *     navigating this document. Free workspaces have no Stripe customer and the
+ *     route 4xxs → falls back to the web surface.
  */
 export function BillingPane({ workspaceSegment, workspaceId, role }: Props) {
   const [portalLoading, setPortalLoading] = useState(false);
@@ -43,8 +37,8 @@ export function BillingPane({ workspaceSegment, workspaceId, role }: Props) {
       if (!data?.url) throw new Error("Couldn't open billing portal");
       openUrlInBrowser(data.url);
     } catch {
-      // No portal session (or the call failed): hand the whole surface to the
-      // browser instead of dead-ending on an error line.
+      // No portal session (or call failed): hand the surface to the browser
+      // rather than dead-ending on an error line.
       openInBrowser(billingPath(workspaceSegment));
       setPortalError("Opening billing in your browser…");
     } finally {

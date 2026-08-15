@@ -1,9 +1,7 @@
 /**
- * Generates the macOS tray template images (black glyph on transparent alpha).
- * Template images MUST be black + alpha only — macOS recolors them for
- * light/dark menu bars. Emits renderer/assets/trayTemplate.png (16px) and
- * trayTemplate@2x.png (32px). Pure Node (zlib), no native deps.
- *
+ * Generates the macOS tray template images. ⚠ Template images MUST be black + alpha ONLY —
+ * macOS recolors them for light/dark menu bars. Emits renderer/assets/trayTemplate.png (16px)
+ * and trayTemplate@2x.png (32px). Pure Node (zlib), no native deps.
  * Run once when the glyph changes:  node scripts/gen-tray-icon.js
  */
 const zlib = require('zlib');
@@ -34,8 +32,8 @@ function chunk(type, data) {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
-// Coverage of the glyph at normalized coords (0..1). Rounded-corner speech
-// bubble with a short tail at the lower-left — reads as "Channels / messages".
+// Coverage of the glyph at normalized coords (0..1): rounded speech bubble with a short tail
+// at the lower-left.
 function glyphCoverage(nx, ny) {
   // Bubble body: rounded rect roughly spanning x[0.14,0.86] y[0.16,0.66].
   const cx = 0.5, cy = 0.41;

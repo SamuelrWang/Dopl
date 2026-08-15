@@ -1,11 +1,8 @@
 /**
- * INVARIANT SUITE — CLUSTER_DELETE cascade contract.
- *
- * A cluster owns its columns and every nested card; deleting it must
- * remove all of them and scrub the dangling references (childIds and
- * relationship targetIds) from objects that survive in OTHER clusters,
- * exactly as OBJECT_DELETE does for a single object — while leaving the
- * other clusters and a no-op unknown id untouched.
+ * INVARIANT SUITE — CLUSTER_DELETE cascade contract. Deleting a cluster removes
+ * its columns + nested cards and scrubs dangling childIds / relationship
+ * targetIds off objects surviving in OTHER clusters, leaving those clusters and
+ * a no-op unknown id untouched.
  */
 
 import { describe, it, expect } from "vitest";
@@ -37,9 +34,8 @@ function makeState(): GraphState {
     makeObject("sub1"),
     makeObject("card2"),
     makeObject("colB", { childIds: ["card3"] }),
-    // card3 lives in cluster B but references cluster-A objects: a shared
-    // child (card1) and two edges — one that keeps a surviving target,
-    // one that empties out and must be dropped.
+    // card3 (cluster B) references cluster-A objects: shared child card1 and
+    // two edges — one keeps a surviving target, one empties and is dropped.
     makeObject("card3", {
       childIds: ["card1"],
       relationships: [
@@ -96,21 +92,14 @@ describe("CLUSTER_DELETE", () => {
 
 /**
  * INVARIANT SUITE — orphanedByObjectDelete mirrors `cascade_hard_delete_object`.
- *
- * The count this returns is what the confirm dialog shows before a permanent
- * delete, so an over-count scares the user off a safe action and an under-count
- * destroys work they were never warned about. The rule is MEMBERSHIP, not
- * depth: a descendant that still hangs under a surviving parent lives on the
- * board that holds it. `makeState`'s `card1` is exactly that case — a child of
- * both `colA` (cluster A) and `card3` (cluster B).
+ * Its count is what the confirm dialog shows before a permanent delete. ⚠ Rule
+ * is MEMBERSHIP, not depth: a descendant still under a surviving parent lives
+ * on. `makeState`'s `card1` is that case — child of both `colA` and `card3`.
  */
 /**
- * INVARIANT SUITE — CREATE_RESOLVE rewrites every place an id is named.
- *
- * A provisional id left behind anywhere is a dangling reference the user only
- * discovers on the next load: a column whose cluster no longer lists it, an
- * edge pointing at nothing, a `ref` attribute that renders blank. The rewrite
- * is therefore total, not "the links of the row that was just created".
+ * INVARIANT SUITE — CREATE_RESOLVE rewrites every place an id is named. ⚠ Total,
+ * not just the created row's links: a leftover provisional id is a dangling
+ * reference the user only discovers on the next load.
  */
 describe("CREATE_RESOLVE", () => {
   function pendingState(): GraphState {
@@ -118,8 +107,7 @@ describe("CREATE_RESOLVE", () => {
       clusters: [
         {
           ...makeCluster("p:cluster", ["p:col"]),
-          // Dragged positions are keyed by OBJECT id — the id-keyed structure
-          // that holds no id-shaped field, and so the one a rewrite skips.
+          // Dragged positions keyed by OBJECT id — the structure a rewrite skips.
           layout: { "p:col": { x: 40, y: 80 }, live: { x: 1, y: 2 } },
         },
       ],
@@ -155,7 +143,6 @@ describe("CREATE_RESOLVE", () => {
 
   it("folds in the server's slug, keyed by the REAL cluster id", () => {
     expect(graphReducer(pendingState(), RESOLVE).clusters[0].slug).toBe("revenue");
-    // No slug for that cluster: whatever it already had survives untouched.
     const noSlug = graphReducer(pendingState(), { type: "CREATE_RESOLVE", map: RESOLVE.map });
     expect(noSlug.clusters[0].slug).toBe("p:cluster");
   });
@@ -165,18 +152,16 @@ describe("CREATE_RESOLVE", () => {
     expect(live.childIds).toEqual(["card-1"]);
     expect(live.relationships).toEqual([{ label: "refs", targetIds: ["card-1", "other"] }]);
     expect(live.attributes[0].value).toEqual({ kind: "ref", value: ["col-1", "other"] });
-    // A text value that merely LOOKS like an id is content, not a reference.
+    // A text value that LOOKS like an id is content, not a reference.
     expect(live.attributes[1].value).toEqual({ kind: "text", value: "p:col" });
   });
 
   it("remaps the cluster layout's KEYS, positions preserved", () => {
     const { layout } = graphReducer(pendingState(), RESOLVE).clusters[0];
     expect(Object.keys(layout).sort()).toEqual(["col-1", "live"]);
-    // The position itself is untouched — this is a rename, not a re-layout.
     expect(layout["col-1"]).toEqual({ x: 40, y: 80 });
     expect(layout.live).toEqual({ x: 1, y: 2 });
-    // Nothing provisional survives as a key: that leftover is the orphan that
-    // would ride back to `clusters.layout` on the next drag write.
+    // A leftover provisional key rides back to `clusters.layout` on next drag.
     expect(Object.keys(layout).some((id) => id.startsWith("p:"))).toBe(false);
   });
 
@@ -191,8 +176,8 @@ describe("CREATE_RESOLVE", () => {
 
 describe("orphanedByObjectDelete", () => {
   it("orphans only the descendants with no surviving parent", () => {
-    // colA owns card1 + card2. card2 has nowhere else to live; card1 also
-    // hangs under card3, so it survives — and so does its own child sub1.
+    // card2 has nowhere else to live; card1 also hangs under card3 so it
+    // survives, and so does its child sub1.
     expect(orphanedByObjectDelete(makeState(), "colA")).toEqual(["card2"]);
   });
 

@@ -22,39 +22,30 @@ import {
   ModeBadge,
   StatusChip,
 } from "./session-card-status";
-// DECISION 2 (2026-08-04): the close PROMPT and the close FORM are their own
-// module (§2 cap) — one seam, "how a thread gets closed", and this file is the
-// card around it.
+// The close PROMPT and close FORM are their own module — one seam, "how a thread
+// gets closed"; this file is the card around it.
 import { CloseProposalPrompt, ThreadCloseForm } from "./session-card-close";
 import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
 
 /**
- * One THREAD as a single bordered card, rendering the session that worked it.
- * The header carries the thread title (the authoritative overlay title, falling
- * back to the derived summary), the opener's identity + absolute time, and — for
- * a first-class thread — a mode badge. The body nests EVERY message of the
- * exchange attributed (the requester's request and each agent reply, author +
- * avatar + time per entry); `task_progress` lines stay as subtle progress rows.
- * The `task_started/finished/failed` lifecycle markers never appear in the body
- * — they become the status chip in the footer (Thread active / Thread complete
- * / Thread failed, or a calm terminal label for an operator-chosen ending).
+ * One THREAD as a single bordered card. Header: overlay title (falling back to
+ * the derived summary), opener identity + absolute time, and a mode badge for a
+ * first-class thread. Body nests EVERY message attributed (author + avatar +
+ * time per entry); `task_progress` stays a subtle progress row. ⚠ The
+ * `task_started/finished/failed` markers never appear in the body — they BECOME
+ * the footer status chip.
  *
- * A channel runs MANY threads at once, between different pairs, so the card
- * never assumes the thread is the viewer's: when the authoritative thread row
- * says they are neither its creator nor its addressee, the footer drops
- * "Open thread" for a read-only marker. That button opens a window bound to
- * THIS thread and the desktop forces the thread tag onto whatever the session
- * posts (`session-outbound-tag.js`), so for a non-party it leads only to a
- * server refusal. A legacy session carries no thread row, so its parties are
- * unknown and nothing is claimed either way.
+ * ⚠ A channel runs MANY threads between different pairs, so the card never
+ * assumes the thread is the viewer's: when the thread row says they are neither
+ * creator nor addressee, the footer drops "Open thread" for a read-only marker.
+ * That button opens a window BOUND to this thread and the desktop forces the tag
+ * onto whatever it posts (`session-outbound-tag.js`), so a non-party reaches
+ * only a server refusal. A legacy session has no thread row, so nothing is
+ * claimed either way.
  *
- * Card geometry follows the message-bubble family (`rounded-[10px]` border,
- * `px-3.5` padding); the header + footer strips reuse the
- * `bg-card-surface-subtle` section-strip recipe. The container is ALWAYS
- * neutral — the status-tinted active surface shipped in v2.4 and was removed
- * the same day by product call, so status is the chip's job alone (pinned by
- * the container tests). Amber still means waiting on a human, but it lives only
- * on the consent card at the transcript bottom.
+ * Geometry follows the message-bubble family (`rounded-[10px]`, `px-3.5`);
+ * header/footer strips reuse `bg-card-surface-subtle`. ⚠ The container is ALWAYS
+ * neutral — status is the chip's job alone.
  */
 export function SessionCard({
   session,
@@ -66,15 +57,11 @@ export function SessionCard({
   session: SessionGroup;
   /** Transient ring while the thread panel has navigated to this card. */
   highlighted?: boolean;
-  /**
-   * The authoritative thread row for this session (from `channel_tasks` — the
-   * storage name), carrying `createdBy` / `targetUserId` / `status`; it gates
-   * the Close control. Absent for a legacy (non first-class) session, or until
-   * the integration pass threads it through from the channel's `threads` by
-   * `session.taskId`; in either case no thread controls render.
-   */
+  /** Authoritative thread row (`channel_tasks`) carrying `createdBy` /
+   *  `targetUserId` / `status`; gates the Close control. Absent for a legacy
+   *  session, in which case no thread controls render. */
   thread?: ChannelThread;
-  /** The viewer's user id — the controls show only for a thread's creator or target. */
+  /** Viewer's user id — controls show only for a thread's creator or target. */
   currentUserId?: string;
   /** Close this thread with an outcome + optional summary. Absent hides Close. */
   onCloseThread?: (
@@ -83,14 +70,11 @@ export function SessionCard({
     summary: string
   ) => Promise<void>;
 }) {
-  // Per-entry collapse. EVERY entry present at mount starts COLLAPSED (a
-  // summary-bearing entry shows its one-liner, a summary-less one just its
-  // author/time line); the chevron expands one entry at a time. Entries that
-  // ARRIVE while the card is mounted are deliberately NOT added to the set —
-  // live activity the viewer is watching renders expanded. The state is
-  // component-local on purpose: switching channels or leaving the page
-  // unmounts the card and resets everything to collapsed. Expansion is a
-  // transient reading gesture, not a preference — do not persist it.
+  // Per-entry collapse. Every entry present AT MOUNT starts collapsed; entries
+  // that ARRIVE while mounted are deliberately NOT added — live activity the
+  // viewer is watching renders expanded.
+  // ⚠ Component-local on purpose: expansion is a transient reading gesture, not
+  // a preference. Do not persist it.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     for (const entry of session.entries) {
@@ -108,70 +92,54 @@ export function SessionCard({
       return next;
     });
 
-  // Close gating: only a thread's creator or target may close it, and only when
-  // the close callback is wired. Reopening a closed thread lives in the thread
-  // panel (the header's thread list), never on the card.
+  // ⚠ Only a thread's creator or target may close it, and only when the callback
+  // is wired. Reopen lives in the thread panel, never on the card.
   const [closing, setClosing] = useState(false);
   const canManageThread = !!thread && isThreadParty(thread, currentUserId);
   const showClose =
     canManageThread && thread?.status === "open" && !!onCloseThread;
-  // DECISION 2 (2026-08-04) — PROPOSE-THEN-CONFIRM, the human half.
+  // PROPOSE-THEN-CONFIRM, human half. An agent posts a marked non-terminal note
+  // and its OPERATOR decides; this turns that note into a decision, with Close
+  // pre-filled to the proposed outcome.
   //
-  // An agent may no longer close a thread; when it believes the work is done it
-  // posts a marked, non-terminal note and its OPERATOR decides. This is where
-  // that note stops being a line in the log and becomes a decision: the prompt
-  // shows who asked and why, and its Close button is the ordinary close form
-  // with the proposed outcome already chosen.
-  //
-  // GATED ON THE SAME RULE AS THE CLOSE ITSELF (`showClose`), because a prompt
-  // nobody can act on is worse than none: it would tell a third member of the
-  // channel that somebody else's thread is finished and hand them a button that
-  // 403s. A stale proposal (the thread was closed since) disappears with the
-  // control, which is correct — there is nothing left to confirm.
+  // ⚠ Gated on the SAME rule as the close itself (`showClose`) — a prompt nobody
+  // can act on tells a third member somebody else's thread is finished and hands
+  // them a button that 403s. A stale proposal disappears with the control.
   const proposal = showClose ? readCloseProposal(session) : null;
-  // Dismissal is LOCAL and deliberately not persisted. "Keep open" means "not
-  // now", and the thread staying open IS the persisted state; writing a
-  // suppression would make the next real proposal invisible.
+  // ⚠ Dismissal is LOCAL and never persisted. "Keep open" means "not now", and
+  // the thread staying open IS the persisted state — a stored suppression makes
+  // the next real proposal invisible.
   const [proposalDismissed, setProposalDismissed] = useState<string | null>(null);
   const showProposal =
     !!proposal && !closing && proposalDismissed !== proposal.message.id;
-  // Provably someone else's thread: a first-class row names both parties and we
-  // know who is looking. Without the row (a legacy session) or without a viewer
-  // id the parties are unknown, so the card keeps its normal footer rather than
-  // guessing.
+  // Provably someone else's thread. Without the row (legacy session) or a viewer
+  // id the parties are unknown, so keep the normal footer rather than guess.
   const viewerIsOutsider = !!thread && !!currentUserId && !canManageThread;
 
   const openerName = session.head.authorName || "Agent";
   const title = session.title ?? session.summary ?? "Thread";
-  // Separate the body lanes at render time: chat replies keep the nested
-  // attributed-message rendering; `task_progress` milestones render as a
-  // distinct check-marked accomplishment list; NOTICES are status lines about
-  // the thread itself (the reopen echo) and get the calm one-liner treatment —
-  // never the ✓, which on a just-reopened thread reads as "done". `groupThread`'s
-  // output is unchanged — the split is purely presentational.
+  // Body lanes split at render time: chat replies keep nested attributed
+  // rendering; `task_progress` milestones get the ✓ list; NOTICES (the reopen
+  // echo) get the calm one-liner. ⚠ Never the ✓ for a notice — on a just-reopened
+  // thread it reads as "done". Purely presentational; `groupThread` is unchanged.
   const { milestones, replies, notices } = splitSessionEntries(session.entries);
   const agentReplies = replies.filter((e) => e.authorKind === "agent");
   const showWorking = session.status === "active" && agentReplies.length === 0;
-  // The honest "Working…" line: a calm session-end (interrupted/capped/ended)
-  // with no restart means the session stopped, even when an open-thread overlay
-  // still pins the status to "active". Show that end's calm note in place of
-  // "Working…" rather than lie. An agent reply already suppressed the line via
-  // `showWorking`, so this only fires when the card would otherwise say Working.
+  // ⚠ A calm session-end (interrupted/capped/ended) with no restart means the
+  // session stopped even when an open-thread overlay pins status "active" — show
+  // its note in place of "Working…" rather than lie.
   const calmEndNote = session.calmEndStatus
     ? CALM_TERMINAL_NOTE[session.calmEndStatus]
     : undefined;
-  // An operator-chosen calm terminal (declined/dropped/interrupted/capped/ended)
-  // never delivered a reply, so show a calm one-line note rather than an empty
-  // body. (When an overlay pins "active", `status` is not a terminal, so this is
-  // undefined and the `calmEndNote` path above carries the note instead.)
+  // A calm terminal never delivered a reply — show a one-line note, not an empty
+  // body. When an overlay pins "active", `status` is not terminal, so
+  // `calmEndNote` above carries it instead.
   const terminalNote =
     replies.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
 
-  // PROVISIONAL, and it says so. A request opened optimistically renders this
-  // card from a message the server has not acknowledged yet (its head carries a
-  // `pending:` id), so it is dimmed and inert until the POST answers — the real
-  // content, one frame after the click, without inviting a click on controls
-  // whose thread does not exist yet. `pending.ts` owns the recipe.
+  // PROVISIONAL: an optimistically-opened request renders from a message the
+  // server has not acknowledged (head carries a `pending:` id), so the card is
+  // dimmed and inert until the POST answers. `pending.ts` owns the recipe.
   const provisional = isPendingId(session.head.id);
 
   return (
@@ -341,9 +309,9 @@ export function SessionCard({
       )}
       {showClose && closing && thread && onCloseThread && (
         <ThreadCloseForm
-          // The proposal's reason becomes the close summary's starting point —
-          // the agent already wrote the sentence, and retyping it is how a good
-          // outcome summary turns into an empty one.
+          // The proposal's reason seeds the close summary — the agent already
+          // wrote the sentence, and retyping it turns a good outcome summary
+          // into an empty one.
           initialSummary={proposal?.message.body.trim() ?? ""}
           onSubmit={async (outcome, summary) => {
             await onCloseThread(thread.id, outcome, summary);
@@ -356,36 +324,26 @@ export function SessionCard({
   );
 }
 
-/**
- * The note for the one refusal the operator can act on: the desktop cannot reach
- * this CHANNEL at all (not a member, deleted, or signed out). A thread with no
- * local record is NOT this case — the desktop resolves the channel from the API
- * and opens a read-only shell — so this copy is about the channel, never about a
- * session being live.
- */
+/** ⚠ The one actionable refusal: the desktop cannot reach this CHANNEL (not a
+ *  member, deleted, signed out). A thread with no local record is NOT this case
+ *  — the desktop opens a read-only shell. Copy is about the CHANNEL. */
 export const NO_LOCAL_SESSION_NOTE =
   "This channel isn't available on this machine.";
 
-/** Every window slot is in use — the operator must free one. The visible noun
- *  is THREAD (the window depicts one); the constant name is not visible. */
+/** Window budget spent. ⚠ Visible noun is THREAD; the constant name is not. */
 export const SESSION_BUDGET_NOTE =
   "Too many thread windows are open. Close one and try again.";
 
 /**
- * Open this thread's session from the web card, via the main-window bridge, and
- * turn the desktop's verdict into the note (if any) the card should show.
+ * Open this thread's session via the main-window bridge and turn the desktop's
+ * verdict into the note (if any) to show.
  *
- * A window opens for ANY thread the operator can reach — live, parked, settled,
- * or never seen on this machine (the desktop resolves the channel from the API
- * and paints its history read-only). So the absence of a local record is NOT a
- * failure and must stay silent; only a genuine refusal says anything:
- *   `no-thread` — the channel itself is unreachable (not a member, deleted,
- *                 signed out). The one case worth a note.
- *   `busy`      — the window budget is spent; the operator can free one.
- * Anything else (an older desktop with no reason, a transport throw) stays
- * quiet: the operator can just click again.
- *
- * Exported for unit testing the click action.
+ * ⚠ A window opens for ANY reachable thread — live, parked, settled, or never
+ * seen on this machine — so the absence of a local record is NOT a failure and
+ * must stay SILENT. Only genuine refusals speak:
+ *   `no-thread` — the channel is unreachable (not a member, deleted, signed out)
+ *   `busy`      — the window budget is spent
+ * Anything else (older desktop with no reason, a transport throw) stays quiet.
  */
 export async function reopenSessionWindow(
   bridge: DoplSessionsBridge,
@@ -400,19 +358,13 @@ export async function reopenSessionWindow(
 }
 
 /**
- * Desktop-only footer control that opens this thread's session. It renders
- * whenever the bridge exists and is ALWAYS clickable: status never gates it, and
- * it takes no session/thread status at all, because the desktop can open a
- * session for any thread it has a record of — live, parked, or long settled (a
- * recreated shell shows the channel's history and typing starts a fresh
- * session).
+ * Desktop-only footer control opening this thread's session. ⚠ ALWAYS clickable
+ * — status never gates it, and it takes no session/thread status at all.
  *
- * Renders NOTHING in a plain browser or an older desktop build — the bridge is
- * feature-detected after mount so SSR and first client render agree
- * (hydration-safe). Opening happens in-process (no server/realtime state,
- * F-072); it never starts a query, and gated tools still gate on reshow. Only a
- * refusal the operator can act on (unreachable channel, or the window budget)
- * shows a note; everything else stays silent.
+ * ⚠ Renders NOTHING in a plain browser or older desktop build; the bridge is
+ * feature-detected AFTER MOUNT so SSR and first client render agree
+ * (hydration-safe). Opening is in-process — never starts a query, and gated
+ * tools still gate on reshow.
  */
 export function ReopenWindowButton({
   channelId,
@@ -425,12 +377,12 @@ export function ReopenWindowButton({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  // Feature-detect after mount (window-only) so SSR and first client render agree.
+  // ⚠ Feature-detect after mount so SSR and first client render agree.
   useEffect(() => {
     setBridge(getDesktopSessions());
   }, []);
 
-  // Plain browser (or an older desktop build without the sessions API): nothing.
+  // Plain browser or older desktop build without the sessions API.
   if (!bridge) return null;
 
   return (
@@ -444,8 +396,7 @@ export function ReopenWindowButton({
         try {
           setNote(await reopenSessionWindow(bridge, channelId, threadId));
         } catch {
-          // A thrown invoke is a transport failure, not a verdict about the
-          // thread, so it stays quiet: the operator can click again.
+          // A thrown invoke is a transport failure, not a verdict — stay quiet.
           setNote(null);
         } finally {
           setBusy(false);
@@ -456,11 +407,9 @@ export function ReopenWindowButton({
 }
 
 /**
- * The session control's markup: the optional one-line note plus the button. The
- * button carries NO status gate — the only thing that ever disables it is an
- * open call already in flight, so a double-click can't fire two invokes.
- * Exported so its always-enabled shape can be asserted without the post-mount
- * bridge detection.
+ * The session control's markup. ⚠ NO status gate on the button — the only thing
+ * that disables it is an open call already in flight, so a double-click cannot
+ * fire two invokes.
  */
 export function OpenWindowControls({
   busy,

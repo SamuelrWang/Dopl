@@ -8,16 +8,13 @@ import { Avatar } from "@/shared/ui/avatar";
 import { installBridge } from "#/test-utils/bridge";
 
 /**
- * `useBridgedImageSrc` is the fix for OAuth avatars rendering as initials in
- * the packaged renderer: `profiles.avatar_url` points at provider CDNs that
- * `img-src 'self' data: blob: <supabase>` cannot enumerate, so main proxies
- * the bytes back as a `data:` URI.
+ * `useBridgedImageSrc`: OAuth avatars render as initials in the packaged
+ * renderer because `profiles.avatar_url` points at CDNs `img-src` cannot
+ * enumerate, so main proxies the bytes back as a `data:` URI.
  *
- * It lives in the WEB tree (`@/shared/hooks/...`) and is exercised from HERE
- * because this is the app with jsdom + testing-library — and because the
- * behavior worth pinning is the SPA one. The web half is pinned too (the
- * bridge-absent case must be a verbatim, request-free passthrough, or every
- * usedopl.com avatar regresses).
+ * Lives in the WEB tree, exercised HERE because this is the app with jsdom.
+ * ⚠ The bridge-absent case must be a verbatim, request-free passthrough or
+ * every usedopl.com avatar regresses.
  */
 
 const GOOGLE = "https://lh3.googleusercontent.com/a/ACg8ocK=s96-c";
@@ -39,8 +36,7 @@ const read = () => screen.getByTestId("src").textContent;
 
 afterEach(() => {
   __resetBridgedImageCache();
-  // Leave no bridge behind for the next case — `getSpaBridge()` reads
-  // `window.dopl` live.
+  // ⚠ Leave no bridge behind — `getSpaBridge()` reads `window.dopl` live.
   Reflect.deleteProperty(window as unknown as Record<string, unknown>, "dopl");
   vi.unstubAllGlobals();
 });
@@ -57,7 +53,7 @@ describe("web (no SPA bridge)", () => {
   });
 
   it("is not fooled by the LEGACY desktop wrapper's partial window.dopl", () => {
-    // The pre-1.8 wrapper exposes `window.dopl` with no `apiRequest`; it loads
+    // The legacy wrapper exposes `window.dopl` with no `apiRequest` and loads
     // the live web app, where a bridged src would be a broken image.
     installBridge({ isDesktop: true, avatarDataUri: vi.fn() });
     render(<Probe url={GOOGLE} />);
@@ -77,8 +73,7 @@ describe("SPA (bridge present)", () => {
     spa(avatarDataUri);
 
     render(<Probe url={GOOGLE} />);
-    // Pending: the caller keeps its fallback rather than emitting a request
-    // the CSP would block.
+    // Pending: caller keeps its fallback, no CSP-blocked request.
     expect(read()).toBe("(none)");
     expect(avatarDataUri).toHaveBeenCalledWith(GOOGLE);
 
@@ -136,9 +131,7 @@ describe("SPA (bridge present)", () => {
   it("leaves the fallback in place on an older main with no such handler", () => {
     installBridge({ apiRequest: vi.fn() });
     render(<Probe url={GOOGLE} />);
-    // No bridged op: the raw URL is returned, exactly as before this hook —
-    // the CSP blocks it and the component shows initials, which is the old
-    // behavior, not a new failure mode.
+    // No bridged op: raw URL returned, as before this hook.
     expect(read()).toBe(GOOGLE);
   });
 

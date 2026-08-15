@@ -1,13 +1,9 @@
 /**
- * WHO LANDS WHERE AFTER A SIGN-IN, as a table.
- *
- * `/login` is not one flow, it is four that share a screen: a plain web visitor
- * arriving from the landing page's "Get Started", a deep link bouncing through
- * (`/oauth/authorize`, `/invite/<token>`, `/join/<token>`, the middleware's own
- * `?redirectTo=`), the desktop app's system-browser OAuth, and a password reset.
- * Only the FIRST one's destination moved. The rest are pinned here because the
- * cost of getting them wrong is not a bad landing page — it is an OAuth consent
- * that never returns to the client, or a desktop app that can never sign in.
+ * WHO LANDS WHERE AFTER A SIGN-IN, as a table. ⚠ `/login` is FOUR flows sharing
+ * one screen: plain web visitor, deep link bouncing through (`/oauth/authorize`,
+ * `/invite/<token>`, `/join/<token>`, middleware `?redirectTo=`), the desktop
+ * app's system-browser OAuth, and a password reset. Getting the last three wrong
+ * costs an OAuth consent that never returns, or a desktop app that cannot sign in.
  */
 
 import { describe, it, expect } from "vitest";
@@ -19,8 +15,6 @@ import {
 
 describe("a PLAIN web sign-in", () => {
   it("lands on the download page, not on the app", () => {
-    // The whole point of the auth-first funnel: the account is captured, and the
-    // next thing the user needs is the dmg — not a web app that is being retired.
     expect(webPostAuthDestination(null)).toBe("/get-started");
     expect(webPostAuthDestination(undefined)).toBe("/get-started");
     expect(webPostAuthDestination("")).toBe("/get-started");
@@ -28,11 +22,9 @@ describe("a PLAIN web sign-in", () => {
   });
 
   it("reads as 'asked for nothing', which is what selects the download page", () => {
-    // The null is the signal, and it is load-bearing wherever a branch asks
-    // "did this URL name a destination": the middleware's signed-in `/login`
-    // bounce and the `/onboarding` retirement carry-through both fall back on
-    // it. (`/auth/callback`'s first-run onboarding detour read it too, until
-    // F-136 deleted the detour — web onboarding is retired.)
+    // ⚠ The null IS the signal wherever a branch asks "did this URL name a
+    // destination" — the middleware's signed-in `/login` bounce and the
+    // `/onboarding` retirement carry-through both fall back on it.
     expect(explicitPostAuthTarget(null)).toBeNull();
     expect(explicitPostAuthTarget("")).toBeNull();
   });
@@ -52,8 +44,8 @@ describe("an EXPLICIT ?redirectTo= is honoured, unchanged", () => {
   });
 
   it("keeps the query and the fragment the deep link depends on", () => {
-    // The OAuth dance dies without its query: `client_id`, `state`, `code_challenge`
-    // all ride the redirect back.
+    // ⚠ The OAuth dance dies without its query: `client_id`, `state`,
+    // `code_challenge` all ride the redirect back.
     expect(webPostAuthDestination("/oauth/authorize?client_id=a&state=b#c")).toBe(
       "/oauth/authorize?client_id=a&state=b#c"
     );
@@ -69,10 +61,9 @@ describe("a HOSTILE target is not a target", () => {
     ["a scheme", "javascript:alert(1)"],
   ])("%s degrades to the landing, and reads as 'asked for nothing'", (_label, target) => {
     expect(webPostAuthDestination(target)).toBe(WEB_POST_AUTH_LANDING);
-    // The second assertion is the one with teeth: if a rejected value read as an
-    // explicit target, a crafted `?redirectTo=https://evil.example` would silently
-    // change which BRANCH `/auth/callback` takes, even though it can't change the
-    // URL. Rejection has to be total.
+    // ⚠ Rejection must be TOTAL: if a rejected value read as an explicit target,
+    // a crafted `?redirectTo=https://evil.example` would change which BRANCH
+    // `/auth/callback` takes even though it cannot change the URL.
     expect(explicitPostAuthTarget(target)).toBeNull();
   });
 
@@ -87,10 +78,9 @@ describe("a HOSTILE target is not a target", () => {
 
 describe("the landing itself", () => {
   it("is a same-origin path the middleware will gate", () => {
-    // `/get-started` is deliberately NOT in `proxy.ts` PUBLIC_ROUTES: a signed-out
-    // visitor must be bounced to `/login?redirectTo=/get-started` and come back.
-    // A value that started with "/download" would inherit that route's PUBLIC
-    // prefix match and silently open the page to anybody.
+    // ⚠ `/get-started` is deliberately NOT in `proxy.ts` PUBLIC_ROUTES. A value
+    // starting with "/download" would inherit that route's PUBLIC prefix match
+    // and silently open the page to anybody.
     expect(WEB_POST_AUTH_LANDING.startsWith("/")).toBe(true);
     expect(WEB_POST_AUTH_LANDING.startsWith("/download")).toBe(false);
     expect(webPostAuthDestination(WEB_POST_AUTH_LANDING)).toBe(WEB_POST_AUTH_LANDING);

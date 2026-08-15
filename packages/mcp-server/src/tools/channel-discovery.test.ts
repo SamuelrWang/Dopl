@@ -1,40 +1,23 @@
 /**
- * THE CONTACT PATH IS DISCOVERABLE — the routing pins for `dopl_channel`.
+ * THE CONTACT PATH IS DISCOVERABLE — routing pins for `dopl_channel`.
  *
- * THE INCIDENT. A fresh external session was told "ask Sam's agent what he did
- * recently" and spent its first ~10 tool calls wandering: `dopl_map`, then
- * `dopl_members` three times, then `dopl_chats`, then `dopl_kb`. It found the
- * CHANNELS feature at all only because one knowledge-base entry happened to
- * mention a past exchange. Every call it made was a reasonable call. Nothing it
- * read said that reaching another MEMBER or their AGENT is a thing this product
- * does, or which tool does it.
+ * ⚠ Pinned on the DISCOVERY surface, not the channel tool: `dopl_channel` is
+ * DEFERRED in some clients, so its description is not loaded until ToolSearch
+ * fetches it and the tool NAME is the entire pre-discovery signal. An agent
+ * deciding where to look reads three things first — the server instructions,
+ * the `dopl_map` result they tell it to fetch, and `dopl_members` — so the
+ * sentence is pinned into each.
  *
- * WHY THE DISCOVERY SURFACE, AND NOT THE CHANNEL TOOL. `dopl_channel` already
- * carries the most detailed description in this server — and it is DEFERRED in
- * some clients, which means that description is not loaded until ToolSearch
- * fetches it, and the tool NAME is the entire pre-discovery signal. An agent
- * deciding where to look reads three things first: the server instructions, the
- * `dopl_map` result the instructions tell it to fetch, and (for anything about
- * people) `dopl_members`. All three described a workspace of knowledge bases,
- * skills and ontology clusters. This suite pins the sentence into each one.
- *
- * WHAT THESE ARE AND ARE NOT. Every assertion here is a string match on ROUTING
- * prose. None of them touches an op, a gate, or a permission: the additions say
- * WHICH TOOL reaches a person, and `dopl_channel`'s own description remains the
- * single source on what a post costs and who may make one. The last test in the
- * file is the guard on exactly that.
- *
- * Sibling suites: `tool-scope-claims.test.ts` (descriptions may not overclaim)
- * and `tool-scope-footers.test.ts` (results carry their own scope). This one is
- * the third question those two do not ask: is the destination NAMED anywhere an
- * agent will actually look?
+ * ⚠ ROUTING prose only. No assertion here touches an op, a gate or a
+ * permission: they say WHICH TOOL reaches a person, and `dopl_channel`'s own
+ * description stays the single source on cost and permissions. The last test in
+ * the file guards exactly that.
  */
 
 import { describe, it, expect, vi } from "vitest";
 
-// `buildInstructions` lives in server.ts beside `createServer`, so importing it
-// pulls the SDK in. Stubbed exactly as `server.test.ts` and `narration.test.ts`
-// stub it; nothing here constructs a server.
+// ⚠ `buildInstructions` is re-exported from server.ts, so importing it pulls in
+// the SDK — stubbed the same way `server.test.ts` stubs it.
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
     tool() {}
@@ -79,9 +62,8 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
   });
 
   it("says the tool is DEFERRED, so an empty tool list is not an absent feature", () => {
-    // The half that made the incident expensive: the agent could not have found
-    // the tool by reading its description, because the description was not
-    // loaded. Saying "load it with ToolSearch" is what closes that gap.
+    // ⚠ The agent cannot find the tool by reading its description, because the
+    // description is not loaded — "load it with ToolSearch" closes that gap.
     expect(OUT).toContain("DEFERRED");
     expect(OUT).toContain("ToolSearch");
   });
@@ -93,8 +75,8 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
   });
 
   it("does not restate the channel tool's own rules", () => {
-    // The instructions are read on EVERY connection. Op-level detail belongs in
-    // the tool description, which is fetched only when the tool is.
+    // ⚠ Read on EVERY connection — op-level detail belongs in the tool
+    // description, which is fetched only when the tool is.
     expect(OUT).not.toContain("to_agent");
     expect(OUT).not.toContain("create_thread");
   });
@@ -118,8 +100,8 @@ describe("dopl_map names the destination it cannot list", () => {
   });
 
   it("says it did not query them, so the line is never read as a count", async () => {
-    // The whole tool is counts, and this section has none. Saying WHY is what
-    // stops "no channels section" from reading as "no channels".
+    // ⚠ The tool is counts and this section has none — say WHY, or "no channels
+    // section" reads as "no channels".
     const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
     expect(text).toContain("this manifest does not query them");
     expect(text).toContain("nothing above is a count of them");
@@ -127,8 +109,8 @@ describe("dopl_map names the destination it cannot list", () => {
   });
 
   it("sits BELOW the scope note, which only speaks for the domains it read", async () => {
-    // `SCOPE_NOTE` ends "every section above was read". A pointer to a domain
-    // this tool never queries must not sit under that sentence and inherit it.
+    // ⚠ `SCOPE_NOTE` ends "every section above was read" — a pointer to a
+    // domain this tool never queries must not sit under it and inherit that.
     const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
     expect(text.indexOf("with no such notice every section above was read")).toBeLessThan(
       text.indexOf("Reaching a member or their agent"),
@@ -194,8 +176,7 @@ describe("dopl_members answers 'who is here' with a way to reach them", () => {
   }
 
   it("op=get carries the same pointer, byte for byte", async () => {
-    // ONE constant, three renders: an agent that reads any one of them reads
-    // the same route. Three hand-written variants would drift.
+    // ⚠ ONE constant, three renders — hand-written variants drift.
     expect(await members({ op: "get", member: "u-1" })).toContain(CONTACT_POINTER);
   });
 
@@ -206,8 +187,8 @@ describe("dopl_members answers 'who is here' with a way to reach them", () => {
   });
 
   it("op=get on a DEACTIVATED row does NOT offer the route", async () => {
-    // A DM and a channel invite both require an ACTIVE workspace member, so
-    // offering the route here would name a call the server refuses.
+    // ⚠ A DM and a channel invite both require an ACTIVE member, so offering
+    // the route here names a call the server refuses.
     const text = await members(
       { op: "get", member: "u-1" },
       { listWorkspaceMembers: vi.fn(async () => [member({ status: "revoked" })]) },
@@ -221,11 +202,10 @@ describe("dopl_members answers 'who is here' with a way to reach them", () => {
 
 describe("the routing additions grant nothing", () => {
   /**
-   * Three surfaces gained a sentence about a tool that WRITES. The failure mode
-   * is a routing line that reads as a licence — "post to X" rather than "the
-   * tool that reaches X is Y" — so this asserts the shape of what was added,
-   * not just its presence. `dopl_channel`'s description (and the desktop's own
-   * consent gate) remain the single source on what a call costs.
+   * ⚠ Three surfaces carry a sentence about a tool that WRITES, and the failure
+   * mode is a routing line reading as a LICENCE ("post to X" rather than "the
+   * tool that reaches X is Y") — so assert the SHAPE, not just the presence.
+   * `dopl_channel` and the desktop consent gate stay the source on cost.
    */
   const surfaces = async () => [
     buildInstructions([WS]),

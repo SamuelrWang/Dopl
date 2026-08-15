@@ -15,9 +15,7 @@ import {
   DirectChannelImmutableError,
   DirectSelfTargetError,
 } from "./errors";
-// P0-2 — who may post a LIFECYCLE marker, and the server-internal options that
-// answer it. Its own module (§2 cap) because it is its own reason to change: a
-// question about the caller's standing, not about the write or what it stores.
+// Who may post a LIFECYCLE marker, and the server-internal options answering it.
 import {
   assertLifecycleKindIsServerOwned,
   type PostMessageOptions,
@@ -48,22 +46,14 @@ import {
  */
 
 /**
- * Refuse a post that says `intent:"chat"` and then addresses a PERSON.
+ * Refuse a post that says `intent:"chat"` and then addresses a PERSON. The two
+ * halves say opposite things, and reconciling either way is the
+ * invisible-delivery failure the addressing contract exists to prevent — so 400,
+ * never a silent pick.
  *
- * The two halves say opposite things — chat means "do not raise a prompt on
- * anyone's machine", an addressee means "raise one on exactly this machine" —
- * and reconciling either way is the invisible-delivery failure the addressing
- * contract exists to prevent. So it is a 400, not a silent pick.
- *
- * It used to live in `service-writes-agents.ts` beside the named-agent
- * resolution, and its name meant "unaddressed BY A HUMAN ADDRESSEE" because a
- * `toAgent` under chat was allowed. With agent addressing gone (rollback §1)
- * there is only one kind of addressee left and the name is simply true.
- *
- * Cheap and pure, so it runs in {@link postMessage} BESIDE the addressee-
- * membership check — i.e. BEFORE the idempotency short-circuit, exactly like
- * that one. A contradictory post must 400 on the retry too, not be answered
- * with the stored message from a request that never had the contradiction.
+ * ⚠ Runs in {@link postMessage} BESIDE the addressee-membership check, i.e.
+ * BEFORE the idempotency short-circuit: a contradictory post must 400 on the
+ * retry too, not be answered with a stored message from a clean request.
  */
 function assertChatIsUnaddressed(input: ChannelMessageCreateInput): void {
   if (input.intent !== "chat") return;
@@ -100,7 +90,6 @@ export async function createChannel(
     throw err;
   }
 
-  // The creator is the channel owner.
   await repo.insertMember({
     channel_id: channel.id,
     user_id: ctx.userId,
@@ -113,11 +102,11 @@ export async function createChannel(
 }
 
 /**
- * Open (or dedup-return) a direct (1:1) channel with `memberUserId`. The
- * `direct_key` is the two user-ids sorted and joined ':'; a lookup by
- * (workspace, direct_key) makes repeat opens idempotent ("open existing"). The
- * peer must be an active workspace member, a self-DM is refused, and exactly
- * two members are inserted (membership-of-2 lives here — a CHECK can't count).
+ * Open (or dedup-return) a direct channel. `direct_key` is the two user-ids
+ * sorted and joined ':'; lookup by (workspace, direct_key) makes repeat opens
+ * idempotent. Peer must be an active workspace member, self-DM refused, exactly
+ * two members inserted — ⚠ membership-of-2 lives here because a CHECK can't
+ * count.
  */
 async function createDirectChannel(
   ctx: ChannelContext,
@@ -131,11 +120,10 @@ async function createDirectChannel(
   }
 
   const directKey = [ctx.userId, memberUserId].sort().join(":");
-  // Idempotent open. Look up INCLUDING soft-deleted rows: the partial unique
-  // index counts a soft-deleted DM, so a fresh insert for a deleted pair would
-  // 23505. A live row is returned as-is (dedup); a soft-deleted row is REVIVED
-  // — un-hidden and its two member rows restored — so the same conversation
-  // (and its history) reopens. A DM delete is "hide until reopened".
+  // ⚠ Look up INCLUDING soft-deleted rows — the partial unique index counts a
+  // soft-deleted DM, so a fresh insert for a deleted pair 23505s. Live row
+  // returned as-is; soft-deleted row REVIVED with its member rows, so the same
+  // conversation and history reopen. A DM delete is "hide until reopened".
   const existing = await repo.findDirectChannelAnyStatus(
     ctx.workspaceId,
     directKey
@@ -151,8 +139,8 @@ async function createDirectChannel(
       workspace_id: ctx.workspaceId,
       created_by: ctx.userId,
       slug,
-      // Stored but ignored by the DM UI (it renders the peer). NOT NULL / CHECK
-      // still require a non-empty name.
+      // Ignored by the DM UI (it renders the peer), but NOT NULL / CHECK still
+      // require a non-empty name.
       name: "Direct message",
       topic: "",
       visibility: "private",
@@ -160,13 +148,10 @@ async function createDirectChannel(
       direct_key: directKey,
     });
   } catch (err) {
-    // A 23505 here is either the direct_key index (a concurrent open of the
-    // SAME pair) or the workspace slug index (a concurrent create that took
-    // the slug this call had already picked). Look the pair up INCLUDING
-    // soft-deleted rows — the same reason the pre-insert lookup does — and
-    // converge on it; a slug race resolves to nothing and surfaces as a clean
-    // 409 instead of the raw 23505 becoming a generic 500 on "open direct
-    // message".
+    // 23505 = the direct_key index (concurrent open of the SAME pair) or the
+    // workspace slug index (concurrent create took the slug). ⚠ Look the pair up
+    // INCLUDING soft-deleted rows and converge; a slug race resolves to nothing
+    // and surfaces as a clean 409 instead of a generic 500.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
       const raced = await repo.findDirectChannelAnyStatus(
         ctx.workspaceId,
@@ -197,22 +182,16 @@ async function createDirectChannel(
 }
 
 /**
- * Return an existing direct channel, reviving it first when it was
- * soft-deleted (un-hidden) so the same conversation — and its history —
- * reopens. A live row is returned as-is.
+ * Return an existing direct channel, reviving it first when soft-deleted so the
+ * same conversation and history reopen. A live row is returned as-is.
  *
- * The two member rows are re-asserted on EVERY open, not only on the revive
- * branch (Q2). A live DM with a torn roster is otherwise a dead end: the
- * missing side reads the channel as not-found (`getChannel` →
- * `loadVisibleChannel`), and the partial unique index on `direct_key` keeps
- * the live row reserving the pair, so a fresh DM can't be created either.
- * `removeMember` refuses to tear a DM at the MEMBER level — but that is no
- * longer the whole story: a WORKSPACE departure legitimately removes the
- * leaver's row after soft-closing the pair (`service-workspace-departure.ts`),
- * and pairs damaged before the member guard existed are unreachable by any
- * other repair path — re-asserting here makes them self-heal on the next
- * open, from EITHER side (a rejoined leaver included). Two membership
- * reads on a dedup path (not a hot one) is the whole cost.
+ * ⚠ Both member rows are re-asserted on EVERY open, not only the revive branch.
+ * A live DM with a torn roster is otherwise a dead end: the missing side reads
+ * the channel as not-found, and the partial unique index on `direct_key` keeps
+ * the live row reserving the pair, so no fresh DM can be created either. A
+ * WORKSPACE departure legitimately removes the leaver's row
+ * (`service-workspace-departure.ts`), so re-asserting here is the only self-heal
+ * — from EITHER side, a rejoined leaver included.
  */
 async function reopenDirectChannel(
   ctx: ChannelContext,
@@ -228,10 +207,9 @@ async function reopenDirectChannel(
 }
 
 /**
- * Restore one member of a reopened direct channel. A soft-delete leaves the
- * `channel_members` rows in place, so this is normally a no-op: re-insert only
- * the row that went missing. The caller takes `owner` and the peer `member`,
- * so a pair healed from the evicted side still has someone who can manage it.
+ * Restore one member of a reopened direct channel — normally a no-op, since a
+ * soft-delete leaves `channel_members` in place. Caller takes `owner`, peer
+ * `member`, so a pair healed from the evicted side still has a manager.
  */
 async function ensureDirectMember(
   ctx: ChannelContext,
@@ -259,8 +237,8 @@ export async function updateChannel(
   if (!canManageChannel(ctx, membership)) {
     throw new ChannelForbiddenError("manage this channel");
   }
-  // A DM is always private (DB CHECK). Reject a visibility change here so it
-  // returns a clean 400 instead of surfacing the raw CHECK-constraint 500.
+  // ⚠ A DM is always private (DB CHECK) — reject the visibility change here for
+  // a clean 400 instead of a raw CHECK-constraint 500.
   if (channel.is_direct && patch.visibility !== undefined) {
     throw new DirectChannelImmutableError("visibility");
   }
@@ -278,44 +256,28 @@ export async function updateChannel(
 }
 
 /**
- * TWO DELETES BEHIND ONE VERB, and the branch is `is_direct` (Samuel's
- * decision, 2026-08-08 — C-16, F-173). Getting the branch backwards destroys
- * data in one direction and strands it forever in the other, so it is stated
- * here rather than inferred at the repository.
+ * ⚠ TWO DELETES BEHIND ONE VERB, branching on `is_direct`. Backwards, it
+ * destroys data one way and strands it forever the other.
  *
- * **A DM: SOFT, and that is not a trash.** `channels.deleted_at` on a direct
- * channel is the CLOSE half of close/reopen — either side's next open revives
- * the same row with its full history (`reviveChannel` / `reopenDirectChannel`).
- * Both members may do it: a DM has no real manage hierarchy (one side holds the
- * `owner` row only because they happened to open the conversation), and since a
- * DM's roster is immutable (`removeMember` refuses to tear the pair) this is the
- * ONLY exit the non-creator has. Hard-deleting a DM would let one member destroy
- * a shared transcript on a unilateral click, which is exactly what the
- * reversible design exists to prevent. ENGINEERING §7 and migration
- * `20260807110000`'s header both say so; do not "finish the job" here.
+ * **DM: SOFT, and not a trash.** `channels.deleted_at` on a direct channel is
+ * the CLOSE half of close/reopen — either side's next open revives the same row
+ * with its history (`reviveChannel` / `reopenDirectChannel`). Both members may
+ * do it (a DM has no real manage hierarchy) and, since the roster is immutable,
+ * it is the non-creator's ONLY exit. ⚠ Do not "finish the job" and hard-delete:
+ * that lets one member destroy a shared transcript on a unilateral click.
+ * ENGINEERING §7 and migration `20260807110000`'s header both say so.
  *
- * **Anything else: HARD, cascading, gone.** Owner / workspace-admin only, as
- * before — the authorization is untouched, only the write at the end changed,
- * the same shape the rest of the app took in §2b. Before this, a non-DM delete
- * stamped `deleted_at` and produced a row that was unreachable in every
- * direction at once: no revive path (`reviveChannel`'s only caller is the DM
- * reopen), no restore route, no trash, deliberately excluded from the purge
- * sweep — and still holding its slug against a non-partial unique index, so
- * recreating the channel by its own name 409'd against something nobody could
- * see. "Permanently deletes" in the dialog was the only honest half of it.
- * Now the row is really gone, its messages / members / threads cascade with it
- * (`hardDeleteChannel` documents the FK chain), and the slug is reusable.
+ * **Anything else: HARD, cascading, gone.** Owner / workspace-admin only.
+ * Messages / members / threads cascade (`hardDeleteChannel` documents the FK
+ * chain) and the slug becomes reusable.
  *
- * NO SEPARATE REALTIME DOORBELL IS NEEDED, and this is the one non-obvious
- * consequence. `channels` stays at `REPLICA IDENTITY DEFAULT`, so its own DELETE
- * frame carries only the primary key and the subscribers' `workspace_id=eq.…`
- * filter drops it. It does not matter: the cascade fires real DELETEs on
- * `channel_members`, which DOES carry `workspace_id` in its replica identity
- * (`20260807150000`) and rides the SAME refetch signal in both subscribers
- * (`CHANNEL_TABLES`, `SYNC_TABLES`). One doorbell, already paid for. Putting an
- * identity on `channels` instead would widen the WAL record of `touchChannel`,
- * which runs on EVERY message post — the hottest update in the feature — to fix
- * a frame that already arrives.
+ * ⚠ No separate realtime doorbell is needed. `channels` stays at `REPLICA
+ * IDENTITY DEFAULT`, so its DELETE frame carries only the PK and the
+ * subscribers' `workspace_id=eq.…` filter drops it — but the cascade fires real
+ * DELETEs on `channel_members`, which DOES carry `workspace_id`
+ * (`20260807150000`) and rides the same refetch signal in both subscribers.
+ * Adding an identity to `channels` would widen the WAL record of
+ * `touchChannel`, which runs on EVERY message post.
  */
 export async function deleteChannel(
   ctx: ChannelContext,
@@ -338,23 +300,13 @@ export async function deleteChannel(
 // ─── Messages ───────────────────────────────────────────────────────
 
 /**
- * Post a message (or an activity event) into a channel.
+ * Post a message (or activity event) into a channel. ONE write — an idempotent
+ * hit returns the stored row and writes nothing at all.
  *
- * ONE WRITE. It used to be two — the message insert plus an ENGAGEMENT stamp on
- * `channel_agents` — wrapped in a shared idempotency envelope so a lost stamp
- * could be repaired by a retry. Engagement is gone with the named agents it
- * described (rollback §1), so the second write, its replay repair and the
- * `replayStoredMessage` seam are gone with it: an idempotent hit now returns the
- * stored row and writes nothing at all.
- *
- * F6 — THE RETURN CARRIES ONE NOTICE, `threadClosed`, and it is a notice about
- * THIS CALL rather than a property of the message. A closed thread still ACCEPTS
- * the post (the decided behaviour — see `isThreadClosed`), so nothing about the
- * stored row changes; what changes is that the caller is told. It is set only on
- * the path that actually resolved the thread, which means an IDEMPOTENT REPLAY
- * does not carry it: a replay re-posts nothing and re-resolves nothing, and
- * inventing the flag there would mean re-reading a thread row to describe a
- * write that already happened.
+ * ⚠ The return carries one notice, `threadClosed`, about THIS CALL rather than
+ * the message. A closed thread still ACCEPTS the post (see `isThreadClosed`), so
+ * the stored row is unchanged; only the caller is told. Set only on the path
+ * that actually resolved the thread, so an IDEMPOTENT REPLAY does not carry it.
  */
 export async function postMessage(
   ctx: ChannelContext,
@@ -368,26 +320,21 @@ export async function postMessage(
     throw new ChannelForbiddenError("post to this channel");
   }
 
-  // `intent:"chat"` means "reach nobody's agent", so naming an addressee
-  // contradicts it — 400 rather than silently picking a half. Beside the
-  // membership check because both must precede the idempotency short-circuit:
-  // a contradictory post has to fail on the retry too.
+  // ⚠ Beside the membership check because both must precede the idempotency
+  // short-circuit — a contradictory post has to fail on the retry too.
   assertChatIsUnaddressed(input);
-  // P0-2 — and the same placement rule, for the same reason.
+  // ⚠ Same placement rule, same reason.
   assertLifecycleKindIsServerOwned(ctx, input, opts);
 
-  // Addressing (v1.1): a `toUserId` must name an actual channel member —
-  // otherwise the message would target a listener that will never see it.
+  // A `toUserId` must name an actual channel member, or the message targets a
+  // listener that will never see it.
   //
-  // C-20: channel membership is NOT enough. Nothing sweeps `channel_members`
-  // when someone leaves the workspace, so a departed teammate stays a channel
-  // member here — the post lands, `openingSeq`/`await` arms, and nothing ever
-  // answers. Assert ACTIVE workspace membership too, the same predicate (and for
-  // the same reason) trust checks at consumption — see
-  // `trust-service.isTrustedRequester`: "a rule outlives the teammate leaving".
-  // Fail closed with the existing undeliverability error rather than accept an
-  // address that can never be answered. The channel check runs first, so the
-  // second round-trip is only paid once a `toUserId` is a channel member.
+  // ⚠ Channel membership is NOT enough: nothing sweeps `channel_members` on
+  // workspace-leave, so a departed teammate stays a channel member — the post
+  // lands, `openingSeq`/`await` arms, and nothing ever answers. Assert ACTIVE
+  // workspace membership too (same predicate `trust-service.isTrustedRequester`
+  // checks at consumption). Channel check runs first, so the second round-trip
+  // is only paid once a `toUserId` is a channel member.
   if (
     input.toUserId &&
     !(
@@ -398,17 +345,15 @@ export async function postMessage(
     throw new ChannelAddresseeNotMemberError(input.toUserId);
   }
 
-  // Idempotency: a re-sent client_msg_id returns the stored message and writes
-  // nothing.
+  // Re-sent client_msg_id returns the stored message and writes nothing.
   if (input.clientMsgId) {
     const existing = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
     if (existing) return hydrateOne(existing);
   }
 
-  // Addressing (incl. the DM auto-address), the reserved-key anti-spoof fold
-  // and the task-key stamping all live in `service-writes-metadata.ts` — one
-  // place decides what a caller may put in `metadata` and what the server
-  // stamps itself (jsonb, no schema change).
+  // Addressing (incl. DM auto-address), the reserved-key anti-spoof fold and
+  // task-key stamping all live in `service-writes-metadata.ts` — ONE place
+  // decides what a caller may put in `metadata`.
   const { metadata, threadClosed } = await resolvePostMetadata(
     ctx,
     channel,
@@ -421,8 +366,7 @@ export async function postMessage(
   );
 
   // `system` is server-reserved and rejected by the route schema, so a posted
-  // message always ties to the acting user (agent posts included — the agent
-  // acts on behalf of the token's owner).
+  // message always ties to the acting user (agent posts included).
   const authorKind =
     input.authorKind ?? (ctx.source === "agent" ? "agent" : "user");
 
@@ -439,8 +383,8 @@ export async function postMessage(
       client_msg_id: input.clientMsgId ?? null,
     });
   } catch (err) {
-    // Lost an idempotency race — converge on the stored winner: this is the
-    // short-circuit reached a second way and must answer identically.
+    // ⚠ Lost an idempotency race — the short-circuit reached a second way, so
+    // it must answer identically.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
       const raced = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
       if (raced) return hydrateOne(raced);
@@ -448,11 +392,10 @@ export async function postMessage(
     throw err;
   }
 
-  // Surface the channel as active (list sorts by updated_at).
   await repo.touchChannel(ctx.workspaceId, channel.id);
   const message = await hydrateOne(row);
-  // F6: the flag is ADDED ONLY WHEN TRUE, so a post into an open thread (or no
-  // thread at all) returns byte-for-byte the object it always did.
+  // ⚠ Added ONLY when true, so a post into an open thread (or none) returns
+  // byte-for-byte the object it always did.
   return threadClosed ? { ...message, threadClosed: true } : message;
 }
 

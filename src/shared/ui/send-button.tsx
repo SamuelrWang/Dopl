@@ -1,31 +1,21 @@
 "use client";
 
 /**
- * SendButton — THE composer send affordance, shared by every Dopl composer.
+ * SendButton — THE composer send affordance. One button, two states: send at
+ * rest, pause while the agent is mid-turn. Glyphs are inline SVG — no external
+ * asset, nothing built from a string.
  *
- * One button, two states. At rest it is the raised black circle with a white
- * up-arrow that sends the draft; while the agent is mid-turn it MORPHS into a
- * pause control that interrupts. Both glyphs are inline SVG, so nothing is ever
- * built from a string and no external asset is fetched.
- *
- * The look is the desktop session window's `.send-btn` (30px face, 8px radius,
- * `.auth-btn-3d` black gradient + border + shadow, 16px white glyph) expressed
- * with kit classes and tokens ONLY — the raised/hover/active/disabled recipe is
- * `.auth-btn-3d` from globals.css, never re-derived here, and the glyph color is
- * the `text-on-cta` token. Extracted so the main app and the session window do
- * not each carry their own copy of that recipe.
- *
- * The session window (renderer/session/*) still ships its own CSS twin because
- * it is a plain-<script> sandbox that cannot import React; pointing it at this
- * component is a follow-up owned by whoever owns renderer/session/.
+ * ⚠ Raised/hover/active/disabled recipe is `.auth-btn-3d` from globals.css,
+ * never re-derived here; glyph colour is the `text-on-cta` token. The desktop
+ * session window (renderer/session/*) ships a CSS twin of this face because it
+ * is a plain-<script> sandbox that cannot import React — keep them in sync.
  */
 
 import { cn } from "@/shared/lib/utils";
 
-/** Which affordance the one button is showing right now. */
 export type SendButtonMode = "send" | "pause";
 
-/** Default accessible names, mirroring the session window's SEND_LABEL map. */
+/** Accessible names — mirrors the session window's SEND_LABEL map. */
 const SEND_LABEL: Record<SendButtonMode, string> = {
   send: "Send",
   pause: "Pause the agent",
@@ -42,13 +32,12 @@ export function SendButton({
   label,
   className,
 }: {
-  /** "send" (up arrow) at rest; "pause" while a turn is running. */
   mode?: SendButtonMode;
   disabled?: boolean;
   onClick: () => void;
-  /** Accessible name override; defaults to the mode's label. */
+  /** Accessible-name override; defaults to the mode's label. */
   label?: string;
-  /** Layout-only extras (margins/alignment). Never restyle the face here. */
+  /** Layout-only extras. Never restyle the face here. */
   className?: string;
 }) {
   return (
@@ -67,7 +56,7 @@ export function SendButton({
   );
 }
 
-/** The up-arrow, path-identical to the session window's inline send glyph. */
+/** ⚠ Path-identical to the session window's inline send glyph. */
 function SendGlyph() {
   return (
     <svg
@@ -90,7 +79,7 @@ function SendGlyph() {
   );
 }
 
-/** The two pause bars, geometry-identical to the session window's glyph. */
+/** ⚠ Geometry-identical to the session window's pause glyph. */
 function PauseGlyph() {
   return (
     <svg

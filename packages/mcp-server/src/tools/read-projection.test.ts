@@ -1,27 +1,21 @@
 /**
- * INVARIANT SUITE — the four ontology reads that render NAMES fetch the SUMMARY,
- * and a clipped one says so (ENGINEERING §8, "Read projections").
+ * INVARIANT SUITE — the ontology reads that render NAMES fetch the SUMMARY, and
+ * a clipped one says so.
  *
- * `map-projection.test.ts` makes this claim for `dopl_map`, and states why it
- * needs a suite of its own: swapping `{ view: "summary" }` back to a bare
- * `getOntology()` renders a BYTE-IDENTICAL result, passes every existing
- * behavioural test, and quietly restores the P0-3 payload blocker. That argument
- * is not special to `dopl_map` — it is a property of the projection — and it now
- * covers four more call sites, so they are pinned the same way: on the CALL, not
- * on the output.
+ * ⚠ Pinned on the CALL, not the output: swapping `{ view: "summary" }` back to
+ * a bare `getOntology()` renders a BYTE-IDENTICAL result and passes every
+ * behavioural test while restoring the payload blocker.
  *
- * The second half is the honest one. Every whole-workspace ontology read is
- * capped by `ONTOLOGY_READ_LIMITS`, but only the summary REPORTS the cap
- * (`truncated`); the full snapshot has always been clipped in silence. So these
- * four surfaces did not become clippable by moving — they became able to admit
- * it, and each renders the admission where the thing it clipped is.
+ * ⚠ Every whole-workspace ontology read is capped by `ONTOLOGY_READ_LIMITS`,
+ * but only the SUMMARY reports the cap (`truncated`) — the full snapshot has
+ * always been clipped in silence. Each surface renders the admission where the
+ * thing it clipped is.
  *
- * NOT COVERED HERE, deliberately: `op="get"` and `op="anchor"`. Both render
- * through `renderObject`, which reads `attributes` / `relationships` /
- * `template` / `methods` off the target and scans every object's relationships
- * for the "Referenced by" backlinks. They must keep fetching the whole graph,
- * and a future change that "optimizes" them onto the summary is the mistake this
- * header exists to name.
+ * ⚠ NOT covered, deliberately: `op="get"` and `op="anchor"`. Both render
+ * through `renderObject`, which reads `attributes`/`relationships`/`template`/
+ * `methods` off the target and scans every object's relationships for
+ * "Referenced by" backlinks — they MUST keep fetching the whole graph, and
+ * "optimizing" them onto the summary is the mistake this header names.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -48,9 +42,9 @@ const SUMMARY = {
 };
 
 /**
- * The SAME graph handed over as a full snapshot, JSONB attached. If any of these
- * renders ever starts reading a heavy field, its two results diverge and it
- * stops being safe to feed the summary.
+ * ⚠ The SAME graph as a full snapshot with JSONB attached — if a render ever
+ * starts reading a heavy field, its two results diverge and it stops being safe
+ * to feed the summary.
  */
 const HEAVY = {
   clusters: [{ ...SUMMARY.clusters[0], layout: { "col-1": { x: 10, y: 20 } } }],
@@ -112,9 +106,8 @@ describe("the name-only ontology reads ask for the cheap projection", () => {
   });
 
   it('dopl_ontology_admin calls getOntology with { view: "summary" }', async () => {
-    // Unreachable in production — §2b refuses every op on an `_admin` tool in
-    // server.ts's registration wrapper before the handler runs — so this pins
-    // the resolvers' honesty about what they read, not a payload saving.
+    // Unreachable in production (every `_admin` op is refused before the
+    // handler runs), so this pins the resolvers' honesty, not a payload saving.
     const c = ontologyStub({ deleteOntologyCluster: vi.fn(async () => undefined) });
     await callTool(registerOntologyTool, c, "dopl_ontology_admin", {
       op: "delete_cluster",
@@ -140,7 +133,6 @@ describe("the detail reads still fetch the whole graph", () => {
       object: "o-1",
     });
     expect(viewArgs(c)).toEqual([undefined]);
-    // Proof it is the heavy fields that are wanted, not just the call shape.
     expect(text).toContain("## Actions");
     expect(text).toContain("## Relationships");
   });
@@ -183,7 +175,6 @@ describe("the switched renders read names and containment only", () => {
       args,
     );
     expect(fat).toBe(lean);
-    // The container name comes off `childIds`, which the summary carries.
     expect(lean).toContain("(`Lead` · id: `o-1`)");
   });
 
@@ -235,7 +226,7 @@ describe("a clipped ontology read is reported, not absorbed", () => {
       { op: "map" },
     );
     expect(text).toContain("CLIPPED");
-    // And still renders what it did get — a clip is not an error.
+    // ⚠ Still renders what it DID get — a clip is not an error.
     expect(text).toContain("`Lead`");
   });
 
@@ -268,8 +259,8 @@ describe("a clipped ontology read is reported, not absorbed", () => {
       "dopl_ontology",
       { op: "resolve", query: "acme" },
     );
-    // One match, so the cap notice must be absent while the clip notice is not:
-    // "narrow the query" is the wrong instruction for rows no query returns.
+    // ⚠ Cap notice absent, clip notice present — "narrow the query" is the
+    // wrong instruction for rows no query returns.
     expect(text).toContain("CLIPPED");
     expect(text).not.toContain("Showing");
   });
@@ -282,8 +273,8 @@ describe("a clipped ontology read is reported, not absorbed", () => {
       { query: "no-such-object" },
     );
     expect(text).toContain("CLIPPED");
-    // The group still reports its miss; the clip is what makes that miss
-    // readable as "not searched" rather than "not there".
+    // ⚠ The clip is what makes the miss readable as "not searched" rather than
+    // "not there".
     expect(text).toContain("## Ontology objects");
   });
 

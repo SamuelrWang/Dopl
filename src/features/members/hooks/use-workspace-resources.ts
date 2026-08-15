@@ -6,28 +6,21 @@ import { accessMatrixPath } from "../client/query-keys";
 import type { ResourcesCache } from "../lib/optimistic-cache";
 
 /**
- * WHERE WORKFLOWS LEAVE THE ACCESS-MATRIX INVENTORY (retirement D7).
- *
- * `workflow` stays a valid grantable type in the DB and in the access-matrix
- * payload — existing grant rows keep working and nothing is migrated. It just
- * stops rendering, and it stops here rather than in each component because the
- * console's surfaces read this list for more than display: `members-view`
- * DERIVES the Access tab's default selection from `resourceList[0]`, so a
- * workflow left in the array would open in the detail pane with no click.
- * `create-team-dialog` builds its grant rows from the same array.
- *
- * The matrix has a SECOND half this does not reach — each team's `grants`
- * array, filtered where those are rendered (`members-list-pane`,
- * `member-detail`). The predicate itself lives in `teams/access-levels`.
+ * ⚠ Where workflows leave the access-matrix INVENTORY. `workflow` stays a
+ * valid grantable type in the DB and in the payload; it only stops rendering,
+ * and it must stop HERE rather than per-component because `members-view`
+ * DERIVES the Access tab's default selection from `resourceList[0]` (a
+ * workflow left in would open with no click) and `create-team-dialog` builds
+ * its grant rows from the same array.
+ * ⚠ The matrix has a SECOND half this does not reach — each team's `grants`,
+ * filtered in `members-list-pane` / `member-detail`. Predicate lives in
+ * `teams/access-levels`.
  */
 const selectResources = (body: ResourcesCache) =>
   withoutRetiredResources(body.resources ?? []);
 
-/**
- * Every grantable resource the UI still renders (knowledge bases + skills,
- * with name + access mode) from the access matrix. Feeds the Access tab,
- * the team detail's grant rows, and the create-team dialog.
- */
+/** Grantable resources the UI still renders (KBs + skills, name + access
+ *  mode). Feeds the Access tab, team detail grant rows, create-team dialog. */
 export function useWorkspaceResources(workspaceSlug: string) {
   const query = useApiQuery(accessMatrixPath(workspaceSlug), {
     select: selectResources,

@@ -3,12 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DocBodySkeleton } from "./doc-pane-chrome";
 
 /**
- * The second of the two hand-rolled `animate-pulse` clones the kit forbids
- * (`src/shared/ui/skeleton.tsx:5-7`, DESIGN-SYSTEM "no local Bar clones").
- * It had already drifted — it tinted its bars `surface-raised-3` where the
- * kit uses `surface-raised-2`, so the knowledge body ghosted a shade darker
- * than every other skeleton in the app. That is the drift the rule exists to
- * prevent, and the reason this is pinned rather than left to review.
+ * ⚠ No local `animate-pulse` Bar clones (src/shared/ui/skeleton.tsx,
+ * DESIGN-SYSTEM). The clone this replaced had already drifted to
+ * `surface-raised-3` where the kit uses `surface-raised-2`, ghosting the
+ * knowledge body a shade darker than every other skeleton. Hence pinned.
  */
 describe("DocBodySkeleton", () => {
   const html = renderToStaticMarkup(<DocBodySkeleton />);
@@ -31,8 +29,8 @@ describe("DocBodySkeleton", () => {
   });
 
   it("announces itself instead of being hidden outright", () => {
-    // It used to be `aria-hidden`, which left a screen reader with silence
-    // where the body was about to appear.
+    // ⚠ Not `aria-hidden`: that leaves a screen reader silent where the body
+    // is about to appear.
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading document");
   });

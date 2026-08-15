@@ -16,15 +16,11 @@ import {
 import * as repo from "./repository";
 
 /**
- * Shared internals for the knowledge service. Cross-cutting gates and
- * helpers used by more than one of the per-domain service modules
- * (`service-bases`, `service-base-writes`, `service-folders`,
- * `service-entries`, `service-paths`, `service-seed`).
+ * Cross-cutting gates + helpers shared by the per-domain service modules.
  *
- * The repository (`./repository.ts`) does raw I/O and bypasses RLS via
- * the service-role client — so every method that reaches a row MUST
- * filter by `ctx.workspaceId` (or chase a row up to a base and verify
- * scope) to stop cross-workspace leakage.
+ * ⚠ `./repository.ts` bypasses RLS via the service-role client, so every
+ * method reaching a row MUST filter by `ctx.workspaceId` (or chase the row up
+ * to a base and verify scope) or workspaces leak into each other.
  */
 
 // ─── Context construction ───────────────────────────────────────────
@@ -38,11 +34,9 @@ export interface AuthLike {
 }
 
 /**
- * Translates a `withWorkspaceAuth` (or MCP equivalent) auth result into
- * a `KnowledgeContext`. Source is derived from the presence of an API
- * key — session callers are users; API-key callers are agents. The
- * key's workspace lock (if any) is forwarded so the service layer can
- * enforce M-10 visibility rules.
+ * `withWorkspaceAuth` (or MCP equivalent) result → `KnowledgeContext`. Source
+ * derives from API-key presence: session = user, API key = agent. The key's
+ * workspace lock is forwarded so the service can enforce M-10 visibility.
  */
 export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
   return {
@@ -57,15 +51,10 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
 // ─── Visibility gates ───────────────────────────────────────────────
 
 /**
- * M-10 visibility filter — true if the caller can see this KB based
- * on its visibility, ownership, and the API-key scope:
- *   - Public items: always visible.
- *   - Private items via session or personal API key: owner-only.
- *   - Private items via workspace-scoped API key: never visible
- *     (those keys may be shared between humans).
- *
- * Used both as a row-level filter (`listBases`) and as a 404 gate
- * (`getBaseById` / `getBaseBySlug` / `getBaseByPublicId`).
+ * M-10 visibility. Public → always; private via session/personal key →
+ * owner-only; private via workspace-scoped key → NEVER (shared between humans).
+ * Used as row filter (`listBases`) AND 404 gate (`getBaseById` /
+ * `getBaseBySlug` / `getBaseByPublicId`).
  */
 export function canSeeBase(ctx: KnowledgeContext, base: KnowledgeBase): boolean {
   if (base.visibility === "public") return true;
@@ -73,11 +62,8 @@ export function canSeeBase(ctx: KnowledgeContext, base: KnowledgeBase): boolean 
   return base.createdBy === ctx.userId;
 }
 
-/**
- * Full visibility gate for single-base reads: M-10 visibility rules plus
- * team scoping — a teams-mode base is 404 for members outside every
- * granted team (admins and the creator always pass).
- */
+/** Single-base read gate: M-10 rules + team scoping. Teams-mode base is 404
+ *  for members outside every granted team; admins and creator always pass. */
 export async function assertBaseVisible(
   ctx: KnowledgeContext,
   base: KnowledgeBase
@@ -94,11 +80,8 @@ export async function assertBaseVisible(
   if (level === null) throw new KnowledgeBaseNotFoundError(base.id);
 }
 
-/**
- * Team-scope list filter: drops teams-mode bases the caller can't read.
- * One batch query regardless of base count; workspace-mode bases pass
- * through untouched.
- */
+/** Drops teams-mode bases the caller can't read. One batch query regardless
+ *  of base count; workspace-mode bases pass through. */
 export async function filterTeamVisibleBases(
   ctx: KnowledgeContext,
   bases: KnowledgeBase[]
@@ -116,26 +99,20 @@ export async function filterTeamVisibleBases(
 // ─── Write enforcement ──────────────────────────────────────────────
 
 /**
- * Gate for KB writes from EVERY source (web sessions included). Team
- * grants are the source of truth: owner/admin and the creator always
- * pass; on a teams-mode base other members need an `edit` grant via one
- * of their teams; on a workspace-mode base the role default applies
- * (member → edit, viewer → read-only).
- *
- * `AgentWriteDisabledError` is still thrown when an agent tries to flip
- * `agentWriteEnabled` itself in updateBase — that path doesn't call
- * here.
+ * KB write gate for EVERY source, web sessions included. Team grants are the
+ * source of truth: owner/admin/creator pass; teams-mode members need an `edit`
+ * grant; workspace-mode uses the role default (member → edit, viewer → read).
+ * ⚠ updateBase does NOT route here for `agentWriteEnabled` flips — it throws
+ * `AgentWriteDisabledError` itself.
  */
 export async function assertBaseWritable(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
-  // `agent_write_enabled=false` makes a base read-only to AGENTS; human
-  // web-UI callers (source="user") are unaffected. Enforce it on the
-  // write path, not just deletes (F-10b) — the flag was advertised in the
-  // MCP surface + docstrings but only the team-access matrix was checked
-  // here, so an agent with team "edit" could still overwrite a base
-  // flagged read-only. Read-only wins over team access.
+  // ⚠ `agent_write_enabled=false` = read-only to AGENTS only; source="user"
+  // unaffected. Must be checked on the WRITE path, not just deletes (F-10b):
+  // team-access alone let an agent with team "edit" overwrite a read-only
+  // base. Read-only wins over team access.
   if (ctx.source === "agent" && !base.agentWriteEnabled) {
     throw new AgentWriteDisabledError(base.id);
   }
@@ -150,16 +127,10 @@ export async function assertBaseWritable(
 }
 
 /**
- * Delete gate for agent callers (F-10). A base flagged
- * `agent_write_enabled = false` is READ-ONLY to agents, so the destructive
- * soft-deletes (base / folder / entry) must honor the toggle the same way
- * content writes do. The audit hole was that only the write path checked
- * the flag — the admin deletes didn't, so an agent could trash a base
- * flagged read-only (it deleted the seeded "Dopl Guide" KB this way).
- *
- * Only `ctx.source === "agent"` is gated; human (web-UI) deletes always
- * pass. Reuses `AgentWriteDisabledError` → 403 AGENT_WRITE_DISABLED, the
- * same shape/error the blocked agent writes already surface.
+ * F-10 delete gate. `agent_write_enabled = false` is READ-ONLY to agents, so
+ * base/folder/entry deletes honor the toggle like content writes do.
+ * Only `ctx.source === "agent"` gated; human deletes always pass. Reuses
+ * `AgentWriteDisabledError` → 403 AGENT_WRITE_DISABLED for shape parity.
  */
 export function assertAgentCanDelete(
   ctx: KnowledgeContext,

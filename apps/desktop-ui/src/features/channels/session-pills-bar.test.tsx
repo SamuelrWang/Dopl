@@ -5,22 +5,14 @@ import { SessionPillsBar } from "@/features/channels/components/session-pills-ba
 import { installBridge } from "#/test-utils/bridge";
 
 /**
- * The SESSION PILLS BAR, exercised where it actually runs.
+ * SESSION PILLS BAR. Component lives in the WEB tree but is desktop-only, so
+ * its DOM contract is pinned HERE (jsdom + real bridge fixture); the web half
+ * (SSR renders nothing, the pure filter) is pinned in the root suite.
  *
- * The component lives in the WEB tree (`@/features/channels/components/…`) because
- * this renderer bundles that tree, but it is desktop-only: everything in it is a
- * fact about the operator's machine, delivered over `window.dopl.sessions`. So the
- * DOM half of its contract is pinned HERE, in the app with jsdom and a real bridge
- * fixture — the same split `use-bridged-image-src` uses. The web half (SSR renders
- * nothing; the pure per-channel filter) is pinned in the root suite.
- *
- * THE CASE THAT MATTERS MOST IS THE ABSENT ONE. This component self-hides on a
- * missing capability, which is correct for a browser, for the retired website's
- * preload, and for a desktop build older than §3.3 — and a self-hiding surface
- * cannot report its own absence. `dopl-desktop-app/test/preload-parity.test.mjs`
- * proves the SPA preload HAS `sessions.summaries` / `sessions.onSummaries`; these
- * cases prove the component asks for them by those names and degrades to silence
- * rather than to a broken call when it does not get them.
+ * ⚠ The ABSENT cases matter most: a self-hiding surface cannot report its own
+ * absence. `dopl-desktop-app/test/preload-parity.test.mjs` proves the preload
+ * HAS `sessions.summaries`/`onSummaries`; these prove the component asks by
+ * those names and degrades to silence, not a broken call.
  */
 
 const CHANNEL = "22222222-2222-4222-8222-222222222222";
@@ -42,11 +34,10 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
 type Listener = (e: { sessions: DesktopSessionSummary[] }) => void;
 
 /**
- * A `window.dopl` shaped like `renderer/app-preload.js` really exposes.
- * `shape` picks which desktop this is:
- *   "current"  — the SPA preload as of §3.3
- *   "no-feed"  — `reopen` only: the retired website's preload, and any older main
- *   "no-sessions" — a bridge with no sessions namespace at all
+ * `window.dopl` shaped like `renderer/app-preload.js` exposes. `shape`:
+ *   "current"     — the SPA preload
+ *   "no-feed"     — `reopen` only: retired website's preload / older main
+ *   "no-sessions" — no sessions namespace at all
  */
 function bridge(
   opts: { sessions?: DesktopSessionSummary[]; shape?: "current" | "no-feed" | "no-sessions" } = {}
@@ -68,8 +59,8 @@ function bridge(
     };
   }
   const surface: Record<string, unknown> = {
-    // The SPA marker `getSpaBridge` keys on. The pre-1.8 wrapper's partial
-    // `window.dopl` has no `apiRequest` and must never be mistaken for this.
+    // ⚠ The marker `getSpaBridge` keys on — the legacy wrapper's partial
+    // `window.dopl` has no `apiRequest` and must not be mistaken for this.
     apiRequest: vi.fn(() => Promise.resolve({ status: 200, statusText: "OK", hasBody: false })),
   };
   if (shape !== "no-sessions") surface.sessions = sessions;
@@ -105,8 +96,6 @@ describe("no capability, no bar", () => {
   });
 
   it("renders nothing on a build with reopen but no feed, and asks for nothing", async () => {
-    // The retired website's preload is this exact shape (ENGINEERING §9.3), and so
-    // is any main older than §3.3. Silence, not a thrown call.
     const b = bridge({ shape: "no-feed" });
     render(<SessionPillsBar channelId={CHANNEL} />);
     await waitFor(() => expect(bar()).toBeNull());
@@ -181,8 +170,8 @@ describe("the pills render from the summaries", () => {
   });
 
   it("a frame pushed while the initial read is in flight is not overwritten by it", async () => {
-    // The read is a promise and the subscription is synchronous; an older answer
-    // resolving late must not walk a newer frame back.
+    // Read is a promise, subscription synchronous: a late older answer must
+    // not walk a newer frame back.
     const b = bridge({ sessions: [summary({ name: "quartz" })] });
     render(<SessionPillsBar channelId={CHANNEL} />);
     b.push([summary({ name: "onyx" })]);
@@ -209,7 +198,7 @@ describe("the dropdown", () => {
     clickPill(0);
     expect(screen.getByRole("menu")).toBeInTheDocument();
     expect(screen.getByText("Rewrite the parser")).toBeInTheDocument();
-    // "Idle" covers between-turns, awaiting-peer and parked; the line says so.
+    // "Idle" covers between-turns, awaiting-peer and parked.
     expect(screen.getByText(/parked/)).toBeInTheDocument();
   });
 
@@ -222,8 +211,7 @@ describe("the dropdown", () => {
   });
 
   it("Open calls the SAME reopen op the session card uses, with (channel, thread)", async () => {
-    // Not a new op: main has ONE reopen path (live window -> an ended session's kept
-    // window -> recreate a parked shell) and a pill must not grow a second one.
+    // ⚠ Main has ONE reopen path; a pill must not grow a second one.
     const b = bridge({ sessions: [summary({ taskId: "task-7" })] });
     render(<SessionPillsBar channelId={CHANNEL} />);
     await waitFor(() => expect(pills()).toHaveLength(1));
@@ -234,8 +222,8 @@ describe("the dropdown", () => {
   });
 
   it("an ENDED session is openable — its window is the transcript to read", async () => {
-    // Main retains an ended pill ONLY where the window survived (the abandonment
-    // case), so every ended pill that exists is one `reopen` can answer.
+    // Main retains an ended pill ONLY where the window survived, so every
+    // ended pill that exists is one `reopen` can answer.
     const b = bridge({ sessions: [summary({ state: "ended", taskId: "task-9" })] });
     render(<SessionPillsBar channelId={CHANNEL} />);
     await waitFor(() => expect(pills()).toHaveLength(1));

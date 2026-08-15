@@ -24,13 +24,10 @@ interface Props {
 }
 
 /**
- * The cluster as lanes of object cards. Each lane is a flat inset panel
- * carrying white cards: a short header card (the column, whose name edits
- * in place and whose kebab opens it in the editor panel — where its object
- * template lives), then its children, then the add button.
- *
- * The lane supplies its own gray; the board area behind it is the page
- * surface.
+ * The cluster as lanes of object cards. Each lane is an inset panel: header
+ * card (the column — name edits in place, kebab opens it in the editor panel),
+ * then its children, then the add button. The lane supplies its own gray; the
+ * board behind it is the page surface.
  */
 export function KanbanBoard({
   cluster,
@@ -47,18 +44,15 @@ export function KanbanBoard({
     .filter((col): col is OntologyObject => Boolean(col));
 
   return (
-    // THE DOT GRID IS LOAD-BEARING GEOMETRY, not decoration, so the numbers
-    // have to agree. `.kanban-substrate` tiles at 12px and every dimension out
-    // here is a whole number of tiles: board padding p-6 = 24 (2), lane w-72 =
-    // 288 (24), gutter gap-3 = 12 (1, so a dot sits dead centre in it), lane
-    // padding p-3 = 12 (1). Lane edges land at 24, 324, 624 … — stride 300 =
-    // 25 tiles — and the white cards inside them at 36 and 300, all on grid
-    // lines. The 12px pitch is FORCED by the 12px gutter: at the inherited
-    // 24px pitch every second lane would sit half a tile out.
+    // ⚠ THE DOT GRID IS LOAD-BEARING GEOMETRY. `.kanban-substrate` tiles at
+    // 12px and every dimension here is a whole number of tiles: p-6 = 24 (2),
+    // lane w-72 = 288 (24), gutter gap-3 = 12 (1, dot dead centre), lane p-3 =
+    // 12 (1). Lane edges land at 24, 324, 624 … (stride 300 = 25 tiles), cards
+    // at 36 and 300. The 12px pitch is FORCED by the 12px gutter — at the
+    // inherited 24px pitch every second lane sits half a tile out.
     //
-    // `items-start` is what stops the lanes stretching: each one is now as
-    // tall as its own contents, and the vertical overflow belongs to this
-    // board (`overflow-auto`), not to a scrollbar inside every lane.
+    // `items-start` stops lanes stretching: each is as tall as its contents and
+    // vertical overflow belongs to this board, not a scrollbar per lane.
     <div className="graph-substrate kanban-substrate flex min-h-0 flex-1 items-start gap-3 overflow-auto p-6">
       {columns.map((col) => (
         <Column
@@ -97,9 +91,8 @@ function Column({
   onCreateObject: (columnId: string) => void;
 }) {
   return (
-    // A pending column takes its whole lane inert with it — header inputs,
-    // its menu and the add button all address an id the server has not
-    // minted yet.
+    // ⚠ Pending column takes its whole lane inert: header inputs, menu and add
+    // button all address an id the server hasn't minted yet.
     <div
       {...pendingRow(
         pendingIds.has(col.id),
@@ -115,8 +108,7 @@ function Column({
         onSelect={onSelect}
         onCreateObject={onCreateObject}
       />
-      {/* No scroller of its own any more: the lane hugs its cards and the
-          board scrolls. */}
+      {/* No scroller here: lane hugs its cards, the board scrolls. */}
       <div className="flex flex-col gap-2">
         {col.childIds.map((id) => (
           <KanbanCard
@@ -129,8 +121,8 @@ function Column({
           />
         ))}
         {canEdit && (
-          // Hugs the left corner AFTER the last card rather than filling the
-          // lane: it is the next row in the list, not a footer for it.
+          // Hugs the left corner AFTER the last card, not filling the lane:
+          // it is the next row in the list, not a footer.
           <button
             type="button"
             onClick={() => onCreateObject(col.id)}

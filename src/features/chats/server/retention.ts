@@ -6,20 +6,13 @@ import {
 } from "@/features/billing/server/entitlements";
 import * as repo from "./repository";
 
-/**
- * The chats retention window is a READ filter, not a delete: free
- * workspaces show only sessions newer than `chatsWindowDays`; Pro (and
- * any full-history plan) sees everything. Nothing is ever removed — the
- * window only hides. This module resolves the window for a workspace and
- * builds the friendly "upgrade to restore full history" envelope the
- * detail route returns, mirroring billing's `entitlementDeniedBody`.
- */
+/** ⚠ The retention window is a READ filter, never a delete: free workspaces
+ *  see only sessions newer than `chatsWindowDays`, full-history plans see
+ *  everything, and nothing is ever removed. Resolves the window and builds
+ *  the upgrade envelope the detail route returns. */
 
-/**
- * Resolved window for a workspace read. `since` is the DB-computed cutoff
- * DATE (`YYYY-MM-DD`) to feed `.gte`/`.lt session_date` filters, or `null`
- * when history is unbounded (Pro).
- */
+/** `since` = DB-computed cutoff DATE (`YYYY-MM-DD`) for `.gte`/`.lt` on
+ *  `session_date`, or null when history is unbounded. */
 export interface ChatsWindow {
   windowDays: number | null;
   since: string | null;
@@ -34,17 +27,10 @@ export async function resolveChatsWindow(
   return { windowDays: chatsWindowDays, since };
 }
 
-/**
- * Structured body for a detail read of a hidden chat. Mirrors the shape
- * of billing's `entitlementDeniedBody`: a flat `{ error, message,
- * upgrade_url }` envelope. Emphasizes that nothing is deleted — the chat
- * is safely stored, Pro restores full history.
- *
- * `upgrade_url` comes from billing's shared `upgradeUrl()` — the standalone
- * billing page (`/billing`, see `features/billing/url.ts`), which is the one
- * upgrade surface that outlives the website retirement. The per-workspace
- * `/{slug}/settings/billing` route does not exist (404).
- */
+/** Denial body for a hidden chat. Flat `{ error, message, upgrade_url }`,
+ *  mirroring billing's `entitlementDeniedBody`. ⚠ `upgrade_url` must come
+ *  from billing's `upgradeUrl()` (`/billing`, `features/billing/url.ts`) —
+ *  the per-workspace `/{slug}/settings/billing` route 404s. */
 export function chatRetentionDeniedBody() {
   return {
     error: "chat_outside_retention" as const,

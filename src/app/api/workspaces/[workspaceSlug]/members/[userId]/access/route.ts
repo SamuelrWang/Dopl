@@ -13,13 +13,9 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[workspaceSlug]/members/[userId]/access — a
- * member's effective access on every resource, resolved SERVER-side so
- * the member drawer and the enforcement path share one implementation
- * (computeEffectiveAccess over server-fetched teams + resources).
- *
- * Callers: admins+ for anyone; regular members only for themselves.
- * Shape: { rows: EffectiveAccessRow[] }
+ * GET — a member's effective access on every resource, resolved SERVER-side so the member drawer
+ * and the enforcement path share one implementation (`computeEffectiveAccess`).
+ * Admins+ for anyone; regular members only for themselves. Shape `{ rows: EffectiveAccessRow[] }`.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
@@ -38,7 +34,7 @@ export const GET = withUserAuth(
         userId
       );
       if (targetUserId !== userId && !meetsMinRole(caller.role, "admin")) {
-        // 404 (not 403) so member existence isn't an oracle for non-admins.
+        // ⚠ 404, not 403 — member existence must not be an oracle for non-admins.
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 

@@ -1,12 +1,8 @@
 /**
- * `/oauth/authorize` consent screen — the anti-phishing marking (P1 2026-08-08).
- *
- * `client_name` is attacker-controllable (RFC 7591 registration is open), and it
- * was rendered verbatim as a bold label, so anyone could register a client
- * called "Dopl Official Desktop" and phish an /authorize link. These tests pin
- * that a client the user has never connected is marked UNVERIFIED and its name
- * is framed as a self-reported claim — while a client the user has connected
- * before (or the reserved first-party device client) renders clean.
+ * `/oauth/authorize` — anti-phishing marking. `client_name` is attacker-controllable (RFC 7591
+ * registration is open), so a never-connected client must be marked UNVERIFIED with its name
+ * framed as a self-reported claim; a previously-connected client (or the reserved first-party
+ * device client) renders clean.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -30,7 +26,7 @@ vi.mock("@/shared/auth/mcp-oauth", () => ({ getClient: mocks.getClient }));
 vi.mock("@/shared/auth/oauth-client-verification", () => ({
   userHasPriorGrant: mocks.userHasPriorGrant,
 }));
-// The split layout pulls in styling-only chrome; render its children inline.
+// Split layout is styling-only chrome; render its children inline.
 vi.mock("@/shared/layout/auth-split", () => ({
   AuthSplitLayout: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -72,9 +68,8 @@ describe("unverified (never-connected) client", () => {
     const html = await markup(params());
     expect(html).toContain("Unverified app");
     expect(html).toContain("chosen by the app itself");
-    // The attacker-chosen name is quoted, not presented as an official label.
+    // Attacker-chosen name is quoted, not an official label.
     expect(html).toContain("“Dopl Official Desktop”");
-    // The consent form is intact — approval still works.
     expect(html).toContain('action="/api/oauth/authorize"');
   });
 });

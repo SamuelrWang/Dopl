@@ -1,21 +1,15 @@
 /**
- * Unit tests for the transcript reads' QUERY SHAPE. Supabase is mocked with a
- * chainable builder that records every call, so these assert the filters and
- * ordering that actually reach PostgREST.
+ * The transcript reads' QUERY SHAPE. Supabase mocked with a chainable builder
+ * recording every call, so these assert the filters and ordering that actually
+ * reach PostgREST.
  *
- * The original contract under test is the thread scope (`metadata->>taskId`): a
- * read that isolates ONE exchange instead of paging the whole channel and
- * filtering client-side. It is a FILTER — it composes with the existing cursor /
- * limit / author-exclusion behaviour and never replaces it — and the invariant
- * that matters most is that it survives BOTH cursor modes, since the cursored
- * and cursorless reads were separate query builders until this landed.
+ * Thread scope (`metadata->>taskId`) is a FILTER — it composes with cursor /
+ * limit / author-exclusion and never replaces them. ⚠ It must survive BOTH
+ * cursor modes; the cursored and cursorless reads are separate query builders.
  *
- * Two suites were added 2026-08-08 for the same reason the first exists: both
- * bugs they pin are PREDICATES that read correctly as JavaScript and are wrong
- * as SQL (`NULL <> x` is NULL, not true), so the only place to catch them is the
- * filter string itself. C-17 / F-171 is the NULL-unsafe author exclusion that
- * hid every system-authored message from every agent's await; C-6 / F-172 is
- * the anchor a re-raisable close proposal is keyed on.
+ * ⚠ The other two suites pin PREDICATES that read correctly as JavaScript and
+ * are wrong as SQL (`NULL <> x` is NULL, not true), so the only place to catch
+ * them is the filter STRING.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -53,11 +47,8 @@ function messageRow(seq: number, taskId?: string): ChannelMessageRow {
   };
 }
 
-/**
- * Chainable, thenable Supabase-builder stub. Every method records its call and
- * returns the builder; awaiting it resolves to `rows` (which the test sets),
- * so the whole `.from().select().eq()....limit()` chain runs without a DB.
- */
+/** Chainable, thenable Supabase-builder stub — every method records its call and
+ *  returns the builder, so the whole chain runs without a DB. */
 function makeAdmin(rows: ChannelMessageRow[]) {
   const calls: Call[] = [];
   const builder: Record<string, unknown> = {};
@@ -100,8 +91,7 @@ describe("listMessages — thread scope", () => {
 
     const rows = await listMessages(CHANNEL, { limit: 50, threadId: THREAD_UUID });
 
-    // The jsonb accessor is the load-bearing detail: `metadata->>taskId`
-    // compares the key as TEXT, which is how the value is stored.
+    // ⚠ `metadata->>taskId` compares as TEXT, which is how the value is stored.
     expect(eqFilters(calls)).toEqual({
       channel_id: CHANNEL,
       "metadata->>taskId": THREAD_UUID,
@@ -110,8 +100,7 @@ describe("listMessages — thread scope", () => {
   });
 
   it("accepts a LEGACY task-<channelId>-<seq> id verbatim (no uuid coercion)", async () => {
-    // Legacy ids are exactly the exchanges that are hardest to reconstruct by
-    // hand, so the filter must pass them through untouched rather than 400.
+    // ⚠ Legacy ids must pass through untouched rather than 400.
     const calls = makeAdmin([messageRow(7, LEGACY_THREAD_ID)]);
 
     await listMessages(CHANNEL, { limit: 50, threadId: LEGACY_THREAD_ID });
@@ -132,15 +121,13 @@ describe("listMessages — thread scope", () => {
 
     const rows = await listMessages(CHANNEL, { limit: 50 });
 
-    // The unfiltered read is byte-for-byte the query that always ran: one
-    // `eq` on the channel, and nothing touching metadata.
+    // Unfiltered read: one `eq` on the channel, nothing touching metadata.
     expect(eqFilters(calls)).toEqual({ channel_id: CHANNEL });
     expect(calls.some((c) => String(c.args[0]).includes("metadata"))).toBe(false);
     expect(rows).toHaveLength(2);
   });
 
   it("survives BOTH cursor modes (the two reads share one filter chain)", async () => {
-    // Cursorless: newest `limit`, fetched descending and flipped to ascending.
     const cursorless = makeAdmin([messageRow(9, THREAD_UUID), messageRow(8, THREAD_UUID)]);
     const flipped = await listMessages(CHANNEL, { limit: 2, threadId: THREAD_UUID });
     expect(eqFilters(cursorless)["metadata->>taskId"]).toBe(THREAD_UUID);
@@ -149,7 +136,6 @@ describe("listMessages — thread scope", () => {
     });
     expect(flipped.map((r) => r.seq)).toEqual([8, 9]);
 
-    // Cursored: `seq > since`, already ascending, returned as-is.
     const cursored = makeAdmin([messageRow(8, THREAD_UUID), messageRow(9, THREAD_UUID)]);
     const ordered = await listMessages(CHANNEL, {
       since: 7,
@@ -165,9 +151,8 @@ describe("listMessages — thread scope", () => {
   });
 
   it("composes with the await hold's author exclusion", async () => {
-    // Both optional filters are applied to the same builder; neither drops the
-    // other. (The await path passes no thread id today — this is the guard
-    // that the shared chain didn't make the two mutually exclusive.)
+    // ⚠ Both optional filters applied to the same builder, neither dropping the
+    // other — the shared chain must not make them mutually exclusive.
     const calls = makeAdmin([]);
 
     await listMessages(CHANNEL, {
@@ -185,19 +170,13 @@ describe("listMessages — thread scope", () => {
 });
 
 /**
- * C-17 / F-171 — THE AUTHOR EXCLUSION MUST BE NULL-SAFE, IN BOTH QUERIES.
- *
+ * ⚠ THE AUTHOR EXCLUSION MUST BE NULL-SAFE, IN BOTH QUERIES.
  * `.neq("author_user_id", x)` is `author_user_id <> x`, and SQL `NULL <> x` is
- * NULL, not true — so the plain form silently dropped every SYSTEM-authored row
- * from any await that named an author, which the MCP lane ALWAYS does. The
- * stale-thread sweep's close proposal therefore rendered on the web card and was
- * invisible to every agent holding an await: the one surface the tool teaches
- * agents to keep armed.
+ * NULL, not true — so the plain form silently drops every SYSTEM-authored row
+ * from any await that names an author, which the MCP lane ALWAYS does.
  *
- * These assert the SQL SHAPE rather than a behaviour, because there is no
- * database here — the whole bug was a predicate that reads correctly in
- * JavaScript and is wrong in Postgres, and the only place to catch that is the
- * string that reaches PostgREST.
+ * Asserts the SQL SHAPE, not a behaviour: there is no database here, and the
+ * only place to catch the predicate is the string reaching PostgREST.
  */
 describe("author exclusion — NULL-safe, and identical in the read and the probe", () => {
   const SELF = "aaaaaaaa-e29b-41d4-a716-446655440000";
@@ -209,14 +188,13 @@ describe("author exclusion — NULL-safe, and identical in the read and the prob
     await listMessages(CHANNEL, { limit: 10, excludeAuthor: SELF });
 
     expect(calls.find((c) => c.op === "or")?.args).toEqual([NULL_SAFE]);
-    // The bare form is the bug. Its absence is the assertion.
+    // ⚠ The bare form is the bug — its absence is the assertion.
     expect(calls.some((c) => c.op === "neq")).toBe(false);
   });
 
   it("hasMessagesAfter emits the SAME predicate", async () => {
-    // A probe that misses a row the read would return turns the hold into a
-    // fetch-empty-continue spin; a probe that HITS on a row the read then drops
-    // does the same thing the other way round. They have to agree exactly.
+    // ⚠ Probe and read must agree EXACTLY — a probe missing a row the read
+    // returns (or hitting one the read drops) spins the hold either way.
     const calls = makeAdmin([]);
 
     await hasMessagesAfter(CHANNEL, 5, SELF);
@@ -226,9 +204,8 @@ describe("author exclusion — NULL-safe, and identical in the read and the prob
   });
 
   it("applies nothing at all when no author is excluded (the desktop lane)", async () => {
-    // The desktop listener deliberately sends no `excludeAuthor` — it needs its
-    // own account's rows for thread targeting and requester-window routing — so
-    // the unfiltered query must stay byte-identical.
+    // ⚠ Desktop listener sends no `excludeAuthor` (it needs its own account's
+    // rows), so the unfiltered query must stay byte-identical.
     const read = makeAdmin([]);
     await listMessages(CHANNEL, { limit: 10 });
     expect(read.some((c) => c.op === "or" || c.op === "neq")).toBe(false);
@@ -240,10 +217,9 @@ describe("author exclusion — NULL-safe, and identical in the read and the prob
 });
 
 /**
- * C-6 / F-172 — the RE-PROPOSAL WINDOW. `latestThreadActivitySeq` is the number
- * `proposeTaskClose` keys its idempotency on, and the one filter that makes the
- * whole scheme work is the exclusion of proposals from the anchor: without it a
- * proposal moves its own anchor, so every retry writes a new prompt.
+ * The RE-PROPOSAL WINDOW. `latestThreadActivitySeq` is what `proposeTaskClose`
+ * keys idempotency on. ⚠ Proposals MUST be excluded from the anchor — otherwise
+ * a proposal moves its own anchor and every retry writes a new prompt.
  */
 describe("latestThreadActivitySeq — the anchor a re-proposal is keyed on", () => {
   it("scopes to the thread and EXCLUDES close proposals, newest first", async () => {
@@ -256,9 +232,9 @@ describe("latestThreadActivitySeq — the anchor a re-proposal is keyed on", () 
       channel_id: CHANNEL,
       "metadata->>taskId": THREAD_UUID,
     });
-    // NULL-safe for the same reason the author filter is: `closeProposed` is
-    // ABSENT on an ordinary message, so `->>` yields NULL and a bare `neq`
-    // would drop every real message in the thread — inverting the anchor.
+    // ⚠ NULL-safe like the author filter: `closeProposed` is ABSENT on an
+    // ordinary message, so `->>` yields NULL and a bare `neq` drops every real
+    // message in the thread — inverting the anchor.
     expect(calls.find((c) => c.op === "or")?.args).toEqual([
       "metadata->>closeProposed.is.null,metadata->>closeProposed.neq.true",
     ]);
@@ -270,8 +246,8 @@ describe("latestThreadActivitySeq — the anchor a re-proposal is keyed on", () 
   });
 
   it("is 0, not null, for a thread with no non-proposal message", async () => {
-    // A thread opened and never spoken in. The key has to be a total function
-    // or the first proposal's `client_msg_id` reads `...-undefined`.
+    // ⚠ Must be a total function, or the first proposal's `client_msg_id` reads
+    // `...-undefined`.
     makeAdmin([]);
     await expect(latestThreadActivitySeq(CHANNEL, THREAD_UUID)).resolves.toBe(0);
   });

@@ -6,23 +6,16 @@ import { PageError, PageLoading } from "#/components/page-states";
 import { useApiQuery } from "#/hooks/use-api-query";
 
 /**
- * /:workspaceSegment/chats — the agent-exported chat archive.
+ * /:workspaceSegment/chats — agent-exported chat archive. Seam only; `ChatsView`
+ * and its tree are REUSED by import.
  *
- * Port of `src/app/[workspaceSlug]/(app)/chats/page.tsx`. `ChatsView` and its
- * whole component tree are REUSED by import (they are Next-free); this file is
- * only the seam that turns the RSC's server fetches into client queries.
- *
- * The RSC resolved workspace + membership + `listChats`/`listFolders` and
- * passed all of it down. Here the same four reads are `useApiQuery` calls
- * against the endpoints that already back them, and the page mounts `ChatsView`
- * once they land — not before: the view seeds its own `useState` (including the
- * initial selection) from these props, so a mount with empty arrays would pick
- * the wrong selection and never re-seed.
+ * ⚠ Mount `ChatsView` only once all four reads land: it seeds its own `useState`
+ * (including initial selection) from these props, so a mount with empty arrays
+ * picks the wrong selection and never re-seeds.
  *
  * Two round trips, not one: `resolve` turns the URL segment into a workspace
- * (and its canonical form, which `useTeams` inside the share popovers uses as a
- * path segment), then `me` — which is id-scoped by header — supplies the
- * caller's role and user id that only the RSC had.
+ * plus its canonical form (used as a path segment by `useTeams` in the share
+ * popovers); `me` is id-scoped by header and supplies caller role + user id.
  */
 
 interface ResolvedSegment {

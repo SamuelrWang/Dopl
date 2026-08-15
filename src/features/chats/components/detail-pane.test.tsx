@@ -13,11 +13,8 @@ vi.mock("../client/hooks", () => ({
 
 const { DetailPane } = await import("./detail-pane");
 
-/**
- * The archive's transcript slot said "Loading transcript…" in muted copy —
- * one of the text loaders §5 calls the real problem. It ghosts the bubble
- * column now, sized from the message count the header already printed.
- */
+/** Transcript slot ghosts the bubble column, sized from the message count the
+ *  header already printed — not a text loader. */
 
 function chat(over: Partial<Chat> = {}): Chat {
   return {
@@ -71,7 +68,7 @@ describe("chats DetailPane — transcript loading", () => {
     const ghosts = html.match(/data-slot="skeleton"/g) ?? [];
     expect(ghosts.length).toBeGreaterThan(0);
     expect((html.match(/animate-pulse/g) ?? []).length).toBe(ghosts.length);
-    // user turns indent right, exactly as MessageList renders them
+    // user turns indent right, as MessageList renders them
     expect(html).toContain("ml-12");
   });
 
@@ -94,13 +91,9 @@ describe("chats DetailPane — transcript loading", () => {
   });
 });
 
-/**
- * A pin toggle used to dim the star for two network hops and only THEN flip
- * it, so two quick clicks both read the stale value and sent the same PATCH
- * twice. The write is optimistic now: the star shows its new state at once
- * and the control is inert for the round trip, which is what stops a second,
- * contradicting PATCH from racing the first.
- */
+/** ⚠ The pin write is optimistic AND inert for the round trip: without the
+ *  inertness two quick clicks read the same stale value and send the same
+ *  PATCH twice. */
 describe("chats DetailPane — pin", () => {
   it("shows the new state and marks the control pending", () => {
     const html = render({ pinned: true }, true);

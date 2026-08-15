@@ -13,20 +13,17 @@ import { HeroChat } from "./hero-chat";
 import styles from "../knowledge-v2.module.css";
 
 interface Props {
-  /** Bases after search AND the scope pill — what the grid renders. */
+  /** After search AND the scope pill — exactly what the grid renders. */
   bases: KnowledgeBase[];
   /** Per-pill badge counts, cut BEFORE the scope pill (see list-filters). */
   filterCounts: Record<ListFilter, number>;
-  /** `{entryCount, lastEntryUpdatedAt, storageBytes}` keyed by base id, from
-   *  the list route. */
   baseStats?: Record<string, KnowledgeBaseStats>;
-  /** The workspace's per-base storage cap in bytes — ONE number for every
-   *  card, folded into the same list response. `null` = unknown, no bars. */
+  /** Per-base storage cap in bytes, from the same list response. `null` =
+   *  unknown → no bars. */
   kbStorageLimit?: number | null;
-  /** Display names for foreign base owners, keyed by user id. */
   ownerNames?: Record<string, string>;
-  /** The CALLER'S OWN starred base ids, from the same list response. Lifted to
-   *  the front of the grid; never counted by the scope pills. */
+  /** CALLER'S OWN starred base ids. Lifted to the front of the grid; ⚠ never
+   *  counted by the scope pills. */
   starredBaseIds?: string[];
   currentUserId: string;
   query: string;
@@ -34,32 +31,27 @@ interface Props {
   filter: ListFilter;
   onFilterChange: (f: ListFilter) => void;
   onOpenBase: (base: KnowledgeBase) => void;
-  /** Toggle the caller's star. Optimistic upstream, so the reorder below is
-   *  driven by the click, not by the round trip. */
+  /** Optimistic upstream, so the reorder below rides the click. */
   onToggleStar: (baseId: string, starred: boolean) => void;
   onCreate: () => void;
-  /** Bundled hero image for the banner above the filters. Injected by the
-   *  host app (the asset is Vite-bundled in the SPA — the shared tree cannot
-   *  import it); absent = no banner, which is also the test default. */
+  /** Hero banner image, injected by the host app — the asset is Vite-bundled
+   *  in the SPA and the shared tree cannot import it. Absent = no banner
+   *  (the web + test default). */
   heroImageSrc?: string;
 }
 
 /**
- * KNOWLEDGE HOME — the `/knowledge` mode of the one component that serves
- * both knowledge routes (`knowledge-v2.tsx` picks by selection). A card grid
- * over every visible base, with the search field and the scope pills that
- * narrow it; the trailing dashed cell creates a new base.
+ * KNOWLEDGE HOME — `/knowledge` mode of the component serving both knowledge
+ * routes (`knowledge-v2.tsx` picks by selection).
  *
- * MOUNTS NO TREES. A grid of N bases must cost ONE request, so nothing here
- * touches `trees`/`loadTree` — the entry counts and content timestamps come
- * folded into the base list itself (`GET /api/knowledge/bases › baseStats`).
- * Opening a card is what loads a tree.
+ * ⚠ MOUNTS NO TREES. A grid of N bases must cost ONE request, so nothing here
+ * touches `trees`/`loadTree`; counts and timestamps ride the base list
+ * (`GET /api/knowledge/bases › baseStats`). Opening a card loads a tree.
  *
- * STARRED BASES SORT TO THE FRONT, and the sort runs HERE — after search and
- * the scope pill, over exactly the cards this grid is about to render. That
- * ordering is what makes stars a VIEW concern rather than a filter one: a star
- * changes where a card sits, never whether it is in the results, and the pill
- * badges (cut upstream, before the scope filter) never see it.
+ * ⚠ Star sort runs HERE — after search and the scope pill, over exactly the
+ * cards about to render. That is what keeps stars a VIEW concern: a star moves
+ * a card, never adds or removes one, and the pill badges (cut upstream of the
+ * scope filter) never see it.
  */
 export function KnowledgeHome({
   bases,
@@ -84,11 +76,10 @@ export function KnowledgeHome({
   );
   const ordered = useMemo(() => {
     if (starred.size === 0) return bases;
-    // ONE comparator, TWO groups, and nothing else — `Array.prototype.sort` is
-    // stable (ES2019), so every card keeps the position the filter gave it
-    // WITHIN its group. Comparing on anything more (name, date) would quietly
-    // replace the list's own ordering with a second one that only stars can
-    // see. `[...bases]` because sort mutates and `bases` is the caller's array.
+    // ⚠ ONE comparator, TWO groups, nothing else: sort is stable (ES2019), so
+    // cards keep the filter's order WITHIN a group. Comparing on name/date
+    // replaces the list's ordering with one only stars can see.
+    // `[...bases]` because sort mutates and `bases` is the caller's array.
     return [...bases].sort(
       (a, b) => Number(starred.has(b.id)) - Number(starred.has(a.id))
     );
@@ -104,17 +95,10 @@ export function KnowledgeHome({
         <SearchField value={query} onChange={onQueryChange} className="w-64" />
       </div>
 
-      {/* Hero banner — bundled image with the auth pages' liquid-glass panel
-          over its left side (the same shared component as the login slab),
-          and the assistant panel attached to its bottom edge. Decorative: the
-          blurb is presentation, so the image is alt="".
-
-          THE CHAT IS PART OF THE HERO, not a sibling of it — one rounded
-          container, image band on top, gray panel below. So it is inside this
-          guard rather than beside it: no bundled image means no hero, and a
-          chat box floating alone above the pills would be a different
-          component than the one that was designed. It also keeps the web/test
-          default (no `heroImageSrc`) exactly as clean as it was. */}
+      {/* Decorative banner, so the image is alt="".
+          ⚠ CHAT IS PART OF THE HERO, not a sibling — one rounded container,
+          image band on top, gray panel below. Hence inside this guard: no
+          bundled image means no hero AND no floating chat box. */}
       {heroImageSrc && (
         <div className={styles.homeHero}>
           <div className={styles.homeHeroBand}>
@@ -165,9 +149,8 @@ export function KnowledgeHome({
             />
           ))}
 
-          {/* Always last, never filtered away: creating a base is not a
-              search result, and a grid that hides its only create affordance
-              whenever the query matches nothing is a dead end. */}
+          {/* ⚠ Always last, NEVER filtered away — a query matching nothing
+              must not hide the only create affordance. */}
           <button
             type="button"
             className={styles.cardNew}
@@ -185,9 +168,8 @@ export function KnowledgeHome({
   );
 }
 
-/** "You" for the caller's own bases (and ownerless seeds), the resolved
- *  display name for another member's, a neutral stand-in when the name
- *  lookup degraded. */
+/** "You" for own/ownerless bases, resolved display name for another member's,
+ *  neutral stand-in when the name lookup degraded. */
 function ownerLabelFor(
   base: KnowledgeBase,
   currentUserId: string,

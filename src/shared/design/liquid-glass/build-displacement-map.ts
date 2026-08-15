@@ -1,11 +1,8 @@
 /**
- * Pure canvas builder for the LiquidGlass displacement map.
- *
- * Encodes a rounded-rect "lens" as a displacement map: R = x-displacement,
- * G = y-displacement, derived from a signed-distance field to the rounded-rect
- * edge. A ring centred ON the edge (wider/softer on the inside via `feather`),
- * smootherstepped, then shaped by `curve`, drives feDisplacementMap to bend the
- * backdrop outward at the rim. No React, no DOM beyond the passed-in canvas.
+ * Pure canvas builder for the LiquidGlass displacement map. Rounded-rect
+ * "lens": R = x-displacement, G = y-displacement, from an SDF to the
+ * rounded-rect edge. Ring centred ON the edge (wider/softer inside via
+ * `feather`), smootherstepped, shaped by `curve`. No DOM beyond the canvas.
  */
 
 /** Saturation of the displacement map. */
@@ -16,15 +13,15 @@ const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 export type DisplacementMapParams = {
   /** Corner radius (px). */
   radius: number;
-  /** Rim half-width of the refraction ring (reference "splay"). */
+  /** Rim half-width of the refraction ring (= `splay`). */
   rim: number;
   /** Bevel profile exponent — <1 sharpens the edge, >1 rounds it. */
   curve: number;
-  /** Extra inner falloff added to the ring on the inside of the edge. */
+  /** Extra inner falloff on the ring, inside the edge. */
   feather: number;
 };
 
-/** Paint the displacement map into `canvas` at `w`×`h` and return it as a data URI. */
+/** Paint map into `canvas` at `w`×`h`; returns a data URI. */
 export function buildDisplacementMap(
   canvas: HTMLCanvasElement,
   w: number,

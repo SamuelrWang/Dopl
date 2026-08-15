@@ -12,14 +12,11 @@ import {
   type BootPayload,
 } from "#/pages/boot/use-boot-state";
 
-/** `GET /api/workspaces/resolve?segment=` — the HTTP twin of the server's
- *  `resolveWorkspaceSegmentForUser` (docs/migration-research/web-pages.md
- *  §1.5; the RSC-only `resolvePageWorkspace` wrapper was deleted 2026-08-11).
- *  Still live, still the web app's route, and still read directly by the
- *  chats page.
- *  The SPA gets the same answer — plus role, caller id and the access matrix —
- *  from `POST /api/boot`, and SEEDS this key from it so the callers that still
- *  ask never pay a request. */
+/** `GET /api/workspaces/resolve?segment=` — HTTP twin of the server's
+ *  `resolveWorkspaceSegmentForUser`. Still the web app's route, still read
+ *  directly by the chats page. The SPA gets the same answer plus role, caller
+ *  id and access matrix from `POST /api/boot`, and SEEDS this key from it so
+ *  the callers that still ask never pay a request. */
 export interface ResolvedWorkspace {
   workspace: Workspace;
   canonical: string;
@@ -30,18 +27,11 @@ export const RESOLVE_PATH = "/api/workspaces/resolve";
 export const ME_PATH = "/api/workspaces/me";
 
 /**
- * EXPLICIT, and it stays explicit now that F-163 is fixed.
- *
- * It was originally a workaround: `use-api-query-core` forwarded
- * `staleTime: opts.staleTime` unconditionally and TanStack merges options by
- * spread, so an explicit `undefined` OVERRODE the client default and
- * `QUERY_DEFAULT_OPTIONS.staleTime` (30s) was inert for every query that named
- * none. That is fixed at the hook, so this could now be deleted and inherited.
- * It is not, because the requirement is this query's, not the app's: the boot
- * page SEEDS this key and navigates in the same tick, and a shell that treats
- * the seeded answer as stale refetches it on mount — the serial hop back, one
- * commit later. Naming the value here means a future change to the app-wide
- * default cannot silently undo the launch collapse.
+ * ⚠ Named EXPLICITLY even though it now equals the app-wide default. The boot
+ * page SEEDS this key and navigates in the same tick; a shell that treats the
+ * seeded answer as stale refetches on mount — the serial hop back, one commit
+ * later. Stating it here means a change to the app-wide default cannot silently
+ * undo the launch collapse.
  */
 const BOOT_STALE_MS = 30_000;
 
@@ -51,7 +41,7 @@ export interface WorkspaceRoute {
   /** Canonical `{slug}-{publicId}` segment; "" until the resolve returns. */
   segment: string;
   workspace: Workspace | null;
-  /** The caller's role on it — free: the resolve proved membership to get it. */
+  /** Caller's role — free: the resolve proved membership to get it. */
   role: Role | null;
   /** The caller's own user id, from the same answer. */
   currentUserId: string | null;
@@ -69,33 +59,26 @@ export function myAccessPath(segment: string): string {
 }
 
 /**
- * Write ONE boot answer into every cache entry it can satisfy.
+ * Write ONE boot answer into every cache entry it can satisfy. Callers outside
+ * this module still read four endpoints (chats: `resolve` + `me`; settings
+ * modal: `me`; `MyAccessProvider`: `my-access`; onboarding:
+ * `onboarding-state`); seeding is what turns "one endpoint answers everything"
+ * into "nobody else fetches".
  *
- * The boot endpoint collapsed four round trips into one, but four endpoints
- * are still read by callers outside this module — the chats page reads
- * `resolve` + `me`, the settings modal reads `me`, `MyAccessProvider` reads
- * `my-access`, the onboarding page reads `onboarding-state`. Seeding is what
- * turns "one endpoint answers everything" into "nobody else fetches": each of
- * those queries mounts against a warm, fresh entry (staleTime 30s) and never
- * dispatches.
- *
- * A SEED, NOT AN OVERRIDE — `setQueryData` only where nothing is cached, so a
- * live answer is never clobbered by a boot payload that may be a moment older.
+ * ⚠ A SEED, NOT AN OVERRIDE: `setQueryData` only where nothing is cached, so a
+ * live answer is never clobbered by an older boot payload.
  */
 export function seedBootAnswer(
   queryClient: QueryClient,
   boot: BootPayload,
   routedSegment?: string
 ): void {
-  // DURING RENDER, NOT IN AN EFFECT — and the ordering is the whole reason
-  // this is worth a note. React runs CHILD effects before parent ones, and
-  // both the things that consume these seeds are children: `<Navigate>` on
-  // the boot page (its effect performs the navigation) and the routed page
-  // under the shell's `<Outlet/>` (its effects dispatch its queries). Seeded
-  // from a parent effect, every one of them fires its own request first and
-  // the seed lands a round trip too late — the exact hop this endpoint was
-  // built to delete. Writing to the query cache is an external-store write,
-  // idempotent here (see `seed` below), so a render-phase call is safe.
+  // ⚠ Called DURING RENDER, not in an effect. React runs CHILD effects before
+  // parent ones, and both consumers of these seeds are children: `<Navigate>`
+  // on the boot page and the routed page under the shell's `<Outlet/>`. Seeded
+  // from a parent effect, each fires its own request first and the seed lands
+  // a round trip too late — the exact hop this endpoint deletes. Safe because
+  // a query-cache write is an external-store write, idempotent here.
   const seed = (key: readonly unknown[], value: unknown) => {
     if (queryClient.getQueryData(key) === undefined) {
       queryClient.setQueryData(key, value);
@@ -110,7 +93,7 @@ export function seedBootAnswer(
   const { workspace, segment } = boot;
   if (!workspace || !segment) return;
 
-  // The SHELL's own key, so the boot page's launch answer already serves the
+  // SHELL's own key, so the boot page's launch answer already serves the
   // navigation into `/{segment}` that immediately follows it.
   seed(bootQueryKey(segment), { ...boot, needsRedirect: false });
   const resolved: ResolvedWorkspace = {
@@ -119,8 +102,7 @@ export function seedBootAnswer(
     needsRedirect: false,
   };
   seed([RESOLVE_PATH, undefined, { segment }], resolved);
-  // A stale routed segment answers for BOTH URLs, mirroring the web 301 where
-  // one response serves the old path and the new one.
+  // A stale routed segment answers for BOTH URLs, mirroring the web 301.
   if (routedSegment && routedSegment !== segment) {
     seed([RESOLVE_PATH, undefined, { segment: routedSegment }], {
       ...resolved,
@@ -139,12 +121,10 @@ export function seedBootAnswer(
 }
 
 /**
- * The transport `useApiQueryWith` calls. `/api/boot` is a POST (its
- * no-segment mode may provision), which `apiRequest`'s GET-shaped hook
- * contract does not express — so the method is bound here and the hook keeps
- * everything else it is hardened for: the `[path, workspaceId, query]` cache
- * key, the disabled-query refetch guard, and the pending+idle self-heal that
- * fixed the stale-segment navigation flake.
+ * Transport `useApiQueryWith` calls. `/api/boot` is a POST (its no-segment mode
+ * may provision), which `apiRequest`'s GET-shaped hook contract cannot express,
+ * so the method is bound here and the hook keeps the rest: `[path, workspaceId,
+ * query]` cache key, disabled-query refetch guard, pending+idle self-heal.
  */
 function bootRequest<T>(
   _path: string,
@@ -158,20 +138,15 @@ function bootRequest<T>(
 }
 
 /**
- * Resolves `/:workspaceSegment` to a workspace, for the shell AND for pages.
+ * Resolves `/:workspaceSegment` for the shell AND for pages, on one query key,
+ * so a workspace costs ONE request per segment — which is why pages read it
+ * here, not from router context.
  *
- * Both call it with the same query key, so the workspace costs ONE request per
- * segment no matter how many components need it — which is why pages read the
- * workspace through this hook instead of through router context.
- *
- * It reads `POST /api/boot`, not `GET /api/workspaces/resolve`, and that is
- * the point of P0-2: the same round trip that resolves the segment also
- * carries the caller's role, their user id, and the workspace access matrix.
- * Those were two further hops (`me`, then `my-access`) that could not start
- * until this one landed — and the shell gates `<Outlet/>` on this one, so
- * every page's own data queued behind all three. The endpoint accepts the
- * canonical `{slug}-{publicId}` form and legacy slug-only URLs, and reports
- * `needsRedirect` where the web app 301s.
+ * ⚠ Reads `POST /api/boot`, not `GET /api/workspaces/resolve`: the same round
+ * trip carries role, user id and the access matrix, which were two further
+ * serial hops behind the `<Outlet/>` gate. Accepts canonical
+ * `{slug}-{publicId}` and legacy slug-only URLs; reports `needsRedirect` where
+ * the web app 301s.
  */
 export function useWorkspaceRoute(): WorkspaceRoute {
   const { workspaceSegment: routedSegment = "" } = useParams();
@@ -184,14 +159,12 @@ export function useWorkspaceRoute(): WorkspaceRoute {
 
   const workspace = query.data?.workspace ?? null;
 
-  // SEED THE OTHER KEYS from this answer, INCLUDING the canonical one on a
-  // redirect: the stale-segment response already carries the whole workspace,
-  // so the post-rewrite remount must not pay (or race) a second resolve.
-  // Render-phase, before the `<Outlet/>` children render and dispatch their
-  // own queries (see `seedBootAnswer`). Unguarded because that helper writes
-  // only where nothing is cached — including this hook's OWN key, which
-  // always holds `query.data` by the time we get here — so every call after
-  // the first is a handful of cache lookups and no state change.
+  // Seed the other keys, INCLUDING the canonical one on a redirect: the
+  // stale-segment response already carries the whole workspace, so the
+  // post-rewrite remount must not pay (or race) a second resolve. Render-phase,
+  // before `<Outlet/>` children dispatch their own queries. Unguarded because
+  // `seedBootAnswer` writes only where nothing is cached, so every call after
+  // the first is cache lookups and no state change.
   const queryClient = useQueryClient();
   if (query.data) seedBootAnswer(queryClient, query.data, routedSegment);
 

@@ -4,20 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HERO_CHAT_PLACEHOLDER, HERO_CHAT_REPLY, HeroChat } from "./hero-chat";
 
 /**
- * THE HERO CHAT — design-only, so what is pinned here is the DESIGN's
- * behaviour, not a product contract. Two things this suite exists to keep:
+ * Design-only chat, so this pins the DESIGN's behaviour. Two properties:
+ *   1. Honesty: reply is a stated placeholder, mic is a pressed STATE with no
+ *      transcription — a mic that writes into the field invents words.
+ *   2. ⚠ Collapse animates: the log is still mounted when "clear" is clicked,
+ *      because the height transition needs a height to fall from. Invisible in
+ *      a screenshot, first thing a "simplify" pass removes.
  *
- *   1. **It stays honest.** The reply is a stated placeholder, and the mic is a
- *      pressed STATE with no transcription behind it — a later edit that makes
- *      the mic write into the field would be inventing words the user did not
- *      say, and the assertion below is what catches it.
- *   2. **The collapse animates.** The log is deliberately still mounted at the
- *      moment "clear" is clicked, because the height transition needs a height
- *      to fall from. That ordering is invisible in a screenshot and is exactly
- *      what a "simplify" pass removes, so it is asserted directly.
- *
- * `knowledge-home.test.tsx` owns the other half: that this is ATTACHED to the
- * hero and absent when the hero is.
+ * `knowledge-home.test.tsx` owns the ATTACHMENT half.
  */
 
 afterEach(cleanup);
@@ -40,8 +34,7 @@ describe("HeroChat idle", () => {
 
     expect(input()).toBeTruthy();
     expect(sendButton()).toBeTruthy();
-    // The mic is a TOGGLE in the accessibility tree, not a tint: `aria-pressed`
-    // is the only thing that says so, and it starts off.
+    // Mic is a TOGGLE in the a11y tree, not a tint: `aria-pressed` says so.
     expect(
       screen.getByLabelText("Dictate a message").getAttribute("aria-pressed")
     ).toBe("false");
@@ -53,7 +46,6 @@ describe("HeroChat idle", () => {
     expect(screen.getByRole("button", { name: "Find where X is documented" })).toBeTruthy();
     expect(screen.getByText("Answers draw on the bases you can see.")).toBeTruthy();
 
-    // Idle = no conversation, and specifically no canned reply sitting there.
     expect(screen.queryByText(HERO_CHAT_REPLY)).toBeNull();
     expect(screen.queryByLabelText("Clear conversation")).toBeNull();
   });
@@ -73,7 +65,7 @@ describe("HeroChat idle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Summarize a knowledge base" }));
 
     expect(input().value).toBe("Summarize a knowledge base");
-    // A chip is a draft, not a submit — one click must not start a turn.
+    // Chip is a draft, not a submit.
     expect(screen.queryByText(HERO_CHAT_REPLY)).toBeNull();
   });
 });
@@ -84,12 +76,10 @@ describe("HeroChat conversation", () => {
     type("What is in the sales playbook?");
     fireEvent.click(sendButton());
 
-    // The user's OWN words, verbatim — not a summary, not the placeholder.
     expect(screen.getByText("What is in the sales playbook?")).toBeTruthy();
     expect(screen.getByText(HERO_CHAT_REPLY)).toBeTruthy();
-    // The draft is consumed and the input stays put, ready for the next turn.
     expect(input().value).toBe("");
-    // Suggestions are an idle affordance; they go once there is a conversation.
+    // Suggestions are idle-only.
     expect(screen.queryByRole("button", { name: "Find where X is documented" })).toBeNull();
   });
 
@@ -119,14 +109,12 @@ describe("HeroChat conversation", () => {
     fireEvent.keyDown(input(), { key: "Enter" });
 
     fireEvent.click(screen.getByLabelText("Clear conversation"));
-    // THE ORDER IS THE POINT: the turn is still mounted for the length of the
-    // collapse, so the grid track has a height to animate DOWN from. Wiping it
-    // on the click would turn the close into a jump.
+    // ⚠ ORDER IS THE POINT: turn stays mounted for the collapse, so the grid
+    // track has a height to animate DOWN from. Wiping on click = a jump.
     expect(screen.getByText(HERO_CHAT_REPLY)).toBeTruthy();
 
     await waitFor(() => expect(screen.queryByText(HERO_CHAT_REPLY)).toBeNull());
     expect(screen.queryByLabelText("Clear conversation")).toBeNull();
-    // Idle means idle: the suggestions come back.
     expect(screen.getByRole("button", { name: "Find where X is documented" })).toBeTruthy();
   });
 });
@@ -138,8 +126,7 @@ describe("HeroChat mic", () => {
 
     fireEvent.click(mic);
     expect(mic.getAttribute("aria-pressed")).toBe("true");
-    // NO FAKE TRANSCRIPTION. The field is untouched and the hint says why —
-    // a pressed mic that quietly typed something would be the design lying.
+    // NO FAKE TRANSCRIPTION: field untouched, hint says why.
     expect(input().value).toBe("");
     expect(screen.getByText(/not wired up yet/)).toBeTruthy();
 

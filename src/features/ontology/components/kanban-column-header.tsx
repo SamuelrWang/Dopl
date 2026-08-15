@@ -29,23 +29,17 @@ interface Props {
 }
 
 /**
- * The white header card at the top of a column's lane: the column name
- * (edited in place), its card count, and — for editors — an add button and
- * a kebab menu.
+ * Header card at the top of a column's lane: name (edited in place), card
+ * count, and for editors an add button + kebab menu. Expands downward onto a
+ * PREVIEW of the column's description and default fields; the template is
+ * edited in the panel's TemplateEditor ("Column settings").
  *
- * Clicking the card expands it DOWNWARD onto a preview of what the column
- * is: its description, and the default fields every new card is born with.
- * Preview only — the template is EDITED in the right panel's TemplateEditor,
- * which the kebab's "Column settings" opens (it replaced the old gear).
- *
- * ── THE CARD IS NOT ONE BUTTON, for the reason `knowledge-v2/home/base-card`
- *    documents at length: a `<button>` inside a `<button>` is invalid HTML and
- *    browsers reparent the inner one OUT of the card. The name input and the
- *    two icon buttons are therefore SIBLINGS, the chevron is the real
- *    keyboard-operable toggle (`aria-expanded` + `aria-controls`), and the
- *    row's `onClick` is a MOUSE convenience that duplicates it rather than
- *    competing with it — every control on the row stops propagation so one
- *    click fires exactly one thing.
+ * ⚠ THE CARD IS NOT ONE BUTTON (see `knowledge-v2/home/base-card`): a
+ * `<button>` inside a `<button>` is invalid HTML and browsers reparent the
+ * inner one OUT. Input + icon buttons are SIBLINGS; the chevron is the real
+ * keyboard toggle (`aria-expanded` + `aria-controls`) and the row's `onClick`
+ * is a mouse convenience duplicating it. Every control stops propagation so one
+ * click fires exactly one thing.
  */
 export function KanbanColumnHeader({
   column,
@@ -63,10 +57,9 @@ export function KanbanColumnHeader({
   const detailsId = `column-details-${column.id}`;
 
   return (
-    // No `overflow-hidden` on the card: the kebab's Popover is an absolutely
-    // positioned child of this subtree and a clipping ancestor would cut the
-    // menu off. Nothing inside paints its own background, so the rounded
-    // corners hold without it.
+    // ⚠ No `overflow-hidden`: the kebab's Popover is an absolutely positioned
+    // child and a clipping ancestor cuts the menu off. Nothing inside paints a
+    // background, so rounded corners hold without it.
     <div
       className="kanban-card shrink-0 rounded-[10px] border bg-bg-elevated"
       data-selected={selected ? "true" : undefined}
@@ -154,10 +147,9 @@ export function KanbanColumnHeader({
         )}
       </div>
 
-      {/* Smooth height collapse without measuring: the row animates 0fr → 1fr
-          and the child clips itself. `inert` while closed so the hidden input
-          is out of the tab order and off the accessibility tree — `overflow:
-          hidden` alone hides it from sight only. */}
+      {/* Height collapse without measuring: row animates 0fr → 1fr, child clips
+          itself. ⚠ `inert` while closed keeps the hidden input out of tab order
+          and off the a11y tree — `overflow: hidden` alone only hides it. */}
       <div
         id={detailsId}
         inert={!open}

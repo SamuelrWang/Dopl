@@ -1,16 +1,11 @@
 import TurndownService from "turndown";
 
-/**
- * Turndown rules used by the KB doc editor's HTML→markdown round-trip.
- * Extracted from `doc-editor.tsx` to keep the editor file under the
- * §2 line cap; behaviour is unchanged.
- */
+/** Turndown rules for the KB doc editor's HTML→markdown round-trip. */
 
 /**
- * Custom turndown rule for anchor tags. Mirrors GFM-style inline links
- * `[text](href "title")`. Bypasses turndown's default rule entirely so
- * extra Tiptap-injected attributes (class, target, rel) can't cause
- * the rule to skip — every `a[href]` round-trips deterministically.
+ * Anchor rule → GFM inline `[text](href "title")`. ⚠ Bypasses turndown's
+ * default rule: Tiptap-injected attrs (class, target, rel) can make the
+ * default skip the anchor. Keyed only on `a[href]`, so it always round-trips.
  */
 export function makeLinkRule(): TurndownService.Rule {
   return {
@@ -20,8 +15,7 @@ export function makeLinkRule(): TurndownService.Rule {
       const a = node as HTMLAnchorElement;
       const href = a.getAttribute("href") ?? "";
       const title = a.getAttribute("title");
-      // `content` is the already-converted markdown for the link's
-      // text. Empty content (autolink case) — fall back to the URL.
+      // `content` = already-converted link text; empty (autolink) → use URL.
       const text = content.trim() || href;
       return title ? `[${text}](${href} "${title}")` : `[${text}](${href})`;
     },
@@ -29,9 +23,8 @@ export function makeLinkRule(): TurndownService.Rule {
 }
 
 /**
- * Tiny custom turndown rule for tables — turndown's default leaves
- * tables as raw HTML; we want GFM pipe tables back. Inline rather
- * than pulling in `turndown-plugin-gfm` for one feature.
+ * Table rule → GFM pipe tables. Turndown's default leaves raw HTML; inline
+ * here rather than pulling in `turndown-plugin-gfm` for one feature.
  */
 export function makeTableRule(): TurndownService.Rule {
   return {

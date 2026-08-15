@@ -1,15 +1,10 @@
 /**
- * A coalescing deferred-refetch coordinator.
+ * Coalescing deferred-refetch coordinator. `request(busy)` runs immediately when
+ * idle, else defers and coalesces (many signals → one pending run);
+ * `settle(busy)` runs the single coalesced refetch once writes have drained.
  *
- * A realtime change fires `request(busy)`: when the feature has local
- * edits in flight (`busy`), the refetch is deferred and coalesced (many
- * signals collapse to one pending run); when idle it runs immediately.
- * When a write settles the feature calls `settle(busy)`, which runs the
- * single coalesced refetch once writes have drained.
- *
- * This is the guard that stops a remote event mid-edit from clobbering an
- * unsent optimistic change (a debounced ontology PATCH, a graph
- * merge-scheduler entry). Framework-agnostic and synchronously testable.
+ * ⚠ The guard that stops a remote event mid-edit from clobbering an unsent
+ * optimistic change (a debounced PATCH, a merge-scheduler entry).
  */
 export interface RefetchCoordinator {
   /** A remote change arrived. Run now if idle, else defer + coalesce. */
@@ -30,7 +25,6 @@ export function createRefetchCoordinator(run: () => void): RefetchCoordinator {
         deferred = true;
         return;
       }
-      // Running now satisfies any earlier deferral, so clear the flag.
       deferred = false;
       run();
     },

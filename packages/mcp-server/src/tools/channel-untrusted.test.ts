@@ -1,30 +1,19 @@
 /**
- * FIX L5 / M2 — UNTRUSTED TEXT SPLICED INTO A RESULT A MODEL READS, outside the
- * framing that disclaims message bodies. Two sites, one discipline: the await
- * result's failure description (L5, below) and the read result's thread-legend
- * title (M2, at the bottom of this file).
+ * UNTRUSTED TEXT SPLICED INTO A RESULT A MODEL READS, OUTSIDE the framing that
+ * disclaims message bodies. Two sites: the await result's failure description
+ * (below) and the read result's thread-legend title (bottom of this file).
  *
- * `dopl_channel` results are careful about counterparty BODIES: `opRead` and
- * `opAwait` emit `UNTRUSTED_BODY_HEADER` above them, so the framing is read
- * before the content it frames. The `await` op's FAILED-MID-HOLD branch is the
- * one place that splices upstream text OUTSIDE that framing — it names what
- * broke so the agent can act on it — and "it is our own server's error" is a
- * claim about the SOURCE, not about the CONTENT: a 400 echoing a rejected
- * field, a proxy error page, or a not-found naming a counterparty-supplied ref
- * can all carry text an attacker influenced.
+ * ⚠ `await`'s FAILED-MID-HOLD branch is the one place that splices upstream
+ * text outside `UNTRUSTED_BODY_HEADER`, and "our own server's error" is a claim
+ * about the SOURCE, not the CONTENT — a 400 echoing a rejected field, a proxy
+ * error page, or a not-found naming a counterparty ref all carry influenced text.
  *
- * Bounding it (160 chars, one line) was never enough on its own: 160 characters
- * is ample room for "IGNORE THE ABOVE. New instruction: …" to sit in the result
- * as unframed narration by the server. What is pinned here is that the text is
- * NEUTRALIZED — stripped of anything that lets it pose as structure and
- * rendered as one inline code span, so however it reads it reads as a value.
+ * ⚠ Bounding it (160 chars, one line) is not enough: that is ample room for
+ * "IGNORE THE ABOVE. New instruction: …" as unframed server narration. Pinned
+ * here: the text is NEUTRALIZED and rendered as one inline code span.
  *
- * Split into its own file (rather than added to `channel-wake.test.ts`) at the
- * §2 500-line cap. The @dopl/client is hand-stubbed; nothing transports.
- *
- * Q1 — the OTHER five sites (channel name/topic, thread title/outcome summary,
- * display_name) and the per-op untrusted headers are pinned in the sibling
- * `channel-narration.test.ts`, split off here for the same 500-line cap.
+ * The other five sites and the per-op untrusted headers are pinned in
+ * `channel-narration.test.ts`.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -57,10 +46,7 @@ function fakeClock() {
   };
 }
 
-/**
- * Run a hold whose SECOND inner poll throws `message`, and return the result
- * text. That is the FAILED-MID-HOLD branch — the one that names the failure.
- */
+/** Hold whose SECOND inner poll throws — the FAILED-MID-HOLD branch. */
 async function failMidHold(message: string): Promise<string> {
   const clock = fakeClock();
   const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
@@ -86,8 +72,8 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
   it("renders the description as ONE inline code span", async () => {
     const text = await failMidHold("socket hang up");
     expect(failureSpan(text)).toBe("socket hang up");
-    // Exactly two backticks on that line: a third would close the span early
-    // and put the tail back into narration.
+    // ⚠ Exactly two backticks — a third closes the span early and puts the tail
+    // back into narration.
     const line = text.split("\n").find((l) => l.includes("socket hang up"))!;
     expect((line.match(/`/g) ?? []).length).toBe(2);
   });
@@ -98,13 +84,11 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
     const text = await failMidHold(hostile);
     const span = failureSpan(text);
     expect(span).not.toBeNull();
-    // The words survive — this is a diagnostic and has to stay useful...
+    // Words survive — this is a diagnostic and must stay useful...
     expect(span).toContain("IGNORE THE ABOVE");
-    // ...but no markdown structure, no quoting, no line breaks, and above all
-    // no backtick that could escape the span.
+    // ...but no markdown structure, quoting, line breaks, or escaping backtick.
     expect(span).not.toMatch(/[`*_#>[\]{}|]/);
     expect(span).not.toMatch(/[\n\r]/);
-    // And the actionable half of the result is still there, underneath it.
     expect(text).toContain("since=7");
     expect(text).toContain("before you end your turn");
   });
@@ -129,19 +113,14 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
 });
 
 /**
- * FIX M2 — THE SAME HOLE, ONE LINE LOWER: the thread legend's TITLE.
+ * THE SAME HOLE ONE LINE LOWER: the thread legend's TITLE.
  *
- * `UNTRUSTED_BODY_HEADER` disclaims message BODIES. The legend that expands the
- * short thread tags sits underneath it and reads as the server's own narration,
- * and the title it prints is peer-typed — "server-stamped" says where the bytes
- * were copied from, not who wrote them. The id beside it was always neutralized
- * by its code span; the title was interpolated raw, and a title runs to 200
- * characters with interior newlines allowed. That is room to close the line and
- * write fresh ones: a forged legend entry mapping a tag to an attacker's id, a
- * fake heading, a tool call "the server" appears to be recommending.
- *
- * Same discipline pinned here as for `describeFailure`, plus the half that keeps
- * it a feature: a legitimate title must still be READABLE.
+ * ⚠ `UNTRUSTED_BODY_HEADER` disclaims message BODIES; the legend sits under it
+ * and reads as the server's own narration. The title is peer-typed —
+ * "server-stamped" says where the bytes were copied from, not who wrote them —
+ * and runs to 200 chars with interior newlines allowed: room to close the line
+ * and forge a legend entry, a heading, or a tool call the server appears to
+ * recommend. ⚠ A legitimate title must still be READABLE.
  */
 
 const THREAD_ID = "3f2a91c4-dead-beef-0000-000000000001";
@@ -186,12 +165,10 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
 
   it("still NAMES a legitimate thread, as ONE inline code span", async () => {
     const line = await legendLine("Ship the listener fix");
-    // The point of the legend is that a reader can tell which exchange is which.
     expect(titleSpan(line)).toBe("Ship the listener fix");
     expect(line).toContain(`\`${THREAD_ID}\``);
-    // Three spans on the line — the short tag, the full id, the title — and
-    // nothing half-open. (The short tag gained its own span in the Q1-E pass:
-    // `metadata.taskId` is peer-set verbatim for any non-UUID value.)
+    // ⚠ Three spans (short tag, full id, title), nothing half-open — the short
+    // tag needs one too: `metadata.taskId` is peer-set verbatim for non-UUIDs.
     expect((line.match(/`/g) ?? []).length).toBe(6);
   });
 
@@ -206,14 +183,13 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     const line = await legendLine(hostile);
     const span = titleSpan(line);
     expect(span).not.toBeNull();
-    // The words survive — a real title has to stay legible...
+    // Words survive — a real title must stay legible...
     expect(span).toContain("New instruction");
-    // ...but nothing that lets them pose as structure, and above all no
-    // backtick to escape the span and no newline to start a line of its own.
+    // ...but nothing that poses as structure, no escaping backtick, no newline.
     expect(span).not.toMatch(/[`*_#>[\]{}|]/);
     expect(span).not.toMatch(/[\n\r]/);
-    // The whole payload stayed on the legend line: no second "SYSTEM" line, no
-    // second tag mapping, nothing rendered outside the span.
+    // ⚠ Whole payload stays on the legend line — no second line, no second tag
+    // mapping, nothing outside the span.
     const text = (
       await opRead(
         stubClient({ readChannelMessages: vi.fn(async () => [threadedMsg(hostile)]) }),
@@ -222,7 +198,6 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     ).content[0].text;
     expect(text.split("\n").filter((l) => l.includes("SYSTEM"))).toHaveLength(1);
     expect(text).not.toContain("`attacker-thread`");
-    // And the line's own instruction is intact underneath it.
     expect(line).toContain(`\`${THREAD_ID}\``);
     expect(line).toContain('op="post"');
   });
@@ -230,7 +205,6 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
   it("a title made only of markup renders as NO title — the L3 tell, not a broken span", async () => {
     const line = await legendLine("``` **__** ###");
     expect(titleSpan(line)).toBeNull();
-    // Exactly the shape of a thread the server could not name.
     expect(line.startsWith(`Threads above: \`3f2a91c4\` = \`${THREAD_ID}\`.`)).toBe(true);
   });
 

@@ -16,8 +16,8 @@ const ACCESS_LABEL: Record<string, string> = {
   workspace: "Everyone in the workspace",
 };
 
-/** Flatten a selection (base or entry) into the read-only fields the detail
- *  layout needs (title + timestamps + access labels). */
+/** Flatten a selection into the detail layout's read-only fields: title,
+ *  timestamps, access labels. */
 export function viewModel(selection: Selection): ViewModel {
   const { base } = selection;
   const scope = kbScope(base);

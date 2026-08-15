@@ -1,22 +1,14 @@
 /**
- * INVARIANT SUITE — the `mcp_tool_calls` instrumentation inside
- * `withWorkspaceAuth`.
+ * The `mcp_tool_calls` instrumentation inside `withWorkspaceAuth`.
  *
- * A sibling of `with-workspace-auth.test.ts` (the same split
- * `with-auth-rate-limit.test.ts` makes off `with-auth.test.ts`) because that
- * file sits at the 500-line cap and this concern is self-contained.
+ * ⚠ THE RULE: an `X-MCP-Tool` name beginning with `_` is an INTERNAL call (the
+ * MCP layer hitting our own infrastructure routes), not analytics.
+ * `_mcp_credits_consume` fires on EVERY tool call, so logging it adds one insert
+ * per call and puts a synthetic tool atop every usage query. The header is still
+ * SENT; only the analytics write is skipped.
  *
- * THE RULE: an `X-MCP-Tool` name beginning with `_` is an INTERNAL call — the
- * MCP layer hitting our own infrastructure routes — not an agent calling a
- * tool, and it is not analytics. `_mcp_credits_consume` fires on EVERY MCP
- * tool call, so logging it would add one `mcp_tool_calls` insert per tool call
- * and put a synthetic tool at the top of every usage query. The header is
- * still SENT (worth having in a server log); only the analytics write is
- * skipped.
- *
- * Same harness as the sibling: `withUserAuth` stubbed so the OAuth-bearer
- * branch is selectable (the instrumentation is agent-callers only), the REAL
- * `resolveActiveWorkspace` over a mocked repository.
+ * Harness: `withUserAuth` stubbed so the OAuth-bearer branch is selectable (the
+ * instrumentation is agent-callers only), the REAL `resolveActiveWorkspace`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

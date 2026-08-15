@@ -28,9 +28,8 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildSkillContext(auth);
     const slug = requireSkillSlug(auth.params);
     const patch = await parseJson(request, SkillUpdateSchema);
-    // Optimistic-concurrency precondition. Mismatch → 412
-    // SKILL_STALE_VERSION; client must surface conflict resolution
-    // rather than retry blindly.
+    // Precondition; mismatch → 412 SKILL_STALE_VERSION. ⚠ Client must surface conflict
+    // resolution, not retry blindly.
     const expectedUpdatedAt =
       request.headers.get("x-updated-at") ?? undefined;
     const skill = await updateSkill(ctx, slug, patch, expectedUpdatedAt);

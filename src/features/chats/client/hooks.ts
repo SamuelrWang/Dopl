@@ -17,17 +17,10 @@ const selectFolders = (body: ChatFoldersCache): ChatFolder[] =>
   body.folders ?? [];
 
 /**
- * The archive's three reads, all on `useApiQuery` — which is what makes them
- * PATCHABLE. Every one of them registers the `[path, workspaceId, query]`
- * tuple `@/shared/api/query-keys` rebuilds for the write side, so a mutation
- * can edit exactly the entry a component is subscribed to.
- *
- * `useChatDetail` used to call `useQuery` with a hand-typed
- * `["chat-detail", workspaceId, chatId]`. Two costs, both real: the writes
- * had no factory to reach it through (so they refetched instead of patching),
- * and its two-element prefix was a workspace-wide handle — one realtime signal
- * invalidated every transcript the user had ever opened. Keyed by path, the
- * broadest thing any writer can name is one chat.
+ * ⚠ All three reads must stay on `useApiQuery` — it registers the
+ * `[path, workspaceId, query]` tuple `@/shared/api/query-keys` rebuilds for
+ * the write side, so writes patch the exact entry. Hand-typed keys break
+ * patching and widen invalidation to every transcript in the workspace.
  */
 
 export function useChats(workspaceId: string) {
@@ -41,13 +34,8 @@ export function useChatFolders(workspaceId: string) {
   });
 }
 
-/**
- * Loads the full transcript for the selected chat. Header data lives in the
- * list read (single source for the toggles); this hook only owns the messages
- * payload. The key scopes per chat, so a stale transcript never renders under
- * a different header — and revisiting a chat serves from cache. `retry()`
- * re-runs the fetch.
- */
+/** Full transcript for the selected chat. Header data lives in the list read
+ *  (single source for toggles); this owns only the messages payload. */
 export function useChatDetail(
   chatId: string | null,
   workspaceId: string
@@ -57,7 +45,7 @@ export function useChatDetail(
     { workspaceId, select: selectChat }
   );
 
-  // Data wins over error: a failed background refetch must not blank a
+  // ⚠ Data wins over error: a failed background refetch must not blank a
   // rendered transcript into the error card.
   const status: ChatDetailStatus = !chatId
     ? "idle"
@@ -67,7 +55,6 @@ export function useChatDetail(
         ? "error"
         : "loading";
 
-  // `useApiQuery`'s refetch already no-ops on a disabled (null-path) query.
   const rawRefetch = query.refetch;
   const retry = useCallback(() => {
     void rawRefetch();

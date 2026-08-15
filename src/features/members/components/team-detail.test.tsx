@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
 /**
- * THE RENAME THAT WAS REFUSED, and what the input is left showing.
- *
- * The pane commits name/description on blur and deliberately has NO prop-sync
- * effect: `members-view` renders it with `key={team.id}`, so a team switch
- * remounts and the `useState` initialisers are the sync. That is the right
- * shape for the success path — and it means a REFUSED write has nothing to
- * correct the field. The mutation layer restores the cached team verbatim, so
- * the crumb and the list row go back to the old name while the input keeps the
- * text the server rejected, presented as if it had been saved.
- *
- * The writes are mocked rather than driven through the transport: the property
- * here is the pane's own local state after a rejected `mutateAsync`, and the
- * rollback underneath it is already pinned by `write-configs.test.ts`.
+ * A REFUSED rename, and what the input is left showing. The pane commits on
+ * blur with NO prop-sync effect (`members-view` keys it by team id, so a
+ * switch remounts and the `useState` initialisers are the sync) — so a refused
+ * write has nothing to correct the field, and the input would keep the
+ * rejected text as if saved while crumb and list row roll back.
+ * Writes are mocked: the property here is the pane's local state after a
+ * rejected `mutateAsync`; the rollback is pinned by `write-configs.test.ts`.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -84,7 +78,7 @@ function mount() {
   };
 }
 
-/** Type into a field and commit it the way the pane commits: on blur. */
+/** Type into a field and commit the way the pane does: on blur. */
 async function commit(field: HTMLInputElement, value: string) {
   fireEvent.change(field, { target: { value } });
   await act(async () => {
@@ -115,7 +109,7 @@ describe("team rename", () => {
 
     await commit(name, "  Growth EMEA  ");
 
-    // Normalised to what was actually sent, and it stays.
+    // Normalised to what was sent, and it stays.
     expect(name.value).toBe("Growth EMEA");
   });
 

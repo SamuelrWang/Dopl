@@ -8,11 +8,8 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * POST /api/join/[token] — request to join the workspace behind a
- * shareable link. Authed. Returns either the workspace route (already a
- * member) or the requested/pending outcome for the awaiting-approval UX.
- */
+/** POST — request to join the workspace behind a shareable link. Authed. Returns the workspace
+ *  route (already a member) or the requested/pending outcome. */
 export const POST = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {

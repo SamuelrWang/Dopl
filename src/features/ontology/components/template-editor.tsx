@@ -8,8 +8,8 @@ import type { GraphAction } from "../graph-state";
 import type { OntologyObject, TemplateField } from "../types";
 import { FIELD_WELL } from "./ontology-bits";
 
-/** Shared with the column header card's read-only template preview, so the
- *  two renderings of a field's kind can never drift apart. */
+/** ⚠ Shared with the column header card's read-only template preview — two
+ *  renderings of a field's kind must not drift. */
 export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
   pill: "Tag",
@@ -19,10 +19,9 @@ export const KIND_LABELS: Record<TemplateField["kind"], string> = {
 };
 
 /**
- * The column's object template — default fields (label + kind, no
- * values) that every new child object is born with. Deliberately NOT
- * the attributes editor: rows here are field definitions, so there is
- * no value cell to fill, just the label and a kind chip.
+ * The column's object template — default fields (label + kind, no values) every
+ * new child is born with. NOT the attributes editor: rows are field
+ * definitions, so there is no value cell, just label + kind chip.
  */
 export function TemplateEditor({
   column,
@@ -39,8 +38,8 @@ export function TemplateEditor({
   const setTemplate = (template: TemplateField[]) =>
     dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { template } });
 
-  // Upsert by label (case-insensitive), matching the MCP
-  // set_template_field semantics — no duplicate default fields.
+  // ⚠ Upsert by label (case-insensitive) to match MCP `set_template_field`
+  // semantics — no duplicate default fields.
   const addField = () => {
     const label = newLabel.trim();
     if (!label) return;

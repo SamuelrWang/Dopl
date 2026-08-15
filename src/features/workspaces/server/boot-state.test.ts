@@ -1,20 +1,11 @@
 /**
- * `getBootState` + the membership facts the segment resolver now carries
- * (launch-blocker P0-2, parts b and c).
- *
- * THE PROPERTIES, and why each is worth a test rather than a comment:
- *
- *   - FAIL-CLOSED. The segment mode resolves or returns null; it must never
- *     fall through to `ensureDefaultWorkspace`. A boot endpoint that answers
- *     "you asked for a workspace you can't see, here's a different one" is a
- *     cross-tenant bug wearing a performance fix's clothes.
- *   - NO PROVISIONING BEFORE ONBOARDING. The gate used to live in the SPA
- *     (`enabled: signedIn && onboarded`); folding two hops into one moved it
- *     server-side and it has to still be there.
- *   - ROLE THREADED, NOT RE-READ. The membership fetch that proves the caller
- *     may see the workspace is the SAME fetch that answers `GET
- *     /api/workspaces/me`, and the same one `listEffectiveAccess` used to
- *     repeat. Discarding it was the reason those were separate round trips.
+ * `getBootState` + the membership facts the segment resolver carries. Pins:
+ *   - FAIL-CLOSED: segment mode resolves or returns null, NEVER falls through
+ *     to `ensureDefaultWorkspace` (that is a cross-tenant bug).
+ *   - NO PROVISIONING BEFORE ONBOARDING (gate moved server-side from the SPA's
+ *     `enabled: signedIn && onboarded`).
+ *   - ROLE THREADED, NOT RE-READ: the membership fetch proving access is the
+ *     same one that answers `GET /api/workspaces/me`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -107,7 +98,7 @@ describe("resolveWorkspaceSegmentForUser — role rides along", () => {
 
     const resolved = await resolveWorkspaceSegmentForUser(CANONICAL, USER);
     expect(resolved).toMatchObject({ canonical: CANONICAL, needsRedirect: false, role: "admin" });
-    // The membership read happens ONCE — it is the same read that gates access.
+    // Membership read happens ONCE — same read that gates access.
     expect(mockRepo.findMembership).toHaveBeenCalledTimes(1);
   });
 
@@ -142,7 +133,7 @@ describe("getBootState — segment mode", () => {
     });
     // The role is THREADED into the access batch, not re-fetched by it.
     expect(mockAccess).toHaveBeenCalledWith(WS_ID, USER, { role: "member" });
-    // A teams-mode resource with no grant reads as "read", never omission.
+    // Teams-mode resource with no grant reads as "read", never omission.
     expect(state?.myAccess).toEqual({
       defaultLevel: "edit",
       overrides: [{ resourceType: "knowledge_base", resourceId: "kb-1", level: "read" }],

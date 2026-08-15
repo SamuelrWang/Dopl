@@ -1,11 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
-/**
- * Read the onboarding gate. A missing profiles row reads as "not
- * onboarded" — the row is created by signup hooks before any of this
- * runs, but be defensive rather than throw on the edge case.
- */
+/** Onboarding gate. Missing profiles row reads as "not onboarded" (signup
+ *  hooks create it first; defensive, not expected). */
 export async function findOnboardedAt(userId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin()
     .from("profiles")
@@ -17,10 +14,9 @@ export async function findOnboardedAt(userId: string): Promise<string | null> {
 }
 
 /**
- * Stamp onboarding completion. Conditional update (`onboarded_at IS
- * NULL`) so concurrent/repeat submits are no-ops; returns whether this
- * call won — callers use that to fire the completion event exactly
- * once (a single-writer idempotent-stamp pattern).
+ * Stamp onboarding completion. ⚠ Conditional update (`onboarded_at IS NULL`)
+ * makes concurrent/repeat submits no-ops; return value = "this call won", which
+ * callers use to fire the completion event exactly once.
  */
 export async function markOnboarded(userId: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin()
@@ -34,10 +30,9 @@ export async function markOnboarded(userId: string): Promise<boolean> {
 }
 
 /**
- * "Has this user's agent ever completed the OAuth dance?" — an
- * unrevoked mcp_tokens row. Point lookup on the partial index
- * mcp_tokens_user_active_idx. Deliberately NOT profiles.mcp_connected_at
- * (legacy heartbeat ping with a freshness window).
+ * Agent ever completed the OAuth dance? = unrevoked mcp_tokens row. Point
+ * lookup on partial index mcp_tokens_user_active_idx. ⚠ Deliberately NOT
+ * profiles.mcp_connected_at (legacy heartbeat with a freshness window).
  */
 export async function hasActiveMcpToken(userId: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin()
@@ -51,7 +46,7 @@ export async function hasActiveMcpToken(userId: string): Promise<boolean> {
   return !!data;
 }
 
-/** display_name lookup for the workspace-naming fallback chain. */
+/** display_name for the workspace-naming fallback chain. */
 export async function findDisplayName(userId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin()
     .from("profiles")

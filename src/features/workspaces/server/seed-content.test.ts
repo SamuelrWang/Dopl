@@ -1,10 +1,8 @@
 /**
- * Content-shape tests for the seed corpus. These are pure (no DB): they
- * assert the cross-references authored across features actually line up —
- * every ontology attribute points at a knowledge entry key or skill slug
- * that the knowledge/skills seeds really produce, and the graph is
- * internally well-formed (every relationship endpoint resolves). A drift
- * here would surface as dangling refs in a real seeded workspace.
+ * Content-shape tests for the seed corpus, pure (no DB): every ontology
+ * attribute must point at a knowledge entry key or skill slug the
+ * knowledge/skills seeds really produce, and every relationship endpoint must
+ * resolve. Drift here = dangling refs in a real seeded workspace.
  */
 
 import { describe, it, expect } from "vitest";
@@ -73,9 +71,9 @@ describe("ontology seed — cross-reference integrity", () => {
 });
 
 /**
- * Workflows are retired (see docs/RETIREMENT-UNWIRING-PLAN.md, D5). The
- * seed corpus must not reintroduce them: no seeded skill, guide entry, or
- * ontology attribute may teach a surface a new workspace no longer has.
+ * ⚠ Workflows are retired (docs/RETIREMENT-UNWIRING-PLAN.md, D5). No seeded
+ * skill, guide entry, or ontology attribute may teach a surface a new
+ * workspace no longer has.
  */
 describe("seed corpus — workflows stay retired", () => {
   it("seeds no skill that teaches workflows", () => {
@@ -132,9 +130,9 @@ describe("seed corpus — workflows stay retired", () => {
 });
 
 /**
- * The exact starter corpus a NEW workspace receives. Pinned so a future
- * edit has to be deliberate — this list is what a fresh owner sees on
- * first login, and what the bootstrap prompt assumes exists.
+ * The exact starter corpus a NEW workspace receives. Pinned so an edit has to
+ * be deliberate — this is what a fresh owner sees on first login and what the
+ * bootstrap prompt assumes exists.
  */
 describe("seed corpus — what a new workspace gets", () => {
   it("one knowledge base with five guide entries", () => {

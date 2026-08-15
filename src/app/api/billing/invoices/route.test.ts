@@ -1,13 +1,8 @@
 /**
- * GET /api/billing/invoices — the history, camelCased, admin-gated.
- *
- * The pins that matter here are DTO-shaped rather than behavioural, because
- * this route's whole job is a translation: Stripe's `amount_paid` /
- * `hosted_invoice_url` / epoch `created` must not reach a client, and the page
- * size must stay the one constant in `features/billing/billing-account.ts` (a
- * second copy would drift the moment either moves).
- *
- * The Stripe SDK is faked at the module boundary. Nothing touches the network.
+ * GET /api/billing/invoices — DTO-shaped pins, since the route's job is a translation: Stripe's
+ * `amount_paid` / `hosted_invoice_url` / epoch `created` must not reach a client, and the page
+ * size must stay the ONE constant in `features/billing/billing-account.ts`.
+ * The Stripe SDK is faked at the module boundary; nothing touches the network.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -170,7 +165,7 @@ describe("when there is no Stripe account", () => {
     const res = await GET(request());
     expect(res.status).toBe(200);
     expect((await res.json()).invoices).toEqual([]);
-    // Stripe was never called — a missing customer is not a lookup.
+    // A missing customer is not a lookup.
     expect(stripeCalls.listParams).toBeNull();
   });
 

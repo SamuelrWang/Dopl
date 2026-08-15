@@ -14,10 +14,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * GET /api/workspaces/[workspaceSlug]/invitations — list pending invitations.
- * Admin+ only (enforced inside `listWorkspaceInvitations`).
- */
+/** GET — pending invitations. Admin+, enforced inside `listWorkspaceInvitations`. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -37,12 +34,8 @@ export const GET = withUserAuth(
   }
 );
 
-/**
- * POST /api/workspaces/[workspaceSlug]/invitations — create a new invitation.
- * Admin+ only (enforced inside `createInvitation`). Returns the
- * invitation row including the magic-link token; the inviter is
- * expected to copy the resulting URL until email send is wired.
- */
+/** POST — create an invitation. Admin+, enforced inside `createInvitation`. Returns the row
+ *  INCLUDING the magic-link token; the inviter copies the URL until email send is wired. */
 export const POST = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -67,6 +60,6 @@ export const POST = withUserAuth(
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/invitations", err);
     }
   },
-  // sessionOnly: inviting a member into the workspace is an admin action.
+  // sessionOnly: inviting a member is an admin action.
   { sessionOnly: true }
 );

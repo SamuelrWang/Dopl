@@ -18,12 +18,9 @@ interface Props {
   enabled: boolean;
 }
 
-/**
- * Pending join requests from the shareable link — the admin approval
- * queue. Each row: requester identity, role picker (default Member),
- * Approve / Decline. Renders nothing while empty. Data flows through
- * useJoinRequests — the same query cache entry as the members view.
- */
+/** Admin approval queue for shareable-link join requests: identity, role
+ *  picker, Approve / Decline. Renders nothing while empty. Reads through
+ *  useJoinRequests — the same cache entry as the members view. */
 export function JoinRequestsBanner({ workspaceSlug, workspaceId, enabled }: Props) {
   const {
     requests,
@@ -34,11 +31,8 @@ export function JoinRequestsBanner({ workspaceSlug, workspaceId, enabled }: Prop
   const [error, setError] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
-  /**
-   * The row is dropped in `onMutate` and the roster is invalidated by the
-   * mutation, so nothing here has to await a refresh — only the 402 branch is
-   * left, and a failure restores the queue from the layer's snapshot.
-   */
+  /** Row drop + roster invalidation are the mutation's, so nothing here awaits
+   *  a refresh; only the 402 branch is left. */
   async function resolve(
     request: JoinRequestView,
     action: "approve" | "decline"
@@ -47,8 +41,8 @@ export function JoinRequestsBanner({ workspaceSlug, workspaceId, enabled }: Prop
     try {
       await resolveRequest(request.id, action, roles[request.id] ?? "member");
     } catch (err) {
-      // Solo plan is single-member — approving is blocked server-side.
-      // Offer the in-place Team upgrade instead of a dead-end error line.
+      // Solo is single-member, so approval is blocked server-side — offer the
+      // in-place Team upgrade rather than a dead-end error line.
       if (
         err instanceof ApiError &&
         err.code === "SOLO_MEMBER_LIMIT" &&

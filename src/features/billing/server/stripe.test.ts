@@ -1,15 +1,10 @@
 /**
- * WHERE STRIPE SENDS THE BROWSER BACK.
+ * Where Stripe sends the browser back. A checkout session is redeemed minutes
+ * to days later and a portal session outlives its tab, so these two
+ * `return_url` strings get a test of their own: the failure mode is a customer
+ * who paid landing on a redirect that no longer exists.
  *
- * A checkout session minted now is redeemed minutes to days later, and a portal
- * session outlives the tab that opened it. Both `return_url`s used to name
- * `/canvas?billing=…` — a page on the retirement plan's RETIRE list
- * (docs/migration-research/website-retirement-plan.md). That is why these two
- * strings get a test of their own: the failure mode is not a broken page, it is
- * a customer who paid and lands on a redirect that no longer exists.
- *
- * The Stripe SDK is faked at the module boundary. Nothing here touches the
- * network, and no session, customer or charge is ever created.
+ * Stripe SDK faked at the module boundary — no network, no session created.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -67,17 +62,15 @@ async function checkout(segment?: string | null) {
 
 describe("the checkout return", () => {
   it("lands on the billing page for the workspace that was PAID FOR", async () => {
-    // Not the buyer's default workspace: a multi-workspace admin upgrading
-    // their second workspace would otherwise be returned to the first one's
-    // billing state and be told nothing happened.
+    // ⚠ Not the buyer's DEFAULT workspace — a multi-workspace admin would be
+    // returned to the first workspace's billing state.
     expect(await checkout(SEGMENT)).toBe(
       `https://www.usedopl.com/billing/${SEGMENT}?billing=success&session_id={CHECKOUT_SESSION_ID}`
     );
   });
 
   it("keeps Stripe's session-id placeholder literal", async () => {
-    // Percent-encoded braces are not substituted — the customer would arrive
-    // with the string `{CHECKOUT_SESSION_ID}` in the URL.
+    // ⚠ Percent-encoded braces are not substituted by Stripe.
     const url = await checkout(SEGMENT);
     expect(url).toContain("session_id={CHECKOUT_SESSION_ID}");
     expect(url).not.toContain("%7B");

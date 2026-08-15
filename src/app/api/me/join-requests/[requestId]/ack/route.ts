@@ -12,7 +12,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** POST /api/me/join-requests/[requestId]/ack — dismiss a join-request popup. */
+/** POST — dismiss a join-request popup. */
 export const POST = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {

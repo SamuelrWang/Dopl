@@ -20,8 +20,8 @@ interface Props {
   member: WorkspaceMemberView;
   isSelf: boolean;
   canEditTarget: boolean;
-  /** Whether clicking the row opens the detail drawer (admins see
-   *  everyone; regular members only themselves). */
+  /** Row click opens the detail drawer. Admins see everyone; regular members
+   *  only themselves. */
   clickable: boolean;
   busy: boolean;
   onOpen: () => void;
@@ -29,10 +29,7 @@ interface Props {
   onRemove: () => void;
 }
 
-/**
- * One members-table row: avatar · role · team chips · last active ·
- * kebab. Clicking the row opens the member detail drawer (when allowed).
- */
+/** One members-table row: avatar · role · team chips · last active · kebab. */
 export function MemberRow({
   member: m,
   isSelf,
@@ -48,8 +45,8 @@ export function MemberRow({
   const extraChips = m.teams.length - chips.length;
   const kebabItems = [
     ...(clickable ? [{ label: "View details", onSelect: onOpen }] : []),
-    // Same predicate as the role select — canEditTarget comes from
-    // canShowMemberControls, matching what the server will accept.
+    // ⚠ Same predicate as the role select: canEditTarget comes from
+    // canShowMemberControls, matching what the server accepts.
     ...(canEditTarget
       ? [
           {

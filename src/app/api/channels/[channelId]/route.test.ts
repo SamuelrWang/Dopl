@@ -1,21 +1,10 @@
 /**
- * C-13 (visibility half) — the channel PATCH's FIELD-level session gate.
- *
- * THE SECURITY PROPERTY: private→public exposes the entire channel AND its
- * history to every member of the workspace. Samuel's ruling (2026-08-10) is
- * that the widening takes a human. The gate is per-FIELD rather than per-METHOD
- * because this one PATCH is four writes behind one verb — `name`, `topic`,
- * `archived` have no audience consequence and stay agent-reachable, which is
- * exactly what the last two cases here pin. Take the gate off and the first
- * three fail; widen it to the whole method and the last two fail.
- *
- * Both DIRECTIONS are refused for an agent, not only the widening: no MCP op or
- * desktop call reaches this field today, so there is no narrowing caller to
- * break, and a direction-free gate needs no read of the current row.
- *
- * Mocking is the `members/route.test.ts` idiom — token layer, workspace
- * resolution and the channels service only. `withWorkspaceAuth` / `withUserAuth`
- * are the shipping ones, so the agent-vs-session discrimination is real.
+ * The channel PATCH's FIELD-level session gate. private→public exposes the entire channel AND its
+ * history to every workspace member, so the widening takes a human. Per-FIELD, not per-METHOD:
+ * `name`, `topic`, `archived` have no audience consequence and stay agent-reachable.
+ * ⚠ Take the gate off and the first three cases fail; widen it to the whole method and the last
+ * two fail. Both directions are refused (no narrowing caller exists to break).
+ * `withWorkspaceAuth`/`withUserAuth` are the shipping ones, so the discrimination is real.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

@@ -13,45 +13,32 @@ import type { ChannelContext } from "./service-shared";
 
 /**
  * The await long-poll's HOLD: block until a message with `seq > since` lands
- * (returning it the instant it does) or the deadline passes. Extracted from
- * the route so the loop is unit-testable without a server — the route stays a
- * thin adapter (§ route handlers are ≤80 lines and hold no logic).
+ * (returning it instantly) or the deadline passes. Extracted from the route so
+ * the loop is unit-testable without a server.
  *
- * Q8 EGRESS DIET (2026-07-31). Supabase free-tier egress was at 182% of the
- * 5 GB cap and this loop is the one structurally growing consumer: the
+ * ⚠ This loop is the feature's one structurally growing egress consumer — the
  * teaching tells every agent with an open exchange to keep an await armed
- * continuously, so a listening user held ~1.33 queries/sec, forever. Three
- * shapes changed here, none of them visible to a caller:
+ * continuously. Three shapes exist for that, none caller-visible:
  *
- *  1. TICK = EXISTENCE CHECK. Every tick after the first asks `seq > since
- *     LIMIT 1` on one column and fetches full rows ONLY once that hits. It
- *     bounds a tick's work to an index probe no matter how far behind the
- *     cursor is. Tick 0 stays a direct row read on purpose: access was just
- *     validated by `resolveReadableChannelId` and the desktop's wake path
- *     (`timeoutMs=1`) is exactly one tick, so probing first would add a round
- *     trip to the hot wake path and save nothing (a miss returns `[]` either
- *     way).
- *  2. RECHECK CADENCE. `revalidateAwaitAccess` ran EVERY tick — 2 of the 3
- *     queries and ~99% of the bytes. It now runs on the first held tick and
- *     every `AWAIT_REVALIDATE_EVERY_TICKS` after (~15s bounded staleness on
- *     an idle hold), and the queries themselves were narrowed to the columns
- *     the decision reads.
- *  3. THE SECURITY PROPERTY IS ON THE RETURN PATH, NOT THE CADENCE. The
- *     invariant is "no message is DELIVERED to someone who lost access", and
- *     it is enforced as: NO FETCH OF ROWS MAY PRECEDE A PROOF OF ACCESS WITHIN
- *     THE SAME TICK. On an existence hit the hold proves access before reading
- *     rows — via `verifyAccess`, which skips the query only when the periodic
- *     recheck already proved it EARLIER IN THIS TICK, i.e. when the proof is
- *     younger than the probe that found the message and re-asking would return
- *     the same answer. (M2: this used to be described as revalidating
- *     "unconditionally"; the guard has always been there, and the description
- *     was what was wrong.) Loss of access is caught before delivery whatever
- *     the tick count; the cadence only bounds how long a *silent* hold
- *     survives a revocation.
+ *  1. TICK = EXISTENCE CHECK. Every tick after the first asks
+ *     `seq > since LIMIT 1` on one column and fetches rows ONLY once that hits.
+ *     ⚠ Tick 0 stays a direct row read on purpose: access was just validated by
+ *     `resolveReadableChannelId` and the desktop's wake path (`timeoutMs=1`) is
+ *     exactly one tick, so probing first adds a round trip and saves nothing.
+ *  2. RECHECK CADENCE. `revalidateAwaitAccess` runs on the first held tick and
+ *     every `AWAIT_REVALIDATE_EVERY_TICKS` after (~15s bounded staleness on an
+ *     idle hold), narrowed to the columns the decision reads.
+ *  3. ⚠ THE SECURITY PROPERTY IS ON THE RETURN PATH, NOT THE CADENCE:
+ *     NO FETCH OF ROWS MAY PRECEDE A PROOF OF ACCESS WITHIN THE SAME TICK. On
+ *     an existence hit the hold proves access before reading rows via
+ *     `verifyAccess`, which skips the query only when the periodic recheck
+ *     already proved it EARLIER IN THIS TICK. Loss of access is caught before
+ *     delivery at any tick count; the cadence only bounds how long a SILENT
+ *     hold survives a revocation.
  *
- * Contract preserved byte-for-byte: same cursor semantics, same ordering and
- * limit (`pollChannelMessages`), returns the instant a message arrives, and
- * a `ChannelNotFoundError` from the recheck still ends the hold as a 404.
+ * ⚠ Contract preserved byte-for-byte: same cursor semantics, ordering and limit
+ * (`pollChannelMessages`), instant return, and a `ChannelNotFoundError` from the
+ * recheck still ends the hold as a 404.
  */
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,12 +57,10 @@ export interface AwaitHoldOptions {
   /** Absolute epoch-ms deadline; the hold returns empty once it passes. */
   deadline: number;
   /**
-   * When set, messages authored by this user id neither end the hold nor
-   * appear in its page. A caller that posts while its own await is armed
-   * (a `task_progress` milestone, a close echo) otherwise pops its own hold
-   * on its own echo, which defeats the wake primitive for exactly the
-   * multi-step work it exists for. Absent = every author ends the hold, which
-   * is what the desktop listener needs.
+   * Messages by this author neither end the hold nor appear in its page. ⚠ A
+   * caller that posts while its own await is armed otherwise pops its own hold
+   * on its own echo, defeating the wake primitive for exactly the multi-step
+   * work it exists for. Absent = every author ends the hold (desktop listener).
    */
   excludeAuthor?: string;
   /** Aborts the hold when the client disconnects. */
@@ -83,12 +68,9 @@ export interface AwaitHoldOptions {
   /** Tick interval. Overridable so tests don't sleep in real seconds. */
   pollIntervalMs?: number;
   /**
-   * L6 — DIAG counters the caller owns, so they survive a THROW. The hold ends
-   * in a `ChannelNotFoundError` whenever a mid-hold revocation or soft-delete
-   * lands, and with the counts living only in the return value those holds
-   * emitted no telemetry at all: the [await-hold] line measured only the holds
-   * that ended well, which is the wrong half of the population to watch. Pass
-   * an object and it is updated as the loop runs.
+   * ⚠ Counters the CALLER owns, so they survive a THROW. The hold ends in
+   * `ChannelNotFoundError` on any mid-hold revocation or soft-delete, and counts
+   * living only in the return value lose exactly the holds worth watching.
    */
   counters?: AwaitHoldCounters;
 }
@@ -97,16 +79,14 @@ export interface AwaitHoldResult {
   messages: ChannelMessage[];
   /** DIAG (Q8): message queries issued — existence probes plus row reads. */
   polls: number;
-  /**
-   * DIAG (Q8): access rechecks issued. Each is 1 query on a public channel,
-   * 2 on a private one (channel + membership).
-   */
+  /** Access rechecks issued — 1 query on a public channel, 2 on a private one
+   *  (channel + membership). */
   revalidations: number;
 }
 
 /**
  * Hold on an ALREADY-RESOLVED channel id (`resolveReadableChannelId` ran the
- * full visibility gate) until messages past `since` exist or `deadline`.
+ * full visibility gate) until messages past `since` exist, or `deadline`.
  */
 export async function awaitNewMessages(
   ctx: ChannelContext,
@@ -116,25 +96,24 @@ export async function awaitNewMessages(
   const { since, deadline, signal, excludeAuthor } = opts;
   const intervalMs = opts.pollIntervalMs ?? AWAIT_POLL_INTERVAL_MS;
 
-  // L6: the caller's object when it passed one, so a hold that ends in a throw
-  // still leaves its counts behind for the telemetry line.
+  // Caller's object when it passed one, so a hold ending in a throw still
+  // leaves its counts behind.
   const counters: AwaitHoldCounters = opts.counters ?? {
     polls: 0,
     revalidations: 0,
   };
-  // Ticks elapsed, and the tick at which access was last proven. Tick 0 is
-  // proven by `resolveReadableChannelId`, so the hot single-tick wake path
-  // costs no recheck at all.
+  // Ticks elapsed, and the tick access was last proven at. ⚠ Tick 0 is proven by
+  // `resolveReadableChannelId`, so the hot single-tick wake path costs no
+  // recheck at all.
   let ticks = 0;
   let verifiedAtTick = 0;
 
   /**
-   * Prove access, unless it was already proven EARLIER IN THIS TICK. The skip
-   * is what keeps the invariant honest rather than weakening it: a proof from
-   * this same tick necessarily predates the fetch that follows, so re-running
-   * the identical query cannot learn anything the first one missed. Never
-   * widen this to "already proven recently" — a proof from an earlier tick is
-   * exactly the one a revocation can have landed after.
+   * Prove access unless already proven EARLIER IN THIS TICK — a proof from the
+   * same tick necessarily predates the fetch that follows, so re-running the
+   * identical query learns nothing.
+   * ⚠ NEVER widen this to "already proven recently": a proof from an earlier
+   * tick is exactly the one a revocation can have landed after.
    */
   const verifyAccess = async () => {
     if (verifiedAtTick === ticks) return;
@@ -153,23 +132,21 @@ export async function awaitNewMessages(
   ) {
     await sleep(Math.min(intervalMs, Math.max(0, deadline - Date.now())));
     ticks += 1;
-    // Background recheck: first held tick, then every Nth. A soft-delete or a
-    // membership revocation throws ChannelNotFoundError (-> 404) and ends the
-    // hold rather than leaving it listening to a channel it can no longer see.
+    // Background recheck: first held tick, then every Nth. A soft-delete or
+    // revocation throws ChannelNotFoundError and ends the hold.
     if ((ticks - 1) % AWAIT_REVALIDATE_EVERY_TICKS === 0) await verifyAccess();
     counters.polls += 1;
-    // The probe carries the SAME author filter as the row read: an existence
-    // hit on a message the page would then drop turns the hold into a
-    // fetch-empty-continue spin, one extra pair of queries every tick.
+    // ⚠ The probe carries the SAME author filter as the row read — an existence
+    // hit on a message the page then drops spins the hold fetch-empty-continue,
+    // one extra pair of queries every tick.
     if (!(await hasNewMessages(channelId, since, excludeAuthor))) continue;
-    // A hit: prove access BEFORE reading rows, so nothing is ever delivered to
-    // a caller who lost it since the last recheck.
+    // ⚠ Prove access BEFORE reading rows, so nothing is delivered to a caller
+    // who lost it since the last recheck.
     await verifyAccess();
     counters.polls += 1;
     const found = await pollChannelMessages(channelId, since, excludeAuthor);
-    // Defensive: an existence hit that reads back empty (a row removed in
-    // between) must keep holding, never return `{messages: [], timedOut:
-    // false}` — that shape means "delivered nothing" to every caller.
+    // ⚠ An existence hit that reads back empty must keep HOLDING — never return
+    // `{messages: [], timedOut: false}`, which reads as "delivered nothing".
     if (found.length > 0) messages = found;
   }
 

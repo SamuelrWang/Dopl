@@ -7,23 +7,18 @@ import {
 } from "./workspace-billing";
 
 /**
- * Reconcile a Team workspace's Stripe seat quantity with its current
- * active member count. Called (best-effort) after a member is added or
- * removed.
+ * Reconcile a Team workspace's Stripe seat quantity with its active member
+ * count. Best-effort, after a member is added or removed.
  *
- * No-ops when:
- *   - Stripe isn't configured (tests / preview — never touch the API),
- *   - the workspace has no active Team subscription (Solo is flat — its
- *     quantity is always 1 and is never touched here),
- *   - the seat count already matches (avoid needless proration churn).
+ * No-ops when: Stripe isn't configured (tests/preview — never touch the API);
+ * no active Team subscription (Solo is flat, quantity always 1); or the seat
+ * count already matches (avoid proration churn).
  *
- * Solo is single-member by contract; a live Solo workspace with 2+ active
- * members is a race/bug. We do NOT resize its (flat) Stripe quantity — the
- * entitlements backstop degrades it to free multi-member rules — but we
- * warn so the anomaly is visible.
+ * ⚠ A live Solo workspace with 2+ active members is a race/bug — we do NOT
+ * resize its flat quantity (the entitlements backstop degrades it to free
+ * multi-member rules) but we warn so the anomaly is visible.
  *
- * Proration uses Stripe's account default. Isolated here (one Stripe
- * call, all guards in one place) so it stays testable in isolation.
+ * Proration uses Stripe's account default.
  */
 export async function syncSeatQuantity(workspaceId: string): Promise<void> {
   if (!isStripeConfigured()) return;

@@ -9,41 +9,26 @@ import type {
 } from "./types";
 
 /**
- * OPTIMISTIC CREATES for the ontology board — the ordering half of the write
- * path, kept out of React so it can be tested as what it is: a sequence.
+ * OPTIMISTIC CREATES for the ontology board — the write path's ordering half,
+ * outside React so it's testable as a sequence.
  *
- * What this replaced (roadmap §5, the worst latency-to-pixel ratio in the app):
- * "New cluster" fired THREE serial POSTs — cluster, seed column, seed card —
- * and dispatched nothing until each answered. The click changed no pixel at
- * all for the length of three round trips, then the whole board appeared at
- * once. `+Column` / `+Card` were the same shape with one hop instead of three.
+ * Before the first POST leaves: provisional ids minted, rows dispatched into
+ * the reducer as PENDING (`src/shared/ui/pending.ts`). POSTs then run SERIALLY
+ * — each needs the id the previous minted. `CREATE_RESOLVE` swaps ids in place;
+ * a failure removes the rows and cleans the server half (F-031).
  *
- * What happens now, before the first POST leaves: provisional ids are minted,
- * the cluster / column / card are dispatched into the reducer, and they render
- * as PENDING rows (dimmed + inert, `src/shared/ui/pending.ts`). The POSTs then
- * run in the same order they always did — they have to, each one needs the id
- * the previous one minted — but the user is not waiting on them. When they
- * answer, `CREATE_RESOLVE` swaps every provisional id for the real one in
- * place; when one fails, the optimistic rows are removed and the server half is
- * cleaned up (F-031).
- *
- * WHY NOT `useApiMutation`: the shared write layer patches the TANSTACK CACHE,
- * and the ontology board does not render from the cache — it renders from
- * `graphReducer`, seeded once from the snapshot query and authoritative from
- * then on (`use-ontology.ts`'s `dirtyRef`). A cache patch here would land in an
- * entry no observer reads. The reducer IS this feature's optimistic engine, so
- * the four rules are honoured against it rather than against the cache: cancel
- * is moot (nothing refetches into the reducer without passing the write gate),
- * the rollback is a reducer dispatch, invalidation stays explicit (none — the
- * reducer holds the truth), and every write is keyed by ids captured at submit.
+ * ⚠ NOT `useApiMutation`: that patches the TANSTACK CACHE, but this board
+ * renders from `graphReducer` (`use-ontology.ts` `dirtyRef`), so a cache patch
+ * lands where no observer reads. The reducer IS the optimistic engine —
+ * rollback is a dispatch, invalidation is none, writes keyed by submit-time ids.
  */
 
 /** Marks an id the server has not acknowledged yet — never sent as a target. */
 const PENDING_ID_PREFIX = "pending:";
 
-/** True for a row that exists only on screen. Prefixed rather than a bare
- *  uuid so a provisional id that leaks into a request fails the server's uuid
- *  check instead of being stored as a dangling reference. */
+/** True for a row that exists only on screen. ⚠ Prefixed, not a bare uuid, so a
+ *  leaked provisional id fails the server's uuid check instead of being stored
+ *  as a dangling reference. */
 export function isPendingOntologyId(id: string): boolean {
   return id.startsWith(PENDING_ID_PREFIX);
 }
@@ -56,8 +41,7 @@ function newPendingId(): string {
   return `${PENDING_ID_PREFIX}${token}`;
 }
 
-/** The names the server has always been sent — kept here so the optimistic row
- *  and the POST body cannot drift apart. */
+/** ⚠ Shared by the optimistic row AND the POST body so they cannot drift. */
 export const NEW_CLUSTER_NAME = "New cluster";
 export const NEW_COLUMN_NAME = "Untitled column";
 export const NEW_CARD_NAME = "New object";
@@ -67,14 +51,10 @@ function emptyValue(kind: AttributeValue["kind"]): AttributeValue {
 }
 
 /**
- * The row the server would build, built locally instead.
- *
- * `parent` is the column a card is being added to: columns act as templates, so
- * the server births a card with the column's template fields as empty
- * attributes and a copy of its actions and relationships (`server/service.ts`
- * → `createObject`). Mirroring that rule here is what lets the pending card
- * render COMPLETE — attribute count and all — rather than as a stub that
- * rearranges itself when the POST answers.
+ * The row the server would build, built locally. ⚠ Must mirror
+ * `server/service.ts › createObject` (columns are templates: card born with
+ * template fields as empty attributes + copies of actions/relationships).
+ * Drift → pending card renders as a stub that rearranges when the POST answers.
  */
 function pendingObject(name: string, parent?: OntologyObject): OntologyObject {
   return {
@@ -120,12 +100,8 @@ export interface OntologyCreateApi {
   deleteCluster(clusterId: string): Promise<void>;
 }
 
-/**
- * Everything a create does to the outside world. Injected so the ordering can
- * be driven by a test with a hand-settled transport — the point being proven is
- * that the dispatches happen BEFORE the first request leaves, which a runner
- * that awaits the whole thing cannot see.
- */
+/** Everything a create does to the outside world. Injected so a hand-settled
+ *  transport can prove dispatches happen BEFORE the first request leaves. */
 export interface OntologyCreateSink {
   /** Straight into the reducer — never the API-mirroring `dispatch`. */
   dispatch(action: GraphAction): void;
@@ -154,10 +130,8 @@ export interface OptimisticCreate<T> {
   done: Promise<T | null>;
 }
 
-/**
- * "New cluster": tab, seed column and seed card on screen in the same frame as
- * the click, then three serial POSTs behind them.
- */
+/** "New cluster": tab, seed column, seed card on screen in the click's frame,
+ *  then three serial POSTs behind them. */
 export function createClusterOptimistic(
   api: OntologyCreateApi,
   sink: OntologyCreateSink
@@ -175,8 +149,8 @@ export function createClusterOptimistic(
   sink.beginWrite();
 
   const done = (async (): Promise<OntologyCluster | null> => {
-    // Tracks whether the cluster POST landed — the guard for the SERVER half of
-    // the rollback: a later POST that fails leaves an orphan cluster row (F-031).
+    // Guard for the SERVER half of the rollback: a later POST failing leaves an
+    // orphan cluster row (F-031).
     let createdClusterId: string | null = null;
     try {
       const savedCluster = await api.createCluster({ name: cluster.name });
@@ -200,9 +174,8 @@ export function createClusterOptimistic(
       sink.created();
       return savedCluster;
     } catch (err) {
-      // Local half first, and whole: CLUSTER_DELETE cascades to the column and
-      // card this cluster owns, so a half-created cluster never survives as a
-      // ghost tab. Then the server half, best-effort.
+      // Local half first, whole: CLUSTER_DELETE cascades to the owned column +
+      // card, so no ghost tab survives. Server half after, best-effort.
       sink.dispatch({ type: "CLUSTER_DELETE", id: cluster.id });
       const plan = planClusterCreateRollback(createdClusterId);
       if (plan.rollback) {
@@ -211,7 +184,7 @@ export function createClusterOptimistic(
       sink.failed("create cluster", err);
       return null;
     } finally {
-      // After `resolve`, never before: an id is only real once it is swapped.
+      // ⚠ After `resolve`, never before: an id is real only once swapped.
       sink.clearPending(ids);
       sink.endWrite();
     }
@@ -220,10 +193,8 @@ export function createClusterOptimistic(
   return { row: cluster, done };
 }
 
-/**
- * "+ Column" / "Add new": the card is in its lane before the POST leaves.
- * `parent` is the column a card is nested under, for template inheritance.
- */
+/** "+ Column" / "Add new": row is in its lane before the POST leaves. `parent`
+ *  = the column a card nests under, for template inheritance. */
 export function createObjectOptimistic(
   api: OntologyCreateApi,
   sink: OntologyCreateSink,
@@ -242,8 +213,8 @@ export function createObjectOptimistic(
 
   const done = (async (): Promise<OntologyObject | null> => {
     try {
-      // The TARGET is the one captured at submit — never re-read from the
-      // current selection, which may have moved during the round trip.
+      // ⚠ TARGET captured at submit — never re-read from current selection,
+      // which may have moved during the round trip.
       const saved = await api.createObject({ ...target, name: object.name });
       sink.resolve({ [object.id]: saved.id });
       sink.created();

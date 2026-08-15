@@ -5,44 +5,34 @@ import {
 import { openExternalPath, openExternalUrl } from "@/shared/lib/open-external";
 
 /**
- * Handing a URL off to the user's real browser, for this renderer.
+ * Handing a URL off to the user's real browser. Thin fire-and-forget wrappers
+ * over `@/shared/lib/open-external` — the shared bridge-or-`window.open`
+ * helper the web tree uses, so ONE place decides how a link leaves the app.
  *
- * Both functions are thin fire-and-forget wrappers over
- * `@/shared/lib/open-external` — the shared bridge-or-`window.open` helper the
- * web tree uses too, so there is exactly one place that decides how an
- * external link leaves the app.
- *
- * Lives in `lib/` rather than under `components/settings-modal/`: the boot
- * screen's public-page links need it as much as billing does, and burying it
- * under a feature folder is why the signed-out screen grew its own copy.
+ * ⚠ Stays in `lib/`, not under `components/settings-modal/`: the boot screen's
+ * public-page links need it too, and burying it under a feature folder is how
+ * the signed-out screen grew its own copy.
  */
 
-/** Hand an absolute URL off to the user's real browser. For URLs this app did
- *  not build — the Stripe-hosted billing portal, which the API mints. */
+/** For URLs this app did not build — e.g. the API-minted Stripe portal url. */
 export function openUrlInBrowser(url: string): void {
   void openExternalUrl(url);
 }
 
-/** Hand an app path off to the user's real browser (origin from the preload
- *  constant — the packaged renderer is a `file://` document). */
+/** App path → browser. Origin comes from the preload constant; the packaged
+ *  renderer is a `file://` document. */
 export function openInBrowser(path: string): void {
   void openExternalPath(path);
 }
 
 /**
- * The web billing surface for a specific workspace — `/billing/{segment}`,
- * THE POST-RETIREMENT BILLING PAGE (`src/app/billing/[segment]/page.tsx`).
+ * Web billing surface for a workspace — `/billing/{segment}`
+ * (`src/app/billing/[segment]/page.tsx`). ⚠ Built by the web tree's one
+ * billing-URL module so this and Stripe's return URLs cannot drift apart.
  *
- * It used to be `/{segment}/canvas?billing=upgrade`, which mounted the whole
- * app shell to open a settings modal; that tree is being deleted
- * (docs/migration-research/website-retirement-plan.md), and this handoff is one
- * of the two flows that tethered the desktop app to it. Built by the web tree's
- * one billing-URL module so this and Stripe's return URLs cannot drift apart.
- *
- * Workspace-scoped on purpose: a segment-less `/billing` resolves the user's
- * DEFAULT workspace, which is not necessarily the one open here. `plan` is
- * passed when the user already chose one, so the browser opens straight into
- * that checkout instead of asking the same question twice.
+ * ⚠ Workspace-scoped on purpose: a segment-less `/billing` resolves the user's
+ * DEFAULT workspace, not necessarily the one open here. Pass `plan` when the
+ * user already chose one so the browser opens straight into that checkout.
  */
 export function billingPath(
   workspaceSegment: string,
@@ -52,10 +42,9 @@ export function billingPath(
 }
 
 /**
- * The same page with no intent — where account DELETION lives. Deletion is
- * irreversible and runs a Supabase sign-out + redirect the renderer cannot
- * reproduce, so it stays on the web (plan decision D4) and the desktop Account
- * pane links here (`../components/settings-modal/account-actions.tsx`).
+ * Same page, no intent — where account DELETION lives. Irreversible, and its
+ * Supabase sign-out + redirect is not reproducible in the renderer, so it stays
+ * on the web; `../components/settings-modal/account-actions.tsx` links here.
  */
 export function accountPagePath(workspaceSegment: string): string {
   return webBillingPath({ segment: workspaceSegment });

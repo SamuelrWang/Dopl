@@ -8,18 +8,16 @@ import KnowledgeDetailPage from "./detail";
 import { WORKSPACE_ID } from "#/test-utils/bridge";
 
 /**
- * Shared fixture + harness for the knowledge page suites
- * (`./index.test.tsx` — deep links and base detail; `./home.test.tsx` — the
- * card grid). Extracted when the two modes made one file exceed the 500-line
- * cap; the fake is identical for both and duplicating it would let the two
- * suites drift into testing different servers.
+ * Shared fixture + harness for the knowledge page suites (`./index.test.tsx` —
+ * deep links and base detail; `./home.test.tsx` — the card grid). ⚠ One fake
+ * for both: duplicating it lets the suites drift into testing different
+ * servers.
  *
- * The data layer is mocked at `window.dopl` — the ONE seam both clients sit
- * on. The SPA's transport picks the bridge over `fetch`, and so does the web
- * `api-client` that every reused knowledge module (`client/api.ts`,
- * `client/hooks.ts`) calls, so a single fake serves the whole tree and the
- * request log is the real wire traffic. Its presence also puts the reused
- * components in desktop mode, where realtime and presence no-op.
+ * Mocked at `window.dopl` — the ONE seam both clients sit on. The SPA transport
+ * picks the bridge over `fetch`, and so does the web `api-client` every reused
+ * knowledge module (`client/api.ts`, `client/hooks.ts`) calls, so one fake
+ * serves the whole tree and the request log is real wire traffic. Its presence
+ * also puts reused components in desktop mode, where realtime/presence no-op.
  */
 
 const USER_ID = "user-1";
@@ -83,11 +81,10 @@ const requests: Array<{ path: string; method: string }> = [];
 const starred = new Set<string>();
 
 /**
- * HELD star writes. An optimistic patch is only observably optimistic while
- * its request is STILL IN FLIGHT — against a fake that answers instantly,
- * "patched on click" and "patched on settle" produce the same DOM. `defer`
- * parks every star write until `settleStarWrites` releases it, so a suite can
- * assert the grid has already moved before the server has said anything.
+ * ⚠ HELD star writes. An optimistic patch is only observably optimistic while
+ * its request is STILL IN FLIGHT — against an instant fake, "patched on click"
+ * and "patched on settle" give the same DOM. `defer` parks every star write
+ * until `settleStarWrites` releases it.
  */
 let starGate: Promise<"ok" | "fail"> | null = null;
 let openStarGate: ((outcome: "ok" | "fail") => void) | null = null;
@@ -123,8 +120,7 @@ const WORKSPACE = {
 };
 
 function route(path: string) {
-  // ONE read for workspace + role + caller id (P0-2). `resolve` and `me` are
-  // still live endpoints, but the page no longer waits on them in series —
+  // ONE read for workspace + role + caller id: `resolve`/`me` stay live, but
   // the boot answer is seeded into their cache entries.
   if (path === "/api/boot") {
     return ok({
@@ -172,9 +168,8 @@ function route(path: string) {
           : {}),
       },
       kbStorageLimit: 5_000_000,
-      // Per-user stars. Mutable, like `created`/`renamedB`: the star routes
-      // below write it, so a refetch reflects what the toggle actually sent
-      // rather than what the optimistic patch guessed.
+      // Per-user stars, mutable: star routes below write it, so a refetch
+      // reflects what the toggle SENT, not what the optimistic patch guessed.
       starredBaseIds: [...starred],
     });
   }
@@ -202,10 +197,10 @@ function route(path: string) {
     });
   }
   if (path === "/api/knowledge/bases/base-b/tree") {
-    // A hard-deleted base's tree is GONE, not merely absent from the list.
-    // Serving it forever would let a stale cache — or an eviction-triggered
-    // refetch — repopulate content the delete was supposed to destroy, and
-    // the test would pass on a fiction. See `evictDeletedBase`.
+    // ⚠ A hard-deleted base's tree is GONE, not merely absent from the list.
+    // Serving it would let a stale cache (or an eviction-triggered refetch)
+    // repopulate content the delete destroyed, and the test would pass on a
+    // fiction. See `evictDeletedBase`.
     if (deletedB) {
       return { status: 404, statusText: "Not Found", hasBody: true, body: { error: "Not found" } };
     }
@@ -303,10 +298,9 @@ export function renderAt(entry: string) {
 
 
 /**
- * Per-test reset + the `window.dopl` bridge install. Every suite calls this
- * from `beforeEach`: the fake server carries mutable state (created / renamed
- * / deleted), and a leaked flag silently changes what the NEXT test's list
- * request answers.
+ * ⚠ Per-test reset + `window.dopl` bridge install; every suite calls this from
+ * `beforeEach`. The fake server carries mutable state (created / renamed /
+ * deleted) and a leaked flag silently changes the NEXT test's list answer.
  */
 export function installKnowledgeBridge(): void {
   requests.length = 0;
@@ -322,6 +316,6 @@ export function installKnowledgeBridge(): void {
     onAuthState: () => () => {},
     openExternal: () => Promise.resolve({ ok: true }),
   });
-  // Nothing may reach the network; a call here is a bug, not a fallback.
+  // ⚠ Nothing may reach the network; a call here is a bug, not a fallback.
   vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("no network"))));
 }

@@ -1,20 +1,15 @@
-// Pure CHROME helpers for the Dopl session window (v1.7.5 D1/D5/D7):
-//
-//   - headerIdentity(init)   -> {title, subtitle, avatarName}   (there is NO `hasPeer` field:
-//                               this header said so for a year and nothing ever returned it)
+// Pure CHROME helpers for the Dopl session window:
+//   - headerIdentity(init)   -> {title, subtitle, avatarName}
 //   - windowTitle(init)      -> the native title-bar string
 //   - sendButtonMode(state)  -> 'send' | 'pause'
 //   - sendButtonLabel(mode)  -> the aria-label for that mode
 //   - growHeight(...)        -> the composer's next height in px
-//   - streamLane(item)       -> 'me' | 'them' | null   (chat-style alignment)
+//   - streamLane(item)       -> 'me' | 'them' | null
 //   - laneClass(item)        -> the lane CSS class, or "" for a full-width item
 //
-// Split out of session-viewmodel.js purely to respect the HARD 500-line-per-file
-// cap (§2) — same discipline as the session-render.js split. Like the view-model
-// this module is DOM / electron / fs free and UMD-wrapped: a plain <script> in the
-// sandboxed renderer (attaching `globalThis.DoplSessionChrome`), a require() under
-// node --test. It produces STRINGS and NUMBERS only, never markup; session.js
-// prints every one of them via textContent.
+// ⚠ DOM / electron / fs free and UMD-wrapped: a plain <script> in the sandboxed renderer
+// (attaching `globalThis.DoplSessionChrome`), a require() under node --test.
+// ⚠ STRINGS and NUMBERS only, never markup; session.js prints them via textContent.
 
 (function (global, factory) {
   const api = factory();
@@ -26,17 +21,15 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  // The view-model owns the shared string discipline (collapse to one line + cap).
-  // It is reached the same way this file is: a require() under node, the renderer
-  // global in the sandbox (session.html loads session-viewmodel.js first).
+  // The view-model owns the shared string discipline (one line + cap), reached the same way
+  // this file is. ⚠ session.html must load session-viewmodel.js first.
   const vm =
     typeof module === "object" && typeof require === "function"
       ? require("./session-viewmodel.js")
       : (typeof globalThis !== "undefined" && globalThis.DoplSessionVM) || null;
 
-  // Bound every identity string the same way prompt-framing.sanitizeName bounds a
-  // counterparty-controlled display name: one line, 80 chars. The value is then
-  // printed via textContent only, so a hostile name stays display data.
+  // ⚠ Bound every identity string like prompt-framing.sanitizeName does: one line, 80 chars.
+  // Printed via textContent only, so a hostile name stays display data.
   const NAME_CAP = 80;
   function identityName(value) {
     if (vm && typeof vm.oneLine === "function") return vm.oneLine(value, NAME_CAP);
@@ -44,25 +37,21 @@
     return s.length > NAME_CAP ? s.slice(0, NAME_CAP - 1).trimEnd() + "…" : s;
   }
 
-  // ── D1: header + window identity ────────────────────────────────────────────
-  // ONE priority order drives the header title, the header subtitle, the avatar
-  // initials, and the native window title:
-  //     taskTitle -> peer name (init.from) -> channelName -> "Session".
-  // The subtitle carries the next identity down, and only when the title is the
-  // thread title, so the peer / channel name is never printed twice.
-  //
-  // v3.0 VOCABULARY BOUNDARY: wire name `task` == domain name `thread`. `init.taskTitle`
-  // is the server-stamped `metadata.taskTitle` and keeps its wire spelling here (and in
-  // session.html's `#taskTitle`); everything the operator READS says "thread", and the
-  // window this identity titles is the operator's own SESSION on this machine.
+  // ── header + window identity ────────────────────────────────────────────────
+  // ⚠ ONE priority order drives the header title, subtitle, avatar initials and native window
+  // title: taskTitle -> peer name (init.from) -> channelName -> "Session". The subtitle carries
+  // the NEXT identity down, and only when the title is the thread title, so the peer / channel
+  // name is never printed twice.
+  // Wire name `task` == domain name `thread`: `init.taskTitle` keeps the WIRE spelling here and
+  // in session.html's `#taskTitle`; what the operator READS says "thread".
   function headerIdentity(init) {
     const info = init || {};
     const taskTitle = identityName(info.taskTitle);
     const peer = identityName(info.from);
     const channel = identityName(info.channelName);
     const title = taskTitle || peer || channel || "Session";
-    // The avatar is ALWAYS drawn: the peer when we know one, else the title — a
-    // group channel or a bare shell still gets a token, never a black box.
+    // ⚠ The avatar is ALWAYS drawn: the peer when known, else the title — a group channel or
+    // bare shell still gets a token, never a black box.
     return {
       title,
       subtitle: taskTitle ? peer || channel || "" : "",
@@ -75,20 +64,16 @@
     return "Dopl · " + headerIdentity(init).title;
   }
 
-  // ── D5: the send button morphs into a pause control while a turn runs ───────
-  // v3.1 — THIS IS NOW THE ONLY INTERRUPT CONTROL. The header "Stop" button is deleted, so the
-  // morph had to be widened from "phase running AND activity working" to every state in which
-  // there is something to interrupt. Three states used to have Stop as their ONLY path:
-  //   running with a NULL activity — the whole FIRST turn. Nothing emits a status until that
-  //                turn ENDS, so the old predicate showed Send for its entire duration.
-  //   awaiting_permission — a tool call is mid-flight, parked on the operator's button. Deny
-  //                releases that ONE call; interrupt stops the turn.
-  //   awaiting_inbound with a null/working activity — the same hole, under the gate.
-  // The rule is therefore inverted: a LIVE phase pauses unless the activity says the agent is
-  // resting. A resting phase (consent / parked / interrupted / ended) and an unknown phase keep
-  // Send, so the button can never offer to pause nothing. `launching` is deliberately NOT live:
-  // it is only ever the pre-`init` window, which has received no events at all — and the header's
-  // "End session" still aborts a query that is booting.
+  // ── The send button morphs into a pause control while a turn runs ───────────
+  // ⚠ THE ONLY INTERRUPT CONTROL (the header "Stop" button is gone), so the predicate must be
+  // "a LIVE phase pauses unless the activity says the agent is RESTING" — never "phase running
+  // AND activity working", which leaves three states unpausable: `running` with a NULL activity
+  // (the whole FIRST turn — nothing emits a status until it ENDS), `awaiting_permission` (a
+  // tool call mid-flight; Deny releases ONE call, interrupt stops the turn), and
+  // `awaiting_inbound` with a null/working activity.
+  // A resting phase (consent / parked / interrupted / ended) and an UNKNOWN phase keep Send, so
+  // the button can never offer to pause nothing. ⚠ `launching` is deliberately NOT live: it is
+  // only the pre-`init` window, and "End session" still aborts a booting query.
   const LIVE_PHASES = { running: true, awaiting_inbound: true, awaiting_permission: true };
   const RESTING_ACTIVITIES = { idle: true, awaiting_peer: true, parked: true };
   function sendButtonMode(state) {
@@ -97,16 +82,14 @@
     return RESTING_ACTIVITIES[s.activity] === true ? "send" : "pause";
   }
 
-  // ── v3.1: the "Thinking" chip ───────────────────────────────────────────────
-  // TRUE while a turn is in flight and the agent has produced NOTHING for it yet. The window
-  // runs with includePartialMessages:false (LOAD-BEARING for the outbound card, FIX F4), so the
-  // SDK emits no token stream to hang this on: the honest signal is the transcript itself —
-  // once the agent's first text, tool card or outbound message lands, it is no longer "nothing
-  // rendered". State only; thinking CONTENT is never displayed.
-  //   appears   — the turn was pushed (the operator's own bubble, an accepted inbound, or the
-  //               opening request) and the session is live.
-  //   clears    — the first agent artifact renders, the turn ends (`result` -> idle /
-  //               awaiting_peer), a card takes over, or the session parks / interrupts / ends.
+  // ── The "Thinking" chip ─────────────────────────────────────────────────────
+  // TRUE while a turn is in flight and the agent has rendered NOTHING for it yet.
+  // ⚠ The window runs with includePartialMessages:false (LOAD-BEARING for the outbound card),
+  // so there is no token stream to hang this on — the honest signal is the TRANSCRIPT itself.
+  // ⚠ State only; thinking CONTENT is never displayed.
+  //   appears — the turn was pushed and the session is live.
+  //   clears  — the first agent artifact renders, the turn ends, a card takes over, or the
+  //             session parks / interrupts / ends.
   const AGENT_ITEM_KINDS = { tool: true, outbound: true };
   function isAgentOutput(item) {
     const it = item || {};
@@ -126,11 +109,10 @@
     return SEND_LABEL[mode] || SEND_LABEL.send;
   }
 
-  // ── D7: composer auto-grow ──────────────────────────────────────────────────
-  // Grow with the content up to exactly `maxLines` line-heights, then stay fixed
-  // and scroll. `padding` is the textarea's vertical padding, which is part of both
-  // scrollHeight and the border-box height, so it rides inside the clamp. Returns a
-  // px number; a degenerate line-height falls back to the raw scrollHeight.
+  // ── composer auto-grow ──────────────────────────────────────────────────────
+  // Grow to exactly `maxLines` line-heights, then stay fixed and scroll. ⚠ `padding` is the
+  // textarea's vertical padding, part of BOTH scrollHeight and the border-box height, so it
+  // rides inside the clamp. A degenerate line-height falls back to the raw scrollHeight.
   function growHeight(scrollHeight, lineHeight, maxLines, padding) {
     const lh = num(lineHeight);
     const sh = Math.max(0, num(scrollHeight));
@@ -145,32 +127,22 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  // ── chat-style stream lanes (v2.7 L1) ───────────────────────────────────────
-  // The window is a two-sided conversation between THIS MACHINE and the PEER, not a
-  // log. The RIGHT lane is everything that originates here — the operator's typed
-  // turns, HIS agent's spoken text, AND the agent's command/tool activity. The LEFT
-  // lane is only what the peer actually sends back. Everything that is a DECISION or a
-  // system line keeps the full stream width. The decision is keyed on the view-model
-  // item KIND — NEVER on the item text:
-  //
-  //   turn (ANY role: operator/user AND assistant/agent) -> 'me'   (this machine)
-  //   tool                                               -> 'me'   (the agent's own work)
-  //   counterparty                                       -> 'them' (the peer's reply)
-  //   history (v2.5 D3)                                  -> its OWN stamped lane
-  //                                          ('me' | 'them'), computed in main from the
-  //                                          message author so a replayed thread aligns
-  //                                          like live turns
-  //   outbound | outbound_pending | inbound_pending | notice | history_divider |
-  //   anything else                                      -> null
-  //
-  // v2.7 CHANGED two of these: an assistant/agent turn moved from 'them' to 'me' (it is
-  // HIS agent speaking, not the peer), and a tool card moved from un-laned to 'me'. null
-  // still means "no lane": the outbound decision card + delivered record, inbound gate
-  // cards, the history divider, notices, and the permission dock keep full width — a
-  // decision is neither side of the conversation.
-  // v2.8: `peer_message` (the operator's OWN words, addressed to the peer's agent) is this
-  // machine's output too, so it joins the right lane. It is NOT a turn (my agent never saw
-  // it) and NOT an outbound (my agent did not draft it).
+  // ── chat-style stream lanes ─────────────────────────────────────────────────
+  // A two-sided conversation between THIS MACHINE and the PEER, not a log. RIGHT lane =
+  // everything originating here (operator turns, this agent's text, its tool activity); LEFT
+  // lane = only what the peer sends back; DECISION and system items keep full stream width.
+  // ⚠ Keyed on the view-model item KIND, NEVER on item text:
+  //   turn (ANY role, operator AND agent)  -> 'me'
+  //   tool                                 -> 'me'   (the agent's own work)
+  //   peer_message                         -> 'me'   (the operator's words to the peer's
+  //                                          agent — NOT a turn, my agent never saw it, and
+  //                                          NOT an outbound, my agent did not draft it)
+  //   counterparty                         -> 'them'
+  //   history                              -> its OWN stamped lane ('me' | 'them'), computed
+  //                                          in main from the message author so a replayed
+  //                                          thread aligns like live turns
+  //   outbound | outbound_pending | inbound_pending | notice | history_divider | anything
+  //                                        -> null (full width; a decision is neither side)
   const ME_KINDS = { turn: true, tool: true, peer_message: true };
   const LANE_CLASS = { me: "lane-me", them: "lane-them" };
 
@@ -182,7 +154,7 @@
     return null;
   }
 
-  // The lane CSS class for an item, or "" when the item is not conversational.
+  // The lane CSS class, or "" when the item is not conversational.
   function laneClass(item) {
     const lane = streamLane(item);
     return lane ? LANE_CLASS[lane] : "";

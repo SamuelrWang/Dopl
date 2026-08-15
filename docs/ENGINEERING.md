@@ -2089,3 +2089,586 @@ Nine audit findings, all on the desktop side. Act on the rules below rather than
 **WHAT THE `ToolSearch` FINDING IS NOT.** It is not evidence that `full` was failing the "your connected apps" promise. It failed SAFE, not closed: with `ToolSearch` denied, deferral was off and EVERY MCP tool arrived in the turn-1 prompt in full. What that cost was CONTEXT and the tool-search feature — not reachability. **Note the SDK lane does NOT set `strictMcpConfig`** (and must not: see C-10's rule for the headless twin), so by the SDK's own definition of that flag the session is not fenced to the dopl server and the operator's other MCP configurations load. Releasing `ToolSearch` under `full` therefore turns deferral back on for those connectors, which is the design working — schemas loaded on demand behind one gated call, instead of every connector's full schema pushed into turn 1. **The dopl server is exempted from that by `alwaysLoad`, deliberately: it is the session's reason for existing.** (Not empirically re-verified: exactly which of the operator's on-disk servers survive `settingSources: []`, which removes the settings-file tier by a different mechanism than `strictMcpConfig`.)
 
 **RESIDUAL, stated so it is not re-derived as handled.** A `Task`/`Agent` call approved by the operator spawns a subagent that does not inherit this session's `canUseTool` bound, so that one click is an approval of everything the subagent then does. That is the H3 argument, and it is now answered by the click rather than by the table — deliberately, because the same session can already run `Bash`.
+
+## 2026-08-15 — Comment-cleanup harvest: rationale relocated from code comments
+
+A repo-wide comment sweep ran on **2026-08-15** across 18 scopes (`src/features/*`, `src/shared/*`, `src/app`, `apps/desktop-ui`, `packages/dopl-client`, `packages/mcp-server`, `dopl-desktop-app`). Its rubric deletes decorative and restating comments outright, and **relocates** the ones that carry a decision, a rejected alternative, or an incident. This section is where the relocated half landed — it is the *why* that used to sit above the code, not new guidance, and nothing here overrides `docs/INVARIANTS.md` or the code (precedence: code > INVARIANTS > ENGINEERING).
+
+**65 entries**, harvested 2026-08-15 from 67 candidates (two pairs told the same story from adjacent scopes and were merged). Each entry ends with the anchor it was relocated FROM; where a body states a count, a size, or a timing without its own date, that number was measured by the sweep on **2026-08-15** and should be re-measured before it is relied on.
+
+### The login form has three credential paths, not four — the magic link is gone (2026-08-13)
+
+`signInWithOtp` was the login form's third credential path, surfaced as "Email me a sign-in link instead". The control and the `sendMagicLink` member of `LoginActions` were removed together, leaving password + OAuth. Re-adding one puts a fourth credential path back on a screen that has three.
+
+- A pre-password user with no password on file still has two roads in: "Forgot password?" (the same email round-trip, ending on a page that SETS a password) and Google/GitHub, which auto-provision on first sign-in. The removal closed no door.
+- The desktop MAIN process still implements the op (`dopl-desktop-app/main/auth-password.js`, reachable over the bridge). What went is the login form's USE of it, not the capability.
+- The absence is pinned, not just documented: `src/features/auth/components/login-form-core.test.tsx` asserts no "sign-in link" text and no `/link/i` button, and a host that still passed `sendMagicLink` would not type-check against `LoginActions` (`src/features/auth/hooks/use-login-core.ts`).
+
+- **The desktop SPA host lost the same control in the same edit** (`apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`). The bridge op and main's `sendMagicLink` handler are untouched and still implemented; nothing in the renderer calls them, and the SPA cannot wire the op back without restoring the `LoginActions` member. The covering assertion in `apps/desktop-ui/src/pages/boot/index.test.tsx` went with it. Password recovery has never had a bridge op, so the desktop form's conditional "Forgot password?" link stays hidden and recovery ends on the public site's `/auth/reset-password`.
+
+*Relocated from* `src/features/auth/hooks/use-login-core.ts › LoginActions`, `apps/desktop-ui/src/pages/boot/signed-out-screen.tsx › SignedOutScreen`
+
+### Sessions are ALWAYS persisted — there is no "remember me" seam to add one to
+
+The login form carried a "Remember me" checkbox that reached no auth call. It was removed rather than wired, because neither binding has a non-remembered path to choose between:
+
+- Web persists the session in cookies — `src/shared/supabase/browser.ts` › `getSupabaseBrowser`, a `@supabase/ssr` browser client.
+- Desktop stores the credential on disk in MAIN (`dopl:password-sign-in` → authTokens).
+
+Consequences that are still live: `LoginActions.signInWithPassword` takes exactly two arguments, because there is no persistence flavour to pass at that seam; and `login-form-core.test.tsx` asserts the checkbox is GONE (`queryByRole("checkbox")` null), not merely hidden. Adding the control back would be decoration wired to nothing unless one of the two storage decisions above changes first.
+
+*Relocated from* `src/features/auth/hooks/use-login-core.ts › LoginActions`
+
+### The onboarding provisioning wait is a stepped checklist, not a spinner
+
+`POST /api/onboarding/complete` is the LAST thing a new user waits on before seeing the product, and it was covered by a hand-rolled 28px `animate-spin` ring — one of the four real spinners LAUNCH-READINESS-ROADMAP §5 called out. It is `src/features/onboarding/components/provisioning-checklist.tsx` now.
+
+The design rule that came out of it, and that the tests enforce:
+
+- The rows name the REAL stages of the call, so the wait explains itself instead of only passing time.
+- There are no progress events on the wire. The first two rows tick on a timer; the LAST one never self-completes — it stays active until the component unmounts, which happens when the navigation it names actually lands. **Nothing in a progress UI may claim to be done when it isn't.**
+- The active marker is the pulse dot the MCP connect step already uses for "Waiting for your agent…" — a status indicator, deliberately not a spinner. `provisioning-checklist.test.tsx` asserts `animate-spin` appears in neither the checklist nor `onboarding-flow-core.tsx`, and that exactly one `animate-pulse` renders at first paint.
+
+*Relocated from* `src/features/onboarding/components/provisioning-checklist.tsx › ProvisioningChecklist`
+
+### Knowledge client: no projection hooks over the base-list cache entry
+
+`useKnowledgeBases` — a bases-only projection of `useKnowledgeBaseList` — was deleted when the two-pane controller needed `starredBaseIds` off the same cache entry and moved onto `useKnowledgeBaseList` directly. It had one caller.
+
+The rule this bought: **do not add a projection hook that drops keys from a response that keeps growing folds.** `GET /api/knowledge/bases` now answers five folds in one entry (`bases`, `ownerNames`, `baseStats`, `kbStorageLimit`, `starredBaseIds`), and each new fold would need a second reader in every projection — and the second reader renders one frame behind the first. Consumers read `useKnowledgeBaseList` and narrow at the call site instead.
+
+*Relocated from* `src/features/knowledge/client/hooks.ts › useKnowledgeBaseList`
+
+### Ontology — OPTIMISTIC CREATES replaced the three-serial-POST click (2026-08-08)
+
+- **What it replaced.** "New cluster" fired THREE serial POSTs — cluster, seed column, seed card — and dispatched nothing until each answered. The click changed **no pixel at all** for the length of three round trips, then the whole board appeared at once. `+Column` / `+Card` were the same shape with one hop instead of three. This was the worst latency-to-pixel ratio in the app (roadmap §5).
+- **What replaced it.** `src/features/ontology/optimistic-create.ts` mints provisional ids, dispatches the cluster / column / card into `graphReducer`, and renders them as PENDING rows (dimmed + inert, `src/shared/ui/pending.ts`) **before the first POST leaves**. The POSTs still run in the same serial order — each needs the id the previous one minted — but the user is not waiting on them. `CREATE_RESOLVE` swaps every provisional id for the real one in place; a failure removes the optimistic rows and cleans up the server half.
+- **Why the test asserts WHEN, not whether.** `optimistic-create.test.ts` snapshots reducer state INSIDE the transport, at the instant each request leaves. "The cluster ends up on the board" always passed — it is the timing that regressed.
+- **Why not `useApiMutation`.** The shared write layer patches the TanStack cache; the ontology board renders from `graphReducer`, seeded once from the snapshot query and authoritative after (`use-ontology.ts` `dirtyRef`). A cache patch would land in an entry no observer reads. The reducer IS this feature's optimistic engine.
+
+*Relocated from* `src/features/ontology/optimistic-create.ts › OptimisticCreate`
+
+### Ontology — THE SUMMARY PROJECTION and the read ceilings (P0-3)
+
+- **The unpriced read.** Every whole-workspace ontology query was `select(...).eq("workspace_id", …)` with **no `limit`** — the row count was whatever the workspace happened to hold, on a paid plan with no object cap, on a path any member can hit repeatedly. An unbounded read is not a slow read, it is an unpriced one: nothing in the system said how large the response COULD get. `ONTOLOGY_READ_LIMITS` (`server/dto.ts`) closed that.
+- **The wide read.** `GET /api/ontology` did four parallel whole-table pulls and shipped every JSONB column: `attributes` (schema ceiling 100 entries, text values to 4000 chars), `methods`, `template`, plus each cluster's `layout`. `dopl_map` — the call the MCP server instructions mandate before every agent's first substantive reply — paid all of it to render cluster names and column names.
+- **What the projections cost before.** `createCluster`'s uniqueness check called `listClusters`, so every cluster's `layout` crossed the wire so `slugify` could compare strings. `currentRelationships` loaded EVERY relationship row in the workspace and scanned for a matching `source_object_id` in JavaScript, on four hot paths (create-with-inheritance, update, claim_anchor, get_anchor) — the predicate was indexed the whole time.
+- **Why `repository-projections.ts` is its own module.** `repository.ts` sat at 483 lines against the hard 500 cap with its lint exemption removed, so it had no room; and these queries share one reason to exist that the wide ones do not — each replaces a read whose cost was set by the size of the WORKSPACE rather than the size of the answer.
+
+*Relocated from* `src/features/ontology/server/dto.ts › ONTOLOGY_READ_LIMITS`
+
+### Ontology — the new-workspace seed went from ~34 awaited round-trips to FOUR statements
+
+- The seed runs **inside the post-signup redirect**, so its awaited round-trip count is a product property, not a micro-optimisation. It used to be ~34: an `insertObject` followed by an `updateObject` on the SAME row (to add `subtitle`/`template`) for every one of the nine objects, a membership insert each, and a delete+insert replace-set per relationship source — every one awaited before the user was redirected out of the auth callback.
+- It is now FOUR writes whatever the corpus size: cluster, objects, memberships, relationships (`server/service-seed.ts`, backed by `server/repository-seed.ts`). Object uuids are minted in Node, so the memberships and relationships that point at them are built up front instead of being discovered one insert at a time.
+- `insertObject` in `repository.ts` deliberately stays narrow (name + attributes/methods) because that IS the create surface the API and MCP expose; the bulk form lives beside the seed. `insertRelationships` is the ADD form, distinct from `replaceRelationshipsForSource` — using the replace form in a seed meant a delete + an insert per source object, all serial, to clear rows that could not exist.
+- Pinned by `server/service-seed.test.ts`, which asserts the four-statement form AND that batching cost the graph nothing: same objects, parentage, ordering, resolved attribute ids and relationship endpoints.
+
+*Relocated from* `src/features/ontology/server/service-seed.ts`
+
+### Ontology — the kanban card's inline expand was REMOVED (2026-08-12)
+
+- The card carried a chevron that dropped it open on an attribute preview. Both the cursor-following hover card (`components/object-hover-card.tsx`) and the right-side editor panel (`components/object-panel.tsx`) already render those rows, so it was a **third** rendering of the same data — and the one control on the card that did not do what the card does (select the object).
+- It is gone. `components/kanban-card.tsx` is now name → description → hairline → counts, and the whole card selects.
+- What stayed load-bearing at the site, and why it is still commented there: the fixed `h-[216px]` (18 × the 12px dot pitch — the scale has nothing at 216) and the eight-line clamp sum, which is arithmetic rather than taste and has to be re-done if the height, paddings, lane padding or type scale move.
+
+*Relocated from* `src/features/ontology/components/kanban-card.tsx › KanbanCard`
+
+### F-131 half 2 — a redirect that fired correctly through a route that no longer existed (2026-08-06)
+
+`features/marketing/components/pricing-content.tsx › handleGetStarted` carried two dead things in three lines, both silent.
+
+The param was `?redirect=`, which NOTHING reads. The canonical name is `redirectTo` (`shared/lib/url/post-auth-landing.ts`, and the `?redirectTo=` round-trip contract in §9.2). A signed-out visitor clicking these therefore signed in and landed on the default post-auth page, having silently lost the page they asked for.
+
+The destination was `/canvas`, which Stage D deleted. It still "worked" — the retirement map 302s it to `/get-started` — so the bug was invisible: a redirect that fires correctly through a route that no longer exists. Both now name the landing directly via `WEB_POST_AUTH_LANDING`.
+
+Lesson: a redirect target behind a compatibility 302 cannot be smoke-tested by clicking it. Grep for the param NAME, not the destination.
+
+*Relocated from* `src/features/marketing/components/pricing-content.tsx › PricingContent`
+
+### Landing banner scene — the click tilt was removed to stop Chrome dropping the blur (2026-08-13)
+
+The pinned banner scene (`features/marketing/components/use-banner-scrub.ts`) originally tilted the glass card on the scrubbed click. Rotating the `backdrop-filter` container was the prime suspect for Chrome dropping the blur partway through the scene, so the tilt was removed; the click is now carried by the ripple plus the cursor's press dip alone.
+
+A `⚠ NO card tilt` marker remains at the site. The same session removed the scroll choreography from the Control section, which is now static by rule.
+
+Lesson: do not animate a transform on an element that owns a `backdrop-filter`. If a beat needs motion, move it to a sibling or an overlay.
+
+*Relocated from* `src/features/marketing/components/use-banner-scrub.ts › useBannerScrub`
+
+### Landing banner glass — quantised-resize buckets popped, exact-box-per-frame + staticMap does not
+
+An earlier version of the banner scrub sized the glass card in quantised buckets to ration LiquidGlass displacement-map rebuilds. Each rebuild swapped the `<feImage>` data-URI, and the async decode of that swap was visible as a pop at every bucket boundary.
+
+The fix was the opposite of rationing: run `LiquidGlass` with `staticMap` so the map is built once and STRETCHES with the box, then write the exact box every frame. A layout resize now costs a small reflow and no map rebuild.
+
+A `⚠ EXACT box every frame, no buckets` marker remains in `use-banner-scrub.ts › render`, and `marketing.css › .lp-banner-glass` records that the hook writes width/height/transform inline in `scrub` mode only.
+
+Lesson: when a cache rebuild is the thing that pops, making the cached artifact resolution-independent beats rebuilding it less often.
+
+*Relocated from* `src/features/marketing/components/use-banner-scrub.ts › useBannerScrub`
+
+### Framework stage 2 — the 0.90s hold is a tuned number, not slack
+
+In the "Define Objects" stamp sequence (`features/marketing/marketing.css`, "2 — the stamp"), the resolved pills (`sam-voice`, `sam-sales-docs`, `crm-updating`) are the one frame that says what "stamped" MEANS, so the gap between the last field row landing and the panel starting to condense is a real step in the choreography.
+
+It was tuned across three passes: an early cut left the pills at full opacity for only 360ms — legible in theory, unreadable in practice. The correction over-shot to 2.40s, which stalled the sequence badly enough to read as a bug. 0.90s is the settled number.
+
+A related 270ms gap sits between the panel finishing its own fade-in (2.83s) and the first field row starting (3.10s): nested opacities multiply, and rows that rise while their panel is still arriving are the other way this reads faint.
+
+Both constraints survive at the site as `⚠ THE HOLD AT 4.20s IS A REAL STEP`. The floor to protect on any re-time is ~0.8s.
+
+*Relocated from* `src/features/marketing/marketing.css`
+
+### border-radius: 999px is a pill IDIOM and must not be interpolated
+
+`marketing.css › @keyframes lp-fw-sam-condense` animates the expanded Sam panel down onto the compact instance card. Its `to` radius is 22px, NOT the 999px the base `.lp-fw-sam-card` rule carries, and that is the fix — not a value to "tidy" back.
+
+999px works statically because the used radius is clamped at paint time to half the shorter side, which is only ever 22px once the card is 44px tall. INTERPOLATED it is a literal length, so a 12px ▸ 999px ramp put the used radius at ~44px 100ms in and ~71px at 300ms while the box was still 190px tall — and because the card sets `overflow: hidden`, that arc is a MASK. The card bulged into an egg and then a circle, and the mask ate the left half of Sam's face and the top of his name.
+
+22px is the same final pill (44 ÷ 2) and never exceeds half of any intermediate height, so the corner can never reach the avatar at x = 10. Keep the `to` in step with `.lp-fw-inst`'s HEIGHT, not with its border-radius.
+
+Lesson: any keyframe that interpolates `border-radius` on a box whose height is also animating must use a real length derived from the smallest intermediate height.
+
+*Relocated from* `src/features/marketing/marketing.css › lp-fw-sam-condense`
+
+### UsageMeter — the `inline` variant is DELETED, and why a phrasing-only variant is not kept for the next caller (2026-08-12)
+
+`UsageMeter` briefly carried an `inline` prop: a `<span>`/`<div>` element swap for a caller whose own surface was a `<button>`, since block elements cannot legally nest inside one. It existed for exactly ONE caller, the knowledge home card. That card stopped being a single `<button>` when it grew a second control (a star) that could not nest inside the outer button either — which made the block elements valid again and left `inline` with no caller.
+
+**It was deleted rather than kept "for the next one."** A phrasing-only variant of a recipe is a second rendering of that recipe, and this component's own history is the argument: `UsageMeter` only became a shared primitive because a SECOND hand-rolled copy of the bar appeared beside the first, and two more divergent bars already existed elsewhere in the tree. A variant nobody calls drifts from the one everybody calls, silently, because no render exercises it. Restore it from git if a genuinely button-shaped surface ever needs a meter.
+
+The same reasoning is why `usageBandClass` (the `tone="ramp"` colour bands) is module-private: `tone="ramp"` is the whole public surface, and a caller able to reach the bands could paint them somewhere the meter is not.
+
+*Relocated from* `src/shared/ui/usage-meter.tsx › UsageMeter`
+
+### CrystalField deleted with the auth crystal panel (2026-08-14)
+
+- **`CrystalField` removed (2026-08-14):** the canvas tile-flip background primitive in `src/shared/design/` went with its only consumer, the auth split's crystal panel. `src/shared/design/index.ts` now exports exactly two primitives — `LiquidGlass` (refractive glass card, the canonical glass aesthetic) and `FlushGrid` (sets `--grid-cell-x`/`--grid-cell-y` on `<body>` for the `.mosaic-bg::after` overlay in globals.css). Do not reintroduce a canvas-animated background primitive into the shared design kit without a live consumer.
+
+*Relocated from* `src/shared/design/index.ts › LiquidGlass`
+
+### DocEditor's PROSE_CLASSES lost its paired read-only renderer
+
+- **`DocEditor` prose styling is now unpaired:** `src/shared/editor/doc-editor.tsx › PROSE_CLASSES` carried a standing sync warning — "must match DocMarkdown exactly so the editor and the read-only renderer look identical at every step." `DocMarkdown` no longer exists in the source tree (as of 2026-08-15 it survives only inside the prebuilt `dopl-desktop-app/renderer/app/assets/*.js` bundle). The sync constraint was removed from the code because there is nothing left to sync against. ⚠ If a read-only markdown renderer is reintroduced, the two class lists must be re-paired and the warning restored — a drift here shows up as content visibly reflowing when the user toggles between read and edit.
+
+*Relocated from* `src/shared/editor/doc-editor.tsx › DocEditor`
+
+### Why the KB doc editor is three files
+
+- **`src/shared/editor/` is split for the §2 line cap, not for reuse:** `doc-editor-toolbar.tsx` (Tiptap toolbar, `float` + `header` variants, conditional table group) and `doc-editor-turndown.ts` (the custom `a[href]` and `table` Turndown rules) were both extracted from `doc-editor.tsx` purely to stay under the file-size cap; behaviour was unchanged by the extraction. Treat them as one unit when reading. The one rule that is NOT cosmetic: `makeLinkRule` deliberately overrides Turndown's built-in `inlineLink`, because Tiptap's Link mark adds `class`/`target`/`rel` attributes that made the default rule skip anchors and drop hrefs on round-trip.
+
+*Relocated from* `src/shared/editor/doc-editor-toolbar.tsx`
+
+### Knowledge home card stopped being a single <button> (star toggle)
+
+The `/knowledge` home card was ONE `<button>` wrapping the whole cell, with "Open →" as a styled `<span>`: one target, one action, nothing nested. Adding a per-user star ended that — a second control cannot be a `<button>` inside a `<button>` (invalid HTML; browsers reparent the inner one out of the card entirely, so it is not merely unreachable by keyboard, it lands elsewhere in the document). Absolutely positioning a sibling button over the footer was rejected: its position would be a magic number and its reading order unrelated to where it appears.
+
+The container became an `<article>` with two sibling footer buttons. Preserved deliberately: one obvious keyboard Open action (the old span promoted to a real button); the container keeps an `onClick` as a MOUSE duplicate, with both buttons stopping propagation so one click fires one thing; `aria-label` names every control by its base (a grid otherwise presents N buttons all called "Open"); `aria-pressed` on the star because it is a toggle. The `<span>` soup the old markup needed (`<div>`/`<p>` inside a `<button>` is invalid) went with it, and `StorageMeter` dropped its `inline` (phrasing-content) pass-through — both call sites now render its block form, so there is one shape of that meter again. The property being defended never changed: no `<button>` inside a `<button>`, ever.
+
+*Relocated from* `src/features/knowledge/components/knowledge-v2/home/base-card.tsx › BaseCard`, `src/features/knowledge/components/knowledge-v2/home/knowledge-home.test.tsx`, `src/features/knowledge/components/knowledge-v2/storage-meter.tsx › StorageMeter`
+
+### Base LIST moved from the detail list pane to the home card grid
+
+The Knowledge V2 list pane used to list EVERY base as a row that expanded into its own tree, with a search field and the scope pills above them. All three moved to the `/knowledge` home card grid, which is now where a choice between bases is made: a pane scoped to one base has no list to filter, no scope to switch, and no second base to collapse this one in favour of. What is left is the crumb back out.
+
+The same move removed the controller's "select the first base" seed and the per-workspace last-base preference that upgraded it — both existed purely to fill an empty right pane the grid now replaces. A deep link is now the ONLY thing that starts the view on a base; no base in the URL means the home grid. The pane's loading state also switched from a "Loading…" text line to a skeleton, because opening a card is now THE way into the pane and that text would flash on every visit.
+
+*Relocated from* `src/features/knowledge/components/knowledge-v2/list/list-panel.tsx › ListPanel`, `src/features/knowledge/components/knowledge-v2/list/list-panel.test.tsx`, `src/features/knowledge/components/knowledge-v2/use-knowledge-v2-controller.ts › useKnowledgeV2Controller`
+
+### KB scope narrowing no longer 409s (workflow↔KB invariant retired)
+
+Narrowing a knowledge base's sharing scope used to be able to 409 against the workflow↔KB invariant, which opened a shared conflict dialog in the Sharing section. Workflows were deleted on 2026-08-11 and that was the status's only producer, so a scope save now either applies or fails as itself. The remaining rule at the site is the permission one: editable by the KB owner or a workspace admin, mirroring the service-side `ScopeChangeForbiddenError`; everyone else gets a read-only summary.
+
+*Relocated from* `src/features/knowledge/components/kb-sharing-section.tsx › KbSharingSection`
+
+### Detail toolbar band replaced the dead Overview/Messages/Attachments tabs
+
+The slim header strip below the knowledge detail breadcrumb (`.detailToolbarBand`) took the place of a dead Overview / Messages / Attachments tab row. It now hosts the rich-text formatting toolbar for an open entry, sitting above the scroll body so formatting stays reachable while a long document scrolls; DocEditor publishes its live instance up via `onEditor` and suppresses its own floating pill. The band is always rendered and empty until the editor mounts, which keeps its height stable.
+
+*Relocated from* `src/features/knowledge/components/knowledge-v2/knowledge-v2.module.css › .detailToolbarBand`, `src/features/knowledge/components/knowledge-v2/detail/detail-panel.tsx › DetailPanel`
+
+### Workspace settings had two hand-composed copies (2026-08-03 fleet audit, duplication-quality)
+
+`WorkspaceSectionBody` (`src/shared/layout/settings-modal/sections/workspace-section-core.tsx`) exists because two live surfaces each hand-composed the same three components independently: the settings MODAL's General pane and the desktop SPA's `/settings` PAGE, both assembling the icon uploader + `WorkspaceSettingsFormCore` + `WorkspaceDangerZoneCore`. Both were reachable and both shipped, and their POST-RENAME behaviour drifted apart — the duplication-quality finding of the 2026-08-03 fleet audit. The fix is ONE composition rendered by both surfaces with the differences pushed into props (`onSaved`/`onDeleted` navigation, `imageUploader`, `extras`). It is deliberately a fragment, not a card, so each caller still owns its own chrome. The ordering — icon uploader, rename/description form, MCP block, owner-only danger zone — is part of the contract, not incidental.
+
+*Relocated from* `src/shared/layout/settings-modal/sections/workspace-section-core.tsx › WorkspaceSectionBody`
+
+### Auth split's right pane: crystal panel replaced by the landing framework banner (2026-08-14)
+
+`AuthBannerPanel` (`src/shared/layout/auth-split/auth-split-layout.tsx`) replaced a bespoke crystal panel on 2026-08-14; the crystal field it drew was DELETED, not benched. The pane's geometry and elevation were carried over unchanged (32px radius, layered float shadow) — only the fill changed, to the landing page's framework banner image plus the stock `LiquidGlass` primitive at the landing card's `radius={20}`, so a visitor arriving from the landing page meets a composition they already scrolled past. Nothing was copied out of `marketing.css`, because there was nothing to copy: the glass is a React component, and `.lp-fw-glass`/`.lp-fw-glass-card` are only that section's own centring plus a 544px width cap. The slab is sized with percentage insets and NO transform (a transform on a `backdrop-filter` element is a rendering coin flip) plus a px floor so a short viewport cannot squash it, and it is empty on purpose — the tab windows are the landing page's payload, the form column is this page's.
+
+*Relocated from* `src/shared/layout/auth-split/auth-split-layout.tsx › AuthSplitLayout`
+
+### App shell dropped its dark window frame, and the brand pill joined one elevation (2026-08-11)
+
+`.root` in `src/shared/layout/app-shell/app-shell.module.css` used to paint a dark navy window frame behind `.surface`. Since 2026-08-11 it paints the SAME gray as `.surface`, so the surface's margins read as breathing room instead of a border. `--rail` is still defined and still used by other features — it is simply no longer the app frame, so do not read its existence as evidence the frame is coming back. In the same pass the sidebar's `.brandPill` gave up its own flatter recipe (an #e2e2e0 hairline and a single 3px/8px drop), which read as a different, shallower object sitting directly above chips that did not, and adopted `.auth-btn-3d-light` value for value: the landing/auth white button, the sidebar's active `.raised-tab` chip and the workspace-switcher trigger are now ONE elevation. A real `border` is safe on the pill where it is not on `.raised-tab` because the pill is `width: 100%`, so the extra 2px comes out of the content box rather than the layout.
+
+*Relocated from* `src/shared/layout/app-shell/app-shell.module.css › .root`
+
+### The 402/403 `upgrade_url` pointed at a page the retirement plan DELETES — and its own comment argued the opposite (2026-08-15, comment sweep)
+
+`src/features/billing/server/entitlements.ts › upgradeUrl` carried a long note justifying its target. The note had **both facts backwards**: it claimed `/canvas?billing=upgrade` was on the KEEP list and `/pricing` was being deleted. `docs/migration-research/website-retirement-plan.md` says the opposite on both — the whole `[workspaceSlug]` tree RETIRES (and the top-level `/canvas` redirect with it), while `/pricing` is KEEP-PUBLIC (decision D6).
+
+- **Why this comment mattered more than most.** These envelopes are read by **API-first clients, MCP agents included**, which follow `upgrade_url` literally. A doc-comment that is confidently wrong about which page survives is one edit away from re-pointing a money URL at a 302. The correction (decision D1, GAP-11) sends every envelope at `/billing` — `src/app/billing/[segment]/page.tsx`, reached through its segment-less forwarder — and it is built by `features/billing/url.ts` so this and the other five billing entry points cannot drift apart again.
+- **The builder is workspace-AGNOSTIC on purpose.** These call sites are reached with a workspace *id* only, never a resolved `{slug}-{publicId}` SEGMENT, and bare `/billing` resolves the caller's DEFAULT workspace — the same trade `/canvas` made. The Stripe `return_url`s, which DO know their workspace, already pass a segment; plumbing one through here is follow-up, not a blocker.
+- **The lesson, which is the reason this is in ENGINEERING and not in the file.** A comment that ARGUES against a plan document is the shape a fiction takes. `entitlements.test.ts` now pins the target string, so the assertion lives where it can fail rather than where it can only be believed.
+
+*Relocated from* `src/features/billing/server/entitlements.ts › upgradeUrl`
+
+### `ensureDefaultWorkspace`: the catch-23505 recovery became dead code when the slug constraints were dropped (2026-08-02, A-019 superseded)
+
+`workspaces/server/service.ts › ensureDefaultWorkspace` is a SELECT-then-INSERT, and it is racy: a fast OAuth round trip lands a second caller while the first is still inserting, both see "no existing", both insert.
+
+- **The original fix (Audit A-019) was to catch the unique-constraint violation on the second insert and re-fetch.** That worked only while a unique constraint existed to violate.
+- **It silently stopped working.** Migrations `20260502120000` and `20260504000000` DROPPED the slug uniqueness constraints (`public_id` is random and never collides), so there was no longer any constraint for the second concurrent insert to trip. The recovery branch became unreachable code and two cold-booting clients could both create an "Untitled" workspace.
+- **Race-proofing moved INTO the database.** The `ensure_default_workspace` RPC (migration `20260802200000`) serializes check-then-insert under a **per-owner, transaction-scoped advisory lock**, and returns `created` so the caller knows whether THIS call won and therefore owes the starter-corpus seed. `repository.ts › ensureDefaultWorkspaceRow` is the only caller.
+- **The general shape:** an app-side recovery keyed on a DATABASE constraint is only as live as that constraint. Dropping a constraint is not a no-op for the code that catches its error — and nothing in the type system or the test suite noticed.
+
+*Relocated from* `src/features/workspaces/server/service.ts › ensureDefaultWorkspace`
+
+### `first_cluster_built` outlived its only emitter — the funnel tiles that could never move again (2026-08-11, clusters removal)
+
+When the clusters feature was removed on 2026-08-11, the `first_cluster_built` conversion event lost its **only** emitter. Nothing deleted the rows or the event type.
+
+- **What was left behind.** Historical `first_cluster_built` rows still sit in `conversion_events` as legitimate history, and `analytics/server/conversion-events.ts › hasFiredEvent` will still answer truthfully about them. But the admin dashboard's funnel ratios derived from that event were frozen — the tiles could never move again, and a reader had no way to tell "nobody built a cluster this month" from "nothing can emit this any more".
+- **The fix was in `launch-metrics.ts`, not in the table.** The `first_cluster_built` funnel ratios were dropped from the daily time series; the rows stayed. Deleting the history would have made past months lie; keeping the tile would have made the present lie.
+- **The rule this is an instance of.** Removing a feature is not done when its code is gone — every append-only log it wrote to now has a type with no producer, and every dashboard reading that type needs a decision: retire the tile, or say in the UI that the series is closed. Silence is the failure mode, because an analytics tile that never changes looks exactly like a metric at zero.
+
+*Relocated from* `src/features/analytics/server/launch-metrics.ts › LaunchMetrics`
+
+### Polymorphic grant writes silently hit the wrong table
+
+`team_resource_access.resource_id` is polymorphic across four tables, and `teams/server/repository-resources.ts` is the only thing that knows which. It used to dispatch with an inline `knowledge_base ? knowledge_bases : workflows` ternary per function, so `skill`, `chat` and `chat_folder` writes were routed into the (now deleted) `workflows` table. A Supabase `.update()` that matches zero rows returns `{ error: null }`: nothing threw, the route 200'd, and a skill's scope toggle "succeeded" and reverted on the next refetch. The fix is the `RESOURCE_TABLES` map with `satisfies Record<TeamResourceType, …>`, so a fifth resource type fails to compile rather than resolving to the wrong table. The failure mode is invisible to any test that mocks above the query builder — `repository-resources.test.ts` and `repository-tables.test.ts` exist to assert on the TABLE NAME the builder was handed, and on the `workspace_id` filter.
+
+*Relocated from* `src/features/teams/server/repository-resources.ts › TeamResourceType`
+
+### WORKFLOW_NOT_FOUND renamed to RESOURCE_NOT_FOUND
+
+`requireEffectiveAccess` in `teams/server/access.ts` threw the literal `WORKFLOW_NOT_FOUND` for every non-KB resource type, long after the guard had come to cover chats, chat folders and skills — only the code still said otherwise. It was renamed to `RESOURCE_NOT_FOUND` alongside the workflows deletion, after a whole-repo grep found the producer was the ONLY mention of the old literal: no consumer branched on it in `src/`, `apps/`, `packages/` or the desktop tree. It now matches what `teams/server/service.ts` already throws for the same condition.
+
+*Relocated from* `src/features/teams/server/access.ts › requireEffectiveAccess`
+
+### The members console's dead controls, and why the writes are mutation configs
+
+Every write on the members console was `setBusy(true); await apiRequest(); onChanged()`, where `onChanged` refetched. Only the refetch could change a pixel, so four controls produced nothing at all on click for two network hops: the invitation revoke ✕, the role select (which rendered the OLD role while disabled), the member removal, and the join-request approve/decline pair — the last of which was double-fireable, because the row and both its buttons stayed live for the length of the PATCH. They are mutation configs over the shared layer now (`hooks/use-{member,team,access,invitation}-writes.ts`, `use-join-requests.ts`); the cache is patched in `onMutate` and a failure restores the exact snapshot. The configs are exported as pure factories so `write-configs.test.ts` can drive the SHIPPED config through TanStack's own `MutationObserver` — a re-declared copy would pass while the real one was wrong.
+
+Two cases deliberately did NOT get an optimistic patch. The join-link RESET can only be minted by the server, and inventing a placeholder token would put a dead invite URL on screen for an admin to copy; it uses `pending` instead, and the reconcile folds the POST's answer into the read's cache with no refetch. An APPROVAL mints a `workspace_members` row the client cannot compose (server join time, hydrated profile, seat gate), so the roster is the one cache it may not reconcile.
+
+This also closed F-045: `useInvalidateBillingStatus` had been exported with zero callers, so seat and member counts went stale after every membership change and the entitlements read papered over it with a 5s `staleTime`. Membership writes now invalidate billing status in `onSuccess` — not `invalidate` — because a removal that FAILED moved no seats.
+
+*Relocated from* `src/features/members/hooks/use-member-writes.ts › useMemberWrites`
+
+### Chats had two sources of truth for the list
+
+The five chat writes each patched AFTER the await and wrote their result into `ChatsView`'s `useState` copy of the list, which the query cache underneath never learned about. Two sources of truth, the second authoritative for exactly as long as the component stayed mounted — a remount inside the cache window rebuilt from the untouched cache entry, so a pin/share/delete came back. The cache is the state now and `chats-view.tsx` carries a standing ⚠ never to mirror the list into `useState`.
+
+Two specific bugs fell out of the same change. PIN is a pure toggle whose button rendered the server's value, so two quick clicks read the same stale `pinned` and sent the same PATCH twice; the optimistic patch plus `pending` inertness is what stops two conflicting PATCHes racing to decide the row. CREATE FOLDER held its input open across the round trip and cleared it only on success, so a repeated Enter — key repeat, impatience, a slow POST — created two folders; the input now clears AT submit (`list-pane.tsx`) and the pending row supplies the feedback that made the second Enter feel necessary. Both halves are required.
+
+*Relocated from* `src/features/chats/hooks/use-chat-writes.ts › useChatWrites`
+
+### Folder re-scope was 2N serial round-trips
+
+A chat folder's scope is authoritative for every chat filed in it, and propagating a re-scope ran `delete` + `insert` per chat — 2N serial round-trips on one "Save sharing" click, unbounded in N. A 200-chat folder timed the gateway out. The grant set is identical for every chat in the folder, so it collapsed to one `.in()` delete plus one array upsert, chunked only to keep the REQUEST bounded: PostgREST serialises `.in()` into the URL and uuids run ~40 bytes each, so an unchunked delete over a big folder 414s at the gateway instead of erroring usefully. 100 ids ≈ 4KB of query string; the upsert chunk is measured in ROWS because its payload is the body (resourceIds × teamIds). `service-folders.test.ts` pins the collapsed form so the loop cannot come back.
+
+*Relocated from* `src/features/chats/server/service-folders.ts`
+
+### Skills could not be created in the product at all
+
+The skills browser's "New skill" `+` was hardcoded `disabled` with a tooltip promising authoring "in the next milestone", so the only route to creating a skill was an agent over MCP. The affordance is real now (`CreateSkillDialog` → `POST /api/skills` → the existing editor). The dialog collects exactly three fields — name, description, whenToUse — because those are the three `SkillCreateSchema` requires AND the three `SkillView` cannot edit afterwards (it edits title, folder, sharing and the SKILL.md body). That coupling is invisible from either file, so `create-skill-dialog.test.ts` pins it: a new required field in the schema would make every dialog submission a silent 400, and relaxing one would leave the dialog asking for something the product no longer needs.
+
+*Relocated from* `src/features/skills/components/skills-browser-core.test.tsx`
+
+### Seeded skills showed "Couldn't load" on any non-default workspace
+
+A freshly-seeded skill has its SKILL.md body on the skill row and ZERO `skill_versions` rows, which was suspected first — but the detail/DTO path never depends on a version row. The actual cause was the DetailPane fetching WITHOUT an X-Workspace-Id header: `withWorkspaceAuth` fell back to the caller's DEFAULT workspace, the seeded slug was not there, `resolveSkillBody` threw `SkillNotFoundError`, and the pane showed its fallback. The fix threads `workspaceId` into the client fetch so the route targets the workspace being viewed. `service-reads.test.ts` pins both facts — seeded-shape loads fully, and the resolve is workspace-scoped.
+
+*Relocated from* `src/features/skills/server/service-reads.test.ts`
+
+### teams/server/repository.ts split, and why the barrel stays
+
+`repository.ts` had reached 625 lines with four unrelated reasons to change in it. It was split on the seams the data already had — one table group each, no behaviour touched and not a single query altered: `repository.ts` (the `teams` rows), `repository-members.ts` (`team_members` + `workspace_invitation_teams`), `repository-grants.ts` (`team_resource_access`), `repository-resources.ts` (the tables a grant can point AT). The re-exports from `repository.ts` are load-bearing: it is still the address outside callers import, including `vi.mock("@/features/teams/server/repository")` in the chats tests, so a concern module dropping out of the barrel must fail in the teams suite rather than in another feature. New call sites inside `teams/server/` should import the concern module directly.
+
+*Relocated from* `src/features/teams/server/repository.ts`
+
+### Channels — a thread READ used to carry its PARTICIPANT SET (removed with breakout rooms, 2026-08-05)
+
+- **What was there.** `listChannelThreads` / `getChannelThread` in `packages/dopl-client/src/channel.ts` returned a `ChannelThreadDetail` — the thread row plus its PARTICIPANT SET, the breakout room's membership — normalized through a `withParticipants` helper so that an older deployment's *missing* field and a genuinely set-less thread's `[]` both read as "no participants". The helper existed precisely because those two cases are indistinguishable on the wire and a caller must not be handed `undefined` to re-decide.
+- **Why it went.** Breakout rooms were removed in phase 2 of the channels rollback (see that section). The field, the `withParticipants` helper and the `ChannelThreadDetail` type went with them: a thread read is now just the row (`ChannelThread`).
+- **What survived, and why it matters.** The *additive-field discipline* the helper embodied is still live on three sibling fields, each normalized at the client boundary rather than at the call site: `ChannelThreadCreated.openingSeq`, `ChannelThreadClosed.echoSeq` / `ChannelThreadCloseProposed.markerSeq`, and `ChannelMessagePosted.threadClosed`. Each reads `null` (or `false`) when the server omits the key, never `undefined`. Anyone adding a fourth additive field to a channels response should normalize it the same way — the rule outlived the feature that taught it.
+
+*Relocated from* `packages/dopl-client/src/channel.ts › listChannelThreads`
+
+### Stale-thread sweep — three defects in one never-run cron (2026-08-08, C-1 + C-17, F-171)
+
+- **Stale-thread sweep — three defects in one never-run cron (2026-08-08, C-1 + C-17, F-171):** `CRON_SECRET` was unset in Vercel until 2026-08-10, so every `/api/cron/*` route answered 503 and `GET /api/cron/stale-threads` had **never executed** — which is why all three of its bugs were invisible rather than merely undetected. (1) **It measured the wrong clock.** It filtered on `channel_tasks.updated_at`, whose only writer is `repository-tasks.updateTask` (reached solely from close / set_mode / reopen); `postMessage` bumps `channels.updated_at` and never the task row. A thread with hourly traffic therefore looked 30 days idle — the sweep would have fired HARDEST on the busiest threads — while `set_thread_mode` reset the clock with zero activity. Now `repoTasks.listStaleOpenThreads`, deriving the clock from `channel_messages` (migration `20260807160000` holds the trigger-vs-touch-vs-subquery reasoning; short version: a daily reader must not be paid for by every message insert forever). (2) **It wrote an author no agent could see.** `author_user_id: null` against every MCP await's `.neq("author_user_id", …)` — and SQL `NULL <> x` is NULL, not true — rendered the close proposal on the web card and hid it from any agent holding an await, the exact surface `dopl_channel` teaches every agent to keep armed. The NULL author STAYS; the FILTER was fixed (`repository-messages.excludeAuthorFilter`). Forging an identity would put a close proposal in the mouth of one of the two parties and then hide it from precisely that party's agent. (3) **It bypassed the serialized insert.** A raw `db.from("channel_messages").insert(...)` skipped `channel_message_insert`, whose per-channel advisory xact lock is taken before `nextval` precisely so a reader's cursor cannot advance past a not-yet-visible lower seq. It also used to restate `proposeTaskClose`'s own `client_msg_id`, so a scheduled sweep landing first could replace an agent's stated reason with "no activity for a while" on the card that renders the most recent proposal (C-6); the keys are now disjoint namespaces. **How the secret was finally armed, because the shape recurs:** the first run of a job whose backlog has accumulated since the feature shipped is the largest it will ever have, and each prompt is a real message in a real shared transcript both members see and cannot un-see. `channel_tasks_stale` is a pure read, so the safe sequence was: run the migration's verification SELECT against production first, read the candidate list (it returned ZERO rows — oldest open thread 2026-07-31), THEN set the secret. Do not set it and read the log afterwards.
+
+*Relocated from* `src/app/api/cron/stale-threads/route.ts`
+
+### `/auth/callback` — the onboarding detour deleted the destination it carried (F-136)
+
+- **`/auth/callback` — the onboarding detour deleted the destination it carried (F-136):** a first-run arrival with a `?redirectTo=` deep link used to be routed through `/onboarding?redirectTo=<target>` so the web survey could finish the journey it interrupted. Web `/onboarding` is retired (F-135): it 302s to `/get-started`, and **that hop REPLACES the query** — so the detour deleted the very link it existed to carry. An invite arrived at the download page; so did an MCP OAuth consent screen, whose client then never received its code. The retry failed identically, because `onboarded_at` is only stamped inside the desktop app now: **no state reachable from the web could have made a second attempt behave differently.** Removing the detour rather than repointing it is safe because of WHAT these arrivals target — `/oauth/authorize`, `/invite/*`, `/join/*`, `/auth/reset-password`, `/billing/*` are all on the retirement KEEP list and not one reads onboarding state. The onboarding READ went with the branch, which is the only way the destination stops depending on a column the web cannot stamp. The end-to-end walk is `src/first-run-deep-link.test.ts`; the matrix is `src/app/auth/callback/route.test.ts`, where the deep-link assertion is deliberately the INVERSE of the one it replaces.
+
+*Relocated from* `src/app/auth/callback/route.ts`
+
+### `/api/version` — a forced-upgrade gate that shipped never blocking anyone, and a clamp that decayed (F-125)
+
+- **`/api/version` — a forced-upgrade gate that shipped never blocking anyone, and a clamp that decayed (F-125):** having no auth wrapper on the route was not enough. `src/proxy.ts` 401s every unmatched `/api/**` path before a route runs, so the path has to be listed in **both** its `PUBLIC_ROUTES` and `SELF_AUTH_ROUTES`. Without those entries the desktop got a 401, read it as "no answer", failed open, and the entire gate silently blocked nobody — which is exactly how it shipped, and how a live `version gate: floor fetch 401` caught it. `proxy.test.ts` now pins the signed-out 200. Separately, the anti-brick clamp's `latest` was `DOPL_DESKTOP_LATEST_VERSION`, bumped by hand, so it decayed — and a decayed clamp refuses legitimate floors, i.e. the gate fails safe and useless at the same time. Both failure directions were real: **stale-LOW** refused a floor that was genuinely published, and **stale-HIGH** came from copying `dopl-desktop-app/package.json`'s version as the old docs instructed, which runs AHEAD of what is published and would have bricked every Mac. `latest` is now derived from the release feed the updater already reads (`latest-release.ts`), READ from a cache in the handler and REFRESHED after the response — so GitHub being slow, rate-limited or gone cannot add a millisecond to the route, and every degraded value refuses MORE floors than the truth would, never fewer. **`GET` is a synchronous function on purpose** — it cannot await a socket even by accident — and a test pins that. The refusal is invisible on the wire (served as the same plain "no floor" a correct unset config produces), so it is logged, deduped on (reason, value), and the line names WHICH origin it read: a derived latest means "publish the build", a declared one means "your env var is stale", and a log that names the wrong knob is worse than one that names none.
+
+*Relocated from* `src/app/api/version/route.ts`
+
+### `/api/mcp` — three transport failures that all looked like success (Q6 / Q9-M1H1 / Q14, 2026-07-31)
+
+- **`/api/mcp` — three transport failures that all looked like success (Q6 / Q9-M1H1 / Q14, 2026-07-31):** (1) **`enableJsonResponse: true` capped every long call at exactly 60.0s.** In that mode the SDK returns a promise that resolves only once every JSON-RPC response is ready (`webStandardStreamableHttp handlePostRequest`), so nothing — status line included — reaches the client until the tool handler returns. Claude Code wraps each non-GET fetch to a `type: "http"` MCP server in an AbortController firing at `max(server.timeout ?? 60_000, 60_000)` ms, and that timer bounds TIME-TO-RESPONSE-HEADERS; with no headers until the end it covered the WHOLE call. `op="await"` (the wake primitive), `op="list"` and `dopl_kb` reads all died at 60s. Dropping the flag puts the transport on its default SSE path, which returns `new Response(readable, …)` synchronously after dispatch, so headers flush at t≈0 and the 60s bound covers only the handshake — fixing terminal CLI users, claude.ai connectors, Claude Desktop and third-party clients **without** a per-server `timeout` override, which is the point: we cannot configure any of them. (2) **GET routed to the same handler failed by SUCCEEDING.** GET on a Streamable HTTP endpoint asks for the standalone SSE stream a STATEFUL server uses; we are stateless (`sessionIdGenerator: undefined`), and the SDK's `handleGetRequest` skips session validation in that mode and answers 200 `text/event-stream` with a stream nothing will ever write to or close. While byte-silent, an intermediary reaped it in ~30-60s and the waste stayed invisible — then `withSseKeepAlive` landed, started feeding it a comment every 15s, and thereby stopped anything from reaping it, so it survived to `maxDuration` (300s). Every SDK client opens that stream right after `notifications/initialized` and reconnects on a graceful end: one continuously-running 300s function per connected client, renewed ~12x/hour, carrying zero events, burning the same concurrency the 215s `op="await"` holds need. 405 is the specified answer and the SDK's `_startOrAuthSse` returns on it without raising or reconnecting. (3) **Nothing downstream learned the client had hung up.** Neither `withSseKeepAlive`'s `cancel` nor the SDK's stream teardown aborts a running tool handler, so an `op="await"` hold that lost its client kept re-issuing its ~50s loopback poll for the rest of its ~215s budget — ~4 more `/api/channels/[id]/await` invocations, each a fresh 60s function doing its own Supabase work, for nobody; worse, the timed-out result tells the agent to re-arm immediately, so the orphan ran alongside a live hold. Threading `request.signal` into the `DoplClient` fixes it, deliberately narrower than "cancel everything": the client refuses to START further requests but only interrupts an in-flight one when the method is idempotent, because aborting the loopback also aborts the inner route mid-write and the thread-create path is not yet atomic. **Residual:** `opAwait` in `packages/mcp-server` does not yet check `signal.aborted` BETWEEN polls, so at most one already-doomed poll is still opened.
+
+*Relocated from* `src/app/api/mcp/route.ts › POST`
+
+### OpenGraph card — a 1.30MB PNG that recompression could not fix (P0-4, 2026-08-07)
+
+- **OpenGraph card — a 1.30MB PNG that recompression could not fix (P0-4, 2026-08-07):** the link-preview card was a 1200×630 screenshot of the landing page — photographic content in a format built for flat colour, at ~13× the size a card of those dimensions should be — pulled by every scrape (iMessage, Slack, Twitter, LinkedIn, Discord) and by nothing else. **PNG was not fixable in place:** `compressionLevel: 9` made it slightly LARGER, and palette quantization to 128 colours (the only setting that reached the target size) banded the sky gradient that is most of the frame. The source is fully opaque, so JPEG loses nothing real: q86, 4:4:4 chroma, mozjpeg → **100,348 bytes, a 92.3% reduction**, visually indistinguishable at card size and above. The extension change is the POINT of the rename, not an accident of it: JPEG is the one lossy format every scraper in that list has always accepted. WebP was 44KB and tempting, and is the thing to try once the tail of scrapers is actually known.
+
+*Relocated from* `src/app/layout.tsx`
+
+### Checkout duplicate-subscription fence — why it is a Postgres compare-and-set, not an advisory lock (M-3)
+
+- **Checkout duplicate-subscription fence — why it is a Postgres compare-and-set, not an advisory lock (M-3):** `POST /api/billing/checkout` stakes the workspace for the duration of the create-session critical section only, so a truly concurrent checkout on this instance OR any other Vercel lambda is turned away instead of racing to mint a duplicate untracked subscription. The claim is a **single-statement upsert-claim in Postgres that self-expires after 2 minutes**, chosen because the prior attempt used an advisory lock and hit the PgBouncer session-vs-transaction leak. It is RELEASED unconditionally in a `finally` on every path — success, validation 409, or throw — because holding it past that point falsely 409s the same user's retry for up to the self-expiry, which is an abandon/plan-switch lockout and a conversion regression; the 2-minute expiry is only the backstop for a failed release write. **Residual, stated so it is not re-derived as handled:** this fences concurrent session-CREATION, not the whole checkout lifetime. A SEQUENTIAL re-checkout landing during webhook lag (claim already released, `stripeSubscriptionId` not yet persisted) can still mint a duplicate sub; closing that needs webhook-side subscription dedup. See `claimWorkspaceCheckout` / migration `20260720210814_workspace_billing_checkout_claim.sql`.
+
+*Relocated from* `src/app/api/billing/checkout/route.ts › POST`
+
+### Nightly sweeps must bound their fan-out — a 429 is indistinguishable from a failure
+
+- **Nightly sweeps must bound their fan-out — a 429 is indistinguishable from a failure:** `GET /api/cron/reconcile-seats` was an uncapped `Promise.allSettled` over EVERY live Team workspace, where each element is 2 DB reads + 2 Stripe calls + a write. At any real customer count that opens all of them in the same tick: Stripe's limit is per-second, and **a rate-limited response looks exactly like a failed seat true-up to this code**, so the sweep would have reported mass failure with no cause — and the connection pooler saturates on the DB half before Stripe even answers. The cap is small on purpose: a nightly sweep has no deadline, so throughput is worth nothing and staying under everyone's limits is worth a lot. The two properties capping must not cost are pinned in `route.test.ts`: every workspace is visited exactly once, and one failure never aborts the rest — which requires the bounded pool to keep results **index-aligned** with its input, since a mis-aligned result set blames the wrong workspace.
+
+*Relocated from* `src/app/api/cron/reconcile-seats/route.ts`
+
+### Desktop OAuth handoff — `/auth/desktop-complete` deleted (Stage D, 2026-08-06)
+
+- **Desktop OAuth handoff — `/auth/desktop-complete` deleted (Stage D, 2026-08-06):** the app used to finish sign-in by loading `/auth/desktop-complete` with the same tokens and calling `setSession` there — a page that existed only so the retired remote shell could plant its cookie jar. Stage D deleted both: the desktop now captures the tokens straight off the `dopl://auth#<tokens>` deep-link fragment, and loading that page stranded the window on "Signing you in…". `/auth/desktop-handoff` itself is unchanged; only what happens after the handoff is. The surviving constraint at the site is the login-CSRF nonce, armed by main and threaded `desktop-start → /auth/callback → desktop-handoff → dopl:// fragment`, which is what lets `captureFromFragment` demand an EXACT state match instead of the weaker presence+TTL gate.
+
+*Relocated from* `src/app/auth/desktop-handoff/page.tsx`
+
+### Boot: four serial launch reads collapsed into POST /api/boot
+
+**The SPA launch used to cost four strictly serial round trips.** `/api/user/onboarding-state` → `/api/workspaces/ensure-default` (gated on its answer) → `/api/workspaces/resolve` → `/api/workspaces/me`, plus the shell's `my-access` on top. None of it was a real dependency — server-side it is one composition — but the shell gated `<Outlet/>` on the third, so no page began fetching its own data until all four had landed. `POST /api/boot` answers all four, and `seedBootAnswer` (`apps/desktop-ui/src/components/app-shell/use-workspace-route.ts › seedBootAnswer`) writes that one answer into the four legacy cache keys, so the shell and the first page mount warm. The four endpoints stay live: the web app, `@dopl/client` and deep links still call them. It is a POST because the no-segment mode may provision, but it is idempotent and read-shaped, so it is modelled as a `useQuery` — the documented exception to CONVENTIONS' "writes use useMutation". Pinned by `apps/desktop-ui/src/pages/boot/index.test.tsx` ("mounts the real shell and its page having read the API exactly once").
+
+*Relocated from* `apps/desktop-ui/src/pages/boot/index.tsx`
+
+### Why the overview stat row is asserted as a whole set
+
+The overview stat row went from four cards to three during the retirement and **no test failed**, because the suite only ever checked the Skills card — and the "N people in this workspace" line underneath is `MembersWidgetCore` copy, not a card, so it kept passing too. `apps/desktop-ui/src/pages/overview/index.test.tsx` now asserts the WHOLE row: every card's label, every href (the row doubles as navigation, so each one must be a real route), and the row LENGTH — the length check is what stops a fourth card silently linking to "Not found". Rule: for a fixed-membership navigation row, pin the set, never a representative member.
+
+*Relocated from* `apps/desktop-ui/src/pages/overview/index.test.tsx`
+
+### Knowledge root became a destination instead of an auto-redirect
+
+`/{ws}/knowledge` used to rewrite itself onto the first (or last-opened) base before first paint, so the card grid was unreachable. It is now a real landing page: nothing auto-selects a base out of it and the address bar is untouched until the user moves. Two consequences worth keeping: (1) a grid of N bases costs ONE request — the card meta comes from `baseStats`/`ownerNames` on the list response, so no per-card tree fetch may be introduced to fill those numbers in; (2) both `knowledge` and `knowledge/:kbSlug` are registered against the SAME component type (`./detail.tsx` re-exports `./index.tsx`), so react-router reconciles the two matches and crossing between the grid and the two-pane view does not remount the controller — loaded trees, search text and scope filter survive the round trip. Pinned by `apps/desktop-ui/src/pages/knowledge/home.test.tsx`.
+
+*Relocated from* `apps/desktop-ui/src/pages/knowledge/home.test.tsx`
+
+### A key with no writer is the easiest thing in a codebase to delete by mistake
+
+`resolvePostMetadata` strips three agent-attribution keys from caller metadata and never re-stamps them:
+
+    delete metadata.to_agent_id;
+    delete metadata.to_agent_ids;
+    delete metadata.author_agent_id;
+
+Removing each of those three lines individually left all 2,109 root tests green. Every sibling reserved key — `intent`, `handoff`, `to_user_id`, `session_id`, `summary`, `runtime`, `appVersion` — had a firing security test; these three had theirs inside `service-writes-metadata-agents.test.ts`, which was deleted wholesale along with the named-agent feature. The feature went; the key did not, and neither did the reason it is stripped.
+
+The write path for named agents is gone. The READ path is deliberately alive: stored rows still carry `author_agent_id` and the transcript still renders "quartz · Ada's agent" from it (`lib/agent-display.ts`, `channel-transcript.tsx`). So the key is now a display credential with a live reader and NO legitimate writer — which makes the strip the entire boundary. A caller able to set it on a new post attributes their own words to somebody's retired agent, on the other member's screen, under the server's own byline.
+
+The general rule: when a feature is rolled back, a reserved key whose WRITER is deleted but whose READER survives becomes strictly more dangerous, not less — and it reads as dead code to everyone who comes after. Delete the feature's tests and the strip is unprotected. `service-writes-metadata-attribution.test.ts` now drives the real `postMessage` and asserts the absence per key.
+
+*Relocated from* `src/features/channels/server/service-writes-metadata-attribution.test.ts`
+
+### A test that spells a wire contract the same way on both sides proves nothing
+
+`lib/group-thread-markers.ts` reads `threadReopened` off the wire; `server/service-writes-metadata-markers.ts` stamps it as `REOPEN_MARKER_KEY`. Two processes, one string, no compiler between them.
+
+The first version of `group-thread-reopen.test.ts` built its fixtures from the client-side constant AND asserted against the same constant. Renaming that constant would have silently stopped it matching the server's key, every reopen echo would have fallen back into the milestones lane rendering a green ✓ on a thread that had just come back to life — and the whole suite would have stayed green. The gap was found by mutation, not by inspection: the file survived exactly that edit.
+
+The fix is one assertion that pins the key as a LITERAL while every other assertion keeps using the constant for readability. Same shape as the `THREAD_REOPENED_KEY` docblock's other rule: status is decided by FLAG, never by matching body text, because the echo's copy is server-generated and already has two forms.
+
+Rule: for any string that crosses a process boundary with no shared type, exactly one test must spell it as a literal. A test that imports the constant on both sides moves with a rename and is a coverage illusion.
+
+*Relocated from* `src/features/channels/lib/group-thread-reopen.test.ts › THREAD_REOPENED_KEY`
+
+### An error message that recommends a deleted parameter
+
+`ChannelChatAddressedError`'s message read "Mention an agent with toAgents to have it act". That was correct for exactly the four days between the 2026-07-31 chat/request narrowing and the rollback that deleted named-agent addressing. After the rollback, `schema.ts#removedParam` declares `toAgent` / `toAgents` as `z.never()` — so a caller who followed the advice got a SECOND 400, from a different layer, naming the parameter the first error had just recommended.
+
+Nothing pinned the sentence, so nothing noticed. The MCP twin (`packages/mcp-server/src/tools/channel-post-notes.ts` `CHAT_ADDRESSED_REFUSAL`) was rewritten at the time; this HTTP copy was missed. Two statements of one rule is how the copy in this feature drifted from the code three times.
+
+The same shape recurred in the tool descriptions: `channel-description.ts`'s `propose_close` entry and `channel-ops-threads.ts`'s close refusal both ended "do not propose twice", which — left alone after `propose_close` became re-raisable — would have stopped a well-behaved agent from ever re-proposing, defeating the change entirely from the one place no test looks.
+
+Rule: an error message is product surface (the route returns it verbatim in the envelope) and must be pinned like any shipped string. When the same rule is stated on two lanes, a test asserts the DECISION both offer, not the wording — the surfaces legitimately phrase it for different callers.
+
+*Relocated from* `src/features/channels/server/errors.ts › ChannelChatAddressedError`
+
+### Documentation that described a path it had never exercised
+
+Read-session-state shipped as a contract with a flagged delivery gap, and said in four separate places — the repository's docblock, `session-state-service`, `src/app/api/channels/sessions/route.ts`, and the finding itself — that the op "returns [] live until the desktop push lands".
+
+It did not. The `channel_sessions` migration was unapplied, so PostgREST answered `PGRST205` ("could not find the table in the schema cache"), the raw error was rethrown, `mapChannelError` has no arm for a non-domain error, and the shared tail turned it into a 500 INTERNAL_ERROR. The op was broken in exactly the state its own documentation described as normal — and four documents agreed with each other rather than with the code.
+
+The fix degrades that ONE PostgREST code to the empty list, and is deliberately narrow: permission denied, a moved column, a dropped connection and a timeout all still throw, because each of those means the answer is UNKNOWN rather than EMPTY, and an empty list is a claim. The degrade carries its own delete-me condition — once the table is applied everywhere, a missing relation is a real deployment fault and should be loud.
+
+Rule: "returns X when the migration has not landed" is a claim about a code path, and a claim about a code path with no test is a guess. Four copies of a guess is still a guess.
+
+*Relocated from* `src/features/channels/server/repository-sessions.ts`
+
+### The wrong reason for a correct decision, propagated to four places
+
+The session pill has deliberately no `thinking` state. The recorded reason was that it needs streaming (`includePartialMessages`), which is off. That reason was wrong, and it had been copied into four places before anyone checked it.
+
+The session WINDOW already renders a Thinking chip with no stream at all (`session-chrome.js#thinkingVisible`). What actually blocks the PILL is its INPUT: `pillState` sees only the reducer's `{ phase, activity, parked }`, never what has been RENDERED for the current turn. A fourth state needs that fact lifted into the reducer — not a stream. Anyone acting on the recorded reason would have gone and enabled streaming, paid for it, and still had no pill state.
+
+A second instance of the same shape sits in `service-writes-lifecycle.ts`: the `internalLifecycle` flag's docblock said the close echo "is raised from a request that may well carry an agent token, so identity alone cannot tell it apart". That stopped being true the same week, when propose-then-confirm made `closeTask` open with `if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError()` ahead of every lookup. The flag's only caller can never hold an agent ctx; the flag is a no-op in practice and its value is now purely documentary (it states at the call site that the post is the server speaking, which is what stops the rule being re-derived from identity).
+
+Rule: a comment that gives the REASON for a constraint is a load-bearing claim about a different file, and it rots faster than the constraint does. When the reason is corrected, grep for the sentence — a wrong reason that survives in three other files is worse than no reason, because it is actionable.
+
+*Relocated from* `src/features/channels/types.ts`
+
+### Desktop renderer: PageLoading renders a shape, and the disk cache does not bring the text loader back
+
+**The desktop SPA's `PageLoading` used to be one grey `<span>` reading "Loading…", justified in-code by a main-process read cache that would make a skeleton flash "the bug, not the feature".** That cache was never built — the SQLite half of the desktop migration plan is still unwritten — so every launch was a genuine cold fetch over IPC and the justification described infrastructure that did not exist. A cold launch of Channels crosses FIVE of these states back to back (boot ×3, the shell, then the page's own access gate); as bare text that was five flickers of grey copy in five different positions.
+
+**The IndexedDB persister that DID land (`apps/desktop-ui/src/lib/query-client.ts › createQueryPersister`) does not restore the old argument**, for two reasons. A restored snapshot means the pending state is never ENTERED — a skeleton that does not render costs nothing — and restore is itself async and bounded (`maxAge`, `buster`, success-only dehydration), so a first launch, a bumped buster, a day-old cache and a runtime with no IndexedDB all still land in the pending branch. **The right lever for a warm start is to skip the pending state, never to make it emptier.** Rendering ONE `.page-float` skeleton across the whole chain is the point: five sequential pending states read as a single steady surface whose contents resolve, instead of five separate flashes. `apps/desktop-ui/src/components/page-states.tsx › PageLoading` is the only loading state a ported desktop page may render; `variant` picks "page" or "two-pane".
+
+*Relocated from* `apps/desktop-ui/src/components/page-states.tsx › PageLoading`
+
+### Desktop renderer: the IndexedDB persister was deferred to a cache that was never built
+
+**The desktop renderer mounted a bare `QueryClient` with no persister**, deliberately, deferred to a main-process SQLite cache on the reasoning that two disk caches with different lifetimes is worse than one. That cache does not exist, and the cost of waiting was paid every launch: `gcTime: 24h` buys nothing across a process exit, so the local-first flagship refetched its entire world on every cold start — starting COLDER than the web app it replaces, which has had IndexedDB persistence since Phase 1.
+
+`apps/desktop-ui/src/lib/query-client.ts › createQueryPersister` now wraps the SAME persister the web app uses (`src/shared/api/idb-persister.ts`). When the main-process cache lands, this is the thing it replaces; until then it is the thing that makes a relaunch feel instant. The buster is a THREE-part string (`DESKTOP_QUERY_CACHE_BUSTER`) because a desktop snapshot goes bad for two independent reasons: `__DOPL_RENDERER_BUILD__` (the Electron app version — the packaged equivalent of the web buster's deployment id) moves when a shipped update reshapes how a response is read, and the shared web tree's `QUERY_CACHE_BUSTER` is kept in so the two clients can never disagree about what a persisted entry means. `RENDERER_CACHE_SCHEMA` is bumped only for a change to the query-KEY contract itself (`[path, workspaceId, query]`), which the build id would not catch.
+
+*Relocated from* `apps/desktop-ui/src/lib/query-client.ts › createQueryPersister`
+
+### 2026-08-03 fleet audit (duplication): five desktop-SPA forks that had already drifted
+
+The desktop SPA grew five copies of things that must have exactly one definition; **each had already drifted or was one edit away from it, and all five are now single-sourced.** Recorded because the failure mode is identical every time — a hand-kept twin with no signal when it falls out of step.
+
+- **`isUnauthorized`** — boot carried a private copy that ALSO treated 403 as signed-out. The two answered differently under one name, and the last person to "share" the helper edited boot without noticing its twin. THE definition now lives at `apps/desktop-ui/src/components/page-states.tsx › isUnauthorized` and is 401-only: the SPA authenticates with a session JWT, so the only 403s this API mints (`SESSION_REQUIRED` / `WRITE_SCOPE_REQUIRED`, both OAuth-agent-only) cannot reach it, and a genuine authorization failure is an error to show, not a reason to throw the user at the login screen — access denial on workspace routes is already collapsed to 404.
+- **`invalidateWorkspaceReads`** — the `/settings` page and the settings modal each had their own, already divergent: the page removed the boot answer on every invalidation and navigated explicitly on a slug change, the modal removed it only on delete. One copy now, at `apps/desktop-ui/src/lib/workspace-cache.ts`.
+- **`useWorkspaceAccess`** — began under `pages/skills/` as a stopgap "for pages rendered STANDALONE, before the app shell exists", with its own copy of the resolve call, and outlived that condition. Once the shell wrapped every page, two abstractions were resolving the same segment and only a hand-kept byte-identical query key stopped them double-fetching and disagreeing about role and canonical segment. It now shares `useWorkspaceRoute`'s boot query: one boot query for the shell and every page.
+- **`useApiQuery`** — was a byte-for-byte fork of the web hook, so the `[path, workspaceId, query]` cache-key contract and the TanStack refetch workaround had two homes and no signal to keep them in sync. `apps/desktop-ui/src/hooks/use-api-query.ts` now only BINDS `@/shared/hooks/use-api-query-core` to the SPA's `apiRequest`, which is the one thing that genuinely differs.
+- **The test bridge** — every SPA suite hand-rolled the same `window.dopl` stub and re-declared the resolve/me wire shapes the whole app rests on, so a payload change needed a dozen coordinated edits and a missed one left a suite passing against a stale contract. `apps/desktop-ui/src/test-utils/bridge.tsx` is now the single fixture module; it stubs at `window.dopl.apiRequest` rather than at `#/lib/api-transport` on purpose, because workspace-scoped pages read over BOTH clients and both funnel into that one bridge in the packaged app.
+
+*Relocated from* `apps/desktop-ui/src/components/page-states.tsx › isUnauthorized`
+
+### Why the desktop dmg name is resolved, not pinned (the rejected `artifactName` fix)
+
+**The obvious one-line fix was rejected, and the reason is worth keeping.** `src/shared/version/mac-download.ts` resolves the dmg's asset name out of `latest-mac.yml` at request time instead of hardcoding it. The cheaper fix was to pin `artifactName` in the desktop's electron-builder config to a version-less name, which would have made the original constant true in one line with no route. It lost on three counts: it renames the artifacts in the min-version gate's FIRST release, the one release whose auto-update path must not acquire a new variable; it leaves the public Download button 404ing until that release actually ships, which is after the fix merges; and it drops the version out of the downloaded file name, which is the first thing a support conversation asks for. Nothing forecloses it — if the artifacts are ever renamed, the resolver keeps working unchanged, because it never assumed a name in the first place.
+
+*Relocated from* `src/shared/version/mac-download.ts`
+
+### Why the minimum-version gate does not ride `X-Dopl-App-Version` (the rejected 426)
+
+**Recorded so the question is not rediscovered.** Forcing old desktop builds forward looks like a `426 Upgrade Required` on `/api/**` keyed on the `x-dopl-app-version` stamp. It was rejected on three grounds. (1) It would gate ACCESS on a value any device-token holder can set, which is the one thing that header's contract forbids — and it buys no coercion for the cost, because the client that lies about its version is exactly the client that would ignore the 426. (2) The population it would reach cannot act on it: builds at or below 1.8.0 predate the gate entirely, so a 426 reaches them as unexplained API failures across every screen, which is strictly worse than letting a stale build keep working. (3) A cooperating client does not need to be told twice — it PULLS the floor from `GET /api/version` and blocks ITSELF, which puts the whole upgrade story (the screen, the download, the restart) in the one process that can actually perform it. So the floor lives in `src/shared/version/desktop-floor.ts` and the gate lives in `dopl-desktop-app/main/min-version.js`.
+
+*Relocated from* `src/shared/auth/app-version-header.ts`
+
+### The shared-kit duplication class: three forks that each cost a real bug (2026-08-03 fleet audit)
+
+**A fork of a shared contract is not tidiness debt — each of these shipped a defect.** Three instances found in one audit pass, all now collapsed into `src/shared/`:
+
+- **`ApiError` was declared twice**, once in the web client and once in `apps/desktop-ui/src/lib/api.ts`, so two instanceof-incompatible classes shipped inside ONE SPA bundle: a 401 raised by a shared feature client could not be recognised by the SPA's `isUnauthorized`, and every plan-gate envelope change had to be made twice or the two halves of the app disagreed about error codes. Fixed by `src/shared/api/api-envelope.ts` — everything ABOVE the transport lives there; only "which wire the bytes leave on" is per-client.
+- **The GET hook was forked byte-for-byte** at the start of the desktop migration. The cache-key contract `[path, workspaceId, query]` is what the whole request-dedup story rests on, and a fix to one copy gave the other no signal to mirror it. Fixed by `src/shared/hooks/use-api-query-core.ts`, which takes the request function as an argument — one argument, zero drift.
+- **`openExternal` existed three times** (the settings modal's helper, the signed-out screen's private re-implementation, and an inline bridge cast in the channels onboarding card), so a future hardening — validating the scheme before handing a URL to the OS opener — would have landed in one of three places. Fixed by `src/shared/lib/open-external.ts`.
+
+**The rule the three share:** when two clients differ only in TRANSPORT, the contract above the transport gets exactly one home and the clients get thin bindings. `query-defaults.ts` is the precedent — framework-free module in `src/shared/`, no `"use client"`, no React, no Next, no `import.meta`, which is what makes it safe for a Vite renderer to consume directly and the bar any future shared module must clear.
+
+*Relocated from* `src/shared/api/api-envelope.ts › ApiError`
+
+### Channels — why a message carries `metadata.session_id`, and why the header OUTLIVED named agents
+
+An agent post is authored by its OWNER'S ACCOUNT, and one operator legitimately runs several concurrent sessions. The incident that established this: two concurrent sessions holding the same agent handle gave a peer contradictory instructions 79 seconds apart, and nothing in `metadata` could attribute either — "<handle> said X" was not a well-formed statement. `as_agent` was per-call and ownership-checked only, so any process holding the owner's credential could claim a `channel_agents` row.
+
+Named agents were later deleted and the field stayed, because the ambiguity was never about handles: an author label names an ACCOUNT, and no author label can name a PROCESS. `metadata.session_id` is the only thing on the wire that can, and `packages/mcp-server/src/tools/channel-render.ts › sessionIdOf` is what renders it. It is stamped only from the `X-Dopl-Session-Id` header (shape-checked in `session-header.ts`), and neutralized at render anyway — the write path is a claim about today's code, not about rows already in the table.
+
+- **The transport half** (`packages/dopl-client/src/transport.ts`). `DoplTransportOptions.sessionId` is echoed on every request as `X-Dopl-Session-Id`; the reserved `metadata.session_id` stamp is its only consumer. It was written for named agents, because `as_agent` was ownership-checked and per-call and so never said which *process* was speaking. The rollback deleted the feature that motivated it and left the problem it solved: without the stamp a reader cannot tell two concurrent sessions of the SAME poster apart, which is exactly what the session pills need.
+- **⚠ It is a LABEL, NOT A LOCK.** Nothing gates on it and no session count is enforced. Do not build an ownership or concurrency check on `metadata.session_id` — it is set by the in-app MCP route forwarding whatever value it was called with, and an unset value simply stamps nothing. Its sibling `X-Dopl-Runtime` is the one that carries a behavioural consequence (a `desktop-session` runtime stops the desktop opening a competing requester window for a thread an external session already owns).
+
+*Relocated from* `packages/mcp-server/src/tools/channel-render.ts › sessionIdOf`, `packages/dopl-client/src/transport.ts › DoplTransportOptions`
+
+### The thread-scoped read offers NO await cursor (a fix shipped backwards, twice)
+
+`dopl_channel(op="read", thread=…)` filters the transcript to one exchange. Its result hint originally printed "Highest seq shown: N", warned that N is thread-local, then interpolated that same N into `since=N` — so an agent that had only ever read one thread never saw messages sitting below N in other exchanges.
+
+The first correction concluded the CHANNEL-wide max M was the right number and shipped that. That is the wrong direction and makes the loss strictly worse: `await` is `gt("seq", since)`, so a LARGER `since` returns FEWER messages. The rows in `(N, M]` are exactly the other exchanges this reader has not seen — awaiting from N delivers them, awaiting from M drops them permanently, because the cursor only moves forward. It was caught in production by a counterparty's agent reading the hint against the schema, in the exchange that was testing the feature.
+
+The standing conclusion: NEITHER number is a cursor. A safe `since` is the highest seq below which the reader has seen EVERYTHING channel-wide, and a thread-scoped read deliberately filtered rows out, so it establishes no such bound and cannot. `channel-ops-read.ts › opRead` therefore offers no number at all on the scoped branch — it states the thread high-water mark as DISPLAY, says the read advanced no channel-wide cursor, and points at the unscoped read that can establish one. The real fix would be a thread filter on `await` (or an opaque resume token) so "watch MY exchange" becomes expressible instead of approximated.
+
+*Relocated from* `packages/mcp-server/src/tools/channel-ops-read.ts › opRead`
+
+### Why no tool headline may contain a completeness word ("every" cost a false escalation)
+
+`dopl_map`'s description opened "Compact manifest of the active workspace — EVERY knowledge base, skill, workflow cluster, and ontology cluster". It returned none of them in full: `map.ts` filters skills to `status === "active"`, and `listSkills` / `listKbBases` are visibility-filtered server-side before the rows arrive.
+
+Two agents on two machines called it and got "10 knowledge bases, 6 skills" against "4 KBs, 1 skill". Everything they did from there was correct: they formed a permissions hypothesis, tested it with `access_matrix`, disproved it, tested workspace targeting, disproved that, and escalated a confirmed server-side `dopl_map` bug to the operator. There was no bug — one caller was the owner, and five of the six skills were owner-private. Three questions, three correct answers, and one word that told both agents the answers were comparable.
+
+Two mechanical guards now exist, in `tools/tool-scope-claims.test.ts` (descriptions) and `tools/tool-scope-footers.test.ts` (results). The headline rule has NO allowlist: a claim that needs qualifying does not belong in the sentence with no room to qualify it. And the standing rule for the result-side footers is that they state the FILTER, never a count — "drafts are not listed" is free, "4 skills were hidden from you" is a round trip on every list call, and a count is knowable only for rows the server already sent, never for the ones its own visibility filter withheld.
+
+*Relocated from* `packages/mcp-server/src/tools/tool-scope-claims.test.ts`
+
+### Desktop app — PER-CHANNEL NOTIFY SCOPE IS GONE, and that is a behaviour change (F-170)
+
+**WHAT WAS REMOVED.** `classify`'s implicit two-member trigger used to read a per-channel notify scope off the Channel DTO and return `'ignore'` when it was `'none'`:
+
+```js
+const scope = (entry.channel && entry.channel.myNotifyScope) || 'all';
+return scope === 'none' ? 'ignore' : 'trigger';
+```
+
+**WHY.** Two of the column's three options were lies. `'addressed'` was compared nowhere in the tree, and `'none'` ("Muted") never silenced an explicitly addressed request — which is most of what a channel carries. The control claimed a scope it did not have.
+
+**⚠ THIS IS A REAL BEHAVIOUR CHANGE, NOT A CLEANUP.** That read was the ONLY thing anywhere in the app that could stop an implicit two-member trigger. A two-member channel or DM now ALWAYS prompts on an unaddressed user-authored message, and there is **no per-channel opt-out anywhere in the product**.
+
+**⚠ DO NOT REINSTATE THE OLD COLUMN.** Its semantics are the bug. A "be quiet in one channel" feature has to be designed from the requirement, not restored from `myNotifyScope`. The site (`main/targeting.js`, the implicit 1:1 branch) carries the do-not-reinstate warning; this entry carries the reason and the fact that removing it changed what the app does.
+
+*Relocated from* `dopl-desktop-app/main/targeting.js`
+
+### Desktop app — AN UNRESOLVABLE TOOL PROFILE FAILS CLOSED (audit C-11)
+
+**THE DEFECT.** `tool-profiles.normalizeProfile` answered `'full'` for anything it did not recognize — including `null`, which is what `myAgentToolProfile` is for a non-member read, for an unrefreshed channel DTO, and for any out-of-enum value that reaches the client. A profile that could not be RESOLVED silently BECAME the widest one, and nothing anywhere said so. An operator whose explicit `read_only` evaporated into `full` had no signal of any kind.
+
+**THE TREE HELD TWO CONTRADICTORY ANSWERS.** One file over, `session-park.knownProfile` already answered the same question the opposite way — unknown -> `read_only`, "fail restrictive" — for a profile read off a durable record. Two deliberate rules, opposite directions, same question.
+
+**THE DISTINCTION SAMUEL DREW, and it is the whole of the change.** A user CHOOSING maximum access is fine: `full` is the DB column's default, a normal membership row really does carry it, and it passes through untouched. An unknown value BECOMING maximum access is not. So an explicit `'full'` is honoured exactly as before, and only the unresolvable case moves — to the same `read_only` the record path already picked.
+
+**AND THE DEGRADATION IS REPORTED.** `onUnknownProfile` is an INJECTED reporter wired to `diag` OUTSIDE the extracted sentinel block, because `main/tool-profiles.js` must stay free of electron / fs / path (`test/tool-profiles.test.mjs` evaluates everything between the sentinels verbatim in a plain Node context). The require is LAZY — it runs only when an unrecognized profile is actually seen — so requiring the module under `node --test` still costs nothing and cannot pull electron in. **A failure to log must never be able to change the containment decision that has already been made.** `profileLabel` and `profileHint` follow `normalizeProfile` for the same reason: a consent card reading "Full-access" over a spawn contained at `read_only` is a card that lies.
+
+*Relocated from* `dopl-desktop-app/main/tool-profiles.js › normalizeProfile`
+
+### Desktop app — THE 550px STATUS STRIP: what flexbox did with a 320px deficit
+
+**THE SYMPTOM.** The session window's status strip stood ~550px tall inside a 520px-wide window, with the Messages select clipped at the window edge and the working-directory pill unreachable.
+
+**THE ARITHMETIC.** The window is 520px wide AND 520px MIN wide (`main/session-window.js`), so the row has ~478px of content box. Adding the two `<select>` axes took the row's natural width to ~800px: status pill + model meta + Tools + Messages + the posture line + the folder pill. On ONE non-wrapping line that ~320px deficit has to land somewhere, and flexbox put it on the only children that could take it:
+
+- **`.perm-posture` absorbed nearly all of it.** It carried `min-width: 0`, so it had NO automatic minimum. Crushed to a few px it still had ~140 characters to draw, and `white-space: normal` wraps at every space — so it drew **one word per line** and grew the row to hundreds of px.
+- **`.status-meta` clamped at min-content**, which for `claude-opus-5[1m]` is a post-hyphen fragment, so the model line broke into THREE.
+- **Everything else (`.mode-select`, `.folder-pill`, `.perm-warn`) is `flex: none`**, so what was left simply ran off the right edge.
+
+`align-items: center` was NOT the cause; it is only why the survivors floated in the middle of the tall box, which is what made it read as a stretched container.
+
+**THE FIX, and why it is the only honest one.** The row WRAPS. At 520px there is no way to fit ~800px of controls on one line, and both single-line alternatives hide a control the operator needs (the folder pill, or half the posture). Wrapping is also the idiom this stylesheet already uses for exactly this failure (`.outbound-pending .row`, `.perm-actions`, `.inbound-pending .row`). Every text child then gets a FLOOR plus a one-line guarantee, so no child can grow the row by collapsing again — and there is no horizontal overflow left to hide, which is why **NO `overflow: hidden` goes on the strip itself**. `.perm-posture`'s `min-width: 0` is replaced by `flex: 1 1 100%` (its own full-width line) plus a 200px floor, because its copy states BOTH axes and ellipsising it would show Tools while silently dropping Messages — the exact inversion the two-axis contract exists to prevent. `test/session-status-strip` pins the floor-plus-one-line invariant for every text child in the row.
+
+*Relocated from* `dopl-desktop-app/renderer/session/session.css › .perm-posture`
+
+### Desktop app — CHANNEL HISTORY: why the two passes are CHOSEN, never tried in order (F17 -> Q1)
+
+`main/session-history.js` paints a reopened parked shell's transcript from the channel, and the same array is also stashed as the fresh run's fenced seed. It has two read passes, and the arc that produced them is why they are selected by a predicate rather than tried in preference order.
+
+**ROUND 1 — TOO NARROW.** Filtering on `metadata.taskId` alone showed nothing for a real DM exchange. Most of those rows carry no `taskId` at all (the request and the agent's reply are plain `message` rows; the only tagged row is the `task_started` lifecycle event, which the entry filter rightly skips), and a responder shell with no first-class task has no task id to match on either. A reopened window painted an EMPTY stream for a conversation that plainly had messages. Fix: a PAIR-SCOPED fallback behind the task-scoped read — same two-party author rule, minus the taskId condition. It widened WHICH rows count, never WHOSE.
+
+**ROUND 2 — THE FALLBACK OVERSHOT FROM "TOO NARROW" TO "UNSCOPED".** It ran for EVERY legacy task, because their messages are never stamped, so the tagged pass always found zero and always fell through. And a pair-scoped read of a DM is the WHOLE CHANNEL: a reopened window for one 10-minute task replayed months of unrelated conversation — and seeded all of it into the fresh run's first turn.
+
+**⚠ THE RULE THAT CAME OUT OF IT.** The passes are chosen by WHETHER the shell has a task id, never tried in preference order, because "the task pass found nothing" is the NORMAL state of a legacy task. A session that HAS a task id gets a task WINDOW: rows stamped with this task, plus the UNSTAMPED two-party messages inside the task's own `seq` span. **A task with no anchor in the fetched window paints NOTHING and says where to read it** — it must not fall back. The pair-scoped pass survives ONLY for a shell with no task id at all: there is no window to compute, and the pair IS the scope.
+
+**THE SPAN IS COMPUTED OFF ROWS ALREADY FETCHED.** No second request and no server filter — a `?taskId=` read was REJECTED. It mirrors the web thread grouper: START is the legacy `task-<channelId>-<seq>` id's own carried seq when that opener row is in the window, else the oldest row stamped with this task whatever its kind; END is this task's LAST terminal (a settled task can be REOPENED and continued, and reading the FIRST terminal re-hides every round after the first interruption), else the next OTHER `task_started` (`src/features/channels/lib/group-thread.ts › groupThread`), else open-ended. A `task_started` with no id of its own is malformed, not a successor, so it never truncates real history.
+
+**RELATED BOUND.** `channel_messages.seq` is GENERATED ALWAYS AS IDENTITY on the TABLE, not a per-channel offset and not a fetch cursor. That is why `fetchRows` omits `since` entirely: a `(cursor - 200)` window holds an arbitrary number of THIS channel's rows (often far fewer than the 50 rendered, sometimes zero), and a cursor of 0 asks for the OLDEST 200 rows of the whole thread.
+
+*Relocated from* `dopl-desktop-app/main/session-history.js`

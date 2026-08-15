@@ -3,16 +3,15 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
 
 /**
- * Pure data access for the channels tables — channels, members, workspace
- * membership + profiles. Every function takes the service-role admin client
- * (RLS-bypassing); visibility + authz are enforced in the service layer. The
- * generated `Database` type does not yet carry the channels tables, so
- * `supabaseAdmin()` (an untyped `SupabaseClient`) accepts the table names and
- * results are cast to the hand-written row types in `dto.ts`.
+ * Pure data access for channels, members, workspace membership + profiles.
+ * ⚠ Every function uses the service-role admin client (RLS-BYPASSING) —
+ * visibility and authz are enforced in the SERVICE layer, never here.
  *
- * Siblings (§2 500-line cap): `repository-messages.ts` (the transcript),
- * `repository-tasks.ts` (`channel_tasks`), `repository-collab.ts` (consent +
- * trust + presence).
+ * The generated `Database` type does not carry the channels tables, so
+ * `supabaseAdmin()` is untyped and results are cast to `dto.ts`'s row types.
+ *
+ * Siblings: `repository-messages.ts` (transcript), `repository-tasks.ts`,
+ * `repository-collab.ts` (consent + trust + presence).
  */
 
 export function pgErrorCode(err: unknown): string | null {
@@ -31,8 +30,8 @@ interface ListOpts {
 }
 
 /**
- * Every channel the caller may see: workspace-public ones plus any private
- * channel they belong to. Soft-deleted channels are always excluded.
+ * Every channel the caller may see: workspace-public plus any private channel
+ * they belong to. Soft-deleted always excluded.
  */
 export async function listChannels(
   workspaceId: string,
@@ -72,11 +71,10 @@ export async function findChannelById(
 }
 
 /**
- * The two columns the await hold's per-tick access recheck actually reads —
- * "does this channel still exist (not soft-deleted) and is it public?".
- * Same filters as {@link findChannelById}; only the projection differs, so a
- * recheck that repeats for the whole hold ships ~70 bytes instead of the
- * ~460-byte row (Q8 egress diet). Never use it where the DTO is built.
+ * The two columns the await hold's per-tick recheck reads: does this channel
+ * still exist (not soft-deleted), and is it public? Same filters as
+ * {@link findChannelById}, only the projection differs.
+ * ⚠ Never use where the DTO is built.
  */
 export async function findChannelAccess(
   workspaceId: string,
@@ -99,7 +97,7 @@ export async function findChannelBySlug(
   slug: string
 ): Promise<ChannelRow | null> {
   const db = supabaseAdmin();
-  // Escape ilike metacharacters so a slug like "a_b" can't match "axb".
+  // ⚠ Escape ilike metacharacters, or a slug like "a_b" matches "axb".
   const literal = slug.replace(/[\\%_]/g, "\\$&");
   const { data, error } = await db
     .from("channels")
@@ -113,20 +111,16 @@ export async function findChannelBySlug(
 }
 
 /**
- * Every slug already taken in the workspace — INCLUDING soft-deleted channels.
- * `channels_workspace_slug_key` is a plain (non-partial) unique index on
- * (workspace_id, lower(slug)), so a soft-deleted row keeps owning its slug: a
- * read that hid deleted rows handed `slugify` a name the index would reject,
- * turning "delete #design, create #design again" into a 409 naming a channel
- * the user can no longer see (and, on the DM path, a generic 500). The index
- * stays non-partial on purpose — a soft-deleted DM is REVIVED by name
- * (`findDirectChannelAnyStatus` → `reviveChannel`), which would break if
- * another channel could take its slug while it was hidden.
+ * Every slug taken in the workspace, INCLUDING soft-deleted channels.
  *
- * SINCE 2026-08-08 (C-16, F-173) THE ONLY HIDDEN ROWS LEFT ARE DMs: a non-DM
- * delete removes the row, so "delete #design, create #design again" returns the
- * SAME name rather than `design-2`. Nothing here changed — this was always
- * "what the index would reject".
+ * ⚠ `channels_workspace_slug_key` is a plain NON-PARTIAL unique index on
+ * (workspace_id, lower(slug)), so a soft-deleted row keeps owning its slug.
+ * Hiding deleted rows here hands `slugify` a name the index rejects → 409 (or a
+ * generic 500 on the DM path) naming a channel the user cannot see.
+ *
+ * The index stays non-partial on purpose: a soft-deleted DM is REVIVED by name
+ * (`findDirectChannelAnyStatus` → `reviveChannel`), which breaks if another
+ * channel could take its slug while hidden. Only DMs are hidden rows now.
  */
 export async function existingSlugs(workspaceId: string): Promise<string[]> {
   const db = supabaseAdmin();
@@ -135,7 +129,7 @@ export async function existingSlugs(workspaceId: string): Promise<string[]> {
     .select("slug")
     .eq("workspace_id", workspaceId);
   if (error) throw error;
-  // The index is on lower(slug); compare in the same case-folded space.
+  // ⚠ Index is on lower(slug) — compare in the same case-folded space.
   return ((data ?? []) as Array<{ slug: string }>).map((r) =>
     r.slug.toLowerCase()
   );
@@ -153,14 +147,11 @@ type ChannelInsert = {
 };
 
 /**
- * The direct channel for a member-pair (`direct_key`) in a workspace INCLUDING
- * a soft-deleted one, or null. Backs both the DM dedup (a repeat "open direct
- * message" returns the existing channel instead of inserting a second) and the
- * DM revive: the partial unique index counts the soft-deleted row, so a repeat
- * open must find and revive it rather than insert a second (which would
- * 23505). There is deliberately no live-rows-only variant — every caller that
- * converges on a DM has to see the hidden row, or it 500s on a slug/direct_key
- * collision with a channel it cannot read.
+ * The direct channel for a member-pair (`direct_key`), INCLUDING a soft-deleted
+ * one. Backs both DM dedup and DM revive: the partial unique index counts the
+ * soft-deleted row, so a repeat open must find and revive it or 23505.
+ * ⚠ Deliberately NO live-rows-only variant — a caller that cannot see the hidden
+ * row 500s on a slug/direct_key collision with a channel it cannot read.
  */
 export async function findDirectChannelAnyStatus(
   workspaceId: string,
@@ -242,13 +233,13 @@ export async function touchChannel(
 }
 
 /**
- * Stamp `deleted_at` — **DM ONLY** since 2026-08-08 (C-16, F-173). Not a trash
- * and never was: on a DM this is the CLOSE half of close/reopen, either side's
- * next open revives the same row with its history, and it is the only exit a
- * non-creator has from an immutable roster. A tombstoned DM is LIVE PRODUCT
- * STATE (ENGINEERING §7). Every other channel goes through
- * {@link hardDeleteChannel} — routing a non-DM back here to "be safe" produces
- * a row unreachable in every direction that still owns its slug forever.
+ * Stamp `deleted_at` — ⚠ **DM ONLY**. Not a trash: on a DM this is the CLOSE
+ * half of close/reopen, either side's next open revives the row with its
+ * history, and it is a non-creator's only exit from an immutable roster. A
+ * tombstoned DM is LIVE PRODUCT STATE (ENGINEERING §7).
+ * ⚠ Every other channel goes through {@link hardDeleteChannel} — routing a
+ * non-DM here "to be safe" produces a row unreachable in every direction that
+ * owns its slug forever.
  */
 export async function softDeleteChannel(
   workspaceId: string,
@@ -264,19 +255,17 @@ export async function softDeleteChannel(
 }
 
 /**
- * Remove the channel row — **NON-DM ONLY** (Samuel's decision, 2026-08-08;
- * C-16, F-173). The transcript, the membership, the threads and everything else
- * hanging off it go with it, permanently.
+ * Remove the channel row — ⚠ **NON-DM ONLY**. Transcript, membership, threads
+ * and everything hanging off it go permanently.
  *
- * ONE STATEMENT, AND THAT IS WHY THERE IS NO RPC HERE. All six child FKs into
+ * ⚠ ONE STATEMENT, and that is why there is NO RPC here. All six child FKs into
  * `channels` are `ON DELETE CASCADE` (members, messages, consent requests,
  * tasks → participants, agents, sessions), so one DELETE is already atomic and
- * complete. `cascade_hard_delete_cluster` needed a PL/pgSQL body for the
- * OPPOSITE reason: ontology's cascade is a lie about its tree (MEMBERSHIP rows,
- * not child objects), so that delete had to be composed and therefore wrapped.
- * Do not add an RPC to "follow the pattern" — the pattern is atomicity, and one
- * statement already has it. The slug comes back with the row:
- * `channels_workspace_slug_key` is non-partial, so only a survivor owns a name.
+ * complete. Do not add an RPC to "follow the pattern" —
+ * `cascade_hard_delete_cluster` needed PL/pgSQL for the OPPOSITE reason
+ * (ontology's cascade is over MEMBERSHIP rows, so it had to be composed).
+ * The slug comes back with the row (`channels_workspace_slug_key` is
+ * non-partial, so only a survivor owns a name).
  */
 export async function hardDeleteChannel(
   workspaceId: string,
@@ -337,11 +326,9 @@ export async function findMembership(
 }
 
 /**
- * Membership EXISTENCE only — the await hold's per-tick "is this caller still
- * a member" recheck. {@link findMembership} returns the whole row (~380 bytes)
- * and the recheck reads none of it, so the hold uses this ~50-byte projection
- * instead (Q8 egress diet). `maybeSingle()` is kept so a duplicate row still
- * surfaces as an error exactly as it does on the full read.
+ * Membership EXISTENCE only — the await hold's per-tick recheck.
+ * {@link findMembership} returns the whole row and the recheck reads none of it.
+ * ⚠ `maybeSingle()` kept so a duplicate row still surfaces as an error.
  */
 export async function hasMembership(
   channelId: string,
@@ -422,10 +409,9 @@ export async function deleteMember(
   if (error) throw error;
 }
 
-/** Best-effort read-watermark bump for a member viewing the thread.
- *  Monotonic at the row level: a concurrent reader that already advanced the
- *  watermark past `at` turns this into a no-op (no UPDATE, no WAL event, no
- *  realtime fan-out) — the guard that keeps refetch loops from feeding
+/** Best-effort read-watermark bump. ⚠ Monotonic at the row level: a concurrent
+ *  reader that already advanced past `at` makes this a no-op (no UPDATE, no WAL
+ *  event, no realtime fan-out) — the guard that stops refetch loops feeding
  *  themselves. */
 export async function updateLastRead(
   channelId: string,
@@ -443,10 +429,9 @@ export async function updateLastRead(
 }
 
 /**
- * Update a member's OWN per-channel preferences (notify scope and / or agent
- * tool profile); returns the updated membership row. The workspace-guard
- * trigger fires only on UPDATE OF workspace_id/channel_id, so this never
- * trips it.
+ * Update a member's OWN per-channel preferences; returns the updated row.
+ * The workspace-guard trigger fires only on UPDATE OF workspace_id/channel_id,
+ * so this never trips it.
  */
 export async function updateMemberPrefs(
   channelId: string,

@@ -2,16 +2,12 @@ import type { Appearance } from "@stripe/stripe-js";
 
 /**
  * Stripe Appearance config for the native custom checkout (ui_mode:
- * "elements"). Maps the Dopl design system onto the Payment Element so the
- * Stripe-rendered card form reads as the same surface as the rest of the app
- * (concave pressed-in inputs, 11px uppercase labels, raised white tabs, bento
- * blocks).
+ * "elements"). Maps the Dopl design system onto the Payment Element.
  *
- * HARDCODED HEX IS CORRECT HERE — the design-system "no raw hex" rule does
- * NOT apply. The Payment Element renders in a cross-origin Stripe iframe and
- * CANNOT read this page's CSS custom properties (the `--color-*` / `@theme`
- * tokens in globals.css), so literal values are the only option. Each literal
- * below mirrors a specific token; keep them in sync with globals.css:
+ * ⚠ HARDCODED HEX IS CORRECT HERE — the "no raw hex" rule does NOT apply. The
+ * Payment Element renders in a cross-origin Stripe iframe and CANNOT read this
+ * page's CSS custom properties (`--color-*` / `@theme` in globals.css). Each
+ * literal below mirrors a token; KEEP IN SYNC with globals.css:
  *
  *   #232a31                  → --text-primary        (text-text-primary / colorPrimary ink)
  *   #646d78                  → --text-secondary      (text-text-secondary, labels)
@@ -38,10 +34,9 @@ const CONCAVE_SHADOW =
 const CONCAVE_FOCUS_SHADOW =
   "inset 0 2px 5px rgba(0, 0, 0, 0.17), inset 0 1px 2px rgba(0, 0, 0, 0.09), inset 0 -1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(24, 24, 24, 0.07)";
 
-// Raised white face for the selected payment-method tab. The kit `.raised-tab`
-// uses a white→#f2f2f2 gradient, but the Appearance API only accepts a solid
-// backgroundColor (gradients / the `background` shorthand are unsupported and
-// warn), so this uses solid #ffffff + a hairline border + a soft raised shadow.
+// ⚠ Kit `.raised-tab` uses a white→#f2f2f2 gradient, but the Appearance API
+// only accepts a solid backgroundColor (gradients / `background` shorthand
+// unsupported and warn) — hence solid #ffffff + hairline + raised shadow.
 const RAISED_TAB_SHADOW =
   "inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.06)";
 

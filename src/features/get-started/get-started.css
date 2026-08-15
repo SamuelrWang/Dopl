@@ -1,44 +1,17 @@
-/* ─────────────────────────────────────────────────────────────────────
-   /get-started — the post-auth download page, as TWO FULL-HEIGHT FIELDS.
+/* `/get-started` — post-auth download page. Two full-height fields, neither
+   scrolls at desktop (page IS the viewport).
 
-   THE LAYOUT IS A STRUCTURAL CLONE of the reference Samuel supplied (Wispr
-   Flow's post-login download screen), localized to Dopl's own palette: a
-   43% near-black column carrying the brand, a serif display heading, three
-   numbered steps and the retry sentence; a 57% deep field carrying the
-   illustration, which is cropped by the viewport rather than centred in a
-   box. Neither field scrolls at desktop sizes — the page IS the viewport.
-
-   SCOPED UNDER `.lp` ON PURPOSE. This file declares no typeface for body
-   copy, no ink, no hairline and no page gutter: the root element carries
-   BOTH `lp` and `gs`, so `--grotesk`, `--ink`, `--line` and `--gutter` all
-   come from marketing.css. A visitor arrives here one click after the
-   landing page and one screen after login; it has to be the same surface.
-
-   THE TWO FIELD COLOURS ARE BOTH EXISTING TOKENS, not new paint:
-     · left  = `--ink` (#0d0d0d), the landing page's own black — the same
-       value `.lp-btn--3d` and `.lp-plan-badge` are poured from.
-     · right = `--rail-tile` → `--rail` (globals.css), the app-shell frame
-       colour, which is also `--body-bg`. The reference puts the product
-       illustration on a saturated deep brand field; the deepest brand
-       surface Dopl owns is the chrome of the app being installed, so the
-       drawing of the install sits on the colour of the thing installed.
-
-   The ONE typeface this file names is the display serif — see `.gs-title`.
-   The illustration's own palette and clock live next door in
-   `install-animation.css`, which is the only other file the page imports.
-   ───────────────────────────────────────────────────────────────────── */
+   ⚠ SCOPED UNDER `.lp` — root carries BOTH `lp` and `gs`, so `--grotesk`,
+   `--ink`, `--line`, `--gutter` come from marketing.css; declare none here.
+   Field colours: left `--ink`, right `--rail-tile`/`--rail` (globals.css).
+   Illustration palette + clock: `install-animation.css`. */
 
 .gs {
-  /* The page's one accent. `--link` is globals.css's only blue, so the
-     status dot, the browser's downloads-button highlight, the drop target
-     and the Applications folder are all literally the same token — no
-     second blue gets invented for the illustration. */
+  /* One accent for page + illustration; `--link` = globals.css's only blue. */
   --gs-accent: var(--link);
 
-  /* On-dark ink. marketing.css sets `color: #fff` on every dark surface it
-     owns and has no muted tier for one, because it has never had a dark
-     field this large. The three softer steps are ALPHAS OF THAT SAME
-     WHITE, not new greys — nothing here introduces a hue. */
+  /* On-dark ink: alphas of one white, no new greys/hues — marketing.css has no
+     muted tier for dark surfaces. */
   --gs-on-dark: #ffffff;
   --gs-on-dark-body: rgba(255, 255, 255, 0.78);
   --gs-on-dark-muted: rgba(255, 255, 255, 0.5);
@@ -47,16 +20,14 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  /* The page is the viewport: no page scroll. The dark column keeps its own
-     `overflow-y: auto` so a short window can still reach the steps. */
+  /* No page scroll; `.gs-panel` has its own `overflow-y: auto` so a short
+     window still reaches the steps. */
   overflow: hidden;
   background: var(--ink);
   display: grid;
   grid-template-columns: 43fr 57fr;
-  /* Explicit, not implicit: the right field carries `container-type: size`,
-     so it contributes NOTHING to an auto row's content size and the row's
-     height would be decided entirely by the copy column. One `1fr` row
-     makes both fields exactly the viewport, whatever is inside them. */
+  /* ⚠ Explicit row required: `.gs-field` has `container-type: size` so it
+     contributes NOTHING to an auto row, leaving height to the copy column. */
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -77,16 +48,13 @@
   flex: none;
 }
 
-/* `.lp-brand` paints itself `--ink`, which is this field's background. The
-   lockup is the landing page's, unchanged — only its ink flips. */
+/* `.lp-brand` paints itself `--ink` = this field's background; flip its ink. */
 .gs-brand .lp-brand {
   color: var(--gs-on-dark);
 }
 
-/* Everything between the brand and the footer, centred in what is left.
-   `flex-shrink: 0` is the whole reason the panel scrolls instead of clipping
-   on a short window: a shrinkable block would compress under its own copy
-   and spill it over the footer, silently, with no scrollbar to say so. */
+/* ⚠ `flex-shrink: 0` — shrinkable, copy spills over the footer with no
+   scrollbar instead of scrolling. */
 .gs-copy {
   flex: 1 0 auto;
   display: flex;
@@ -95,15 +63,10 @@
   padding: 40px 0;
 }
 
-/* THE ONE SERIF ON THE PAGE, and it is a real token: `--font-playfair` is
-   Newsreader, loaded by `next/font/google` in src/app/layout.tsx (the name
-   predates the switch away from Playfair). It is the face the login
-   wordmark, the onboarding headline and the legal-page titles already use,
-   and the fleet audit PINNED it precisely so `var(--font-playfair),
-   Georgia, serif` is a safe write — an undefined variable with no fallback
-   invalidates the whole declaration and silently inherits the grotesk.
-   Upright, not the italic the auth wordmarks use: this is a display
-   heading, not a signature. */
+/* ⚠ `--font-playfair` is Newsreader, loaded by `next/font/google` in
+   src/app/layout.tsx (name predates the switch). KEEP `, Georgia, serif`:
+   undefined variable with no fallback invalidates the whole declaration and
+   silently inherits the grotesk. */
 .gs-title {
   margin: 0;
   max-width: 7.4em;
@@ -115,10 +78,6 @@
   color: var(--gs-on-dark);
 }
 
-/* Plain numbered lines — "1." "2." "3." — not the pill-numeral list this
-   page shipped with. The reference sets them as body copy and the numerals
-   as text, which is what makes the column read as three sentences rather
-   than as a widget. */
 .gs-steps {
   margin: 34px 0 0;
   padding: 0;
@@ -129,10 +88,9 @@
   max-width: 30em;
 }
 
-/* The numeral is positioned OUT of flow, not laid out as a grid/flex
-   sibling: a step's text is inline content (`Double-click <code>…</code>.`)
-   and any layout mode that treats children as items would break that
-   sentence into one item per node — which it did, one character wide. */
+/* ⚠ Numeral out of flow, NOT a grid/flex sibling: step text is inline
+   (`Double-click <code>…</code>.`) and item-based layout breaks the sentence
+   into one item per node, one character wide. */
 .gs-steps li {
   counter-increment: gs-step;
   position: relative;
@@ -173,20 +131,12 @@
   text-underline-offset: 3px;
 }
 
-/* ── Bottom-left: what the reference fills with a decorative badge ────── */
-
-/* The reference hangs a small lavender ornament here. Dopl's only circular
-   brand object is the app icon, which is already the lockup at the top of
-   this same column, so a second one 600px below reads as a duplicated logo
-   rather than as decoration — and marketing.css has no badge recipe to
-   borrow. The slot carries the LIVE STATUS instead: the download starts by
-   itself and silently, so the one element on the page that says "something
-   is happening right now" is worth more here than an ornament. */
+/* ── Bottom-left: live status ─────────────────────────────────────────── */
 .gs-footer {
   flex: none;
   margin-top: auto;
-  /* padding, not margin, so the gap survives the stacked layout where
-     `margin-top: auto` has no free space to eat. */
+  /* ⚠ padding, not margin: stacked layout leaves `margin-top: auto` no free
+     space to eat. */
   padding-top: 36px;
   display: grid;
   gap: 7px;
@@ -230,9 +180,9 @@
   }
 }
 
-/* The frame that starts the download. Zero-sized rather than display:none —
-   a display:none frame is not guaranteed to load, and a load is the point.
-   Absolutely positioned, so it is not a grid item and cannot open a row. */
+/* Download frame. ⚠ Zero-sized, NOT display:none — a display:none frame is
+   not guaranteed to load, and the load is the point. Absolute so it is not a
+   grid item and cannot open a row. */
 .gs-sink {
   position: absolute;
   width: 0;
@@ -244,11 +194,10 @@
 
 /* ── Right field: the illustration's surface ─────────────────────────── */
 
-/* `container-type: size` is load-bearing, not decoration: the illustration
-   inside is a fixed coordinate space scaled by ONE factor derived from this
-   element's own box (see `install-animation.css`), and container units are
-   what let that factor read the field rather than the viewport — which is
-   the only reason the same scale works in the stacked layout too. */
+/* ⚠ `container-type: size` is load-bearing: the illustration is a fixed coord
+   space scaled by ONE factor off this element's box (`install-animation.css`).
+   Container units make that factor read the FIELD, not the viewport — the only
+   reason the same scale works in the stacked layout. */
 .gs-field {
   position: relative;
   min-width: 0;
@@ -259,10 +208,8 @@
 
 /* ── Responsive ──────────────────────────────────────────────────────── */
 
-/* Below 900px the two fields stack: instructions first (they are the job),
-   illustration second at a fixed proportion of the width. The browser
-   fragment stays cropped by the top of its own field, because the crop is
-   the field's `overflow`, not the viewport's. */
+/* Below 900px fields stack: instructions first, illustration at a fixed
+   proportion of width. Crop is the field's `overflow`, not the viewport's. */
 @media (max-width: 900px) {
   .gs {
     grid-template-columns: minmax(0, 1fr);
@@ -290,9 +237,8 @@
 
 /* ── Reduced motion ──────────────────────────────────────────────────── */
 
-/* The dot stops too. The sentence beside it already says what it says, and
-   an infinite pulse is exactly the thing the preference is asking about;
-   what the illustration does instead of animating is next door. */
+/* Dot stops too — infinite pulse is exactly what the preference asks about,
+   and the sentence beside it already carries the meaning. */
 @media (prefers-reduced-motion: reduce) {
   .gs-status-dot {
     animation: none;

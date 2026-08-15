@@ -1,29 +1,17 @@
 /**
- * F-145 — AN UNKNOWN TOOL ARGUMENT IS REFUSED BY NAME, NOT SILENTLY DROPPED.
+ * ⚠ AN UNKNOWN TOOL ARGUMENT IS REFUSED BY NAME, NOT SILENTLY DROPPED. A raw
+ * shape becomes a plain `z.object`, which STRIPS unknown keys: an invented
+ * addressing param is accepted, never reaches the handler, the post lands
+ * UNADDRESSED, and the result narrates a success — the invisible delivery the
+ * route layer already refuses with `z.never()` params.
  *
- * THE DEFECT THIS FILE PINS, end to end and through the REAL SDK. Every tool was
- * registered with a RAW SHAPE, which the SDK turns into a plain `z.object` and
- * parses with `safeParseAsync`. A plain `z.object` strips unknown keys, so
- * `dopl_channel {op:"post", body:"hi", to_agent:"quartz"}` was ACCEPTED,
- * `to_agent` never reached the handler, the post landed UNADDRESSED, and the
- * result narrated a success. That is the invisible delivery the route layer
- * already refuses — `src/features/channels/schema.ts#removedParam` declares the
- * deleted named-agent params as `z.never()` for exactly this reason — and the
- * MCP layer IN FRONT of it had the hole the route had closed. It was reachable:
- * `closedThreadNote` shipped a sentence teaching `to_agent="<handle>"` on every
- * post into a closed thread, so the tool taught the argument its own parser
- * then swallowed.
+ * ⚠ NOT MOCKED: the finding lives inside the SDK's parse step, which a stubbed
+ * `McpServer` cannot observe. Boots the real `createServer` over a real
+ * `InMemoryTransport` pair and asks a real `Client`.
  *
- * NOT MOCKED, deliberately. `server.test.ts` stubs `McpServer` to capture
- * handlers, so it can pin what we PASS but never what the SDK DOES with it —
- * and the whole finding lives inside the SDK's parse step. This file boots the
- * real `createServer` over a real `InMemoryTransport` pair and asks a real
- * `Client`, so what it observes is what a remote agent observes.
- *
- * THE SCOPE IS EVERY TOOL, not `dopl_channel`. Removed vocabulary is one way a
- * model arrives at a param that does not exist; a stale cached tool list, an
- * older build's docs and plain invention are others, and none of them is
- * specific to channels.
+ * ⚠ SCOPE IS EVERY TOOL. Removed vocabulary is one way a model arrives at a
+ * param that does not exist; a stale cached tool list, an older build's docs
+ * and plain invention are others.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -113,9 +101,9 @@ describe("the published input schema forbids extra properties", () => {
   });
 
   it("…and nothing else about the published schema changed", () => {
-    // The strictness is a NARROWING, not a rewrite: the params, their prose and
-    // their caps are what they were, and `workspace` is still injected on every
-    // tool. A schema that lost a field would also pass the test above.
+    // ⚠ Strictness is a NARROWING, not a rewrite — params, prose and caps are
+    // unchanged and `workspace` is still injected. A schema that LOST a field
+    // would also pass the test above.
     const channel = listed.tools.find((t) => t.name === "dopl_channel");
     const props = channel?.inputSchema?.properties as
       | Record<string, unknown>
@@ -124,7 +112,6 @@ describe("the published input schema forbids extra properties", () => {
       expect.arrayContaining(["op", "channel", "body", "to", "thread", "workspace"]),
     );
     expect(channel?.inputSchema?.required).toEqual(["op"]);
-    // …and the removed params are not back as declared fields either.
     for (const gone of ["to_agent", "to_agents", "as_agent", "participants"]) {
       expect(Object.keys(props ?? {})).not.toContain(gone);
     }
@@ -141,20 +128,16 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
     const text = (res.content as Array<{ text: string }>)
       .map((c) => c.text)
       .join("");
-    // The field is NAMED. That is the whole difference from a silent strip: a
-    // calling agent can correct itself instead of believing a delivery that
-    // never happened.
+    // ⚠ The field is NAMED — the whole difference from a silent strip, since a
+    // calling agent can then correct itself.
     expect(text).toContain("to_agent");
     expect(text).toContain("-32602");
-    // AND the post did not happen. Before this change the call succeeded with
-    // `to_agent` stripped and the result read "Posted to **General**".
+    // ⚠ AND the post did not happen.
     expect(posted).not.toHaveBeenCalled();
   });
 
   it("a legitimate call on the same op still goes through", async () => {
-    // The refusal must be about the UNKNOWN key and nothing else — a strictness
-    // change that also broke ordinary posts would be a worse bug than the one
-    // it fixes.
+    // ⚠ The refusal must be about the UNKNOWN key and nothing else.
     const res = await client.callTool({
       name: "dopl_channel",
       arguments: { op: "post", channel: "general", body: "hi" },

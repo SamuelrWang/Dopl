@@ -26,7 +26,7 @@ import {
 } from "./use-content-descriptions";
 
 interface Props {
-  /** Selected base's tree — reused from the controller (no extra fetch). */
+  /** Selected base's tree, reused from the controller (no extra fetch). */
   tree: BaseTree | undefined;
   baseId: string;
   workspaceId: string;
@@ -41,10 +41,9 @@ function byPosition<T extends { position: number }>(a: T, b: T): number {
 }
 
 /**
- * The base overview's "Contents" tree: every folder + entry, each with an
- * inline-editable short description (folders → `description`, entries →
- * `excerpt`). Lets a human curate the same summaries agents read in MCP
- * get_tree / list_dir. Folders expand (default open); rows edit in place.
+ * Base overview "Contents" tree: every folder + entry with an inline-editable
+ * short description (folders → `description`, entries → `excerpt`). These are
+ * the same summaries agents read in MCP get_tree / list_dir.
  */
 export function OverviewContents({
   tree,
@@ -65,8 +64,8 @@ export function OverviewContents({
     onTreeRefresh,
   });
 
-  // Track COLLAPSED folders (not expanded), so folders default to open —
-  // including any that stream in after an async tree load.
+  // ⚠ Track COLLAPSED folders, not expanded ones, so folders default open —
+  // including any streaming in after an async tree load.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -292,7 +291,7 @@ function ContentRow({
   );
 }
 
-/** In-place concave-field editor for a folder description / entry excerpt. */
+/** In-place editor for a folder description / entry excerpt. */
 function DescriptionField({
   value,
   saving,
@@ -329,7 +328,7 @@ function DescriptionField({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Skip Enter while a CJK IME is composing (matches InlineEditableRow).
+    // ⚠ IME guard: skip Enter while composing (matches InlineEditableRow).
     if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) {
       return;
     }

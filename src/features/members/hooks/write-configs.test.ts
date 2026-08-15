@@ -1,19 +1,10 @@
 /**
- * The members console's write CONFIGS, driven through TanStack's own
- * framework-free `MutationObserver` — the same machinery `useMutation` runs,
- * minus React.
- *
- * The launch audit's claim about this console was specific: four controls
- * produced NOTHING on click, because every one of them awaited a request and
- * then awaited a refetch, and only the refetch could change a pixel. So the
- * property under test is equally specific and is asserted the same way the
- * shared layer's own suite asserts it — by recording the cache AT THE MOMENT
- * THE TRANSPORT IS CALLED, i.e. before the network has been spoken to at all,
- * not merely before it answers.
- *
- * The configs are imported from the hooks they back, never re-declared here: a
- * copy would pass while the shipped config was wrong, which is exactly the
- * silent-no-op failure `shared/api/query-keys.ts` exists to prevent.
+ * Members console write CONFIGS, driven through TanStack's framework-free
+ * `MutationObserver` — what `useMutation` runs, minus React. Property under
+ * test: the cache changes AT THE MOMENT THE TRANSPORT IS CALLED, before the
+ * network is spoken to at all.
+ * ⚠ Configs are imported from the hooks they back, never re-declared here — a
+ * copy would pass while the shipped config was wrong.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -46,7 +37,7 @@ vi.mock("@/shared/ui/toast", () => ({ toast: () => {} }));
 
 const SLUG = "acme";
 
-/** The exact tuple `useApiQuery` registers — the entry a patch has to reach. */
+/** The exact tuple `useApiQuery` registers — the entry a patch must reach. */
 function entry(path: string) {
   return apiQueryKey(path);
 }
@@ -57,11 +48,8 @@ function client(): QueryClient {
   });
 }
 
-/**
- * A transport the test settles by hand, which records the cache AS THE REQUEST
- * LEAVES. That snapshot is the deterministic proof of "the click changed the
- * screen", with no timing assumption in it.
- */
+/** Transport the test settles by hand; records the cache AS THE REQUEST
+ *  LEAVES, so the proof carries no timing assumption. */
 function deferredRequest(observe?: () => unknown) {
   let settle!: (value: unknown) => void;
   let fail!: (error: unknown) => void;
@@ -106,7 +94,7 @@ describe("revoke invitation — the dead control", () => {
 
     net.settle(undefined);
     await run;
-    // No refetch was asked for: the delete is fully computable client-side.
+    // No refetch: the delete is fully computable client-side.
     expect(qc.getQueryData<InvitationsCache>(key)?.invitations).toHaveLength(1);
   });
 
@@ -216,8 +204,8 @@ describe("member role — the stale-value select", () => {
 
     net.settle(undefined);
     await run;
-    // The roster it just computed is NOT re-downloaded; the server-resolved
-    // access pane, which it cannot compute, is.
+    // Roster just computed is NOT re-downloaded; the server-resolved access
+    // pane, which it cannot compute, is.
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: [`/api/workspaces/acme/members/u-1/access`],
@@ -257,7 +245,7 @@ describe("member removal — F-045's seat refresh", () => {
       memberIds: ["u-2"],
       memberCount: 1,
     });
-    // Not yet — a removal that has not succeeded has moved no seats.
+    // A removal that hasn't succeeded has moved no seats.
     expect(seats).not.toHaveBeenCalled();
 
     net.settle(undefined);
@@ -324,13 +312,11 @@ describe("resource scope — the segmented control that would not move", () => {
 });
 
 /**
- * A GRANT IS A PER-MEMBER FACT, and the pane that says so is server-computed.
- *
- * `member-detail` reads `…/members/<id>/access` — the same resolution the
- * enforcement path runs — and nothing else refreshes it, because the pane never
- * unmounts. Changing what a team may reach changes that answer for every member
- * of the team, so each of their entries has to be named here. It cannot be done
- * with a prefix: TanStack matches keys per ARRAY ELEMENT and these keys are
+ * A grant is a PER-MEMBER fact and its pane is server-computed:
+ * `member-detail` reads `…/members/<id>/access` and nothing else refreshes it
+ * (the pane never unmounts). Changing a team's reach changes that answer for
+ * every member, so ⚠ each member's entry must be named individually — a prefix
+ * cannot work: TanStack matches keys per ARRAY ELEMENT and these keys are
  * whole paths, so `[…/members]` reaches no `[…/members/<id>/access]` entry.
  */
 const accessKey = (userId: string) => [
@@ -402,8 +388,8 @@ describe("team delete — the grants that go with it", () => {
 
     net.settle(undefined);
     await run;
-    // The team row is computable here; what the server resolves for the member
-    // it used to grant through is not.
+    // Team row is computable here; what the server resolves for the member it
+    // granted through is not.
     expect(invalidate.mock.calls.map(([args]) => args)).toEqual([
       { queryKey: accessKey("u-1") },
     ]);

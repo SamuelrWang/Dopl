@@ -3,39 +3,21 @@ import { PageShellSkeleton, TwoPaneListSkeleton } from "@/shared/ui/skeleton";
 import { ApiError } from "#/lib/api";
 
 /**
- * The two states every page renders besides its content, and the router-level
+ * The two states every page renders besides its content, plus the router-level
  * boundary behind them. Ported pages use THESE — no per-feature spinner, no
  * per-feature error copy (ENGINEERING §12: fail loudly, once, in one voice).
  *
  *   isPending → <PageLoading />
  *   error     → <PageError error={error} onRetry={refetch} />
  *
- * `PageLoading` renders a SHAPE, not a line of text.
+ * ⚠ `PageLoading` must render a SHAPE, never a line of text. A cold Channels
+ * launch crosses FIVE of these back to back (boot ×3, shell, page access gate);
+ * ONE `.page-float` skeleton across the whole chain reads as a single steady
+ * surface resolving, where text reads as five flickers in five positions. The
+ * lever for a warm start is skipping the pending state, not emptying it.
  *
- * It used to be one grey `<span>`, and the comment here justified that with a
- * main-process read cache that would make a skeleton flash "the bug, not the
- * feature". That cache was never built — the SQLite half of Phase 2/3 is still
- * unwritten — so every launch was a genuine cold fetch over IPC and the
- * justification described infrastructure that did not exist. A cold launch of
- * Channels crosses FIVE of these states back to back (boot ×3, the shell, then
- * the page's own access gate); as bare text that was five flickers of grey
- * copy in five different positions.
- *
- * The IndexedDB persister that DID land (`#/lib/query-client`
- * `createQueryPersister`) does not bring the old argument back, for two
- * reasons. A restored snapshot means the pending state is never ENTERED — a
- * skeleton that doesn't render costs nothing — and restore is itself async and
- * bounded (`maxAge`, `buster`, success-only dehydration), so a first launch, a
- * bumped buster, a day-old cache and a runtime with no IndexedDB all still
- * land here. The right lever for a warm start is to skip the pending state,
- * never to make it emptier.
- *
- * Rendering ONE `.page-float` skeleton across the whole chain is the point:
- * five sequential pending states read as a single steady surface whose
- * contents resolve, instead of five separate flashes.
- *
- * `variant` picks the shape:
- *   "page"     — the generic single-surface page (default; also the boot chain)
+ * `variant`:
+ *   "page"     — generic single-surface page (default; also the boot chain)
  *   "two-pane" — list + detail, for channels/chats/knowledge/skills/members
  */
 export function PageLoading({
@@ -53,18 +35,15 @@ export function PageLoading({
 }
 
 /**
- * A 401 from any surface means ONE thing in the desktop app: the session is
- * gone. Screens route it to the signed-out view, never to a generic error.
+ * 401 from any surface = the session is gone; screens route it to the
+ * signed-out view, never to a generic error. THE definition — boot and shell
+ * alike; do not fork a private copy.
  *
- * THE definition, for boot and for the shell alike. Boot carried a private
- * copy that also treated 403 as signed-out; the two answered differently under
- * one name, and the last person to "share" this helper edited boot without
- * noticing its twin (2026-08-03 fleet audit, duplication-quality). 403 is
- * deliberately NOT signed-out: the desktop SPA authenticates with a session
- * JWT, so the only 403s this API mints (SESSION_REQUIRED / WRITE_SCOPE_REQUIRED,
- * both OAuth-agent-only) cannot reach it, and a genuine authorization failure
- * is an error to show, not a reason to throw the user at the login screen —
- * access denial on the workspace routes is already collapsed to 404.
+ * ⚠ 403 is deliberately NOT signed-out. The SPA authenticates with a session
+ * JWT, so the only 403s this API mints (SESSION_REQUIRED /
+ * WRITE_SCOPE_REQUIRED, both OAuth-agent-only) cannot reach it, and a genuine
+ * authorization failure is an error to show, not a reason to throw the user at
+ * the login screen — workspace-route access denial is already collapsed to 404.
  */
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;

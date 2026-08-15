@@ -2,41 +2,23 @@
 
 /**
  * Shared, ref-counted Supabase Realtime channels for workspace-table
- * subscriptions.
- *
- * WHY THIS EXISTS (Phase 0, docs/DESKTOP-MIGRATION-PLAN.md): the previous
- * design gave every mounted `useWorkspaceTablesRealtime` instance its own
- * channel (topic included React's useId), because Supabase v2 rejects
- * `.on("postgres_changes", …)` bindings added after `.subscribe()` — the
- * server fixes the binding list at JOIN time, and a second subscriber
- * attaching to an already-subscribed topic threw and took down the page.
- * Per-instance topics dodged that crash but multiplied server-side
- * subscriptions: every subscription is WAL-polling work on Postgres, and
- * the fan-out grew to ~96 live subscriptions eating >80% of DB exec time.
- *
- * This registry keeps the crash-safety AND collapses the fan-out:
- *   - One live channel per `(topicPrefix, workspaceId, tables)` key.
- *     All `.on()` bindings are attached BEFORE `.subscribe()`; components
- *     share through a listener set, never through late `.on()` calls.
- *   - TOPIC NAMES ARE GENERATION-UNIQUE. `RealtimeClient.channel(topic)`
- *     returns the EXISTING channel object for a topic it still knows, and
- *     `removeChannel()` is async (the channel is only forgotten after the
- *     leave push settles) — so reusing one topic string across reconnects
- *     would hand back the old, already-subscribed channel and either throw
- *     on `.on()` or silently no-op `.subscribe()`. Sharing is provided by
- *     the registry entry; topic identity is deliberately never reused.
- *   - Every status callback is generation-guarded: tearing down an old
- *     channel fires its CLOSED into a callback that no longer matches the
- *     entry's current generation and is ignored — our own cleanup can
- *     never be mistaken for a live-channel failure.
- *   - A listener that attaches to an already-SUBSCRIBED channel is fired
- *     once immediately — the old per-instance design gave every mount a
- *     SUBSCRIBED→refetch, and callers rely on that catch-up semantics.
- *   - Ref-counted teardown with a short grace period so StrictMode's
- *     mount→unmount→mount doesn't churn real websocket joins.
- *
- * RLS still applies: the client connects under the user's auth, so the
- * server filters events to rows the user can read.
+ * subscriptions. Collapses per-instance fan-out (every subscription is
+ * WAL-polling work on Postgres). Invariants:
+ *   - One live channel per `(topicPrefix, workspaceId, tables)` key. ⚠ ALL
+ *     `.on()` bindings BEFORE `.subscribe()` — Supabase v2 fixes the binding
+ *     list at JOIN time and throws on a late `.on()`. Components share through
+ *     a listener set.
+ *   - ⚠ TOPIC NAMES ARE GENERATION-UNIQUE, never reused: `channel(topic)`
+ *     returns the EXISTING object for a topic still known and `removeChannel()`
+ *     is async, so reuse hands back the old subscribed channel, which throws on
+ *     `.on()` or silently no-ops `.subscribe()`.
+ *   - Every status callback is generation-guarded, so our own teardown CLOSED
+ *     is not mistaken for a live-channel failure.
+ *   - A listener attaching to an already-SUBSCRIBED channel fires once
+ *     immediately — callers rely on that catch-up.
+ *   - Ref-counted teardown with a grace period, so StrictMode remounts do not
+ *     churn websocket joins.
+ * RLS still applies: client connects under the user's auth.
  */
 
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
@@ -44,10 +26,8 @@ import { getSpaBridge } from "@/shared/lib/spa-bridge";
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
 
-/** Delay before an unused channel is actually torn down. Long enough to
- *  absorb StrictMode remounts and route transitions that remount the same
- *  page component; short enough that leaving a page really does release
- *  its subscriptions. */
+/** Teardown delay: long enough to absorb StrictMode remounts and route
+ *  transitions, short enough that leaving a page releases its subscriptions. */
 const TEARDOWN_GRACE_MS = 1_000;
 
 type Listener = () => void;
@@ -68,8 +48,8 @@ interface Entry {
   reconnectTimer: ReturnType<typeof setTimeout> | null;
   reconnectAttempt: number;
   teardownTimer: ReturnType<typeof setTimeout> | null;
-  /** Channel died while the entry had no listeners (reconnects are
-   *  suppressed in the teardown grace window) — a revive must reconnect. */
+  /** Died with no listeners (reconnects suppressed in the grace window) — a
+   *  revive must reconnect. */
   broken: boolean;
   /** Torn down — a stale unsubscribe closure must not touch a revived key. */
   dead: boolean;
@@ -77,11 +57,11 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 
-/** MODULE-scoped generation counter. Never per-entry: `teardown()` deletes
- *  the entry, so a per-entry counter would reset and mint a byte-identical
- *  topic while realtime-js may still remember the old channel (leave pushes
- *  ack asynchronously) — `channel(topic)` would return the leaving corpse,
- *  whose `subscribe()` silently no-ops, leaving the key dead until reload. */
+/** ⚠ MODULE-scoped, never per-entry: `teardown()` deletes the entry, so a
+ *  per-entry counter resets and mints a byte-identical topic while realtime-js
+ *  may still remember the old channel (leave pushes ack async) —
+ *  `channel(topic)` returns the leaving corpse whose `subscribe()` silently
+ *  no-ops, leaving the key dead until reload. */
 let nextGeneration = 1;
 
 /** One-shot guard for the missing-config warning below. */
@@ -97,8 +77,7 @@ function entryKey(
 
 function fire(entry: Entry): void {
   if (entry.dead) return;
-  // Snapshot: a listener may unsubscribe (or subscribe a sibling) while we
-  // iterate.
+  // Snapshot: a listener may unsubscribe (or subscribe a sibling) mid-iterate.
   for (const listener of [...entry.listeners]) {
     try {
       listener();
@@ -108,8 +87,8 @@ function fire(entry: Entry): void {
   }
 }
 
-/** Release the current channel object (async on the wire; we only drop our
- *  reference — generation guards make any late status noise inert). */
+/** Drop our reference; release is async on the wire and generation guards make
+ *  late status noise inert. */
 function releaseChannel(entry: Entry): void {
   if (entry.channel) {
     try {
@@ -131,9 +110,8 @@ function clearReconnect(entry: Entry): void {
 
 function scheduleReconnect(entry: Entry): void {
   if (entry.dead || entry.reconnectTimer) return;
-  // No join for an entry in the teardown grace window (no listeners) —
-  // it is about to be discarded, so a websocket join would be pure churn.
-  // Mark it broken instead; a revive inside the window reconnects.
+  // No join for an entry in its teardown grace window — pure churn. Mark
+  // broken; a revive inside the window reconnects.
   if (entry.listeners.size === 0) {
     entry.broken = true;
     return;
@@ -144,9 +122,7 @@ function scheduleReconnect(entry: Entry): void {
     ];
   entry.reconnectTimer = setTimeout(() => {
     entry.reconnectTimer = null;
-    // Listeners may have drained since this was armed (the unsubscribe
-    // closure also cancels, but belt-and-suspenders: a join for an entry
-    // in its teardown grace window is pure churn).
+    // Listeners may have drained since this was armed.
     if (entry.listeners.size === 0) {
       entry.broken = true;
       return;
@@ -158,10 +134,9 @@ function scheduleReconnect(entry: Entry): void {
 
 function connect(entry: Entry): void {
   if (entry.dead) return;
-  // Bump the generation BEFORE releasing the old channel: phoenix delivers
-  // the leave-close SYNCHRONOUSLY when the channel can't push (errored
-  // state — i.e. exactly the reconnect path), and that CLOSED must already
-  // be stale by the time it reaches the status callback.
+  // ⚠ Bump generation BEFORE releasing the old channel: phoenix delivers the
+  // leave-close SYNCHRONOUSLY when the channel can't push (errored state = the
+  // reconnect path), so that CLOSED must already be stale on arrival.
   const myGen = ++entry.generation;
   releaseChannel(entry);
   entry.broken = false;
@@ -170,10 +145,8 @@ function connect(entry: Entry): void {
   try {
     supabase = getSupabaseBrowser();
   } catch (err) {
-    // No browser Supabase config in this runtime (SPA renderers return
-    // earlier via the window.dopl no-op; this guards test/exotic
-    // runtimes) — realtime degrades instead of unmounting the tree. A real
-    // web-build misconfig must not die SILENTLY though: warn once.
+    // No browser Supabase config — degrade instead of unmounting the tree, but
+    // a real web-build misconfig must not die silently: warn once.
     if (!warnedNoConfig) {
       warnedNoConfig = true;
       console.warn("[realtime] disabled — browser client unavailable:", err);
@@ -181,20 +154,18 @@ function connect(entry: Entry): void {
     entry.broken = true;
     return;
   }
-  // Topic is generation-unique — see the header comment: reusing a topic
-  // string while realtime-js still remembers it returns the OLD channel
-  // object, which must never happen. The trailing table-count keeps two
-  // same-prefix hooks with different table lists apart as well.
+  // ⚠ Generation-unique topic (see header). Trailing table-count keeps two
+  // same-prefix hooks with different table lists apart.
   const topic = `${entry.topicPrefix}-${entry.workspaceId}-t${entry.tables.length}-g${nextGeneration++}`;
-  // Loosely typed at runtime — same cast the previous implementation used.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let chan = supabase.channel(topic) as any;
 
-  // CRITICAL ORDER: every binding is attached before subscribe(). The binding set
-  // never changes for the channel's lifetime — components share via `listeners`.
-  // THE FILTER IS THE DELETE GATE TOO: a DELETE's WAL record carries only the table's
-  // REPLICA IDENTITY, so it matches one solely while that carries `workspace_id`
-  // (migration 20260807150000). Back to DEFAULT and hard deletes vanish, silently.
+  // ⚠ CRITICAL ORDER: every binding attached before subscribe(); the binding set
+  // never changes for the channel's lifetime.
+  // ⚠ THE FILTER IS ALSO THE DELETE GATE: a DELETE's WAL record carries only the
+  // table's REPLICA IDENTITY, so it matches solely while that carries
+  // `workspace_id` (migration 20260807150000). Back to DEFAULT and hard deletes
+  // vanish silently.
   for (const table of entry.tables) {
     chan = chan.on(
       "postgres_changes",
@@ -212,18 +183,16 @@ function connect(entry: Entry): void {
   }
 
   entry.channel = chan.subscribe((status: ChannelStatus) => {
-    // Stale-generation noise (including the CLOSED our own cleanup emits
-    // when releasing a previous channel) must not drive the state machine.
+    // Stale-generation noise (incl. our own cleanup's CLOSED) must not drive
+    // the state machine.
     if (entry.dead || myGen !== entry.generation) return;
     if (status === "SUBSCRIBED") {
       entry.subscribed = true;
       entry.reconnectAttempt = 0;
-      // realtime-js also recovers on its own internal rejoin timer — a
-      // pending external retry against a now-healthy channel would tear
-      // it down for nothing.
+      // realtime-js recovers on its own rejoin timer; a pending external retry
+      // against a now-healthy channel would tear it down for nothing.
       clearReconnect(entry);
-      // Catch-up refetch for every listener: events during a disconnect
-      // window (or before first join) were missed.
+      // Catch-up refetch: events during the disconnect window were missed.
       fire(entry);
       return;
     }
@@ -240,7 +209,7 @@ function connect(entry: Entry): void {
 
 function teardown(entry: Entry): void {
   entry.dead = true;
-  // Invalidate all callbacks of the final channel before releasing it.
+  // ⚠ Invalidate the final channel's callbacks before releasing it.
   entry.generation += 1;
   if (entry.teardownTimer) {
     clearTimeout(entry.teardownTimer);
@@ -254,12 +223,11 @@ function teardown(entry: Entry): void {
 
 /**
  * Subscribe `listener` to change events for `(topicPrefix, workspaceId,
- * tables)`. Returns an unsubscribe function. The underlying channel is
- * shared across all subscribers of the same key and torn down (after a
- * short grace period) when the last one leaves.
+ * tables)`. Returns an unsubscribe fn. Channel shared across subscribers of the
+ * same key, torn down after a grace period when the last one leaves.
  *
- * `tables` must be a stable, order-stable list — it participates in the
- * share key, so two callers only share when their lists match exactly.
+ * ⚠ `tables` must be stable AND order-stable — it participates in the share key,
+ * so callers only share when their lists match exactly.
  */
 export function subscribeSharedWorkspaceTables(
   workspaceId: string,
@@ -267,15 +235,12 @@ export function subscribeSharedWorkspaceTables(
   topicPrefix: string,
   listener: Listener
 ): () => void {
-  // Bundled desktop SPA (window.dopl present): the renderer has no network
-  // (CSP connect-src 'none') — main watches postgres_changes for the viewed
-  // workspace and pushes coalesced {workspaceId, table} events over the
-  // bridge (Phase 3). Those events feed the SAME listener semantics the web
-  // channels provide, so every feature realtime hook works unchanged. An
-  // older main without the sync surface degrades to the previous no-op.
-  // Capability-keyed (spa-bridge.ts): the legacy wrapper's partial
-  // window.dopl must keep the WEB realtime path — a truthiness check here
-  // silently killed realtime for every wrapper user.
+  // Bundled desktop SPA: renderer has no network (CSP connect-src 'none') —
+  // main watches postgres_changes and pushes coalesced {workspaceId, table}
+  // events over the bridge, with the same listener semantics as web channels.
+  // ⚠ Capability-keyed, NOT a truthiness check on window.dopl: the legacy
+  // wrapper's partial window.dopl must keep the WEB realtime path (a truthiness
+  // check here silently killed realtime for every wrapper user).
   const spaBridge = getSpaBridge();
   if (spaBridge) {
     if (
@@ -315,15 +280,13 @@ export function subscribeSharedWorkspaceTables(
       entry.teardownTimer = null;
     }
     entry.listeners.add(listener);
-    // If the channel died while the entry had no listeners (reconnects are
-    // suppressed during the grace window), revive the connection now. A
-    // merely still-joining channel (subscribed=false, not broken) is left
-    // alone — StrictMode remounts must not churn healthy joins.
+    // Revive only if broken. A still-joining channel (subscribed=false, not
+    // broken) is left alone — StrictMode remounts must not churn healthy joins.
     if (entry.broken) connect(entry);
   }
 
-  // Late joiner on a live channel: give it the same catch-up refetch a
-  // fresh SUBSCRIBED would have delivered.
+  // Late joiner on a live channel gets the catch-up refetch a fresh SUBSCRIBED
+  // would have delivered.
   if (entry.subscribed) listener();
 
   const owned = entry;
@@ -334,8 +297,7 @@ export function subscribeSharedWorkspaceTables(
     released = true;
     owned.listeners.delete(listener);
     if (owned.listeners.size === 0 && owned.reconnectTimer) {
-      // An in-flight retry must not join a websocket for an entry that
-      // just entered its teardown grace window.
+      // In-flight retry must not join for an entry entering its grace window.
       clearReconnect(owned);
       owned.broken = true;
     }
@@ -349,7 +311,7 @@ export function subscribeSharedWorkspaceTables(
   };
 }
 
-// ─── SPA bridge feed (Phase 3) ───────────────────────────────────────────
+// ─── SPA bridge feed ─────────────────────────────────────────────────────
 
 interface SpaSyncBridge {
   syncWatch?: (workspaceId: string | null) => Promise<unknown>;
@@ -367,15 +329,13 @@ interface BridgeSub {
 const bridgeSubs = new Set<BridgeSub>();
 let bridgeOff: (() => void) | null = null;
 let watchedWorkspace: string | null = null;
-/** The value of the most recent syncWatch we ISSUED (set synchronously);
- *  `watchedWorkspace` only advances when the IPC resolves. Dedupe reads
- *  the issued value; retry semantics read the committed one. */
+/** Most recent syncWatch ISSUED (set synchronously); `watchedWorkspace` only
+ *  advances when the IPC resolves. Dedupe reads issued; retry reads committed. */
 let issuedWorkspace: string | null | undefined = undefined;
 let watchNullTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Which workspace should main watch? The one MOST hooks subscribe for,
- *  most-recent winning ties — so a workspace switch (many new-workspace
- *  mounts) wins immediately, while a single straggler re-subscribing with
+/** Workspace main should watch: the one MOST hooks subscribe for, most-recent
+ *  winning ties — a workspace switch wins immediately, a single straggler with
  *  a stale id cannot steal the watch from a mounted page. */
 function wantedWorkspace(): string | null {
   const counts = new Map<string, number>();
@@ -391,10 +351,9 @@ function wantedWorkspace(): string | null {
 
 function issueWatch(bridge: SpaSyncBridge, want: string | null): void {
   issuedWorkspace = want;
-  // Commit only on SUCCESS: a refused IPC (reject) or a refused payload
-  // (a resolved { ok: false } from an older main) must not leave the
-  // renderer believing it is watching — clearing the issued marker makes
-  // the next updateWatch retry.
+  // ⚠ Commit only on SUCCESS: a rejected IPC or a resolved `{ ok: false }` from
+  // an older main must not leave the renderer believing it is watching.
+  // Clearing the issued marker makes the next updateWatch retry.
   void Promise.resolve(bridge.syncWatch?.(want))
     .then((out) => {
       const ok = !(out && typeof out === "object" && (out as { ok?: boolean }).ok === false);
@@ -418,10 +377,10 @@ function updateWatch(bridge: SpaSyncBridge): void {
   const current = issuedWorkspace === undefined ? watchedWorkspace : issuedWorkspace;
   if (want === current) return;
   if (want === null) {
-    // React flushes all cleanups before all creates within a commit, so
-    // every navigation momentarily empties the sub set. Deferring the
-    // unwatch behind the same grace the web path uses keeps a route change
-    // from costing a leave + rejoin + catch-up burst.
+    // ⚠ React flushes all cleanups before all creates in a commit, so every
+    // navigation momentarily empties the sub set. Defer the unwatch behind the
+    // same grace the web path uses, else a route change costs leave + rejoin +
+    // catch-up burst.
     watchNullTimer = setTimeout(() => {
       watchNullTimer = null;
       if (wantedWorkspace() === null) issueWatch(bridge, null);
@@ -448,8 +407,8 @@ function subscribeViaBridge(
       bridge.onSyncEvent?.((e) => {
         for (const s of [...bridgeSubs]) {
           if (s.workspaceId !== e.workspaceId) continue;
-          // Empty table = main's catch-up signal after (re)subscribe —
-          // fire everyone, mirroring the web SUBSCRIBED catch-up.
+          // Empty table = main's catch-up signal after (re)subscribe: fire
+          // everyone, mirroring the web SUBSCRIBED catch-up.
           if (e.table && !s.tables.has(e.table)) continue;
           try {
             s.listener();
@@ -460,8 +419,7 @@ function subscribeViaBridge(
       }) ?? null;
   }
   updateWatch(bridge);
-  // Catch-up: the web path fires on SUBSCRIBED; the bridge path fires once
-  // on subscribe so a page mounting after events flowed refetches.
+  // Catch-up: web path fires on SUBSCRIBED, bridge path fires once on subscribe.
   try {
     listener();
   } catch {

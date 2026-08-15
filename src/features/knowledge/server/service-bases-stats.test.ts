@@ -1,25 +1,11 @@
 /**
  * `listBaseStats` — the fold behind `GET /api/knowledge/bases › baseStats`.
- *
- * The shape it produces is a contract the home grid reads directly, and two
- * halves of it are easy to lose in a refactor:
- *
- *   - **ONE query for N bases.** The reason this function exists is that the
- *     grid must not cost a request per card; the repository call is asserted
- *     to happen once, with the whole id set.
- *   - **Zero is a VALUE, "missing" is not.** Every base in the input gets a
- *     key, so the card can render "0 entries" and a missing key can keep
- *     meaning "the route degraded".
- *
- * `lastEntryUpdatedAt` is the newest CONTENT write, which is a different fact
- * from `KnowledgeBase.updatedAt` (the base's own row) — the out-of-order
- * fixture below is what stops a future `stamps[stamps.length - 1]` shortcut.
- *
- * `storageBytes` adds a THIRD property, and it is the one this file most needs
- * to hold: it reads a column that only exists after
- * `20260812120000_knowledge_base_storage_bytes.sql`, so a server deployed ahead
- * of its migration must lose the BAR and keep the COUNTS. `null` is the value
- * that says so, and it is not the same value as `0`.
+ * Pins: ONE query for N bases; zero is a VALUE and "missing" means the route
+ * degraded; `lastEntryUpdatedAt` is the newest CONTENT write, not
+ * `KnowledgeBase.updatedAt` (out-of-order fixture blocks a
+ * `stamps[stamps.length - 1]` shortcut); `storageBytes` is `null`, never `0`,
+ * when the server ships ahead of
+ * `20260812120000_knowledge_base_storage_bytes.sql` — bar lost, counts kept.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -50,7 +36,7 @@ describe("listBaseStats", () => {
   it("counts and dates every base in ONE repository call", async () => {
     mockRepo.listEntryStampsForBases.mockResolvedValue([
       { baseId: "kb-1", updatedAt: "2026-08-01T00:00:00Z" },
-      // Deliberately not in time order — the newest is not the last row.
+      // Not in time order — newest is not the last row.
       { baseId: "kb-1", updatedAt: "2026-08-09T12:00:00Z" },
       { baseId: "kb-1", updatedAt: "2026-08-03T00:00:00Z" },
       { baseId: "kb-2", updatedAt: "2026-07-01T00:00:00Z" },
@@ -93,8 +79,7 @@ describe("listBaseStats", () => {
   });
 
   it("drops a stamp for a base outside the visible set", async () => {
-    // The id list is the fence. A row for a base the caller cannot see must
-    // not materialise a key the response would then carry.
+    // The id list is the fence: an invisible base must not materialise a key.
     mockRepo.listEntryStampsForBases.mockResolvedValue([
       { baseId: "kb-1", updatedAt: "2026-08-01T00:00:00Z" },
       { baseId: "kb-hidden", updatedAt: "2026-08-02T00:00:00Z" },
@@ -123,15 +108,14 @@ describe("listBaseStats — storageBytes", () => {
       "kb-2",
     ]);
     expect(stats["kb-1"].storageBytes).toBe(4_231_000);
-    // An empty base is a REAL zero — the bar renders, empty.
+    // Empty base is a REAL zero — bar renders, empty.
     expect(stats["kb-2"].storageBytes).toBe(0);
   });
 
   it("keeps the COUNTS when the storage column cannot be read", async () => {
-    // THE DEPLOY-ORDER CASE: this build shipped ahead of its migration, so
-    // `storage_bytes` does not exist yet. Losing the whole stats map to that
-    // would blank the "{N} entries · updated {when}" line the grid has had for
-    // longer than the bar. It degrades to `null` — unknown, no bar — instead.
+    // DEPLOY ORDER: build ahead of migration, `storage_bytes` absent. Losing
+    // the whole stats map would blank the "{N} entries · updated {when}" line;
+    // degrade to `null` (unknown, no bar) instead.
     mockRepo.listEntryStampsForBases.mockResolvedValue([
       { baseId: "kb-1", updatedAt: "2026-08-01T00:00:00Z" },
     ]);

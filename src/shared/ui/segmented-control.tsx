@@ -10,15 +10,11 @@ export interface SegmentedOption<K extends string = string> {
 }
 
 /**
- * Segmented switcher — a TRACKLESS row of individual stadium pills: each
- * option is its own hug-width `.seg-pill` (flat gray fill, fully rounded
- * ends), and the active one swaps that face for the kit's `.raised-tab`
- * (the pill radius stays on the button, ring-for-border in both faces so
- * the swap never shifts layout). THE blessed segmented-tabs primitive:
- * any pane that needs scope/filter tabs composes this instead of
- * hand-rolling the pill recipe, so the look stays identical everywhere.
- * No shared track and no sliding thumb — pills hug their labels, so there
- * is no fixed slot geometry for a thumb to travel.
+ * THE segmented-tabs primitive — compose for any scope/filter tab row, never
+ * hand-roll the pill recipe. TRACKLESS: each option is its own hug-width
+ * `.seg-pill`, active swaps to `.raised-tab`. ⚠ Radius stays on the button and
+ * both faces use ring-for-border, or the swap shifts layout. No sliding thumb —
+ * hugging pills leave no fixed slot geometry to travel.
  */
 export function SegmentedControl<K extends string>({
   options,
@@ -30,13 +26,10 @@ export function SegmentedControl<K extends string>({
   options: ReadonlyArray<SegmentedOption<K>>;
   value: K;
   onChange: (next: K) => void;
-  /**
-   * Inert while a write this control fires is in flight — a second click
-   * during the round trip is a second mutation racing the first, and the
-   * loser's rollback restores the winner's optimistic value.
-   */
+  /** ⚠ Set while a write this control fired is in flight: a second click races
+   *  the first, and the loser's rollback restores the winner's value. */
   disabled?: boolean;
-  /** Layout-only additions (margins, width) — recipes stay in the kit. */
+  /** Layout-only (margins, width) — recipes stay in the kit. */
   className?: string;
 }) {
   return (
@@ -60,8 +53,6 @@ export function SegmentedControl<K extends string>({
           {label}
           {count !== undefined &&
             (value === key ? (
-              // Active tab: the count sits in a solid dark pill inside the
-              // raised face (reference: "All (48)" chip).
               <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta">
                 {count}
               </span>

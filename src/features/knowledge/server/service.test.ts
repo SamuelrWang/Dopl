@@ -1,17 +1,14 @@
 /**
- * INVARIANT SUITE — knowledge base visibility (M-10).
+ * INVARIANT SUITE — knowledge base visibility (M-10). `resolveEntryRefs` is
+ * the public export funnelling through `canSeeBase` + `filterTeamVisibleBases`,
+ * so testing it locks the matrix without exporting the private helpers:
+ * trashed bases dropped; private-not-owner dropped; visible entries map to
+ * { id, title, baseId, baseName }; workspace-scoped API key sees no private
+ * base, even its own.
  *
- * `resolveEntryRefs` is the public export that funnels through the private
- * `canSeeBase` gate + `filterTeamVisibleBases`, so testing it locks the
- * visibility matrix without needing to export the private helpers:
- *   - a trashed base's entries are dropped,
- *   - a base the caller can't see (private, not owner) is dropped,
- *   - visible entries map to { id, title, baseId, baseName },
- *   - a workspace-scoped API key can't see private bases (even its own).
- *
- * Only the repository is mocked; the visibility logic runs for real. All
- * fixtures use accessMode "workspace" so the team-scope branch short-
- * circuits (no Supabase/teams access needed) — the pure part under test.
+ * ⚠ Only the repository is mocked — visibility logic runs for real. All
+ * fixtures use accessMode "workspace" so the team-scope branch short-circuits
+ * (no Supabase/teams access needed).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -132,7 +129,7 @@ describe("resolveEntryRefs visibility", () => {
       ["e-own", "e-public"],
     );
 
-    // Private base dropped; only the public one survives.
+    // Private dropped; only the public one survives.
     expect(refs).toEqual([
       { id: "e-public", title: "Entry e-public", baseId: "b-public", baseName: "Public" },
     ]);

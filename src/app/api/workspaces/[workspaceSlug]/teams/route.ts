@@ -11,7 +11,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** GET /api/workspaces/[workspaceSlug]/teams — list teams with members + grants. Any active member. */
+/** GET — teams with members + grants. Any active member. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -27,7 +27,7 @@ export const GET = withUserAuth(
   }
 );
 
-/** POST /api/workspaces/[workspaceSlug]/teams — create a team. Admin+ only. */
+/** POST — create a team. Admin+. */
 export const POST = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {

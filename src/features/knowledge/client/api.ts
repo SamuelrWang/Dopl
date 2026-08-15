@@ -1,17 +1,11 @@
 "use client";
 
 /**
- * Typed client wrappers for the knowledge REST endpoints (Item 2).
- *
- * Every function here is a thin shell around `fetch` that:
- *   - Sets the `X-Workspace-Id` header when a `workspaceId` is provided.
- *   - Throws `KnowledgeApiError` on `!res.ok` so callers can `try/catch`
- *     uniformly. The error carries the HTTP status, code, and message
- *     pulled from the `{ error: { code, message } }` envelope returned
- *     by `toKnowledgeErrorResponse`.
- *   - Returns the parsed JSON body for 200/201, or `void` for 204.
- *
- * Conventions match the route handlers in `src/app/api/knowledge/`.
+ * Typed client wrappers for knowledge REST endpoints. Each sets
+ * `X-Workspace-Id` when `workspaceId` given, throws `KnowledgeApiError` on
+ * `!res.ok` (from `toKnowledgeErrorResponse`'s `{ error: { code, message } }`
+ * envelope), returns JSON for 200/201 or `void` for 204. Conventions match
+ * `src/app/api/knowledge/`.
  */
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
@@ -55,11 +49,8 @@ interface RequestOpts {
   method?: "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
   /** Optional URL search params (objects, never strings). */
   query?: Record<string, string | undefined>;
-  /**
-   * Optional concurrency precondition. When set, the server compares
-   * against the row's current `updated_at` and returns 412
-   * `KNOWLEDGE_STALE_VERSION` on mismatch. Item 5.A.3.
-   */
+  /** Concurrency precondition. Server compares against the row's current
+   *  `updated_at`; mismatch → 412 `KNOWLEDGE_STALE_VERSION`. */
   expectedUpdatedAt?: string;
 }
 
@@ -68,8 +59,8 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     return await apiRequest<T>(path, opts);
   } catch (err) {
     if (err instanceof ApiError) {
-      // Re-type onto the feature error — doc-pane branches on
-      // KnowledgeApiError instances (e.g. 412 KNOWLEDGE_STALE_VERSION).
+      // ⚠ Re-type: doc-pane branches on KnowledgeApiError instances
+      // (e.g. 412 KNOWLEDGE_STALE_VERSION).
       throw new KnowledgeApiError(err.status, err.code, err.message, err.details);
     }
     throw err;
@@ -78,28 +69,22 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 // ─── Bases ──────────────────────────────────────────────────────────
 
-/** `GET /api/knowledge/bases` in full: the list plus the two maps the route
- *  folds in — display names for bases created by *other* members, and the
- *  per-base counters the home grid renders. */
+/** Full `GET /api/knowledge/bases` response: list plus the maps the route folds in. */
 export interface KnowledgeBaseList {
   bases: KnowledgeBase[];
-  /** Display names for foreign base owners, keyed by user id. `{}` when
-   *  every visible base is the caller's own. */
+  /** Foreign base owners' display names, keyed by user id. `{}` when every
+   *  visible base is the caller's own. */
   ownerNames: Record<string, string>;
-  /** `{entryCount, lastEntryUpdatedAt, storageBytes}` keyed by base id. `{}`
-   *  only when the route degraded — a base with no entries still gets a zeroed
-   *  entry, so a MISSING key means "unknown", never "empty". */
+  /** Keyed by base id. ⚠ MISSING key means "unknown", never "empty" — a base
+   *  with no entries still gets a zeroed entry; `{}` only when route degraded. */
   baseStats: Record<string, KnowledgeBaseStats>;
-  /** The workspace's per-base storage cap in bytes, from its
-   *  entitlement-resolved plan. `null` = unknown (an old server, or a failed
-   *  billing read) — the meters are suppressed rather than drawn against a
-   *  guessed cap. */
+  /** Workspace per-base storage cap in bytes, from entitlement-resolved plan.
+   *  `null` = unknown (old server, or failed billing read) — meters suppressed
+   *  rather than drawn against a guessed cap. */
   kbStorageLimit: number | null;
-  /** The CALLER'S OWN starred base ids, always a subset of `bases`. Per-user:
-   *  a favourite, not a property of the base, so it rides the response rather
-   *  than the row. `[]` is a real answer (nothing starred) AND the degraded
-   *  one — an unknown star and no star render identically, so there is no
-   *  third value to carry. */
+  /** CALLER'S OWN starred base ids, subset of `bases`. Per-user favourite, not
+   *  a base property, so it rides the response not the row. `[]` covers both
+   *  "nothing starred" and degraded — both render identically. */
   starredBaseIds: string[];
 }
 
@@ -117,23 +102,17 @@ export async function fetchBaseList(
     bases: data.bases,
     ownerNames: data.ownerNames ?? {},
     baseStats: data.baseStats ?? {},
-    // `?? null` covers the pre-deploy server that does not send the key at all
-    // — indistinguishable, correctly, from a server that could not resolve it.
+    // Pre-deploy server sends no key — indistinguishable from one that
+    // could not resolve it, correctly.
     kbStorageLimit: data.kbStorageLimit ?? null,
-    // A server that predates stars sends no key; `[]` renders as "nothing
-    // starred", which is exactly what such a server means.
     starredBaseIds: data.starredBaseIds ?? [],
   };
 }
 
 /**
- * Star or unstar ONE base for the calling user.
- *
- * Two idempotent verbs rather than a toggle, matching the route: the caller
- * states the end state it wants, so a retry after an ambiguous failure cannot
- * flip the value back. Returns nothing worth reading — the client already knows
- * the end state it asked for, and reconciling against an echo of its own
- * argument would only add a way for the two to disagree.
+ * Star/unstar ONE base for the calling user. ⚠ Two idempotent verbs
+ * (PUT/DELETE), not a toggle: caller states desired end state, so a retry
+ * after an ambiguous failure cannot flip the value back.
  */
 export async function setBaseStar(
   baseId: string,
@@ -311,15 +290,12 @@ export async function moveEntry(
 export type KnowledgeExportKind = "base" | "folder" | "entry";
 
 /**
- * Downloads a base/folder as a zip or a single entry as a `.md` file.
- * The export routes return a blob with a `Content-Disposition`
- * filename; we honor it, falling back to a sensible default. The
- * workspace header is sent so the right workspace is targeted (without
- * it a multi-workspace caller fails closed as WORKSPACE_REQUIRED).
- *
- * Done with `fetch` + an object-URL anchor rather than a plain link so
- * the `X-Workspace-Id` header rides along and HTTP errors surface as
- * `KnowledgeApiError` instead of navigating to an error page.
+ * Download base/folder as zip, or single entry as `.md`. Honors the
+ * routes' `Content-Disposition` filename, else a default.
+ * ⚠ `fetch` + object-URL anchor, NOT a plain link: the link form drops
+ * `X-Workspace-Id` (multi-workspace caller fails closed as
+ * WORKSPACE_REQUIRED) and navigates to an error page instead of
+ * surfacing `KnowledgeApiError`.
  */
 export async function downloadKnowledgeExport(
   kind: KnowledgeExportKind,
@@ -377,7 +353,7 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-// ─── Search (Item 5.D) ──────────────────────────────────────────────
+// ─── Search ─────────────────────────────────────────────────────────
 
 export interface KnowledgeSearchHit {
   entryId: string;

@@ -1,14 +1,11 @@
 /* ─────────────────────────────────────────────────────────────────────
-   Landing page — pixel clone of the Lattice reference.
-   Hero font is a neo-grotesque (Helvetica Neue), set at a large size with
-   a medium weight and tight negative tracking — that's the "thin" look.
-   Image card is an intentional empty placeholder.
+   Landing page. ⚠ Page-scoped — the app never loads this file.
    ───────────────────────────────────────────────────────────────────── */
 
 .lp {
-  /* Helvetica is the reference face; Arial is the metric-compatible fallback
-     for non-mac visitors. Do NOT swap in a different grotesque — the shapes
-     (double-story a/g, cut terminals) must read as Helvetica. */
+  /* ⚠ Do NOT swap in a different grotesque. Helvetica is the reference face,
+     Arial the metric-compatible fallback; the shapes (double-story a/g, cut
+     terminals) must read as Helvetica. */
   --grotesk: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --ink: #0d0d0d;
   --muted: #8c8c8c;
@@ -56,13 +53,11 @@
 }
 
 .lp-brand-word {
-  /* The auth/signup "Dopl" wordmark, matched exactly: italic `--font-playfair`
-     (which is Newsreader — the token name predates the switch away from
-     Playfair), loaded by next/font/google in src/app/layout.tsx and set on
-     <body>, so it is in scope here. Georgia is the fallback the auth block
-     pins; keep it, because an undefined variable with no fallback invalidates
-     the whole declaration and silently inherits the grotesk. No tracking
-     override — the auth wordmark runs at normal letter-spacing. */
+  /* Matches the auth/signup "Dopl" wordmark exactly. `--font-playfair` is
+     actually Newsreader (token name predates the switch); loaded in
+     src/app/layout.tsx on <body>, so it's in scope. ⚠ Keep the Georgia
+     fallback — an undefined var with no fallback invalidates the whole
+     declaration and silently inherits the grotesk. */
   font-family: var(--font-playfair), Georgia, serif;
   font-style: italic;
   font-size: 21px;
@@ -107,8 +102,7 @@
   gap: 14px;
 }
 
-/* search + menu — layout only; the raised 3D surface comes from the shared
-   .lp-btn--3d-light rule below (same as the login page light buttons) */
+/* Layout only — raised 3D surface comes from .lp-btn--3d-light below. */
 .lp-icon-btn {
   width: 42px;
   height: 42px;
@@ -154,7 +148,6 @@
 
 /* ── 3D controls — the same raised surfaces as the login page ──────────── */
 
-/* Raised dark primary (Login) */
 .lp-btn--3d {
   background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
   color: #fff;
@@ -177,9 +170,8 @@
 }
 .lp-btn--3d:active {
   transform: translateY(1px);
-  /* flip the gradient — dark at the top, lighter pooling at the bottom — and
-     deepen the inset top shadow so the dark face reads as pressed-IN, the same
-     concave look the light buttons get (a dark-on-dark inset alone is invisible) */
+  /* Flip the gradient + deepen the inset top shadow so a dark face reads as
+     pressed-IN — a dark-on-dark inset alone is invisible. */
   background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 55%, #2c2c2c 100%);
   box-shadow:
     inset 0 3px 6px rgba(0, 0, 0, 0.8),
@@ -188,7 +180,6 @@
     0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Raised light surface (Download CTA + the search / menu nav controls) */
 .lp-btn--3d-light,
 .lp-icon-btn,
 .lp-menu-btn {
@@ -221,24 +212,19 @@
     0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-/* ── Nav search — the round button that grows into a pill ───────────────
-   The button is NOT swapped for a field when it opens. `.lp-nav-search-shell`
-   is the round face itself: it composes `.lp-icon-btn`, so the idle pixels are
-   the shared raised recipe above and nothing about a closed nav changed. It
-   just gets wider.
+/* ── Nav search — round button that grows into a pill ───────────────────
+   Not swapped for a field on open: `.lp-nav-search-shell` composes
+   `.lp-icon-btn` and just gets wider.
 
-   OVERLAY, NOT RESERVED LAYOUT. The shell is absolutely positioned inside a
-   slot that stays exactly one button wide, pinned `right: 0` — so the pill's
-   right edge IS the button's right edge for the whole animation and no sibling
-   moves. Growing it in flow was the alternative and it is worse twice over:
-   `.lp-nav` is a `1fr auto 1fr` grid, so a ~300px control overflows the right
-   track and shoves `.lp-nav-center` off centre mid-animation, and reserving
-   the width up front would push Menu leftward while the pill is still closed.
+   ⚠ OVERLAY, NOT RESERVED LAYOUT. Shell is absolutely positioned in a slot
+   that stays one button wide, pinned `right: 0`, so the pill's right edge IS
+   the button's and no sibling moves. In flow it fails twice: `.lp-nav` is a
+   `1fr auto 1fr` grid, so a ~300px control overflows the right track and
+   shoves `.lp-nav-center` off centre mid-animation, and reserving the width
+   up front pushes Menu leftward while the pill is still closed.
 
-   The magnifier needs no motion of its own: it sits in a 42px box at the
-   shell's leading edge, which IS the centre while the shell is 42px wide and
-   the pill's left end once it is 300. These rules must stay AFTER the shared
-   3D block — several of them override `.lp-icon-btn` at equal specificity. */
+   ⚠ These rules must stay AFTER the shared 3D block — several override
+   `.lp-icon-btn` at equal specificity. */
 .lp-nav-search {
   position: relative;
   width: 42px;
@@ -252,12 +238,12 @@
   z-index: 30;
   width: 42px;
   height: 42px;
-  /* .lp-icon-btn centres its content; the pill parks the icon at the leading
-     edge instead. Identical at 42px wide, which is the closed state. */
+  /* .lp-icon-btn centres content; the pill parks the icon at the leading edge.
+     Identical at the 42px closed width. */
   justify-content: flex-start;
   overflow: hidden;
-  /* Same three properties the shared 3D rule animates, plus the width — a
-     bare `transition: width` here would silently drop the hover/press feel. */
+  /* ⚠ Must re-list the shared 3D rule's three properties. A bare
+     `transition: width` silently drops the hover/press feel. */
   transition:
     width 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
     transform 120ms ease,
@@ -269,8 +255,8 @@
   width: 300px;
 }
 
-/* Open, the pill is a field, not a button: the 1px hover lift and the pressed
-   face would both read as "this is clickable" while you are typing in it. */
+/* Open, the pill is a field: hover lift + pressed face would read as
+   "clickable" while you're typing in it. */
 .lp-nav-search[data-open="true"] .lp-nav-search-shell:hover,
 .lp-nav-search[data-open="true"] .lp-nav-search-shell:active {
   transform: none;
@@ -282,13 +268,11 @@
     0 6px 14px rgba(0, 0, 0, 0.06);
 }
 
-/* NO INNER CONCAVE WELL, DELIBERATELY. The kit pairs a raised shell with a
-   pressed-in field where the shell is a CARD hosting a control (the auth
-   block). Here the pill IS the control: a second bordered #e9eaec box inside a
-   42px-tall white pill leaves ~6px of surround and reads as a box in a box.
-   What the field borrows from `.concave-field` (globals.css) is its FOCUS
-   signal — the darkened hairline and the 3px halo — over the raised face,
-   which the brief asks to keep for the whole gesture. */
+/* ⚠ NO INNER CONCAVE WELL. The kit's raised-shell + pressed-field pairing is
+   for a shell that's a CARD hosting a control; here the pill IS the control,
+   and a second bordered box inside a 42px pill leaves ~6px of surround and
+   reads as a box in a box. Only the FOCUS signal is borrowed from
+   `.concave-field` (globals.css): darkened hairline + 3px halo. */
 .lp-nav-search[data-open="true"] .lp-nav-search-shell:focus-within {
   border-color: rgba(24, 24, 24, 0.22);
   box-shadow:
@@ -329,9 +313,9 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--ink);
-  /* Invisible AND unreachable while collapsed — the shell clips it, but a
-     hidden field that still answers to a screen reader is a worse bug than a
-     visible one. Delayed in, instant out, so the text never outruns the pill. */
+  /* ⚠ Invisible AND unreachable while collapsed: the shell only clips it, and
+     a field a screen reader can still reach is worse than a visible one.
+     Delayed in, instant out, so text never outruns the pill. */
   visibility: hidden;
   opacity: 0;
   transition:
@@ -350,11 +334,9 @@
     visibility 0s linear 0s;
 }
 
-/* ── Nav menu — the Menu button and its 3D dropdown ─────────────────────
-   The button is untouched (`.lp-menu-btn`, the shared raised light face); this
-   only wraps it in a positioning context and holds it in the kit's pressed
-   state for as long as the card is up, so the control reads as engaged rather
-   than merely clicked. */
+/* ── Nav menu — Menu button + its 3D dropdown ───────────────────────────
+   Button untouched (`.lp-menu-btn`); this adds a positioning context and holds
+   the kit's pressed state while the card is up. */
 .lp-nav-menu {
   position: relative;
   display: inline-flex;
@@ -367,11 +349,8 @@
     0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-/* The card is the raised light face at card scale: white-to-grey gradient,
-   hairline border, a top inset highlight for the bevel, then THREE drops — a
-   1px seat, a near shadow that ties it to the button, and a wide ambient one
-   that lifts it off the page. Right-aligned and origin top-right, because it
-   belongs to the button it hangs from. */
+/* Raised light face at card scale. ⚠ Replicated in the global layer as
+   `.menu-card` (docs/DESIGN-SYSTEM.md) — edit both together. */
 .lp-nav-menu-card {
   position: absolute;
   top: calc(100% + 10px);
@@ -394,8 +373,8 @@
   animation: lpMenuOut 140ms ease-in forwards;
 }
 
-/* The rotateX is 7deg and no more: enough that the card's top edge arrives
-   first — an unfold, not a fade — while the labels stay unsmeared at 15px. */
+/* rotateX is 7deg and no more: top edge arrives first (an unfold, not a fade)
+   while labels stay unsmeared at 15px. */
 @keyframes lpMenuIn {
   from {
     opacity: 0;
@@ -431,7 +410,6 @@
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
-/* The faintest possible raise — a tint plus the button family's 1px lift. */
 .lp-nav-menu-item:hover,
 .lp-nav-menu-item:focus-visible {
   outline: none;
@@ -460,7 +438,6 @@
   background: var(--line);
 }
 
-/* The dark 3D pill, small and full-width, inside the card. */
 .lp-nav-menu-cta {
   height: 40px;
   padding: 0 16px;
@@ -507,19 +484,14 @@
   gap: 16px;
 }
 
-/* ── Landscape banner — a scroll-scrubbed pinned scene ────────────────
-   `.lp-banner-scene` is the tall scroll TRACK; `.lp-banner-stage` is the sticky
-   viewport-tall pane that holds the picture centred while the scrub runs. The
-   progress maths, the breakpoints and the quantised-resize rationale all live
-   in components/use-banner-scrub.ts — this file only reacts to `data-mode` and
-   to the two custom properties that hook writes on the scene.
+/* ── Landscape banner — scroll-scrubbed pinned scene ──────────────────
+   `.lp-banner-scene` = tall scroll TRACK; `.lp-banner-stage` = sticky
+   viewport-tall pane centring the picture. Maths, breakpoints and rationale
+   live in components/use-banner-scrub.ts; this file only reacts to `data-mode`
+   and the two custom properties that hook writes.
 
-   Only `data-mode="scrub"` gets the track and the pin. `static` (SSR, no-JS,
-   or a viewport too narrow to seat the card) is the picture with the
-   notification parked in its top-right seat and no cursor; `reduced`
-   (prefers-reduced-motion) is the END state rendered flat, also with no
-   cursor. Neither pins, so the page is never taller than its content and
-   nothing is trapped. */
+   ⚠ Only `data-mode="scrub"` gets the track and the pin. `static` and
+   `reduced` must never pin, or the page ends up taller than its content. */
 
 .lp-banner-scene {
   position: relative;
@@ -548,8 +520,8 @@
   border-radius: 24px;
   overflow: hidden;
 }
-/* Keep the WHOLE picture inside the pinned viewport on short screens by capping
-   its width through the asset's own 1170 × 628 aspect. */
+/* Keeps the WHOLE picture inside the pinned viewport on short screens by
+   capping width through the asset's own 1170 × 628 aspect. */
 .lp-banner-scene[data-mode="scrub"] .lp-banner {
   max-width: calc((100vh - 88px) * 1170 / 628);
   margin: 0 auto;
@@ -557,22 +529,20 @@
 .lp-banner-img {
   display: block;
   width: 100%;
-  /* Height follows the image's own aspect — the WHOLE picture shows. */
   height: auto;
   user-select: none;
   -webkit-user-drag: none;
   pointer-events: none;
 }
 
-/* The glass box. In `scrub` the hook writes width/height/transform inline, so
-   only the origin and the promotion hint belong here; the other two modes are
-   pure CSS. */
+/* In `scrub` the hook writes width/height/transform inline, so only origin +
+   promotion hint belong here. Other modes are pure CSS. */
 .lp-banner-glass {
   position: absolute;
   z-index: 1;
 }
-/* The notification seat, top-right. Mirrors NOTIF_* in use-banner-scrub.ts —
-   keep the two in step, they describe the same box. */
+/* ⚠ Notification seat — mirrors NOTIF_* in use-banner-scrub.ts. Same box,
+   keep the two in step. */
 .lp-banner-scene[data-mode="static"] .lp-banner-glass {
   top: 5%;
   right: 3.5%;
@@ -594,11 +564,9 @@
 }
 
 /* ── Notification card — the glass's start state ──────────────────────
-   macOS-notification anatomy: app icon, title line, message, "now". Its
-   HEIGHT IS FIXED at the seat height (= NOTIF_H in use-banner-scrub.ts) rather
-   than 100%, so once the glass starts expanding the content stays put at the
-   top of the growing box and fades out in place instead of drifting to the new
-   centre. Replaces the old `.lp-banner-mcp` block. */
+   ⚠ HEIGHT IS FIXED at the seat height (= NOTIF_H in use-banner-scrub.ts), not
+   100%: once the glass expands, content must stay at the top of the growing
+   box and fade out in place instead of drifting to the new centre. */
 .lp-banner-notif {
   display: flex;
   height: 92px;
@@ -633,7 +601,7 @@
   font-weight: 400;
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.82);
-  /* Two lines max, like a real notification body. */
+  /* Two lines max. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -642,7 +610,7 @@
 .lp-banner-notif-time {
   flex: none;
   align-self: flex-start;
-  /* Sits on the title's baseline row rather than the card's top edge. */
+  /* Sits on the title's baseline row, not the card's top edge. */
   padding-top: 20px;
   font-size: 11px;
   line-height: 1;
@@ -652,8 +620,7 @@
   opacity: 0;
 }
 
-/* Click ripple. One-shot: the engine writes the centre and toggles `is-firing`
-   when progress crosses the click, re-arming on the way back up (the WHY is in
+/* Click ripple, one-shot — engine writes centre + toggles `is-firing` (why: in
    use-banner-scrub.ts). Clipped by LiquidGlass's own overflow. */
 .lp-banner-ripple {
   position: absolute;
@@ -681,8 +648,8 @@
   }
 }
 
-/* macOS pointer. Only `scrub` has it; the engine drives transform + the scene's
-   `--lp-cursor-opacity`. Origin 0 0 so the arrow's TIP is the anchor point. */
+/* macOS pointer, `scrub` only. ⚠ Origin 0 0 so the arrow's TIP is the anchor
+   the engine's transform targets. */
 .lp-banner-cursor {
   position: absolute;
   top: 0;
@@ -698,12 +665,9 @@
   display: none;
 }
 
-/* Empty white panel that fades in over the expanded glass in the last stretch.
-   A child of `.lp-banner-glass` with a FIXED px inset, so the white panel
-   keeps the same distance from the glass edge on all four sides (a %-based
-   inset gave wider horizontal gaps — % of width ≠ % of height on a wide
-   picture). See the TODO in components/hero-banner.tsx — the product-demo
-   slot. */
+/* Product-demo slot (see TODO in components/hero-banner.tsx). ⚠ FIXED px
+   inset, never %: % of width ≠ % of height on a wide picture, which gives
+   wider horizontal gaps than vertical. */
 .lp-banner-demo-slot {
   position: absolute;
   inset: 26px;
@@ -732,17 +696,15 @@
   .lp-icon-btn {
     display: none;
   }
-  /* The shell is already hidden by `.lp-icon-btn` above; this drops the 42px
-     slot it was sitting in, and the nav-right gap with it. */
+  /* Shell already hidden by `.lp-icon-btn`; this drops its 42px slot and the
+     nav-right gap with it. */
   .lp-nav-search {
     display: none;
   }
 }
 
-/* Reduced motion: both surfaces still open and close, instantly. The pill
-   snaps to its full width — the growth IS the motion here, so there is
-   nothing to soften — and the card appears in place without the unfold. The
-   component skips the closing state too, so the card unmounts at once. */
+/* Reduced motion: both surfaces still open and close, instantly. The component
+   skips the closing state too, so the card unmounts at once. */
 @media (prefers-reduced-motion: reduce) {
   .lp-nav-search-shell,
   .lp-nav-search-input,
@@ -758,11 +720,7 @@
   }
 }
 
-/* ── Multiplayer — benefits row between the banner scene and Framework ──
-   Eyebrow + a large LIGHT-weight left-aligned heading (weight 400, same as
-   .lp-headline — the thinness is the point), then three equal cards. Each card
-   is a white bordered box with a light grey visual area filling its top ~2/3
-   and the copy beneath. Markup: components/multiplayer-section.tsx. */
+/* ── Multiplayer — benefits row. Markup: multiplayer-section.tsx ─────── */
 
 .lp-mp {
   width: 100%;
@@ -804,7 +762,6 @@
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 12px;
-  /* the visual area is inset from the card edge by this padding */
   padding: 10px;
 }
 .lp-mp-visual {
@@ -836,7 +793,7 @@
   color: var(--muted);
 }
 
-/* Visual 1 — a mini chat window, bled off the bottom of the grey area. */
+/* Visual 1 — mini chat window, bled off the bottom of the grey area. */
 .lp-mp-chat {
   position: absolute;
   inset: 26px 20px -22px;
@@ -860,9 +817,8 @@
   border-radius: 999px;
   background: #dcdcdc;
 }
-/* Close button one step darker — the same treatment, and the same reasoning, as
-   `.lp-dev-dots i:first-child`. The two mocks start from slightly different
-   greys, so this is the matching offset rather than the matching value. */
+/* Close button one step darker, as `.lp-dev-dots i:first-child`. ⚠ The two
+   mocks start from different greys — match the OFFSET, not the value. */
 .lp-mp-chrome span:first-child {
   background: #bcbcbc;
 }
@@ -877,7 +833,7 @@
   font-size: 15px;
   line-height: 1.35;
   color: #9b9b9b;
-  /* one line each — clipping the tail is the reference's look */
+  /* one line each — the clipped tail is the look */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -891,7 +847,7 @@
   color: #b4b4b4;
 }
 
-/* Visual 2 — a verified agent profile card floating on the grey. */
+/* Visual 2 — verified agent profile card. */
 .lp-mp-profile {
   position: absolute;
   left: 50%;
@@ -938,7 +894,7 @@
   color: var(--muted);
 }
 
-/* Visual 3 — a 4×2 tile grid of the surfaces a channel reaches. */
+/* Visual 3 — 4×2 tile grid. */
 .lp-mp-grid {
   position: absolute;
   inset: 0;
@@ -970,13 +926,10 @@
   }
 }
 
-/* ── Framework — the four-stage tour between Multiplayer and Control ───
-   Eyebrow + a large LIGHT-weight heading (the same treatment and size as
-   .lp-mp-heading), then a wide photo banner carrying ONE white product window,
-   a row of four tab options under it, and the CTA pair. The window content
-   swaps with the selected tab — the component re-keys it, this file fades it in
-   and, for stage 2 alone, runs the whole stamp sequence off that same remount
-   (see "2 — the stamp", below).
+/* ── Framework — four-stage tour ───────────────────────────────────────
+   Window content swaps with the tab: the component re-keys it, this file fades
+   it in and, for stage 2 alone, runs the whole stamp sequence off that same
+   remount (see "2 — the stamp", below).
    Markup: components/framework-section.tsx (+ framework-windows.tsx). */
 
 .lp-fw {
@@ -996,10 +949,10 @@
   color: var(--muted);
 }
 
-/* The heading MUST set two lines. The cap is in `em`, not px, so it tracks the
-   clamped font size instead of re-breaking at each step: 13.2em fits "Unify
-   disconnected data into" (~11.7em) and turns "structured" onto line two,
-   which is ~11.1em — both lines clear the cap at every size in the clamp. */
+/* ⚠ Heading MUST set two lines. Cap in `em`, not px, so it tracks the clamped
+   font size instead of re-breaking at each step: 13.2em fits "Unify
+   disconnected data into" (~11.7em) and turns "structured" (~11.1em) onto
+   line two. */
 .lp-fw-heading {
   margin: 0 0 44px;
   max-width: 13.2em;
@@ -1011,9 +964,9 @@
   color: #0a0a0a;
 }
 
-/* The banner. The source art is PORTRAIT (1170×2080) and this band is roughly
-   2:1, so `cover` crops hard — `object-position` is the knob that keeps the
-   peak in frame. Nudge the percentage, not the height. */
+/* ⚠ Source art is PORTRAIT (1170×2080) in a ~2:1 band, so `cover` crops hard.
+   `object-position` keeps the peak in frame — nudge that percentage, not the
+   height. */
 .lp-fw-banner {
   position: relative;
   width: 100%;
@@ -1031,10 +984,9 @@
 }
 
 
-/* Glass panel centred on the picture; the white window sits INSIDE it with a
-   uniform px gap on all four sides (margin, so % of width vs height can never
-   skew it). The glass is static — nothing animates its box, so its
-   backdrop-filter is safe here. */
+/* Glass panel centred on the picture; window inset by a px margin, so % of
+   width vs height can never skew the gap. Static box, so backdrop-filter is
+   safe here. */
 .lp-fw-glass {
   position: absolute;
   left: 50%;
@@ -1046,18 +998,15 @@
   width: 100%;
 }
 
-/* The one white window, riding the glass. Its height is PINNED, not
-   content-driven: the four vignettes have four different natural heights, and a
-   glass panel that grows and shrinks as you click along the tab row reads as a
-   layout bug rather than as a tour. The pin is the tallest of the four —
-   "Unify Data" — so no vignette had to lose anything to fit.
+/* ⚠ Height is PINNED, not content-driven — the four vignettes have four
+   natural heights and a glass panel resizing along the tab row reads as a bug.
+   Pin = the tallest ("Unify Data"), so nothing had to shrink.
 
-   320.5px is that vignette measured off this file, not eyeballed. .lp-fw-kb:
-   19+19 padding, an 12.5px label on the inherited 1.5 line-height (18.75), the
-   title's 6 + 20×1.5 + 20 (56), three file rows at 11 + 14×1.5 + 11 with two
-   hairlines between (131), and the foot's 18 + 18.75 (36.75) = 280.5, inside
-   .lp-fw-win--unify's 20+20 padding. Change any of those and re-derive this;
-   the three shorter vignettes centre inside whatever it says. */
+   320.5px is measured, not eyeballed: .lp-fw-kb = 19+19 padding + 12.5px label
+   on 1.5 line-height (18.75) + title 6 + 20×1.5 + 20 (56) + three file rows at
+   11 + 14×1.5 + 11 with two hairlines (131) + foot 18 + 18.75 (36.75) = 280.5,
+   inside .lp-fw-win--unify's 20+20 padding. Change any of those and re-derive;
+   the three shorter vignettes centre inside whatever this says. */
 .lp-fw-window {
   --lp-fw-window-h: 320.5px;
 
@@ -1104,7 +1053,6 @@
   letter-spacing: -0.02em;
   color: var(--ink);
 }
-/* the footer line sits on the window's bottom edge whatever the body's height */
 .lp-fw-win-foot {
   margin: auto 0 0;
   padding-top: 18px;
@@ -1112,10 +1060,6 @@
   color: var(--muted);
 }
 
-/* ALL FOUR vignettes are the same sentence — boxes, a dashed connector, a card
-   — read in one direction or the other. 1 and 3 converge (many ▸ one), 2 and 4
-   diverge (one ▸ many); stage 4 just says it twice, with the Claude tile as the
-   pivot. The modifier below only picks the axis and the padding. */
 .lp-fw-win--unify,
 .lp-fw-win--objects,
 .lp-fw-win--action {
@@ -1134,14 +1078,12 @@
   min-height: 176px;
 }
 
-/* The item columns and the connectors share ONE vertical geometry: 3 × 44px
-   boxes with 22px gaps is exactly the 176 user units of every connector
-   viewBox in this section, so the curve endpoints land dead on the box centres
-   at every width. Change a box height or a gap and you MUST change that
-   viewBox with it (framework-windows.tsx › FUNNEL_PATHS / FANOUT_PATHS /
-   SPLIT_PATHS) —
-   nothing else keeps the two in step. That is also why these stacks keep their
-   height at every breakpoint; only the connectors compress. */
+/* ⚠ Item columns and connectors share ONE vertical geometry: 3 × 44px boxes
+   with 22px gaps = the 176 user units of every connector viewBox here, so the
+   curve endpoints land on box centres at every width. Change a box height or a
+   gap and you MUST change that viewBox too (framework-windows.tsx ›
+   FUNNEL_PATHS / FANOUT_PATHS / SPLIT_PATHS). Hence these stacks keep their
+   height at every breakpoint — only the connectors compress. */
 .lp-fw-sources {
   flex: none;
   align-self: center;
@@ -1183,7 +1125,7 @@
   border-radius: 5px;
 }
 
-/* the only parts of the compositions allowed to give up width */
+/* the only parts allowed to give up width */
 .lp-fw-funnel {
   flex: 0 1 72px;
   min-width: 22px;
@@ -1193,9 +1135,8 @@
 .lp-fw-funnel--out {
   flex-basis: 56px;
 }
-/* stage 2's connector occupies the same slot as .lp-fw-funnel, but its three
-   lines are three stacked layers so the sequence can reveal them separately
-   (framework-windows.tsx › SplitConnector) */
+/* Same slot as .lp-fw-funnel, but three stacked layers so the sequence can
+   reveal them separately (framework-windows.tsx › SplitConnector) */
 .lp-fw-fan {
   position: relative;
   flex: 0 1 72px;
@@ -1218,8 +1159,8 @@
   align-self: center;
   height: 176px;
 }
-/* the stand-in for .lp-fw-wire once stage 4 stacks; the gradient reproduces the
-   SVG's "3 4" dash exactly, so the two read as one language */
+/* stands in for .lp-fw-wire once stage 4 stacks. ⚠ Gradient reproduces the
+   SVG's "3 4" dash exactly — keep them identical. */
 .lp-fw-vwire {
   display: none;
   flex: none;
@@ -1233,7 +1174,6 @@
   );
 }
 
-/* the white card every vignette drains into or hangs its fields on */
 .lp-fw-kb,
 .lp-fw-tpl,
 .lp-fw-client,
@@ -1251,10 +1191,9 @@
 .lp-fw-client {
   flex: 1 1 auto;
 }
-/* The window is pinned to stage 1's height, so every OTHER card is stretched
-   taller than its own content — centre it rather than leaving the slack in a
-   pile at the bottom. .lp-fw-kb is exempt: it is the card the pin was measured
-   from, and its foot line is already doing this job with `margin: auto 0 0`. */
+/* Window is pinned to stage 1's height, so every OTHER card is stretched taller
+   than its content — centre it. .lp-fw-kb is exempt: the pin was measured from
+   it and its foot line already does this with `margin: auto 0 0`. */
 .lp-fw-tpl,
 .lp-fw-client,
 .lp-fw-actor {
@@ -1266,7 +1205,6 @@
   padding: 14px;
 }
 
-/* knowledge base file rows */
 .lp-fw-files {
   list-style: none;
   margin: 0;
@@ -1291,8 +1229,6 @@
   color: #b4b4b4;
 }
 
-/* trait rows — the template's (and the actor's) knowledge/skill list. Same
-   ruled-row rhythm as .lp-fw-file, with a type badge instead of an icon. */
 .lp-fw-traits {
   list-style: none;
   margin: 0;
@@ -1327,27 +1263,22 @@
   line-height: 1.3;
   color: var(--muted);
 }
-/* the same badge worn as a VALUE rather than as a type — stage 2's expanded
-   instance, where each template field resolves to a slug. Fully rounded, so it
-   reads as an identifier and not as a second type tag, and in ink rather than
-   muted, because a value is content and a type is a label.
-   ⚠ BEFORE --skill on purpose: a value that names a skill still takes the coral,
-   so this rule must not be the one that wins the colour. */
+/* Badge worn as a VALUE, not a type — stage 2's resolved slugs.
+   ⚠ Must stay BEFORE --skill: a value naming a skill still takes the coral, so
+   this rule must not win the colour. */
 .lp-fw-badge--val {
   border-radius: 999px;
   font-size: 10px;
   color: var(--ink);
 }
-/* skills borrow the Claude coral the stage-4 tile carries — the tint is the
-   thread between "this object can DO something" and the agent that does it */
+/* skills borrow the Claude coral the stage-4 tile carries */
 .lp-fw-badge--skill {
   background: #fbf0eb;
   color: #b4694a;
 }
 
-/* the person boxes: stage 2's instance cards and stage 4's actor identity.
-   .lp-fw-stamp is the positioning context the expanded Sam hangs off, so the
-   column's width and placement live on IT — the <ul> only stacks. */
+/* .lp-fw-stamp is the positioning context the expanded Sam hangs off, so the
+   column's width + placement live on IT — the <ul> only stacks. */
 .lp-fw-stamp {
   position: relative;
   flex: none;
@@ -1362,8 +1293,6 @@
   flex-direction: column;
   gap: 22px;
 }
-/* fully rounded, like stage 3's .lp-fw-chip: an instance is a chip that happens
-   to carry its type, and the two stages are showing the same three people */
 .lp-fw-inst {
   display: flex;
   align-items: center;
@@ -1401,60 +1330,42 @@
   color: var(--muted);
 }
 
-/* ── 2 — the stamp: the expanded Sam, and the sequence that opens it ───
-   The ONE animated vignette. Everything below is @keyframes plus
-   animation-delay — no state, no timers, no library — and it replays on its own
-   because framework-section.tsx keys the tab panel on the stage id, so
-   re-entering "Define Objects" remounts the subtree and every delay restarts
-   from zero.
+/* ── 2 — the stamp ─────────────────────────────────────────────────────
+   The ONE animated vignette: @keyframes + animation-delay, no state, no timers.
+   Replays because framework-section.tsx keys the tab panel on the stage id.
 
-   THE TIMELINE, once, in one place. Each step's numbers appear again on the
-   rule that owns it; this table is what they add up to.
+   THE TIMELINE, once. Each number reappears on the rule that owns it.
 
-     0.00s  the template card, header only — its field rows are held at opacity 0
-     0.40s  field rows rise in (520ms), 340ms apart .................. ends 1.60s
-     1.70s  the TOP line draws (900ms), template edge ▸ Sam ......... ends 2.60s
-     2.40s  the expanded Sam opens under it, fully opaque by ......... 2.83s
-     3.10s  Sam's three resolved fields rise in (460ms), 320ms apart . ends 4.20s
-     4.20s  ▸▸ THE HOLD ◂◂ the resolved pills sit still and legible,
-            nothing else moving, for ................................ 0.90s
-     5.10s  the panel condenses onto the compact card (900ms), its
-            field list dropping out over the first 340ms
-     5.99s  the real compact Sam fades up as the panel fades out
-     6.20s  the MIDDLE line draws (820ms)
-     6.55s  the BOTTOM line draws (820ms)
-     7.00s  Anthony, then 7.40s Grace .............................. ends 7.86s
+     0.40s  template field rows rise (520ms), 340ms apart ...... ends 1.60s
+     1.70s  TOP line draws (900ms), template edge ▸ Sam ........ ends 2.60s
+     2.40s  expanded Sam opens, fully opaque by ................. 2.83s
+     3.10s  Sam's resolved fields rise (460ms), 320ms apart ..... ends 4.20s
+     4.20s  ▸▸ THE HOLD ◂◂ resolved pills still + legible ....... 0.90s
+     5.10s  panel condenses (900ms); field list drops over first 340ms
+     5.99s  real compact Sam fades up as the panel fades out
+     6.20s  MIDDLE line draws (820ms) · 6.55s BOTTOM line (820ms)
+     7.00s  Anthony, 7.40s Grace ............................... ends 7.86s
 
-   ⚠ THE HOLD AT 4.20s IS A REAL STEP, not slack. The resolved pills
-   (sam-voice, sam-sales-docs, crm-updating) are the one frame that says what
-   "stamped" MEANS, and a still earlier cut left them at full opacity for only
-   360ms between the last row landing and the list starting to drop — legible in
-   theory, unreadable in practice. The correction over-shot to 2.40s, which
-   stalled the sequence badly enough to read as a bug; 0.90s is the settled
-   number. Every fade here already resolves to opacity 1 under `both`, so the
-   knob is time and nothing else. If you re-time anything below, the distance
-   from "last field row ends" to "condense begins" is the number to protect —
-   do not take it back under ~0.8s. Ditto the 270ms between the panel finishing
-   its own fade-in (2.83s) and the first field row starting (3.10s): two fades
-   multiply, and rows that rise while their panel is still arriving are the
-   other way this reads faint.
+   ⚠ THE HOLD AT 4.20s IS A REAL STEP, not slack. Two numbers to protect when
+   re-timing: "last field row ends" ▸ "condense begins" must stay ≥ ~0.8s, and
+   the 270ms between panel fade-in done (2.83s) and first field row (3.10s) —
+   nested opacities multiply, so rows rising through an arriving panel read
+   faint.
 
-   THE END STATE IS THE STATIC LAYOUT. Every rule here animates TO what the base
-   rule already says and uses `both` fill to hold the start state during its
-   delay, so the last frame is the layout you would get with the whole section
-   deleted — which is also why the reduced-motion branch is one `animation:
-   none` and hiding one panel, with nothing to re-describe. */
+   ⚠ THE END STATE IS THE STATIC LAYOUT. Every rule animates TO what the base
+   rule already says, `both` fill holding the start during its delay — which is
+   why reduced-motion is one `animation: none` plus hiding one panel. */
 .lp-fw-win--objects {
-  /* the compact card column — also the width the expanded panel collapses TO */
+  /* compact card column — also the width the expanded panel collapses TO */
   --lp-fw-inst-w: 128px;
-  /* the expanded panel. It overhangs the column to the left, over the fan's
-     tail, so its field rows get a line of their own without a reflow. */
+  /* expanded panel; overhangs the column left over the fan's tail so its field
+     rows get their own line without a reflow */
   --lp-fw-sam-w: 146px;
-  /* pinned, because a height animation needs two numbers. It is the panel
-     measured exactly: 42 for the id row + 3 field rows at 9+15+4+19 with two
-     hairlines between (170) + 10 bottom padding + 2 borders. */
+  /* Pinned — a height animation needs two numbers. Measured: 42 id row + 3
+     field rows at 9+15+4+19 with two hairlines (170) + 10 bottom padding + 2
+     borders. */
   --lp-fw-sam-h: 224px;
-  /* decelerating, and NOT past 1 — nothing in this sequence overshoots */
+  /* ⚠ decelerating and NOT past 1 — nothing here overshoots */
   --lp-fw-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
@@ -1463,10 +1374,9 @@
   top: 0;
   right: 0;
 }
-/* The base state is the END state: the compact pill, box for box identical to
-   .lp-fw-inst, so the cross-fade at 5.99s has nothing left to move. The panel
-   opens by running the condense keyframes BACKWARDS through their `both` fill
-   during the delay. */
+/* ⚠ Base state IS the END state: compact pill, box for box identical to
+   .lp-fw-inst, so the 5.99s cross-fade has nothing to move. The panel opens by
+   running the condense keyframes BACKWARDS via `both` fill during the delay. */
 .lp-fw-sam-card {
   overflow: hidden;
   width: var(--lp-fw-inst-w);
@@ -1477,16 +1387,15 @@
   background: #ffffff;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.07);
 }
-/* 42px is .lp-fw-inst's CONTENT box (44 less its two borders); on the card's own
-   horizontal padding, with the same gap. Collapsed, this row is the pill. */
+/* 42px = .lp-fw-inst's CONTENT box (44 less two borders). Collapsed, this row
+   IS the pill. */
 .lp-fw-sam-id {
   display: flex;
   align-items: center;
   gap: 9px;
   height: 42px;
 }
-/* the actor card's move, for the actor card's reason: at 146px the name and its
-   value can never share a line, so they never try */
+/* at 146px name + value can never share a line, so they never try */
 .lp-fw-sam-list .lp-fw-trait {
   flex-direction: column;
   align-items: flex-start;
@@ -1511,10 +1420,8 @@
   animation-delay: 1080ms;
 }
 
-/* 1.70s / 6.20s / 6.55s — top line first, alone; the other two after Sam has
-   settled. DOM order is top ▸ middle ▸ bottom (› SPLIT_PATHS), and since the
-   rewrite each of the three leaves the template edge at its OWN y, so these
-   three reveals are three separate connections and not one fan opening. */
+/* 1.70s / 6.20s / 6.55s — top line alone first, other two after Sam settles.
+   ⚠ DOM order is top ▸ middle ▸ bottom (› SPLIT_PATHS). */
 .lp-fw-fan-line {
   animation: lp-fw-draw 900ms cubic-bezier(0.33, 0, 0.2, 1) both;
 }
@@ -1530,27 +1437,25 @@
   animation-delay: 6550ms;
 }
 
-/* 2.40s in, 5.99s out — one keyframe set for the panel's whole life, because
-   two animations on one element would fight over `opacity` and the second one's
-   backwards fill would win before the first had run.
-   The 3900ms span is read by lp-fw-sam-life's percentages: 11% ends the fade-in
-   (2.83s) and 92% starts the fade-out (5.99s), so the middle 81% — 3.16s — is a
-   flat opacity 1. Change this duration and both stops move; re-derive them. */
+/* 2.40s in, 5.99s out. ⚠ ONE keyframe set for the panel's whole life — two
+   animations on one element fight over `opacity` and the second's backwards
+   fill wins before the first runs. ⚠ The 3900ms span is what lp-fw-sam-life's
+   percentages read: 11% ends fade-in (2.83s), 92% starts fade-out (5.99s).
+   Change this duration and both stops move; re-derive them. */
 .lp-fw-sam {
   animation: lp-fw-sam-life 3900ms 2400ms both;
 }
-/* 5.10s — the condense. Only geometry, so it never touches the fade above. */
+/* 5.10s — condense. Geometry only, so it never touches the fade above. */
 .lp-fw-sam-card {
   animation: lp-fw-sam-condense 900ms cubic-bezier(0.4, 0, 0.2, 1) 5100ms both;
 }
 .lp-fw-sam-list {
   animation: lp-fw-drop 340ms ease 5100ms both;
 }
-/* 3.10s — Sam's resolved fields, on the template rows' rhythm. They start 270ms
-   AFTER the panel is done fading in (2.83s) on purpose: nested opacities
-   multiply, and a row rising through a still-arriving panel is the "faint
-   pills" bug. They then hold — `both`, so opacity 1 forward-fills — until the
-   list drops at 5.10s: a 0.90s read window, the hold in the table above. */
+/* 3.10s — Sam's resolved fields. ⚠ Starts 270ms AFTER the panel finishes
+   fading in (2.83s): nested opacities multiply, and a row rising through a
+   still-arriving panel is the "faint pills" bug. Holds via `both` until the
+   list drops at 5.10s — the 0.90s read window in the table above. */
 .lp-fw-sam-list .lp-fw-trait {
   animation: lp-fw-rise 460ms var(--lp-fw-ease) both;
 }
@@ -1564,9 +1469,8 @@
   animation-delay: 3740ms;
 }
 
-/* 6.00s — Sam does NOT rise: it is already there, under the panel that is
-   collapsing onto it, so it only takes over the pixels. Anthony and Grace have
-   nothing above them and rise like every other new row. */
+/* 6.00s — Sam does NOT rise: it is already there under the collapsing panel and
+   only takes over the pixels. Anthony and Grace rise normally. */
 .lp-fw-instances .lp-fw-inst:nth-child(1) {
   animation: lp-fw-drop 460ms var(--lp-fw-ease) 6000ms both reverse;
 }
@@ -1595,11 +1499,10 @@
     opacity: 0;
   }
 }
-/* The dashes are the stroke's OWN dasharray, so stroke-dashoffset is spoken
-   for; the reveal is a clip on the wrapping box instead. The 99% stop exists to
-   land on `none` rather than on a clip rect flush with the border box, which
-   would shave the half-pixel of the last round cap. inset ▸ none cannot
-   interpolate, so it is parked in the last 1% where it reads as a hard cut. */
+/* Dashes are the stroke's OWN dasharray, so stroke-dashoffset is taken; the
+   reveal is a clip on the wrapping box. ⚠ The 99% stop lands on `none` rather
+   than a rect flush with the border box, which would shave the half-pixel of
+   the last round cap. inset ▸ none can't interpolate, hence the last 1%. */
 @keyframes lp-fw-draw {
   from {
     clip-path: inset(0 100% 0 0);
@@ -1611,10 +1514,9 @@
     clip-path: none;
   }
 }
-/* Stops are PERCENTAGES of the 3900ms on .lp-fw-sam: 11% = 429ms of fade-in
-   (done 2.83s), then a flat 81% at opacity 1, then 8% = 312ms of fade-out
-   starting 5.99s — which is where the compact Sam underneath starts fading up,
-   so the two cross rather than blink. */
+/* ⚠ Stops are PERCENTAGES of the 3900ms on .lp-fw-sam: 11% = 429ms fade-in
+   (done 2.83s), flat 81%, then 8% = 312ms fade-out from 5.99s — where the
+   compact Sam underneath starts fading up, so the two cross. */
 @keyframes lp-fw-sam-life {
   0% {
     opacity: 0;
@@ -1635,17 +1537,13 @@
     transform: none;
   }
 }
-/* ⚠ THE `to` RADIUS IS 22px, NOT THE 999px THE BASE RULE CARRIES, AND THAT IS
-   THE FIX FOR THE CONDENSE — do not "tidy" it back to 999px.
-   999px is a pill IDIOM: it is clamped at paint time to half the shorter side,
-   which is only ever 22px once the card is 44px tall. Interpolated, it is a
-   literal length, so a 12px ▸ 999px ramp put the USED radius at ~44px 100ms in
-   and ~71px at 300ms, while the box was still 190px tall — and `overflow:
-   hidden` above means that arc is a MASK. The card bulged into an egg and then
-   a circle, and the mask ate the left half of Sam's face and the top of his
-   name. 22px is the same final pill (44 ÷ 2) and never exceeds half of any
-   intermediate height, so the corner can never reach the avatar at x = 10.
-   Keep this `to` in step with .lp-fw-inst's height, not with its border-radius. */
+/* ⚠ `to` RADIUS IS 22px, NOT the 999px the base rule carries — do not "tidy"
+   it back. 999px is a pill IDIOM, clamped at paint time to half the shorter
+   side; INTERPOLATED it is a literal length, so 12px ▸ 999px puts the used
+   radius at ~71px 300ms in while the box is still 190px tall, and `overflow:
+   hidden` makes that arc a MASK that eats the avatar. 22px is the same final
+   pill (44 ÷ 2) and never exceeds half of any intermediate height.
+   ⚠ Keep this `to` in step with .lp-fw-inst's HEIGHT, not its border-radius. */
 @keyframes lp-fw-sam-condense {
   from {
     width: var(--lp-fw-sam-w);
@@ -1660,14 +1558,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Straight to the composed end state — which is what the base rules already
-     say, so dropping the animations IS the end state.
+  /* Base rules already say the end state, so dropping the animations IS it.
 
-     ⚠ The three compact cards are listed BY :nth-child, not as
-     `.lp-fw-instances .lp-fw-inst`: each of them carries its own `animation`
-     shorthand on a :nth-child selector, and a plainer selector here would lose
-     to it on specificity and silently leave the sequence running. Any new step
-     that names a row individually has to be named individually here too. */
+     ⚠ Compact cards listed BY :nth-child, not `.lp-fw-instances .lp-fw-inst`:
+     each carries its own `animation` on a :nth-child selector, and a plainer
+     selector loses on specificity and silently leaves the sequence running.
+     Any new step naming a row individually must be named individually here. */
   .lp-fw-tpl .lp-fw-trait,
   .lp-fw-fan-line,
   .lp-fw-sam-list,
@@ -1683,7 +1579,7 @@
   }
 }
 
-/* 3 — relationship chips: the same instances as stage 2, worn down to a pill */
+/* 3 — relationship chips: stage 2's instances, worn down to a pill */
 .lp-fw-chips {
   flex: none;
   align-self: center;
@@ -1712,9 +1608,8 @@
   color: var(--ink);
   white-space: nowrap;
 }
-/* the labelled edge. It rides its own line under the graph rather than floating
-   over the wires — an overlay label has nowhere to go once the window is 264px
-   wide, and it would sit on top of the chips it is meant to annotate. */
+/* Own line under the graph, not floating over the wires: an overlay label has
+   nowhere to go at a 264px window and lands on the chips it annotates. */
 .lp-fw-rule {
   display: flex;
   align-items: center;
@@ -1733,8 +1628,7 @@
   gap: 9px;
   padding-bottom: 13px;
 }
-/* the actor card is 146px wide at its widest, so its traits stack their badge
-   at EVERY size — "Email voice" + a "Knowledge" badge never share a line here */
+/* actor card maxes at 146px, so its traits stack the badge at EVERY size */
 .lp-fw-actor .lp-fw-trait {
   flex-direction: column;
   align-items: flex-start;
@@ -1764,7 +1658,6 @@
   gap: 10px;
   height: 44px;
 }
-/* same weight as .lp-fw-win-foot — these are results, not headings */
 .lp-fw-outcome-text {
   min-width: 0;
   font-size: 12.5px;
@@ -1773,7 +1666,6 @@
   overflow-wrap: anywhere;
 }
 
-/* object field rows: muted key left, near-black value right */
 .lp-fw-fields {
   margin: 0;
   display: flex;
@@ -1890,15 +1782,13 @@
     grid-template-columns: 1fr;
     gap: 22px;
   }
-  /* Same pin, re-derived for this breakpoint's numbers: .lp-fw-kb is 16+16
-     padding + 18.75 label + 56 title + three 13px file rows (41.5 each, two
-     hairlines) + 36.75 foot = 270, inside .lp-fw-win--unify's 16+16.
+  /* Re-derived for this breakpoint: .lp-fw-kb = 16+16 padding + 18.75 label +
+     56 title + three 13px file rows (41.5 each, two hairlines) + 36.75 foot =
+     270, inside .lp-fw-win--unify's 16+16.
 
-     ⚠ AND HERE IT IS A FLOOR, NOT A PIN. Stage 4 is the one vignette that stops
-     being a row down here — actor card, tile and three outcome rows stack into
-     roughly 400px — so pinning would clip it rather than square it up. Stages
-     1, 2 and 3 all measure under 302 and so are still exactly equal; stage 4
-     keeps the height it has always had at this width. */
+     ⚠ HERE IT IS A FLOOR, NOT A PIN. Stage 4 stops being a row down here
+     (~400px stacked), so pinning would clip it. Stages 1-3 all measure under
+     302 and stay exactly equal. */
   .lp-fw-window {
     --lp-fw-window-h: 302px;
 
@@ -1908,19 +1798,18 @@
   .lp-fw-win {
     padding: 20px 20px;
   }
-  /* after .lp-fw-win — same specificity, so source order is what decides it.
-     The item stacks are fixed (they are half of each connector's geometry), so
-     the room for the cards comes out of the window's padding, the cards'
-     padding and the connectors, in that order. A 375px viewport leaves this
-     window ~264px wide: gutter 20 ▸ banner 335 ▸ glass 92% ▸ margin 22. */
+  /* ⚠ Must stay after .lp-fw-win — same specificity, source order decides.
+     Item stacks are fixed (half of each connector's geometry), so card room
+     comes from window padding, card padding, then connectors, in that order.
+     375px viewport ▸ window ~264px: gutter 20 ▸ banner 335 ▸ glass 92% ▸
+     margin 22. */
   .lp-fw-win--unify,
   .lp-fw-win--objects,
   .lp-fw-win--rel,
   .lp-fw-win--action {
     padding: 16px 14px;
   }
-  /* narrower than the 40px stage 1 ran alone with: stages 2 and 3 have a card
-     on BOTH sides of the connector, and stage 1 only gains room by the change */
+  /* narrower than stage 1's 40px: stages 2 and 3 have a card on BOTH sides */
   .lp-fw-funnel,
   .lp-fw-fan {
     flex-basis: 30px;
@@ -1935,14 +1824,13 @@
     font-size: 16px;
     margin-bottom: 12px;
   }
-  /* the longest name is "call-transcript.md"; at 13px it still clears the card
-     on a 375px viewport instead of wrapping onto a second line */
+  /* longest name "call-transcript.md" clears the card at 13px on 375px */
   .lp-fw-kb .lp-fw-file {
     font-size: 13px;
   }
 
-  /* 2 — the badge stops fighting the trait name for the same line; nothing else
-     gets the template card under ~110px next to the instance column. */
+  /* 2 — badge off the trait name's line; nothing else gets the template card
+     under ~110px next to the instance column */
   .lp-fw-trait {
     flex-direction: column;
     align-items: flex-start;
@@ -1952,10 +1840,9 @@
   .lp-fw-trait-name {
     font-size: 12px;
   }
-  /* The panel keeps its 224px — every one of its rows is held at the desktop
-     size by a two-class selector, so only the WIDTH gives. 118 leaves the fan
-     12 of its 30px showing while the panel is open, and hands all 30 back the
-     moment it condenses. */
+  /* Panel keeps its 224px — its rows are held at desktop size by two-class
+     selectors, so only WIDTH gives. 118 leaves the fan 12 of its 30px showing
+     while open, and hands all 30 back on condense. */
   .lp-fw-win--objects {
     --lp-fw-inst-w: 100px;
     --lp-fw-sam-w: 118px;
@@ -1981,7 +1868,7 @@
     font-size: 9.5px;
   }
 
-  /* 3 — the client card is the last thing to give, so the chips give first */
+  /* 3 — client card gives last, so the chips give first */
   .lp-fw-chip {
     padding: 0 10px 0 6px;
     gap: 7px;
@@ -1991,8 +1878,8 @@
   .lp-fw-field-value {
     font-size: 11.5px;
   }
-  /* key over value, same move the trait rows make — the client card is down to
-     ~80px of content here and "Stage · Evaluating" does not fit on one line */
+  /* key over value — client card is ~80px of content here, "Stage ·
+     Evaluating" won't fit on one line */
   .lp-fw-client .lp-fw-field {
     flex-direction: column;
     align-items: flex-start;
@@ -2003,11 +1890,10 @@
     font-size: 11.5px;
   }
 
-  /* 4 — the only vignette that cannot survive as a row: three destination rows
-     need ~170px of text column, which this window does not have once the actor
-     card and the tile are paid for. It becomes a column, and the two hairline
-     .lp-fw-vwire spans take over from the horizontal wires — a squeezed viewBox
-     can compress a connector but it cannot rotate one. */
+  /* 4 — cannot survive as a row: three destination rows need ~170px of text
+     column, which is gone once the actor card and tile are paid for. Becomes a
+     column; .lp-fw-vwire takes over from the horizontal wires, because a
+     squeezed viewBox can compress a connector but not rotate one. */
   .lp-fw-win--action {
     flex-direction: column;
     align-items: center;
@@ -2035,12 +1921,9 @@
   }
 }
 
-/* ── Control — the closing section, on the plain white page ────────────
-   Reference: Natural.dev "Control". Two columns: the claim left (eyebrow,
-   thin heading, four roomy checked bullets, dark pill CTA + text link), and
-   right a large LIGHT-GRAY panel with the white identity card floating high
-   inside it — the gray field around the white card is the texture that makes
-   the section. Static: no scroll choreography (removed 2026-08-13), no modes.
+/* ── Control ───────────────────────────────────────────────────────────
+   Two columns: claim left, gray panel + floating white identity card right.
+   ⚠ Static — no scroll choreography, no modes.
    Markup: components/control-section.tsx. */
 
 .lp-ctl {
@@ -2057,8 +1940,6 @@
   align-items: start;
 }
 
-/* Left column — the reference's air: eyebrow sits close to the heading, the
-   bullets breathe (~34px pitch), the CTA clears the list by ~48px. */
 .lp-ctl-copy {
   padding-top: 12px;
 }
@@ -2113,8 +1994,7 @@
   opacity: 0.6;
 }
 
-/* Right column — the gray field. Taller than the card so gray shows all
-   around it; the card floats in the upper area like the reference. */
+/* Gray taller than the card, so it shows all around. */
 .lp-ctl-panel {
   background: #f5f5f4;
   border-radius: 4px;
@@ -2126,7 +2006,6 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 30px rgba(0, 0, 0, 0.06);
   padding: 24px 26px 22px;
 }
-/* Inner bordered card: name + handle + actions on the left, avatar right. */
 .lp-ctl-card-head {
   display: flex;
   align-items: stretch;
@@ -2193,7 +2072,6 @@
   background: linear-gradient(160deg, #a8c6e8 0%, #6d9fd8 55%, #4d83c4 100%);
 }
 
-/* Key/value rows under the inner card, on the white card itself. */
 .lp-ctl-rows {
   margin: 26px 2px 0;
   display: flex;
@@ -2243,16 +2121,11 @@
 }
 
 
-/* ── Developers — the closing section, and the page's bottom edge ──────
-   Reference: Natural.dev "Developers". Eyebrow + a thin two-line heading (same
-   treatment as .lp-fw-heading / .lp-ctl-heading), then a wide SKY band with a
-   row of tab pills sitting directly on top of one white terminal window, and a
-   single dark CTA pill below the band. The tab swaps the command; this file
-   only fades it. Markup: components/developers-section.tsx.
-
-   BOTTOM EDGE: this section is last, so its padding-bottom — not .lp-hero's
-   48px alone — is what keeps the page from ending flush against the CTA.
-   .lp-ctl never carried a bottom margin, so nothing moved off it. */
+/* ── Developers — last section, owns the page's bottom edge ────────────
+   Tab swaps the command; this file only fades it.
+   Markup: components/developers-section.tsx.
+   ⚠ padding-bottom here is what keeps the page from ending flush against the
+   CTA — .lp-hero's 48px is not enough on its own. */
 
 .lp-dev {
   width: 100%;
@@ -2272,12 +2145,10 @@
   color: var(--muted);
 }
 
-/* The heading MUST set two lines, breaking after the first comma like the
-   reference ("Start moving money via MCP," / "CLI, SDK, or API"). Cap in `em`
-   so it tracks the clamped size instead of re-breaking at each step: calibrated
-   off .lp-fw-heading's measured ~0.42em/char, "Connect your agent via MCP,"
-   lands near 11.8em and adding " SDK," pushes past 13.4em — 12.6em sits between
-   the two, so the break falls after "MCP," at every size in the clamp. */
+/* ⚠ Heading MUST set two lines, breaking after the first comma. Cap in `em` so
+   it tracks the clamped size: at ~0.42em/char, "Connect your agent via MCP,"
+   lands near 11.8em and adding " SDK," passes 13.4em — 12.6em sits between, so
+   the break falls after "MCP," at every size in the clamp. */
 .lp-dev-heading {
   margin: 0 0 44px;
   max-width: 12.6em;
@@ -2289,14 +2160,10 @@
   color: #0a0a0a;
 }
 
-/* The sky band. Roughly 2:1 and SQUARER than our other banners — the reference
-   rounds this one at ~4-8px, not the 24px .lp-fw-banner uses.
-
-   The sky is a real photo (public/img/dev-clouds.jpg, owner-supplied,
-   867×483 — soft focus, so the upscale is invisible). Ghost tabs are white
-   at 65% on it; the 15px tab glyphs carry cutout details in
-   --lp-dev-glyph-bg: white on the active pill, sampled sky lavender on
-   ghosts (a photo can't be referenced from an SVG fill). */
+/* Sky band. Photo is public/img/dev-clouds.jpg (867×483, soft focus so the
+   upscale is invisible). ⚠ Tab glyph cutouts read `--lp-dev-glyph-bg` —
+   white on the active pill, sampled sky lavender on ghosts — because a photo
+   cannot be referenced from an SVG fill. */
 .lp-dev-band {
   position: relative;
   display: flex;
@@ -2310,7 +2177,6 @@
   background: url("/img/dev-clouds.jpg") center / cover no-repeat;
 }
 
-/* One glass panel behind the tab row + terminal. */
 .lp-dev-glass {
   width: min(62%, 840px);
 }
@@ -2364,8 +2230,6 @@
   flex: none;
 }
 
-/* The terminal window. One command line and a lot of room under it — the
-   reference's window is ~200px tall for a single line, which is the point. */
 .lp-dev-term {
   width: 100%;
   background: #ffffff;
@@ -2381,7 +2245,7 @@
   padding: 0 12px 0 18px;
   border-bottom: 1px solid var(--line);
 }
-/* GRAY dots, not the macOS traffic colours — the reference's are gray. */
+/* GRAY dots, not the macOS traffic colours. */
 .lp-dev-dots {
   display: inline-flex;
   gap: 8px;
@@ -2392,12 +2256,9 @@
   border-radius: 999px;
   background: #d9d9d9;
 }
-/* Close button one step darker than its two neighbours. macOS gives the three
-   distinct colours; staying gray (see above) loses that, and a flat row of
-   identical dots reads as decoration rather than as window chrome. Darkening
-   only the leftmost restores the hierarchy without importing the traffic
-   palette. Kept in step with `.lp-mp-chrome span:first-child`, which does the
-   same thing at 8px — the two window mocks should not disagree. */
+/* Close button one step darker — restores window-chrome hierarchy without
+   importing the traffic palette. ⚠ Keep in step with
+   `.lp-mp-chrome span:first-child`, which does the same at 8px. */
 .lp-dev-dots i:first-child {
   background: #b9b9b9;
 }
@@ -2430,8 +2291,8 @@
   outline-offset: 2px;
 }
 
-/* FIXED height: the Claude Code command wraps to two lines, the others are
-   one — the box is sized for two so switching tabs moves NOTHING. */
+/* ⚠ FIXED height, sized for TWO lines: the Claude Code command wraps and the
+   others don't, so a content-driven box would move on every tab switch. */
 .lp-dev-term-body {
   display: flex;
   align-items: flex-start;
@@ -2454,8 +2315,8 @@
     animation: none;
   }
 }
-/* Marketing has no mono token — the landing page owns one grotesk and nothing
-   else — so the stack is spelled out here rather than invented as a var. */
+/* No mono token exists for marketing (the page owns one grotesk), so the stack
+   is spelled out rather than invented as a var. */
 .lp-dev-prompt,
 .lp-dev-cmd {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
@@ -2486,7 +2347,7 @@
   .lp-dev-heading {
     margin-bottom: 32px;
   }
-  /* Height goes auto so the band still closes cleanly once the tabs wrap. */
+  /* auto height so the band still closes cleanly once the tabs wrap */
   .lp-dev-band {
     height: auto;
     padding: clamp(40px, 8vw, 72px) 0 clamp(48px, 10vw, 88px);
@@ -2570,7 +2431,6 @@
   border-radius: 999px;
   padding: 4px 11px;
 }
-/* Softer badge for the Pro card — a label, not the "Popular" accent. */
 .lp-plan-badge--soft {
   color: var(--ink);
   background: #f0f0f0;
@@ -2601,8 +2461,7 @@
   font-size: 14px;
   color: var(--muted);
 }
-/* One-sentence plain-English summary of who the tier is for — the key
-   legibility win. min-height keeps the CTAs roughly aligned across cards. */
+/* min-height keeps the CTAs roughly aligned across cards. */
 .lp-plan-summary {
   font-size: 13.5px;
   line-height: 1.45;
@@ -2673,9 +2532,8 @@
 }
 
 /* ── Comparison strip ─────────────────────────────────────────────────
-   Makes the tier deltas unmistakable under the cards. The table has a
-   min-width and lives in an overflow-x scroller so it survives mobile
-   (scrolls sideways rather than crushing). */
+   ⚠ min-width + overflow-x scroller: the table must scroll sideways on mobile
+   rather than crush. */
 .lp-compare {
   margin-top: 40px;
 }
@@ -2703,7 +2561,6 @@
 .lp-compare-table tbody tr:last-child td {
   border-bottom: none;
 }
-/* Column headers = plan names. */
 .lp-compare-table thead th {
   font-size: 15px;
   font-weight: 600;
@@ -2717,7 +2574,6 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-/* Row headers = the feature being compared. */
 .lp-compare-table tbody th {
   font-size: 14px;
   font-weight: 500;
@@ -2736,7 +2592,7 @@
   font-weight: 400;
   color: var(--muted);
 }
-/* Tint the Team column so the highlighted card carries through the strip. */
+/* Tint the Team column so the highlighted card carries through */
 .lp-compare-col--popular {
   background: rgba(13, 13, 13, 0.03);
 }
@@ -2752,12 +2608,10 @@
 }
 
 /* ── Ambient-audio toggle ────────────────────────────────────────────────
-   The landing bed's on/off control (ambient-audio.tsx), pinned bottom-left.
-   It composes `.lp-icon-btn` for the raised 3D face — this block only
-   places and shrinks it, so the nav buttons stay the single source of the
-   recipe. Smaller than a nav button (34 vs 42) because it is page chrome
-   rather than navigation: present, not competing with the hero. Its
-   z-index clears the banner scene's stacked layers (max 3). */
+   Bed's on/off control (ambient-audio.tsx). Composes `.lp-icon-btn` for the 3D
+   face — this block only places and shrinks it (34 vs 42: page chrome, not
+   navigation), so the nav buttons stay the single source of the recipe.
+   ⚠ z-index must clear the banner scene's stacked layers (max 3). */
 .lp-audio-toggle {
   position: fixed;
   left: 20px;
@@ -2770,7 +2624,7 @@
 .lp-audio-toggle:hover {
   color: var(--ink);
 }
-/* Keyboard focus must survive the button's own transform/shadow states. */
+/* ⚠ Keyboard focus must survive the button's transform/shadow states. */
 .lp-audio-toggle:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;

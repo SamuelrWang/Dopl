@@ -1,10 +1,10 @@
 /**
- * Member-management hierarchy rules, shared by server enforcement
- * (invitations.ts, join-links.ts) and the members UI. Pure — client-safe.
+ * Member-management hierarchy, shared by server enforcement (invitations.ts,
+ * join-links.ts) and the members UI. Pure — client-safe.
  *
- * Owners manage anyone (including themselves — last-owner protection is
- * a separate DB-backed check). Admins manage member/viewer only: never
- * themselves, never owners or other admins.
+ * Owners manage anyone incl. themselves (last-owner protection is a separate
+ * DB-backed check). Admins manage member/viewer only: never themselves, never
+ * owners or other admins.
  */
 
 import { meetsMinRole, type Role } from "./types";
@@ -31,9 +31,8 @@ export function canGrantRole(callerRole: Role, newRole: Role): boolean {
 }
 
 /**
- * Whether the members UI renders manage controls for a row. Stricter
- * than the server rule: self and owner rows never show controls (owners
- * self-manage via ownership transfer, not the row menu).
+ * ⚠ Stricter than the server rule: self and owner rows never show controls
+ * (owners self-manage via ownership transfer, not the row menu).
  */
 export function canShowMemberControls(
   callerRole: Role,

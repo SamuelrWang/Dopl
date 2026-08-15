@@ -10,9 +10,8 @@ import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP, FIELD_WELL } from "./ontology-bits";
 
 /**
- * Relationships section — editable edges. Each row: edge label, target
- * chips (click = navigate, ✕ = unlink), and the cascade picker to link
- * more (columns or individual objects). Footer adds a new edge.
+ * Relationships section — editable edges. Row = label, target chips (click =
+ * navigate, ✕ = unlink), cascade picker to link more. Footer adds an edge.
  */
 export function RelationshipsEditor({
   object,

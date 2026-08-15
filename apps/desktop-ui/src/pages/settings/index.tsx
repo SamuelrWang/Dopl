@@ -13,22 +13,15 @@ import { useWorkspaceRoute } from "#/components/app-shell";
 import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
 
 /**
- * /:workspaceSegment/settings — per-workspace settings. Port of
- * `src/app/[workspaceSlug]/(app)/settings/page.tsx`
- * (docs/migration-research/web-pages.md §14).
+ * /:workspaceSegment/settings — per-workspace settings.
  *
- * The RSC's two server calls (segment resolution — the since-deleted
- * `resolvePageWorkspace` — plus `resolveMembershipOrThrow`)
- * collapse into the endpoint §14 names as already covering them:
- * `GET /api/workspaces/{segment}` → `{ workspace, role }`. That is the same
- * path+key the settings modal's workspace pane reads — both build it with
- * `workspaceReadPath` — so the two share one cache entry.
+ * `GET /api/workspaces/{segment}` → `{ workspace, role }`. Same path+key the
+ * settings modal's workspace pane reads (both via `workspaceReadPath`), so the
+ * two share one cache entry.
  *
- * The sections are NOT composed here: `WorkspaceSectionBody` is the one
- * composition the modal's General pane renders too, so a change to the
- * workspace-settings surface lands on both. This page differs only in chrome (a
- * page header instead of the modal's section card) and in the extra section it
- * hangs off the body's `extras` slot.
+ * ⚠ Sections NOT composed here: `WorkspaceSectionBody` is the same composition
+ * the modal's General pane renders, so changes land on both. This page differs
+ * only in chrome and in what it hangs off the body's `extras` slot.
  */
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -71,10 +64,8 @@ export default function SettingsPage() {
             workspace={workspace}
             role={role}
             onSaved={(updated, previous) => {
-              // The web binding's `router.push` / `router.refresh()` pair: a
-              // rename regenerates the slug, so the canonical URL moves and
-              // every cached read of the old segment is stale. Same segment →
-              // just re-read (there is no RSC to refresh here).
+              // ⚠ Rename regenerates the slug, so the canonical URL moves and
+              // every cached read of the old segment is stale.
               invalidateWorkspaceReads(queryClient, segment);
               if (updated.slug !== previous.slug) {
                 navigate(`/${workspaceSegment(updated)}/settings`, { replace: true });
@@ -82,9 +73,8 @@ export default function SettingsPage() {
             }}
             onDeleted={(next) => {
               invalidateWorkspaceReads(queryClient, segment);
-              // Lands on BootPage, which provisions via ensure-default or
-              // routes to /onboarding — mirrors the web's post-delete
-              // convergence.
+              // "/" lands on BootPage, which provisions or routes to
+              // /onboarding.
               navigate(next ? `/${workspaceSegment(next)}` : "/", { replace: true });
             }}
             extras={<ConnectedAppsSection />}

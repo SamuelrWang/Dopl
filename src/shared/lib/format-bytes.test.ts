@@ -2,12 +2,9 @@ import { describe, it, expect } from "vitest";
 import { formatBytes } from "./format-bytes";
 import { KB_STORAGE_BYTES } from "@/features/billing/kb-storage";
 
-/**
- * The property worth pinning is the JOIN with the cap table: the meter renders
- * `formatBytes(used)` beside `formatBytes(limit)`, so a decimal/binary mismatch
- * between this file and `kb-storage.ts` shows up as a cap that reads 4.8 MB.
- * Both sides of that join are asserted here, per INVARIANTS §14.
- */
+/** ⚠ The JOIN with the cap table is the property: the meter renders
+ *  `formatBytes(used)` beside `formatBytes(limit)`, so a decimal/binary mismatch
+ *  vs `kb-storage.ts` shows up as a cap that reads 4.8 MB. */
 
 describe("formatBytes", () => {
   it("renders bytes whole and larger units to one decimal", () => {

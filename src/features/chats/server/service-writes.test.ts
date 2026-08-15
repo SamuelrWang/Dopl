@@ -1,10 +1,8 @@
 /**
- * Unit tests for the chats write service. Repository + retention window are
- * mocked (no Supabase). Focus: the append echo must not become a retention
- * bypass — appending to a chat outside the free-plan window returns the
- * detail with the transcript withheld (messages: []) while keeping the
- * append itself allowed and `messageCount` honest. Pro / in-window appends
- * echo the full transcript as before.
+ * Chats write service, repository + retention window mocked.
+ * ⚠ Focus: the append echo must not become a retention bypass — an append to
+ * an out-of-window chat returns the detail with `messages: []` while the
+ * append itself is allowed and `messageCount` stays honest.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -90,9 +88,8 @@ describe("appendMessages — retention echo", () => {
 
     const detail = await appendMessages(ctx, "chat-1", APPEND);
 
-    // The append still ran.
     expect(repo.appendMessagesTx).toHaveBeenCalled();
-    // Transcript withheld, but the count stays honest.
+    // Transcript withheld, count stays honest.
     expect(detail.messages).toEqual([]);
     expect(detail.messageCount).toBe(5);
   });
@@ -122,17 +119,15 @@ describe("appendMessages — retention echo", () => {
 });
 
 describe("deleteChat — permanent delete invariants", () => {
-  // Delete is PERMANENT as of 2026-08-07 (RETIREMENT-UNWIRING-PLAN §2b): there
-  // is no trash, no restore, no purge. `deleteChat` resolves a LIVE chat via
-  // `requireOwnChat` and hard-deletes it in one step. These pin the gate (which
-  // is unchanged) and the fact that the write is a real DELETE.
+  // ⚠ Delete is PERMANENT: no trash, no restore, no purge. `deleteChat`
+  // resolves a LIVE chat via `requireOwnChat` and hard-deletes in one step.
   beforeEach(() => {
     vi.mocked(repo.hardDeleteChat).mockResolvedValue(undefined);
   });
 
   it("refuses an unknown or cross-workspace chat (not found, no delete)", async () => {
-    // findChatById is workspace-scoped, so an unknown id and a cross-workspace
-    // id both come back null — one lookup covers both refusals.
+    // findChatById is workspace-scoped, so unknown and cross-workspace ids
+    // both come back null — one lookup covers both refusals.
     vi.mocked(repo.findChatById).mockResolvedValue(null);
 
     await expect(deleteChat(ctx, "chat-1")).rejects.toBeInstanceOf(
@@ -153,10 +148,10 @@ describe("deleteChat — permanent delete invariants", () => {
   });
 
   it("refuses a workspace-scoped API-key caller even when they own it", async () => {
-    // The chat is PUBLIC/workspace so `canSeeChat` lets the key past the
-    // visibility gate — the refusal has to come from the ownership branch's
-    // `ctx.apiKeyWorkspaceId` clause, which is what this pins. (A private chat
-    // 404s one step earlier, which would test the visibility gate instead.)
+    // ⚠ Chat is PUBLIC/workspace so `canSeeChat` lets the key past the
+    // visibility gate: the refusal must come from the ownership branch's
+    // `ctx.apiKeyWorkspaceId` clause. A private chat 404s a step earlier and
+    // would test the wrong gate.
     const apiKeyCtx: ChatContext = { ...ctx, apiKeyWorkspaceId: WS };
     vi.mocked(repo.findChatById).mockResolvedValue(
       chatRow({ visibility: "public" })
@@ -174,7 +169,7 @@ describe("deleteChat — permanent delete invariants", () => {
     await deleteChat(ctx, "chat-1");
 
     expect(repo.hardDeleteChat).toHaveBeenCalledWith(WS, "chat-1");
-    // The soft-delete path is gone: nothing may stamp `deleted_at` any more.
+    // ⚠ Nothing may stamp `deleted_at` any more.
     expect(repo).not.toHaveProperty("softDeleteChat");
   });
 });

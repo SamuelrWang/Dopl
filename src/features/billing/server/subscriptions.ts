@@ -34,9 +34,8 @@ export async function getProfileBillingRef(
 }
 
 /**
- * Find the user behind a Stripe customer id (grandfather mapping only —
- * the legacy customer id lives on the profile; new customers live on
- * workspace_billing).
+ * User behind a Stripe customer id — grandfather mapping ONLY (legacy customer
+ * id lives on the profile; new customers live on workspace_billing).
  */
 export async function getUserByStripeCustomer(
   stripeCustomerId: string

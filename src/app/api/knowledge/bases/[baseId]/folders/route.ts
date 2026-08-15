@@ -10,10 +10,8 @@ import {
 } from "@/features/knowledge/server/service";
 import { KnowledgeFolderCreateSchema } from "@/features/knowledge/schema";
 
-// URL provides the parent base, so the body must NOT carry it. Omitting
-// the field at parse time means clients can `POST {name: "..."}` without
-// a redundant `knowledgeBaseId` field — and prevents silent override of
-// a mismatched value (we'd inject the URL's id either way).
+// ⚠ URL provides the parent base, so the body must NOT carry it — omitting the field at parse
+// time prevents a silent override of a mismatched `knowledgeBaseId`.
 const FolderCreateBodySchema = KnowledgeFolderCreateSchema.omit({
   knowledgeBaseId: true,
 });

@@ -11,16 +11,13 @@ export interface MembersWidgetCoreProps {
   /** Null until the members fetch resolves. */
   members: WorkspaceMemberView[] | null;
   loading: boolean;
-  /** Router-agnostic link — `next/link` in the web app, react-router in the SPA. */
+  /** Router-agnostic link: `next/link` in web, react-router in the SPA. */
   Link: LinkLike;
 }
 
-/**
- * The overview members panel's Next-free, fetch-free core (see
- * `./members-widget` for the web binding): total count, an overlapping avatar
- * stack (first 5), and a "View all →" link to the full members page. The list
- * is a prop because the two apps read it over different transports.
- */
+/** Next-free, fetch-free core of the overview members panel (web binding in
+ *  `./members-widget`): count, avatar stack, "View all" link. ⚠ The list is a
+ *  prop because the two apps read it over different transports. */
 export function MembersWidgetCore({
   workspaceSlug,
   members,

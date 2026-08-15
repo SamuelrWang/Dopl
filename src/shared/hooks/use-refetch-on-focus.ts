@@ -3,29 +3,20 @@
 import { useEffect, useRef } from "react";
 
 interface Options {
-  /**
-   * Skip the refetch when this returns true. Use to suppress refresh
-   * while the user has unsaved keystrokes — replacing editor content
-   * mid-typing would clobber their in-progress edits.
-   */
+  /** Skip the refetch when true. ⚠ Use while the user has unsaved keystrokes —
+   *  replacing editor content mid-typing clobbers in-progress edits. */
   skip?: () => boolean;
-  /**
-   * Minimum interval between refetches. Multiple focus events fired in
-   * quick succession (e.g. quick alt-tab) collapse to one call.
-   */
+  /** Minimum interval between refetches; rapid focus events collapse to one. */
   minIntervalMs?: number;
   /** Defaults to true; pass false to disable the hook entirely. */
   enabled?: boolean;
 }
 
 /**
- * Calls `refetch` whenever the browser tab regains focus or visibility,
- * gated by `skip()` and throttled by `minIntervalMs`.
- *
- * Listens to both `visibilitychange` (covers cmd-tab and back-grounding)
- * and `focus` (covers click-into-window from another already-visible
- * window) so the cross-tab "I switched back, show me the latest" flow
- * is reliable on every platform.
+ * `refetch` on tab focus/visibility, gated by `skip()` and throttled by
+ * `minIntervalMs`. ⚠ Listens to BOTH `visibilitychange` (cmd-tab,
+ * back-grounding) and `focus` (click-into-window from an already-visible
+ * window) — either alone is unreliable across platforms.
  */
 export function useRefetchOnFocus(
   refetch: () => void | Promise<void>,

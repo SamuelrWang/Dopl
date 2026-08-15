@@ -3,22 +3,12 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { SkillContext, SkillEvent, SkillVersion } from "../types";
 
 /**
- * Skill history — body-version snapshots + the structural audit timeline.
- *
- * Write API (called from service.ts mutation paths only):
- *   recordVersion(...)  — snapshot the SKILL.md body after a content save
- *   recordEvent(...)    — log a structural change (create/publish/…)
- *
- * Both writers are BEST-EFFORT: a history failure must never fail the
- * user's save, so errors are logged loudly and swallowed. The read API
- * is strict (throws) — a broken history page should say so.
- *
- * Retention: newest VERSION_CAP snapshots per skill; pruned inline after
- * each insert.
- *
- * Since F-029 the body is a column on the skill row, so versions key off
- * `skill_id` alone (the `skill_versions` table — formerly
- * `skill_file_versions`, with its file linkage dropped).
+ * Skill history — body snapshots (`recordVersion`) + structural audit events
+ * (`recordEvent`), written only from service.ts mutation paths.
+ * ⚠ Both writers are BEST-EFFORT: a history failure must never fail the
+ * user's save, so errors are logged and swallowed. Readers are strict.
+ * Retention: newest VERSION_CAP snapshots per skill, pruned inline after each
+ * insert. Versions key off `skill_id` alone.
  */
 
 const VERSION_CAP = 200;
@@ -82,7 +72,7 @@ export interface RecordVersionArgs {
   body: string;
 }
 
-/** Snapshot the SKILL.md body. Never throws — history must not break saves. */
+/** ⚠ Never throws — history must not break saves. */
 export async function recordVersion(args: RecordVersionArgs): Promise<void> {
   const { ctx, skillId, body } = args;
   try {
@@ -104,7 +94,7 @@ export async function recordVersion(args: RecordVersionArgs): Promise<void> {
   }
 }
 
-/** Log a structural change. Never throws — history must not break saves. */
+/** ⚠ Never throws — history must not break saves. */
 export async function recordEvent(args: {
   ctx: SkillContext;
   skillId: string;
@@ -133,9 +123,9 @@ export async function recordEvent(args: {
 /** Keep the newest VERSION_CAP snapshots for a skill. */
 async function pruneVersions(skillId: string): Promise<void> {
   const db = supabaseAdmin();
-  // Find the created_at of the oldest row we want to KEEP, then delete
-  // everything strictly older. Two cheap indexed queries; runs inline
-  // after each insert so the excess is never more than one row.
+  // created_at of the oldest row to KEEP, then delete everything strictly
+  // older. Two indexed queries; inline after each insert, so the excess is
+  // never more than one row.
   const { data, error } = await db
     .from("skill_versions")
     .select("created_at")

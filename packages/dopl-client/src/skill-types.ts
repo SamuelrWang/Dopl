@@ -1,18 +1,16 @@
 /**
  * Domain types for skills exposed over the Dopl API.
  *
- * Mirrors `src/features/skills/types.ts` in the main app — kept in
- * sync by hand. If they ever drift, the API responses are the source
- * of truth.
+ * ⚠ Mirrors `src/features/skills/types.ts` — hand-synced. On drift, the API
+ * responses are the source of truth.
  */
 
 export type SkillStatus = "active" | "draft";
 export type SkillWriteSource = "user" | "agent";
 
 /**
- * Per-resource visibility. Skills use the full three-way model:
- * private (owner only), public+workspace (everyone), public+teams
- * (granted teams). Sharing is fully re-scopable by the owner or a
+ * Skills use the full three-way model: private (owner only), public+workspace
+ * (everyone), public+teams (granted teams). Fully re-scopable by the owner or a
  * workspace admin.
  */
 export type SkillVisibility = "public" | "private";
@@ -48,10 +46,9 @@ export interface Skill {
   agentWriteEnabled: boolean;
   visibility: SkillVisibility;
   accessMode: SkillAccessMode;
-  /** Optional organizing folder label; null = unfiled. */
+  /** Organizing folder label; null = unfiled. */
   folder: string | null;
-  /** Teams granted read access — populated only for owners/admins on
-   *  teams-mode skills. */
+  /** Populated only for owners/admins on teams-mode skills. */
   grantedTeamIds: string[];
   createdBy: string | null;
   lastEditedBy: string | null;
@@ -61,10 +58,7 @@ export interface Skill {
   deletedAt: string | null;
 }
 
-/**
- * The single file backing a skill: its `SKILL.md` procedure body.
- * Skills are single-file — each has exactly one active file.
- */
+/** The `SKILL.md` procedure body. Skills are single-file: exactly one active. */
 export interface SkillFile {
   id: string;
   workspaceId: string;

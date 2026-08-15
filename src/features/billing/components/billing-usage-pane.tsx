@@ -7,20 +7,13 @@ import { formatDate } from "@/shared/lib/format-time";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
- * USAGE — what this workspace has spent of what it is entitled to.
+ * USAGE half of `/billing/[segment]`. Pure READ of the one billing-status
+ * payload (`useWorkspaceEntitlements`) — no second endpoint, no write, no
+ * Stripe; legible to every member, unlike the admin-gated Billing tab.
  *
- * The Usage half of `/billing/[segment]`. Everything here is a READ of the one
- * billing-status payload (`useWorkspaceEntitlements`) — no second endpoint, no
- * write, no Stripe. That is the whole reason the page splits: the Billing tab
- * is about money and is admin-only in its interesting parts, while this tab is
- * about the workspace and is legible to every member.
- *
- * FOUR FACTS, IN THE ORDER THEY RUN OUT. MCP credits reset monthly and are the
- * only meter every plan has, so they lead. Ontology objects are capped only on
- * a multi-member free workspace — a paid one shows the count and says
- * "Unlimited" rather than rendering an empty track against a cap that does not
- * exist. Members/seats and the chat-history window are limits you meet rather
- * than fill, so they are lines, not bars.
+ * Order = order things run out: MCP credits (only meter every plan has),
+ * ontology objects (capped only on multi-member free; paid says "Unlimited"
+ * rather than an empty track), then members/seats and chat window as lines.
  */
 export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
   const ent = useWorkspaceEntitlements(workspaceId);
@@ -106,7 +99,7 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-/** A limit you meet rather than fill — the meter's row shape, no track. */
+/** Limit you meet rather than fill — meter row shape, no track. */
 function UsageLine({
   label,
   value,

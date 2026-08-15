@@ -10,9 +10,8 @@ import {
 } from "./dto";
 
 /**
- * Raw Supabase I/O for knowledge BASES — reads, writes, cascade
- * trash/restore, and owner-name hydration. No business logic, no auth
- * checks; see `repository.ts` for the split map and conventions.
+ * Raw Supabase I/O for knowledge BASES. No business logic, no auth checks —
+ * see `repository.ts` for the split map and conventions.
  */
 
 export async function findBaseById(
@@ -27,9 +26,8 @@ export async function findBaseById(
   return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
 }
 
-/** Batch id lookup — trash visibility filtering (parents of trashed
- *  folders/entries may be live or trashed, so deleted rows are
- *  included). Workspace-filtered because callers pass untrusted ids. */
+/** Batch id lookup. Deleted rows INCLUDED (parents of trashed children may
+ *  themselves be trashed). Workspace-filtered — callers pass untrusted ids. */
 export async function listBasesByIds(
   workspaceId: string,
   ids: string[]
@@ -96,11 +94,9 @@ export async function listBasesForWorkspace(
 }
 
 /**
- * Read-only — used by slug-collision checks in the service. Returns
- * only ACTIVE slugs (deleted_at IS NULL) to match the partial-unique
- * index that's still in place — slug uniqueness within a workspace
- * survives the publicId rollout because MCP tools (`kb_*`) address
- * bases by slug.
+ * ACTIVE slugs only (`deleted_at IS NULL`), matching the partial-unique index.
+ * Slug uniqueness per workspace persists alongside publicId because MCP `kb_*`
+ * tools address bases by slug.
  */
 export async function listBaseSlugsForWorkspace(
   workspaceId: string
@@ -121,17 +117,15 @@ export interface InsertBaseArgs {
   slug: string;
   description?: string | null;
   agentWriteEnabled?: boolean;
-  /** Persisted as `'public'` if omitted (matches DB column default).
-   *  App code passes `'private'` for new items so they start as drafts;
-   *  see `createBase` in service.ts. */
+  /** `'public'` if omitted (DB column default). App code passes `'private'`
+   *  for new items so they start as drafts; see `createBase`. */
   visibility?: "public" | "private";
   /** `'workspace'` if omitted (matches DB column default). */
   accessMode?: "workspace" | "teams";
   createdBy: string | null;
 }
 
-/** The row shape for one base insert — shared by the single and batch forms
- *  so the column defaults can never drift between them. */
+/** ⚠ Shared by single AND batch insert so column defaults can't drift. */
 function baseInsertRow(args: InsertBaseArgs) {
   return {
     workspace_id: args.workspaceId,
@@ -157,11 +151,8 @@ export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   return mapBaseRow(data as KnowledgeBaseRow);
 }
 
-/**
- * Insert many bases in ONE statement, for the new-workspace seed. Callers
- * key the result by `slug` (unique per workspace) rather than by index, so
- * nothing depends on the order rows come back in.
- */
+/** Many bases in ONE statement (new-workspace seed). ⚠ Callers key results by
+ *  `slug`, not index — nothing may depend on returned row order. */
 export async function insertBases(
   argsList: InsertBaseArgs[]
 ): Promise<KnowledgeBase[]> {
@@ -180,9 +171,8 @@ export interface UpdateBasePatch {
   slug?: string;
   description?: string | null;
   agentWriteEnabled?: boolean;
-  /** Two-way — the service layer gates who may change scope and runs
-   *  the (since deleted) workflow↔KB narrowing invariant; this repo function takes
-   *  whatever it's given and trusts the caller. */
+  /** Two-way. Service layer gates who may change scope; this repo function
+   *  trusts the caller. */
   visibility?: "public" | "private";
   accessMode?: "workspace" | "teams";
 }
@@ -211,9 +201,8 @@ export async function updateBaseRow(
     update.agent_write_enabled = patch.agentWriteEnabled;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
   if (patch.accessMode !== undefined) update.access_mode = patch.accessMode;
-  // Optimistic concurrency: when expectedUpdatedAt is supplied, the
-  // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
-  // the row changed since the caller read it → return null (stale).
+  // Optimistic concurrency: `updated_at` filter makes this an atomic CAS.
+  // 0 rows → row changed since the caller read it → null (stale).
   let query = db.from("knowledge_bases").update(update).eq("id", id);
   if (expectedUpdatedAt !== undefined) {
     query = query.eq("updated_at", expectedUpdatedAt);
@@ -228,13 +217,10 @@ export async function updateBaseRow(
 }
 
 /**
- * PERMANENTLY delete a base and everything inside it. Deletion is
- * immediate and irreversible — there is no trash (2026-08-07).
- *
- * Workspace-scoped as defense-in-depth on the destructive path. The
- * base's folders/entries (and embeddings/cluster links) cascade out via
- * their `knowledge_base_id ... ON DELETE CASCADE` FKs, so one statement
- * clears the whole subtree.
+ * PERMANENT delete of a base and everything inside — no trash. Workspace-scoped
+ * as defense-in-depth. Folders/entries (and embeddings/cluster links) cascade
+ * via `knowledge_base_id ... ON DELETE CASCADE`, so one statement clears the
+ * subtree.
  */
 export async function hardDeleteBase(
   workspaceId: string,
@@ -250,18 +236,13 @@ export async function hardDeleteBase(
 }
 
 /**
- * `knowledge_bases.storage_bytes` for a SET of bases, keyed by base id — the
- * usage bar's `used` half.
- *
- * A SEPARATE, NARROW QUERY RATHER THAN A COLUMN ON THE BASE ROW, and that is
- * the whole point of it: `KNOWLEDGE_BASE_COLS` feeds `mapBaseRow`, whose output
- * is the `KnowledgeBase` interface that `scripts/check-knowledge-type-drift.ts`
- * pins field-for-field against the SDK's mirror. Adding the counter there would
- * push a display-only number onto every MCP `kb_*` payload. Same rationale as
- * `types.ts › KnowledgeBaseStats`, applied one layer down.
- *
- * Two columns and an `in` filter, so the whole grid costs one round trip.
- * Workspace-filtered like every other batch read here.
+ * `knowledge_bases.storage_bytes` for a SET of bases — the usage bar's `used`
+ * half, one round trip for the grid.
+ * ⚠ SEPARATE QUERY, NOT a column in `KNOWLEDGE_BASE_COLS`: those feed
+ * `mapBaseRow` → the `KnowledgeBase` interface that
+ * `scripts/check-knowledge-type-drift.ts` pins field-for-field against the SDK
+ * mirror, so adding the counter pushes a display-only number onto every MCP
+ * `kb_*` payload. Same rationale as `types.ts › KnowledgeBaseStats`.
  */
 export async function listBaseStorageBytes(
   workspaceId: string,
@@ -283,14 +264,12 @@ export async function listBaseStorageBytes(
 }
 
 /**
- * One base's `storage_bytes` — the write gate's `used` reading. Returns `null`
- * when the row is gone, which the caller must NOT read as zero: the gate fails
- * OPEN on an unknown counter (see `service-storage.ts`).
- *
- * ⚠ `storage_bytes` arrives as a JS `number` even though the column is BIGINT.
- * PostgREST serialises int8 as a JSON number and `supabase-js` does not
- * re-widen it; that is exact up to 2^53 bytes (~9 PB), which no knowledge base
- * will reach before this comment is archaeology.
+ * One base's `storage_bytes` — the write gate's `used` reading.
+ * ⚠ `null` (row gone) must NOT be read as zero: the gate fails OPEN on an
+ * unknown counter (see `service-storage.ts`).
+ * ⚠ Arrives as a JS `number` though the column is BIGINT — PostgREST
+ * serialises int8 as JSON number and `supabase-js` doesn't re-widen. Exact to
+ * 2^53 bytes (~9 PB).
  */
 export async function getBaseStorageBytes(
   workspaceId: string,

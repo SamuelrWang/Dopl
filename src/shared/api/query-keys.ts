@@ -1,29 +1,20 @@
 import type { ApiRequestOpts } from "./api-envelope";
 
 /**
- * THE cache-key factory for every `apiRequest`-backed query.
+ * THE cache-key factory for every `apiRequest`-backed query. ⚠ Never hand-type
+ * the tuple at a call site: a key that drifts by one character is a SILENT
+ * no-op — the write lands in an entry no observer is subscribed to, the screen
+ * does not change, and nothing fails.
  *
- * `use-api-query-core.ts:54` builds `[path, workspaceId, query]` and nothing
- * else ever named that tuple, so a mutation that wanted to write into a read's
- * cache had to re-type the array by hand at the call site — which is why this
- * repo had zero `setQueryData` and ~86 await-then-refetch write sites instead.
- * A hand-typed key that drifts by one character is a silent no-op: the write
- * lands in a cache entry no observer is subscribed to, the screen does not
- * change, and nothing fails. Hence one factory, imported by both sides.
+ * ⚠ Two shapes, and the difference is load-bearing:
+ *  - `entry(opts)` — the EXACT tuple one read built (tests, `getQueryData`).
+ *  - `all` — the one-element PREFIX `[path]`. TanStack matches by array prefix,
+ *    so this reaches every workspace / query-param variant in one call.
+ *    Optimistic writes and invalidations use it because the writer usually does
+ *    NOT know which variants a reader mounted (the channel list is cached twice,
+ *    with and without `?include=archived`).
  *
- * TWO SHAPES, and the difference is load-bearing:
- *
- *  - `entry(opts)` is the EXACT tuple one read built. Use it to assert against
- *    a specific cache entry (tests, `getQueryData`).
- *  - `all` is the one-element PREFIX `[path]`. TanStack matches keys by array
- *    prefix, so this reaches every workspace / query-param variant of the same
- *    resource in one call. Optimistic writes and invalidations use it, because
- *    the writer usually does NOT know which variants a reader mounted (the
- *    channel list, for instance, is cached twice — with and without
- *    `?include=archived` — and a tool-profile toggle must patch both).
- *
- * Framework-free on purpose (no React, no Next): the desktop SPA imports this
- * verbatim, exactly as it imports `query-defaults.ts`.
+ * ⚠ Framework-free (no React, no Next) — the desktop SPA imports this verbatim.
  */
 
 /** The `query` half of the tuple — `apiRequest`'s own param shape. */
@@ -67,11 +58,9 @@ export interface ApiResourceKeys {
   entry(opts?: ApiQueryKeyOpts): ApiQueryKey;
 }
 
-/**
- * Wrap a path in its key factories. Features build the path (they own their
- * URL vocabulary) and get the two key shapes back, so no feature ever writes
- * an array literal that has to match `use-api-query-core` by eye.
- */
+/** Wrap a path in its key factories: features own their URL vocabulary and get
+ *  both key shapes back, so no feature writes an array literal that must match
+ *  `use-api-query-core` by eye. */
 export function apiResource(path: string): ApiResourceKeys {
   return {
     path,

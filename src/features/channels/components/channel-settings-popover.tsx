@@ -22,41 +22,30 @@ import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "./permission-preset-row";
 import type { AgentToolProfile, Channel, ChannelMember } from "../types";
 
 /**
- * WHAT EACH TOOL PROFILE ACTUALLY MEANS, in the operator's words.
+ * WHAT EACH TOOL PROFILE MEANS, in the operator's words. ⚠ Source of truth is
+ * `dopl-desktop-app/main/tool-profiles.js` — read its header before touching a
+ * line here. These three sentences are the ONLY place a person is told what they
+ * are choosing between, and each is a claim about CONTAINMENT.
  *
- * The source of truth is `dopl-desktop-app/main/tool-profiles.js` — read its
- * header before touching a line here, because these three sentences are the ONLY
- * place a person is told what they are choosing between, and every one of them is
- * a claim about containment.
+ * `full` — no `--tools` bound, no `--allowedTools`, no scoped `--settings`, and
+ * specifically NO `--strict-mcp-config`: the operator's OWN connected MCP servers
+ * load alongside Dopl's and their global `permissions.allow` keeps applying.
+ * That is the PRODUCT. The copy's job is to INFORM, not to warn.
  *
- * `full` — the spawn carries no `--tools` bound, no `--allowedTools` list, no
- * scoped `--settings`, and specifically NO `--strict-mcp-config`. Concretely: the
- * operator's OWN connected MCP servers load alongside Dopl's, and their global
- * `permissions.allow` entries keep applying. That is the PRODUCT, not an accident
- * — a teammate asking your agent to pull something out of your Slack is the point
- * of the feature. The copy's job is to make the choice INFORMED, not to make it
- * sound like a hazard, so it names the connectors plainly and stops there.
- *
- * `dopl_only` — local read built-ins + WebFetch/WebSearch + the NON-ADMIN Dopl
- * tools, each pre-approved by name so they work headless. Deliberately NOT "full
- * minus danger": the header is explicit that it is not more dangerous than `full`,
- * and it is a legitimate first choice, not a fallback. `dopl_channel` is excluded
- * AND denied by name, so its reply routes back through the approve-out gate rather
- * than posting itself.
+ * `dopl_only` — local read built-ins + WebFetch/WebSearch + NON-ADMIN Dopl tools,
+ * pre-approved by name so they work headless. ⚠ Not "full minus danger" — it is
+ * not more dangerous than `full` and is a legitimate first choice.
+ * `dopl_channel` is excluded AND denied by name, so its reply routes back through
+ * the approve-out gate rather than posting itself.
  *
  * `read_only` — local read built-ins only. The whole Dopl MCP server is denied by
- * prefix, and so is the web, which is why it is the one profile with no outbound
- * channel of its own at all.
+ * prefix, and so is the web, so it is the one profile with no outbound channel.
  *
- * DO NOT add "and a few destructive tools are always denied" to the `full` line,
- * even now that C-10's floor has landed. `UNIVERSAL_HARD_DENY` is exactly the Dopl
- * ADMIN + RETIRED tools; the SDK lane's `SESSION_HARD_DENY` is broader (the
- * delegation / outbound / persistence built-ins too), and `tool-profiles.js` says
- * in writing that it stopped short of those on purpose and that the gap is real.
- * So there IS a floor, and it is not the same floor on both lanes — a UI sentence
- * generalizing it would be true on one lane and wrong on the other. The three
- * descriptions below say what each profile GRANTS, which is the question the
- * operator is actually answering, and make no promise about what is withheld.
+ * ⚠ Do NOT add "and a few destructive tools are always denied" to the `full`
+ * line. `UNIVERSAL_HARD_DENY` is exactly the Dopl ADMIN + RETIRED tools, while
+ * the SDK lane's `SESSION_HARD_DENY` is BROADER on purpose — so a generalizing
+ * sentence is true on one lane and wrong on the other. These describe what each
+ * profile GRANTS and promise nothing about what is withheld.
  */
 const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
   value: AgentToolProfile;
@@ -80,20 +69,16 @@ const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
 ];
 
 /**
- * TRUST'S REAL SCOPE, stated once.
+ * ⚠ TRUST IS WORKSPACE-WIDE. The row is
+ * `UNIQUE (operator_user_id, trusted_user_id, workspace_id)` — no channel column,
+ * ever — while the toggle lives in a per-CHANNEL popover, so the LABEL is the only
+ * thing that can carry the scope: every channel and DM in the workspace,
+ * including ones that do not exist yet.
  *
- * The row is `UNIQUE (operator_user_id, trusted_user_id, workspace_id)` — there is
- * no channel column and there never was (audit C-19). The toggle nonetheless lives
- * in a per-CHANNEL popover, and the copy it shipped with ("Trusted teammates'
- * requests run without a prompt") named no scope at all, so the one fact that
- * decides whether flipping it is reasonable — that it covers every channel and DM
- * in the workspace, including ones that do not exist yet — was the fact it left
- * out. Samuel's decision is to KEEP it workspace-wide and fix the label.
- *
- * The second sentence matters as much as the first: an auto-allowed request raises
- * no card anywhere, so this is the moment the blast radius can be shown, and it is
- * also the only place the two settings meet — trust decides whether a session
- * spawns unprompted, Tools decides what that session can reach.
+ * ⚠ The second sentence matters as much as the first: an auto-allowed request
+ * raises NO card anywhere, so this is the only moment the blast radius can be
+ * shown, and the only place the two settings meet — trust decides whether a
+ * session spawns unprompted, Tools decides what it can reach.
  */
 const TRUST_SCOPE_COPY =
   "Trust covers the whole workspace — every channel and DM you share with someone, including ones created later.";
@@ -101,12 +86,8 @@ const TRUST_EFFECT_COPY =
   "Their requests skip the approval card and start a session straight away, with whatever this channel's Tools setting allows.";
 
 /**
- * Shown instead of the roster in a channel where nobody else is a member yet.
- *
- * The section used to render NOTHING at all in that case, which is why a
- * single-member workspace could ship for months with its owner never once seeing
- * that standing trust exists. An empty state costs one line and makes the control
- * discoverable before there is anyone to point it at.
+ * Shown instead of the roster when nobody else is a member yet. ⚠ Rendering
+ * NOTHING here hides that standing trust exists from a single-member workspace.
  */
 const TRUST_EMPTY_COPY =
   "Nobody else is in this channel yet. Anyone you add shows up here.";

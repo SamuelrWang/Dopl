@@ -27,7 +27,7 @@ interface Props {
   role: Role;
   onFoldersChanged?: () => void;
   /** Slug edits and the danger-zone delete both change which URL is
-   *  canonical — see ./knowledge-v2/routing.ts. */
+   *  canonical (./knowledge-v2/routing.ts). */
   routing: KnowledgeRouting;
 }
 
@@ -82,12 +82,11 @@ export function BaseSettingsForm({
         workspaceId
       );
       toast({ title: "Saved" });
-      // The new row must be in the cache before the URL moves — the segment
-      // carries the slug, and the controller resolves it against this list.
+      // ⚠ New row must be in the cache BEFORE the URL moves: the segment
+      // carries the slug and the controller resolves it against this list.
       seedKnowledgeBase(queryClient, workspaceId, next);
-      // Slug change keeps the same publicId — the route resolver will
-      // 301 the old URL anyway, but we replace eagerly so the address
-      // bar reflects the new canonical immediately.
+      // Slug change keeps the publicId, so the resolver would 301 anyway;
+      // replace eagerly so the address bar shows the new canonical at once.
       if (next.slug !== base.slug) {
         routing.goToBase(next, "replace");
       } else {
@@ -112,7 +111,6 @@ export function BaseSettingsForm({
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
       evictDeletedBase(queryClient, workspaceId, base.id);
-      // Return to the knowledge list; the user can pick another base there.
       routing.goToBase(null, "replace");
       routing.refreshServerData();
     } catch (err) {
@@ -179,7 +177,7 @@ export function BaseSettingsForm({
         />
       </Section>
 
-      {/* Folder descriptions — agent-facing summaries streamed into MCP
+      {/* Folder descriptions: agent-facing summaries streamed into MCP
           tree / directory listings alongside the folder names. */}
       {folders.length > 0 ? (
         <Section title="Folder descriptions">
@@ -301,8 +299,8 @@ function Field({
   );
 }
 
-/** Full path label per folder ("parent / child"), sorted so nested
- *  folders list under their ancestors. Cycle-guarded. */
+/** Full path label per folder ("parent / child"), sorted so nested folders
+ *  list under their ancestors. ⚠ Cycle-guarded. */
 function sortFoldersByPath(
   folders: KnowledgeFolder[]
 ): Array<{ folder: KnowledgeFolder; pathLabel: string }> {
@@ -322,7 +320,7 @@ function sortFoldersByPath(
     .sort((a, b) => a.pathLabel.localeCompare(b.pathLabel));
 }
 
-/** One folder's description editor — saves on blur when changed. */
+/** One folder's description editor; saves on blur when changed. */
 function FolderDescriptionRow({
   folder,
   pathLabel,

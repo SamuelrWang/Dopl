@@ -1,29 +1,22 @@
 /**
- * THE CLIPPED-ONTOLOGY-READ NOTICE — worded once, for the four reads that can
- * see the clip.
+ * THE CLIPPED-ONTOLOGY-READ NOTICE — ⚠ worded ONCE, for every read that can see
+ * the clip.
  *
  * `ONTOLOGY_READ_LIMITS` (src/features/ontology/server/dto.ts) caps EVERY
- * whole-workspace ontology read — 500 clusters, 5 000 objects, 20 000
- * memberships — and a read that comes back AT its ceiling counts as clipped,
- * because at is indistinguishable from over. Only the SUMMARY projection
- * reports it: `getSummary` returns `truncated`, while `getSnapshot` carries the
- * identical ceilings and says nothing. So the reads that moved onto
- * `view: "summary"` did not become clippable — they always were — they became
- * the only reads in this lane ABLE to admit it, which is why every one of them
- * must, and in one wording.
+ * whole-workspace ontology read, and a read returning AT its ceiling counts as
+ * clipped (at is indistinguishable from over). ⚠ Only the SUMMARY projection
+ * REPORTS it — `getSummary` returns `truncated` while `getSnapshot` carries the
+ * identical ceilings silently — so the summary-backed reads are the only ones
+ * ABLE to admit it, and every one of them must.
  *
- * WHAT THE NOTICE MAY NOT PROMISE. `dopl_map`'s first version pointed a clipped
- * reader at `op="resolve"` and `op="get"`, which is true of the two levels
- * `dopl_map` renders and false of the clip itself: `op="resolve"` reads the same
- * projection under the same ceiling, and `op="get"` resolves its ref out of a
- * full snapshot capped at the same 5 000 rows. There is NO read on this
- * connection that reaches past the ceiling, so the notice says so and tells the
- * agent to report the gap instead of routing it in a circle.
+ * ⚠ THE NOTICE MAY NOT POINT AT `op="resolve"` OR `op="get"`: resolve reads the
+ * same projection under the same ceiling, and get resolves its ref out of a
+ * full snapshot capped at the same rows. NO read on this connection reaches
+ * past the ceiling, so the notice says so and tells the agent to report the gap
+ * rather than routing it in a circle.
  *
- * The caller supplies only the middle clause — what, on ITS surface, is a
- * prefix — because that is the one thing that genuinely differs between a
- * manifest, a two-level map and a query. The framing and the remedy are shared,
- * so a reader who has met one of these has met all four.
+ * The caller supplies only the middle clause — what is a prefix on ITS surface.
+ * Framing and remedy are shared, so a reader who met one has met all.
  */
 
 /** The clipped-read line for one surface. `subject` completes "…, so ${subject}." */

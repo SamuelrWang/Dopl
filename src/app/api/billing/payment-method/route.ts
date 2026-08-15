@@ -4,14 +4,10 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { getWorkspacePaymentMethod } from "@/features/billing/server/billing-account-service";
 
 /**
- * GET /api/billing/payment-method — the card Stripe will charge next.
- *
- * ADMIN ONLY. A card's brand and last four are the workspace's payment
- * identity; a viewer who can read the plan has no business reading them.
- *
- * `{ paymentMethod: null }` is the ANSWER, not an error, for every workspace
- * that has never paid and for any environment without a Stripe key — the
- * service decides that, this handler only carries it (§2, thin handler).
+ * GET /api/billing/payment-method — the card Stripe will charge next. ADMIN ONLY: brand + last
+ * four are the workspace's payment identity, not a viewer-level fact.
+ * `{ paymentMethod: null }` is the ANSWER, not an error, for a workspace that has never paid and
+ * for an environment without a Stripe key.
  */
 export const GET = withWorkspaceAuth(
   async (_request, { workspaceId }) => {

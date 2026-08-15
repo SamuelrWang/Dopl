@@ -1,10 +1,8 @@
 /**
- * NET-NEW (MCP-2) — createServer workspace targeting + footer.
- *
- * The SDK `McpServer` is mocked so we can capture each tool's wrapped
- * handler and drive it directly. Covers the wrapper enforcement (M-3) and
- * the mandatory-effective `_dopl_status` footer with source label (M-4)
- * across 0 / 1 / 2+ memberships, plus `buildInstructions` (M-2).
+ * createServer workspace targeting + footer. The SDK `McpServer` is mocked so
+ * each tool's wrapped handler can be captured and driven directly: wrapper
+ * enforcement and the mandatory-effective `_dopl_status` footer with source
+ * label across 0 / 1 / 2+ memberships, plus `buildInstructions`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,12 +20,11 @@ const registry = vi.hoisted(() => ({
 }));
 
 /**
- * The mock exposes `registerTool` and DELIBERATELY NOT `tool` (F-145). The
- * positional `tool()` overload cannot carry a built schema — the SDK reads a
- * schema instance as annotations and throws — so it is the one API through
- * which the strict input schema silently degrades back to "unknown keys are
- * dropped". A regression to it does not quietly re-register here; it is a
- * TypeError naming the method.
+ * ⚠ Exposes `registerTool` and DELIBERATELY NOT `tool`. The positional `tool()`
+ * overload cannot carry a built schema (the SDK reads a schema instance as
+ * annotations and throws), so it is the one API through which the strict input
+ * schema silently degrades to "unknown keys are dropped" — a regression to it
+ * is a TypeError naming the method, not a quiet re-registration.
  */
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
@@ -149,7 +146,6 @@ describe("no-arg call (M-3 wrapper enforcement)", () => {
     expect(text).toContain("no default workspace");
     expect(text).toContain("`alpha`");
     expect(text).toContain("`beta`");
-    // The real handler must not have executed.
     expect(client.listKbBases).not.toHaveBeenCalled();
   });
 
@@ -237,11 +233,10 @@ describe("per-call workspace= (M-4 footer)", () => {
 
 // ── Identity + locus: WHO is calling, not just WHERE it landed ──────────
 //
-// The footer is the one line that rides every successful response and that the
-// instructions tell the agent to read. It named the workspace and said nothing
-// about the caller, so an agent that needed to know which session it was had to
-// go looking — and the surfaces it would have found answered from three
-// different sources that could disagree inside one connection.
+// ⚠ The footer is the one line riding every successful response that the
+// instructions tell the agent to read. Without the caller on it, an agent that
+// needs to know which session it is goes looking across surfaces answering from
+// sources that can disagree inside one connection.
 
 const CALLER = {
   userId: "u-me",
@@ -317,10 +312,9 @@ describe("_dopl_status — the caller line", () => {
 
 describe("current_workspace — the tool an agent reaches for when it is lost", () => {
   /**
-   * The 2+-membership branch is the one that needed this most and had it least:
-   * `appendDoplStatus` skips the footer entirely when there is no effective
-   * workspace, so this branch carried no identity AND printed slugs with no
-   * workspace ids beside them.
+   * ⚠ The 2+-membership branch needs this most: `appendDoplStatus` skips the
+   * footer entirely when there is no effective workspace, so without a body
+   * line it carries no identity AND prints slugs with no workspace ids.
    */
   it("states the caller and the workspace IDS when there is no auto-target", async () => {
     build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
@@ -338,9 +332,8 @@ describe("current_workspace — the tool an agent reaches for when it is lost", 
   });
 
   /**
-   * On the auto-target branch the footer fires and carries the caller, so the
-   * body must NOT restate it — one caller line per response, wherever it comes
-   * from.
+   * ⚠ On the auto-target branch the footer fires and carries the caller, so the
+   * body must NOT restate it — ONE caller line per response.
    */
   it("states the caller exactly once on the auto-target branch", async () => {
     build({
@@ -372,9 +365,9 @@ describe("buildInstructions — identity is taught before the first tool call", 
   });
 
   /**
-   * The line that pointed at the anchor for "who the caller is" is what made an
-   * agent read a member-typed object NAME as its own identity. It points at
-   * whoami now, and calls the anchor context.
+   * ⚠ Pointing at the ANCHOR for "who the caller is" makes an agent read a
+   * member-typed object NAME as its own identity — point at whoami, and call
+   * the anchor context.
    */
   it("reframes the ontology anchor as context, not identity", () => {
     const text = buildInstructions([WS1]);

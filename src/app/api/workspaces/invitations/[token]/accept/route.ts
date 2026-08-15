@@ -8,11 +8,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * POST /api/workspaces/invitations/[token]/accept — accept an invitation.
- * The caller must be authenticated; their identity becomes the new
- * workspace member.
- */
+/** POST — accept an invitation. Authenticated; the caller's identity becomes the new member. */
 export const POST = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {

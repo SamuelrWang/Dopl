@@ -12,9 +12,8 @@ import {
 } from "@/features/channels/server/service";
 import { TaskCreateSchema } from "@/features/channels/schema";
 
-// Channel tasks: GET lists them (read); POST creates one (create_task). Both
-// are agent-reachable actions (NOT sessionOnly — task ops arrive over the MCP
-// device token); the service enforces the channel-scoped authorization.
+// Channel tasks: GET lists, POST creates. NOT sessionOnly — task ops arrive over the MCP device
+// token; the service enforces channel-scoped authorization.
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
@@ -34,11 +33,10 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       requireChannelId(auth.params),
       input
     );
-    // `task` keeps the storage name (the web + @dopl/client both read it).
-    // `openingSeq` is additive (WAKE-V1): the seq of the thread's opening
-    // message, so a requester can arm `await` on the right cursor without a
-    // follow-up read. Null only when the idempotent short-circuit returned
-    // another member's thread.
+    // `task` keeps the storage name (web + @dopl/client read it). `openingSeq` is additive: the
+    // seq of the thread's opening message, so a requester arms `await` on the right cursor
+    // without a follow-up read. ⚠ Null only when the idempotent short-circuit returned another
+    // member's thread.
     return NextResponse.json({ task: thread, openingSeq }, { status: 201 });
   } catch (err) {
     return toChannelErrorResponse(err);

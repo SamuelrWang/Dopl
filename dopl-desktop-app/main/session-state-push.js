@@ -1,79 +1,45 @@
-// SESSION STATE -> THE SERVER (F-147, rollback plan §3.5 "read session state" + §5).
+// SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="read_sessions")` ->
+// GET /api/channels/sessions -> `channel_sessions`.
 //
-// WHAT THIS CLOSES. Phase 5 shipped the READ end to end — `dopl_channel(op="read_sessions")`
-// -> GET /api/channels/sessions -> `channel_sessions` — and flagged the WRITE as a delivery
-// gap (F-144 (a)), so "what is flint doing?" asked from Claude Desktop answered an honest
-// empty because nothing on this machine ever wrote a row. This is the writer.
+// ⚠ A PUSH ON STATE CHANGE, NOT A HEARTBEAT. presence.js beats every 30s per listener per
+// workspace unconditionally (~120 writes/hour/machine, forever); this writes when a session's
+// DERIVED state actually moves — launch, first tool, park, end. A handful of writes per session
+// lifetime. That difference is the whole argument for the table existing. Do NOT "simplify" it
+// to a timer.
+// ⚠ THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place engine state becomes
+// a pill state, and it already coalesces and fires only when the digest moved. This SUBSCRIBES
+// and re-derives nothing. Anything else is the two-readers-one-fact defect.
+// ⚠ SEPARATE MODULE because session-summary.js is network-free above `module.exports` — its
+// suite reads it as SOURCE and evaluates the block with fakes injected. An apiFetch there ends
+// that. The seam is a subscription.
 //
-// ── IT IS A PUSH ON STATE CHANGE. IT IS NOT A HEARTBEAT. ────────────────────────────────
-// `presence.js` beats every 30s per listener per workspace, unconditionally — the quadratic
-// always-on term plan §5 is shedding (~120 writes an hour, forever, per machine). This
-// writes when a session's DERIVED state actually moves: launch, first tool, a park, an end.
-// A handful of writes per session lifetime. That difference is the entire argument for the
-// new table existing at all, and sequencing item 7 (retiring the presence beat) is meant to
-// be MEASURED against it. A future "just beat it every 30s, it's simpler" gives that back.
+// TRANSPORT IS api.js: a short POST with no abort wiring and no long-poll, so it inherits the
+// shared 401 repair (api-repair.js — a second copy of that repair produced the 1.8.x Channels
+// outage), the app-version stamp and the undici pool reset. listener-io.js keeps its own SEND
+// only because its long-poll wires a caller abort signal in.
 //
-// THE TRIGGER IS NOT DERIVED HERE. `session-summary.js` is the ONE place engine state
-// becomes a pill state (F-142), and it already coalesces a burst of engine dispatches into
-// one digest and fires only when the digest really moved. This module SUBSCRIBES to that.
-// It re-derives nothing: it maps the entry to the wire and posts it. Anything else would be
-// the two-readers-one-fact defect the pills were built to delete.
+// ── ROW LIFETIME ────────────────────────────────────────────────────────────────────────
+// ⚠ A session's row exists while its PILL does and is DELETED when the pill leaves, ended rows
+// included — the row IS that projection (session-summary's retention rule). Keeping `ended`
+// rows to sweep later needs a scheduler this product does not have, so "later" means never and
+// the table grows unbounded; and an `ended` row for a window-less session answers "what is
+// flint doing?" with a session the operator cannot open.
+// ⚠ THE DELETE IS IMPLICIT, which is why this POSTS THE WHOLE SET: the server replaces the
+// caller's set. A delta protocol needs an explicit "this one is gone" that a crashed or quit
+// desktop never sends.
+// KNOWN GAP: rows outlive the process that wrote them. Bounded by (a) the first push for a
+// workspace in a new run replacing its whole set and (b) `reportedWorkspaces` being PERSISTED,
+// so a run starting with no sessions clears them. NOT covered: signing out — the credential
+// that could delete the rows is gone before anything here can react.
 //
-// WHY A SEPARATE MODULE AND NOT A FEW LINES IN session-summary.js. That file is network-free
-// above `module.exports` on purpose — its whole test suite reads it as SOURCE and evaluates
-// the block with two fakes injected, which is what makes the mapping testable without
-// Electron. An `apiFetch` in there ends that. So the seam is a subscription.
-//
-// ── THE TRANSPORT IS api.js, DELIBERATELY ───────────────────────────────────────────────
-// There are exactly two authenticated main-process lanes and this had to pick one, not
-// grow a third: `listener-io.js` keeps its own SEND because its long-poll wires a caller
-// abort signal into the controller and its timeouts are load-bearing, and `api.js` is the
-// shared helper every other main-process caller uses (consent, mcp-config, presence,
-// session-history, session-peer-post, session-close-task). Both share ONE 401 repair
-// (api-repair.js) — a second copy of that repair is what produced the 1.8.x Channels
-// outage. This is a short POST with no abort wiring and no long-poll, i.e. exactly the
-// shape `api.js` exists for, and it inherits the repair, the app-version stamp and the
-// undici pool reset for free.
-//
-// ── THE ROW LIFETIME, and why an ENDED row is DELETED rather than swept ─────────────────
-// F-142's rule is "a pill lives exactly as long as its window": an ended session's pill
-// survives only for the ABANDONMENT case (the one end that keeps its window), it is a
-// HANDLE rather than a tombstone, and the retained set needs no TTL because the window
-// budget bounds it. THE SERVER ROW INHERITS THAT RULE, because the row is that projection.
-// So: a session's row exists while its pill does, and it is DELETED when the pill leaves —
-// including the ended one.
-//
-// The alternative (keep `ended` rows and sweep them later) was rejected twice over. A sweep
-// needs a scheduler this product does not have, so "later" means "never" and the table
-// grows without bound — which is the accumulation plan §5 is trying to get away from. And
-// an `ended` row for a session with no window answers "what is flint doing?" with a session
-// the operator cannot open: the channel transcript is already the record of what happened.
-//
-// THE DELETE IS IMPLICIT, WHICH IS WHY THIS POSTS THE WHOLE SET. Each push carries every
-// session this machine is running in that workspace, and the server replaces the caller's
-// set with it. A delta protocol would need an explicit "this one is gone" message, and the
-// desktop that crashes or quits never sends it.
-//
-// WHAT A CRASH OR A QUIT LEAVES BEHIND, stated rather than papered over. This machine is
-// the only writer, so rows it wrote outlive the process that wrote them. Two things bound
-// that: the first push for a workspace in a new run replaces its whole set, and the
-// workspaces this machine has rows in are PERSISTED, so a run that starts with no sessions
-// clears them (`reportedWorkspaces` below). What is NOT covered is signing out — the
-// credential that could delete the rows is already gone by the time anything here could
-// react — so those rows stand until this account signs in on this Mac again.
-//
-// ── IDENTITY: THE ROW SAYS "THIS USER'S MACHINE IS RUNNING THIS SESSION" ────────────────
-// Signing out does not end the sessions in the engine (they are the engine's to own), so
-// operator A's live sessions are still in the registry when operator B signs in on the same
-// Mac — and a push made under B's credential would file A's session handles, channel names
-// and thread titles as B's, readable by B through `read_sessions`. That is a cross-account
-// leak, and this project has already had two.
-//
-// So every session key is stamped with the identity that was current WHEN THIS MODULE FIRST
-// SAW IT, and only keys stamped with the identity we are posting as are ever reported. A
-// key first seen with no resolvable identity is never reported at all — fail closed. A
-// sign-out and a sign-in as the SAME operator resumes reporting their own sessions, because
-// the stamp matches again; there is nothing to un-quarantine by hand.
+// ── IDENTITY ────────────────────────────────────────────────────────────────────────────
+// ⚠ CROSS-ACCOUNT GUARD. Signing out does not end engine sessions, so operator A's sessions
+// are still in the registry when operator B signs in on the same Mac — and a push under B's
+// credential files A's handles, channel names and thread titles as B's, readable by B through
+// `read_sessions`. Every session key is therefore stamped with the identity current WHEN THIS
+// MODULE FIRST SAW IT, and only matching keys are reported. A key first seen with no resolvable
+// identity is never reported — fail closed. Signing back in as the SAME operator resumes
+// reporting automatically.
 
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
@@ -82,24 +48,21 @@ const Store = require('electron-store');
 const store = new Store();
 
 // ─── BEGIN SESSION-STATE-PUSH (injectable; unit-tested via source extraction) ───────────
-// `apiFetch`, `diag` and `store` are free vars from here down (the session-summary idiom),
-// so test/session-state-push.test.mjs evaluates this code verbatim with fakes — no
-// Electron, no network, no disk.
+// ⚠ `apiFetch`, `diag` and `store` are free vars from here down, so
+// test/session-state-push.test.mjs evaluates this verbatim with fakes — no Electron, no
+// network, no disk.
 
 const ENDPOINT = '/api/channels/sessions';
 const HTTP_TIMEOUT_MS = 15000;
 
-// The workspaces this machine has written rows into, persisted beside the listener's
-// cursors. It exists for ONE case: a run that starts with no sessions in a workspace a
-// previous run left rows in. Without it those rows stand until a session happens to run
-// there again, claiming `working` for a process that is gone.
+// Workspaces this machine has written rows into, persisted beside the listener's cursors. For
+// ONE case: a run that starts with no sessions in a workspace a previous run left rows in.
+// Without it those rows stand claiming `working` for a process that is gone.
 const REPORTED_WORKSPACES_KEY = 'sessionReportWorkspaces';
 
-// BOUNDED RETRY, and the bound is small on purpose. `ui-sync`'s ~39 000-attempt storm is
-// the cautionary tale in this tree: an unbounded retry over a failure that is not going to
-// fix itself is worse than the missing feature. Two attempts, one fixed gap, and then STOP
-// — the digest is not recorded on a failure, so the session's NEXT real state change is
-// the retry. That cadence is bounded by the session's own life rather than by a timer.
+// ⚠ BOUNDED RETRY, deliberately small (ui-sync's ~39 000-attempt storm is the cautionary tale).
+// Two attempts, one fixed gap, then STOP — the digest is NOT recorded on failure, so the
+// session's next real state change is the retry. Bounded by the session's life, not a timer.
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
 
@@ -109,29 +72,27 @@ let unsubscribe = null;
 let lastUserId = null;
 let running = false; // one cycle at a time — the pushes inside one are serial
 let queued = null; // the newest entries that arrived while a cycle was in flight
-let draining = null; // C-8: the in-flight cycle, so the quit path can await one final push
+let draining = null; // the in-flight cycle, so the quit path can await one final push
 
-// sessionKey -> the userId that was current when this module first saw that key. Pruned to
-// the live set on every cycle, so it is bounded by the window budget like everything else.
+// sessionKey -> userId current when this module first saw that key. Pruned to the live set
+// every cycle, so it is bounded by the window budget.
 const origin = new Map();
-// workspaceId -> the digest of the set this process last STORED there. A push whose digest
-// is unchanged is not sent: a window rebuild, a re-mount or an identical re-derivation must
-// not cost a write.
+// workspaceId -> digest of the set this process last STORED there. ⚠ An unchanged digest is
+// not sent: a window rebuild, a re-mount or an identical re-derivation must not cost a write.
 const pushedDigest = new Map();
-// One line per (workspace, failure shape) — the `staleNotified` idiom. A subsystem that
-// dies must say so, once, not once per state change.
+// One line per (workspace, failure shape). A subsystem that dies must say so ONCE, not once
+// per state change.
 const loggedFailures = new Set();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const short = (id) => String(id || '').slice(0, 8);
 
 /**
- * ONE REPORT ENTRY -> THE WIRE ROW. The only mapping in this module, and it is a rename:
- * `key` is the server's `sessionKey` (the stable (channel, thread) key, which is why the
- * table upserts on it rather than on the ephemeral `sessionId`), and the empty `taskId` of
- * a responder with no first-class thread becomes the NULL the column actually stores.
- * `state`, `name`, `channelName` and `threadTitle` are passed through byte-for-byte — this
- * module does not get a vote on what a session's state is.
+ * ONE REPORT ENTRY -> THE WIRE ROW. The only mapping here, and it is a rename: `key` is the
+ * server's `sessionKey` (the stable (channel, thread) key the table upserts on, NOT the
+ * ephemeral `sessionId`), and an empty `taskId` becomes the NULL the column stores.
+ * ⚠ state / name / channelName / threadTitle pass through byte-for-byte — this module gets no
+ * vote on what a session's state is.
  */
 function reportRow(e) {
   return {
@@ -145,17 +106,16 @@ function reportRow(e) {
   };
 }
 
-/** The set a workspace's rows are compared by. Same reasoning as `summariesDigest`: one
- *  stable string, so a field added to the row shape is compared automatically. */
+/** One stable string, like `summariesDigest`, so a field added to the row shape is compared
+ *  automatically. */
 function setDigest(rows) {
   return JSON.stringify(rows || []);
 }
 
 /**
- * Stamp every key we have not seen before with the identity that is current NOW, and
- * release the stamps of keys that have left the projection. This is the whole
- * cross-account guard: a stamp is written once per key and never rewritten, so a session
- * that started under one operator can never be re-attributed to the next one.
+ * Stamp unseen keys with the identity current NOW; release stamps of keys that left the
+ * projection. ⚠ THE WHOLE CROSS-ACCOUNT GUARD: a stamp is written once per key and NEVER
+ * rewritten, so a session started under one operator can never be re-attributed to the next.
  */
 function trackOrigin(entries, userId) {
   const live = new Set();
@@ -175,27 +135,18 @@ function ownedBy(entries, userId) {
   return entries.filter((e) => origin.get(String((e && e.key) || '')) === userId);
 }
 
-// ── C-2: THE AD-HOC SESSION NEVER GOES ON THE WIRE ──────────────────────────────────────
-//
-// THE DEFECT (audit C-2). An UNTHREADED inbound — the ordinary DM, which is where this
-// product lives — has no first-class thread, so `targeting.firstClassTaskId` answers '' and
-// `trigger.taskIdFor` mints `task-<channelId>-<seq>`. That flows into the session key and
-// onto the wire, where the server's `SESSION_KEY_RE` (hex, dashes, one colon) and
-// `threadId: z.string().uuid()` both refuse it. Zod validates the ARRAY, so ONE such entry
-// 400s the whole `sessions` payload; `retryable(400)` is false, so the digest is never
-// recorded and every later push for that workspace fails identically. The visible symptom
-// is `read_sessions` answering `[]` for the machine — INCLUDING its perfectly valid
-// UUID-threaded sessions — and stale rows never being cleared.
-//
-// SAMUEL'S DECISION: filter client-side, do NOT widen the server schema. `read_sessions`
-// answers "what is this member's agent doing on THIS thread"; an ad-hoc session has no
-// thread for the answer to be about, so a row for it would be a row nobody can ask for.
-// Widening the key charset would also give up the reconcile's delete-by-key safety
-// (`SESSION_KEY_RE` exists so "does this key need escaping" is unaskable).
-//
-// THE RULE IS THE SERVER'S CONTRACT, RESTATED — a uuid channel and either a uuid thread or
-// none. It is deliberately not a `!key.startsWith('task-')` sniff: the reason to drop a row
-// is that the server would refuse it, so the predicate says exactly that.
+// ── THE AD-HOC SESSION NEVER GOES ON THE WIRE ───────────────────────────────────────────
+// ⚠ An UNTHREADED inbound (the ordinary DM) has no first-class thread, so trigger.taskIdFor
+// mints `task-<channelId>-<seq>`, which the server's `SESSION_KEY_RE` and
+// `threadId: z.string().uuid()` both refuse. Zod validates the ARRAY, so ONE such entry 400s
+// the WHOLE payload; retryable(400) is false, so the digest is never recorded and every later
+// push for that workspace fails identically — `read_sessions` answers [] for the machine,
+// valid UUID-threaded sessions included, and stale rows are never cleared.
+// ⚠ Filter client-side; do NOT widen the server schema. `read_sessions` answers "what is this
+// member's agent doing on THIS thread", and an ad-hoc session has no thread for the answer to
+// be about. Widening the key charset also gives up the reconcile's delete-by-key safety.
+// The predicate RESTATES the server's contract (uuid channel, uuid thread or none) rather than
+// sniffing `!key.startsWith('task-')`: the reason to drop a row is that the server refuses it.
 const WIRE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function serverReportable(e) {
@@ -205,10 +156,8 @@ function serverReportable(e) {
   return taskId === '' || WIRE_UUID_RE.test(taskId);
 }
 
-// One line per dropped session, NOT per push: a filtered entry survives every state change
-// of a session that may run for hours, and a per-change log is the quieter cousin of the
-// `ui-sync` storm this file's retry bound already exists to avoid. Pruned to the live set on
-// every cycle, exactly like `origin`, so it is bounded by the window budget.
+// ⚠ One line per dropped session, NOT per push: a filtered entry survives every state change
+// of a session that may run for hours. Pruned to the live set every cycle, like `origin`.
 const loggedAdHoc = new Set();
 
 function reportable(entries) {
@@ -230,10 +179,9 @@ function reportable(entries) {
   return kept;
 }
 
-/** workspaceId -> the rows to report there. An entry with no workspace has nowhere to go
- *  and is dropped rather than guessed at (the header is X-Workspace-Id, and the server
- *  fences on it); it is not reachable from a real session, which is why it is a diag and
- *  not a throw. */
+/** workspaceId -> rows to report there. ⚠ An entry with no workspace is DROPPED, never
+ *  guessed at (the server fences on X-Workspace-Id). Unreachable from a real session, which
+ *  is why it diags rather than throws. */
 function groupByWorkspace(entries) {
   const out = new Map();
   for (const e of entries) {
@@ -250,12 +198,10 @@ function groupByWorkspace(entries) {
 }
 
 // ── The persisted "workspaces this machine has rows in" record ──────────────────────────
-//
-// KEYED BY OPERATOR, because a ROW is. `{ userId: [workspaceId, …] }`. A machine-wide list
-// would make the next operator to sign in clear a workspace they may not even be a member
-// of, and — worse — would forget that the PREVIOUS operator still has rows there, which is
-// the one thing this record exists to remember. Entries empty out and are dropped, so it is
-// bounded by the accounts that have actually signed in on this Mac.
+// ⚠ KEYED BY OPERATOR (`{ userId: [workspaceId, …] }`), because a ROW is. A machine-wide list
+// would make the next operator to sign in clear a workspace they may not be a member of, and
+// would forget that the PREVIOUS operator still has rows there — the one thing this remembers.
+// Empty entries are dropped, so it is bounded by accounts that signed in on this Mac.
 function reportedRecord() {
   let raw = null;
   try { raw = store.get(REPORTED_WORKSPACES_KEY); } catch (_err) { return {}; }
@@ -329,27 +275,23 @@ async function send(workspaceId, rows) {
 
 /**
  * ONE CYCLE: the projection as it stands -> at most one POST per workspace whose set moved.
- *
- * The empty-set push is the DELETE half. A workspace this machine has rows in that now has
- * no sessions gets `{ sessions: [] }` once, which is what removes the last session's row
- * (and, after a crash, whatever the previous run left behind).
+ * ⚠ The empty-set push is the DELETE half: a workspace with rows but no sessions gets
+ * `{ sessions: [] }` once, removing the last session's row (and a previous run's leftovers).
  */
 async function cycle(entries) {
   const userId = (deps.getUserId && deps.getUserId()) || null;
   trackOrigin(entries, userId);
   if (!userId) return; // signed out: nothing here is ours to assert
   if (userId !== lastUserId) {
-    // A different operator's server state is unknown to this process, and their failures
-    // are not ours. Nothing is carried across except the origin stamps, which are the
-    // whole point.
+    // A different operator's server state is unknown here and their failures are not ours.
+    // ⚠ Nothing carries across except the origin stamps, which are the whole point.
     pushedDigest.clear();
     loggedFailures.clear();
     lastUserId = userId;
   }
-  // C-2: the ad-hoc rows are dropped HERE, before the grouping — so the digest, the
-  // empty-set delete and the bounded retry all operate on exactly the set that goes on the
-  // wire. Filtering later (inside `send`) would have left the digest recording a payload
-  // that was never sent, which is the same "recorded but not stored" defect in reverse.
+  // ⚠ Ad-hoc rows are dropped HERE, before grouping, so the digest, the empty-set delete and
+  // the bounded retry all operate on exactly the set that goes on the wire. Filtering inside
+  // `send` leaves the digest recording a payload that was never sent.
   const groups = groupByWorkspace(reportable(ownedBy(entries, userId)));
   for (const ws of reportedWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
@@ -357,8 +299,7 @@ async function cycle(entries) {
   for (const [ws, rows] of groups) {
     const digest = setDigest(rows);
     if (pushedDigest.get(ws) === digest) continue;
-    // Serial on purpose: one machine, a handful of workspaces, and a burst of parallel
-    // writes is exactly what this design exists to avoid.
+    // Serial on purpose: a burst of parallel writes is what this design exists to avoid.
     const stored = await send(ws, rows);
     if (!stored) continue; // NOT recorded, so the next real change retries
     pushedDigest.set(ws, digest);
@@ -391,10 +332,9 @@ async function drain() {
 }
 
 /**
- * Arm the writer. `getUserId()` answers the operator this machine is signed in as (read at
- * push time, never captured — it changes underneath us), and `summary` is
- * session-summary.js, injected rather than required so the block above stays evaluable.
- * Idempotent.
+ * Arm the writer. ⚠ `getUserId()` is read at PUSH time, never captured — it changes
+ * underneath us. `summary` is session-summary.js, INJECTED rather than required so the block
+ * above stays evaluable. Idempotent.
  */
 function start(opts) {
   const o = opts || {};
@@ -413,10 +353,9 @@ function start(opts) {
 }
 
 /**
- * Run a cycle now, off the CURRENT projection. Its one caller is the sign-in transition: a
- * fresh credential is not a state change, so nothing would fire on its own — and a run that
- * starts signed out, then signs in, has a previous run's rows to clear and possibly a live
- * session to report.
+ * Run a cycle now off the CURRENT projection. One caller: the sign-in transition. A fresh
+ * credential is not a state change, so nothing fires on its own — yet a run that starts signed
+ * out then signs in has a previous run's rows to clear and possibly a live session to report.
  */
 function kick() {
   if (!armed || !deps.summary || typeof deps.summary.reportList !== 'function') return;
@@ -424,18 +363,12 @@ function kick() {
 }
 
 /**
- * C-8 — `kick()`, AWAITABLE, for the quit path and nothing else.
- *
- * A quit that ends every live session leaves this machine's rows saying `working` for a
- * process that no longer exists, and nothing else clears them until the same account signs in
- * on this Mac again — the row-staleness the audit already flags twice. So the quit teardown
- * pushes the (now empty) set and waits for it.
- *
- * IT IS THE CALLER THAT BOUNDS THE WAIT, not this function. `send` already carries a 15s HTTP
- * timeout and one retry, which is the right budget for a running app and a completely wrong
- * one for a quit; racing it against a short deadline is the quit guard's decision to make and
- * is stated there. This just makes the in-flight cycle observable — `drain()`'s own try/catch
- * means the promise settles whatever the network did, so awaiting it can never reject.
+ * `kick()`, AWAITABLE, for the quit path and nothing else — a quit that ends every session
+ * otherwise leaves rows saying `working` for a dead process until the same account signs in on
+ * this Mac again.
+ * ⚠ THE CALLER BOUNDS THE WAIT, not this function: `send`'s 15s timeout + one retry is right
+ * for a running app and wrong for a quit, so racing it against a short deadline is the quit
+ * guard's decision. `drain()`'s own try/catch means this promise can never reject.
  */
 function flush() {
   kick();
@@ -455,7 +388,7 @@ module.exports = {
   // the live half
   start,
   kick,
-  flush, // C-8: an awaitable kick, for the quit teardown
+  flush, // an awaitable kick, for the quit teardown
   stop,
   // the pure core (exported for the shell + the tests)
   MAX_ATTEMPTS,

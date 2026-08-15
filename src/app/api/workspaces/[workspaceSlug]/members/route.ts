@@ -11,11 +11,8 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * GET /api/workspaces/[workspaceSlug]/members — list members of a workspace. Any
- * active member can read. Hydrates each row with the member's email +
- * display name so the UI can render without a second hop.
- */
+/** GET — workspace members, any active member. Rows hydrate email + display name so the UI
+ *  renders without a second hop. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {

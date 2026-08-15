@@ -1,10 +1,7 @@
 /**
- * /invite/[token] — accept-invite landing page.
- *
- * Server-fetches the public invitation status by token, then renders a
- * card with canvas/inviter context. Auth-gated only at the accept step:
- * the public-status endpoint doesn't require a session, so unauthed
- * visitors see what they're being invited to before signing in.
+ * /invite/[token] — accept-invite landing. Server-fetches the public invitation status by token.
+ * Auth-gated only at the ACCEPT step: the status endpoint needs no session, so unauthed visitors
+ * see what they are being invited to before signing in.
  */
 
 import { notFound } from "next/navigation";
@@ -27,8 +24,7 @@ export default async function AcceptInvitePage({ params }: PageProps) {
 
   const user = await getUser();
 
-  // Strip the token from the props passed to the client — it's already
-  // in the URL; the API endpoint doesn't echo it either.
+  // Strip the token from client props — it is already in the URL.
   const { token: _omit, ...invitationWithoutToken } = status.invitation;
   void _omit;
   const safeStatus = {

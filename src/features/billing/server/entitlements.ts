@@ -10,35 +10,21 @@ import {
 } from "./workspace-billing";
 
 /**
- * THE entitlements contract other agents (enforcement, chats window, UI)
- * build against. Given a workspace, resolve everything a gate needs:
- * plan, billing status, seat/member counts, the ontology object cap +
- * usage, and the chats visibility window.
- *
- * Model (decided):
- *   - Plans are WORKSPACE-level: "free" | "solo" | "team".
- *   - Team is per-seat ($7.99/seat); entitled while status is
- *     active/past_due. Seats sync to the active member count.
- *   - Solo is flat ($5.99, single-member only); entitled ONLY while
- *     status is active/past_due AND memberCount === 1. If a second member
- *     ever appears (race/bug), solo loses its entitlement and the
- *     workspace degrades to free multi-member rules until fixed — this
- *     backstop lives here so no abuse path bypasses the object cap.
- *   - Free workspaces get full features. Two capacity rules apply, and
- *     ONLY to multi-member free workspaces (1-member free = uncapped,
- *     Notion-style):
- *       * ontology object cap of FREE_MULTI_MEMBER_OBJECT_CAP,
- *       * chats visible window of FREE_CHATS_WINDOW_DAYS.
- *   - Freeze-don't-delete: over the cap, creates are blocked but reads /
- *     edits / exports always work. `canCreateObjects` encodes only the
- *     create gate.
- *   - past_due is treated as paid-with-warning: an entitled workspace
- *     keeps its entitlements (uncapped, canCreateObjects stays true) while
- *     `status` surfaces "past_due" for the UI. canceled reverts to free.
+ * THE entitlements contract every gate (enforcement, chats window, UI) builds
+ * against. Plans are WORKSPACE-level.
+ *   - team: entitled while active/past_due; seats sync to active members.
+ *   - solo: entitled ONLY while active/past_due AND memberCount === 1. ⚠ A
+ *     second member degrades it to free multi-member rules — the backstop lives
+ *     HERE so no abuse path bypasses the object cap.
+ *   - free: full features; capacity rules apply ONLY to MULTI-member free
+ *     (1-member free = uncapped) — FREE_MULTI_MEMBER_OBJECT_CAP,
+ *     FREE_CHATS_WINDOW_DAYS.
+ *   - ⚠ Freeze-don't-delete: over cap blocks CREATES only (`canCreateObjects`);
+ *     reads/edits/exports always work.
+ *   - past_due keeps entitlements and surfaces in `status`; canceled → free.
  */
 
-/** Alias of the canonical `PlanId` (plans.ts) — kept as the entitlements
- *  contract's public name for the plan union. */
+/** Alias of canonical `PlanId` — contract's public name for the union. */
 export type WorkspacePlan = PlanId;
 
 /** Solo is a single-member plan; adding a member is blocked at this count. */
@@ -61,13 +47,10 @@ export const FREE_MULTI_MEMBER_OBJECT_CAP = 100;
 export const FREE_CHATS_WINDOW_DAYS = 90;
 
 /**
- * Resolve the EFFECTIVE paid plan for entitlement purposes, or null when
- * the workspace falls back to free rules. A plan grants entitlements only
- * while the subscription is live (active) or in the grace window
- * (past_due); a canceled sub reverts to free (the row may keep its
- * historical plan but loses entitlements). Solo additionally requires a
- * single-member workspace — a solo row with a second member (race/bug)
- * degrades to free so the multi-member object cap still applies.
+ * EFFECTIVE paid plan, or null → free rules. Live = active | past_due; canceled
+ * reverts to free (row keeps its historical plan but loses entitlements).
+ * ⚠ Solo also requires memberCount <= 1 — a solo row that grew a second member
+ * degrades, so the multi-member object cap still applies.
  */
 function paidEntitlement(
   plan: WorkspacePlan,
@@ -82,19 +65,12 @@ function paidEntitlement(
 }
 
 /**
- * THE PLAN VERDICT ALONE, from data the caller already has — the SAME
- * `paidEntitlement` logic `getWorkspaceEntitlements` runs (one definition, not
- * a copy), minus everything the verdict does not need.
+ * Plan verdict alone, from data the caller already holds — same
+ * `paidEntitlement` definition as `getWorkspaceEntitlements`, not a copy. For
+ * the per-MCP-tool-call credit path, which needs only the plan.
  *
- * WHY IT EXISTS: the per-tool-call credit path needs the entitled plan and
- * NOTHING ELSE, and `getWorkspaceEntitlements` is three queries — one of which
- * is a `COUNT(*)` over `ontology_objects` that only the object cap reads. On a
- * hot path charged once per MCP tool call that count is pure tax. Callers that
- * need the caps/window keep using `getWorkspaceEntitlements`, unchanged.
- *
- * Pure on purpose: the caller reads `workspace_billing` ONCE and feeds the row
- * into both this and the credit-period rule, so the two can never disagree
- * about which subscription state they were looking at.
+ * ⚠ Pure on purpose: the caller reads `workspace_billing` ONCE and feeds the
+ * row to both this and the credit-period rule, so they cannot disagree.
  */
 export function entitledPlanFor(
   billing: Pick<WorkspaceBillingRow, "plan" | "status"> | null,
@@ -124,9 +100,8 @@ export async function getWorkspaceEntitlements(
   const entitled = paid !== null;
   const plan: WorkspacePlan = paid ?? "free";
 
-  // Free multi-member workspaces are capped; 1-member free + any entitled
-  // paid plan are uncapped. A degraded solo (2+ members) counts as free
-  // here, so the multi-member cap applies to it too.
+  // Free multi-member capped; 1-member free + entitled paid uncapped. Degraded
+  // solo (2+ members) counts as free here, so the cap applies to it too.
   const objectCap =
     entitled || memberCount < 2 ? null : FREE_MULTI_MEMBER_OBJECT_CAP;
   const canCreateObjects = objectCap === null || objectsUsed < objectCap;
@@ -136,7 +111,6 @@ export async function getWorkspaceEntitlements(
     plan,
     status,
     memberCount,
-    // Seats are a per-seat (team) concept; solo is flat, so it has none.
     seatCount: paid === "team" ? billing?.seatCount ?? null : null,
     objectCap,
     objectsUsed,
@@ -146,10 +120,8 @@ export async function getWorkspaceEntitlements(
 }
 
 /**
- * Thrown by `assertCanCreateObject` when a workspace is over its free
- * object cap. Mirror of the old billing `AccessDecision` denial, reshaped
- * for the workspace model. Carries the workspace id so the route handler
- * can build the friendly denial body.
+ * Thrown by `assertCanCreateObject` when a workspace is over its free object
+ * cap. Carries the workspace id so the route handler can build the denial body.
  */
 export class EntitlementError extends Error {
   readonly code = "over_free_cap" as const;
@@ -163,31 +135,16 @@ export class EntitlementError extends Error {
 }
 
 /**
- * Create-time gate for ontology objects (the freeze-don't-delete rule).
- * Throws `EntitlementError` when the workspace is over its free cap;
- * returns silently otherwise. Reads / edits / exports never call this.
- */
-/**
- * The URL every 402/403 plan-gate envelope points at: THE POST-RETIREMENT
- * BILLING SURFACE, `/billing` (`src/app/billing/[segment]/page.tsx`, reached
- * here through its segment-less forwarder). Built by `../url` so this and the
- * five other billing entry points cannot drift apart again.
+ * ⚠ The URL every 402/403 plan-gate envelope points at: `/billing`
+ * (`src/app/billing/[segment]/page.tsx`, via its segment-less forwarder). NOT
+ * `/canvas?billing=upgrade` (RETIRES with the `[workspaceSlug]` tree) and NOT
+ * `/pricing` (marketing, sells nothing) — decision D1/D6,
+ * docs/migration-research/website-retirement-plan.md. API-first clients (MCP
+ * agents) follow this link literally. Built by `../url` so the six billing
+ * entry points cannot drift apart.
  *
- * NOT `/canvas?billing=upgrade`, which is what this returned until decision D1
- * landed, and NOT `/pricing`. THE NOTE THAT USED TO SIT HERE HAD BOTH FACTS
- * BACKWARDS — it claimed `/canvas` was on the keep list and `/pricing` was
- * being deleted. docs/migration-research/website-retirement-plan.md says the
- * opposite on both: the whole `[workspaceSlug]` tree RETIRES (and the top-level
- * `/canvas` redirect with it), while `/pricing` is KEEP-PUBLIC (decision D6).
- * The correction matters more here than in most comments, because these
- * envelopes are read by API-FIRST clients — MCP agents included — that follow
- * the link literally, and the old target is about to start 302ing.
- *
- * Workspace-agnostic on purpose, unchanged: these three builders are reached
- * from contexts with no resolved workspace SEGMENT (only an id), and `/billing`
- * resolving the caller's DEFAULT workspace is the same trade `/canvas` made.
- * Plumbing the segment through is the follow-up, not a blocker — the Stripe
- * return URLs, which DO know their workspace, already pass one.
+ * Workspace-agnostic on purpose: these builders are reached with only an id,
+ * no SEGMENT, and `/billing` resolves the caller's DEFAULT workspace.
  */
 export function upgradeUrl(): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
@@ -204,16 +161,10 @@ export async function assertCanCreateObject(
 }
 
 /**
- * Solo member-limit denial. Subclasses `HttpError` so the workspace route
- * catch blocks (`err instanceof HttpError → err.toResponseBody()`) keep
- * routing it as a 402, but overrides `toResponseBody` to emit the FLAT
- * plan-gate envelope — `{ error: <code>, message, upgrade_url }` — the same
- * shape `entitlementDeniedBody()` / the object-cap gate uses, instead of
- * the nested `{ error: { code, message, details } }` default. The web
- * consumers (invite-dialog, members-view, join-requests-banner) and
- * `apiRequest` already parse this flat shape (string `error` code + a
- * top-level `upgrade_url`). `details` is kept on the instance so callers
- * that inspect the thrown error still see `upgrade_url`.
+ * Solo member-limit denial. Subclasses `HttpError` so route catch blocks route
+ * it as a 402, but ⚠ overrides `toResponseBody` to emit the FLAT plan-gate
+ * envelope `{ error: <code>, message, upgrade_url }` instead of the nested
+ * default — the web consumers and `apiRequest` parse the flat shape.
  */
 class SoloMemberLimitError extends HttpError {
   readonly upgradeUrl: string;
@@ -229,9 +180,8 @@ class SoloMemberLimitError extends HttpError {
     this.upgradeUrl = upgradeUrl;
   }
 
-  // Flat plan-gate envelope. The base signature types `error` as an object;
-  // this gate deliberately uses a string code with a sibling `upgrade_url`,
-  // so cast to the base return type — callers pass the value straight to
+  // Base signature types `error` as an object; this gate uses a string code
+  // with a sibling `upgrade_url`, hence the cast — callers pass straight to
   // `NextResponse.json` and never read it back through the typed shape.
   toResponseBody() {
     return {
@@ -243,13 +193,9 @@ class SoloMemberLimitError extends HttpError {
 }
 
 /**
- * Create-time gate for adding a member (invitation accept, join-link).
- * A live Solo workspace is single-member by contract, so adding a member
- * is refused with a 402 (flat plan-gate envelope, see `SoloMemberLimitError`)
- * pointing at the upgrade path. Free and Team workspaces are unaffected
- * (no-op). Resolves billing + the active member count; the throw is gated
- * on a live Solo subscription that is already at (or above) the
- * single-member limit.
+ * Create-time gate for adding a member (invitation accept, join-link). A live
+ * Solo workspace is single-member by contract → 402 (flat plan-gate envelope,
+ * see `SoloMemberLimitError`). Free and Team are no-ops.
  */
 export async function assertCanAddMember(workspaceId: string): Promise<void> {
   const [billing, memberCount] = await Promise.all([
@@ -265,13 +211,9 @@ export async function assertCanAddMember(workspaceId: string): Promise<void> {
 }
 
 /**
- * Structured JSON body returned by a route when `assertCanCreateObject`
- * denies a create. Mirrors the old `accessDeniedBody` shape/pattern so
- * clients get a single, predictable "upgrade to continue" envelope.
- * Emphasizes that nothing is deleted — the workspace is frozen, not wiped.
- *
- * `upgrade_url` comes from `upgradeUrl()` — the in-app upgrade surface. The
- * per-workspace `/{slug}/settings/billing` route does not exist (404).
+ * JSON body a route returns when `assertCanCreateObject` denies a create — one
+ * predictable "upgrade to continue" envelope. Says nothing is deleted: the
+ * workspace is frozen, not wiped.
  */
 export function entitlementDeniedBody() {
   return {

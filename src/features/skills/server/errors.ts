@@ -1,9 +1,7 @@
 import "server-only";
 
-/**
- * Domain errors thrown by the skills service. Mapped to HttpError at
- * the route boundary via `mapSkillError`.
- */
+/** Skills domain errors, mapped to HttpError at the route boundary via
+ *  `mapSkillError`. */
 
 export class SkillNotFoundError extends Error {
   readonly code = "SKILL_NOT_FOUND";
@@ -40,12 +38,9 @@ export class SkillFileNotFoundError extends Error {
   }
 }
 
-/**
- * Thrown when a PATCH/PUT carries an `expectedUpdatedAt` precondition
- * that doesn't match the row's current `updated_at`. Maps to 412 — the
- * client should refetch and surface a conflict resolution UI rather
- * than silently overwriting the parallel writer's content.
- */
+/** `expectedUpdatedAt` precondition didn't match the row's `updated_at`.
+ *  Maps to 412 — ⚠ the client must refetch and surface a conflict UI, never
+ *  silently overwrite the parallel writer. */
 export class SkillStaleVersionError extends Error {
   readonly code = "SKILL_STALE_VERSION";
   readonly expected: string;
@@ -60,11 +55,8 @@ export class SkillStaleVersionError extends Error {
   }
 }
 
-/**
- * Thrown when a workspace-scoped API key tries to create a private
- * skill. Mirrors `WorkspaceKeyPrivateVisibilityError` in the
- * knowledge feature — see that doc for the rationale (Audit B6).
- */
+/** Workspace-scoped API key tried to create a private skill. Mirrors
+ *  `WorkspaceKeyPrivateVisibilityError` in the knowledge feature. */
 export class WorkspaceKeyPrivateSkillError extends Error {
   readonly code = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
   constructor() {

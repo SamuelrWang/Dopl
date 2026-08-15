@@ -7,18 +7,13 @@ import type { BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
 
 /**
- * The PAYWALL's desktop degradation (journey-audit GAP-9). `UpgradeModal` is a
- * WEB component the SPA reuses — the ontology over-cap flow, the chats
- * retention upsell, the members invite / join-request blocks all mount it — and
- * its checkout step mounted Stripe Embedded Checkout, which the packaged
- * renderer cannot load at all (`script-src 'self'`, `connect-src 'none'`,
- * `frame-src 'none'`). Clicking "Choose Pro" dead-ended on an error card while
- * the settings modal's billing pane already handed checkout to the browser.
+ * The PAYWALL's desktop degradation. `UpgradeModal` is a WEB component the SPA
+ * reuses, and its checkout step mounts Stripe Embedded Checkout, which the
+ * packaged renderer cannot load (`script-src 'self'`, `connect-src 'none'`,
+ * `frame-src 'none'`).
  *
- * Asserted through the real Electron bridge (`window.dopl`), which is also what
- * marks this renderer as the SPA: the shared detector is capability-keyed, so
- * the pitch stays, the Stripe mount goes, and the purchase leaves for the
- * browser. `fetch` is a never-resolving tripwire.
+ * Asserted through the real bridge, which is also what marks this renderer as
+ * the SPA: pitch stays, Stripe mount goes, purchase leaves for the browser.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -70,7 +65,7 @@ describe("UpgradeModal in the desktop SPA", () => {
   it("keeps the plan pitch and hands checkout to the browser, scoped to this workspace", async () => {
     renderModal();
 
-    // The pitch is unchanged — only the payment leg differs.
+    // Pitch unchanged — only the payment leg differs.
     expect(await screen.findByRole("button", { name: "Choose Pro" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Choose Pro" }));
 
@@ -79,16 +74,14 @@ describe("UpgradeModal in the desktop SPA", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue in your browser" }));
 
-    // The standalone billing page (`src/app/billing/[segment]/page.tsx`), NOT
-    // the retiring `/{segment}/canvas`, and carrying the plan the user just
-    // chose so the browser opens straight into that checkout.
+    // Standalone billing page, carrying the chosen plan so the browser opens
+    // straight into that checkout.
     await waitFor(() =>
       expect(openExternal).toHaveBeenCalledWith(
         `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=solo`
       )
     );
-    // The origin is the preload constant, never the file:// document, and the
-    // renderer never reached the network itself.
+    // ⚠ Origin is the preload constant, never the file:// document.
     expect(fetch).not.toHaveBeenCalled();
   });
 

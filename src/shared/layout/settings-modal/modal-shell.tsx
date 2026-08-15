@@ -17,20 +17,18 @@ interface Props {
 }
 
 /**
- * Portal modal in the new design language: darkened scrim + a card that
- * fades / pops in and out. Mounts on open, animates via the `.visible`
- * classes a frame later, and stays mounted through the exit transition
- * before unmounting. Closes on scrim click or Escape and locks body
- * scroll while open. The card carries the light token scope so embedded
- * token-based components render light regardless of the app theme.
+ * Portal modal: scrim + card that fades/pops. Mounts on open, animates via the
+ * `.visible` classes a frame later, stays mounted through the exit transition.
+ * Closes on scrim click or Escape; locks body scroll while open. Card carries
+ * the light token scope so embedded components render light in any app theme.
  */
 export function ModalShell({ open, onClose, label, size = "wide", children }: Props) {
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
 
-  // All state writes happen inside rAF / timeout callbacks (never
-  // synchronously in the effect body) so the enter/exit transition plays
-  // across separate paints and the set-state-in-effect rule is satisfied.
+  // ⚠ Every state write sits inside a rAF/timeout callback, never synchronously
+  // in the effect body: the transition needs separate paints, and the
+  // set-state-in-effect lint rule forbids the direct version.
   useEffect(() => {
     if (open) {
       const id = requestAnimationFrame(() => {

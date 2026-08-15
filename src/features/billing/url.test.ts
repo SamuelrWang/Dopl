@@ -1,12 +1,7 @@
 /**
- * THE BILLING SURFACE'S URL, as a table.
- *
- * Six independent call sites used to hand-write `/{segment}/canvas?billing=…`;
- * they now all come through here, and the reason they had to move is that the
- * page they named is being deleted (docs/migration-research/
- * website-retirement-plan.md). So the assertion with teeth is not the shape of
- * the string — it is that nothing this builder emits points into the retiring
- * tree, and that the params money depends on survive the trip.
+ * The billing surface's URL, as a table. The assertion with teeth: nothing this
+ * builder emits points into the retiring app tree, and the params money depends
+ * on survive the trip.
  */
 
 import { describe, it, expect } from "vitest";
@@ -29,7 +24,6 @@ describe("the path it builds", () => {
   });
 
   it("falls back to the default-workspace forwarder when no segment is known", () => {
-    // The 402 envelopes and /pricing reach this builder with an id at best —
     // `/billing` resolves the caller's default workspace rather than 404ing.
     expect(billingPath()).toBe(BILLING_SURFACE_ROOT);
     expect(billingPath({ segment: null, intent: "upgrade" })).toBe(
@@ -51,9 +45,8 @@ describe("the path it builds", () => {
   });
 
   it("leaves Stripe's session-id placeholder LITERAL", () => {
-    // `%7BCHECKOUT_SESSION_ID%7D` is not a placeholder to Stripe — it is a
-    // string, delivered verbatim to the browser. This is the whole reason the
-    // query is concatenated rather than run through URLSearchParams.
+    // ⚠ `%7BCHECKOUT_SESSION_ID%7D` is delivered verbatim to the browser —
+    // why the query is concatenated, not run through URLSearchParams.
     const url = billingPath({
       segment: "acme-ab12cd34ef56",
       intent: "success",
@@ -90,9 +83,8 @@ describe("the absolute form", () => {
 
 describe("billingSelfPath — the page's own URL, for the login bounce", () => {
   it("keeps the query, which is the entire point", () => {
-    // A first-time payer's browser is BY DEFINITION signed out: they follow
-    // `?billing=upgrade`, get bounced to /login, and if the query does not ride
-    // along in `redirectTo` checkout never opens after they sign in.
+    // First-time payer is signed out: without the query riding along in
+    // `redirectTo`, checkout never opens after sign-in.
     expect(
       billingSelfPath("acme-ab12cd34ef56", { billing: "upgrade", plan: "solo" })
     ).toBe("/billing/acme-ab12cd34ef56?billing=upgrade&plan=solo");
@@ -118,7 +110,6 @@ describe("what the page reads back off the URL", () => {
   it("only `success` and `return` arm the post-checkout poll", () => {
     expect(parseBillingReturn("success")).toBe("success");
     expect(parseBillingReturn("return")).toBe("return");
-    // `upgrade` means nothing has been bought yet — polling would be a lie.
     expect(parseBillingReturn("upgrade")).toBeNull();
     expect(parseBillingReturn("../evil")).toBeNull();
     expect(parseBillingReturn(null)).toBeNull();
@@ -136,8 +127,7 @@ describe("what the page reads back off the URL", () => {
   it("accepts only the two purchasable plans", () => {
     expect(parseCheckoutPlan("solo")).toBe("solo");
     expect(parseCheckoutPlan("team")).toBe("team");
-    // "free" is a plan but not a CHECKOUT — auto-opening it would mint a
-    // session for a price that does not exist.
+    // "free" is a plan but not a CHECKOUT — no such price exists.
     expect(parseCheckoutPlan("free")).toBeNull();
     expect(parseCheckoutPlan("enterprise")).toBeNull();
     expect(parseCheckoutPlan(null)).toBeNull();

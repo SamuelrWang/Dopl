@@ -81,10 +81,9 @@ function indexByFolder(entries: KnowledgeEntry[]) {
 const pad = (depth: number) => ({ paddingLeft: 28 + depth * 15 });
 
 /**
- * Folder/entry tree for one knowledge base — the v2 design language (small,
- * near-black, hairline rows). Right-click (or the hover "⋯") opens the context
- * menu for rename/move/delete/download; folder hover reveals +entry / +folder;
- * renames + fresh-create stubs edit inline. No drag-drop by design.
+ * Folder/entry tree for one knowledge base. Right-click (or hover "⋯") opens
+ * rename/move/delete/download; folder hover reveals +entry / +folder; renames
+ * and fresh-create stubs edit inline. No drag-drop, by design.
  */
 export function TreeRows({
   folders,
@@ -260,16 +259,15 @@ function FolderRow({
   const create = async (kind: "entry" | "folder") => {
     if (busy) return;
     setBusy(true);
-    // Reveal the new child — creating inside a collapsed folder would hide it.
+    // ⚠ Reveal: creating inside a collapsed folder would hide the child.
     if (!isOpen) toggle(folder.id);
     try {
       if (kind === "folder") {
-        // Folder: created + auto inline-renamed (controller sets editingNodeId).
-        // Mark it a stub so Escape removes the empty placeholder.
+        // Auto inline-rename (controller sets editingNodeId); marked a stub
+        // so Escape removes the empty placeholder.
         const id = await onCreateFolder(folder.id, "Untitled folder");
         inline.beginStubEdit(id);
       } else {
-        // Entry: created + opened in the detail editor (renamed via its title).
         await onCreateEntry(folder.id, "Untitled entry");
       }
     } catch {
@@ -407,8 +405,8 @@ function RowEditor({
   );
 }
 
-/** Base-root create affordance — folders/entries with no parent folder are
- *  created here (folder rows handle their own children on hover). */
+/** Base-root create affordance: parentless folders/entries. Folder rows
+ *  handle their own children on hover. */
 function AddRow({
   onCreateFolder,
   onCreateEntry,
@@ -456,7 +454,7 @@ function AddRow({
   );
 }
 
-/** Small icon button rendered as a span (rows are <button>; avoid nesting). */
+/** ⚠ Icon button rendered as a <span>: rows are <button>, no nesting. */
 function RowIconBtn({
   title,
   disabled,

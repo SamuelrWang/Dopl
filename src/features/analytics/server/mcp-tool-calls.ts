@@ -1,11 +1,9 @@
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Per-op MCP instrumentation writer. Inserts one row into `mcp_tool_calls`
- * for every workspace-scoped MCP tool call, capturing who / where / what /
- * whether-it-wrote. Foundation for future usage analytics and usage-based
- * billing — distinct from `mcp_events` (which captures full payloads for
- * the admin transcript view).
+ * Per-op MCP instrumentation: one `mcp_tool_calls` row per workspace-scoped
+ * tool call — who / where / what / whether-it-wrote. Distinct from `mcp_events`
+ * (full payloads for the admin transcript view).
  *
  * Fire-and-forget: never throws — instrumentation must not break a request.
  */

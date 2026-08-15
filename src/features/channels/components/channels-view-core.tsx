@@ -55,43 +55,30 @@ function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
 }
 
 /**
- * Channels page root — a two-pane `.page-float` master/detail surface: the
- * searchable channel list on the left, the selected channel's thread +
- * composer on the right. Layers the v1.2 human-in-the-loop surfaces on top of
- * the base thread: the consent inbox (inbound approvals + outbound reviews),
- * per-teammate trust, agent tool profiles, and live presence. All client-
- * fetched via `useApiQuery`; MCP / agent / desktop writes surface live through
- * the realtime hooks (refetch, never merge).
+ * Channels page root — two-pane master/detail: searchable channel list left,
+ * selected channel's thread + composer right, plus the human-in-the-loop
+ * surfaces (consent inbox, per-teammate trust, agent tool profiles, presence).
+ * All client-fetched via `useApiQuery`; MCP / agent / desktop writes surface
+ * through the realtime hooks — ⚠ refetch, NEVER merge.
  *
- * THE WRITES DO NOT LIVE HERE ANY MORE — three hooks own them, which is what
- * took this file back under the §2 cap it had been sitting over:
- * `use-thread-writes` (send / open / close / reopen — the flagship optimistic
- * path), `use-channel-preference-writes` (tool profile, trust, consent — the
- * writes that used to carry hand-rolled override records), and
- * `use-channel-lifecycle-writes` (archive / visibility / delete / join /
- * leave). ALL THREE are on `useApiMutation` and patch the query cache
- * directly, so this file holds no optimistic lens of its own: what it renders
- * is what the cache says, one frame after the click.
+ * ⚠ The writes live in three hooks, not here: `use-thread-writes` (send / open /
+ * close / reopen), `use-channel-preference-writes` (tool profile, trust,
+ * consent), `use-channel-lifecycle-writes` (archive / visibility / delete /
+ * join / leave). All three are on `useApiMutation` and patch the query cache
+ * directly, so this file holds NO optimistic lens of its own.
  *
- * ALL THREE ALSO TAKE `gate`, and that is the whole of audit C-27's fix: the
- * refetch coordinator used to cover the send and the thread ops only, so every
- * other write raced the realtime doorbell and survived on override maps
- * instead. `useRefetchGate` owns one counter and every mutation's `settleWith`
- * feeds it, so the coordinator now covers the feature rather than a third of
- * it — and a write that throws still releases the deferred refetch.
+ * ⚠ All three also take `gate`. `useRefetchGate` owns one counter and every
+ * mutation's `settleWith` feeds it, so the coordinator covers the whole feature;
+ * a write that throws still releases the deferred refetch.
  *
- * Next-free by construction so the desktop SPA can bundle it
- * (apps/desktop-ui/src/pages/channels/index.tsx): the only router dependency —
- * the first-run explainer's step links — arrives as the `Link` prop.
+ * ⚠ Next-free by construction so the desktop SPA can bundle it — the only router
+ * dependency (the first-run explainer's step links) arrives as the `Link` prop.
  * `./channels-view` is the web app's `next/link` binding.
  *
- * IN THE BUNDLED SPA the four realtime hooks below are deliberate no-ops
+ * ⚠ In the bundled SPA the realtime hooks below are deliberate NO-OPS
  * (`shared-channel-registry.ts` short-circuits when `window.dopl` is present),
- * so every surface still loads from its own `useApiQuery` and then refreshes
- * on the consent poll, on each mutation's own settle-time invalidations, and
- * on TanStack's focus revalidation — until Phase 3 pushes change events over
- * the bridge. Nothing here changes for that; the hooks stay wired as the web
- * page wires them.
+ * so surfaces refresh on the consent poll, each mutation's settle-time
+ * invalidations, and TanStack's focus revalidation instead.
  */
 export function ChannelsViewCore({
   workspaceId,
@@ -107,8 +94,8 @@ export function ChannelsViewCore({
   const [directOpen, setDirectOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [goPublicOpen, setGoPublicOpen] = useState(false);
-  // Double-fire guards, and only that: the OPTIMISTIC half of these two writes
-  // is a cache patch now, so nothing here mirrors a server value.
+  // ⚠ Double-fire guards ONLY — the optimistic half is a cache patch, so nothing
+  // here mirrors a server value.
   const [trustBusyIds, setTrustBusyIds] = useState<ReadonlySet<string>>(EMPTY_IDS);
   const [consentBusyIds, setConsentBusyIds] =
     useState<ReadonlySet<string>>(EMPTY_IDS);
@@ -126,8 +113,7 @@ export function ChannelsViewCore({
     [channels, tab]
   );
 
-  // Derived effective selection: an explicit pick that still exists wins, else
-  // the first row — so the thread always shows something real.
+  // Explicit pick that still exists wins, else the first row.
   const effectiveId = useMemo(() => {
     if (selectedId && displayChannels.some((c) => c.id === selectedId)) {
       return selectedId;
@@ -142,11 +128,10 @@ export function ChannelsViewCore({
     loading: messagesLoading,
     refetch: refetchMessages,
   } = useChannelMessages(selected?.id ?? null, workspaceId);
-  // `membersStale` is this read's `isPlaceholderData`: through a channel switch
-  // `keepPreviousData` keeps the PREVIOUS channel's roster on screen, and the
-  // composer's request mode turns that roster into the `toUserId` it posts. It
-  // rides down to the composer so a request cannot address the last channel's
-  // peer (400 `ChannelAddresseeNotMemberError`, after the optimistic paint).
+  // ⚠ `membersStale` is this read's `isPlaceholderData`. Through a channel
+  // switch `keepPreviousData` keeps the PREVIOUS channel's roster on screen and
+  // request mode turns that roster into the posted `toUserId`, so this rides
+  // down to the composer to stop a request addressing the last channel's peer.
   const {
     members,
     stale: membersStale,
@@ -157,10 +142,9 @@ export function ChannelsViewCore({
     loading: threadsLoading,
     refetch: refetchThreads,
   } = useChannelThreads(selected?.id ?? null, workspaceId);
-  // Poll BACKSTOP scoped to THIS page (not the sidebar badge), for the case
-  // where the realtime socket itself is down — consent INSERTs are delivered
-  // over realtime (see CONSENT_INBOX_POLL_MS). Pauses automatically while the
-  // tab is hidden (TanStack default).
+  // ⚠ Poll BACKSTOP scoped to THIS page, not the sidebar badge — for a downed
+  // realtime socket only (consent INSERTs do arrive over realtime). Pauses while
+  // the tab is hidden. See CONSENT_INBOX_POLL_MS.
   const { inbound, outbound } = useConsentInbox(
     workspaceId,
     undefined,
@@ -168,9 +152,9 @@ export function ChannelsViewCore({
   );
   const { trustedIds } = useTrustRules(workspaceId);
 
-  // Pending consent for the SELECTED channel (banner) + a set of every channel
-  // with something pending (list-row indicator + "seen from the list"). A
-  // decided request leaves the inbox cache at once, so nothing is filtered here.
+  // Pending consent for the SELECTED channel plus the set of every channel with
+  // something pending. A decided request leaves the inbox cache at once, so
+  // nothing is filtered here.
   const pending = useMemo(
     () => [...inbound, ...outbound],
     [inbound, outbound]
@@ -185,28 +169,25 @@ export function ChannelsViewCore({
   );
 
   // Realtime → coalesced refetch, deferred while a local write is in flight.
-  // `useRefetchGate` owns the coordinator AND the in-flight counter every
-  // caller used to keep by hand; `gate` is handed to each mutation's
-  // `settleWith`, so a write that throws still releases the deferred refetch.
+  // `gate` is handed to each mutation's `settleWith`, so a write that throws
+  // still releases the deferred refetch.
   const refetchRef = useRef<() => void>(() => {});
   refetchRef.current = () => {
     void refetchChannels();
     void refetchMessages();
     void refetchMembers();
-    // A `create_thread` / `close_thread` posts a message, so the same realtime
-    // signal that refreshes messages also refreshes the authoritative thread
-    // status/title overlay (`set_thread_mode` posts none, so it is eventually
-    // consistent).
+    // create/close_thread post a message, so the signal that refreshes messages
+    // also refreshes the thread overlay. `set_thread_mode` posts none and is
+    // eventually consistent.
     void refetchThreads();
   };
   const { signal, gate } = useRefetchGate(() => refetchRef.current());
   useChannelsRealtime(workspaceId, signal);
-  // Presence is high-churn (a heartbeat per listener per ~30s) and never
-  // clobbers a send, so it bypasses the coordinator — but it only refetches the
-  // ROSTER, on a trailing debounce. The channel list is deliberately NOT
-  // refetched here: that read does a workspace-wide presence scan plus a
-  // per-channel member fan-out, and the only thing it adds is `onlineMemberCount`,
-  // which nothing renders (the header derives "N online" from the roster).
+  // Presence is high-churn (~30s per listener) and never clobbers a send, so it
+  // bypasses the coordinator — but refetches the ROSTER only, on a trailing
+  // debounce. ⚠ The channel list is deliberately NOT refetched: that read does a
+  // workspace-wide presence scan plus a per-channel member fan-out and adds only
+  // `onlineMemberCount`, which nothing renders.
   const membersRefetchRef = useRef<() => void>(() => {});
   membersRefetchRef.current = () => void refetchMembers();
   const presenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,8 +198,7 @@ export function ChannelsViewCore({
     []
   );
   usePresenceRealtime(workspaceId, () => {
-    // Already scheduled: the freshness window is 90s, so coalescing a burst
-    // into one refetch loses nothing.
+    // Freshness window is 90s, so coalescing a burst loses nothing.
     if (presenceTimerRef.current) return;
     presenceTimerRef.current = setTimeout(() => {
       presenceTimerRef.current = null;
@@ -227,7 +207,7 @@ export function ChannelsViewCore({
   });
 
   // Author display for a pending row, so an optimistic message does not render
-  // as "Member" for one round trip and then rename itself.
+  // as "Member" for a round trip and then rename itself.
   const me = members.find((m) => m.userId === currentUserId) ?? null;
   const { send, openThread, threadOp } = useThreadWrites({
     workspaceId,
@@ -248,8 +228,8 @@ export function ChannelsViewCore({
   async function handleSend(body: string, opts?: SendOptions) {
     if (!selected) return;
     await send.mutateAsync({
-      // Captured HERE, at submit: a channel switch mid-flight must not move
-      // this write into another channel's cache.
+      // ⚠ Captured at SUBMIT — a channel switch mid-flight must not move this
+      // write into another channel's cache.
       channelId: selected.id,
       clientMsgId: newClientMsgId(),
       body,
@@ -258,10 +238,10 @@ export function ChannelsViewCore({
   }
 
   /**
-   * The composer's REQUEST mode: open a titled thread addressed to one member.
-   * The `clientMsgId` is the thread's idempotency key — a resend after a failed
-   * open returns the already-created thread instead of double-creating it (and
-   * double-spawning the responder's window).
+   * REQUEST mode: open a titled thread addressed to one member. `clientMsgId` is
+   * the idempotency key — a resend after a failed open returns the existing
+   * thread rather than double-creating it AND double-spawning the responder's
+   * window.
    */
   async function handleCreateThread(input: {
     title: string;
@@ -301,11 +281,9 @@ export function ChannelsViewCore({
   }
 
   /**
-   * C-13: WIDENING TAKES A HUMAN, so the menu's toggle no longer reaches the
-   * write directly. private→public opens the confirm dialog and the write runs
-   * from there; public→private narrows the audience and goes straight through,
-   * the same way it always did. The decision lives in `go-public-dialog.tsx`
-   * beside the copy the human reads.
+   * ⚠ WIDENING TAKES A HUMAN: private→public opens the confirm dialog and the
+   * write runs from there; public→private narrows the audience and goes straight
+   * through. The decision lives in `go-public-dialog.tsx`, beside the copy.
    */
   function handleToggleVisibility() {
     if (!selected) return;
@@ -327,7 +305,7 @@ export function ChannelsViewCore({
     try {
       await prefs.trust.mutateAsync({ userId, trusted });
     } catch {
-      // The rollback + the toast are the mutation's; this only clears the guard.
+      // Rollback + toast are the mutation's; this only clears the guard.
     } finally {
       setTrustBusyIds((s) => withoutId(s, userId));
     }
@@ -339,15 +317,14 @@ export function ChannelsViewCore({
     try {
       await prefs.consent.mutateAsync({ id, decision });
     } catch {
-      // Same: the card comes back with the cache rollback.
     } finally {
       setConsentBusyIds((s) => withoutId(s, id));
     }
   }
 
-  // A row with no profile resolves the way the DESKTOP resolves it — see
-  // `UNRESOLVED_TOOL_PROFILE`. The settings popover renders this value as a
-  // containment claim, so the web may not pick a wider answer than the machine.
+  // ⚠ A row with no profile resolves the way the DESKTOP resolves it
+  // (`UNRESOLVED_TOOL_PROFILE`) — the settings popover renders this as a
+  // containment claim, so the web must never pick a wider answer.
   const channelForThread = selected
     ? {
         ...selected,

@@ -12,12 +12,10 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import { checkoutAppearance } from "./checkout-appearance";
 
 /**
- * Lazy singleton, NEVER a module-level read: `process` doesn't exist in the
+ * ⚠ Lazy singleton, NEVER a module-level read: `process` doesn't exist in the
  * Vite-bundled desktop renderer, and a top-level `process.env.*` is an
- * import-time ReferenceError that whites out the whole SPA (the same rule
- * `@/shared/supabase/browser.ts` follows). Desktop never calls this —
- * checkout degrades behind the settings modal — so the guard only has to
- * keep the import side-effect-free.
+ * import-time ReferenceError that whites out the whole SPA (same rule as
+ * `@/shared/supabase/browser.ts`).
  */
 let stripePromise: ReturnType<typeof loadStripe> | null = null;
 function getStripePromise() {
@@ -32,18 +30,15 @@ function getStripePromise() {
 }
 
 /**
- * Native checkout for a paid plan. The backend creates a custom-checkout
- * session (`ui_mode: "elements"`) and we render its `client_secret` through
- * our own design-system-styled `PaymentElement` + pay button — no Stripe
- * iframe chrome. `plan` picks the price the backend sells: "solo" ($5.99
- * flat, single-member workspaces only — the server 409s
- * SOLO_REQUIRES_SINGLE_MEMBER otherwise) or "team" ($7.99 per seat).
- * `workspaceId` scopes the checkout to the workspace being upgraded (sent as
- * `x-workspace-id`); omitting it makes the server resolve fail-closed from
- * memberships (a sole workspace auto-targets; 0 or 2+ → WORKSPACE_REQUIRED).
+ * Native checkout: backend creates a custom-checkout session
+ * (`ui_mode: "elements"`), we render its `client_secret` through our own
+ * `PaymentElement` + pay button — no Stripe iframe chrome.
  *
- * Self-contained: mounts inside the upgrade modal or the settings modal with
- * no page assumptions, and stays max-width friendly.
+ * `plan`: "solo" ($5.99 flat, single-member only — server 409s
+ * SOLO_REQUIRES_SINGLE_MEMBER otherwise) or "team" ($7.99 per seat).
+ * `workspaceId` → `x-workspace-id`; omitting it makes the server resolve
+ * fail-closed from memberships (sole workspace auto-targets; 0 or 2+ →
+ * WORKSPACE_REQUIRED).
  */
 export function EmbeddedCheckoutForm({
   workspaceId,
@@ -57,9 +52,6 @@ export function EmbeddedCheckoutForm({
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Preserve the original client-secret fetch flow: POST /api/billing/checkout
-  // with `{plan}` + optional `x-workspace-id`, parse either error envelope,
-  // and surface the portal-link escape hatch on the live-sub 409.
   const loadSecret = useCallback(async () => {
     setError(null);
     setPortalUrl(null);
@@ -75,8 +67,7 @@ export function EmbeddedCheckoutForm({
       });
       if (!res.ok) {
         const errBody: unknown = await res.json().catch(() => ({}));
-        // The "already has an active subscription" 409 ships a portal
-        // link — surface it, since "Try again" would just 409 again.
+        // Live-sub 409 ships a portal link; "Try again" would just 409 again.
         const portal = extractPortalUrl(errBody);
         if (portal) setPortalUrl(portal);
         setError(
@@ -131,12 +122,6 @@ export function EmbeddedCheckoutForm({
   );
 }
 
-/**
- * The payment form once the session exists. Reads the initialized checkout
- * from `useCheckout()`, renders a compact order summary derived from the
- * session's own total/line item, the `PaymentElement`, and a full-width pay
- * button that calls `checkout.confirm()`.
- */
 function CheckoutPaymentForm({ plan }: { plan: "solo" | "team" }) {
   const result = useCheckout();
   const [confirming, setConfirming] = useState(false);
@@ -155,12 +140,10 @@ function CheckoutPaymentForm({ plan }: { plan: "solo" | "team" }) {
   const handleConfirm = async () => {
     setConfirming(true);
     setConfirmError(null);
-    // No args → the session's server-set return_url drives the post-payment
-    // redirect: `/billing/{segment}?billing=success&session_id=…`, the page that
-    // reads `billing=success` as the signal to poll for the webhook (see
-    // `features/billing/url.ts`). A successful card confirm typically redirects
-    // the page — that is the intended flow, so we leave the button in its
-    // "Processing…" state on success.
+    // ⚠ No args → session's server-set return_url drives the redirect to
+    // `/billing/{segment}?billing=success&session_id=…`, where `billing=success`
+    // is the signal to poll for the webhook (`features/billing/url.ts`). Success
+    // navigates away, so the button deliberately stays "Processing…".
     const confirmResult = await checkout.confirm();
     if (confirmResult.type === "error") {
       setConfirmError(confirmResult.error.message);
@@ -201,10 +184,8 @@ function CheckoutPaymentForm({ plan }: { plan: "solo" | "team" }) {
 }
 
 /**
- * Describe the order from the session itself rather than hardcoding prices:
- * the plan total (`checkout.total.total`) and the first line item (seat
- * quantity + per-seat unit amount) already carry Stripe-formatted, localized
- * currency strings.
+ * Order described from the session, not hardcoded prices: `checkout.total.total`
+ * and the first line item already carry Stripe-formatted, localized currency.
  */
 function describeOrder(checkout: StripeCheckoutValue, plan: "solo" | "team") {
   const item = checkout.lineItems[0];
@@ -236,8 +217,6 @@ function intervalAdverb(interval: string): string {
   }
 }
 
-/** Skeleton matching the checkout shape (summary + fields + pay button) —
- *  `animate-pulse` on `surface-raised-2` via the shared `Skeleton` primitive. */
 function CheckoutSkeleton() {
   return (
     <div className="space-y-3.5" aria-busy="true" aria-live="polite">
@@ -253,11 +232,6 @@ function CheckoutSkeleton() {
   );
 }
 
-/**
- * Shared error card — surfaced both when the client-secret fetch fails
- * (optional portal link + retry) and when Stripe fails to initialize the
- * checkout from the secret (message only).
- */
 function CheckoutErrorCard({
   message,
   portalUrl,
@@ -298,9 +272,9 @@ function CheckoutErrorCard({
 }
 
 /**
- * Pull a human-readable message from either error envelope the billing
- * routes emit: flat `{ error: "CODE" | "text", message? }` (checkout
- * 409s) or nested `{ error: { code, message } }` (HttpError.toResponseBody).
+ * Handles BOTH billing error envelopes: flat `{ error: "CODE"|text, message? }`
+ * (checkout 409s) and nested `{ error: { code, message } }`
+ * (HttpError.toResponseBody).
  */
 function extractErrorMessage(body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
@@ -321,8 +295,7 @@ function extractErrorMessage(body: unknown): string | null {
   return null;
 }
 
-/** The live-sub 409 carries `portalUrl` (flat envelope) — the escape
- *  hatch to manage the existing subscription instead of re-checkout. */
+/** Live-sub 409 carries `portalUrl` (flat envelope) — manage-instead-of-recheckout. */
 function extractPortalUrl(body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
   const url = (body as { portalUrl?: unknown }).portalUrl;

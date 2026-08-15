@@ -2,18 +2,13 @@ import type { Chat, ChatDetail, ChatFolder } from "../types";
 import type { ChatScope } from "../scope";
 
 /**
- * The pure half of the chats optimistic layer: what an unsaved folder looks
- * like, what a scope change means in cache terms, and how each of the three
- * chat caches absorbs a write.
+ * Pure half of the chats optimistic layer: unsaved-folder shape, scope→cache
+ * mapping, and how each of the three chat caches absorbs a write. No React,
+ * no DOM, no net.
  *
- * Split from the hooks so every rule here is testable with no React, no DOM
- * and no network — these are the rules that decide whether a delete leaves a
- * ghost row behind and whether a folder re-scope shows the right pill before
- * the server answers.
- *
- * THE CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
- * endpoint returned and applies `select` on read, so a patch operates on
- * `{ chats, hiddenCount }` / `{ folders }` / `{ chat }`, never on the selected
+ * ⚠ CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
+ * endpoint returned and applies `select` on read, so patch
+ * `{ chats, hiddenCount }` / `{ folders }` / `{ chat }`, never the selected
  * array or the selected `ChatDetail`.
  */
 
@@ -24,7 +19,7 @@ export interface ChatListCache {
 export interface ChatFoldersCache {
   folders: ChatFolder[];
 }
-/** The transcript read: one chat's full document under `chat`. */
+/** Transcript read: one chat's full document under `chat`. */
 export interface ChatDetailCache {
   chat: ChatDetail;
 }
@@ -43,13 +38,10 @@ export interface ScopeBody {
   teamIds?: string[];
 }
 
-/**
- * ONE scope→columns mapping, used by the request body and the optimistic
- * patch alike, so the guess on screen and the row the server writes cannot
- * drift. It mirrors `updateChatForUser` exactly: anything that is not
- * public+teams lands on `access_mode: 'workspace'` with an empty grant set
- * (grants are replace-set, and a private chat keeps none).
- */
+/** ⚠ ONE scope→columns mapping for both request body and optimistic patch,
+ *  so screen and server row can't drift. Mirrors `updateChatForUser`:
+ *  anything not public+teams lands on `access_mode: 'workspace'` with an
+ *  empty grant set (grants are replace-set). */
 export function scopeFields(scope: ChatScope, teamIds: string[]): ScopeFields {
   if (scope === "team") {
     return {
@@ -81,14 +73,10 @@ export function isPendingId(id: string): boolean {
   return id.startsWith(PENDING_ID_PREFIX);
 }
 
-/**
- * The id an optimistic folder carries until the server names it.
- *
- * Minted ONCE, at submit, and carried in the draft — never re-derived inside
- * a patch. That is what lets `reconcile` find the exact row `optimistic`
- * added, even after the user has typed a second folder name into the same
- * input while the first POST is still in flight.
- */
+/** Id an optimistic folder carries until the server names it. ⚠ Mint ONCE at
+ *  submit and carry it in the draft — never re-derive inside a patch, or
+ *  `reconcile` can't find the row `optimistic` added when a second name was
+ *  typed while the first POST was in flight. */
 export function pendingFolderId(): string {
   const cryptoRef = globalThis.crypto;
   const token = cryptoRef?.randomUUID
@@ -97,13 +85,12 @@ export function pendingFolderId(): string {
   return `${PENDING_ID_PREFIX}${token}`;
 }
 
-/** The folder row the list renders one frame after Enter. */
 export function buildPendingFolder(id: string, name: string): ChatFolder {
   return {
     id,
     name,
-    // A new folder is born private with no grants (`insertFolder` takes only a
-    // name); the reconcile replaces the whole row from the server's answer.
+    // New folders are born private with no grants (`insertFolder` takes only
+    // a name); reconcile replaces the whole row from the server's answer.
     visibility: "private",
     accessMode: "workspace",
     grantedTeamIds: [],
@@ -119,18 +106,14 @@ export function addFolderRow(
   cache: ChatFoldersCache | undefined,
   folder: ChatFolder
 ): ChatFoldersCache | undefined {
-  // DECLINE TO SEED. A cache with no data is a read still in flight; writing
-  // a one-row list here would render an archive with one folder in it and
-  // then have the landing read replace it.
+  // ⚠ DECLINE TO SEED. No data = read still in flight; a one-row list here
+  // renders an archive of one folder until the landing read replaces it.
   if (!cache) return cache;
   return { ...cache, folders: sortFolders([...cache.folders, folder]) };
 }
 
-/**
- * Put `folder` in the list, replacing `replaceId` if given. Used by both
- * reconciles: a create swaps its pending twin for the saved row (by the id
- * minted at submit), a re-scope replaces the row in place.
- */
+/** Put `folder` in the list, replacing `replaceId` if given. Create swaps its
+ *  pending twin (by the id minted at submit); re-scope replaces in place. */
 export function upsertFolderRow(
   cache: ChatFoldersCache | undefined,
   folder: ChatFolder,
@@ -157,7 +140,7 @@ export function patchChatRow(
   };
 }
 
-/** Replace one chat row wholesale — the reconcile from a PATCH's answer. */
+/** Reconcile from a PATCH's answer. */
 export function replaceChatRow(
   cache: ChatListCache | undefined,
   chat: Chat
@@ -177,11 +160,8 @@ export function removeChatRow(
   return { ...cache, chats: cache.chats.filter((c) => c.id !== chatId) };
 }
 
-/**
- * Mirror a folder's authoritative scope onto every chat filed in it — the
- * client half of the server's fan-out, so the pills in the list flip with the
- * folder's own rather than one round trip later.
- */
+/** Client half of the server's fan-out: mirror a folder's authoritative
+ *  scope onto every chat filed in it. */
 export function applyFolderScopeToChats(
   cache: ChatListCache | undefined,
   folderId: string,
@@ -196,14 +176,9 @@ export function applyFolderScopeToChats(
   };
 }
 
-/**
- * Merge header fields into the cached TRANSCRIPT.
- *
- * MERGE, NEVER REPLACE: a chat PATCH answers with the LIST-level `Chat`, which
- * has no `messages`. Assigning that response into this cache would evict a
- * 200-message transcript on a pin toggle and make the next selection re-read
- * it — the exact re-download the mutation layer exists to stop.
- */
+/** Merge header fields into the cached TRANSCRIPT. ⚠ MERGE, NEVER REPLACE: a
+ *  chat PATCH answers with the LIST-level `Chat`, which has no `messages` —
+ *  assigning it would evict the transcript on a pin toggle. */
 export function mergeChatDetail(
   cache: ChatDetailCache | undefined,
   fields: Partial<Chat>

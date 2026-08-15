@@ -2,8 +2,8 @@
 
 import { ResetPasswordForm } from "./reset-password-form";
 
-/** Centered single-column reset surface. Shares the login bg + scoped typeface;
- *  no right panel — this is a focused recovery step. */
+/** Centered single-column reset surface. Login bg + scoped typeface, no right
+ *  panel — focused recovery step. */
 export function ResetPasswordScreen() {
   return (
     <main

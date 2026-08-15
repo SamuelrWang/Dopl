@@ -24,10 +24,8 @@ import {
 import { getBaseById } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
-/**
- * Knowledge entry reads + writes, plus `resolveEntryRefs` (the
- * visibility-gated id→name resolver for ontology knowledge attributes).
- */
+/** Entry reads + writes, plus `resolveEntryRefs` — the visibility-gated
+ *  id→name resolver for ontology knowledge attributes. */
 
 export interface ListEntriesOpts {
   folderId?: string | null;
@@ -65,12 +63,11 @@ export interface KnowledgeEntryRef {
 }
 
 /**
- * Names for a set of entry ids — display resolution for ontology
- * knowledge-attribute refs (`GET /api/knowledge/entries?ids=`). Applies
- * the SAME base-visibility gating as `listBases` (M-10 private/public +
- * api-key scope via `canSeeBase`, teams scope via `filterTeamVisibleBases`):
- * an entry whose base the caller can't read is silently dropped, never
- * leaked. Unknown / cross-workspace / trashed ids simply don't resolve.
+ * Names for a set of entry ids (`GET /api/knowledge/entries?ids=`).
+ * ⚠ Applies the SAME base-visibility gating as `listBases` — `canSeeBase` for
+ * M-10 + api-key scope, `filterTeamVisibleBases` for teams. Entries under an
+ * unreadable base are silently DROPPED, never leaked; unknown /
+ * cross-workspace / trashed ids simply don't resolve.
  */
 export async function resolveEntryRefs(
   ctx: KnowledgeContext,
@@ -110,7 +107,7 @@ export async function createEntry(
       );
     }
   }
-  // Storage gate. A create is pure growth, so its delta is the whole body.
+  // Storage gate: a create is pure growth, delta = whole body.
   await assertStorageHeadroom(ctx, base, bodyBytes(input.body));
   const created = await repo.insertEntry({
     workspaceId: ctx.workspaceId,
@@ -141,10 +138,9 @@ export async function updateEntry(
   if (expectedUpdatedAt && entry.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, entry.updatedAt);
   }
-  // Storage gate, on the NET delta. `patch.body === undefined` leaves the
-  // column alone, so a title/position-only patch has no delta at all — and a
-  // shrink is negative, which `assertStorageHeadroom` waves through even when
-  // the base is already over cap (that edit is the way OUT of the hole).
+  // Storage gate on the NET delta. `patch.body === undefined` leaves the
+  // column alone (no delta); a shrink is negative and `assertStorageHeadroom`
+  // waves it through even over cap — that edit is the way OUT of the hole.
   if (patch.body !== undefined) {
     await assertStorageHeadroom(
       ctx,
@@ -156,7 +152,7 @@ export async function updateEntry(
     id,
     {
       title: patch.title,
-      // Pass through as-is: undefined skips the column, null clears it.
+      // As-is: undefined skips column, null clears.
       excerpt: patch.excerpt,
       body: patch.body,
       entryType: patch.entryType,
@@ -166,15 +162,13 @@ export async function updateEntry(
     },
     expectedUpdatedAt
   );
-  // null = atomic CAS lost the race (a concurrent write landed between
-  // the read above and this write). Re-fetch for the actual version.
+  // null = CAS lost the race to a concurrent write. Re-fetch actual version.
   if (saved === null) {
     const fresh = await getEntry(ctx, id);
     throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
   }
-  // Content changed → refresh chunk embeddings in the background.
-  // (Position/folder-only patches skip; the hash check inside would
-  // no-op anyway, but don't even schedule.)
+  // Content changed → refresh chunk embeddings in background. Position/folder
+  // -only patches skip scheduling entirely (the hash check would no-op).
   if (patch.title !== undefined || patch.body !== undefined) {
     scheduleEntryEmbedding(saved);
   }
@@ -210,10 +204,7 @@ export async function moveEntry(
   });
 }
 
-/**
- * PERMANENTLY delete an entry. No trash, no restore (2026-08-07). Gates
- * unchanged from the old soft-delete path.
- */
+/** PERMANENT delete of an entry. No trash, no restore. */
 export async function deleteEntry(
   ctx: KnowledgeContext,
   id: string
@@ -221,8 +212,8 @@ export async function deleteEntry(
   const entry = await getEntry(ctx, id);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
-  // F-10: honor the parent base's agent-read-only flag on the by-id delete
-  // route too (an agent API key can hit this directly, not just via MCP).
+  // F-10: honor the parent base's agent-read-only flag here too — an agent
+  // API key can hit this route directly, not only via MCP.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.hardDeleteEntry(ctx.workspaceId, id);

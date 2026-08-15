@@ -1,24 +1,13 @@
 /**
- * C-12 — the members route's CALLER-TYPE matrix.
+ * The members route's CALLER-TYPE matrix. ⚠ An agent must not operate the control that contains
+ * it: `PATCH` writes `agentToolProfile` and nothing else, and a `full` profile has live Bash, so
+ * ungated the agent reads its own bearer off disk and PATCHes itself back to `full`.
  *
- * THE SECURITY PROPERTY THIS FILE EXISTS FOR: an agent must not be able to
- * operate the control that contains it. `PATCH` writes `agentToolProfile` and
- * (since F-170 took notify scope out) nothing else, so the profile the operator
- * sets is the whole of that method. The desktop hands every spawned agent a
- * 90-day `dopl.read`+`dopl.write` device token, and a `full` profile has live
- * Bash — so without the gate the agent reads its own bearer off disk and PATCHes
- * its profile back to `full` after the operator tightens it, durably.
+ * Pinned per-METHOD, not inferred from an option object: PATCH refuses every bearer regardless of
+ * scope; GET / POST / DELETE stay reachable (invites are a separate, unmade decision).
  *
- * The three cases that matter are pinned per-METHOD rather than inferred from an
- * option object: PATCH refuses every bearer regardless of scope, and GET / POST /
- * DELETE stay reachable — invites are deliberately untouched by this change
- * (C-13's invite half is a separate, unmade decision).
- *
- * Only the token layer, the workspace resolution and the channels service are
- * mocked. `withWorkspaceAuth` and its inner `withUserAuth` are the SHIPPING
- * ones, so the discriminator under test is the real one: an `Authorization:
- * Bearer dopl_at_*` header selects the agent branch, a Supabase JWT bearer and
- * a cookie both select the session branch.
+ * `withWorkspaceAuth` + inner `withUserAuth` are the SHIPPING ones, so the discriminator is real:
+ * `Bearer dopl_at_*` selects the agent branch; a Supabase JWT bearer and a cookie select session.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -27,14 +16,14 @@ import { NextRequest } from "next/server";
 const state = vi.hoisted(() => ({
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
   sessionUser: null as { id: string } | null,
-  /** The bundled desktop SPA's credential: a Supabase access JWT as a bearer. */
+  /** The SPA's credential: a Supabase access JWT as a bearer. */
   jwtUser: null as { id: string } | null,
 }));
 
 vi.mock("@/shared/auth/mcp-session", () => ({
   touchMcpStatus: vi.fn(),
-  // The OAuth branch rate-limits BEFORE the sessionOnly gate; admit everything
-  // so the refusal under test is the caller-type one, not the ceiling.
+  // ⚠ The OAuth branch rate-limits BEFORE the sessionOnly gate; admit everything so the refusal
+  // under test is the caller-type one, not the ceiling.
   checkAndRecordRateLimitSubject: vi.fn(async () => true),
 }));
 vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
@@ -57,17 +46,15 @@ vi.mock("@supabase/ssr", () => ({
     },
   }),
 }));
-// The JWKS verification itself (`bearer-jwt.ts`) is exercised by its own suite;
-// stubbed here so a NON-`dopl_at_` bearer can take its real branch in the
-// wrapper without a live Supabase project.
+// JWKS verification has its own suite; stubbed so a NON-`dopl_at_` bearer takes its real branch
+// without a live Supabase project.
 vi.mock("@/shared/auth/bearer-jwt", () => ({
   getBearerJwtUser: vi.fn(async () => state.jwtUser),
 }));
 vi.mock("@/shared/auth/mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
-  // The wrapper discriminates bearer KINDS through this predicate before it
-  // ever validates: a Supabase JWT presented as a bearer takes the SESSION
-  // branch. Mirror the real prefix check.
+  // ⚠ The wrapper discriminates bearer KINDS through this predicate before validating — mirror
+  // the real prefix check or every bearer case throws.
   isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
 }));
 vi.mock("@/features/workspaces/server/service", () => ({
@@ -105,7 +92,7 @@ const WRITE_TOKEN = {
   tokenId: "tok-agent",
 };
 
-/** A `dopl_at_*` bearer — the agent branch. */
+/** `dopl_at_*` bearer — agent branch. */
 function agentReq(method: string, body?: unknown): NextRequest {
   return new NextRequest(URL_, {
     method,
@@ -118,7 +105,7 @@ function agentReq(method: string, body?: unknown): NextRequest {
   });
 }
 
-/** No Authorization header — the cookie-session branch. */
+/** No Authorization header — session branch. */
 function sessionReq(method: string, body?: unknown): NextRequest {
   return new NextRequest(URL_, {
     method,
@@ -167,11 +154,8 @@ describe("PATCH (agent tool profile) — the C-12 gate", () => {
 
 describe("the DESKTOP is unaffected — a Supabase JWT bearer is a SESSION", () => {
   it("a non-`dopl_at_` bearer takes the session branch and the write lands", async () => {
-    // This is the desktop outage case, stated as a test: the bundled SPA
-    // authenticates with a Supabase access JWT and the desktop main process
-    // with the session cookie jar. Neither is `dopl_at_*`, so neither sets
-    // `agentTokenId` and neither meets the gate — the operator's own tightening
-    // and re-widening of the profile keeps working from both surfaces.
+    // The desktop outage case: SPA (Supabase JWT) and main process (cookie jar) are neither
+    // `dopl_at_*`, so neither sets `agentTokenId` and the operator's own writes keep working.
     state.jwtUser = { id: "desktop-user" };
     const req = new NextRequest(URL_, {
       method: "PATCH",

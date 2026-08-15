@@ -9,12 +9,10 @@ import { requireWorkspaceRole } from "./authz";
 import { findMembership, findWorkspaceById } from "./repository";
 
 /**
- * Shareable join links + admin-approved join requests.
- *
- * One standing link per workspace (token rotatable — rotating kills any
- * previously shared copies). Anyone with the link can request to join;
- * an admin approves (picking a role) or declines from the members page.
- * The requester sees one-time popups driven by the two ack columns.
+ * Shareable join links + admin-approved join requests. One standing link per
+ * workspace; rotating the token kills previously shared copies. Anyone with the
+ * link can request; an admin approves (picking a role) or declines. Requester
+ * popups are driven by the two ack columns.
  */
 
 export type JoinRequestStatus = "pending" | "approved" | "declined";
@@ -34,10 +32,9 @@ const REQUEST_COLS =
   "id, workspace_id, user_id, status, requested_at, resolved_at, pending_acknowledged_at, resolved_acknowledged_at";
 
 /**
- * Lowercase hex, NOT base64url: join links get retyped and pasted through
- * messaging apps that case-fold URLs, and a case-sensitive token then 404s
- * (seen in the wild on day one). 32 bytes = 64 hex chars, ample entropy.
- * Lookups normalize to lowercase for the same reason.
+ * ⚠ Lowercase hex, NOT base64url: join links get retyped and pasted through
+ * messaging apps that case-fold URLs, and a case-sensitive token then 404s.
+ * Lookups normalize to lowercase for the same reason. 32 bytes = 64 hex chars.
  */
 function generateToken(): string {
   return randomBytes(32).toString("hex");
@@ -71,7 +68,7 @@ export async function getOrCreateJoinLink(
     created_by: callerId,
   });
   if (insertError) {
-    // Concurrent first-ask — the other insert won; read it back.
+    // Concurrent first-ask: the other insert won; read it back.
     const { data: after } = await db
       .from("workspace_join_links")
       .select("token")
@@ -158,10 +155,9 @@ export type RequestJoinResult =
   | { outcome: "requested" | "already_pending"; workspaceName: string };
 
 /**
- * Create (or revive) a join request via the link. Idempotent: an open
- * pending request is returned as-is; a previously declined/approved row
- * is reset to pending so the user can re-request. Active members are
- * routed straight to the workspace.
+ * Create (or revive) a join request. Idempotent: an open pending request is
+ * returned as-is; a declined/approved row resets to pending so the user can
+ * re-request. Active members route straight to the workspace.
  */
 export async function requestJoin(
   token: string,
@@ -183,10 +179,9 @@ export async function requestJoin(
     };
   }
 
-  // Solo plan is single-member — every member-add path must gate. Tell the
-  // joiner up front (402) instead of parking a pending request that an admin
-  // could never approve on a Solo workspace. Already-active members returned
-  // above, so this only fires for a genuine add.
+  // ⚠ Solo is single-member — EVERY member-add path must gate. 402 up front
+  // rather than parking a request no admin could approve. Already-active
+  // members returned above, so this only fires for a genuine add.
   await assertCanAddMember(info.workspaceId);
 
   const { data: existing, error } = await db
@@ -243,8 +238,8 @@ export async function listPendingJoinRequests(
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{ id: string; user_id: string; requested_at: string }>;
-  // Hydrate identities concurrently — one serial GoTrue round trip per
-  // requester would make a popular link's queue load in seconds.
+  // Concurrent: one serial GoTrue round trip per requester would take
+  // seconds on a popular link's queue.
   return Promise.all(
     rows.slice(0, 100).map(async (r) => {
       let email: string | null = null;
@@ -278,9 +273,9 @@ export async function listPendingJoinRequests(
 }
 
 /**
- * Approve (with a role) or decline a pending request. Admin+. Approval
- * upserts the membership as active; the requester's outcome popup is
- * driven by resolved_acknowledged_at staying null.
+ * Approve (with a role) or decline a pending request. Admin+. Approval upserts
+ * the membership as active; the outcome popup is driven by
+ * `resolved_acknowledged_at` staying null.
  */
 export async function resolveJoinRequest(
   workspaceId: string,
@@ -289,8 +284,8 @@ export async function resolveJoinRequest(
   action: { kind: "approve"; role: "admin" | "member" | "viewer" } | { kind: "decline" }
 ): Promise<void> {
   const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
-  // Same policy as updateMemberRole (member-policy.ts): only the owner can
-  // mint admins — otherwise an admin could elevate an accomplice here.
+  // ⚠ Same policy as updateMemberRole (member-policy.ts): only the owner mints
+  // admins, else an admin could elevate an accomplice here.
   if (action.kind === "approve" && !canGrantRole(callerRole, action.role)) {
     throw new HttpError(
       403,
@@ -311,15 +306,13 @@ export async function resolveJoinRequest(
   if (row.status !== "pending") return; // Idempotent — already resolved.
 
   if (action.kind === "approve") {
-    // A stale pending request can outlive a separate join path (email
-    // invite) or a later promotion. Never clobber an existing ACTIVE
-    // membership — approving then just acknowledges the request.
+    // ⚠ Never clobber an existing ACTIVE membership — a stale pending request
+    // can outlive an email invite or a later promotion.
     const existing = await findMembership(workspaceId, row.user_id);
     if (!existing || existing.status !== "active") {
-      // Solo plan is single-member — every member-add path must gate. A stale
-      // pending request (raised while free/team) survives a downgrade to Solo,
-      // so re-check before the upsert. The already-active short-circuit above
-      // skips this — acknowledging an existing member adds no seat.
+      // ⚠ Re-check before the upsert: a request raised while free/team
+      // survives a downgrade to Solo. The already-active short-circuit above
+      // skips this — it adds no seat.
       await assertCanAddMember(workspaceId);
 
       const { error: memberError } = await db.from("workspace_members").upsert(
@@ -336,8 +329,8 @@ export async function resolveJoinRequest(
       );
       if (memberError) throw memberError;
 
-      // Seat count changed — reconcile the Pro subscription quantity.
-      // Best-effort: a billing hiccup must not fail the approval.
+      // Reconcile Pro subscription quantity. Best-effort: a billing hiccup
+      // must not fail the approval.
       await syncSeatQuantity(workspaceId).catch((err) => {
         console.error(
           `[join-links] syncSeatQuantity failed for workspace ${workspaceId}:`,
@@ -362,7 +355,7 @@ export async function resolveJoinRequest(
 /* --------------------------- my notices ---------------------------- */
 
 /**
- * The caller's unacknowledged join-request notices, oldest first:
+ * Caller's unacknowledged join-request notices, oldest first:
  *   - pending + pending_acknowledged_at null  -> "awaiting approval"
  *   - approved/declined + resolved_acknowledged_at null -> outcome popup
  */

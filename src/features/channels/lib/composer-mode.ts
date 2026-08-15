@@ -1,72 +1,40 @@
 /**
- * COMPOSER MODES — the two different things a keystroke in a channel can be.
+ * COMPOSER MODES — the two things a keystroke in a channel can be. The composer
+ * says which BEFORE Enter:
  *
- * Until now the composer had ONE send, and that send was always a request: an
- * addressed post carrying a `summary`, which is exactly what wakes the other
- * side's machine. There was no way to just talk. Operators noticed, because a
- * channel that poked a teammate's agent every time you said "morning" is not a
- * channel.
+ * - CHAT (default) — plain channel message. No subject, thread, or addressee.
+ *   `intent: "chat"` says so on the wire, so the routing side never has to infer
+ *   "probably didn't mean to start anything" from a missing field. Reaches
+ *   nobody's machine.
+ * - REQUEST — titled thread addressed to one member via the create-thread path:
+ *   posts the opening message and starts that member's agent.
  *
- * So a send is now one of two shapes, and the composer says which BEFORE you
- * press Enter:
+ * The line between them is whether anything starts on someone else's machine,
+ * and their consent prompt needs the title only request carries. Server draws
+ * the same line (a human `to` under chat is a 400).
  *
- * - CHAT (the default) — a plain channel message. No subject, no thread, no
- *   addressee. `intent: "chat"` says so on the wire, so the routing side never
- *   has to infer "they probably didn't mean to start anything" from the absence
- *   of a field. It reaches nobody's machine, full stop.
- * - REQUEST — the old behavior, made explicit and given back its subject line:
- *   a titled thread addressed to one member, opened through the create-thread
- *   path, which posts the opening message and starts that member's agent.
+ * ⚠ `@` in a body is PLAIN TEXT — it no longer resolves to anything.
  *
- * THE LINE BETWEEN THEM is whether anything is started on somebody else's
- * machine, and a person's consent prompt needs the title only request carries.
- * The server draws the same line (a human `to` under chat is a 400).
+ * ⚠ Chat's label reads "Message" but the WIRE VALUE stays `chat` — it is
+ * `MessageIntent`, the server's own vocabulary; renaming is a protocol change.
  *
- * CHAT USED TO HAVE A SECOND CONSEQUENCE. An `@handle` in the body resolved
- * against the channel's named agents and travelled as `toAgents`, so a chat
- * message could start agents by name — the primary way work was handed out.
- * Named agents are gone (rollback §1), so chat has exactly one consequence
- * again and `@` in a body is plain text.
- *
- * PHASE 4 MOVED THE CONTROL, NOT THE DECISION (rollback §3.2). The mode used to
- * ride a `SegmentedControl` in a row ABOVE the input; it is now a PILL INSIDE
- * the input bubble, on the right, next to the send button. Nothing in this file
- * changed for that except the copy: the chat slot reads **Message**, because
- * §3.2 names the two states "message ↔ request" and the session window's pill
- * says "Message <name>" beside it — two pills that are the same control should
- * not use two different words for the same half. The WIRE VALUE is still `chat`
- * (it is `MessageIntent`, the server's own vocabulary, and renaming it would be
- * a protocol change to make a label read better).
- *
- * Everything here is pure so both shapes can be pinned without a DOM: which
- * payload a draft becomes, and what the composer refuses to send, are the two
- * facts this feature turns on.
+ * Everything here is pure so both shapes can be pinned without a DOM.
  */
 
 import type { MessageIntent } from "../types";
 
-/**
- * Chat or Request. Deliberately an ALIAS of the wire `MessageIntent` rather
- * than a parallel union: the toggle picks the intent, and a second copy of the
- * two strings is a second thing to drift.
- */
+/** ⚠ ALIAS of the wire `MessageIntent`, never a parallel union — a second copy
+ *  of the two strings is a second thing to drift. */
 export type ComposerMode = MessageIntent;
 
-/**
- * CHAT IS THE DEFAULT, deliberately: the surface's resting state must be the
- * one that costs nothing. Starting somebody's agent is the action you opt into.
- */
+/** Chat is the default: the resting state must be the one that costs nothing.
+ *  Starting somebody's agent is opt-in. */
 export const DEFAULT_COMPOSER_MODE: ComposerMode = "chat";
 
 /**
- * The pill's slots, in order.
- *
- * `hint` is the row's second line in the dropdown, and it is the CONSEQUENCE
- * rather than a restatement of the label — the same discipline the help line
- * below already follows, applied one step earlier, because the dropdown is now
- * the moment the operator chooses. It is deliberately TARGET-FREE (no name):
- * the menu is open before a target is resolved, and the help line under the
- * composer is where the resolved addressee gets named.
+ * Pill slots, in order. `hint` states the CONSEQUENCE, not the label, and is
+ * deliberately TARGET-FREE — the menu opens before a target is resolved; the
+ * help line under the composer is where the addressee gets named.
  */
 export const COMPOSER_MODE_OPTIONS: ReadonlyArray<{
   key: ComposerMode;
@@ -89,35 +57,19 @@ export interface ComposerHelpState {
 }
 
 /**
- * The one line under the composer that makes the consequence legible.
+ * The line under the composer. Names the CONSEQUENCE, not the mode — what an
+ * operator gets wrong is what Enter will do, never the label. Chat's line is
+ * FIXED; it never varies with the body. Without a `targetName`, request mode
+ * says what is missing rather than promising an outcome it can't deliver.
  *
- * It names the CONSEQUENCE, not the mode ("no agent is started" beats "chat
- * mode"), because the thing an operator got wrong was never the label, it was
- * what pressing Enter would do. `targetName` is the resolved addressee; without
- * one, request mode says what is still missing rather than promising an
- * outcome it cannot deliver.
- *
- * CHAT'S LINE IS FIXED AGAIN. It briefly MOVED with the body: an `@handle` that
- * resolved to a named agent replaced it with "quartz will act on this", because
- * chat had two consequences and which one you got depended on characters in the
- * text rather than on any visible control. With named agents gone (rollback §1)
- * chat has one consequence and the line simply states it.
- *
- * `blocked` closes the other half of the same gap. `buildComposerPayload`
- * already knows WHY a request refuses, and until now only its boolean reached
- * the screen: a request with a recipient and no subject greyed the send button
- * out while this line went on promising "Opens a thread and starts Ada's
- * agent." Three states are surfaced, and only three —
- *  - `stale-roster` is checked FIRST and is the reason this list grew: the
- *    roster on screen still belongs to the channel you switched away from, so
- *    every other line here would name the wrong person;
- *  - `missing-recipient` is already covered by a null `targetName` (the same
- *    sentence, arrived at from the other direction);
- *  - `missing-subject` gets its own line, which says what the subject is FOR
- *    rather than just naming the empty field, because the reason it cannot be
- *    guessed from the body is that a person reads it in a consent prompt.
- * `empty-body` is deliberately NOT surfaced: an empty composer explains itself,
- * and a nag on a field the operator has not started filling is noise.
+ * Three `blocked` states surfaced, and only three:
+ *  - ⚠ `stale-roster` checked FIRST — the on-screen roster still belongs to the
+ *    channel you switched away from, so every other line would name the wrong
+ *    person;
+ *  - `missing-recipient` — already covered by a null `targetName`;
+ *  - `missing-subject` — says what the subject is FOR, because a person reads it
+ *    in a consent prompt.
+ * `empty-body` deliberately NOT surfaced: an empty composer explains itself.
  */
 export function composerModeHelp(
   mode: ComposerMode,
@@ -127,10 +79,9 @@ export function composerModeHelp(
   if (mode === "chat") {
     return "Message the channel. No agent is started.";
   }
-  // FIRST, ahead of the target: while the roster is stale the name we WOULD
-  // print is the previous channel's peer, so this line exists precisely to not
-  // say it. It is the only blocked reason that is about the app rather than
-  // about the draft, and it clears itself.
+  // ⚠ Ahead of the target: while the roster is stale the name we WOULD print is
+  // the previous channel's peer. Only blocked reason about the app rather than
+  // the draft, and it clears itself.
   if (state.blocked === "stale-roster") {
     return "Loading who's in this channel…";
   }
@@ -147,19 +98,13 @@ export function composerModeHelp(
  * Options for a plain message post. `intent` rides along so the server can tell
  * a deliberate chat from an unaddressed request.
  *
- * IT CARRIES NO ADDRESSEE AT ALL, and the absence is the enforcement. `toUserId`
- * and `summary` used to sit here and were plumbed all the way into
- * `postMessage`, long after the last thing that populated them went away: the
- * composer's only `onSend` call is the chat one. They are exactly the two fields
- * that turn a chat post into an addressed one, so a live wire nobody drives is
- * the shape through which the bug this whole change fixes comes back — one
- * component reaching past the builder and calling `onSend` with an addressee,
- * which no test of a PURE payload builder can see. Deleting them makes that a
- * type error instead. `toAgents` sat here for the same span and is gone for the
- * same reason plus one more: nothing it addressed exists (rollback §1).
+ * ⚠ CARRIES NO ADDRESSEE, and the absence IS the enforcement — do not re-add
+ * `toUserId` / `summary` here. They are the two fields that turn a chat post
+ * into an addressed one, and a component reaching past the builder to call
+ * `onSend` with an addressee is invisible to any test of a pure payload
+ * builder. Absent, that is a type error instead.
  *
- * Lives here rather than in the component so the payload builders and the
- * component agree on one shape.
+ * Lives here, not in the component, so builders and component share one shape.
  */
 export interface SendOptions {
   intent?: ComposerMode;
@@ -206,13 +151,12 @@ export interface ComposerDraft {
   /** The picked addressee in a normal channel. */
   toUserId: string | null;
   /**
-   * TRUE WHILE THE ROSTER ON SCREEN IS THE PREVIOUS CHANNEL'S
-   * (`useChannelMembers`' `isPlaceholderData`). Request mode is the only thing
-   * that reads the roster — {@link resolveRequestTarget} turns it into the
-   * `toUserId` that goes on the wire — so a request built from a stale one
-   * addresses somebody who is not in this channel and the server answers 400
-   * `ChannelAddresseeNotMemberError` after the optimistic row is already on
-   * screen. Chat sends never read it and are deliberately NOT gated.
+   * True while the on-screen roster is the PREVIOUS channel's
+   * (`useChannelMembers`' `isPlaceholderData`). Request mode is the only reader
+   * ({@link resolveRequestTarget} turns it into the wire `toUserId`), so a
+   * request built from a stale roster addresses a non-member and 400s
+   * `ChannelAddresseeNotMemberError` after the optimistic row is on screen.
+   * ⚠ Chat sends never read it and are deliberately NOT gated.
    */
   rosterStale?: boolean;
 }
@@ -230,21 +174,16 @@ export function resolveRequestTarget(draft: {
 }
 
 /**
- * Turn a draft into the payload it will actually send, or say what is missing.
+ * Turn a draft into the payload it will send, or say what is missing.
  *
- * THE INVARIANT THIS FILE EXISTS FOR: chat mode can only ever produce a
- * {@link ChatPayload}. There is no branch, no fallback, and no "well, it was
- * addressed, so…" that lets a chat draft open a thread. The addressing state (a
- * stale picked addressee, a DM's peer) is not even read in chat mode, and
- * `@mentions` in the body are DECORATIVE TEXT — reaching a person means
- * starting their machine, and that is request mode's job precisely because it
- * is the shape that carries a title for their consent prompt.
+ * ⚠ THE INVARIANT THIS FILE EXISTS FOR: chat mode can ONLY produce a
+ * {@link ChatPayload}. No branch, no fallback lets a chat draft open a thread.
+ * Addressing state is not even read in chat mode and `@mentions` are decorative
+ * text.
  *
- * Request mode is the mirror image: it REQUIRES both a recipient and a subject
- * and refuses rather than inventing either. The old composer derived a missing
- * subject from the body's first line; that stays gone, because a request's
- * title is the thing the other operator reads in their consent prompt and a
- * guessed one is how "asdf" ends up being someone's approval decision.
+ * ⚠ Request mode REQUIRES both recipient and subject and refuses rather than
+ * inventing either — never derive a missing subject from the body's first line;
+ * that title is what the other operator reads in their consent prompt.
  */
 export function buildComposerPayload(draft: ComposerDraft): ComposerBuildResult {
   const body = draft.body.trim();
@@ -254,11 +193,8 @@ export function buildComposerPayload(draft: ComposerDraft): ComposerBuildResult 
     return { ok: true, payload: { kind: "chat", body, intent: "chat" } };
   }
 
-  // BEFORE the target is resolved, because resolving it is the bug: a DM whose
-  // roster is still the previous channel's has a `peerId`, and it is the wrong
-  // person. Refusing here is what turns "silently addressed the last channel's
-  // peer, 400, roll back" into a disabled Send for the frame or two the roster
-  // takes to arrive.
+  // ⚠ BEFORE the target is resolved — resolving it IS the bug: a DM whose roster
+  // is still the previous channel's has a `peerId`, and it is the wrong person.
   if (draft.rosterStale) return { ok: false, reason: "stale-roster" };
 
   const toUserId = resolveRequestTarget(draft);
@@ -270,28 +206,20 @@ export function buildComposerPayload(draft: ComposerDraft): ComposerBuildResult 
   return { ok: true, payload: { kind: "thread", title, body, toUserId } };
 }
 
-// `canSubmitComposer(draft) => buildComposerPayload(draft).ok` used to live here
-// and is DELETED, not deprecated. The composer now builds the payload once and
-// reads both halves of it — the boolean for the send button, the REASON for the
-// help line — because reading only the boolean is exactly how a request with no
-// subject greyed the button out while the line went on promising to start
-// someone's agent. A convenience wrapper that returns only the half that caused
-// that is not a convenience.
+// ⚠ Do NOT re-add a `canSubmitComposer` boolean wrapper. The composer builds the
+// payload once and needs BOTH halves — the boolean for the send button, the
+// REASON for the help line. Reading only the boolean is how a request with no
+// subject greyed the button out while the line promised to start someone's agent.
 
 /** What a submitted draft DID. */
 export type ComposerSubmitResult = "sent" | "opened" | "blocked";
 
 /**
- * Run a submitted draft. The payload decides the path: a chat payload posts a
- * message with `intent: "chat"` and no addressing; a thread payload goes
- * through the create-thread path (title = subject, body = message, to = the
- * picked member). A surface with no create-thread path wired refuses rather
- * than silently downgrading a request into an unaddressed post.
- *
- * A THIRD OUTCOME used to be checked FIRST, ahead of both: `/new-agent`, the
- * one place a keystroke stopped being a message at all. It summoned a named
- * agent, and it is gone with them (rollback §1) — as is the whole slash-command
- * surface, which had exactly that one entry.
+ * Run a submitted draft. Payload decides the path: chat posts with
+ * `intent: "chat"` and no addressing; thread goes through create-thread (title =
+ * subject, body = message, to = picked member). ⚠ A surface with no
+ * create-thread path REFUSES rather than downgrading a request into an
+ * unaddressed post.
  */
 export async function submitComposerDraft(
   params: ComposerDraft & {

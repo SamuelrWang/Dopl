@@ -8,17 +8,10 @@ import type { AssignableRole, WorkspaceInvitationView } from "../types";
 import type { JoinRequestView } from "../hooks/use-join-requests";
 import { Avatar, RoleSelect } from "./member-bits";
 
-/**
- * The members list pane's two ADMIN QUEUES — pending join requests and
- * outstanding invitations — as label-strip groups above the roster.
- *
- * Extracted from `members-list-pane.tsx` (ENGINEERING §2: the pane crossed
- * the 500-line cap when the loading skeleton landed, and §2's rule is split
- * in the same change rather than trim a comment to buy the line back). They
- * are a real seam, not an arithmetic one: both render only for admins, both
- * are queues of things to ACT on rather than rows to select, and neither
- * touches the pane's selection/filter state.
- */
+/** The list pane's two ADMIN QUEUES — pending join requests and outstanding
+ *  invitations — as label-strip groups above the roster. Split from
+ *  `members-list-pane.tsx`: both are admin-only, both are things to ACT on
+ *  rather than rows to select, and neither touches selection/filter state. */
 
 const ICON_BTN =
   "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
@@ -39,13 +32,9 @@ function GroupHead({ title, count }: { title: string; count: number }) {
   );
 }
 
-/**
- * `busy` is a SECOND-CLICK guard, not the feedback. Both queues resolve
- * optimistically — the acted-on row leaves in `onMutate`, which is what makes
- * the approve/decline pair un-double-fireable and what the revoke ✕ used to
- * produce nothing at all in place of. This only stops another row being fired
- * at while the first write is still settling.
- */
+/** ⚠ `busy` is a SECOND-CLICK guard, not the feedback: both queues resolve
+ *  optimistically and the acted-on row leaves in `onMutate`. This only stops
+ *  ANOTHER row being fired at while the first write settles. */
 export function JoinRequestsGroup({
   requests,
   onResolve,

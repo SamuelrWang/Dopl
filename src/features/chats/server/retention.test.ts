@@ -1,9 +1,8 @@
 /**
- * Unit tests for the chats retention window resolver + denial body.
- * Billing entitlements and the repository (the DB-computed cutoff) are
- * mocked — no Supabase, no network. Rules under test:
- *   - free plan  -> resolves a DB cutoff and reports windowDays
- *   - pro plan   -> unbounded (null), no cutoff query fired
+ * Retention window resolver + denial body; billing and the DB-computed cutoff
+ * are mocked.
+ *   - free: resolves a DB cutoff and reports windowDays
+ *   - pro:  unbounded (null), no cutoff query fired
  *   - denial body mirrors billing's flat { error, message, upgrade_url }
  */
 
@@ -13,8 +12,8 @@ import type { WorkspaceEntitlements } from "@/features/billing/server/entitlemen
 vi.mock("@/features/billing/server/entitlements", () => ({
   getWorkspaceEntitlements: vi.fn(),
   FREE_CHATS_WINDOW_DAYS: 90,
-  // Real implementation on purpose: the envelope's `upgrade_url` is the
-  // contract under test here (GAP-11), not an incidental dependency.
+  // Real implementation on purpose — the envelope's `upgrade_url` is the
+  // contract under test, not an incidental dependency.
   upgradeUrl: () =>
     `${process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com"}/billing?billing=upgrade`,
 }));
@@ -70,10 +69,8 @@ describe("chatRetentionDeniedBody", () => {
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
-  // GAP-11, as re-decided by the retirement plan (D1): API-first clients (MCP
-  // agents) follow this URL literally, so it must name a page that both
-  // SURVIVES the website retirement and can take money. `/canvas?billing=…` is
-  // on the RETIRE list; `/pricing` is a marketing page that sells nothing.
+  // ⚠ MCP agents follow this URL literally, so it must name a page that both
+  // survives and can take money.
   it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {
     const body = chatRetentionDeniedBody();
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);

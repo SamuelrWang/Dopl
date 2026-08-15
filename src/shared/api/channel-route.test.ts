@@ -1,10 +1,9 @@
 /**
- * Route-param extractors for the channels API.
- *
- * The consent-id guard is the load-bearing one: `id` lands in a `uuid =`
- * filter, so an unvalidated non-UUID reaches Postgres as a 22P02 cast failure
- * — a generic 500 plus a `system_events` error row per call. It must fail as
- * the same 404 a missing / foreign id gets, so ids still can't be probed.
+ * Route-param extractors for the channels API. ⚠ The consent-id guard is
+ * load-bearing: `id` lands in a `uuid =` filter, so an unvalidated non-UUID
+ * reaches Postgres as a 22P02 cast failure (generic 500 + a `system_events` row
+ * per call). It must fail as the SAME 404 a missing/foreign id gets, so ids
+ * cannot be probed.
  */
 
 import { describe, it, expect } from "vitest";

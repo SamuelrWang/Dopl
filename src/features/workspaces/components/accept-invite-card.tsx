@@ -7,9 +7,8 @@ import { DesktopHandoffPanel } from "./desktop-handoff-panel";
 
 interface Props {
   /**
-   * Server-resolved invitation status. The token-stripped variant from
-   * the public API endpoint — accepting still requires the token from
-   * the URL.
+   * Server-resolved invitation status, token-stripped (public API endpoint).
+   * Accepting still requires the token from the URL.
    */
   status: Omit<InvitationStatus, "invitation"> & {
     invitation: Omit<InvitationStatus["invitation"], "token">;
@@ -27,18 +26,15 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 /**
- * Accept-invite landing card. Shows the workspace + inviter context, then:
- *   - if the invitee is signed in → Accept button hits the API
- *   - if not → Sign in CTA that bounces through /login and back here
- *   - if the link is dead (expired/revoked/used) → friendly explainer
- *   - once accepted → the desktop handoff, into the workspace they just joined
+ * Accept-invite landing card:
+ *   - signed in → Accept button hits the API
+ *   - signed out → Sign in CTA bouncing through /login back here
+ *   - dead link (expired/revoked/used) → explainer
+ *   - accepted → desktop handoff into the workspace
  *
- * THE ACCEPT USED TO END IN A `router.push('/{slug}-{publicId}')`, which is a
- * URL the website retirement 302s to `/get-started` — so the reward for
- * accepting an invitation was a download page that never mentioned the
- * workspace. Accepting is a MEMBERSHIP, and membership is spent in the desktop
- * app, so the card hands off with `dopl://open/{segment}` instead
- * (`desktop-handoff-panel.tsx`).
+ * ⚠ Never `router.push('/{slug}-{publicId}')` — the retirement map 302s that to
+ * `/get-started`. Membership is spent in the desktop app, so the card hands off
+ * with `dopl://open/{segment}` (`desktop-handoff-panel.tsx`).
  */
 export function AcceptInviteCard({ status, token, needsAuth }: Props) {
   const [accepting, setAccepting] = useState(false);

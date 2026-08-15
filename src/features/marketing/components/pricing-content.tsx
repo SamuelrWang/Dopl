@@ -10,16 +10,9 @@ import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 import type { User } from "@supabase/supabase-js";
 
 /**
- * Public pricing body — the landing-page (light Lattice) language. Three
- * real, purchasable plans from the shared plan defs: Starter, Pro
- * ($5.99/mo flat, individuals) and Team ($7.99 per seat / month, the
- * highlighted growth path). Each card carries a one-line plain-English
- * summary; a comparison strip underneath spells out the deltas (object
- * caps, chat history, members, price) so it's obvious what each tier gets
- * and when caps apply. Subscribing hands off to the in-app Plans & Billing
- * pane so checkout always carries an explicit workspace id. This is the body
- * of the /pricing page (its only render site — a site-nav popup variant used
- * to share it), so it carries no page chrome of its own.
+ * Body of /pricing (its only render site — no page chrome of its own).
+ * ⚠ Subscribing hands off to the in-app Plans & Billing pane so checkout always
+ * carries an explicit workspace id.
  */
 
 const PLAN_SUMMARY: Record<string, string> = {
@@ -60,9 +53,9 @@ const COMPARE_ROWS: {
     team: { main: "Unlimited", sub: "per seat" },
   },
   {
-    // One MCP credit = one MCP tool call. Allowances live in
-    // `features/billing/credits.ts › MONTHLY_MCP_CREDITS` — retune there, then
-    // this row and `plans.ts › PLANS.features`, which are copy, not config.
+    // ⚠ Copy, not config. Source of truth =
+    // `features/billing/credits.ts › MONTHLY_MCP_CREDITS`. Retune there, then
+    // sync this row AND `plans.ts › PLANS.features`.
     label: "MCP credits",
     free: { main: "500", sub: "/ month" },
     solo: { main: "10,000", sub: "/ month" },
@@ -89,11 +82,9 @@ export function PricingContent() {
     });
   }, []);
 
-  // Billing is per-workspace and `/api/billing/status` fails closed with no
-  // workspace context. Fetch the membership list first (withUserAuth — never
-  // 400s on resolution). Exactly one workspace → read its status; 2+ → skip
-  // the status read (can't pick one from a public page) and hand off to the
-  // in-app billing pane, which has the workspace context.
+  // `/api/billing/status` fails closed without workspace context, so resolve
+  // membership first (withUserAuth — never 400s). Exactly 1 workspace → read
+  // status; 2+ → skip it (public page can't pick one) and hand off in-app.
   const workspacesQuery = useApiQuery<{ workspaces: { id: string }[] }>(
     "/api/workspaces",
     { enabled: user !== null }
@@ -103,9 +94,7 @@ export function PricingContent() {
     workspaces && workspaces.length === 1 ? workspaces[0].id : undefined;
   const multiWorkspace = (workspaces?.length ?? 0) >= 2;
 
-  // Fires once we've resolved a single workspace to scope the read to. `plan`
-  // ("free" | "solo" | "team") tells us which card is the live subscription so
-  // the matching paid card reflects it (Current plan / manage billing).
+  // `plan` = "free" | "solo" | "team" — which card is the live subscription.
   const statusQuery = useApiQuery<{ status?: string; plan?: string }>(
     "/api/billing/status",
     {
@@ -113,9 +102,8 @@ export function PricingContent() {
       workspaceId: soleWorkspaceId,
     }
   );
-  // past_due is still a paid subscription — showing a subscribe CTA would start
-  // a duplicate checkout. Treat active + past_due as subscribed and route
-  // past_due users to manage their existing billing instead.
+  // past_due is still paid — a subscribe CTA there starts a duplicate checkout.
+  // So active + past_due both count as subscribed; past_due → manage billing.
   const status = statusQuery.data?.status;
   const currentPlan = statusQuery.data?.plan;
   const isPaid = status === "active" || status === "past_due";
@@ -126,19 +114,14 @@ export function PricingContent() {
       router.push(`/login?redirectTo=${encodeURIComponent("/pricing")}`);
       return;
     }
-    // Checkout is workspace-scoped, but this public page can't pick a
-    // workspace for multi-workspace users — an in-place checkout would
-    // silently bill the wrong one. Hand off to the billing surface, where the
-    // target workspace is explicit and the checkout carries its id.
-    // Multi-workspace users land on the billing page to choose; single-workspace
-    // users go straight to upgrade. `/billing` (no segment) resolves the
-    // caller's default workspace — the post-retirement replacement for the
-    // `/canvas?billing=…` redirect this used to push (`features/billing/url.ts`).
+    // ⚠ Never check out in place: this public page can't pick a workspace, so
+    // a multi-workspace user would be billed on the wrong one silently. Hand
+    // off to /billing, where the target workspace is explicit. `/billing` (no
+    // segment) resolves the caller's default (`features/billing/url.ts`).
     router.push(billingPath({ intent: multiWorkspace ? "return" : "upgrade" }));
   }
 
-  // Route into the billing page, where the past_due warning + Stripe portal
-  // live — no duplicate portal logic on this public page.
+  // past_due warning + Stripe portal live on /billing — no duplicate here.
   function handleManageBilling() {
     router.push(
       user
@@ -147,16 +130,9 @@ export function PricingContent() {
     );
   }
 
-  // F-131 half 2 (2026-08-06) — TWO dead things in three lines, both silent.
-  //
-  // The param was `?redirect=`, which NOTHING reads: the canonical name is `redirectTo`
-  // (`shared/lib/url/post-auth-landing.ts`, and the `?redirectTo=` round-trip contract in
-  // ENGINEERING §9.2). A signed-out visitor clicking these therefore signed in and landed on
-  // the default post-auth page, having silently lost the page they asked for.
-  //
-  // And the destination was `/canvas`, which STAGE D DELETED. It still "worked" — the
-  // retirement map 302s it to /get-started — so the bug was invisible: a redirect that fires
-  // correctly through a route that no longer exists. Both now name the landing directly.
+  // ⚠ Param is `redirectTo`, never `redirect` — nothing reads the latter and
+  // the round-trip fails silently (ENGINEERING §9.2,
+  // `shared/lib/url/post-auth-landing.ts`).
   function handleGetStarted() {
     if (user) {
       router.push(WEB_POST_AUTH_LANDING);
@@ -300,9 +276,8 @@ function PlanCardCta({
     );
   }
 
-  // Pro + Team are both real, purchasable tiers. When the sole workspace's
-  // live plan matches this card, reflect the subscription instead of offering a
-  // duplicate checkout; past_due routes to manage billing.
+  // Card matching the live plan reflects it instead of offering a duplicate
+  // checkout; past_due routes to manage billing.
   const isCurrentPlan = isPaid && currentPlan === plan.id;
 
   if (isCurrentPlan && isPastDue) {
@@ -323,7 +298,7 @@ function PlanCardCta({
       </button>
     );
   }
-  // Team is the highlighted growth path → dark primary; Pro → light.
+  // Team = highlighted growth path → dark primary; Pro → light.
   const primary = plan.id === "team";
   return (
     <button

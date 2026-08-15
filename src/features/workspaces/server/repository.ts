@@ -48,8 +48,7 @@ export async function findWorkspaceBySlug(
 
 /**
  * Primary routing lookup. `public_id` is globally unique, so no
- * owner/membership filter is needed at this layer — authz happens in
- * the service via `resolveMembershipOrThrow`.
+ * owner/membership filter here — authz is `resolveMembershipOrThrow`.
  */
 export async function findWorkspaceByPublicId(
   publicId: string
@@ -65,13 +64,10 @@ export async function findWorkspaceByPublicId(
 }
 
 /**
- * Membership-aware slug lookup, used only by the legacy slug-only URL
- * fallback during the publicId migration window. Returns null if zero
- * OR more-than-one of the user's active-member workspaces match — slug
- * uniqueness is no longer enforced post-publicId, so an ambiguous
- * legacy URL is forced to 404 rather than silently routing to the
- * wrong workspace. Canonical URLs (`{slug}-{publicId}`) bypass this
- * function entirely.
+ * Membership-aware slug lookup — legacy slug-only URL fallback only.
+ * ⚠ Returns null on zero OR 2+ matches: slug uniqueness is not enforced
+ * post-publicId, so an ambiguous legacy URL must 404 rather than route to the
+ * wrong workspace. Canonical `{slug}-{publicId}` URLs bypass this entirely.
  */
 export async function findMemberWorkspaceBySlug(
   userId: string,
@@ -84,18 +80,13 @@ export async function findMemberWorkspaceBySlug(
 }
 
 /**
- * Oldest-OWNED workspace resolver (owner_id match). Tries (in order):
- *   1. The literal slug "default" (legacy path — pre-S-15 backfill).
- *   2. The user's oldest owned workspace, by created_at ASC.
+ * Oldest-OWNED workspace resolver: literal slug "default" (legacy), else oldest
+ * owned by created_at ASC.
  *
- * SCOPE (MCP-2): this is OWNERSHIP-based, which diverges from active
- * membership (owns 0 / member of 1, owns 1 / member of 3). It is used ONLY
- * by the signup bootstrap (`ensureDefaultWorkspace` — "does a default
- * already exist?") and the Stripe webhook grandfather path
- * (`webhook-handler.ts`, one legacy customer). It MUST NOT be used for
- * request auth resolution — `resolveActiveWorkspace` resolves off active
- * memberships (`listWorkspacesWithRoleForUser`) instead, so a user's oldest
- * owned workspace can never silently swallow a request meant for another.
+ * ⚠ OWNERSHIP-based, diverging from active membership. ONLY for the signup
+ * bootstrap (`ensureDefaultWorkspace`) and the Stripe webhook grandfather path.
+ * MUST NOT be used for request auth — `resolveActiveWorkspace` resolves off
+ * active memberships so an owned workspace cannot swallow another's request.
  */
 export async function findDefaultWorkspaceForUser(
   userId: string
@@ -116,10 +107,8 @@ export async function findDefaultWorkspaceForUser(
 }
 
 /**
- * Count workspaces OWNED by a user. Used by the Stripe webhook's
- * grandfather path to detect ambiguous legacy-subscription mappings (a user
- * who owns more than one workspace) — the default-workspace fallback then
- * warrants a warning because the legacy sub could belong to any of them.
+ * Workspaces OWNED by a user. The Stripe webhook's grandfather path uses this
+ * to detect ambiguous legacy-subscription mappings (2+ owned → warn).
  */
 export async function countWorkspacesOwnedBy(userId: string): Promise<number> {
   const { count, error } = await supabaseAdmin()
@@ -138,8 +127,8 @@ export async function listWorkspacesForUser(userId: string): Promise<Workspace[]
     .eq("user_id", userId)
     .eq("status", "active");
   if (error) throw error;
-  // Supabase typings model nested joins as arrays even when the join is
-  // 1:1; cast through unknown so we can flatten the workspace object.
+  // ⚠ Supabase typings model nested joins as arrays even when 1:1; cast
+  // through unknown to flatten the workspace object.
   const rows = (data ?? []) as unknown as Array<{ workspace: WorkspaceRow | WorkspaceRow[] }>;
   const workspaces: Workspace[] = [];
   for (const row of rows) {
@@ -153,11 +142,8 @@ export async function listWorkspacesForUser(userId: string): Promise<Workspace[]
 }
 
 /**
- * Same shape as `listWorkspacesForUser` but additionally projects the
- * member's role on each workspace, so a single query gets both. Used
- * by `GET /api/workspaces` (response shape) and the MCP
- * `list_workspaces` tool. Filtered to active memberships only —
- * pending invitations don't count, revoked members are excluded.
+ * `listWorkspacesForUser` + the member's role, one query. ⚠ Active memberships
+ * only — pending invitations don't count, revoked members excluded.
  */
 export async function listWorkspacesWithRoleForUser(
   userId: string
@@ -243,7 +229,7 @@ export async function insertWorkspaceWithOwnerMembership(
     joined_at: new Date().toISOString(),
   });
   if (memberError) {
-    // Roll back the workspace insert so we don't leave an orphan.
+    // Roll back the workspace insert so no orphan is left.
     await db.from("workspaces").delete().eq("id", workspace.id);
     throw memberError;
   }
@@ -251,12 +237,10 @@ export async function insertWorkspaceWithOwnerMembership(
 }
 
 /**
- * Race-proof SELECT-or-INSERT of the caller's default workspace via the
+ * Race-proof SELECT-or-INSERT of the default workspace via the
  * `ensure_default_workspace` RPC (migration 20260802200000): a per-owner
- * transaction-scoped advisory lock serializes concurrent callers, so two
- * cold-booting clients can never double-create "Untitled". Returns the
- * workspace plus whether THIS call created it (the caller seeds only
- * then).
+ * transaction-scoped advisory lock serializes concurrent callers so two cold
+ * boots cannot double-create "Untitled". `created` = THIS call made it.
  */
 export async function ensureDefaultWorkspaceRow(
   args: CreateWorkspaceArgs
@@ -308,14 +292,9 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 }
 
 /**
- * Head-counts for the overview stat cards: three `count: "exact", head: true`
- * queries in parallel, no row payloads. Soft-deleted knowledge bases and
- * skills are excluded.
- *
- * A failed count comes back as `null` from PostgREST and degrades to 0
- * rather than throwing — a stat card reading zero beats a 500 on the
- * workspace home. (Behaviour lifted verbatim from the `loadCounts` helper
- * the overview page used to inline.)
+ * Head-counts for the overview stat cards: three parallel
+ * `count: "exact", head: true` queries. Soft-deleted bases/skills excluded.
+ * ⚠ A failed count is `null` from PostgREST and degrades to 0, never throws.
  */
 export async function countWorkspaceResources(
   workspaceId: string
@@ -351,9 +330,8 @@ export interface ProfileSummary {
 }
 
 /**
- * Batch profile lookup for member-list hydration — one query instead of
- * a per-user auth.admin.getUserById loop. `profiles` rows are created by
- * the auth.users trigger and carry the synced email/name/avatar.
+ * Batch profile lookup for member-list hydration — one query, not a per-user
+ * `auth.admin.getUserById` loop.
  */
 export async function listProfileSummaries(
   userIds: string[]

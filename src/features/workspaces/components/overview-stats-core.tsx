@@ -11,11 +11,9 @@ export interface OverviewStatsCoreProps {
 }
 
 /**
- * The stat row's Next-free core (see `./overview-stats` for the web binding).
- * Each card is a live count that deep-links into its section, so the row
- * doubles as navigation — which is why the Workflows card left with the
- * Workflows page (docs/RETIREMENT-UNWIRING-PLAN.md §3.1): a stat card whose
- * href is not a route is a link to "Not found".
+ * Stat row's Next-free core (`./overview-stats` is the web binding). Each card
+ * deep-links into its section, so the row doubles as navigation — ⚠ a stat card
+ * whose href is not a route is a link to "Not found".
  */
 export function OverviewStatsCore({
   segment,

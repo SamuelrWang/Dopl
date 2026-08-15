@@ -5,19 +5,17 @@ import { getClient, issueAuthCode } from "@/shared/auth/mcp-oauth";
 export const dynamic = "force-dynamic";
 
 /**
- * Consent approval handler for the OAuth authorization endpoint. The consent
- * page (/oauth/authorize) POSTs here. We re-validate the client + redirect_uri
- * (exact match) and the session, then either issue an authorization code and
- * redirect back to the client, or redirect with `error=access_denied`.
+ * Consent approval handler; `/oauth/authorize` POSTs here. Re-validates the client +
+ * redirect_uri (EXACT match) and the session, then issues a code or redirects with
+ * `error=access_denied`.
  */
 function str(v: FormDataEntryValue | null): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
 export async function POST(request: NextRequest) {
-  // CSRF defense for this state-changing, cookie-authenticated POST: reject
-  // cross-origin submissions. (Supabase session cookies are SameSite=Lax,
-  // which already blocks cross-site cookie POSTs; this is defense-in-depth.)
+  // CSRF defense for a state-changing cookie-authenticated POST. Supabase cookies are
+  // SameSite=Lax, which already blocks cross-site POSTs; this is defense-in-depth.
   const origin = request.headers.get("origin");
   if (origin && origin !== request.nextUrl.origin) {
     return NextResponse.json(
@@ -37,7 +35,7 @@ export async function POST(request: NextRequest) {
   const decision = str(form.get("decision"));
   const grantWrite = form.get("grant_write") === "on";
 
-  // Re-validate client + redirect before trusting redirectUri for any redirect.
+  // ⚠ Re-validate client + redirect before trusting redirectUri for any redirect.
   const client = clientId ? await getClient(clientId) : null;
   if (
     !client ||
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Session could have lapsed between page render and submit.
+  // Session may have lapsed between page render and submit.
   if (!user) {
     return NextResponse.redirect(
       new URL("/login", request.nextUrl.origin).toString(),

@@ -11,7 +11,7 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** GET /api/workspaces/[workspaceSlug]/teams/[teamId] — team detail. Any active member. */
+/** GET — team detail. Any active member. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -27,7 +27,7 @@ export const GET = withUserAuth(
   }
 );
 
-/** PATCH /api/workspaces/[workspaceSlug]/teams/[teamId] — rename/recolor. Admin+ only. */
+/** PATCH — rename / recolor. Admin+. */
 export const PATCH = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -44,7 +44,7 @@ export const PATCH = withUserAuth(
   }
 );
 
-/** DELETE /api/workspaces/[workspaceSlug]/teams/[teamId] — delete team. Admin+ only. */
+/** DELETE — delete team. Admin+. */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
@@ -58,10 +58,8 @@ export const DELETE = withUserAuth(
       return toErrorResponse(err);
     }
   },
-  // sessionOnly: deleting a team is an admin access-control action, not an agent
-  // one — the same class as removing a member from it, which is also sessionOnly.
-  // Deletes are permanent (2026-08-07) and an agent token has no dialog to gate
-  // it, which is the invariant the MCP delete block holds on its own surface.
+  // sessionOnly: an access-control action. ⚠ Deletes are PERMANENT and an agent token has no
+  // dialog to gate one — the invariant the MCP delete block holds on its own surface.
   { sessionOnly: true }
 );
 

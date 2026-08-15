@@ -1,14 +1,11 @@
 /**
- * N-PARTY CHANNELS — the pair-join, the author gate, and the legacy seq-N
- * backfill.
+ * N-PARTY CHANNELS — pair-join, author gate, legacy seq-N backfill.
  *
- * "One session runs per channel at a time" is a DM invariant, and a three-member
- * channel breaks it outright. The open fallback window is CHANNEL-WIDE while a
- * session belongs to ONE operator, so every case below is some version of the
- * same question: may THIS author take THAT window. A stranger closes it, the
- * requester leaves it standing, the responder spends it.
- *
- * Split out of `group-thread.test.ts` (§2, 983 lines) along the source split.
+ * ⚠ "One session per channel at a time" is a DM invariant that a three-member
+ * channel breaks. The open fallback window is CHANNEL-WIDE while a session
+ * belongs to ONE operator, so every case here asks: may THIS author take THAT
+ * window. A stranger closes it, the requester leaves it standing, the responder
+ * spends it.
  */
 
 import { describe, expect, it } from "vitest";
@@ -47,8 +44,8 @@ function sessions(items: ThreadItem[]) {
 
 describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   it("joins an addressed requester follow-up into the open pair session", () => {
-    // While the session is open, a follow-up from the requester addressed to the
-    // responder (no task id of its own) still belongs to the exchange.
+    // While open, a requester follow-up addressed to the responder (no task id)
+    // still belongs to the exchange.
     const t = "task-c1-100";
     const items = groupThread([
       msg({ seq: 100, kind: "message", authorKind: "user", authorUserId: "u_req", body: "please do X", metadata: { to_user_id: "u_resp" } }),
@@ -59,14 +56,12 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
     expect(items).toHaveLength(1);
     const s = sessions(items);
     if (s[0].type !== "session") throw new Error("expected session");
-    // Backfilled opener + agent reply + requester follow-up, in order.
     expect(s[0].session.entries.map((e) => e.body)).toEqual(["please do X", "On it.", "and also Y"]);
   });
 
   it("keeps a third party's addressed message OUT of a two-party session (3-member channel)", () => {
-    // In a channel with a third member, a message to/from that third party is
-    // not in {requester, responder} — it must not fold into the session, and it
-    // stops the pair-join window.
+    // ⚠ A third party is not in {requester, responder} — must not fold into the
+    // session, and stops the pair-join window.
     const t = "task-c1-60";
     const items = groupThread([
       msg({ seq: 60, kind: "message", authorKind: "user", authorUserId: "u_req", body: "start", metadata: { to_user_id: "u_resp" } }),
@@ -76,22 +71,19 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
     const s = sessions(items);
     expect(s).toHaveLength(1);
     if (s[0].type !== "session") throw new Error("expected session");
-    // Only the backfilled opener — the third party's message is not an entry.
     expect(s[0].session.entries.map((e) => e.body)).toEqual(["start"]);
     const last = items[items.length - 1];
     if (last.type !== "message") throw new Error("expected standalone message");
     expect(last.message.body).toBe("hello");
   });
 
-  // Q5 — the open fallback window is CHANNEL-WIDE, but a session belongs to one
-  // operator. Before the author gate, any untagged agent post fell into whatever
-  // window happened to be open, regardless of who wrote it.
+  // ⚠ The fallback window is CHANNEL-WIDE but a session belongs to ONE
+  // operator. Without the author gate, any untagged agent post falls into
+  // whatever window is open, whoever wrote it.
   it("keeps a THIRD member's untagged agent post OUT of an open pair session (3-member channel)", () => {
-    // A asks B; B's agent starts; C's agent posts an unrelated note with no
-    // taskId and no addressing (the default shape in a non-direct channel,
-    // where auto-addressing is off). It must not become the session's reply —
-    // which would both title the card with a stranger's text AND flip A's
-    // still-running request to Done.
+    // A asks B; B's agent starts; C's agent posts an untagged, unaddressed note.
+    // ⚠ Must not become the session's reply — that titles the card with a
+    // stranger's text AND flips A's still-running request to Done.
     const t = "task-c1-1";
     const items = groupThread([
       msg({ seq: 1, kind: "message", authorKind: "user", authorUserId: "u_a", body: "please do X", metadata: { to_user_id: "u_b" } }),
@@ -101,10 +93,8 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
     const s = sessions(items);
     expect(s).toHaveLength(1);
     if (s[0].type !== "session") throw new Error("expected session");
-    // Only the backfilled opener — C's note is not an entry.
     expect(s[0].session.entries.map((e) => e.body)).toEqual(["please do X"]);
-    // A's request is still in flight, and the card is NOT titled with C's text
-    // (the summary is A's own ask, via the backfilled opener).
+    // ⚠ Card is NOT titled with C's text — the summary is A's own ask.
     expect(s[0].session.status).toBe("active");
     expect(s[0].session.summary).toBe("please do X");
     const last = items[items.length - 1];
@@ -113,10 +103,8 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("does not let one pair's untagged reply land in another pair's concurrent session", () => {
-    // Two concurrent exchanges: T1 (A↔B) then T2 (C↔D). B's terminal-mode reply
-    // arrives untagged while T2 holds the channel-wide window. It must stand
-    // alone rather than becoming T2's reply (which would mark C-and-D's session
-    // Done and suppress its "Working…" line).
+    // T1 (A↔B) then T2 (C↔D). B's untagged terminal reply arrives while T2 holds
+    // the channel-wide window. ⚠ Must stand alone, not become T2's reply.
     const t1 = "task-c1-10";
     const t2 = "task-c1-12";
     const items = groupThread([
@@ -130,7 +118,6 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
     expect(s).toHaveLength(2);
     if (s[0].type !== "session" || s[1].type !== "session") throw new Error("expected sessions");
     expect(s[1].session.taskId).toBe(t2);
-    // C↔D's card holds only its own backfilled opener and is still working.
     expect(s[1].session.entries.map((e) => e.body)).toEqual(["C asks D"]);
     expect(s[1].session.status).toBe("active");
     expect(s[1].session.summary).toBe("C asks D");
@@ -141,7 +128,7 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
 
   it("does not let the FIRST responder's untagged reply join a SECOND responder's session", () => {
     // Two task_started from different responders; the untagged reply belongs to
-    // the first. The window is held by the second — the reply must not join it.
+    // the FIRST while the second holds the window.
     const t1 = "task-c1-20";
     const t2 = "task-c1-21";
     const items = groupThread([
@@ -163,7 +150,7 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
 
   it("still folds the open session's OWN responder's untagged reply in (author gate is not a blanket close)", () => {
     // The gate must not break the case the window exists for: the responder's
-    // own terminal-mode reply, posted with no taskId, in a 3-member channel.
+    // own terminal-mode reply, no taskId, 3-member channel.
     const t = "task-c1-30";
     const items = groupThread([
       msg({ seq: 30, kind: "message", authorKind: "user", authorUserId: "u_a", body: "please do X", metadata: { to_user_id: "u_b" } }),
@@ -178,8 +165,7 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("closes the window on a third member's untagged agent post, so a LATER responder reply stands alone", () => {
-    // Mirrors the addressed-third-party path: a stranger's post means the
-    // exchange moved on, so nothing after it folds in either.
+    // A stranger's post means the exchange moved on — nothing after it folds in.
     const t = "task-c1-40";
     const items = groupThread([
       msg({ seq: 40, kind: "task_started", authorKind: "agent", authorUserId: "u_b", metadata: { taskId: t } }),
@@ -194,9 +180,8 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("lets the REQUESTER's untagged agent post stand alone without spending the window", () => {
-    // Inside the pair but not the responder: it is not the session's answer, so
-    // it does not join — but it is not a stranger either, so the responder's
-    // real reply that follows still lands in the card.
+    // Inside the pair but not the responder: does not join, but is no stranger
+    // either, so the responder's real reply still lands.
     const t = "task-c1-45";
     const items = groupThread([
       msg({ seq: 45, kind: "message", authorKind: "user", authorUserId: "u_a", body: "please do X", metadata: { to_user_id: "u_b" } }),
@@ -215,8 +200,8 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("keeps the anonymous-author transcript byte-for-byte (responder unknown -> fallback unchanged)", () => {
-    // A transcript with no author ids at all (the legacy/anonymous shape) has no
-    // responder to compare against, so the window behaves exactly as before.
+    // No author ids at all (legacy/anonymous) = no responder to compare, so the
+    // window behaves as before.
     const t = "task-c1-50";
     const items = groupThread([
       msg({ kind: "task_started", authorKind: "agent", authorUserId: null, metadata: { taskId: t } }),
@@ -230,9 +215,8 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("leaves a lone decision-echo card untouched by the seq-N backfill", () => {
-    // A denied request never started: a lone task_failed decision echo carrying
-    // the deterministic id, with no task_started. The seq-N opener must NOT be
-    // pulled in (nothing to open into).
+    // Denied request never started — lone task_failed echo, no task_started.
+    // ⚠ The seq-N opener must NOT be pulled in.
     const t = "task-c1-70";
     const items = groupThread([
       msg({ seq: 70, kind: "message", authorKind: "user", authorUserId: "u_req", body: "the proposal", metadata: { to_user_id: "u_resp" } }),
@@ -250,8 +234,7 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("stops accepting addressed follow-ups once the session has finished", () => {
-    // A follow-up that arrives after task_finished is outside the window and
-    // stays standalone; only the backfilled opener remains in the card.
+    // A follow-up after task_finished is outside the window and stays standalone.
     const t = "task-c1-80";
     const items = groupThread([
       msg({ seq: 80, kind: "message", authorKind: "user", authorUserId: "u_req", body: "start", metadata: { to_user_id: "u_resp" } }),
@@ -270,10 +253,9 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("a responder's pair-joined reply spends the window so the next task's opener is not absorbed", () => {
-    // The first session's task_finished never arrives (dropped). The responder's
-    // addressed no-taskId reply joins the card AND closes the window, so the
-    // next exchange's seq-N opener stays standalone and backfills into its own
-    // card instead of being swallowed by the stale one.
+    // First session's task_finished never arrives. The responder's addressed
+    // no-taskId reply joins the card AND closes the window, so the next
+    // exchange's seq-N opener backfills into its own card.
     const t1 = "task-c1-70";
     const t2 = "task-c1-73";
     const items = groupThread([
@@ -294,33 +276,28 @@ describe("N-party grouping — pair-join, author gate, seq-N backfill", () => {
   });
 
   it("DM (2-member): an auto-addressed request + the peer agent's addressed reply group into one done pair card", () => {
-    // Feature 4 auto-addresses a DM message to the peer. The peer's agent spawns
-    // (task_started with the legacy id) and self-posts an addressed reply with no
-    // task id of its own. The existing B1 backfill + B2 pair-join group both into
-    // one card with NO grouping-logic change — verifying the DM shape is already
-    // handled by today's heuristics.
+    // DM auto-address → peer's agent spawns (task_started, legacy id) and
+    // self-posts an addressed reply with no task id. Backfill + pair-join group
+    // both into one card with NO grouping-logic change.
     const t = "task-c1-200";
     const items = groupThread([
       msg({ seq: 200, kind: "message", authorKind: "user", authorUserId: "u_req", body: "please review", metadata: { to_user_id: "u_resp" } }),
       msg({ seq: 201, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
       msg({ seq: 202, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "reviewed", metadata: { to_user_id: "u_req" } }),
     ]);
-    // One card, no loose bubbles: the opener backfilled and the reply pair-joined.
     expect(items).toHaveLength(1);
     const s = sessions(items);
     expect(s).toHaveLength(1);
     if (s[0].type !== "session") throw new Error("expected session");
     expect(s[0].session.taskId).toBe(t);
     expect(s[0].session.entries.map((e) => e.body)).toEqual(["please review", "reviewed"]);
-    // A delivered agent reply implies the exchange is Done even with no finish.
+    // A delivered agent reply implies Done even with no finish marker.
     expect(s[0].session.status).toBe("done");
   });
 
   it("DM (2-member): a legacy task-{ch}-{N} start backfills its auto-addressed seq-N opener as the opening entry", () => {
-    // The DM opener (auto-addressed to the peer, no task id) spawned
-    // `task-c1-300`. B1 backfill pulls it into the card as the opening entry,
-    // ahead of the agent reply, and removes it from the loose stream — the same
-    // legacy backfill, exercised through the Feature 4 DM addressing shape.
+    // The DM opener spawned `task-c1-300`; backfill pulls it in as the opening
+    // entry ahead of the agent reply and removes it from the loose stream.
     const t = "task-c1-300";
     const items = groupThread([
       msg({ seq: 300, kind: "message", authorKind: "user", authorUserId: "u_req", body: "the DM proposal", metadata: { to_user_id: "u_resp" } }),

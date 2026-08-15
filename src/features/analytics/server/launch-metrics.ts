@@ -1,11 +1,11 @@
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Launch-metrics aggregations for the admin analytics dashboard.
- * All read-only; admin auth is enforced at the route layer.
+ * Launch-metrics aggregations for the admin analytics dashboard. Read-only;
+ * admin auth is enforced at the route layer.
  *
- * Prices hardcoded here so the MRR number matches what Stripe actually
- * charges. If that ever diverges, read them from env instead.
+ * ⚠ Prices hardcoded so MRR matches what Stripe actually charges — keep in sync
+ * or read them from env instead.
  */
 
 const SOLO_MONTHLY_USD = 5.99;
@@ -25,11 +25,9 @@ export interface LaunchMetrics {
 export async function getLaunchMetrics(): Promise<LaunchMetrics> {
   const supabase = supabaseAdmin();
 
-  // ── Basic counts ─────────────────────────────────────────────────
-  // Billing is workspace-level: paid plans are 'solo' ($5.99 flat) and
-  // 'team' ($7.99 × seat_count). Canceled subs revert to plan='free', and
-  // past_due keeps entitlements (grace), so active + past_due are the
-  // still-billing rows that drive MRR.
+  // Billing is workspace-level: 'solo' ($5.99 flat), 'team' ($7.99 ×
+  // seat_count). Canceled reverts to plan='free' and past_due keeps
+  // entitlements, so active + past_due are the rows that drive MRR.
   const [{ count: signupsTotal }, { data: paidRows }] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase
@@ -57,10 +55,7 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
       .toFixed(2)
   );
 
-  // ── Daily time series (last 30 days) from conversion_events ──────
-  // (The first_cluster_built funnel ratios were dropped 2026-08-11 with the
-  // clusters feature — the event lost its only emitter, so those tiles could
-  // never move again. Historical rows remain in conversion_events.)
+  // Daily time series (last 30 days) from conversion_events.
   const [signupEvents, subscribedEvents] = await Promise.all([
     fetchEvents("signup"),
     fetchEvents("subscribed"),

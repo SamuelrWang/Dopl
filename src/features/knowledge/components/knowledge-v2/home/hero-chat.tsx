@@ -9,42 +9,30 @@ import { CHIP, RAISED_WELL } from "@/shared/ui/wells";
 import styles from "../knowledge-v2.module.css";
 
 /**
- * HERO CHAT — the gray panel ATTACHED to the bottom of the knowledge hero.
+ * HERO CHAT — gray panel attached under the knowledge hero image band.
  *
- * ⚠ DESIGN ONLY. Nothing here talks to a server: there is no route, no query,
- * no transcript. Sending appends a HARDCODED reply so the shape of the feature
- * can be reviewed live; the reply says so in its own words rather than
- * pretending, and the mic is a pressed STATE with no recognition behind it.
+ * ⚠ DESIGN ONLY. No route, no query, no transcript. Send appends a HARDCODED
+ * reply; the mic is a pressed STATE with no recognition behind it.
  *
- * WHY IT IS NOT ITS OWN CARD. The hero is one rounded container: the image
- * band keeps the top corners, this keeps the bottom ones, and the container's
- * single border wraps both (`.homeHero` is `overflow:hidden`, so neither child
- * carries a radius of its own). The fill is `bg-bg-inset` — the SAME token as
- * the card grid's own wells (`.cardInset`) — which is what makes it read as an
- * inset extension of the hero rather than a second floating card stacked under
- * it. `bg-card-surface-subtle` (header strips) reads as a lid, not a well, and
- * `--shell-chip` belongs to nav chrome.
+ * Not its own card: `.homeHero` is one `overflow:hidden` rounded container, so
+ * neither child carries a radius. Fill is `bg-bg-inset` — same token as
+ * `.cardInset` — so it reads as an inset extension, not a stacked card.
+ * `bg-card-surface-subtle` reads as a lid; `--shell-chip` is nav chrome.
  *
- * REUSE: the SHARED composer pieces are reused (`SendButton`, the auto-grow
- * textarea math, `CHIP`/`RAISED_WELL`); the channel `MessageComposer` is not,
- * because it is feature-coupled — it takes a channel roster, owns the
- * chat/request intent pill and the addressee picker, and its send path builds
- * a channel payload. The input well is therefore composed from the sanctioned
- * `.concave-field` kit recipe, exactly as that composer does.
+ * Reuses shared composer pieces (`SendButton`, auto-grow textarea, `CHIP` /
+ * `RAISED_WELL`) but NOT the channel `MessageComposer`: that one is
+ * feature-coupled (channel roster, intent pill, addressee picker, channel send
+ * payload). Input well composes the `.concave-field` kit recipe instead.
  */
 
-/** Verbatim, and the one place it is written. */
+/** ⚠ The one place this string is written. */
 export const HERO_CHAT_PLACEHOLDER =
   "Create, edit, or ask about your knowledge bases...";
 
-/**
- * The canned turn. Deliberately says what is and is not wired: a design pass
- * that reads as a working feature is how a placeholder ships.
- */
 export const HERO_CHAT_REPLY =
   "This feature is coming soon! For now, your AI agent delivers the same functionalities over Dopl MCP.";
 
-/** Canned prompts. Clicking one FILLS the input; it does not send. */
+/** Clicking one FILLS the input; it does not send. */
 const SUGGESTIONS = [
   "Summarize a knowledge base",
   "Draft a new base from my notes",
@@ -54,7 +42,7 @@ const SUGGESTIONS = [
 const HINT_IDLE = "Answers draw on the bases you can see.";
 const HINT_LISTENING = "Dictation is not wired up yet — this is the pressed state only.";
 
-/** Matches the `.heroChatReveal` transition; the log is wiped once it lands. */
+/** ⚠ Must match the `.heroChatReveal` transition. */
 const COLLAPSE_MS = 300;
 
 interface Turn {
@@ -72,8 +60,8 @@ export function HeroChat() {
   const nextId = useRef(1);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // A pending collapse holds the log mounted so it has a height to animate
-  // DOWN from. Unmounting on unmount too, or a wipe lands on a dead component.
+  // Pending collapse holds the log mounted so it has a height to animate DOWN
+  // from; clear on unmount or the wipe lands on a dead component.
   useEffect(
     () => () => {
       if (collapseTimer.current !== null) clearTimeout(collapseTimer.current);
@@ -96,12 +84,9 @@ export function HeroChat() {
     setValue("");
   }, [value]);
 
-  /**
-   * Collapse in TWO steps, and the order is the whole trick: the flag flips
-   * first so the grid track animates 1fr→0fr with the log still in it, and the
-   * log is wiped only once that has run. Clearing the turns first would leave
-   * an empty track to "animate", i.e. a jump.
-   */
+  /** ⚠ Collapse in TWO steps, order matters: flip the flag first so the grid
+   *  track animates 1fr→0fr with the log still in it, wipe turns only after.
+   *  Clearing turns first animates an empty track — a jump. */
   const clear = useCallback(() => {
     setOpen(false);
     if (collapseTimer.current !== null) clearTimeout(collapseTimer.current);
@@ -113,12 +98,9 @@ export function HeroChat() {
 
   return (
     <div className="flex flex-col border-t border-border-default bg-bg-inset px-3.5 pb-3 pt-3">
-      {/* THE ANIMATION. `grid-template-rows: 0fr → 1fr` over an
-          `overflow:hidden` child is the one auto-height transition that needs
-          no measurement — no ResizeObserver, no max-height guess that clips a
-          long turn or eases against a number nothing reaches. Everything below
-          the hero (the scope pills, the card grid) is in normal flow, so it
-          slides down with it for free. */}
+      {/* Auto-height via `grid-template-rows: 0fr → 1fr` over an
+          `overflow:hidden` child — no measurement, no ResizeObserver, no
+          max-height guess. See `.heroChatReveal`. */}
       <div className={styles.heroChatReveal} data-open={open ? "true" : undefined}>
         <div className={styles.heroChatRevealInner}>
           {turns.length > 0 && (
@@ -137,21 +119,15 @@ export function HeroChat() {
                 </button>
               </div>
 
-              {/* `polite`, not `assertive`: a reply appearing is not an alert.
-                  The region is the LOG, so each appended turn is announced.
-                  Height CAPS at ~10 text lines (.heroChatLog) — the reveal
-                  animation still runs to the capped height, and past it the
-                  log scrolls internally instead of growing the box. */}
+              {/* `polite`, not `assertive`: a reply is not an alert. Region is
+                  the LOG so each appended turn is announced. Height caps at
+                  ~10 lines (.heroChatLog), then scrolls internally. */}
               <div
                 className={cn(styles.heroChatLog, "flex flex-col gap-3")}
                 aria-live="polite"
               >
                 {turns.map((turn) => (
                   <div key={turn.id} className="flex flex-col gap-2">
-                    {/* The user's words are ELEVATED (raised well on the inset
-                        body); the agent's are FLAT on the gray, no bubble —
-                        one voice is a thing you said, the other is the
-                        surface answering. */}
                     <p
                       className={cn(
                         RAISED_WELL,
@@ -171,16 +147,14 @@ export function HeroChat() {
         </div>
       </div>
 
-      {/* The input row stays put — it is the bottom of the box in BOTH states,
-          so the next turn is typed where the last one was. */}
       <div className="concave-field flex items-end gap-2 rounded-[12px] py-1.5 pl-3 pr-1.5">
         <textarea
           ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
-            // IME GUARD, same as the channel composer: while an input method
-            // is composing, Enter COMMITS the composition — it is not a send.
+            // ⚠ IME GUARD (same as channel composer): while composing, Enter
+            // COMMITS the composition — not a send.
             if (e.nativeEvent.isComposing || e.keyCode === 229) return;
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -215,8 +189,6 @@ export function HeroChat() {
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {/* Suggestions are an IDLE affordance: once there is a conversation the
-            next prompt is the one in your head, not one of three. */}
         {turns.length === 0 &&
           SUGGESTIONS.map((prompt) => (
             <button

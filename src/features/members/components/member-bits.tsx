@@ -19,7 +19,7 @@ import {
 import type { TeamView } from "@/features/teams/types";
 import type { MemberRole, AssignableRole } from "../types";
 
-// Shared kit avatar — re-exported so feature imports stay stable.
+// Re-exported so feature imports stay stable.
 export { Avatar } from "@/shared/ui/avatar";
 
 const ROLE_OPTIONS: Array<{
@@ -33,17 +33,11 @@ const ROLE_OPTIONS: Array<{
 ];
 
 /**
- * How a grantable resource is drawn in the access UI (label + icon).
- *
- * `workflow` is DELIBERATELY ABSENT. Workflows are retired from the UI and
- * filtered out of the access matrix client-side (`use-workspace-resources`),
- * so nothing here should ever meet one; if a stale row slips through it reads
- * as the neutral fallback rather than reintroducing the word. The DB still
- * accepts `workflow` grants (D7) — only the rendering is gone.
- *
- * A map rather than the inline `=== "knowledge_base" ? … : "Workflow"`
- * ternaries this replaces: the access matrix also emits `skill` rows, which
- * those ternaries labelled "Workflow".
+ * Label + icon per grantable resource in the access UI.
+ * ⚠ `workflow` is DELIBERATELY ABSENT: retired from the UI and filtered out
+ * of the access matrix in `use-workspace-resources`, so a stale row reads as
+ * the neutral fallback instead of reintroducing the word. The DB still
+ * accepts `workflow` grants — only the rendering is gone.
  */
 const RESOURCE_META: Partial<
   Record<TeamResourceType, { label: string; icon: LucideIcon }>
@@ -64,26 +58,18 @@ export function resourceMeta(type: TeamResourceType): {
 }
 
 /**
- * How many resources a team is scoped to, AS RENDERED — retired types are not
- * counted (D7).
- *
- * `team.grants` is the raw payload half of the access matrix and it still
- * carries `workflow` rows (`teams/server/repository.ts` selects grants with no
- * `resource_type` filter, on purpose). Counting it straight is how a team with
- * two KB grants and one workflow grant gets captioned "3 scoped resources"
- * above a list of 2 — the caption and the list disagreeing about the same team.
- * Both call sites (`members-list-pane`, `member-detail`) count through here so
- * they cannot drift from each other or from the lists they label.
+ * Resources a team is scoped to, AS RENDERED — retired types not counted.
+ * ⚠ `team.grants` still carries `workflow` rows (`teams/server/repository.ts`
+ * selects grants with no `resource_type` filter, on purpose), so counting it
+ * straight captions "3 scoped resources" above a list of 2. Both call sites
+ * (`members-list-pane`, `member-detail`) must count through here.
  */
 export function scopedResourceCount(team: Pick<TeamView, "grants">): number {
   return withoutRetiredResources(team.grants).length;
 }
 
-/**
- * Role pills — neutral system language: weight/emphasis carries rank,
- * not hue. Owner is the inverted ink chip; the rest step down through
- * the gray tiers.
- */
+/** Role pills: weight/emphasis carries rank, not hue. Owner is the inverted
+ *  ink chip; the rest step down the gray tiers. */
 const ROLE_STYLE: Record<MemberRole, string> = {
   owner: "bg-surface-invert border-surface-invert text-text-on-invert",
   admin: "bg-bg-inset border-border-strong text-text-primary",
@@ -104,11 +90,8 @@ export function RolePill({ role }: { role: MemberRole }) {
   );
 }
 
-/**
- * Editable role chip — only assignable roles (admin/member/viewer) appear
- * in the menu. Owner is excluded by the AssignableRole type. Click is
- * stopped from bubbling so it doesn't trigger row-level handlers.
- */
+/** Editable role chip. Owner is excluded by the AssignableRole type. Click
+ *  is stopped from bubbling so row-level handlers don't fire. */
 export function RoleSelect({
   value,
   onChange,
@@ -158,7 +141,7 @@ export function RoleSelect({
   );
 }
 
-/** Lightweight dropdown for filter selects (built on the kit Popover). */
+/** Dropdown for filter selects, on the kit Popover. */
 export function SelectFilter({
   value,
   onChange,

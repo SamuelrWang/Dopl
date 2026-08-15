@@ -1,22 +1,9 @@
 /**
- * F-085 — the device-token route's AUTH MATRIX, exercised through the REAL
- * `withUserAuth`.
- *
- * THE SECURITY PROPERTY THIS FILE EXISTS FOR: a bearer must not be able to
- * operate the controls that govern bearers. The desktop hands a 90-day
- * dopl.read+dopl.write device token to every spawned agent, and that agent's
- * whole job is to process an untrusted teammate's message. If it could reach
- * POST it would mint itself a fresh 90-day credential; if it could reach DELETE
- * it would revoke the credential its siblings (or the operator's other
- * machines) depend on, and could delete the very row whose `last_used_at`
- * records that it ran. Both methods are therefore `sessionOnly` — cookie
- * callers only — and that is pinned here per-method, not inferred from the
- * option object.
- *
- * Only the token layer and the DB layer are mocked; the wrapper under test is
- * the shipping one, so the discriminator being exercised is the real one
- * (an Authorization header selects the token branch, its absence the session
- * branch).
+ * The device-token route's AUTH MATRIX through the REAL `withUserAuth`.
+ * ⚠ A bearer must not operate the controls that govern bearers: via POST an agent mints itself a
+ * fresh 90-day credential; via DELETE it revokes its siblings' credential and deletes the row
+ * whose `last_used_at` records that it ran. Both methods are `sessionOnly`, pinned per-method.
+ * Only the token + DB layers are mocked, so the discriminator exercised is the real one.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,10 +16,8 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@/shared/auth/mcp-session", () => ({
   touchMcpStatus: vi.fn(),
-  // `withUserAuth`'s OAuth-bearer branch rate-limits before the sessionOnly
-  // gate; these device-token bearer cases send a live `dopl_at_*` token, so the
-  // limiter is consulted. Admit every request — the gate under test is the
-  // caller-type (sessionOnly) refusal, not the ceiling.
+  // ⚠ The OAuth branch rate-limits BEFORE the sessionOnly gate; admit everything so the refusal
+  // under test is the caller-type one, not the ceiling.
   checkAndRecordRateLimitSubject: vi.fn(async () => true),
 }));
 vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
@@ -40,9 +25,8 @@ vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
     auth: {
-      // Q11: the session branch of `withUserAuth` resolves the caller from
-      // LOCALLY verified claims, not a network `getUser()`. `getUser` stays on
-      // the stub for the auth-js legacy/HS256 fallback path only.
+      // ⚠ The session branch resolves the caller from LOCALLY verified claims, not `getUser()`;
+      // `getUser` is on the stub only for the auth-js legacy/HS256 fallback.
       getClaims: async () => ({
         data: state.sessionUser
           ? {
@@ -59,10 +43,8 @@ vi.mock("@supabase/ssr", () => ({
 }));
 vi.mock("@/shared/auth/mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
-  // `withUserAuth` discriminates bearer KINDS through this predicate before
-  // it ever calls `validateAccessToken` (a Supabase JWT presented as a bearer
-  // takes the session branch instead). Mirror the real prefix check — omitting
-  // it makes every bearer-carrying case here throw inside the wrapper.
+  // ⚠ Discriminates bearer KINDS before `validateAccessToken` — mirror the real prefix check or
+  // every bearer-carrying case throws inside the wrapper.
   isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
   issueDeviceToken: vi.fn(async () => ({
     token: "dopl_at_minted",
@@ -76,7 +58,7 @@ import { issueDeviceToken, revokeDeviceTokens } from "@/shared/auth/mcp-oauth";
 
 const URL_ = "http://localhost/api/auth/mcp-device-token";
 
-/** Request carrying an OAuth bearer (routes to the token branch). */
+/** OAuth bearer → token branch. */
 function bearerReq(method: string, body?: unknown): NextRequest {
   return new NextRequest(URL_, {
     method,
@@ -85,7 +67,7 @@ function bearerReq(method: string, body?: unknown): NextRequest {
   });
 }
 
-/** Request with no Authorization header (routes to the session branch). */
+/** No Authorization header → session branch. */
 function sessionReq(method: string, body?: unknown): NextRequest {
   return new NextRequest(URL_, {
     method,
@@ -115,8 +97,7 @@ describe("DELETE (revoke) — caller-type gate", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, revoked: 1 });
     expect(revokeDeviceTokens).toHaveBeenCalledWith({
-      // The user id comes from the SESSION, never from the body — a caller
-      // cannot name someone else's account.
+      // ⚠ User id comes from the SESSION, never the body.
       userId: "user-9",
       label: "Dopl Desktop CLI (mbp)",
       tokenId: undefined,

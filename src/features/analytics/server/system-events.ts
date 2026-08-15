@@ -2,15 +2,12 @@ import crypto from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
- * Health/anomaly signal logger.
+ * Health/anomaly signal logger. Anything abnormal — external API failures,
+ * ingestion errors, 5xx, quota breaches, slow requests — drops a row into
+ * `system_events`, which `/admin/health` aggregates into rolling error rates
+ * and alert groupings.
  *
- * Anything abnormal across the stack — external API failures, ingestion
- * errors, 5xx responses, quota breaches, slow requests — drops a row into
- * `system_events`. The admin `/admin/health` dashboard aggregates these
- * into rolling error rates and alert groupings.
- *
- * Fire-and-forget: never throws, never blocks the caller. Analytics
- * failures must not break the user-facing request.
+ * Fire-and-forget: never throws, never blocks the caller.
  */
 
 export type SystemEventSeverity = "info" | "warn" | "error" | "critical";
@@ -30,11 +27,10 @@ export interface SystemEventInput {
   category: SystemEventCategory;
   source: string; // endpoint or module identifier, e.g. "POST /api/ingest" or "anthropic.messages"
   message: string; // human-readable summary, one line
-  /** Stable tokens used to hash a grouping fingerprint. Rows with the same
-   * fingerprint are the "same incident" for rollup purposes. Include only
-   * tokens that are stable across occurrences (error name, external API
-   * name, pipeline step) — NOT per-request IDs. If omitted, falls back to
-   * `[category, source, message]` which groups reasonably in most cases. */
+  /** Tokens hashed into a grouping fingerprint; same fingerprint = "same
+   * incident" for rollup. ⚠ Only tokens STABLE across occurrences (error name,
+   * external API name, pipeline step) — never per-request IDs. Omitted falls
+   * back to `[category, source, message]`. */
   fingerprintKeys?: string[];
   metadata?: Record<string, unknown>;
   userId?: string | null;

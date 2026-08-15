@@ -5,11 +5,8 @@ import * as repo from "./repository";
 import { buildSeedKnowledgeBases, DOPL_GUIDE_SLUG } from "./seed";
 import { deriveSlug } from "./service-shared";
 
-/**
- * A base inserted by the seed, with each entry's stable `key` mapped to
- * its inserted uuid + title. The orchestrator threads `entryIdByKey`
- * into the ontology seed so its cross-references resolve.
- */
+/** Seeded base with each entry's stable `key` → inserted uuid + title. The
+ *  orchestrator threads `entryIdByKey` into the ontology seed. */
 export interface SeededBase {
   baseId: string;
   slug: string;
@@ -18,22 +15,17 @@ export interface SeededBase {
 
 export interface SeedKnowledgeResult {
   basesCreated: number;
-  /** The Dopl Guide base (the cross-reference anchor), or null if nothing seeded. */
+  /** Dopl Guide base (cross-reference anchor), null if nothing seeded. */
   guide: SeededBase | null;
 }
 
 /**
- * Idempotent — skips entirely if the workspace already has any active
- * base. Inserts each fixture as a base + its root entries (folders are
- * empty in the current fixtures) and returns the created ids so callers
- * can cross-reference specific entries.
+ * Idempotent — skips entirely if the workspace has any active base. Returns
+ * created ids so callers can cross-reference entries.
  *
- * TWO writes total, whatever the corpus size — one bases insert, one
- * entries insert. It used to be `1 + entries` inserts per fixture, each
- * awaited, plus a `maxEntryPositionIn` read per entry because the fixtures
- * don't pin `position`; the whole thing sat in front of the post-signup
- * redirect. Positions are assigned by index here, which is exactly what
- * the sequential max+1 produced on a fresh base.
+ * ⚠ TWO writes total whatever the corpus size (one bases insert, one entries
+ * insert) — this runs in front of the post-signup redirect. Positions are
+ * assigned BY INDEX, matching what sequential max+1 yields on a fresh base.
  */
 export async function seedWorkspace(
   ctx: KnowledgeContext
@@ -56,16 +48,13 @@ export async function seedWorkspace(
       slug: slugByFixture[i],
       description: fixture.description,
       agentWriteEnabled: fixture.agentWriteEnabled ?? false,
-      // Seeded fixtures are workspace starter content — public so
-      // every member sees them. (Owner-explicit `createBase` calls
-      // default to private; this is the one path where public is
-      // semantically correct.)
+      // Starter content: public so every member sees it. ⚠ The one path where
+      // public is correct — `createBase` defaults to private.
       visibility: "public" as const,
       createdBy: ctx.userId,
     }))
   );
-  // Keyed by slug, not by index: nothing here depends on the order the
-  // insert returns its rows in.
+  // ⚠ Keyed by slug, not index — nothing may depend on returned row order.
   const baseIdBySlug = new Map(bases.map((base) => [base.slug, base.id]));
 
   const entryRows: repo.InsertEntriesArgs[] = [];
@@ -80,10 +69,8 @@ export async function seedWorkspace(
     if (isGuide) guide = { baseId, slug, entryIdByKey: guideEntryIds };
 
     fixture.rootEntries.forEach((entryInput, position) => {
-      // The uuid is minted HERE so the cross-reference map is complete
-      // before the insert resolves — the ontology seed's attributes are
-      // built from it, and nothing has to match returned rows back to
-      // authoring keys.
+      // ⚠ uuid minted HERE so the cross-reference map is complete before the
+      // insert resolves — the ontology seed builds attributes from it.
       const id = randomUUID();
       entryRows.push({
         id,
@@ -96,9 +83,8 @@ export async function seedWorkspace(
         entryType: entryInput.entryType,
         position: entryInput.position ?? position,
         createdBy: ctx.userId,
-        // Seed inserts are system-origin, not agent edits — even when
-        // an agent triggers the lazy seed via listBases, the rows
-        // themselves should record `last_edited_source = 'user'`.
+        // System-origin, not an agent edit: even an agent-triggered lazy seed
+        // records `last_edited_source = 'user'`.
         source: "user",
       });
       if (isGuide && entryInput.key) {

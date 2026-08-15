@@ -2,21 +2,15 @@ import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 
 /**
- * A chat title, its project tag and its folder name are the three short labels
- * the chats feature puts into agent narration: `dopl_chats` op="list" prints
- * one line per chat (title, folder, project) and `dopl_search` prints titles
- * as hit headers. Bounded on the charset for the same reason as every other
- * label — see `@/shared/lib/safe-label`.
- *
- * `overview`, `learnings`, the deliverable labels and the message
- * summary/verbatim pair are NOT bounded: those are the transcript, the payload
- * the feature exists to hand an agent, and they are rendered as bodies under
- * framing that says what they are.
- *
- * `chats` and `chat_folders` carry no INSERT/UPDATE RLS policy (verified
- * against prod), so unlike skills or knowledge bases these rows can only be
- * written by the service role — this schema really is the only writer, and the
- * DB CHECK is the layer that survives the next one.
+ * Title, project tag and folder name are the three short labels chats puts
+ * into agent narration (`dopl_chats` op="list", `dopl_search` hit headers),
+ * so they are charset-bounded — see `@/shared/lib/safe-label`.
+ * ⚠ `overview`, `learnings`, deliverable labels and message summary/verbatim
+ * are NOT bounded and must not be: they are the transcript itself, rendered
+ * as bodies under framing that says so.
+ * `chats` / `chat_folders` carry no INSERT/UPDATE RLS policy, so the service
+ * role is the only writer and this schema is the only gate before the DB
+ * CHECK.
  */
 const ChatTitleSchema = safeLabel("Chat title", 200);
 const ChatProjectSchema = safeLabel("Project", 120);
@@ -54,19 +48,16 @@ const SessionDateSchema = z
   );
 
 /**
- * Agent export payload. `clientSessionId` is the idempotency key:
- * re-exporting the same session UPDATES the existing chat, preserving by
- * default — a header field is only overwritten when the caller passes it,
- * and the transcript is reconciled (upsert by position), never destroyed,
- * so messages added via op="append" survive a re-export. `folder` is a
- * folder NAME — resolved case-insensitively against the caller's folders,
- * created when missing. The chat's `format` is derived server-side from
- * the messages' verbatim mix — it is not caller input.
- *
- * The preserve-on-omit fields (overview/source/visibility/deliverables/
- * learnings) are intentionally left `.optional()` WITHOUT a `.default()`:
- * a default would erase the "caller didn't pass this" signal the re-export
- * merge relies on. Defaults for a fresh create are applied in the service.
+ * Agent export payload. `clientSessionId` is the idempotency key: re-export
+ * UPDATES the existing chat, preserving by default — a header field is
+ * overwritten only when passed, and the transcript is reconciled (upsert by
+ * position), so op="append" messages survive. `folder` is a NAME, resolved
+ * case-insensitively and created when missing. `format` is derived
+ * server-side, never caller input.
+ * ⚠ Preserve-on-omit fields (overview/source/visibility/deliverables/
+ * learnings) are `.optional()` WITHOUT `.default()` — a default erases the
+ * "caller didn't pass this" signal the re-export merge relies on. Fresh-create
+ * defaults are applied in the service.
  */
 export const ChatExportSchema = z.object({
   title: ChatTitleSchema,
@@ -134,11 +125,8 @@ export const ChatFolderCreateSchema = z.object({
 });
 export type ChatFolderCreateInput = z.infer<typeof ChatFolderCreateSchema>;
 
-/**
- * Folder update — rename and/or scope change. Changing the scope
- * propagates to every chat filed in the folder (the folder's scope is
- * authoritative for its chats).
- */
+/** Folder rename and/or scope change. ⚠ Scope propagates to every chat filed
+ *  in the folder — the folder's scope is authoritative. */
 export const ChatFolderUpdateSchema = z
   .object({
     name: ChatFolderNameSchema.optional(),

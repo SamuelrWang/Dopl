@@ -2,11 +2,8 @@ import { HttpError } from "@/shared/lib/http-error";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { toChannelErrorResponse } from "@/features/channels/server/http-mapping";
 
-/**
- * Route-layer helpers for the channels API: re-exports the feature error
- * mapper (so handlers import their catch helper from one place, mirroring
- * `chat-route`) and the dynamic-param extractor.
- */
+/** Route-layer helpers for the channels API: the feature error mapper (one
+ *  import site for handlers) and the dynamic-param extractors. */
 
 export { toChannelErrorResponse };
 
@@ -26,12 +23,10 @@ export function requireChannelId(
 
 /**
  * Extract + validate the `[id]` dynamic param (consent request routes).
- *
- * The shape check is not cosmetic: `id` goes straight into a `uuid =` filter,
- * so a non-UUID reaches Postgres as a 22P02 cast failure — a generic 500 plus
- * a `system_events` error row on EVERY such call, which is a free way to
- * spam the health dashboard. Malformed collapses to the same 404 the service
- * returns for a missing / foreign id, so an id still can't be probed.
+ * ⚠ The shape check is not cosmetic: `id` goes straight into a `uuid =` filter,
+ * so a non-UUID reaches Postgres as a 22P02 cast failure — a 500 plus a
+ * `system_events` row on EVERY such call. Malformed collapses to the SAME 404 a
+ * missing/foreign id gets, so ids cannot be probed.
  */
 export function requireConsentId(
   params: Record<string, string> | undefined
@@ -50,13 +45,8 @@ export function requireConsentId(
   return id;
 }
 
-/**
- * Extract + validate the `[taskId]` dynamic param (task PATCH route). Same
- * rationale as `requireConsentId`: a non-UUID would reach Postgres as a 22P02
- * cast failure (a 500 + a `system_events` row on every such call), so a
- * malformed id collapses to the same 404 the service returns for a missing /
- * foreign id — the id still can't be probed.
- */
+/** Extract + validate the `[taskId]` dynamic param. ⚠ Same rationale as
+ *  `requireConsentId`. */
 export function requireTaskId(
   params: Record<string, string> | undefined
 ): string {
@@ -70,9 +60,6 @@ export function requireTaskId(
   return taskId;
 }
 
-// THERE IS NO `requireAgentId` (channels rollback §1, 2026-08-05). It guarded the `[agentId]`
-// dynamic param of `PATCH /api/channels/[channelId]/agents/[agentId]` (rename / set_status /
-// disengage). That route is deleted, it was the sole consumer, and the 404 it minted —
-// `CHANNEL_AGENT_NOT_FOUND` — is one of the six codes `http-mapping.ts` records as raised by
-// nothing. The one surviving agents endpoint (`GET .../agents`, the historical attribution
-// roster) takes no agent id.
+// ⚠ There is deliberately NO `requireAgentId`: the `[agentId]` route it guarded
+// is deleted, and the surviving `GET .../agents` (historical attribution roster)
+// takes no agent id.

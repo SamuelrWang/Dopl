@@ -21,26 +21,23 @@ export interface ResolvedWorkspaceSegment {
   workspace: Workspace;
   /** The canonical `{slug}-{publicId}` segment for this workspace. */
   canonical: string;
-  /** True when the inbound segment didn't match canonical — caller should 301. */
+  /** Inbound segment didn't match canonical — caller should 301. */
   needsRedirect: boolean;
-  /** The caller's role on it. Free — proving membership already read it. */
+  /** Caller's role. Free — proving membership already read it. */
   role: Role;
 }
 
 /**
- * Resolve a `{workspaceSlug}` URL parameter into a workspace, accepting
- * both the canonical `{slug}-{publicId}` form and legacy slug-only URLs.
+ * Resolve a `{workspaceSlug}` URL parameter into a workspace, accepting the
+ * canonical `{slug}-{publicId}` form and legacy slug-only URLs.
+ *   1. Parses as `{slug}-{publicId}` → look up by publicId. Membership-scoped,
+ *      so non-members get null (404).
+ *   2. Else membership-by-slug. Legacy path lives until the
+ *      `legacy_slug_redirect` system event hits zero over 14 days
+ *      (docs/REFACTOR-FINDINGS.md deletion follow-up).
  *
- * Lookup order:
- *   1. If the segment parses as `{slug}-{publicId}`, look up by publicId.
- *      Authz is membership-scoped — non-members get null (404).
- *   2. Otherwise, fall back to membership-by-slug. The legacy slug-only
- *      path lives until the `legacy_slug_redirect` system event drops
- *      to zero hits over 14 days; tracked in
- *      [docs/REFACTOR-FINDINGS.md] as a deletion follow-up.
- *
- * Returns null when neither path resolves. Callers are responsible for
- * the 301 / 404 / render decision based on `needsRedirect`.
+ * Null when neither resolves; caller owns the 301 / 404 / render decision via
+ * `needsRedirect`.
  */
 export const resolveWorkspaceSegmentForUser = cache(
   async (
@@ -87,10 +84,9 @@ export const resolveWorkspaceSegmentForUser = cache(
 );
 
 /**
- * API-route wrapper. Returns the workspace if reachable, null otherwise.
- * Does NOT 301 on stale segment — clients of API routes can keep using
- * legacy slugs through the deletion window without their fetch
- * promotion semantics changing (a 301 on POST would degrade to GET).
+ * API-route wrapper: workspace if reachable, else null. ⚠ Does NOT 301 on a
+ * stale segment — a 301 on POST degrades to GET, so API clients keep using
+ * legacy slugs through the deletion window.
  */
 export async function resolveApiWorkspace(
   segment: string,
@@ -101,11 +97,10 @@ export async function resolveApiWorkspace(
 }
 
 /**
- * Same lookup, keeping the `role` the resolve already read. For routes that
- * would otherwise re-fetch the membership a second time to answer their own
- * question — `my-access` did exactly that (P0-2, §3.3). Thread the role into
- * `listEffectiveAccess`/`effectiveResourceAccess` via their `opts.role`
- * instead of letting them re-query.
+ * Same lookup, keeping the `role` the resolve already read, for routes that
+ * would otherwise re-fetch the membership. Thread it into
+ * `listEffectiveAccess` / `effectiveResourceAccess` via `opts.role` rather than
+ * letting them re-query.
  */
 export async function resolveApiWorkspaceAccess(
   segment: string,
@@ -117,33 +112,26 @@ export async function resolveApiWorkspaceAccess(
 }
 
 /**
- * THE BOOT ANSWER — everything the bundled SPA needs before it can render a
- * page, in one round trip (`POST /api/boot`, launch-blocker P0-2c).
- *
- * It replaces a strictly SERIAL chain of four: `/api/user/onboarding-state` →
- * `/api/workspaces/ensure-default` → `/api/workspaces/resolve` →
- * `/api/workspaces/me` (+ the shell's `my-access`). Each hop's input was the
- * previous hop's output ONLY because the answers were split across endpoints;
- * server-side they are one composition over reads that already run here.
+ * THE BOOT ANSWER — everything the bundled SPA needs before it can render, in
+ * one round trip (`POST /api/boot`). Replaces a serial chain of four
+ * (`onboarding-state` → `ensure-default` → `resolve` → `me`, + `my-access`).
  *
  * TWO MODES, and the difference is the fail-closed rule (ENGINEERING §9
  * "Workspace resolution"):
+ *   - `segment` GIVEN (shell, deep link) — resolve it and nothing else.
+ *     Membership-scoped, so "not a member" and "does not exist" both arrive as
+ *     `null` → plain 404. ⚠ NEVER falls back to a default workspace; a boot
+ *     endpoint that guesses is a cross-tenant bug.
+ *   - `segment` ABSENT (cold launch at `/`) — the PROVISIONING path:
+ *     `ensureDefaultWorkspace`, idempotent, always 200. ⚠ Gated on onboarding —
+ *     an un-onboarded caller must not have a workspace provisioned underneath
+ *     them, so that branch returns a null workspace and the SPA routes to
+ *     `/onboarding`.
  *
- *   - `segment` GIVEN (the shell, a deep link) — resolve it and nothing else.
- *     Membership-scoped, so "not a member" and "does not exist" arrive
- *     identically as `null` → the route answers a plain 404. NEVER falls back
- *     to a default workspace: a boot endpoint that guesses is a cross-tenant
- *     bug.
- *   - `segment` ABSENT (a cold launch at `/`) — the PROVISIONING path, and
- *     the same one the SPA already took: `ensureDefaultWorkspace`, which is
- *     idempotent and answers 200 (never 201). Gated on onboarding exactly as
- *     the boot page gated it — an un-onboarded caller must not have a
- *     workspace provisioned underneath them, so that branch returns early
- *     with a null workspace and the SPA routes to `/onboarding`.
- *
- * Membership is proven server-side in BOTH modes (`resolveWorkspaceSegmentForUser`
- * / `resolveMembershipOrThrow`) before any of `role`, `userId` or `myAccess`
- * is computed. The client is told what it may see; it never asserts it.
+ * ⚠ Membership is proven server-side in BOTH modes
+ * (`resolveWorkspaceSegmentForUser` / `resolveMembershipOrThrow`) before
+ * `role`, `userId` or `myAccess` is computed. The client is told what it may
+ * see; it never asserts it.
  */
 export interface BootState {
   isOnboarded: boolean;
@@ -164,8 +152,7 @@ export async function getBootState(
   segment: string | null
 ): Promise<BootState | null> {
   if (segment) {
-    // The onboarding read is independent of the workspace read, so it rides
-    // along free rather than costing the hop it used to cost.
+    // Independent of the workspace read, so it rides along free.
     const [status, resolved] = await Promise.all([
       getOnboardingStatus(userId),
       resolveWorkspaceSegmentForUser(segment, userId),
@@ -185,8 +172,8 @@ export async function getBootState(
 
   const status = await getOnboardingStatus(userId);
   if (!status.onboarded) {
-    // NO PROVISIONING BEFORE ONBOARDING — the boot page's own gate
-    // (`enabled: signedIn && onboarded`), moved server-side unchanged.
+    // ⚠ NO PROVISIONING BEFORE ONBOARDING — the boot page's
+    // `enabled: signedIn && onboarded` gate, moved server-side.
     return {
       isOnboarded: false,
       surveyCompleted: status.surveyCompleted,
@@ -200,9 +187,8 @@ export async function getBootState(
   }
 
   const workspace = await ensureDefaultWorkspace(userId);
-  // Fail-closed even on the workspace we just ensured: a revoked owner has no
-  // active membership and must get the same 404 the resolve would have given
-  // them one hop later.
+  // ⚠ Fail-closed even on the workspace just ensured: a revoked owner has no
+  // active membership and must get the same 404.
   const { membership } = await resolveMembershipOrThrow(workspace.id, userId);
   return {
     isOnboarded: true,

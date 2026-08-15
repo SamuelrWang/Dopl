@@ -4,11 +4,7 @@ import { createPortalSession } from "@/features/billing/server/stripe";
 import { getWorkspaceBilling } from "@/features/billing/server/workspace-billing";
 import { composeSegment } from "@/shared/lib/url/parse-segment";
 
-/**
- * Open the Stripe billing portal for the active workspace. Admin/owner
- * only. Requires the workspace to have a Stripe customer (i.e. it has
- * subscribed at least once).
- */
+/** Stripe billing portal for the active workspace. Admin/owner only; requires a Stripe customer. */
 export const POST = withWorkspaceAuth(
   async (_request, { workspaceId, workspaceSlug, workspacePublicId }) => {
     const billing = await getWorkspaceBilling(workspaceId);
@@ -20,8 +16,7 @@ export const POST = withWorkspaceAuth(
     }
 
     try {
-      // The portal returns to THIS workspace's billing page, not the caller's
-      // default one — see `createPortalSession` / `features/billing/url.ts`.
+      // ⚠ Returns to THIS workspace's billing page, not the caller's default one.
       const url = await createPortalSession(
         billing.stripeCustomerId,
         composeSegment(workspaceSlug, workspacePublicId)
@@ -36,7 +31,6 @@ export const POST = withWorkspaceAuth(
       );
     }
   },
-  // sessionOnly: billing mutations must come from an interactive session, never
-  // a background MCP agent — even one holding a dopl.write token.
+  // sessionOnly: billing mutations need an interactive session, never a background MCP agent.
   { minRole: "admin", sessionOnly: true }
 );

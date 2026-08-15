@@ -4,13 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MetaCard } from "./meta-card";
 
 /**
- * The base overview's Details card, pinned at the STORAGE row it just grew.
- *
- * Same three-state contract the home grid follows, and it is the whole reason
- * the meter is a shared component rather than two hand-placed bars: a base
- * reading "full" on its card and "fine" on its overview would be worse than
- * showing neither. Unknown on EITHER half renders nothing at all — never an
- * empty track, which would read as "0 bytes used" to anyone looking at it.
+ * Details card STORAGE row. Same three-state contract as the home grid — the
+ * reason the meter is ONE shared component: a base reading "full" on its card
+ * and "fine" on its overview is worse than showing neither. ⚠ Unknown on
+ * EITHER half renders nothing, never an empty track (reads as "0 bytes used").
  */
 
 afterEach(cleanup);
@@ -56,15 +53,13 @@ describe("MetaCard storage meter", () => {
   });
 
   it("renders NOTHING when neither was passed at all", () => {
-    // The default for every caller that has not been threaded yet.
     renderCard();
     expect(screen.queryByText("Storage")).toBeNull();
   });
 
   it("shows the frozen note at the cap, not one byte later", () => {
-    // `used >= limit` IS the entitlement verdict here: the write gate refuses
-    // when `used + delta > limit`, so at exactly the cap every growth is
-    // already refused.
+    // `used >= limit` IS the entitlement verdict: the write gate refuses when
+    // `used + delta > limit`, so at the cap every growth is already refused.
     renderCard({ storageBytes: 5_000_000, storageLimit: 5_000_000 });
     const note = screen.getByText(/Nothing was deleted/);
     expect(note.textContent).toContain("Upgrade for more room");

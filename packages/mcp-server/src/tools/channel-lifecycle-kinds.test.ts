@@ -1,27 +1,15 @@
 /**
- * P0-2 / P0-3 — THE AGENT'S WRITE SURFACE, after the 2026-08-04 incident.
- *
- * WHAT HAPPENED. A responder agent finished its work and posted the ANSWER as
- * `kind:"task_finished"`. On the requester's side it appeared nowhere:
- * `lib/group-thread.ts` folds a terminal marker into `draft.endEvent` and never
- * pushes it to `draft.entries`, so its body is structurally unrenderable. The
- * runtime was innocent — the desktop's delivery call emits no `kind` at all and
- * the MCP default is `message`. The AGENT chose the kind, because the surface
- * offered five values in one flat enum with no rule about whose each one is.
- *
- * TWO CHANGES ARE PINNED HERE:
- *   1. `op="post"` REFUSES the three lifecycle kinds, before any round-trip, with
- *      a message that says what to do instead. (The authoritative refusal is the
- *      server's — `service-writes.assertLifecycleKindIsServerOwned` — and lives
- *      in the app's own suite. This one is the fast, teaching half.)
- *   2. `op="milestone"` exists, so the milestone lane is a different CALL rather
- *      than a different `kind` on the same call. That is the seam: the two acts
- *      can no longer be confused by picking wrongly between adjacent enum values.
- *
- * The stub client is hand-rolled; nothing transports. What each assertion is
- * really watching for is a REGRESSION OF THE SURFACE, not of the transport: if
- * the refusal is removed, or the milestone op silently starts accepting a kind
- * again, the incident's whole runway is back.
+ * THE AGENT'S WRITE SURFACE. ⚠ A terminal `kind` is structurally unrenderable
+ * on the requester's side (`lib/group-thread.ts` folds it into `draft.endEvent`
+ * and never pushes it to `draft.entries`), so an ANSWER posted as
+ * `kind:"task_finished"` appears NOWHERE. Two guards pinned here:
+ *   1. `op="post"` REFUSES the three lifecycle kinds before any round-trip,
+ *      saying what to do instead. (Authoritative refusal is the server's,
+ *      `service-writes.assertLifecycleKindIsServerOwned`; this is the fast,
+ *      teaching half.)
+ *   2. `op="milestone"` exists, so the milestone lane is a different CALL, not
+ *      a different `kind` on the same call — the two acts can no longer be
+ *      confused by picking wrongly between adjacent enum values.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -75,17 +63,15 @@ describe('op="post" refuses the lifecycle kinds (P0-2)', () => {
     const res = await opPost(client, "general", "Here is the finished analysis…", { kind });
 
     expect(res.isError).toBe(true);
-    // "Nothing was sent" has to be TRUE, not merely claimed: the failure mode is
-    // an agent that believes it delivered. Refused ahead of the channel lookup,
-    // so not even the resolve happens.
+    // ⚠ "Nothing was sent" must be TRUE, not claimed — refused ahead of the
+    // channel lookup, so not even the resolve happens.
     expect(client.postChannelMessage).not.toHaveBeenCalled();
     expect(client.listChannels).not.toHaveBeenCalled();
   });
 
   it("leads with the CONSEQUENCE, because that is what changes behaviour", async () => {
-    // An agent that reached for `task_finished` believed it was delivering. The
-    // sentence that moves it is "the body is not shown", not "that kind is
-    // reserved" — so both the effect and the remedy are pinned.
+    // ⚠ The sentence that moves an agent is "the body is not shown", not "that
+    // kind is reserved" — pin the effect AND the remedy.
     const text = (
       await opPost(stubClient(), "general", "done", { kind: "task_finished" })
     ).content[0].text;
@@ -93,10 +79,8 @@ describe('op="post" refuses the lifecycle kinds (P0-2)', () => {
     expect(text).toContain("Nothing was sent");
     expect(text).toContain("its body is not shown at all");
     expect(text).toContain("delivered nowhere");
-    // The remedy, in the two forms it can take.
     expect(text).toContain("drop `kind` entirely and post the same text");
     expect(text).toContain('op="milestone"');
-    // And the rule that generalizes it.
     expect(text).toContain("FINAL ANSWER included");
   });
 
@@ -124,7 +108,7 @@ describe("what the refusal must NOT catch", () => {
     const res = await opPost(client, "general", "Here is the answer.", {});
     expect(res.isError).toBeFalsy();
     const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
-    // No kind on the wire at all — the default is what every substantive post is.
+    // ⚠ No kind on the wire at all.
     expect((input as unknown as Record<string, unknown>).kind).toBeUndefined();
   });
 });
@@ -151,9 +135,9 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
   });
 
   it("REQUIRES a thread, where post leaves it optional", async () => {
-    // An untagged milestone groups into nothing the requester is watching, which
-    // is the one shape of this call that is always a mistake. `post` keeps
-    // `thread` optional because an untagged post is a legitimate main-room line.
+    // ⚠ An untagged milestone groups into nothing the requester is watching —
+    // always a mistake. `post` keeps `thread` optional because an untagged post
+    // is a legitimate main-room line.
     const client = stubClient();
     const res = await callTool(client)({
       op: "milestone",
@@ -166,15 +150,10 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
   });
 
   it("addresses nobody: a milestone marks the thread, it does not reach for anyone", async () => {
-    // `to` is a real, live param of `post` and is deliberately NOT routed through
-    // here. A milestone that could address somebody would be a reply wearing a
-    // marker's clothes, which is the confusion this op exists to remove.
-    //
-    // IT USED TO ALSO ASSERT `toAgent` / `toAgents` WERE UNSET, and those two
-    // assertions were vacuous from the moment named agents were deleted (F-146):
-    // `ChannelMessageInput` has no such fields, so `undefined` was the only
-    // answer possible and the check could never fail. Asserting the absence of a
-    // field the TYPE lacks is not coverage, it is a comment that runs.
+    // ⚠ `to` is a live param of `post` and deliberately NOT routed through here
+    // — a milestone that could address somebody is a reply wearing a marker's
+    // clothes. ⚠ Do not assert the absence of a field the TYPE lacks: that is
+    // not coverage, it is a comment that runs.
     const client = stubClient();
     await callTool(client)({
       op: "milestone",
@@ -186,9 +165,8 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
     const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
     const sent = input as unknown as Record<string, unknown>;
     expect(sent.toUserId).toBeUndefined();
-    // ...and it DID send the thread and the body, so the absence above is a
-    // routing decision rather than a call that never happened. (`thread` folds
-    // into the STORAGE key `metadata.taskId` at the client boundary.)
+    // ⚠ …and it DID send thread and body, so the absence above is a ROUTING
+    // decision, not a call that never happened.
     expect((sent.metadata as Record<string, unknown>).taskId).toBe(THREAD_ID);
     expect(sent.body).toBe("step two");
   });
@@ -205,7 +183,6 @@ describe("the published surface says whose each kind is", () => {
     };
     registerChannelTool(register, stubClient());
 
-    // zod carries `.describe()` on the def; read it the way an MCP client would.
     const described = (schema.kind as unknown as { description?: string }).description ?? "";
     expect(described).toContain("LEAVE THIS UNSET");
     expect(described).toContain("FINAL ANSWER");

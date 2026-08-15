@@ -4,26 +4,21 @@ import { RESOLVE_PATH } from "#/components/app-shell";
 import { BOOT_PATH } from "#/pages/boot/use-boot-state";
 
 /**
- * Re-read everything that carries a workspace's name, slug or existence, after
- * a write that changed one.
- *
- * `router.refresh()` has no equivalent in this renderer (CONVENTIONS.md), so a
- * rename or a delete has to name the affected keys itself:
+ * Re-read everything carrying a workspace's name, slug or existence after a
+ * write that changed one. No `router.refresh()` equivalent here
+ * (CONVENTIONS.md), so a rename/delete names the affected keys itself:
  *
  *   - the workspace read the settings surfaces render from;
- *   - the shell's resolve — a rename MOVES the canonical segment, and
- *     invalidating this is what surfaces it: the resolve answers
- *     `needsRedirect` for the now-stale URL and the shell's existing effect
- *     rewrites it, exactly as it does for a legacy slug;
- *   - the rail/switcher's workspace list;
+ *   - the shell's resolve — a rename MOVES the canonical segment; invalidating
+ *     makes the resolve answer `needsRedirect` and the shell's existing effect
+ *     rewrites the URL, as for a legacy slug;
+ *   - the switcher's workspace list;
  *   - the boot route's provisioning answer, which must never replay a segment
  *     that may have just been deleted.
  *
- * ONE copy on purpose. The `/settings` page and the settings modal each had
- * their own, and they had already drifted — the page removed the boot answer on
- * every invalidation and navigated explicitly on a slug change, the modal
- * removed it only on delete (2026-08-03 fleet audit, duplication-quality). Two
- * mechanisms for one rename means the next fix reaches one of them.
+ * ⚠ ONE copy on purpose — the `/settings` page and the settings modal each had
+ * their own and had already drifted. Two mechanisms for one rename means the
+ * next fix reaches only one of them.
  */
 export function invalidateWorkspaceReads(
   queryClient: QueryClient,
@@ -32,11 +27,9 @@ export function invalidateWorkspaceReads(
   void queryClient.invalidateQueries({ queryKey: [workspaceReadPath(segment)] });
   void queryClient.invalidateQueries({ queryKey: [RESOLVE_PATH] });
   void queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
-  // Removal, not invalidation: BootPage re-resolves on every mount
-  // (`staleTime: 0`, `refetchOnMount: "always"`), so dropping the entry costs
-  // nothing and guarantees a deleted segment is never replayed. Removing the
-  // whole `/api/boot` prefix also drops the SHELL's entry for the old
-  // segment, which a rename has just made stale — it is the same key family
-  // now that boot answers the segment resolve too.
+  // ⚠ Removal, not invalidation: BootPage re-resolves on every mount
+  // (`staleTime: 0`, `refetchOnMount: "always"`), so dropping costs nothing and
+  // guarantees a deleted segment is never replayed. The whole `/api/boot`
+  // prefix goes, which also drops the SHELL's entry for the old segment.
   void queryClient.removeQueries({ queryKey: [BOOT_PATH] });
 }

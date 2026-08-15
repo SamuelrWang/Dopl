@@ -15,19 +15,14 @@ import {
 } from "./dto";
 
 /**
- * Raw Supabase I/O for the ontology feature. No business logic, no
- * auth checks — that lives in service.ts. Service-role client bypasses
- * RLS; every method filters by workspace_id explicitly so the bypass
- * is contained.
+ * Raw Supabase I/O. Business logic + auth live in service.ts.
+ * ⚠ Service-role client bypasses RLS; every method MUST filter workspace_id.
  */
 
 /**
- * Strip NUL (U+0000) from every string in a value, recursing through
- * arrays/objects. Postgres `text` and `jsonb` both reject a NUL byte, so an
- * unsanitized name/subtitle or a null byte buried in an attribute/method
- * value would 500 the write. NUL is never meaningful in ontology text, so
- * dropping it at the DB write boundary is safe and covers every caller
- * (MCP agent + web UI). (F-7 ontology portion.)
+ * Strip NUL (U+0000) from strings, recursing arrays/objects. Postgres `text`
+ * and `jsonb` both reject NUL → unsanitized value 500s the write. Sits at the
+ * DB write boundary so it covers every caller (MCP + web UI).
  */
 export function stripNullBytes<T>(value: T): T {
   if (typeof value === "string") {
@@ -118,10 +113,9 @@ export async function insertCluster(input: {
 }
 
 /**
- * Resolve the layout to write for a cluster via the shared merge-except-empty
- * semantic (see `mergeStoredLayout`). Reads the current row first for the
- * merge case — the layout column is a single blob, so a partial write must
- * fold in the untouched nodes itself; the reset (`{}`) case skips the read.
+ * Merge-except-empty layout write (see `mergeStoredLayout`). Merge case reads
+ * current row first: layout is one blob, so partial write must fold in
+ * untouched nodes itself. Reset (`{}`) skips the read.
  */
 async function mergeClusterLayout(
   db: ReturnType<typeof supabaseAdmin>,
@@ -149,11 +143,9 @@ export async function updateCluster(
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = stripNullBytes(patch.name);
   if (patch.purpose !== undefined) update.purpose = stripNullBytes(patch.purpose);
-  // Layout merge semantics:
-  // a non-empty layout patch SHALLOW-MERGES per node id into the stored
-  // layout, so two tabs each dragging a different card don't clobber each
-  // other. An explicit empty `{}` is the reset signal — it REPLACES, wiping
-  // every stored position back to pure auto-layout.
+  // Non-empty patch SHALLOW-MERGES per node id (two tabs dragging different
+  // cards must not clobber). Empty `{}` = reset signal: REPLACES, wiping every
+  // stored position back to auto-layout.
   if (patch.layout !== undefined) {
     update.layout = await mergeClusterLayout(db, workspaceId, id, patch.layout);
   }
@@ -170,30 +162,23 @@ export async function updateCluster(
 }
 
 /**
- * Cascade HARD-delete a cluster and every object it owns (its columns plus
- * all nested descendants) in ONE atomic RPC. Deletion is permanent and
- * immediate — there is no trash (2026-08-07). One transaction, so a partial
- * failure can never delete the objects while leaving the cluster behind
- * (the failure mode `cascade_soft_delete_cluster` was written to close).
- * Memberships and relationships cascade via FK.
+ * Cascade HARD-delete cluster + every object it owns (columns, nested
+ * descendants) in ONE atomic RPC. Permanent, no trash. ⚠ Must stay one
+ * transaction: partial failure could delete objects and leave cluster behind.
+ * Memberships/relationships cascade via FK.
  *
- * Returns the number of objects deleted, or null when no LIVE cluster matched
- * the id (the service turns that into a 404).
+ * Returns objects deleted, or null when no LIVE cluster matched (service → 404).
  */
 export async function cascadeHardDeleteCluster(
   workspaceId: string,
   clusterId: string
 ): Promise<number | null> {
   const db = supabaseAdmin();
-  // RPC added by migration 20260807120000_ontology_cluster_hard_delete_rpc.sql;
-  // not yet in the generated Database types (regenerated after the migration
-  // applies). THAT MIGRATION IS DEPLOY-BLOCKING: this is the only code path
-  // `deleteCluster` has, so shipping the app without it makes every cluster
-  // delete fail at runtime with "function does not exist". The `as never`
-  // casts are the house convention for a not-yet-generated RPC (see
-  // `chats/server/repository.ts` → `chat_create_with_messages`); they are also
-  // the reason the missing function does not fail the build, so the migration
-  // has to be tracked by a human, not by tsc.
+  // ⚠ DEPLOY-BLOCKING migration 20260807120000_ontology_cluster_hard_delete_rpc.sql.
+  // Sole path for `deleteCluster`; missing → every cluster delete fails at
+  // runtime. `as never` = house convention for a not-yet-generated RPC (see
+  // `chats/server/repository.ts` → `chat_create_with_messages`) and why tsc
+  // can't catch it — track by hand.
   const { data, error } = await db.rpc(
     "cascade_hard_delete_cluster" as never,
     {
@@ -283,10 +268,8 @@ export async function updateObject(
     .eq("workspace_id", workspaceId)
     .eq("id", id)
     .is("deleted_at", null);
-  // Optimistic concurrency: when expectedUpdatedAt is supplied, the
-  // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
-  // the row changed (or was deleted) since the caller read it → null,
-  // which the service turns into a 412 (stale) or 404 (gone).
+  // Optimistic concurrency: `updated_at` filter = atomic compare-and-swap.
+  // 0 rows → changed-or-deleted since caller read → null → service 412 or 404.
   if (expectedUpdatedAt !== undefined) {
     query = query.eq("updated_at", expectedUpdatedAt);
   }
@@ -296,30 +279,22 @@ export async function updateObject(
 }
 
 /**
- * PERMANENTLY delete one object AND everything left unreachable by its
- * removal, in ONE atomic RPC. Immediate and irreversible (2026-08-07).
+ * PERMANENTLY delete one object AND everything left unreachable by its removal,
+ * in ONE atomic RPC. Irreversible.
  *
- * A plain single-row DELETE here was a data-integrity bug: the FKs that cascade
- * off an object are on `ontology_memberships`, not on the child objects, so
- * deleting a column or a card removed the LINKS to its subtree and left those
- * objects alive with no parent. Nothing can reach a membership-less object —
- * the board, the graph and the picker all walk down from `cluster.columnIds` —
- * yet `workspace-billing` still counts it against the workspace object cap,
- * forever. Soft-delete never had this problem: the memberships survived and
- * restore re-linked the tree.
+ * ⚠ Do NOT reduce to a plain single-row DELETE. Object FKs cascade off
+ * `ontology_memberships`, not off child objects — a plain delete drops the
+ * LINKS and leaves the subtree alive, unreachable (board/picker walk down from
+ * `cluster.columnIds`) yet still counted against the object cap, forever.
  *
- * The RPC deletes the target, then sweeps descendants that the target was the
- * LAST way into; a card that also hangs under another parent survives there.
- * Relationships cascade via FK either way. Its descendant count is discarded
- * here — the delete is the contract — but it is what a "this also deletes N
- * cards" confirm dialog would read.
+ * RPC sweeps descendants it was the LAST way into; a card also hanging under
+ * another parent survives. Relationships cascade via FK.
  */
 export async function hardDeleteObject(workspaceId: string, id: string): Promise<void> {
   const db = supabaseAdmin();
-  // RPC added by migration 20260807140000_cascade_hard_delete_folder_and_object.sql;
-  // not yet in the generated Database types (regenerated after the migration
-  // applies). DEPLOY-BLOCKING with that migration — this is `deleteObject`'s
-  // only path, so shipping without it fails every object delete at runtime.
+  // ⚠ DEPLOY-BLOCKING migration
+  // 20260807140000_cascade_hard_delete_folder_and_object.sql. Sole path for
+  // `deleteObject`; missing → every object delete fails at runtime.
   const { error } = await db.rpc(
     "cascade_hard_delete_object" as never,
     { p_workspace_id: workspaceId, p_object_id: id } as never
@@ -440,10 +415,8 @@ export async function replaceRelationshipsForSource(
   if (insertError) throw insertError;
 }
 
-/**
- * Point the caller's identity anchor at one object — a user has at most
- * one anchor per workspace, so any previous link is cleared first.
- */
+/** Point caller's identity anchor at one object. Max one anchor per user per
+ *  workspace → previous link cleared first. */
 export async function setAnchor(
   workspaceId: string,
   userId: string,

@@ -1,19 +1,14 @@
 /**
  * ONE THREAD'S CURSOR — the two ends of a scoped exchange.
  *
- *   1. `op="read"` with `thread=<id>` filters the transcript to one exchange,
- *      and must NOT hand back a wait that pretends to be filtered too: `await`
- *      is channel-wide and has no thread parameter at all. An agent told to
- *      "await this thread" arms a call that cannot exist.
- *   2. `op="close_thread"` reports the seq the close ECHO landed on. Live
- *      incident this pins: a requester closed a thread, GUESSED the echo's seq
- *      (last known + 1), armed the wait one past it, and silently skipped the
- *      peer's main deliverable, which was already below that guess. When the
- *      server reports no echo, the result says NOTHING about a seq — the whole
- *      point is that a number here is reported, never derived.
- *
- * Its own file rather than an addition to `channel-ops.test.ts`, which sits at
- * the §2 cap. The @dopl/client is hand-stubbed; nothing transports.
+ *   1. ⚠ `op="read"` with `thread=<id>` filters the transcript but must NOT
+ *      hand back a wait that pretends to be filtered too: `await` is
+ *      channel-wide with no thread parameter, so "await this thread" arms a
+ *      call that cannot exist.
+ *   2. ⚠ A seq here is REPORTED, never derived. Guessing a marker/echo seq
+ *      (last known + 1) and arming the wait one past it silently skips the
+ *      peer's deliverable sitting below that guess. When the server reports no
+ *      seq, the result says NOTHING about one.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -73,9 +68,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   it("accepts ANY non-empty id — a legacy task-… id is a real taskId", async () => {
-    // A `.uuid()` here would reject exactly the exchanges that are hardest to
-    // reconstruct by hand: the transcript still carries `task-<channelId>-<seq>`
-    // ids from before threads were a table.
+    // ⚠ A `.uuid()` here rejects exactly the exchanges hardest to reconstruct
+    // by hand — the transcript still carries `task-<channelId>-<seq>` ids.
     const readChannelMessages = vi.fn<ReadSpy>();
     readChannelMessages.mockResolvedValue([msg(9, "task-chan-1-3")]);
     const client = stubClient({ readChannelMessages });
@@ -88,8 +82,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   it("treats a blank thread as unset rather than sending it", async () => {
-    // The route's schema is `min(1)` after trim, so a blank value would 400 —
-    // and the caller plainly meant "the whole channel".
+    // ⚠ The route's schema is `min(1)` after trim, so a blank value 400s — and
+    // the caller meant "the whole channel".
     const readChannelMessages = vi.fn<ReadSpy>();
     readChannelMessages.mockResolvedValue([msg(1)]);
     const client = stubClient({ readChannelMessages });
@@ -115,10 +109,9 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   /**
-   * P1-8 — a client whose two reads DIFFER, which is the whole point: the
-   * thread-scoped call returns the exchange, the unfiltered `limit=1` call
-   * returns the channel's newest message. A stub that answered both the same
-   * (the old one did) cannot tell the fix from the bug.
+   * ⚠ A client whose two reads DIFFER: the thread-scoped call returns the
+   * exchange, the unfiltered `limit=1` call the channel's newest message. A
+   * stub answering both the same cannot tell the fix from the bug.
    */
   function twoLaneClient(threadSeqs: number[], channelMax: number | null) {
     return stubClient({
@@ -131,33 +124,26 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   }
 
   it("a thread-scoped read offers NO await cursor at all (P1-8b)", async () => {
-    // THE INVERSION THIS REPLACES. P1-8 read the complaint correctly — the hint
-    // used to hand back the THREAD max — and then fixed it in the wrong
-    // direction, suggesting the CHANNEL max instead. `await` is gt(seq, since),
-    // so a LARGER since returns FEWER rows: the messages in (threadMax,
-    // channelMax] are exactly the other exchanges this reader never saw, and
-    // awaiting from the channel max drops them permanently. Neither number is a
-    // cursor, because a filtered page cannot establish "I have seen everything
-    // below this". So the hint offers no number and says why.
+    // ⚠ NEITHER number is a cursor — a filtered page cannot establish "I have
+    // seen everything below this". `await` is gt(seq, since), so a LARGER since
+    // returns FEWER rows: awaiting from the CHANNEL max permanently drops
+    // `(threadMax, channelMax]`, the other exchanges this reader never saw.
     const text = (
       await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
     ).content[0].text;
 
-    // Not the thread max, not the channel max, not any number.
     expect(text).not.toMatch(/since=\d/);
     expect(text).not.toContain("the channel's own highest is 91");
-    // The thread max stays as DISPLAY, which is what it was always good for.
+    // Thread max stays as DISPLAY only.
     expect(text).toContain("Highest seq shown: 44");
     expect(text).toContain("THIS READ DID NOT ADVANCE A CHANNEL-WIDE CURSOR");
-    // It names the call that CAN establish one.
     expect(text).toContain("drop `thread`");
-    // ...and nothing anywhere suggests passing a thread INTO an await.
+    // ⚠ Nothing may suggest passing a thread INTO an await.
     expect(text).not.toMatch(/op="await"[^)]*thread/);
   });
 
   it("costs no extra round-trip — the channel head is never fetched", async () => {
-    // P1-8 fetched the channel max to build its (wrong) suggestion. With no
-    // number to offer, that cold-path read is gone: one call, one query.
+    // With no number to offer there is no extra read: one call, one query.
     const readChannelMessages = vi.fn<ReadSpy>();
     readChannelMessages.mockResolvedValue([msg(41, "thread-1"), msg(44, "thread-1")]);
     const client = stubClient({ readChannelMessages });
@@ -168,8 +154,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   it("a CHANNEL-wide read pays for no second round-trip", async () => {
-    // The extra read is a cold-path cost on a thread-scoped call only. The
-    // unfiltered read IS its own cursor, and this is the hot path.
+    // ⚠ The unfiltered read IS its own cursor, and this is the hot path.
     const readChannelMessages = vi.fn<ReadSpy>();
     readChannelMessages.mockResolvedValue([msg(44)]);
     const client = stubClient({ readChannelMessages });
@@ -181,8 +166,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   it("an empty filtered read says it FILTERED, not that the thread is missing", async () => {
-    // `thread` is a filter, not a lookup: an id nothing carries is [] and not a
-    // 404, so "no messages" must not be read as "no such thread".
+    // ⚠ `thread` is a FILTER, not a lookup — an id nothing carries is `[]`, not
+    // a 404, so "no messages" must not read as "no such thread".
     const client = stubClient({ readChannelMessages: vi.fn(async () => []) });
 
     const text = (await opRead(client, "general", undefined, undefined, null, "thread-9"))
@@ -210,8 +195,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   it("neutralizes the id it echoes — a thread id round-trips from peer metadata", async () => {
-    // Q1-E: `metadata.taskId` is stored verbatim for any non-UUID value, so an
-    // id copied out of a read legend is peer bytes by the time it comes back.
+    // ⚠ `metadata.taskId` is stored verbatim for non-UUID values, so an id
+    // copied out of a read legend is peer bytes by the time it comes back.
     const client = stubClient({ readChannelMessages: vi.fn(async () => []) });
 
     const text = (
@@ -224,11 +209,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
 // ── 2. propose_close reports the marker seq ──────────────────────────────
 //
-// DECISION 2 (2026-08-04) re-targeted this half: an agent proposes rather than
-// closes, so the seq it must never guess is the PROPOSAL MARKER's rather than
-// the close echo's. The rule is identical and is the one that matters — a
-// requester once guessed a close echo's seq, armed `await` past it, and silently
-// skipped the peer's whole deliverable.
+// ⚠ The seq an agent must never guess is the PROPOSAL MARKER's: guessing it and
+// arming `await` past it silently skips the peer's whole deliverable.
 
 describe("opProposeClose — the marker's seq is REPORTED, never guessed", () => {
   function proposingClient(markerSeq: number | null): DoplClient {
@@ -248,15 +230,13 @@ describe("opProposeClose — the marker's seq is REPORTED, never guessed", () =>
     expect(text).toContain(
       "Proposal note posted at seq 57 — if you re-arm a wait, use since=57 (or your last READ seq), never a guessed seq.",
     );
-    // The confirmation itself still reads off `{ thread }`, not the wrapper.
     expect(text).toContain("Proposed closing thread **`Ship it`** in **`General`** as completed");
   });
 
   it("reports the FAILURE rather than a seq when no marker landed", () => {
-    // Where a close said nothing at all on `echoSeq: null` (the close had still
-    // happened), a proposal that did not post means NOTHING WAS PROPOSED — the
-    // operator has no prompt and the agent would otherwise wait on a
-    // confirmation nobody was asked for. So this one has to speak.
+    // ⚠ A proposal that did not post means NOTHING WAS PROPOSED — the operator
+    // has no prompt, and the agent would otherwise wait forever on a
+    // confirmation nobody was asked for. So this branch must speak.
     return opProposeClose(proposingClient(null), "general", "thread-1", "completed").then((res) => {
       const text = res.content[0].text;
       expect(text).toContain("did NOT post");

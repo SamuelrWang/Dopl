@@ -25,30 +25,19 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 /**
- * FIELD-LEVEL `sessionOnly` (C-13, Samuel 2026-08-10) — pinned by
- * `src/shared/auth/write-gate-coverage.test.ts`.
+ * ⚠ FIELD-LEVEL `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`.
  *
- * §9's granularity is per-METHOD, and per-method is wrong HERE: this PATCH is
- * four writes behind one verb (`name`, `topic`, `visibility`, `archived`), and
- * only one of them changes who can see the room. Renaming, re-topicking and
- * archiving are ordinary channel management with no audience consequence, so
- * gating the whole method would spend an agent capability the ruling never
- * asked for. `visibility` is the odd one out and gets its own gate.
+ * §9's granularity is per-METHOD, which is wrong HERE: this PATCH is four writes behind one verb
+ * (`name`, `topic`, `visibility`, `archived`) and only `visibility` changes who can see the room.
+ * Gating the whole method would spend an agent capability for nothing.
  *
- * WHAT IT REFUSES: an agent (`dopl_at_*`) caller changing a channel's
- * visibility at all. Samuel's ruling is about WIDENING — private→public exposes
- * the entire channel and its history to every workspace member, which is the
- * asymmetry C-13 names (raising a prompt is `sessionOnly`; exposing the whole
- * transcript was not). The gate covers BOTH directions because it is simpler
- * and costs nothing: no MCP op and no desktop call reaches this field today
- * (`@dopl/client` has no channel-update method at all — `channel.ts` carries
- * `getChannel` and no PATCH), so there is no narrowing caller to break, and
- * public→private is itself an access change an agent should not make silently.
- * Direction-free also means the gate needs no read of the current row.
+ * REFUSES: an agent (`dopl_at_*`) changing visibility at all. private→public exposes the entire
+ * channel AND its history to every workspace member. BOTH directions are gated because it is
+ * simpler and costs nothing — no MCP op or desktop call reaches this field (`@dopl/client` has no
+ * channel-update method), and direction-free means no read of the current row.
  *
- * SESSION CALLERS ARE UNTOUCHED — cookie (web + desktop main) and Supabase-JWT
- * (the bundled SPA) callers never set `agentTokenId`, so the human path through
- * the confirm dialog in `components/go-public-dialog.tsx` is unaffected.
+ * Session callers are untouched: cookie (web + desktop main) and Supabase-JWT (SPA) callers never
+ * set `agentTokenId`, so `components/go-public-dialog.tsx` is unaffected.
  */
 const SESSION_ONLY_FIELDS = ["visibility"] as const;
 

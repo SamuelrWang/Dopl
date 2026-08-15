@@ -1,21 +1,11 @@
 /**
- * REGRESSION — the seeded-skill DetailPane "Couldn't load" bug.
- *
- * A freshly-seeded skill has its SKILL.md body on the skill row and ZERO
- * `skill_versions` rows (the seed path inserts no version). This suite
- * pins two facts about `resolveSkillBody` — the exact service fn the
- * `GET /api/skills/[slug]` route calls:
- *
- *   1. A seeded-shape skill (body present, no version history) loads
- *      fully — the detail/DTO path never depends on a version row.
- *
- *   2. The resolve is WORKSPACE-SCOPED: a lookup that lands in the wrong
- *      workspace yields `SkillNotFoundError` (→ 404 → "Couldn't load").
- *      This is precisely what happened when the DetailPane fetched
- *      WITHOUT an X-Workspace-Id header: `withWorkspaceAuth` fell back to
- *      the caller's DEFAULT workspace, the seeded slug wasn't there, and
- *      the pane showed the fallback. The fix threads `workspaceId` into
- *      the client fetch so the route targets the viewed workspace.
+ * Two facts about `resolveSkillBody` (what `GET /api/skills/[slug]` calls):
+ *   1. A seeded-shape skill — body on the row, ZERO `skill_versions` — loads
+ *      fully; the detail/DTO path never depends on a version row.
+ *   2. The resolve is WORKSPACE-SCOPED: a wrong-workspace lookup yields
+ *      `SkillNotFoundError` → 404 → "Couldn't load". ⚠ A fetch without the
+ *      X-Workspace-Id header makes `withWorkspaceAuth` fall back to the
+ *      caller's DEFAULT workspace, which is exactly this failure.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -40,7 +30,7 @@ import { SkillNotFoundError } from "./errors";
 const mockRepo = vi.mocked(repo);
 
 const SEED_SLUG = "archive-a-session-to-chats";
-// A seed body carries the canonical KB chip syntax the parser resolves.
+// Seed bodies carry the canonical KB chip syntax the parser resolves.
 const SEED_BODY =
   "Export with `dopl_chats`. See [Dopl Guide](dopl://kb/dopl-guide) for the ritual.";
 
@@ -55,7 +45,7 @@ function ctx(overrides: Partial<SkillContext> = {}): SkillContext {
   };
 }
 
-/** A seeded skill: public/workspace-visible, inserted by the seed path. */
+/** Seeded skill: public/workspace-visible. */
 function seededSkill(overrides: Partial<Skill> = {}): Skill {
   return {
     id: "skill-seed",
@@ -83,7 +73,7 @@ function seededSkill(overrides: Partial<Skill> = {}): Skill {
   };
 }
 
-/** The single SKILL.md synthesized from the body columns. */
+/** SKILL.md synthesized from the body columns. */
 function seededFile(overrides: Partial<SkillFile> = {}): SkillFile {
   return {
     id: "skill-seed",
@@ -118,18 +108,17 @@ describe("resolveSkillBody — seeded-shape skill loads (the route's GET path)",
     expect(resolved.files).toHaveLength(1);
     expect(resolved.files[0].name).toBe("SKILL.md");
     expect(resolved.files[0].body).toBe(SEED_BODY);
-    // The seed body's `dopl://kb/dopl-guide` chip resolves as an available
-    // KB reference — the resolver ran end to end without a version row.
+    // Chip resolves as an available KB reference — resolver ran end to end
+    // without a version row.
     expect(resolved.references).toEqual([
       expect.objectContaining({ kind: "kb", slug: "dopl-guide", available: true }),
     ]);
-    // The detail path never reads history.
     expect(mockRepo.readSkillBody).toHaveBeenCalledWith("ws-viewed", "skill-seed");
   });
 
   it("404s when the resolve lands in the WRONG workspace (the header-less bug)", async () => {
-    // A header-less client fetch made the route resolve the caller's
-    // DEFAULT workspace, where the seeded slug does not exist.
+    // Header-less fetch resolves the caller's DEFAULT workspace, where the
+    // seeded slug does not exist.
     mockRepo.findSkillBySlug.mockResolvedValue(null);
 
     await expect(

@@ -8,14 +8,9 @@ vi.mock("./skill-view", () => ({
 
 const { SkillsBrowserCore } = await import("./skills-browser-core");
 
-/**
- * P0-6, the first dead control: the "New skill" `+` was hardcoded `disabled`
- * with a tooltip promising authoring "in the next milestone", which meant a
- * user could not create a skill in the product AT ALL — the only route was an
- * agent over MCP. The affordance is now real (`CreateSkillDialog` →
- * `POST /api/skills` → the existing editor), so what this file guards is that
- * it never regresses to a decoration.
- */
+/** Guards that the "New skill" `+` stays a real affordance
+ *  (`CreateSkillDialog` → `POST /api/skills` → editor) and never regresses to
+ *  a disabled decoration — the only other authoring route is MCP. */
 
 function skill(over: Partial<Skill> = {}): Skill {
   return {

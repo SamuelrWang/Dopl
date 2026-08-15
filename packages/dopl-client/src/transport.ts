@@ -23,23 +23,10 @@ const log = createDebug("dopl:client");
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * Per-async-call workspace override propagated through the call stack
- * via Node's AsyncLocalStorage. The MCP server uses this to route a
- * single tool call to a different workspace without mutating the
- * transport's stored `workspaceId` (which is the SESSION default).
- *
- * Resolution order in `buildHeaders()`:
- *   1. Explicit `workspaceIdOverride` on RequestOptions (per-call,
- *      visible at the call site).
- *   2. AsyncLocalStorage value (per-tool-call, set by the MCP
- *      `registerTool` wrapper — invisible to client.method() callers).
- *   3. Transport's stored `workspaceId` (session default).
- *   4. None — no header is sent; the server resolves fail-closed from the
- *      caller's memberships (a sole workspace auto-targets; 0 or 2+ →
- *      WORKSPACE_REQUIRED). No user-default fallback.
- *
- * Exported so callers in `@dopl/mcp-server` can wrap a handler in
- * `workspaceContext.run(id, fn)`.
+ * Per-async-call workspace override. Routes ONE MCP tool call elsewhere without
+ * mutating the transport's stored `workspaceId` (= SESSION default). Exported
+ * so `@dopl/mcp-server` can `workspaceContext.run(id, fn)`. See
+ * `buildHeaders()` for the resolution order.
  */
 export const workspaceContext = new AsyncLocalStorage<string>();
 
@@ -47,51 +34,34 @@ export interface DoplTransportOptions {
   toolHeaderName?: string;
   clientIdentifier?: string;
   /**
-   * Active canvas (workspace) for this transport. When set, every
-   * request emits an `X-Workspace-Id` header so the server scopes data to
-   * that canvas. When unset, no header is sent and the server resolves
-   * fail-closed from the caller's memberships (a sole workspace
+   * Active canvas. Set → every request emits `X-Workspace-Id`. Unset → no
+   * header, server resolves fail-closed from memberships (sole workspace
    * auto-targets; 0 or 2+ → WORKSPACE_REQUIRED).
    */
   workspaceId?: string;
   /**
-   * Runtime label for the process this client acts for, echoed on every
-   * request as `X-Dopl-Runtime`. The ONLY consumer is the server's reserved
-   * `metadata.runtime` stamp, which distinguishes a desktop-spawned session
+   * Runtime label, echoed as `X-Dopl-Runtime`. ONLY consumer: the server's
+   * reserved `metadata.runtime` stamp, separating a desktop-spawned session
    * (`desktop-session`) from an external agent so the desktop does not open a
-   * competing requester window for a thread an external session already owns.
-   * Set by the in-app MCP route, which forwards the value it was called with;
-   * unset means "external" and stamps nothing.
+   * competing requester window for a thread an external session owns. Set by
+   * the in-app MCP route; unset = external, stamps nothing.
    */
   runtime?: string;
   /**
-   * WHICH SESSION this client acts for, echoed on every request as
-   * `X-Dopl-Session-Id` (F2). The ONLY consumer is the server's reserved
-   * `metadata.session_id` stamp, which is what lets a reader tell two concurrent
-   * sessions of one POSTER apart. It was written for named agents — `as_agent`
-   * was ownership-checked and per-call, so it never said which process was
-   * speaking — and it outlived them (channels rollback §1) because an agent post
-   * is authored by its owner's ACCOUNT, so the author label still names a person
-   * rather than a process. Set by the in-app MCP route, which forwards the value
-   * it was called with; unset stamps nothing.
-   *
-   * A LABEL, NOT A LOCK: nothing gates on it, and no session count is enforced.
+   * Session label, echoed as `X-Dopl-Session-Id` (F2). ONLY consumer: the
+   * server's reserved `metadata.session_id` stamp — what lets a reader tell two
+   * concurrent sessions of one POSTER apart. A LABEL, NOT A LOCK: nothing gates
+   * on it, no session count enforced. Set by the in-app MCP route.
    */
   sessionId?: string;
   /**
    * CALLER-LIFETIME cancellation (Q14). The in-app MCP route passes the
-   * incoming `Request.signal` here, so an MCP client hanging up mid-call (an
-   * ESC during a `dopl_channel(op="await")` hold) stops the work instead of
-   * leaving the hold re-polling for its remaining budget against a client that
-   * is gone.
+   * incoming `Request.signal`, so a client hanging up mid-call (ESC during a
+   * `dopl_channel(op="await")` hold) stops the work.
    *
-   * Once it fires: NO further request is started, and no retry is attempted,
-   * whatever the method. An IN-FLIGHT request is aborted only when the method
-   * is idempotent — see the note in `request()` for why a mutation on the wire
-   * is left alone.
-   *
-   * Combined with — not replaced by — a per-call `RequestOptions.signal`;
-   * whichever fires first wins.
+   * Once fired: NO further request starts, no retry, whatever the method. An
+   * IN-FLIGHT request aborts only when the method is idempotent — see
+   * `request()`. Combined with, not replaced by, `RequestOptions.signal`.
    */
   signal?: AbortSignal;
 }
@@ -103,27 +73,21 @@ export interface RequestOptions {
   toolName?: string;
   retries?: number;
   /**
-   * Per-call workspace id, overriding both the AsyncLocalStorage value
-   * (if any) and the transport's stored `workspaceId`. Lets a caller
-   * direct a single request to a specific workspace without flipping
-   * session-level state. The id must be a UUID — slug resolution
-   * happens at the MCP layer before this point.
+   * Per-call workspace id, overriding both AsyncLocalStorage and the stored
+   * `workspaceId`. ⚠ Must be a UUID — slug resolution happens at the MCP layer
+   * before this point.
    */
   workspaceIdOverride?: string;
   /**
-   * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
-   * concurrency). Reserved headers (Authorization, Content-Type, the
-   * tool header, X-Dopl-Client, X-Dopl-Runtime, X-Dopl-Session-Id,
-   * X-Workspace-Id) cannot be overridden.
+   * Extra per-call headers (e.g. `X-Updated-At`). Reserved headers
+   * (Authorization, Content-Type, the tool header, X-Dopl-Client,
+   * X-Dopl-Runtime, X-Dopl-Session-Id, X-Workspace-Id) cannot be overridden.
    */
   customHeaders?: Record<string, string>;
   /**
-   * Per-call cancellation (Q14). Combined with the transport-level
-   * `DoplTransportOptions.signal` and, on idempotent methods, with this call's
-   * own `timeoutMs` controller — whichever fires first aborts the fetch.
-   *
-   * An abort raises {@link DoplAbortError}, never a retry: retrying a request
-   * whose caller has gone away is the exact waste this exists to stop.
+   * Per-call cancellation (Q14). Combined with `DoplTransportOptions.signal`
+   * and, on idempotent methods, this call's `timeoutMs` controller — first to
+   * fire aborts the fetch. Raises {@link DoplAbortError}, never a retry.
    */
   signal?: AbortSignal;
 }
@@ -149,10 +113,6 @@ export class DoplTransport {
     this.workspaceId = opts.workspaceId ?? null;
   }
 
-  /**
-   * Update the active canvas after construction (e.g. CLI flow where
-   * the user runs `dopl canvas use <slug>` mid-session).
-   */
   setWorkspaceId(workspaceId: string | null): void {
     this.workspaceId = workspaceId;
   }
@@ -181,23 +141,13 @@ export class DoplTransport {
       1 +
       (retries ?? (IDEMPOTENT_METHODS.has(method) ? DEFAULT_GET_RETRIES : 0));
 
-    // Q14 — per-call signal + the transport's caller-lifetime one.
-    //
-    // WHAT CANCELLATION MAY AND MAY NOT INTERRUPT, and why the split:
-    //
+    // Q14 — what cancellation may and may not interrupt:
     //  • NEVER START a request once the caller is gone. Checked at the top of
-    //    every attempt, so this also covers a signal that fires during a
-    //    backoff sleep. Nothing has been sent, so nothing can be half-applied
-    //    — this is free, and it applies to every method.
-    //
-    //  • ONLY ABORT AN IN-FLIGHT request when the method is idempotent. That
-    //    is the whole of the cost this exists to stop: the `op="await"` hold is
-    //    GETs, and it is the only call that keeps working for minutes after its
-    //    client hangs up. A mutation already on the wire is left to finish,
-    //    because killing the loopback also kills the inner route mid-write, and
-    //    the thread-create path is NOT yet atomic — cancelling it there is how
-    //    you mint a half-built thread. Losing at most one short in-flight POST
-    //    per cancelled call is not worth that.
+    //    every attempt, so a signal firing during a backoff sleep counts too.
+    //  • ⚠ ONLY ABORT AN IN-FLIGHT request when the method is idempotent. A
+    //    mutation on the wire is left to finish: killing the loopback kills the
+    //    inner route mid-write, and thread-create is NOT atomic — cancelling
+    //    there mints a half-built thread. One wasted short POST is cheaper.
     const externals = [signal, this.signal] as const;
     const interruptible = IDEMPOTENT_METHODS.has(method);
 
@@ -220,9 +170,9 @@ export class DoplTransport {
 
         if (res.ok) {
           log("%s %s → %d in %dms", method, path, res.status, duration);
-          // No-body successes (204, or an empty 200) must not explode in
-          // res.json() AFTER the server applied the operation — a caller
-          // that can't tell success from failure retries destructive ops.
+          // ⚠ No-body successes (204, empty 200) must not explode in
+          // res.json() AFTER the server applied the op — a caller that can't
+          // tell success from failure retries destructive ops.
           if (res.status === 204) return undefined as T;
           const text = await res.text();
           if (text === "") return undefined as T;
@@ -286,12 +236,8 @@ export class DoplTransport {
   }
 
   /**
-   * 204-expected request (DELETE, etc.). Audit fix #28: now goes
-   * through the same retry / backoff path as `request<T>()`. DELETE is
-   * in IDEMPOTENT_METHODS so the default retry budget applies; on
-   * RETRIABLE_STATUS responses or transient network errors we retry
-   * with jittered backoff just like GET. 401/403 still short-circuit;
-   * a successful response (`res.ok || 204`) returns void.
+   * 204-expected request (DELETE, etc.). Same retry / backoff path as
+   * `request<T>()`; 401/403 short-circuit.
    */
   async requestNoContent(
     path: string,
@@ -303,11 +249,9 @@ export class DoplTransport {
     const maxAttempts =
       1 + (IDEMPOTENT_METHODS.has(method) ? DEFAULT_GET_RETRIES : 0);
 
-    // Q14: this path carries DELETE/PATCH — mutations — so the caller's signal
-    // gates whether a request is STARTED and never interrupts one in flight
-    // (see the long note in `request`). No per-call signal here: the argument
-    // list is positional, and the transport-level one is what the MCP route
-    // sets.
+    // Q14: mutations only here, so the signal gates whether a request is
+    // STARTED and never interrupts one in flight (see `request`). No per-call
+    // signal: arg list is positional; the MCP route sets the transport one.
     const externals = [this.signal] as const;
 
     let lastError: unknown = null;
@@ -393,21 +337,18 @@ export class DoplTransport {
     if (withJsonBody) headers["Content-Type"] = "application/json";
     if (toolName) headers[this.toolHeaderName] = toolName;
     if (this.clientIdentifier) headers["X-Dopl-Client"] = this.clientIdentifier;
-    // Server-read, never caller-writable (it is on the reserved list below):
-    // the runtime label the server turns into `metadata.runtime`.
+    // Server-read, never caller-writable (both on the reserved list below).
     if (this.runtime) headers["X-Dopl-Runtime"] = this.runtime;
-    // Same discipline, same reserved list below: the session label the server
-    // turns into `metadata.session_id` (F2).
     if (this.sessionId) headers["X-Dopl-Session-Id"] = this.sessionId;
-    // Resolution order: explicit per-call override > AsyncLocalStorage
-    // (set by the MCP `registerTool` wrapper for one tool call) > the
-    // transport's stored workspaceId (session default). Falling through
-    // omits the header; the server then resolves fail-closed from the
-    // caller's memberships (0 or 2+ → WORKSPACE_REQUIRED, no default).
+    // Order: per-call override > AsyncLocalStorage (set by the MCP
+    // `registerTool` wrapper) > stored workspaceId (session default). Falling
+    // through omits the header; the server then resolves fail-closed from
+    // memberships — sole workspace auto-targets, 0 or 2+ → WORKSPACE_REQUIRED,
+    // no user default.
     const effectiveWorkspaceId =
       workspaceIdOverride ?? workspaceContext.getStore() ?? this.workspaceId;
     if (effectiveWorkspaceId) headers["X-Workspace-Id"] = effectiveWorkspaceId;
-    // Custom headers last, but never allowed to clobber a reserved key.
+    // Custom headers last, never allowed to clobber a reserved key.
     if (customHeaders) {
       const reserved = new Set([
         "authorization",
@@ -437,8 +378,8 @@ export class DoplTransport {
   ): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    // Q14: the caller's signal(s) fold into THIS request's timeout controller,
-    // so a disconnect tears the socket down now instead of at `timeoutMs`.
+    // Q14: caller signals fold into THIS request's timeout controller, so a
+    // disconnect tears the socket down now instead of at `timeoutMs`. ⚠ The
     // `detach()` in the finally is not optional — the external signal outlives
     // the request, and a 215s await hold links it once per poll.
     const detach = linkAbort(controller, externalSignals);
@@ -469,8 +410,8 @@ function wrapNetworkError(
   externalAborted = false
 ): DoplNetworkError {
   if (error instanceof DOMException && error.name === "AbortError") {
-    // Both cases arrive here as an AbortError; only the caller's signal being
-    // aborted tells them apart, and the distinction is the whole point (Q14).
+    // Timeout and caller-abort both arrive as AbortError; only the caller
+    // signal's state tells them apart (Q14).
     return externalAborted
       ? new DoplAbortError(method, path)
       : new DoplTimeoutError(method, path, timeoutMs);

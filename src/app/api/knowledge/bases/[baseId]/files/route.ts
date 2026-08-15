@@ -15,10 +15,8 @@ import {
   NAME_INVALID_MESSAGE,
 } from "@/features/knowledge/schema";
 
-/**
- * Path-based file CRUD. Used by MCP tools (`kb_read_file`, `kb_write_file`)
- * and the CLI. ID-based equivalents live under `/api/knowledge/entries/...`.
- */
+/** Path-based file CRUD for `kb_read_file` / `kb_write_file` + the CLI.
+ *  ID-based equivalents live under `/api/knowledge/entries/...`. */
 
 function requireBaseId(auth: WorkspaceAuthContext): string {
   const id = auth.params?.baseId;
@@ -34,17 +32,15 @@ function requirePathParam(request: NextRequest): string {
   return path;
 }
 
-// `title` constraints + 1 MB body cap mirror KnowledgeEntryUpdateSchema
-// in features/knowledge/schema.ts. NAME_RE / NAME_INVALID_MESSAGE are
-// imported from the schema module so the literal lives in exactly one
-// place (audit cohesion fix F-2).
+// ⚠ `title` constraints + the 1 MB body cap MIRROR KnowledgeEntryUpdateSchema in
+// features/knowledge/schema.ts — keep in sync. NAME_RE / NAME_INVALID_MESSAGE are imported from
+// that module so the literal lives in exactly one place.
 const MAX_BODY_BYTES = 1_048_576;
 const WriteFileSchema = z.object({
   path: z.string(),
   body: z.string().max(MAX_BODY_BYTES, "Body must be 1 MB or less").optional(),
   title: z.string().min(1).max(300).regex(NAME_RE, NAME_INVALID_MESSAGE).optional(),
-  // Optional agent-facing short summary (≤300 chars), surfaced in
-  // get_tree / list_dir. `null` clears it; omitting leaves it as-is.
+  // Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null` clears; omit keeps.
   excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
 });
 
@@ -65,9 +61,7 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const baseId = requireBaseId(auth);
     const input = await parseJson(request, WriteFileSchema);
     const ctx = buildKnowledgeContext(auth);
-    // Optimistic-concurrency precondition on the resolved entry's
-    // updated_at (mirrors the skills file route + ID-based entry route).
-    // Mismatch → 412 KNOWLEDGE_STALE_VERSION.
+    // Precondition on the resolved entry's updated_at. Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const { entry } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,

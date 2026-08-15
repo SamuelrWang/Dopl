@@ -25,9 +25,9 @@ export async function opList(
     active = active.filter((s) => (s.folder ?? "") === want);
   }
   if (active.length === 0) {
-    // "No active skills in this workspace yet" was the empty-case form of the
-    // same overclaim: a member whose colleague owns six private skills got told
-    // the workspace had none. Both branches now say whose view this is.
+    // ⚠ The EMPTY case is the same overclaim: a member whose colleague owns
+    // private skills must not be told the workspace has none. Both branches say
+    // whose view this is.
     return ok(
       folder !== undefined
         ? `No active skills visible to you in folder ${inlineOr(folder, "`(unnamed folder)`")}. ${SCOPE_NOTE}`
@@ -50,8 +50,7 @@ export async function opList(
     lines.push(`### ${key === "" ? "Unfiled" : `📁 ${inlineOr(key, "`(unnamed folder)`")}`}`);
     lines.push("");
     for (const s of byFolder.get(key)!) {
-      // Show sharing scope — that's the access signal that matters.
-      const visBadge =
+        const visBadge =
         s.visibility === "private"
           ? " _(private)_"
           : s.accessMode === "teams"
@@ -80,21 +79,20 @@ export async function opGet(
   client: DoplClient,
   slug: string,
   detail?: "summary" | "full",
-  // The caller's own user id, for the authorship framing only. See
-  // {@link UNTRUSTED_SKILL_BODY_HEADER}.
+  // Caller's user id, for the authorship framing only.
   callerUserId: string | null = null
 ): Promise<ToolResponse> {
   try {
     const { skill, files, references } = await client.getSkill(slug);
     const file = files.find((f) => f.name === "SKILL.md") ?? files[0];
     const body = file?.body ?? "";
-    // The FILE's authorship, falling back to the skill row's — the body is what
-    // is being framed, so it is the body's authors that decide.
+    // ⚠ The FILE's authorship, falling back to the skill row's — the BODY is
+    // what is framed, so the body's authors decide.
     const foreign = isForeignAuthored(file ?? skill, callerUserId);
     const lines: string[] = [];
-    // Framing FIRST, ahead of the heading, so it precedes every peer-typed
-    // string in the result and not merely the body. Suppressed in `summary`
-    // mode below, where no body is rendered to frame.
+    // ⚠ Framing FIRST, ahead of the heading, so it precedes every peer-typed
+    // string and not merely the body. Suppressed in `summary` mode, where there
+    // is no body to frame.
     if (foreign && detail !== "summary") {
       lines.push(UNTRUSTED_SKILL_BODY_HEADER, "");
     }
@@ -135,11 +133,10 @@ export async function opGet(
           );
         }
       }
-      // `available` is an EXISTENCE check, not an access check:
-      // `knowledgeBaseSlugExists` (features/skills/server/repository.ts) filters
-      // on workspace + slug + `deleted_at IS NULL` and consults no visibility at
-      // all. So a `dopl://kb/<slug>` pointing at another member's PRIVATE base
-      // is marked ✓ here and then 404s on the read. Stating that is free; the
+      // ⚠ `available` is an EXISTENCE check, NOT an access check:
+      // `knowledgeBaseSlugExists` filters on workspace + slug + `deleted_at IS
+      // NULL` and consults no visibility, so a ref to another member's PRIVATE
+      // base is marked ✓ here and 404s on the read. Saying so is free; the
       // per-ref access check that would fix it is a query per reference.
       lines.push(
         `_✓ means the reference EXISTS in this workspace, not that you can read it: a base private to another member still shows ✓ and then 404s on dopl_kb(op="read_file")._`
@@ -147,7 +144,6 @@ export async function opGet(
     }
 
     if (detail === "summary") {
-      // Orientation mode: metadata + body size, no body.
       lines.push("");
       lines.push(
         `_Summary view — SKILL.md is ${body.length.toLocaleString()} chars. Pass detail="full" or use op="read" for the body._`
@@ -170,14 +166,13 @@ export async function opGet(
 export async function opRead(
   client: DoplClient,
   slug: string,
-  // The caller's own user id, for the authorship framing only.
+  // Caller's user id, for the authorship framing only.
   callerUserId: string | null = null,
 ): Promise<ToolResponse> {
   try {
     const file = await client.readSkillBody(slug);
-    // `op="read"` is the BARER of the two body surfaces — no metadata, no
-    // references, just the procedure — which makes it the one that most needs to
-    // say whose procedure it is.
+    // ⚠ `op="read"` is the BARER body surface (no metadata, no references, just
+    // the procedure), so it most needs to say WHOSE procedure it is.
     const header = isForeignAuthored(file, callerUserId)
       ? `${UNTRUSTED_SKILL_BODY_HEADER}\n\n`
       : "";

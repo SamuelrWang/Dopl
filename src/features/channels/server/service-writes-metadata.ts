@@ -5,15 +5,11 @@ import type { ChannelRow, ChannelTaskRow } from "./dto";
 import { ChannelTaskNotInChannelError, TaskForbiddenError } from "./errors";
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
-// The thread half — who may write into a thread (both id shapes) and what the
-// thread row says about accepting the post — is its own module (§2 split).
 import {
   isLegacyThreadParticipant,
   isThreadClosed,
   isThreadParticipant,
 } from "./service-writes-metadata-thread";
-// The RESERVED MARKER KEYS — the metadata that changes how a card READS, and the
-// one rule they all share — are their own module (§2 split, C-26).
 import {
   CLOSE_PROPOSAL_KEYS,
   REOPEN_MARKER_KEY,
@@ -22,70 +18,30 @@ import {
 import type { ChannelContext } from "./service-shared";
 
 /**
- * The ONE place that decides what lands in `channel_messages.metadata`. Split
- * out of `service-writes.ts` (§2 cap) because it is its own reason to change:
- * the reserved-key anti-spoof fold, DM auto-addressing, and the task-key
- * stamping all answer the same question — what may a caller put in metadata,
- * and what does the server stamp itself.
+ * ONE place that decides what lands in `channel_messages.metadata`.
  *
- * Reserved keys (`to_user_id`, `summary`, `runtime`, `appVersion`,
- * `session_id`, `to_user_notify`, `taskMode`,
- * `taskCreatedBy`, `taskTitle`, `taskTarget`, `to_agent_id`, `to_agent_ids`,
- * `author_agent_id`, `intent`, `handoff`,
- * the six calm-terminal flags, the two close-proposal keys and `threadReopened`)
- * are ALWAYS stripped from caller metadata
- * and re-added only from server-validated values. `taskId` stays
- * caller-settable — but EVERY thread id, first-class or legacy, now has to
- * BELONG to the poster (see {@link resolvePostMetadata}).
+ * RESERVED KEYS — always stripped from caller metadata, re-added only from
+ * server-validated values: `to_user_id`, `summary`, `runtime`, `appVersion`,
+ * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
+ * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
+ * `handoff`, the six calm-terminal flags, the two close-proposal keys, and
+ * `threadReopened`. `taskId` stays caller-settable, but every thread id —
+ * first-class or legacy — must BELONG to the poster (see
+ * {@link resolvePostMetadata}). Marker keys live in
+ * `service-writes-metadata-markers.ts`, the thread half in
+ * `service-writes-metadata-thread.ts`.
  *
- * The MARKER half — the calm flags, the close-proposal keys and the reopen
- * marker, i.e. every reserved key whose job is to change how a CARD READS —
- * moved to `service-writes-metadata-markers.ts` at the §2 cap when the reopen
- * echo landed (C-26). That module states the rule they share once; this one
- * applies it.
- *
- * THE THREE AGENT KEYS ARE STRIPPED AND NEVER RE-STAMPED (rollback §1,
- * 2026-08-05). `to_agent_id` / `to_agent_ids` / `author_agent_id` have no
- * writer left — named-agent addressing and authorship are gone — but they stay
- * in the strip list rather than dropping out of this file, because that is what
- * keeps them UNFORGEABLE: `author_agent_id` is what the transcript reads to
- * attribute an OLD message to a handle, and a caller who could set it on a new
- * post could attribute their own words to somebody's retired agent. Stored rows
- * keep theirs and keep rendering; nothing new ever grows one.
- *
- * The THREAD half — `mayWriteThread`, `isLegacyThreadParticipant` and the
- * closed-status read — moved to `service-writes-metadata-thread.ts` at the §2
- * cap when the session stamp and the closed-thread notice landed (F2 + F6).
- *
- * **The legacy gate is CLOSED (F-083 bullet 3 / audit Q10, 2026-07-31).** A
- * non-UUID `task-{channelId}-{seq}` id used to skip the participation check
- * entirely and be stored verbatim, so any channel member could stamp another
- * pair's exchange onto their own message and have it render inside that pair's
- * card (and, with a lifecycle kind, flip its outcome). It is now validated
- * against the same opening-request pair the calm flags use, and a caller who
- * is not one of the two parties has the tag SILENTLY STRIPPED — the message
- * still posts, untagged. Strip and not 403 is deliberate and is the plan's
- * recorded decision (`docs/MULTIPLAYER-PLAN.md`, "judgment calls"): installed
- * desktop 1.7.16 posts legacy ids for its lifecycle events, some against
- * pre-v1.6 openers that carry no `to_user_id` at all, and a hard refusal there
- * would reject real posts from a build already in the field. The first-class
- * (UUID) branch keeps its 403: those ids only ever come from a caller that
- * chose them, and an invisible un-threading is worse than an error.
- *
- * Consequence for the DESKTOP lane (do not do it here): the two-party session
- * history fence — `pairRows` in `session-history.js` — was blocked on exactly
- * this gate (ENGINEERING §8, "close the legacy-id gate FIRST, then widen"). It
- * is now UNBLOCKED; widening it is the desktop lane's later work.
+ * ⚠ The three agent keys have no writer left but MUST stay in the strip list:
+ * `author_agent_id` is what the transcript reads to attribute an old message to
+ * a handle, so a caller who could set it could attribute its own words to
+ * somebody's retired agent. Stored rows keep theirs and keep rendering.
  */
 
 /**
- * The other member of a DIRECT channel, or undefined when it cannot be
- * resolved unambiguously. A DM is exactly two members (enforced when it opens,
- * immutable afterwards), so any other shape — a torn-down roster, an
- * unexpected third row — is ambiguous and resolves to nothing rather than
- * guessing at an addressee. The peer is read OFF the channel roster, the same
- * table the explicit `to` path validates against, so an auto-addressed peer
- * satisfies the v1.1 addressee-is-an-active-member rule by construction.
+ * Other member of a DIRECT channel, or undefined when ambiguous. A DM is exactly
+ * two members; any other shape resolves to nothing rather than guessing.
+ * Read off the same roster table the explicit `to` path validates against, so an
+ * auto-addressed peer satisfies addressee-is-active-member by construction.
  */
 async function resolveDirectPeer(
   channel: ChannelRow,
@@ -100,11 +56,10 @@ async function resolveDirectPeer(
 }
 
 /**
- * The single OPEN task of a direct channel whose two participants are exactly
- * {author, peer}, or null. Deliberately all-or-nothing: with 0 candidates
- * there is nothing to thread into, and with 2+ the reply could belong to
- * either, so guessing would attach a turn to the wrong task card (and route it
- * to the wrong session window on the peer's machine).
+ * Single OPEN task of a direct channel whose participants are exactly
+ * {author, peer}, else null. All-or-nothing: with 2+ candidates a guess would
+ * attach a turn to the wrong card and route it to the wrong session window on
+ * the peer's machine.
  */
 async function resolveInheritableTask(
   channel: ChannelRow,
@@ -124,15 +79,11 @@ async function resolveInheritableTask(
 }
 
 /**
- * What a post's metadata fold produced: the stored `metadata` itself, plus the
- * one NOTICE the fold is in a position to raise and nothing downstream could
- * re-derive without a second query.
- *
- * F6 — `threadClosed` is the whole reason this is an object rather than a bare
- * record. The thread row is resolved here and nowhere else on the write path, so
- * this is the only place that can see a post landing in a CLOSED thread. It
- * rides OUT as a notice rather than being stamped INTO `metadata`: the message
- * is not different for having been posted late, only the caller's report is.
+ * Stored `metadata` plus the one notice nothing downstream could re-derive
+ * without a second query. The thread row is resolved here and NOWHERE else on
+ * the write path, so this is the only place that can see a post landing in a
+ * CLOSED thread. ⚠ Rides out as a notice, never stamped into `metadata` — the
+ * message is not different for being late, only the caller's report is.
  */
 export interface PostMetadataResult {
   metadata: Record<string, unknown>;
@@ -141,163 +92,98 @@ export interface PostMetadataResult {
 }
 
 /**
- * The server-internal inputs to the metadata fold — values no HTTP caller can
- * supply, because they are not fields of `ChannelMessageCreateInput` and no
- * route parses them.
+ * Server-internal inputs to the metadata fold — no HTTP caller can supply
+ * these; they are not fields of `ChannelMessageCreateInput` and no route parses
+ * them.
  */
 export interface PostMetadataOptions {
   /**
-   * Stamp this post as a CLOSE PROPOSAL carrying that outcome. The one caller is
-   * `service-tasks-propose.proposeTaskClose`, which has already checked that the
-   * poster is the thread's creator or its target.
+   * Stamp as CLOSE PROPOSAL with that outcome. Only caller:
+   * `service-tasks-propose.proposeTaskClose`, which has already checked poster
+   * is the thread's creator or target.
    */
   closeProposal?: "completed" | "failed";
   /**
-   * Stamp this post as the REOPEN ECHO (C-26). The one caller is
-   * `service-tasks-lifecycle.reopenTask`, which has already checked that the
-   * poster is the thread's creator or its target and that the row really moved
-   * from `closed` back to `open`. See {@link REOPEN_MARKER_KEY}.
+   * Stamp as the REOPEN ECHO. Only caller:
+   * `service-tasks-lifecycle.reopenTask`, which has already checked poster is
+   * creator or target and that the row really moved `closed` -> `open`. See
+   * {@link REOPEN_MARKER_KEY}.
    */
   reopened?: boolean;
   /**
-   * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
-   * flag `true`. The one caller is `service-tasks.createTask` (the thread
-   * opener), which forwards the validated `TaskCreateInput.handoff`. Reserved
-   * on the runtime stamp's terms: the desktop reads it to decide whether to
-   * open a requester window, so it must never be caller-settable in metadata.
+   * Stamp reserved `metadata.handoff` true. Only caller:
+   * `service-tasks.createTask`, forwarding validated `TaskCreateInput.handoff`.
+   * ⚠ Reserved on the runtime stamp's terms — desktop reads it to decide whether
+   * to open a requester window, so it must never be caller-settable.
    */
   handoff?: boolean;
 }
 
 /**
- * Build the stored `metadata` for a post. `input.toUserId` must ALREADY have
- * passed the addressee-is-a-channel-member check (the caller runs it, so a bad
- * addressee 400s before the idempotency short-circuit).
+ * Build the stored `metadata` for a post. ⚠ `input.toUserId` must ALREADY have
+ * passed the addressee-is-a-channel-member check — the caller runs it, so a bad
+ * addressee 400s before the idempotency short-circuit.
  *
- * The server-owned folds, in order:
+ * Server-owned folds, in order:
  *
- * 1. **Anti-spoof strip (v1.1).** `to_user_id` / `summary` are settable ONLY
- *    via the validated top-level fields: a raw metadata copy would bypass both
- *    the addressee-membership check and the schema's summary length cap
- *    (consent-prompt spoofing on non-members).
- * 1b. **Intent (chat vs. request).** `intent` is reserved and re-stamped only
- *    from the validated top-level field, and it is stamped ONLY WHEN THE CALLER
- *    SUPPLIED IT — an absent field stamps no key at all, so every existing
- *    caller's metadata is byte-for-byte what it was. `chat` is the whole reason
- *    the field exists: it turns fold (2) OFF, so two humans can talk in a DM
- *    without each line poking the other's machine. It is stamped rather than
- *    merely acted on because the receiving side has to be able to tell a
- *    deliberately-unaddressed CHAT from a message that simply forgot to
- *    address — the first is not a delivery failure and must never be repaired
- *    as one.
- * 2. **DM auto-address.** In a DIRECT channel with no caller `to`, the peer is
- *    stamped as `to_user_id`. The MCP `post` path could not be relied on to
- *    pass `to`, and an UNADDRESSED agent message is deliberately ignorable on
- *    the receiving desktop (the v1.3.1 loop brake) — so a legitimate DM reply
- *    was posted successfully and then never delivered. Addressing is what the
- *    web composer already does for a DM (v1.6); doing it server-side means the
- *    model cannot forget the parameter. NEVER auto-addressed in a non-direct
- *    channel: with 3+ members the intended recipient is ambiguous, and a wrong
- *    guess would prompt the wrong operator. **SKIPPED ENTIRELY under
- *    `intent:"chat"`** — the peer is not even resolved, so nothing downstream
- *    can fall back to it. That is the operator's report ("if I send a message
- *    it's just going as a message to the channel... doesn't prompt an agent")
- *    made true, without giving back the delivery guarantee a `request` needs.
- * 3. **Task keys.** The reserved four are stripped and re-stamped from the
- *    resolved task row, so `taskMode` reflects the latest `set_task_mode` and
- *    cannot be spoofed. `taskId` itself stays caller-settable (a responder
- *    legitimately replies within a task); a UUID that resolves to no task in
- *    THIS channel is rejected (v1.7 server-validated threading), while a
- *    legacy `task-<uuid>-<seq>` id never resolves to a row and so stamps none
- *    of the four (a legacy card renders titleless — that is the tell, and the
- *    MCP surface says so). A caller-supplied taskId also SUPPRESSES
- *    inheritance — an explicit thread (or an explicit legacy id) is the
- *    caller's decision.
- *    Inheritance only fires for a plain `message` in a DM addressed to the
- *    peer: it exists so a session reply reaches the requester's waiting window
- *    (the desktop routes by taskId), and stamping a task id onto a lifecycle
- *    marker would let an unrelated `task_failed` land on that task's card.
- * 4. **Thread participation (v2.9; legacy half closed 2026-07-31).** Resolving
- *    in this channel is not enough: in a 3+ member channel every member can
- *    read every thread id, and a stamped `taskId` is what puts a message inside
- *    that thread's card AND routes it to the responder's session window. So a
- *    caller-supplied id must belong to the poster, and the two id shapes fail
- *    DIFFERENTLY on purpose:
- *    - **First-class (UUID):** must be `created_by` / `target_user_id` of the
- *      resolved task, else the post is REFUSED (403), not silently unthreaded —
- *      a message the author believes landed in a thread and the recipient never
- *      sees is the invisible-delivery failure this whole feature exists to
- *      prevent. Closing and reopening were already gated this way.
- *    - **Legacy (`task-<channelId>-<seq>`):** validated by
- *      {@link isLegacyThreadParticipant} — this channel's id, a positive seq,
- *      and a poster inside the opener's {author, to_user_id} pair, either
- *      direction. Anything else (a foreign channel's id, a malformed seq, a
- *      missing or unaddressed opener, another pair's exchange) has the tag
- *      STRIPPED and the post proceeds untagged. It NEVER throws: the installed
- *      desktop posts legacy ids for lifecycle events and a 403 would break it.
- *      Stripping never blocks the post — the message stays visible and
- *      attributable, it simply stops landing in a thread that is not the
- *      poster's.
- *    Inherited ids need no check — inheritance only resolves a task whose
- *    participants are {author, peer} by construction.
- *    **The first-class check is {@link isThreadParticipant} — creator or
- *    target, and nothing else.** It was briefly the participant-set-aware
- *    `mayWriteThread`, so that a BREAKOUT ROOM's set could widen who may post;
- *    breakout rooms are gone (rollback §1) and the gate is the pair again.
- * 5. **Runtime stamp (WAKE-V1; `desktop-ui` added 2026-08-05).** `runtime` is
- *    reserved: stripped from caller metadata unconditionally, then re-stamped
- *    from `ctx.runtime` — which the auth layer resolved from
- *    `X-Dopl-Runtime` AND bounded by the presented credential
- *    (`narrowRuntime`). Two values reach here: `desktop-session` (a session the
- *    desktop app spawned) and `desktop-ui` (the operator typing in the app's own
- *    UI window, which only a first-party SESSION credential may claim — an
- *    agent token is refused upstream). No recognized header → no key at all,
- *    which is what an external agent's message looks like, and is what keeps an
- *    external MCP post opening nothing on the sender's machine. This is the
- *    single stamping point precisely because the desktop reads the key to decide
- *    whether to open a requester window: a caller that could set it in
- *    `metadata` could make its own external post masquerade as either.
- * 6. **App-version stamp (Q10).** `appVersion` is reserved on exactly the same
- *    terms as `runtime`: stripped from caller metadata unconditionally, then
- *    re-stamped only from the REQUEST's `X-Dopl-App-Version` header (resolved
- *    by the auth layer into `ctx.appVersion`, and shape-checked there). Absent
- *    header → no key at all, which is what every non-desktop poster looks like.
- *    It exists because electron-updater installs on QUIT and a background
- *    listener never quits, so a peer can run a stale build indefinitely with
- *    nothing on either machine saying so — a shipped fix then reads as broken.
- *    Purely diagnostic: nothing may gate on it (see `app-version-header.ts`).
- * 6b. **Session stamp (F2).** `session_id` joins the reserved set on EXACTLY
- *    the terms `runtime` and `appVersion` are on: stripped from caller metadata
- *    unconditionally, then re-stamped only from the REQUEST's
- *    `X-Dopl-Session-Id` header (resolved by the auth layer into
- *    `ctx.sessionId`, and shape-checked there). Absent header → no key at all.
- *    It exists because one account's credential can be held by any number of
- *    concurrent sessions at once, so "the agent said X" was not a well-formed
- *    statement: two sessions on one machine issued a peer contradictory
- *    instructions 79 seconds apart with no way to attribute either. A LABEL,
- *    NOT A LOCK — nothing here enforces one live session per anything, and an
- *    external CLI session that sends no header is simply unattributed. It
- *    OUTLIVES the named agents it was introduced beside (rollback §1): a
- *    session is now the only agent identity there is, and this key is what
- *    names one.
- * 7. **Calm-terminal flags (v2.9).** Stripped like any reserved key and
- *    re-stamped only when the post ends up carrying a thread tag the poster is
- *    entitled to — which, since (4), is exactly "a `taskId` survived". Both
- *    shapes are already decided by then, so the flags need no check of their
- *    own and cost no second read. A flag on a thread that is not the poster's
- *    is dropped with the tag that carried it, so the victim's card keeps
- *    rendering the outcome its OWN session produced.
- * 7b. **Reopen marker (C-26).** `threadReopened` on the same condition as the
- *    close proposal and the calm flags: a surviving thread tag. It is what makes
- *    a reopen VISIBLE to the other member at all — `channel_tasks` is in no
- *    realtime table set, so the echo carrying this key is the doorbell.
- * 8. **Closed-thread notice (F6).** The resolved thread row's `status` is READ
- *    at last — it was written on close and cleared on reopen and consulted
- *    nowhere on the write path, so a closed thread accepted posts in silence.
- *    It changes NOTHING about the message: the post lands, the metadata is
- *    identical, and the fact rides out on {@link PostMetadataResult} for the
- *    caller's report. See {@link isThreadClosed} for why this warns instead of
- *    refusing.
+ * 1. **Anti-spoof strip.** `to_user_id` / `summary` settable ONLY via the
+ *    validated top-level fields — a raw metadata copy bypasses both the
+ *    addressee-membership check and the schema's summary cap.
+ * 1b. **Intent.** Stamped only when supplied; absent stamps no key. `chat`
+ *    turns fold (2) OFF. Stamped rather than merely acted on so the receiving
+ *    side can tell a deliberate CHAT from a message that forgot to address, and
+ *    never "repairs" it as a delivery failure.
+ * 2. **DM auto-address.** Direct channel + no caller `to` → peer stamped as
+ *    `to_user_id`; an unaddressed agent message is deliberately ignorable on the
+ *    receiving desktop (loop brake), so a real DM reply would otherwise post and
+ *    never deliver. ⚠ NEVER in a non-direct channel — with 3+ members a wrong
+ *    guess prompts the wrong operator. Skipped entirely under `intent:"chat"`.
+ * 3. **Task keys.** Reserved four stripped and re-stamped from the resolved task
+ *    row, so `taskMode` reflects the latest `set_task_mode` and can't be
+ *    spoofed. `taskId` stays caller-settable: a UUID resolving to no task in
+ *    THIS channel is rejected; a legacy `task-<uuid>-<seq>` resolves to no row
+ *    and stamps none of the four (titleless card is the tell). A caller
+ *    `taskId` SUPPRESSES inheritance; inheritance fires only for a plain
+ *    `message` in a DM addressed to the peer, since a task id on a lifecycle
+ *    marker would land an unrelated `task_failed` on that task's card.
+ * 4. **Thread participation.** ⚠ Resolving in this channel is NOT enough — any
+ *    member can read any thread id, and a stamped `taskId` puts the message
+ *    inside that thread's card AND routes it to the responder's session window.
+ *    The two id shapes fail differently on purpose:
+ *    - First-class (UUID): must be `created_by` / `target_user_id`, else 403
+ *      ({@link isThreadParticipant}). ⚠ Refused, never silently unthreaded — a
+ *      message the author believes landed and the recipient never sees is the
+ *      invisible-delivery failure this feature exists to prevent.
+ *    - Legacy (`task-<channelId>-<seq>`): {@link isLegacyThreadParticipant} —
+ *      this channel's id, positive seq, poster inside the opener's
+ *      {author, to_user_id} pair, either direction. Anything else has the tag
+ *      STRIPPED and posts untagged. ⚠ NEVER throws: installed desktop posts
+ *      legacy ids for lifecycle events, some against openers with no
+ *      `to_user_id` at all, and a 403 would reject real posts from the field.
+ *    Inherited ids need no check — their pair is {author, peer} by construction.
+ * 5. **Runtime stamp.** Stripped unconditionally, re-stamped from `ctx.runtime`
+ *    (auth layer resolved it from `X-Dopl-Runtime` and bounded it by the
+ *    credential via `narrowRuntime`). Two values reach here: `desktop-session`
+ *    and `desktop-ui` (SESSION credential only; agent tokens refused upstream).
+ *    ⚠ No recognized header → no key, which is what stops an external MCP post
+ *    from opening anything on the sender's machine. Single stamping point
+ *    because desktop reads the key to decide whether to open a requester window.
+ * 6. **App-version stamp.** Same terms, from `X-Dopl-App-Version` (via
+ *    `ctx.appVersion`). Exists because electron-updater installs on QUIT and a
+ *    background listener never quits, so a peer can run a stale build forever.
+ *    ⚠ Purely diagnostic — nothing may gate on it (see `app-version-header.ts`).
+ * 6b. **Session stamp.** `session_id` from `X-Dopl-Session-Id`. One account's
+ *    credential can be held by any number of concurrent sessions, so "the agent
+ *    said X" was not well-formed. ⚠ A LABEL, NOT A LOCK — nothing enforces one
+ *    live session; a session sending no header is simply unattributed.
+ * 7. **Calm-terminal flags.** Re-stamped only when a thread tag the poster is
+ *    entitled to survived (4); a flag on a foreign thread drops with its tag.
+ * 7b. **Reopen marker.** `threadReopened` on the same condition — the echo
+ *    carrying this key IS the doorbell, since `channel_tasks` is in no realtime
+ *    table set.
+ * 8. **Closed-thread notice.** Resolved row's `status`. Changes NOTHING about
+ *    the message; rides out on {@link PostMetadataResult}. See
+ *    {@link isThreadClosed} for why this warns rather than refuses.
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
@@ -306,71 +192,50 @@ export async function resolvePostMetadata(
   opts: PostMetadataOptions = {}
 ): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
-  // DECISION 2 — the close-proposal keys are stripped BEFORE anything decides
-  // whether a stamp is coming, exactly like `session_id` below. See
-  // {@link CLOSE_PROPOSAL_KEYS}.
+  // ⚠ Stripped BEFORE anything decides whether a stamp is coming, like
+  // `session_id` below. {@link CLOSE_PROPOSAL_KEYS}, {@link REOPEN_MARKER_KEY}.
   for (const key of CLOSE_PROPOSAL_KEYS) delete metadata[key];
-  // C-26 — the reopen marker, stripped on the same line of reasoning and in the
-  // same place. See {@link REOPEN_MARKER_KEY}.
   delete metadata[REOPEN_MARKER_KEY];
   delete metadata.to_user_id;
-  // `to_user_notify` was RESERVED IN DOCS AND NEVER STRIPPED (F-110 residual
-  // (d) / F-111 residual (a), open since 2026-07-31). Its consumer — the
-  // agent→human escalation verdict — is DELETED (rollback §1), so the standing
-  // "ship the consumer and the strip together" instruction can never be
-  // honoured and the key would stay caller-settable forever. Stripped and never
-  // re-stamped, for the agent keys' reason: a name the docs call server-owned
-  // must not be forgeable by the one caller that reads those docs.
+  // Stripped, never re-stamped: consumer is gone, but a name the docs call
+  // server-owned must not stay forgeable.
   delete metadata.to_user_notify;
   delete metadata.summary;
   delete metadata.runtime;
   delete metadata.appVersion;
-  // Rollback §1 — stripped, never re-stamped. Nothing writes these any more;
-  // the strip is what keeps a new post from FORGING the attribution an old row
-  // legitimately carries. See the module docblock.
+  // ⚠ Stripped, never re-stamped. Nothing writes these any more, but the strip
+  // keeps a new post from FORGING the attribution an old row legitimately has.
   delete metadata.to_agent_id;
   delete metadata.to_agent_ids;
   delete metadata.author_agent_id;
   delete metadata.intent;
-  // F2 — stripped UNCONDITIONALLY, before anything decides whether a stamp is
-  // coming. A caller that could set this could attribute its own post to
-  // somebody else's session, which is the exact forensic question the key
-  // exists to answer.
+  // ⚠ Stripped UNCONDITIONALLY: a caller able to set this could attribute its
+  // own post to somebody else's session — the forensic question the key answers.
   delete metadata.session_id;
-  // SPAWN-WITH-HANDOFF (rollback §3.5) — stripped like every reserved key, and
-  // for the runtime stamp's exact reason: the desktop reads `handoff` to decide
-  // whether to OPEN A WINDOW, so a caller that could set it in metadata could
-  // make its own external post open a session on the operator's machine without
-  // declaring the intent through the validated `create_thread` field. Re-stamped
-  // only from `opts.handoff` below.
+  // ⚠ Desktop reads `handoff` to decide whether to OPEN A WINDOW, so a
+  // caller-set value could open a session on the operator's machine without
+  // going through validated `create_thread`. Re-stamped only from `opts` below.
   delete metadata.handoff;
   const calmFlags = takeCalmFlags(metadata);
 
-  // Stamped only when the caller SUPPLIED it. An absent field stamps no key —
-  // the wire an existing caller produces is unchanged, and absence reads as
-  // `request`, the same discipline `runtime` gets one fold down.
+  // Only when supplied — absent stamps no key, and absence reads as `request`.
   if (input.intent) metadata.intent = input.intent;
 
-  // Server-stamped from the request's own header, never from the payload — and
-  // `ctx.runtime` is already the NARROWED value (an unrecognized label, or a
-  // `desktop-ui` claim from an agent token, arrived here as undefined).
+  // ⚠ From the request HEADER, never the payload. `ctx.runtime` is already
+  // NARROWED (unrecognized label, or `desktop-ui` from an agent token, arrives
+  // undefined).
   if (ctx.runtime) metadata.runtime = ctx.runtime;
   if (ctx.appVersion) metadata.appVersion = ctx.appVersion;
-  // F2, same rule again: the header or nothing. Stamped verbatim — the value is
-  // the caller's own slot key and the server has no opinion about its content
-  // beyond the shape check `session-header.ts` already applied.
+  // Verbatim — shape already checked by `session-header.ts`.
   if (ctx.sessionId) metadata.session_id = ctx.sessionId;
 
-  // CHAT never resolves a peer at all. Not "resolves one and discards it" — the
-  // fallback below reads whatever `peerUserId` holds, so the only way a chat
-  // post can never be auto-addressed is for there to be nothing to fall back to.
+  // ⚠ CHAT never RESOLVES a peer, rather than resolving and discarding — the
+  // fallback below reads whatever `peerUserId` holds, so leaving nothing to fall
+  // back to is the only way a chat post can never be auto-addressed.
   const peerUserId =
     input.intent === "chat"
       ? undefined
       : await resolveDirectPeer(channel, ctx.userId);
-  // The caller's addressee, else the DM peer. There used to be a third source
-  // in front of both — the OWNER BRIDGE, which stamped an addressed agent's
-  // owner here — and it went with the addressing (rollback §1).
   const toUserId = input.toUserId ?? peerUserId;
   if (toUserId) metadata.to_user_id = toUserId;
   if (input.summary) metadata.summary = input.summary;
@@ -384,8 +249,8 @@ export async function resolvePostMetadata(
     typeof metadata.taskId === "string" && metadata.taskId.trim().length > 0
       ? metadata.taskId
       : undefined;
-  // A blank or non-string tag is not a thread id. Dropping it here is what
-  // lets everything below read `metadata.taskId` as "an ACCEPTED thread tag".
+  // Dropping a blank/non-string tag here is what lets everything below read
+  // `metadata.taskId` as "an ACCEPTED thread tag".
   if (!callerTaskId) delete metadata.taskId;
 
   let task: ChannelTaskRow | null = null;
@@ -400,10 +265,9 @@ export async function resolvePostMetadata(
     } else if (
       !(await isLegacyThreadParticipant(channel.id, callerTaskId, ctx.userId))
     ) {
-      // Q10 / F-083 bullet 3: a legacy id that is not the poster's own
-      // exchange is stripped, never refused — the post lands untagged. Silent
-      // to the wire by design: there is no diag lane on this path, and the
-      // installed desktop that sends these ids has nowhere to show one.
+      // ⚠ A legacy id that is not the poster's own exchange is STRIPPED, never
+      // refused — the post lands untagged, silently. The installed desktop that
+      // sends these ids has no diag lane to show a refusal on.
       delete metadata.taskId;
     }
   } else if (
@@ -419,57 +283,46 @@ export async function resolvePostMetadata(
     metadata.taskMode = task.mode;
     metadata.taskCreatedBy = task.created_by;
     metadata.taskTitle = task.title;
-    // A null target (an unaddressed task) stamps nothing — the desktop's
-    // suppression predicate then cannot match and falls through to the
-    // trigger rules.
+    // Null target (unaddressed task) stamps nothing — desktop's suppression
+    // predicate then cannot match and falls through to the trigger rules.
     if (task.target_user_id) metadata.taskTarget = task.target_user_id;
   }
 
-  // Re-stamp the calm-terminal flags only for the thread's own participants —
-  // which is now the same question as "did a thread tag survive the gate
-  // above". A first-class id got there by passing the 403 gate (or by
-  // inheritance, whose pair is {author, peer} by construction), a legacy id by
-  // matching its opener's pair. Anything else (a foreign thread, an
-  // unresolvable id, no thread at all) has no `taskId` left and keeps the
-  // strip, so a fabricated outcome has nothing to attach to.
+  // ⚠ Re-stamp only for the thread's own participants — which is the same
+  // question as "did a thread tag survive the gate above". Anything else (a
+  // foreign thread, unresolvable id, no thread) has no `taskId` left, so a
+  // fabricated outcome has nothing to attach to.
   if (calmFlags.length > 0 && typeof metadata.taskId === "string") {
     for (const key of calmFlags) metadata[key] = true;
   }
 
-  // DECISION 2 — the close proposal, stamped on the SAME condition the calm
-  // flags are: only onto a thread tag that survived the gate above. Belt and
-  // braces (`proposeTaskClose` already checked creator-or-target before calling
-  // us), and the belt is what makes "a prompt to close this thread" unforgeable
-  // rather than merely unforged today.
+  // Close proposal — same condition as the calm flags. Belt and braces
+  // (`proposeTaskClose` already checked creator-or-target); the belt is what
+  // makes "a prompt to close this thread" unforgeable, not merely unforged.
   if (opts.closeProposal && typeof metadata.taskId === "string") {
     metadata.closeProposed = true;
     metadata.closeOutcome = opts.closeProposal;
   }
 
-  // C-26 — THE REOPEN ECHO'S MARKER, on exactly the close proposal's condition:
-  // only onto a thread tag that survived the gate above. `reopenTask` has already
-  // established creator-or-target AND that the row really moved back to `open`,
-  // so this is the belt — and the belt is what makes "this thread is live again"
-  // unforgeable rather than merely unforged today. Stamped as a literal boolean,
-  // read `=== true` by the client, so a truthy-but-not-true value never counts.
+  // Reopen echo marker, on the close proposal's exact condition. `reopenTask`
+  // already established creator-or-target and that the row really moved to
+  // `open`. ⚠ Literal boolean, read `=== true` by the client, so a
+  // truthy-but-not-true value never counts.
   if (opts.reopened === true && typeof metadata.taskId === "string") {
     metadata[REOPEN_MARKER_KEY] = true;
   }
 
-  // SPAWN-WITH-HANDOFF (rollback §3.5) — the same discipline: stamped `true`
-  // only onto a post that carries a thread tag the poster is entitled to (the
-  // opening message always does). It is a ROUTING HINT, not an authorization —
-  // the desktop still requires the identity pair (author === me, task creator
-  // === me) before it acts on it, so a `handoff` a peer could somehow attach
-  // opens nothing on anyone else's machine. Stamped as a literal boolean, read
-  // `=== true` on the desktop, so a truthy-but-not-true value never counts.
+  // Spawn-with-handoff, same discipline: only onto a thread tag the poster is
+  // entitled to (the opening message always is). ⚠ ROUTING HINT, NOT an
+  // authorization — desktop still requires the identity pair (author === me,
+  // task creator === me), so a peer-attached `handoff` opens nothing on anyone
+  // else's machine. Literal boolean, read `=== true` on the desktop.
   if (opts.handoff === true && typeof metadata.taskId === "string") {
     metadata.handoff = true;
   }
 
-  // F6 — the notice, read off the row the folds above already resolved. An
-  // INHERITED task can never be closed (`resolveInheritableTask` filters to
-  // `open`), so in practice this fires only for a caller-supplied first-class
-  // id — the exact shape of "I closed this thread and kept posting into it".
+  // Read off the row the folds already resolved. An INHERITED task can never be
+  // closed (`resolveInheritableTask` filters to `open`), so this fires only for
+  // a caller-supplied first-class id.
   return { metadata, threadClosed: isThreadClosed(task) };
 }

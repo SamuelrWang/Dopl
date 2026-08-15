@@ -31,21 +31,10 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 }
 
 /**
- * The feature's transport, as `useApiMutationWith` consumes it.
- *
- * The mutation layer is transport-injected precisely so a feature can hand it
- * the client it already had: every chat write driven through this one still
- * throws {@link ChatApiError}, so the `err instanceof ChatApiError` branch
- * that puts the server's own wording in the toast (the duplicate-folder 409,
- * the retention 402, the not-owner 403) survives the move off hand-rolled
- * awaits. A mutation wired straight to `apiRequest` would quietly degrade
- * every chats error to its fallback string.
- *
- * READS do NOT go through here. They are `useApiQuery` over `apiRequest`, and
- * their only consumer treats the error as a boolean ("show the retry line"),
- * so wrapping them would buy nothing and fork the transport.
- *
- * Paths live in `./query-keys.ts` beside the cache keys built from them, so a
- * write and the read it patches cannot disagree about the URL.
+ * Transport for `useApiMutationWith`. ⚠ Writes MUST go through this, not raw
+ * `apiRequest`: it throws {@link ChatApiError}, and the `err instanceof
+ * ChatApiError` branch is what puts server wording in the toast (duplicate
+ * folder 409, retention 402, not-owner 403). Reads stay on `useApiQuery`.
+ * Paths live in `./query-keys.ts` beside the cache keys built from them.
  */
 export const chatRequest: ApiMutationRequestFn = request;

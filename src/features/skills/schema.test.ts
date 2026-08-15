@@ -1,11 +1,6 @@
-/**
- * INVARIANT SUITE — skills zod schema caps.
- *
- * Locks the public validation contract both REST handlers and MCP tools
- * parse against: name/description/whenToUse caps, folder ≤ 80, slug shape,
- * and the 1 MB body ceiling. A cap change here is a contract change and
- * must be deliberate.
- */
+/** Locks the validation contract REST handlers and MCP tools both parse
+ *  against: name/description/whenToUse caps, folder ≤ 80, slug shape, 1 MB
+ *  body ceiling. ⚠ A cap change here is a contract change. */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -64,7 +59,7 @@ describe("SkillUpdateSchema", () => {
         teamIds: ["550e8400-e29b-41d4-a716-446655440000"],
       }).success,
     ).toBe(true);
-    // teamIds without the required visibility/accessMode pairing is rejected.
+    // teamIds without the visibility/accessMode pairing is rejected.
     expect(
       SkillUpdateSchema.safeParse({
         teamIds: ["550e8400-e29b-41d4-a716-446655440000"],

@@ -3,11 +3,8 @@
 import { useState } from "react";
 import { Folder } from "lucide-react";
 
-/**
- * The skill header's inline folder chip: click to assign or rename the
- * organizing folder, blank to unfile. Read-only members see the label only
- * (and nothing at all when the skill is unfiled).
- */
+/** Inline folder chip: click to assign or rename, blank to unfile. Read-only
+ *  members see the label only, and nothing at all when unfiled. */
 export function SkillFolderControl({
   folder,
   canEdit,
@@ -19,8 +16,7 @@ export function SkillFolderControl({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder ?? "");
-  // Re-sync the draft when the committed folder changes (sanctioned
-  // adjust-state-during-render pattern — no effect round-trip).
+  // Re-sync the draft on committed-folder change (adjust-state-during-render).
   const [lastFolder, setLastFolder] = useState(folder);
   if (lastFolder !== folder) {
     setLastFolder(folder);

@@ -3,18 +3,15 @@ import Stripe from "stripe";
 import { STRIPE_SESSION_ID_TEMPLATE, billingUrl } from "../url";
 
 /**
- * Where Stripe sends the browser back — the post-retirement billing surface
- * (`src/app/billing/[segment]/page.tsx`), not `/{segment}/canvas?billing=…`,
- * which is on the RETIRE list (docs/migration-research/
- * website-retirement-plan.md §2.3). Sessions minted today are redeemed days
- * later, so this URL has to name a page that will still be there.
+ * ⚠ Where Stripe sends the browser back: `src/app/billing/[segment]/page.tsx`,
+ * NOT `/{segment}/canvas?billing=…` (RETIRE list,
+ * docs/migration-research/website-retirement-plan.md §2.3). Sessions minted
+ * today are redeemed days later, so this URL must name a surviving page.
  *
- * The segment is passed in wherever the caller has one — `withWorkspaceAuth`
- * hands every billing route a `workspaceSlug` + `workspacePublicId` — so the
- * return lands on the billing page for the workspace that was actually paid
- * for. Without it the bare `/billing` resolves the caller's DEFAULT workspace,
- * which for a multi-workspace user is a different workspace than the one whose
- * subscription just started.
+ * ⚠ Pass the segment whenever the caller has one (`withWorkspaceAuth` hands
+ * every billing route a `workspaceSlug` + `workspacePublicId`). Without it,
+ * bare `/billing` resolves the caller's DEFAULT workspace — a different one
+ * than the subscription just paid for.
  */
 function returnUrl(
   segment: string | null | undefined,
@@ -36,37 +33,34 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-/** True when a Stripe secret key is configured. Lets seat-sync / checkout
- *  no-op cleanly in test + preview environments without a live key. */
+/** Lets seat-sync / checkout no-op cleanly in test + preview without a key. */
 export function isStripeConfigured(): boolean {
   return !!process.env.STRIPE_SECRET_KEY;
 }
 
 /**
- * The per-seat Team price (env still named STRIPE_PRO_SEAT_PRICE_ID — the
- * live price predates the Team rename). Set by the main session; read from
- * env only. Returns null when unset so callers can degrade gracefully
- * (seat-sync no-ops; checkout surfaces a clear configuration error).
+ * Per-seat Team price. ⚠ Env is still named STRIPE_PRO_SEAT_PRICE_ID — the live
+ * price predates the Team rename. Null when unset so callers degrade
+ * (seat-sync no-ops; checkout surfaces a config error).
  */
 export function getSeatPriceId(): string | null {
   return process.env.STRIPE_PRO_SEAT_PRICE_ID || null;
 }
 
 /**
- * The flat Solo price. May be UNSET in dev/test — returns null so callers
- * degrade gracefully exactly like `getSeatPriceId` (checkout surfaces a
- * clear config error; webhook plan mapping falls back to metadata/team).
+ * Flat Solo price. May be UNSET in dev/test — null so callers degrade like
+ * `getSeatPriceId` (checkout config error; webhook plan mapping falls back to
+ * metadata/team).
  */
 export function getSoloPriceId(): string | null {
   return process.env.STRIPE_SOLO_PRICE_ID || null;
 }
 
 /**
- * Pick the subscription item that carries the plan price. A subscription
- * may hold several items (add-ons, legacy prices), so reading
- * `items.data[0]` blindly can bill against the wrong line. Prefer the item
- * whose price is the per-seat Team price, then the flat Solo price; fall
- * back to the first item (legacy single-item $20 subs that predate both).
+ * Pick the subscription item carrying the plan price. ⚠ A subscription may hold
+ * several items (add-ons, legacy prices), so `items.data[0]` can bill the wrong
+ * line. Prefer the per-seat Team price, then flat Solo; fall back to the first
+ * item (legacy single-item $20 subs).
  */
 export function selectSeatItem(
   subscription: Stripe.Subscription
@@ -87,34 +81,26 @@ export function selectSeatItem(
 
 export interface WorkspaceCheckoutArgs {
   workspaceId: string;
-  /** Which paid plan to sell. Solo is flat (quantity forced to 1); team
-   *  is per-seat at `quantity` seats. */
+  /** Solo is flat (quantity forced to 1); team is per-seat at `quantity`. */
   plan: "solo" | "team";
-  /** Seat quantity for team (= current active member count). Ignored for
-   *  solo, which always checks out at quantity 1. */
+  /** Team seat quantity (= active member count). Ignored for solo. */
   quantity: number;
   email: string;
   stripeCustomerId?: string | null;
-  /** Canonical `{slug}-{publicId}` segment of the workspace being bought for,
-   *  so the post-payment return lands on ITS billing page rather than the
-   *  buyer's default workspace. */
+  /** ⚠ Canonical `{slug}-{publicId}` segment of the workspace being bought
+   *  for — without it the return lands on the buyer's DEFAULT workspace. */
   segment?: string | null;
 }
 
 /**
- * Workspace-scoped subscription checkout. Solo sells STRIPE_SOLO_PRICE_ID
- * at quantity 1 (flat); team sells STRIPE_PRO_SEAT_PRICE_ID at `quantity`
- * seats. Stamps `{ workspace_id, plan }` into both the session and
- * subscription metadata so the webhook can route the resulting
- * subscription back to its workspace and derive the plan.
+ * Workspace-scoped subscription checkout. Solo → STRIPE_SOLO_PRICE_ID at
+ * quantity 1; team → STRIPE_PRO_SEAT_PRICE_ID at `quantity` seats. ⚠ Stamps
+ * `{ workspace_id, plan }` into BOTH session and subscription metadata so the
+ * webhook can route the subscription back and derive the plan.
  *
- * Uses `ui_mode: "elements"` (Stripe's custom-checkout mode): the session is
- * rendered natively by our own design-system PaymentElement form
- * (components/embedded-checkout.tsx) rather than a Stripe-hosted iframe. The
- * `client_secret` is returned the same way, and `return_url` still receives
- * the post-payment redirect. None of the params below are elements-mode
- * disallowed: we set no `custom_text` / `branding_settings` (disallowed) and
- * no `redirect_on_completion` (embedded-only).
+ * `ui_mode: "elements"` — our own PaymentElement form, not a Stripe iframe.
+ * ⚠ Elements mode disallows `custom_text` / `branding_settings`, and
+ * `redirect_on_completion` is embedded-only.
  */
 export async function createWorkspaceCheckoutSession(
   args: WorkspaceCheckoutArgs
@@ -149,11 +135,9 @@ export async function createWorkspaceCheckoutSession(
     sessionParams.customer_email = args.email;
   }
 
-  // Collapse rapid double-clicks into one session: the key is stable within
-  // an hour for a workspace + plan + quantity, so a burst of clicks reuses
-  // the same checkout, while a genuine retry next hour — or a different
-  // plan, or a seat count that changed mid-hour (member joined between
-  // checkout opens) — gets a fresh session instead of a cached stale one.
+  // Collapses rapid double-clicks into one session: key stable within an hour
+  // per workspace+plan+quantity. A retry next hour, a different plan, or a
+  // seat count that changed mid-hour gets a fresh session.
   const hourBucket = new Date().toISOString().slice(0, 13);
   const session = await stripe.checkout.sessions.create(sessionParams, {
     idempotencyKey: `checkout:${args.workspaceId}:${args.plan}:${quantity}:${hourBucket}`,
@@ -176,16 +160,10 @@ export async function createPortalSession(
 }
 
 /**
- * The customer's DEFAULT payment method — what Stripe will charge next.
- *
- * Two sources, in Stripe's own order of authority: the subscription-level
- * default (`invoice_settings.default_payment_method`, what the portal edits),
- * then the newest attached card. A customer with a card attached but no default
- * set is the normal state after an embedded checkout, so falling back is not a
- * guess — it is the same method Stripe would charge.
- *
- * Returns null for a deleted customer or one with no card at all; the caller
- * renders "no payment method on file" rather than an error.
+ * Customer's DEFAULT payment method. Two sources in Stripe's order of
+ * authority: `invoice_settings.default_payment_method` (what the portal edits),
+ * then the newest attached card — a card with no default set is the normal
+ * state after an embedded checkout. Null for a deleted/cardless customer.
  */
 export async function getDefaultPaymentMethod(
   stripeCustomerId: string
@@ -196,8 +174,8 @@ export async function getDefaultPaymentMethod(
   });
   if (!customer.deleted) {
     const preferred = customer.invoice_settings?.default_payment_method;
-    // Expanded → an object; unexpanded/absent → a string id or null. Only the
-    // object carries the card, and the expand above is what makes it one.
+    // Expanded → object (carries the card); unexpanded/absent → string id or
+    // null. The expand above is what makes it an object.
     if (preferred && typeof preferred !== "string") return preferred;
   }
   const cards = await stripe.paymentMethods.list({
@@ -208,7 +186,7 @@ export async function getDefaultPaymentMethod(
   return cards.data[0] ?? null;
 }
 
-/** The customer's most recent invoices, newest first (Stripe's own order). */
+/** Most recent invoices, newest first (Stripe's own order). */
 export async function listCustomerInvoices(
   stripeCustomerId: string,
   limit: number
@@ -222,10 +200,8 @@ export async function listCustomerInvoices(
 }
 
 /**
- * Set (or clear) Stripe's `cancel_at_period_end` on a subscription. Clearing it
- * is the RESUME path — the subscription was never canceled, it was flagged not
- * to renew, so resuming is the same call with `false` and needs no new
- * checkout.
+ * Set (or clear) Stripe's `cancel_at_period_end`. Clearing is the RESUME path:
+ * the sub was never canceled, only flagged not to renew, so no new checkout.
  */
 export async function setSubscriptionCancelAtPeriodEnd(
   stripeSubscriptionId: string,

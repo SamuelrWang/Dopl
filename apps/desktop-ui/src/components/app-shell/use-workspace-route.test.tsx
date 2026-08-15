@@ -9,19 +9,13 @@ import { useWorkspaceRoute } from "./use-workspace-route";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
- * THE COLLAPSE, pinned at the seam that produces it (launch-blocker P0-2).
+ * The launch round-trip collapse, pinned at the seam that produces it.
  *
- * A launch used to be five strictly serial round trips before any page could
- * ask for its own data: bridge auth → `onboarding-state` → `ensure-default` →
- * `resolve` → `me`. The shell gated `<Outlet/>` on the third, so the last two
- * were in front of every page in the product.
- *
- * `POST /api/boot` answers them together, and `seedBootAnswer` writes that one
- * response into the cache entries of the endpoints it replaced. Both halves
- * matter and both are asserted here: an endpoint that answers everything but
- * seeds nothing leaves the old callers (the chats page, the settings modal,
- * `MyAccessProvider`) issuing their requests anyway, and the round-trip count
- * is unchanged for them.
+ * `POST /api/boot` answers `onboarding-state` + `ensure-default` + `resolve` +
+ * `me` together, and `seedBootAnswer` writes that one response into the cache
+ * entries of the endpoints it replaced. ⚠ BOTH halves are asserted: an endpoint
+ * that answers everything but seeds nothing leaves the old callers (chats page,
+ * settings modal, `MyAccessProvider`) issuing their requests anyway.
  */
 
 const sendRequest = vi.hoisted(() => vi.fn());
@@ -115,7 +109,7 @@ describe("useWorkspaceRoute — one read for the whole boot", () => {
     expect(
       queryClient.getQueryData([`/api/workspaces/${SEGMENT}/my-access`, undefined, undefined])
     ).toEqual({ defaultLevel: "edit", overrides: [] });
-    // The onboarding page shares boot's answer too, rather than re-asking.
+    // Onboarding page shares boot's answer rather than re-asking.
     expect(
       queryClient.getQueryData(["/api/user/onboarding-state", undefined, undefined])
     ).toEqual({ isOnboarded: true, surveyCompleted: true });
@@ -125,8 +119,8 @@ describe("useWorkspaceRoute — one read for the whole boot", () => {
     const queryClient = renderAt("/acme");
     await screen.findByTestId("role");
 
-    // The canonical key is warm before the shell replaces the URL — the web
-    // 301's property, where one response serves the old path and the new.
+    // Canonical key warm BEFORE the shell replaces the URL — the web 301's
+    // property, where one response serves both paths.
     await waitFor(() =>
       expect(
         queryClient.getQueryData(["/api/boot", undefined, { segment: SEGMENT }])

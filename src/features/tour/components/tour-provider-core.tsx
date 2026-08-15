@@ -9,10 +9,9 @@ import {
   useRef,
   useState,
 } from "react";
-// Deep import, never the `app-shell` barrel: the barrel re-exports `AppShell`,
-// which binds `next/link` + `next/navigation` and would drag Next into the
-// desktop renderer's import graph (same rule as
-// `create-workspace-dialog-core`).
+// ⚠ Deep import, never the `app-shell` barrel — the barrel re-exports
+// `AppShell`, which binds `next/link` + `next/navigation` and drags Next into
+// the desktop renderer's graph (same rule as `create-workspace-dialog-core`).
 import type { NavSection } from "@/shared/layout/app-shell/app-sidebar-core";
 import { sectionPath } from "@/shared/layout/app-shell/app-sidebar-core";
 import { TOUR_START_EVENT, tourStepKey } from "../constants";
@@ -23,9 +22,9 @@ import { TourPopover } from "./tour-popover";
 const FINISH_INDEX = TOUR_STEPS.length;
 
 type TourContextValue = {
-  /** Current screen: 0..TOUR_STEPS.length-1 = steps, TOUR_STEPS.length = finish, null = inactive. */
+  /** 0..TOUR_STEPS.length-1 = steps, TOUR_STEPS.length = finish, null = inactive. */
   stepIndex: number | null;
-  /** Begin the tour at step 1 (also triggered by the TOUR_START_EVENT window event). */
+  /** Start at step 1 — also fired by the TOUR_START_EVENT window event. */
   startTour: () => void;
   next: () => void;
   back: () => void;
@@ -46,25 +45,20 @@ function sectionForIndex(index: number): NavSection {
 
 export interface TourProviderCoreProps {
   workspaceSegment: string;
-  /**
-   * Navigate to an in-app path. The core owns WHICH path each step lands on
-   * (`sectionPath`); the caller owns HOW to get there — `next/navigation` on
-   * the web, the SPA router in the desktop renderer.
-   */
+  /** Core owns WHICH path each step lands on (`sectionPath`); caller owns HOW
+   *  — `next/navigation` on web, SPA router in the desktop renderer. */
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }
 
 /**
- * Owns the tour state for a workspace shell. Mounted once by the shell so it
- * survives route changes; renders nothing until the tour starts (the popover
- * returns null while `stepIndex` is null), so it has zero impact on users who
- * never start it. Progress persists to localStorage so a mid-tour reload
- * resumes, and clears on finish/skip.
+ * Tour state for a workspace shell. Mounted once by the shell so it survives
+ * route changes; renders nothing until started (popover returns null while
+ * `stepIndex` is null). Progress persists to localStorage, clears on
+ * finish/skip.
  *
- * Router-free by construction (the wave-1 core/binding pattern): navigation
- * arrives as `onNavigate`, so the desktop SPA mounts this same provider with
- * its own router. `./tour-provider` is the `next/navigation` binding.
+ * ⚠ Router-free by construction — navigation arrives as `onNavigate` so the
+ * desktop SPA mounts this same provider. `./tour-provider` = Next binding.
  */
 export function TourProviderCore({
   workspaceSegment,
@@ -80,7 +74,7 @@ export function TourProviderCore({
         if (index === null) window.localStorage.removeItem(key);
         else window.localStorage.setItem(key, String(index));
       } catch {
-        // storage unavailable — tour still works for this session
+        // storage unavailable — tour still works this session
       }
     },
     [workspaceSegment]
@@ -110,9 +104,8 @@ export function TourProviderCore({
     persist(null);
   }, [persist]);
 
-  // Resume a mid-tour reload from storage (scoped to this workspace).
-  // Restores the popover at the saved screen without navigating (the user is
-  // already on that page after the reload); advancing navigates as usual.
+  // Resume a mid-tour reload (scoped to this workspace). Restores the popover
+  // WITHOUT navigating — the reload already landed on that page.
   useEffect(() => {
     let raw: string | null = null;
     try {
@@ -125,27 +118,27 @@ export function TourProviderCore({
     if (Number.isInteger(parsed) && parsed >= 0 && parsed <= FINISH_INDEX) {
       setStepIndex(parsed);
     }
-    // Mount-only on purpose: a workspace SWITCH abandons the tour (effect
-    // below) instead of resuming another workspace's saved step mid-session.
+    // ⚠ Mount-only: a workspace SWITCH abandons the tour (effect below) rather
+    // than resuming another workspace's saved step mid-session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A tour walks ONE workspace. Switching workspaces mid-tour abandons it —
-  // both the open popover and the old workspace's saved step.
+  // Tour walks ONE workspace: switching abandons both the open popover and the
+  // old workspace's saved step.
   const tourSegment = useRef(workspaceSegment);
   useEffect(() => {
     if (tourSegment.current === workspaceSegment) return;
     try {
       window.localStorage.removeItem(tourStepKey(tourSegment.current));
     } catch {
-      // storage unavailable — in-memory state still resets below
+      // storage unavailable — in-memory state resets below anyway
     }
     tourSegment.current = workspaceSegment;
     setStepIndex(null);
   }, [workspaceSegment]);
 
-  // Decoupled entry point: the onboarding welcome popup dispatches this event
-  // instead of importing the tour (avoids a sideways feature import).
+  // Decoupled entry point — welcome popup dispatches the event instead of
+  // importing the tour (no sideways feature import).
   useEffect(() => {
     function onStart() {
       startTour();

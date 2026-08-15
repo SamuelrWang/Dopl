@@ -7,31 +7,22 @@ import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
 
-/**
- * Per-route options for `withUserAuth` (forwarded through `withWorkspaceAuth`).
- * Both flags ONLY affect OAuth-bearer (remote-MCP agent) callers; session
- * (Supabase-cookie) callers never reach the token branch and so are never
- * gated by either.
- */
+/** Per-route options for `withUserAuth` (forwarded through
+ *  `withWorkspaceAuth`). ⚠ Both flags affect OAuth-bearer (agent) callers ONLY;
+ *  session callers never reach the token branch. */
 export interface UserAuthOptions {
   /**
-   * Exempt this route from the OAuth write-scope method gate. Set ONLY on a
-   * non-GET route that is not a content write and must stay reachable by a
-   * read-only (`dopl.read`-only) connection. The single legitimate case is
-   * the MCP liveness ping (`POST /api/user/mcp-status`), which every
-   * connection — including read-only ones — fires to light the "MCP
-   * connected" indicator. Never set on a route that mutates user/workspace
-   * content.
+   * Exempt route from OAuth write-scope method gate. ⚠ Set ONLY on a non-GET
+   * route that is not a content write and must stay reachable read-only
+   * (`dopl.read`-only) — sole legitimate case is the MCP liveness ping
+   * `POST /api/user/mcp-status`. Never on a route that mutates content.
    */
   writeScopeExempt?: boolean;
   /**
-   * Interactive-session only: reject EVERY OAuth agent token (any scope,
-   * including `dopl.write`) with `403 SESSION_REQUIRED`. Applied to the
-   * destructive admin surface a background agent must never drive — account
-   * / workspace deletion, membership + invitation + join-request mutations,
-   * and billing mutations. This is independent of (and stricter than) the
-   * write-scope gate: a full-write token is still refused. Session (cookie)
-   * callers pass through untouched.
+   * Reject EVERY OAuth agent token (any scope, incl. `dopl.write`) with
+   * `403 SESSION_REQUIRED`. Stricter than, and independent of, the write-scope
+   * gate. For the destructive admin surface: account/workspace deletion,
+   * membership + invitation + join-request mutations, billing mutations.
    */
   sessionOnly?: boolean;
 }
@@ -40,20 +31,15 @@ export interface UserAuthOptions {
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
- * Per-token request ceiling for OAuth bearers hitting the REST resource server
- * DIRECTLY. Shares the exact store (`rate_limit_events`), subject
- * (`mcp:<tokenId>`) and default (600/min) as the `/api/mcp` transport limiter
- * (`with-mcp-transport-auth.ts`) — read from the SAME env var so the two doors
- * can never drift to different ceilings. See the long note at the enforcement
- * point below for why this is a single UNIFIED budget rather than a second one.
+ * Per-token ceiling for OAuth bearers hitting REST directly. ⚠ Must stay
+ * identical to the `/api/mcp` transport limiter in
+ * `src/shared/auth/with-mcp-transport-auth.ts`: same store
+ * (`rate_limit_events`), same subject (`mcp:<tokenId>`), same env var — one
+ * UNIFIED budget across both doors, not two.
  */
 const OAUTH_REST_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
-/**
- * Wrap a handler call so any thrown error or 5xx response emits a
- * system_events row. Used by withUserAuth so every authenticated route
- * automatically contributes to the health dashboard.
- */
+/** Emit a system_events row on any throw or 5xx — feeds the health dashboard. */
 async function runAndLog5xx(
   handler: () => Promise<Response | NextResponse>,
   ctx: { endpoint: string; userId?: string | null }
@@ -89,24 +75,22 @@ async function runAndLog5xx(
 }
 
 /**
- * Injects the authenticated user's ID into the handler. Required for per-user
- * resources (canvas panels, user-scoped clusters).
+ * Injects the authenticated user's ID into the handler.
  *
- * - OAuth-token auth (remote MCP): uses the token's user_id. `apiKeyWorkspaceId`
- *   is always undefined — OAuth callers target any workspace via the
- *   `x-workspace-id` header (request pin) or the per-call `workspace=` arg.
- * - Session auth: uses user.id from the Supabase session.
+ * - OAuth-token (remote MCP): token's user_id. `apiKeyWorkspaceId` always
+ *   undefined — OAuth callers target a workspace via `x-workspace-id` header
+ *   or the per-call `workspace=` arg.
+ * - Session: user.id from the Supabase session.
  */
 export function withUserAuth(
   handler: (
     request: NextRequest,
     context: {
       userId: string;
-      // MCP-agent session marker: the OAuth access-token id for remote-MCP
-      // (agent) calls, undefined for session (UI) calls. Downstream handlers use
-      // it to tag writeback `source` and to enforce per-resource agent gates
-      // (`agent_write_enabled`, canvas-edit access). The "is this an agent?"
-      // signal — its truthiness, not the specific id, is what the gates read.
+      // OAuth access-token id for agent calls, undefined for session (UI)
+      // calls. Truthiness (not the id) is the "is this an agent?" signal read
+      // by writeback `source` tagging and per-resource agent gates
+      // (`agent_write_enabled`, canvas-edit).
       agentTokenId?: string;
       apiKeyWorkspaceId?: string | null;
       params?: Record<string, string>;
@@ -124,28 +108,17 @@ export function withUserAuth(
     if (authHeader) {
       const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-      // BEARER KIND DISCRIMINATION (desktop migration Phase 2 — see
-      // docs/migration-research/auth-flows.md). Two credential families
-      // arrive as Authorization headers and they must never be confused:
-      //
-      //   - `dopl_at_*` — Dopl OAuth tokens (remote-MCP agents + device
-      //     tokens). These are AGENTS: `agentTokenId` is set, the
-      //     sessionOnly and write-scope gates apply, writes are stamped
-      //     `source: "agent"`.
-      //   - anything else — tried as a Supabase access JWT (the bundled
-      //     desktop SPA's credential; its main process holds the session
-      //     and attaches the JWT). Verified LOCALLY against the ES256 JWKS
-      //     (same authority + cost profile as the cookie path, see
-      //     getSessionUser). A valid JWT caller is a SESSION — identical
-      //     semantics to a cookie caller: no agentTokenId, sessionOnly
-      //     routes allowed, no write-scope gate, writes are user-origin.
-      //
-      // The prefix check is exact-match routing, not a heuristic: every
-      // token minted by mcp-oauth.ts carries the `dopl_at_` prefix, and a
-      // Supabase JWT (three dot-separated base64url segments) can never
-      // start with it. An invalid credential of either kind still ends in
-      // the same 401 as before — there is no fallthrough from a presented
-      // bearer to cookie auth.
+      // ⚠ BEARER KIND DISCRIMINATION. Two credential families arrive as
+      // Authorization headers; never confuse them:
+      //   - `dopl_at_*` (minted by mcp-oauth.ts) = AGENT: agentTokenId set,
+      //     sessionOnly + write-scope gates apply, writes stamped `source:
+      //     "agent"`.
+      //   - anything else = tried as Supabase access JWT (desktop SPA). A valid
+      //     JWT caller is a SESSION, semantics identical to a cookie caller: no
+      //     agentTokenId, sessionOnly routes allowed, no write-scope gate.
+      // Prefix check is exact-match routing, not a heuristic — a Supabase JWT
+      // can never start with `dopl_at_`. No fallthrough from a presented bearer
+      // to cookie auth; an invalid credential of either kind is 401.
       if (!isOAuthAccessToken(token)) {
         const jwtUser = await getBearerJwtUser(token);
         if (jwtUser) {
@@ -163,26 +136,15 @@ export function withUserAuth(
         );
       }
 
-      // Remote-MCP OAuth access token. The /api/mcp route forwards the caller's
-      // token to these /api/* endpoints over loopback.
+      // Remote-MCP OAuth access token. /api/mcp forwards the caller's token to
+      // these /api/* endpoints over loopback.
       const tok = await validateAccessToken(token);
       if (tok) {
-        // OAUTH-BEARER RATE LIMIT (P1 — 2026-08-08). A `dopl_at_*` bearer is
-        // accepted DIRECTLY on every REST route (this branch), so without a
-        // ceiling here the per-token limit the `/api/mcp` transport enforces
-        // (`with-mcp-transport-auth.ts`, keyed `mcp:<tokenId>`) is trivially
-        // bypassed — the same token pointed straight at `/api/knowledge/…` was
-        // unbounded. We reuse that limiter verbatim: same store
-        // (`rate_limit_events` via `checkAndRecordRateLimitSubject`), same
-        // subject, same ceiling. Because the transport's own loopback `/api/*`
-        // calls also pass through this branch, a token now spends ONE unified
-        // 600/min budget across both doors instead of an unbounded second one —
-        // a realistic agent's tool-call rate (a few backend touches per call)
-        // stays far under it, while a scripted flood on either door is capped.
-        // Enforced FIRST so even requests the gates below would 403 still count
-        // against the flood budget. Fail-closed (the RPC returns false on any DB
-        // error). Session (cookie / Supabase-JWT) callers never reach this
-        // branch and are never limited — only bearers are.
+        // ⚠ Same limiter as the `/api/mcp` transport (with-mcp-transport-auth.ts):
+        // same store, subject `mcp:<tokenId>`, same ceiling — one unified budget
+        // across both doors. Without it a bearer pointed straight at REST bypasses
+        // the transport limit. Enforced FIRST so requests the gates below would 403
+        // still count. Fail-closed (RPC returns false on any DB error).
         const withinLimit = await checkAndRecordRateLimitSubject(
           `mcp:${tok.tokenId}`,
           OAUTH_REST_RPM,
@@ -199,15 +161,12 @@ export function withUserAuth(
           );
         }
 
-        // Every authenticated MCP call acts as a heartbeat for the settings
-        // MCP-connection detector (polls /api/user/mcp-status). Debounced ~30s.
+        // Heartbeat for the settings MCP-connection detector (polls
+        // /api/user/mcp-status). Debounced ~30s.
         touchMcpStatus(tok.userId);
 
-        // SESSION-ONLY GATE (H-3). Destructive admin routes refuse ALL OAuth
-        // agent tokens regardless of scope — deleting the account/workspace,
-        // changing membership, mutating billing must come from an interactive
-        // session, never a background agent. Session (cookie) callers never
-        // reach this branch, so they're unaffected.
+        // Session-only gate: destructive admin routes refuse ALL agent tokens
+        // regardless of scope.
         if (options.sessionOnly) {
           return NextResponse.json(
             new HttpError(
@@ -219,14 +178,11 @@ export function withUserAuth(
           );
         }
 
-        // WRITE-SCOPE GATE (H-3). An OAuth bearer authorized read-only (its
-        // `scopes` lack `dopl.write`) may not use a write HTTP method against
-        // the REST resource server. Fail-closed — write is permitted ONLY when
-        // `scopes` explicitly includes `dopl.write` (mirrors the MCP tool gate
-        // in packages/mcp-server/src/server.ts). The `/api/mcp` JSON-RPC
-        // transport is a SEPARATE wrapper (authenticateMcpRequest) and never
-        // hits this branch, so a read op arriving as a POST envelope there is
-        // untouched; its writes are scope-gated per-op by WRITE_OPS instead.
+        // Write-scope gate. Fail-closed: write permitted ONLY when `scopes`
+        // explicitly includes `dopl.write`. ⚠ Mirrors the MCP tool gate in
+        // packages/mcp-server/src/server.ts — keep both in sync. The /api/mcp
+        // JSON-RPC transport uses a separate wrapper (authenticateMcpRequest)
+        // and never hits this branch; its writes are gated per-op by WRITE_OPS.
         const isWrite = !READ_METHODS.has(request.method);
         const canWrite =
           Array.isArray(tok.scopes) && tok.scopes.includes("dopl.write");
@@ -250,9 +206,6 @@ export function withUserAuth(
           () =>
             handler(request, {
               userId: tok.userId,
-              // Marks this as an agent (MCP) call so per-resource agent gates
-              // (agent_write_enabled, canvas-edit) and writeback `source`
-              // tagging engage — session (UI) calls leave this undefined.
               agentTokenId: tok.tokenId,
               params: resolvedParams,
             }),
@@ -288,21 +241,12 @@ export function withUserAuth(
 }
 
 /**
- * Wraps an MCP-reachable endpoint. The per-user 24h trial gate is RETIRED
- * (billing is workspace-level now — see features/billing/entitlements.ts),
- * so this no longer paywalls callers. It still:
- *
- *   1. Auth, plus per-token rate limiting of OAuth-bearer callers (both via
- *      `withUserAuth` — the limiter lives in its OAuth-bearer branch and does
- *      not touch cookie/session callers).
- *   2. For MCP (OAuth-token) callers: log the call to mcp_events for the
- *      admin transcript/analytics view.
- *   3. Session (UI) calls pass straight through — unmetered, unlogged.
- *
- * The `action` parameter is a tool-name hint for logMcpEvent (dashboards
- * group by tool). These endpoints are the read-only Dopl knowledge packs;
- * workspace-scoped tool traffic runs through withWorkspaceAuth, which also
- * records per-op usage to mcp_tool_calls.
+ * Wraps an MCP-reachable endpoint. Does NOT paywall (billing is
+ * workspace-level). Auth + per-token rate limiting via withUserAuth; OAuth-token
+ * callers are logged to mcp_events; session (UI) calls pass straight through,
+ * unmetered and unlogged. `action` is a tool-name hint for logMcpEvent.
+ * ⚠ These are the read-only knowledge packs — workspace-scoped tool traffic goes
+ * through withWorkspaceAuth, which records per-op usage to mcp_tool_calls.
  */
 export function withMcpAccess(
   action: string,
@@ -316,24 +260,21 @@ export function withMcpAccess(
   ) => Promise<Response | NextResponse>
 ) {
   return withUserAuth(async (request, ctx) => {
-    // Only a `dopl_at_*` bearer is an MCP caller. A bare "has Authorization
-    // header" test would misclassify desktop Supabase-JWT sessions as MCP
-    // and write their request bodies into mcp_events — key off the token
-    // KIND, never the header's presence.
+    // ⚠ Key off token KIND, never header presence: a bare "has Authorization"
+    // test misclassifies desktop Supabase-JWT sessions as MCP and writes their
+    // request bodies into mcp_events.
     const bearerForKind = (request.headers.get("authorization") ?? "")
       .replace(/^Bearer\s+/i, "")
       .trim();
     const isMcpCaller = isOAuthAccessToken(bearerForKind);
 
-    // UI (session) calls are unmetered and unlogged.
     if (!isMcpCaller) {
       return handler(request, ctx);
     }
 
     const endpoint = `${request.method} ${request.nextUrl.pathname}`;
     const toolName = request.headers.get("x-mcp-tool") || action;
-    // Workspace attribution — the loopback always sends the workspace
-    // UUID; ignore anything that isn't one (slugs, garbage).
+    // Loopback always sends the workspace UUID; ignore slugs/garbage.
     const rawWorkspace = request.headers.get("x-workspace-id");
     const eventWorkspaceId =
       rawWorkspace &&
@@ -347,12 +288,11 @@ export function withMcpAccess(
         const bodyJson = await request.clone().json();
         argsPayload = bodyJson ?? argsPayload;
       } catch {
-        // Body may be empty/non-JSON — fall back to query params (or null)
+        // Empty/non-JSON body — fall back to query params (or null)
       }
     }
     const startedAt = Date.now();
 
-    // Run handler.
     let response: Response | NextResponse;
     try {
       response = await handler(request, ctx);
@@ -373,7 +313,6 @@ export function withMcpAccess(
       throw err;
     }
 
-    // Capture response summary for analytics.
     let responseSummary: unknown = null;
     let errorMessage: string | null = null;
     try {
@@ -416,21 +355,15 @@ export function withMcpAccess(
   });
 }
 
-/**
- * Returns true if the given user ID is the designated admin.
- * Admin is bound to a single Supabase auth UUID via ADMIN_USER_ID env var.
- */
+/** Admin is a single Supabase auth UUID, bound via the ADMIN_USER_ID env var. */
 export function isAdmin(userId: string | null | undefined): boolean {
   const adminId = process.env.ADMIN_USER_ID;
   if (!adminId || !userId) return false;
   return userId === adminId;
 }
 
-// ── Boot validation ─────────────────────────────────────────────────
-// Warn loudly at module load if ADMIN_USER_ID isn't configured.
-// Without it, every admin route silently returns 404 and the moderation
-// queue fills up forever with no way to approve entries. A one-time
-// stderr line is cheap insurance.
+// Boot validation: without ADMIN_USER_ID every admin route silently 404s and
+// the moderation queue fills with no way to approve entries.
 if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
   console.warn(
     "[auth] ADMIN_USER_ID is not set. /admin/* routes will reject all callers as 404. " +
@@ -441,32 +374,17 @@ if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
 /**
  * Extract the authenticated user id from Supabase session cookies.
  *
- * Q11 (2026-07-31) — this used to call `supabase.auth.getUser()`, a NETWORK
- * round-trip to GoTrue (≈5 Postgres queries) on EVERY cookie-authenticated API
- * request, uncached. `proxy.ts` removed that cost from the middleware; this is
- * the HOTTER copy — one idle focused channels tab polls the consent inbox every
- * few seconds, so a browser sitting untouched was worth thousands of GoTrue-side
- * queries an hour before any real work happened. It is the same amplifier that
- * starved GoTrue on 2026-07-31 until OAuth code-exchange started failing.
+ * ⚠ Never `getUser()` here — network round-trip to GoTrue (≈5 Postgres queries)
+ * on EVERY cookie-authed API request. `getClaims()` verifies the access token
+ * locally against the ES256 JWKS; a tampered signature errors, an HS256/kid-less
+ * legacy token degrades to a network `getUser()` inside auth-js.
  *
- * `getClaims()` verifies the access token LOCALLY against the ES256 JWKS (fetched
- * once, cached process-wide for 10 min) — see the long note in `proxy.ts` and the
- * signature-verification proof in `proxy-claims.test.ts`. Nothing is trusted on
- * decode alone: a tampered signature returns an error, and an HS256 / kid-less
- * legacy token degrades to a network `getUser()` inside auth-js itself.
- *
- * THE try/catch IS LOAD-BEARING, and more so here than in the middleware.
- * `getClaims()` only converts `AuthError`s into `{ data: null, error }`; auth-js
- * `validateExp` throws a PLAIN `Error` ("JWT has expired" / "Missing exp claim")
- * which `getClaims()` RE-THROWS at the caller. `getUser()` could never do that.
- * This wrapper is composed by every `/api/channels/**` route (via
- * `withWorkspaceAuth`), so an uncaught throw here is a 500 on every API route
- * instead of the 401 an expired session must produce. Every road — thrown,
- * errored, or no session — ends at `null`, i.e. the same 401 branch a failed
- * `getUser()` landed in. This layer and the middleware now read the SAME
- * authority, which is what Q4 is about.
- *
- * Returns only what the caller uses: the user id (`claims.sub`).
+ * ⚠ THE try/catch IS LOAD-BEARING. `getClaims()` converts only `AuthError`s into
+ * `{ data: null, error }`; auth-js `validateExp` throws a PLAIN `Error` ("JWT has
+ * expired" / "Missing exp claim") that `getClaims()` re-throws at the caller.
+ * Every `/api/channels/**` route composes this via `withWorkspaceAuth`, so an
+ * uncaught throw is a 500 on every API route instead of the required 401. Every
+ * road — thrown, errored, no session — must end at `null`.
  */
 async function getSessionUser(request: NextRequest): Promise<{ id: string } | null> {
   try {

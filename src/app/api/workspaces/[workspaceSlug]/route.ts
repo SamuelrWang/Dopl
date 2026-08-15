@@ -16,11 +16,8 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/**
- * GET /api/workspaces/[workspaceSlug] — fetch one workspace by slug, scoped to the
- * caller. Looks up by (owner_id, slug) first; if not found, falls back
- * to membership-by-slug across workspaces the caller is a member of.
- */
+/** GET — one workspace by slug, scoped to the caller: (owner_id, slug) first, then
+ *  membership-by-slug across workspaces the caller belongs to. */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
@@ -28,10 +25,7 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
 
-    // Owner-side lookup is the fast path. Most calls hit a workspace the
-    // caller owns. Membership lookup (workspaces owned by other users that
-    // the caller has been invited to) lands in Phase 4 and joins through
-    // workspace_members.
+    // Owner-side lookup is the fast path; membership lookup joins through workspace_members.
     const workspace = await resolveApiWorkspace(workspaceSlug, userId);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
@@ -43,10 +37,7 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
   }
 });
 
-/**
- * PATCH /api/workspaces/[workspaceSlug] — rename / edit description. Admin+ only;
- * `renameWorkspace` enforces the role gate.
- */
+/** PATCH — rename / edit description. Admin+; `renameWorkspace` enforces the gate. */
 export const PATCH = withUserAuth(async (request: NextRequest, { userId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
@@ -68,10 +59,7 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
   }
 });
 
-/**
- * DELETE /api/workspaces/[workspaceSlug] — owner-only. Cascades clusters / panels /
- * memberships / invitations via FK ON DELETE CASCADE.
- */
+/** DELETE — owner-only. Cascades clusters / panels / memberships / invitations via FK. */
 export const DELETE = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
@@ -87,6 +75,5 @@ export const DELETE = withUserAuth(async (_request: NextRequest, { userId, param
   } catch (err) {
     return toHttpErrorResponse("api/workspaces/[workspaceSlug]", err);
   }
-// sessionOnly: destroying a workspace (cascades KBs/skills/clusters/members)
-// must never be driven by a background MCP agent — interactive session only.
+// sessionOnly: destroying a workspace cascades KBs/skills/clusters/members — never an agent.
 }, { sessionOnly: true });

@@ -13,8 +13,8 @@ import {
 } from "@/features/channels/server/service";
 import { TrustMutateSchema } from "@/features/channels/schema";
 
-// Per-teammate standing consent, scoped to the caller (operator) in the active
-// workspace. Self-only — the service always uses ctx.userId as the operator.
+// Per-teammate standing consent, scoped to the caller in the active workspace. Self-only — the
+// service always uses ctx.userId as the operator.
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
@@ -49,18 +49,13 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
 
 export const GET = withWorkspaceAuth(handleGet);
 /**
- * H-1 — `sessionOnly` on both mutations. A trust rule is standing consent: it
- * makes every future inbound request from that teammate auto-allow, so the
- * human is never asked again. That is a strictly bigger grant than any single
- * Allow, and the agent it would be granted to is the same
- * `--mcp-config`-spawned, Bash-capable session that is processing an
- * untrusted teammate's message — left open, an injected agent could POST
- * `{trustedUserId: <its requester>}` and permanently retire the gate on its
- * own machine. Revocation (DELETE) is gated for the mirror reason: an agent
- * must not be able to quietly drop a rule the human relies on either.
+ * ⚠ `sessionOnly` on BOTH mutations. A trust rule is standing consent — every future inbound
+ * request from that teammate auto-allows — a strictly bigger grant than any single Allow, handed
+ * to the same `--mcp-config`-spawned, Bash-capable session processing an untrusted teammate's
+ * message. Ungated, an injected agent POSTs `{trustedUserId: <its requester>}` and permanently
+ * retires the gate on its own machine. DELETE is gated for the mirror reason.
  *
- * The desktop only READS trust (cookie-authenticated GET, cached per
- * workspace); it never writes a rule, so nothing in the listener regresses.
+ * The desktop only READS trust (cookie GET, cached per workspace), so nothing regresses.
  */
 export const POST = withWorkspaceAuth(handlePost, { sessionOnly: true });
 export const DELETE = withWorkspaceAuth(handleDelete, { sessionOnly: true });

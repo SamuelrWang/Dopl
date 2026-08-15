@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
-// Deep import, not the `settings-modal` barrel — the barrel re-exports
+// ⚠ Deep import, not the `settings-modal` barrel: the barrel re-exports
 // SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
@@ -27,17 +27,14 @@ interface Props {
   workspaceSlug: string;
   currentUserId: string;
   role: Role;
-  /** Where a freshly created base sends the user — see
-   *  ./knowledge-v2/routing.ts. */
+  /** Where a freshly created base sends the user (./knowledge-v2/routing.ts). */
   routing: KnowledgeRouting;
 }
 
 /**
- * Create-knowledge-base dialog in the new design language: the shared
- * ModalShell (scrim + fade/pop-in light card) in its narrow size — same
- * chrome as `BaseSettingsModal`. Includes the three-way sharing scope
- * picker (private / teams / workspace); server derives the slug from
- * the name.
+ * Create-knowledge-base dialog. Shared ModalShell, narrow size (same chrome as
+ * `BaseSettingsModal`), plus the three-way scope picker. Server derives the
+ * slug from the name.
  */
 export function CreateBaseDialog({
   open,
@@ -93,12 +90,9 @@ export function CreateBaseDialog({
         workspaceId
       );
       close();
-      // Seed BEFORE navigating: the controller resolves the URL segment it is
-      // about to see against the cached base list, and the refetch that
-      // `refreshServerData` kicks off has not landed yet.
-      // Seed BEFORE navigating: the controller resolves the URL segment it is
-      // about to see against the cached base list, and the refetch that
-      // `refreshServerData` kicks off has not landed yet.
+      // ⚠ Seed BEFORE navigating: the controller resolves the URL segment it
+      // is about to see against the cached base list, and the
+      // `refreshServerData` refetch has not landed yet.
       seedKnowledgeBase(queryClient, workspaceId, base);
       routing.goToBase(base, "push");
       routing.refreshServerData();
@@ -212,9 +206,8 @@ export function CreateBaseDialog({
 }
 
 /**
- * Scope radio + (when Teams is selected) the grant editor. Loads teams
- * lazily — `useTeams` only mounts once the user opens the picker, so
- * the landing page doesn't fetch teams for everyone.
+ * Scope radio + (Teams only) grant editor. `useTeams` mounts lazily so the
+ * landing page doesn't fetch teams for everyone.
  */
 function ScopePicker({
   workspaceSlug,

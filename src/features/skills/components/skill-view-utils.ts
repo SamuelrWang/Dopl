@@ -1,7 +1,5 @@
-/**
- * Pure helpers for `skill-view.tsx` — kept out of the component file
- * so the page-level orchestration stays under the 500-line cap.
- */
+/** Pure helpers for `skill-view.tsx`, split out to keep it under the
+ *  500-line cap. */
 
 import {
   PRIMARY_SKILL_FILE_NAME,
@@ -15,11 +13,8 @@ export function errMessage(err: unknown): string {
   return "Unknown error";
 }
 
-/**
- * The single SKILL.md row backing a skill. Skills are single-file, but
- * the resolved payload still carries a `files` array (one element) — pick
- * the SKILL.md defensively, falling back to the first file.
- */
+/** The single SKILL.md row. The resolved payload still carries a one-element
+ *  `files` array, so pick SKILL.md defensively and fall back to files[0]. */
 export function primaryFile(files: SkillFile[]): SkillFile {
   return files.find((f) => f.name === PRIMARY_SKILL_FILE_NAME) ?? files[0];
 }

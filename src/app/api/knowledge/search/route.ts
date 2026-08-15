@@ -4,14 +4,8 @@ import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import { buildKnowledgeContext } from "@/features/knowledge/server/service";
 import { searchKnowledgeEntries } from "@/features/knowledge/server/search";
 
-/**
- * Full-text search across the workspace's knowledge entries.
- *
- *   GET /api/knowledge/search?q=...&base=<slug>&limit=20
- *
- * `base` is optional — when omitted, searches across the whole
- * workspace. `limit` defaults to 20, capped at 100 by the RPC.
- */
+/** Full-text search: `?q=…&base=<slug>&limit=20`. `base` omitted = whole workspace; `limit`
+ *  defaults to 20, capped at 100 by the RPC. */
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {

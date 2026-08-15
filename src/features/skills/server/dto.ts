@@ -8,33 +8,21 @@ import type {
   SkillWriteSource,
 } from "../types";
 
-/**
- * Row shapes for the `skills` table and the snake_case → camelCase
- * mappers consumed by the repository. The `connectors` JSONB column
- * comes back as a parsed array from the Supabase client; we cast
- * through the row interfaces below.
- *
- * The SKILL.md body is columns ON the skill row now (F-029 collapse);
- * `SKILL_BODY_COLS` / `mapSkillBodyRow` synthesize the single `SkillFile`
- * the API still exposes from those columns.
- */
+/** `skills` row shapes + snake_case → camelCase mappers. `connectors` JSONB
+ *  arrives parsed and is cast through the row interfaces below. The SKILL.md
+ *  body is columns on the skill row; `SKILL_BODY_COLS` / `mapSkillBodyRow`
+ *  synthesize the `SkillFile` the API still exposes. */
 
 export const SKILL_COLS =
   "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, status, agent_write_enabled, visibility, access_mode, folder, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
-/**
- * Lighter projection for `skill_list` and the index page row — drops
- * the JSONB display arrays. The repository merges in defaults so the
- * camelCase domain shape stays consistent.
- */
+/** Lighter projection for `skill_list` / index rows — drops the JSONB display
+ *  arrays. Repository merges defaults so the domain shape stays consistent. */
 export const SKILL_SUMMARY_COLS =
   "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, visibility, access_mode, folder, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
-/**
- * Body projection — the SKILL.md fields the app reads plus the skill
- * columns needed to synthesize a full `SkillFile`. `body_updated_at` is
- * the CAS clock (surfaces as `SkillFile.updatedAt`, the version token).
- */
+/** SKILL.md fields plus the skill columns needed to synthesize a `SkillFile`.
+ *  `body_updated_at` is the CAS clock, surfaced as `SkillFile.updatedAt`. */
 export const SKILL_BODY_COLS =
   "id, workspace_id, created_by, created_at, deleted_at, body, body_updated_at, body_edited_by, body_edited_source";
 
@@ -108,12 +96,9 @@ export function mapSkillSummaryRow(row: SkillSummaryRow): Skill {
   return mapSkillRow({ ...row, connectors: [] });
 }
 
-/**
- * Synthesize the single `SkillFile` the API still exposes from the
- * skill's body columns. Fields with no column equivalent are constant
- * (`name` = SKILL.md, `position` = 0) or aliased off the skill row
- * (`id`/`skillId` = skill id, `updatedAt` = body_updated_at).
- */
+/** Synthesize the API's `SkillFile` from the body columns. Fields with no
+ *  column are constant (`name` = SKILL.md, `position` = 0) or aliased off the
+ *  skill row (`id`/`skillId` = skill id, `updatedAt` = body_updated_at). */
 export function mapSkillBodyRow(row: SkillBodyRow): SkillFile {
   return {
     id: row.id,

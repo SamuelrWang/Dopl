@@ -44,11 +44,8 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
-/**
- * Right detail pane — the archived chat as a static document: crumb top
- * bar (owner-gated sharing control, pin, copy, delete), the header box,
- * then the summarized transcript (loaded per selection).
- */
+/** Right detail pane: crumb bar (owner-gated sharing, pin, copy, delete),
+ *  header box, then the summarized transcript loaded per selection. */
 export function DetailPane({
   chat,
   folder,
@@ -120,11 +117,9 @@ export function DetailPane({
         />
 
         {isMine && (
-          // The star flips on the click (the write patches the cache this
-          // reads) and goes inert for the round trip. That inertness is the
-          // whole double-PATCH fix: without it, a second click on a
-          // still-in-flight toggle sends a second, contradicting PATCH and the
-          // row's final state is decided by whichever response lands last.
+          // ⚠ The star must go inert for the round trip: a second click on an
+          // in-flight toggle sends a contradicting PATCH and the row's final
+          // state is decided by whichever response lands last.
           <button
             type="button"
             onClick={() => void onTogglePin(chat.id)}
@@ -200,8 +195,7 @@ export function DetailPane({
           ) : detail ? (
             <MessageList messages={detail.messages} />
           ) : (
-            // The transcript's own shape, not a line of copy. Bubble count
-            // tracks the message count already printed above it, capped so a
+            // Bubble count tracks the message count printed above, capped so a
             // 200-message chat doesn't ghost a screenful.
             <div role="status" aria-busy="true" aria-live="polite">
               <span className="sr-only">Loading transcript</span>

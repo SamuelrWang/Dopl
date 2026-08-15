@@ -8,13 +8,12 @@ export interface ParsedSegment {
 const SEGMENT_REGEX = new RegExp(`^(.+)-([0-9a-z]{${PUBLIC_ID_LENGTH}})$`);
 
 /**
- * Parse a `{slug}-{publicId}` URL segment into its parts. Returns null
- * for legacy segments that don't carry a 12-char base62 suffix.
+ * Parse a `{slug}-{publicId}` URL segment. Null for legacy segments with no
+ * 12-char base62 suffix.
  *
- * Greediness note: `(.+)-` is greedy, so a segment whose slug itself
- * ends in 13+ alphanumerics still parses with the LAST 12 chars as
- * publicId. The trailing-12 alphanumeric pattern is the canonical
- * shape; anything else falls through to the legacy slug-only resolver.
+ * ⚠ `(.+)-` is GREEDY, so a slug itself ending in 13+ alphanumerics still parses
+ * with the LAST 12 chars as publicId. Anything not matching falls through to the
+ * legacy slug-only resolver.
  */
 export function parseSegment(segment: string): ParsedSegment | null {
   const match = SEGMENT_REGEX.exec(segment);
@@ -22,9 +21,7 @@ export function parseSegment(segment: string): ParsedSegment | null {
   return { slug: match[1], publicId: match[2] };
 }
 
-/**
- * Compose a canonical URL segment from a slug and publicId.
- */
+/** Compose a canonical URL segment from a slug and publicId. */
 export function composeSegment(slug: string, publicId: string): string {
   return `${slug}-${publicId}`;
 }

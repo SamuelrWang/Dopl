@@ -1,18 +1,13 @@
 /**
- * OWN POSTS MUST NOT POP YOUR OWN HOLD. Observed live twice: an agent armed
- * `op="await"` and then its own close-echo (and, on the other occasion, a
- * sibling session on the same account) returned the hold instantly. Any agent
- * that posts a `task_progress` milestone after arming killed its own wake —
- * which is precisely the multi-step work the wake primitive exists for.
+ * ⚠ OWN POSTS MUST NOT POP YOUR OWN HOLD. An agent's own close-echo — or a
+ * sibling session on the same account — returns the hold instantly, so any
+ * agent posting a `task_progress` milestone after arming kills its own wake,
+ * which is exactly the multi-step work the primitive exists for.
  *
- * The fix is opt-in at every other layer and ALWAYS-ON here: an MCP await
- * waits for a COUNTERPARTY by definition, so `opAwait` passes the caller's own
- * id as `excludeAuthor` whenever the boot handshake named it. When it did not
- * (`selfUserId === null`) nothing is passed and the poll is the pre-fix one.
- *
- * Split into its own file (rather than added to `channel-wake.test.ts`, which
- * owns the rest of the hold's behaviour) at the §2 500-line cap. The
- * @dopl/client is hand-stubbed; nothing transports.
+ * ⚠ Opt-in at every other layer, ALWAYS-ON here: an MCP await waits for a
+ * COUNTERPARTY by definition, so `opAwait` passes the caller's id as
+ * `excludeAuthor` whenever the boot handshake named it. `selfUserId === null`
+ * passes nothing.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -73,8 +68,8 @@ describe("opAwait — the caller's own posts are excluded", () => {
 
     expect(awaitChannelMessages.mock.calls.length).toBeGreaterThan(1);
     for (const [, opts] of awaitChannelMessages.mock.calls) {
-      // Re-issued with the same cursor AND the same filter: a hold that
-      // dropped the filter on re-issue would still wake on an own echo.
+      // ⚠ Re-issued with the same cursor AND the same filter — dropping the
+      // filter on re-issue still wakes on an own echo.
       expect(opts.since).toBe(7);
       expect(opts.excludeAuthor).toBe(ME);
     }

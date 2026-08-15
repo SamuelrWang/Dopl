@@ -6,16 +6,12 @@ import { apiRequest } from "@/shared/api/api-client";
 const POLL_INTERVAL_MS = 3500;
 
 /**
- * Poll GET /api/onboarding/mcp-status until an active MCP OAuth token
- * shows up for the signed-in user. Stops itself once connected (or on
- * unmount). `enabled` lets the connect step pause polling after the
- * user skips.
+ * Poll GET /api/onboarding/mcp-status until the signed-in user has an active
+ * MCP OAuth token. Self-stops on connect/unmount; `enabled` pauses it on skip.
  *
- * Goes through `apiRequest` rather than `fetch` so the desktop SPA's
- * onboarding port rides the IPC transport (the packaged renderer ships
- * `connect-src 'none'`). The route is `force-dynamic` and sends no
- * cache-control, so dropping the old `cache: "no-store"` changes nothing
- * on the web.
+ * ⚠ `apiRequest`, not `fetch` — packaged desktop renderer ships
+ * `connect-src 'none'` and rides the IPC transport. Route is `force-dynamic`
+ * with no cache-control, so no `cache: "no-store"` is needed.
  */
 export function useMcpConnectionPoll(enabled: boolean): boolean {
   const [connected, setConnected] = useState(false);
@@ -35,7 +31,7 @@ export function useMcpConnectionPoll(enabled: boolean): boolean {
           setConnected(true);
         }
       } catch {
-        // Transient network failure — next tick retries.
+        // Transient failure — next tick retries.
       }
     }
 

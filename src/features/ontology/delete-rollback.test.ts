@@ -1,13 +1,8 @@
 /**
- * INVARIANT SUITE — optimistic-delete rollback.
- *
- * A delete the server refuses must leave the board exactly as it was before
- * the dispatch: the object (or the whole cluster cascade) back, the references
- * the cascade scrubbed off surviving objects back, and the cluster at its
- * ORIGINAL tab index. It must NOT undo anything that happened during the
- * failed request's round trip — the store keeps several writes in flight and a
- * wholesale revert to the pre-delete snapshot would persist stale text on the
- * next debounced PATCH.
+ * INVARIANT SUITE — optimistic-delete rollback. A refused delete restores the
+ * object (or whole cluster cascade), the scrubbed references, and the cluster's
+ * ORIGINAL tab index. ⚠ It must NOT undo anything that landed during the round
+ * trip — a wholesale revert persists stale text on the next debounced PATCH.
  */
 
 import { describe, it, expect } from "vitest";
@@ -77,8 +72,7 @@ describe("planDeleteRollback — cluster delete", () => {
   it("keeps edits made during the failed round trip", () => {
     const before = makeState();
     const deleted = graphReducer(before, { type: "CLUSTER_DELETE", id: "A" });
-    // Two things landed while the DELETE was in flight: a rename on a
-    // surviving object, and a rename on a surviving cluster.
+    // Landed mid-DELETE: a rename on a surviving object and on a cluster.
     const current = graphReducer(
       graphReducer(deleted, {
         type: "OBJECT_UPDATE",
@@ -92,7 +86,6 @@ describe("planDeleteRollback — cluster delete", () => {
 
     expect(rolled?.objects.card3.name).toBe("renamed");
     expect(rolled?.clusters.find((c) => c.id === "B")?.name).toBe("Renamed B");
-    // …and the cascade still came back, references included.
     expect(rolled?.objects.card1).toBeDefined();
     expect(rolled?.objects.sub1).toBeDefined();
     expect(rolled?.objects.card3.childIds).toEqual(["card1"]);

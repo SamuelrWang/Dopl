@@ -1,11 +1,7 @@
 /**
- * INVARIANT SUITE — the per-KB storage constants.
- *
- * `kb-storage.ts` is the ONE retune spot, so what is pinned here is the VALUE
- * of each plan's cap, not merely that the symbol is referenced (INVARIANTS §14:
- * "A PIN ON A SYMBOL IS NOT A PIN"). The unit is the subtle half — these are
- * DECIMAL megabytes, and a well-meant "fix" to 1024-based MiB would silently
- * make the free plan read 4.77 MB in the very bar that renders it.
+ * INVARIANT SUITE — per-KB storage constants. Pins the VALUE of each plan's cap
+ * (INVARIANTS §14: "A PIN ON A SYMBOL IS NOT A PIN"). ⚠ DECIMAL megabytes — a
+ * "fix" to 1024-based MiB makes the free plan read 4.77 MB.
  */
 
 import { describe, it, expect } from "vitest";
@@ -46,9 +42,8 @@ describe("kbStorageLimitForPlan", () => {
   });
 
   it("falls back to the FREE cap for an unknown plan, never to unlimited", () => {
-    // The fail direction matters: an unrecognised plan string must land on the
-    // tightest cap, not on `undefined` (which would compare as NaN and let
-    // every write through).
+    // ⚠ Unrecognised plan must land on the TIGHTEST cap, not `undefined`
+    // (compares as NaN, letting every write through).
     expect(kbStorageLimitForPlan("enterprise" as never)).toBe(
       KB_STORAGE_BYTES.free
     );

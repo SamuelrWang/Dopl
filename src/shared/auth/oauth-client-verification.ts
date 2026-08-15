@@ -4,22 +4,18 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 /**
  * OAuth client verification for the consent screen (anti-phishing).
  *
- * A client's `client_name` is attacker-controllable — RFC 7591 dynamic client
- * registration is an OPEN endpoint, so anyone can register a client named
- * "Dopl Official Desktop" and send its /authorize link to a victim. The consent
- * screen must therefore never render a first-time client's self-chosen name as
- * a trusted first-party label. This module answers "have I connected this app
- * before", which is what lets the screen mark an unknown client as unverified.
- *
- * Lives outside `mcp-oauth.ts` only because that file is at the §2 500-line cap.
+ * ⚠ `client_name` is ATTACKER-CONTROLLABLE — RFC 7591 dynamic registration is an
+ * OPEN endpoint, so anyone can register "Dopl Official Desktop" and send its
+ * /authorize link to a victim. The consent screen must never render a
+ * first-time client's self-chosen name as a trusted first-party label. This
+ * answers "have I connected this app before".
  */
 
 /**
- * Has this user ever authorized this client before? True if ANY `mcp_tokens`
- * row exists for the (user, client) pair — including revoked/expired ones,
- * since the question is "have I connected this app before", not "is a grant
- * live". Fail-closed: a DB error answers `false` (treat as unverified), so a
- * lookup outage widens the warning rather than suppressing it.
+ * Has this user authorized this client before? True if ANY `mcp_tokens` row
+ * exists for the (user, client) pair — ⚠ including revoked/expired ones, since
+ * the question is "connected before", not "grant live". ⚠ Fail-closed: a DB
+ * error answers `false`, widening the warning rather than suppressing it.
  */
 export async function userHasPriorGrant(
   userId: string,

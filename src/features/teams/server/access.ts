@@ -64,11 +64,8 @@ export async function effectiveResourceAccess(
   return level === null ? null : capLevel(level, ceiling);
 }
 
-/**
- * Throws if the caller lacks the required level: 404 when they can't see
- * the resource at all (don't leak existence), 403 when they can see it
- * but the level is insufficient.
- */
+/** 404 when the caller can't see the resource at all (don't leak existence),
+ *  403 when they can see it but the level is insufficient. */
 export async function requireEffectiveAccess(
   userId: string,
   workspaceId: string,
@@ -85,14 +82,8 @@ export async function requireEffectiveAccess(
     opts
   );
   if (level === null) {
-    // `RESOURCE_NOT_FOUND` for every non-KB type. The literal used to be
-    // `WORKFLOW_NOT_FOUND` — this guard has covered chats, chat folders and
-    // skills for a long time and only the code still said otherwise. It was
-    // renamed with the workflows deletion (2026-08-11) after a whole-repo
-    // grep found the producer below was the ONLY mention of the old literal:
-    // no consumer branched on it in `src/`, `apps/`, `packages/` or the
-    // desktop tree. It matches what `teams/server/service.ts` already throws
-    // for the same condition.
+    // `RESOURCE_NOT_FOUND` for every non-KB type — matches what
+    // `teams/server/service.ts` throws for the same condition.
     throw new HttpError(
       404,
       resourceType === "knowledge_base" ? "KNOWLEDGE_BASE_NOT_FOUND" : "RESOURCE_NOT_FOUND",
@@ -108,11 +99,9 @@ export async function requireEffectiveAccess(
   }
 }
 
-/**
- * Batch resolution for list filtering — fixed query count regardless of
- * resource count. Pass `opts.role` (from the auth context) to skip the
- * membership fetch. Returns null if the user isn't an active member.
- */
+/** Batch resolution for list filtering — fixed query count regardless of
+ *  resource count. `opts.role` skips the membership fetch. Null = not an
+ *  active member. */
 export async function listEffectiveAccess(
   workspaceId: string,
   userId: string,
@@ -160,11 +149,10 @@ export async function listEffectiveAccess(
 }
 
 /**
- * The wire shape of `GET /api/workspaces/[workspaceSlug]/my-access`, and of
- * the `myAccess` half of `POST /api/boot`. Stable since the per-member
- * override era — the SPA seeds one endpoint's cache entry from the other's
- * answer, so the two MUST NOT drift; that is why the projection lives here
- * rather than inline in either route.
+ * Wire shape of `GET /api/workspaces/[workspaceSlug]/my-access` AND of the
+ * `myAccess` half of `POST /api/boot`. ⚠ The SPA seeds one endpoint's cache
+ * entry from the other's answer, so the two MUST NOT drift — hence one
+ * shared projection rather than inline shapes in either route.
  */
 export interface MyAccessPayload {
   defaultLevel: AccessLevel;
@@ -176,13 +164,10 @@ export interface MyAccessPayload {
 }
 
 /**
- * Project a batch result onto that wire shape.
- *
- * `level: null` (a teams-mode resource with no grant) maps to `"read"`, NOT
- * to omission: the client treats a missing entry as the ROLE DEFAULT ("edit"
- * for members), which would flip a just-revoked KB panel back to editable.
- * "read" keeps affordances locked until the lists refetch and drop the
- * resource entirely.
+ * ⚠ `level: null` (teams-mode resource with no grant) maps to `"read"`, NOT
+ * omission: the client reads a missing entry as the ROLE DEFAULT ("edit" for
+ * members), which would flip a just-revoked KB panel back to editable.
+ * "read" keeps affordances locked until the lists refetch and drop it.
  */
 export function toMyAccessPayload(result: EffectiveAccessResult): MyAccessPayload {
   return {
@@ -195,11 +180,8 @@ export function toMyAccessPayload(result: EffectiveAccessResult): MyAccessPayloa
   };
 }
 
-/**
- * Pure lookup against a batch result: the caller's level on one resource.
- * Workspace-mode resources resolve to the default level; teams-mode
- * resources resolve via the precomputed array (null = invisible).
- */
+/** Caller's level on one resource, from a batch result. Workspace-mode →
+ *  default level; teams-mode → precomputed array (null = invisible). */
 export function resolveLevel(
   acc: EffectiveAccessResult,
   resourceType: TeamResourceType,

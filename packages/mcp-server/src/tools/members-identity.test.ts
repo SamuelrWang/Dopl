@@ -1,19 +1,14 @@
 /**
- * `dopl_members` — WHO AM I, and the privacy fence around WHO ARE THEY.
+ * `dopl_members` — WHO AM I, and the privacy fence around WHO ARE THEY. Two
+ * claims pulling in opposite directions:
  *
- * Two separate claims live here and they pull in opposite directions:
- *
- *   SELF — `whoami` is the authoritative answer, so it must state the caller's
- *   immutable id even when the membership endpoint declines to, must say what
- *   the session is acting through, and must carry the locus refusals. Before
- *   this, a null `userId` from `GET /api/workspaces/me` produced a whoami that
- *   named a workspace and a role and identified NOBODY — while `dopl_channel`
- *   in the same connection was confidently marking "you" off a different id.
- *
- *   PEER — a member other than the caller is name + immutable id + membership
- *   and NOTHING ELSE. No hostname, no credential, no runtime. The session
- *   record now flows into this tool, so the fence has to be asserted, not
- *   assumed.
+ *   ⚠ SELF — `whoami` is authoritative: it must state the caller's immutable id
+ *   even when the membership endpoint declines to (`GET /api/workspaces/me`
+ *   returns a nullable `userId`), say what the session is acting through, and
+ *   carry the locus refusals.
+ *   ⚠ PEER — a member other than the caller is name + immutable id +
+ *   membership and NOTHING ELSE. No hostname, no credential, no runtime. The
+ *   session record flows into this tool, so the fence is asserted, not assumed.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -89,11 +84,10 @@ describe("whoami — the authoritative self-answer", () => {
   });
 
   /**
-   * THE FIX, ISOLATED. `MyMembership.userId` is `string | null` — "present on
-   * servers that expose it". When it is null, this op used to skip the identity
-   * line entirely and print `## You in WS` + a role, which reads as a confident
-   * answer with the identifying half quietly missing. The session record is now
-   * the source, so the id survives an endpoint that declines to repeat it.
+   * ⚠ `MyMembership.userId` is `string | null`. Reading it as the source makes
+   * a null print `## You in WS` + a role — a confident answer with the
+   * identifying half missing. The SESSION record is the source, so the id
+   * survives an endpoint that declines to repeat it.
    */
   it("still identifies you when the membership endpoint reports no user id", async () => {
     const text = await call(
@@ -153,11 +147,10 @@ describe("whoami — the authoritative self-answer", () => {
 
 describe("op=list — the caller's own row is marked", () => {
   /**
-   * `dopl_channel(op="members")` has marked the caller's row `· you` since the
-   * addressing work; this roster renders the same workspace from the same
-   * column and left the caller to spot itself by eye. Same wording on purpose —
-   * two rosters that disagree about how "you" looks is the same class of bug as
-   * two tools that disagree about who you are.
+   * ⚠ Same wording as `dopl_channel(op="members")`'s `· you` on purpose — two
+   * rosters rendering the same workspace from the same column and disagreeing
+   * about how "you" looks is the same bug class as two tools disagreeing about
+   * who you are.
    */
   it("marks YOUR row and only yours", async () => {
     const text = await call(client(), { op: "list" });
@@ -183,10 +176,9 @@ describe("op=list — the caller's own row is marked", () => {
 
 describe("PRIVACY — a peer is name + id + membership, and nothing more", () => {
   /**
-   * An invariant guard, not a mutation-verified fix: it passes on the old code
-   * too, because the old code had no session record to leak. It exists because
-   * one now flows through this file, and the cheapest way to introduce a leak
-   * from here is to render the caller's session on a member row.
+   * ⚠ An invariant guard, not a mutation-verified fix — it exists because a
+   * session record flows through this file, and the cheapest way to introduce a
+   * leak is to render the caller's session on a MEMBER row.
    */
   it("op=get on another member leaks no credential, hostname, or runtime", async () => {
     const text = await call(client(), { op: "get", member: "u-peer" });

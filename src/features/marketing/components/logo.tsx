@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "../constants";
 
-/** Brand lockup: the raised Dopl app icon + wordmark, matching the login screen. */
+/** Brand lockup. Must match login screen. */
 export function Logo() {
   return (
     <Link href="/" className="lp-brand" aria-label={BRAND}>
