@@ -13,6 +13,7 @@ import OntologyPage from "#/pages/ontology";
 import OntologyDetailPage from "#/pages/ontology/detail";
 import SettingsPage from "#/pages/settings";
 import ChannelsPage from "#/pages/channels";
+import ChannelsV2Page from "#/pages/channels-v2";
 import BootPage from "#/pages/boot";
 import OnboardingPage from "#/pages/onboarding";
 
@@ -60,6 +61,9 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
   { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels", element: <ChannelsPage /> },
+  // Design-review only (hardcoded mock data) — see the page's docblock.
+  // Temporary NAV row in app-sidebar-core.tsx; both go together when v2 lands.
+  { path: "channels-v2", label: "Channels v2", element: <ChannelsV2Page /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
 ];

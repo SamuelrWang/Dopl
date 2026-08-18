@@ -72,6 +72,7 @@ const WORKSPACE_PAGES = {
   skills: true,
   chats: false,
   channels: false,
+  'channels-v2': false,
   members: false,
   settings: false,
 };

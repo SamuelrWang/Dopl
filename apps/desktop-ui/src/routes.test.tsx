@@ -122,6 +122,8 @@ describe("app routes", () => {
   });
 
   it("mirrors the web app's page list", () => {
+    // `channels-v2` is the one desktop-only extra: a hardcoded design-review
+    // page with no web counterpart (routes.tsx row comment).
     expect(WORKSPACE_PAGES.map((page) => page.path)).toEqual([
       "overview",
       "ontology",
@@ -132,6 +134,7 @@ describe("app routes", () => {
       "skills/:skillSlug",
       "chats",
       "channels",
+      "channels-v2",
       "members",
       "settings",
     ]);
