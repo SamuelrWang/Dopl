@@ -1,11 +1,21 @@
+import { useParams } from "react-router";
 import { ChannelsV2Core } from "@/features/channels/components/channels-v2/channels-v2-core";
 import { PageError, PageLoading } from "#/components/page-states";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
- * /:workspaceSegment/channels-v2 — the three-column channels surface on REAL
- * reads, behind a temporary route while the shipping `#/pages/channels` page
- * stays live.
+ * /:workspaceSegment/channels-v2 — and `/channels-v2/:channelId`, the SAME page
+ * with a channel named — the three-column channels surface on REAL reads,
+ * behind a temporary route while the shipping `#/pages/channels` page stays
+ * live.
+ *
+ * ⚠ THE `:channelId` ROW IS THE DESKTOP NOTIFICATION'S LANDING SPOT (wiring
+ * plan Phase 9). Main focuses the window and pushes
+ * `/{segment}/channels-v2/{channelId}` over the navigate bridge; this file is
+ * the ONLY place that reads the param, because `ChannelsV2Core` is Next-free
+ * AND router-free by construction (it is imported by the web tree too). The
+ * param is an INITIAL selection handed down as a plain prop — never a router
+ * dependency inside the shared tree.
  *
  * ⚠ ONLY A SEAM, exactly like `#/pages/channels`. The whole tree is REUSED by
  * import from `@/features/channels/components/channels-v2/`, already client-side
@@ -31,6 +41,9 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  */
 export default function ChannelsV2Page() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
+  // Absent on the index row, which is the "no channel named" case the core
+  // already answers with its own first-row fallback.
+  const { channelId } = useParams<{ channelId: string }>();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) {
@@ -41,6 +54,7 @@ export default function ChannelsV2Page() {
     <ChannelsV2Core
       workspaceId={access.workspaceId}
       currentUserId={access.currentUserId}
+      initialChannelId={channelId ?? null}
     />
   );
 }

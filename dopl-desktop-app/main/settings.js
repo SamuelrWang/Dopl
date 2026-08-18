@@ -18,6 +18,7 @@ const store = new Store();
 // electron-store keys (namespaced so they never collide with v1.x keys like
 // `runInTerminal` — retired in v1.9 — or `claudeSessions`).
 const WINDOW_MODE_KEY = 'sessionWindowMode'; // boolean; unset -> ON
+const PRE_CONSENT_WINDOW_KEY = 'preConsentWindowMode'; // boolean; unset -> OFF
 const TURN_CAP_KEY = 'sessionTurnCap'; // number; unset -> DEFAULT_TURN_CAP
 const IDLE_TTL_KEY = 'sessionIdleTtlMs'; // number ms; unset -> DEFAULT_IDLE_TTL_MS
 const COST_CAP_KEY = 'sessionCostCapUsd'; // number USD; unset / <=0 -> no cap
@@ -38,6 +39,36 @@ function getWindowMode() {
 function setWindowMode(v) {
   const val = !!v;
   store.set(WINDOW_MODE_KEY, val);
+  return val;
+}
+
+// ── The PRE-CONSENT window (wiring plan Phase 9: windowing inverts) ───────────
+//
+// DEFAULTS **OFF**, and that is the inversion. Until 2026-08-18 an inbound
+// request opened a window per thread the instant it arrived — before anyone had
+// looked at it — and the notification click opened another. The new default is
+// the opposite: the notification FOCUSES the main app and navigates to the
+// channel, where the Inbox's launch panel is the decision surface (MAPPING.md
+// § Wiring intent, "Windowing inverts").
+//
+// ⚠ THIS IS A DIFFERENT SWITCH FROM `getWindowMode()` AND MUST STAY ONE. That
+// one governs the OPERATOR'S OWN RUNS — the live session window, the tray's
+// "Run sessions in a window", `session-dispatch`'s five requester-side routes —
+// and it is untouched, still ON by default. What flipped is only "does a request
+// mint a window before it is answered". Collapsing the two would either
+// resurrect the pre-consent window or take the session window down with it.
+//
+// ⚠ THE CAPABILITY IS INTACT, only the default moved. `session-consent.js`, the
+// window factory, the adopt handoff and the C-9 release are all unchanged, and
+// flipping this key back restores the old path byte-for-byte. It deliberately
+// has NO tray item: the pre-consent window is not a product surface any more, it
+// is machinery Phase 10 (the opt-in pop-out) still needs.
+function getPreConsentWindow() {
+  return store.get(PRE_CONSENT_WINDOW_KEY) === true; // DEFAULT OFF
+}
+function setPreConsentWindow(v) {
+  const val = !!v;
+  store.set(PRE_CONSENT_WINDOW_KEY, val);
   return val;
 }
 
@@ -79,6 +110,8 @@ function setCostCapUsd(n) {
 module.exports = {
   getWindowMode,
   setWindowMode,
+  getPreConsentWindow,
+  setPreConsentWindow,
   getTurnCap,
   setTurnCap,
   getIdleTtlMs,

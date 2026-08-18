@@ -32,6 +32,13 @@ import { requestedThreadIds, sidebarThreads } from "./view-model-requested";
 export interface ChannelsV2CoreProps {
   workspaceId: string;
   currentUserId: string;
+  /**
+   * The channel a CALLER named, as an initial selection — the desktop's
+   * `/channels-v2/:channelId` route hands its param down (wiring plan Phase 9).
+   * A plain prop, deliberately: this tree is router-free, so the SPA page owns
+   * the param read and this owns nothing but the selection.
+   */
+  initialChannelId?: string | null;
 }
 
 /**
@@ -82,8 +89,12 @@ export interface ChannelsV2CoreProps {
  * refetch and no payload is ever merged, so RLS and the service filters stay
  * authoritative.
  */
-export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CoreProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export function ChannelsV2Core({
+  workspaceId,
+  currentUserId,
+  initialChannelId = null,
+}: ChannelsV2CoreProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
   const [requestedThreadId, setRequestedThreadId] = useState<string | null>(null);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
   // The Inbox nav row takes over the CENTER column — it is a nav destination,
@@ -91,6 +102,29 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   const [inboxOpen, setInboxOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
+
+  // A SECOND notification, with the page already mounted, changes the route but
+  // not the component — the initial `useState` above would never see it. So the
+  // named channel is re-applied whenever it CHANGES, and only then: a value the
+  // caller keeps handing us unchanged must not fight the operator's own clicks.
+  // Going back to the paramless row (`initialChannelId` → null) names nothing
+  // and therefore selects nothing; the current pick stands.
+  //
+  // ⚠ ADJUSTED DURING RENDER, NOT IN AN EFFECT — React's own "adjusting state
+  // when a prop changes" shape, and `react-hooks/set-state-in-effect` is an
+  // ERROR here (measured 2026-08-18), not a preference. The effect version
+  // paints the OLD channel first and the named one on a second pass, which on
+  // this surface is a visible flash of the wrong transcript. React re-runs this
+  // component before committing anything, so the extra pass costs no DOM.
+  const [routedId, setRoutedId] = useState<string | null>(initialChannelId);
+  if (initialChannelId !== routedId) {
+    setRoutedId(initialChannelId);
+    if (initialChannelId) {
+      setSelectedId(initialChannelId);
+      setRequestedThreadId(null);
+      setInboxOpen(false);
+    }
+  }
 
   const { channels, loading, refetch: refetchChannels } = useChannels(
     workspaceId,

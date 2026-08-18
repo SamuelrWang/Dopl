@@ -61,9 +61,20 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
   { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels", element: <ChannelsPage /> },
-  // Design-review only (hardcoded mock data) — see the page's docblock.
+  // The v2 surface, on real reads since Phase 2 — no longer the mock it was.
   // Temporary NAV row in app-sidebar-core.tsx; both go together when v2 lands.
   { path: "channels-v2", label: "Channels v2", element: <ChannelsV2Page /> },
+  // ⚠ THE NOTIFICATION'S LANDING ROUTE (wiring plan Phase 9). A clicked request
+  // notification focuses the app and navigates HERE, naming the channel the
+  // request was made in; the page threads `:channelId` into the v2 core's
+  // initial selection. It is deliberately a child of `channels-v2` and NOT of
+  // the shipping `channels` row: the v1 page has no channel-detail view at all,
+  // so `channels/:channelId` would either lie about v1 or split the two halves
+  // of one path across two page components. Phase 12 renames BOTH v2 rows to
+  // `channels` in one edit, which is the least-churn shape — and the hand copy
+  // in `dopl-desktop-app/main/deep-link-target.js › WORKSPACE_PAGES` flips
+  // `channels-v2` to `true` for exactly this row (INVARIANTS §11).
+  { path: "channels-v2/:channelId", label: "Channel", element: <ChannelsV2Page /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
 ];

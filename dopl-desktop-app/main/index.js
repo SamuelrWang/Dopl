@@ -287,9 +287,12 @@ if (!gotLock) {
     }
 
     // Start the Channels listener; it drives the tray status label. The
-    // openChannel handler lets a clicked notification open + navigate the window;
+    // openChannel handler lets a clicked notification open + navigate the window
+    // — since Phase 9 it is handed (segment, channelId) and lands ON the channel,
+    // which is the "windowing inverts" ruling's whole focus-the-app half;
     // onPending feeds the tray "Pending: N" count + remembers the newest pending
-    // channel so the tray item can open straight to it (Round B).
+    // channel so the tray item can open straight to it (Round B — segment only,
+    // so it lands on the page and the Inbox badge takes it from there).
     listener.start((status, meta) => tray.update(status, meta), {
       openChannel: navigateToChannels,
       onPending: ({ count, segment }) => {

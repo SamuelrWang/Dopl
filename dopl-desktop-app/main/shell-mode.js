@@ -19,6 +19,15 @@
 //   showMainWindow()                    — reveal/recreate (calls back in)
 //   appOrigin, diag
 
+// THE PAGE A CHANNEL NOTIFICATION LANDS ON, as one string. It is `channels-v2`
+// while the v2 surface lives behind its temporary route: v2 is where the Inbox
+// and the launch panel are, so the shipping v1 page is no longer the useful
+// destination for "come and answer this". Phase 12 renames the v2 routes to
+// `channels` and this constant changes with them — one edit, not a grep.
+// Mirrors a row in `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES`; the hand
+// copy that the drift test guards is `deep-link-target.js`, not this.
+const CHANNELS_PAGE = 'channels-v2';
+
 function makeShellHelpers(deps) {
   function createShellWindow(opts = {}) {
     // THE MINIMUM-VERSION GATE'S ENTIRE ENFORCEMENT POINT. This factory is the
@@ -62,10 +71,27 @@ function makeShellHelpers(deps) {
 
   // Feature B: a clicked channel notification opens the app and navigates to
   // that workspace's Channels page, over the bridge (GAP-16's other half).
-  function navigateToChannels(segment) {
+  //
+  // WIRING PLAN PHASE 9 — WINDOWING INVERTS. This is the whole "focus the app"
+  // half of the inversion, and it already existed; what was missing was the
+  // CHANNEL. `channelId` is optional and every existing caller (the tray's
+  // "Pending: N") still lands on the page itself.
+  //
+  // ⚠ BOTH INTERPOLATED VALUES ARE SERVER DATA ENTERING A ROUTER PATH, and both
+  // are checked by the ONE module that owns that question —
+  // `deep-link-target.js › isSafeSegment`, the same character rule every
+  // deep-link segment passes (INVARIANTS §11). A second regex here would be a
+  // second answer to it. An unusable segment shows the window and navigates
+  // nowhere; an unusable channel id degrades to the page, which is exactly what
+  // a notification with no channel already does. Required LAZILY (the tray.js
+  // idiom above) so this file keeps its module-scope dependency freedom.
+  function navigateToChannels(segment, channelId) {
     deps.showMainWindow();
     if (!segment) return;
-    navigateTo(`/${segment}/channels`);
+    const { isSafeSegment } = require('./deep-link-target');
+    if (!isSafeSegment(segment)) return;
+    const page = `/${segment}/${CHANNELS_PAGE}`;
+    navigateTo(isSafeSegment(channelId) ? `${page}/${channelId}` : page);
   }
 
   // Replace whatever is on screen with the window the CURRENT gate verdict calls

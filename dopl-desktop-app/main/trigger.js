@@ -200,12 +200,23 @@ async function handleTrigger(entry, m) {
   // notification; the poke below makes the watcher resolve it at once. A pending
   // row gets the Allow/Dismiss notification — Dismiss PARKS (stays pending).
   if (!created.status || created.status === 'pending') {
-    // Item 8: open the pre-consent window IMMEDIATELY (shows the request + Accept/Deny;
-    // runs NO agent work until Accept, when launchResponderSession ADOPTS it). The
-    // native notification + web panel remain valid secondary surfaces — all three route
-    // through the SAME consent row (first-answer-wins). Window-mode OFF -> no window,
-    // today's headless + approve-out path is preserved byte-for-byte.
-    if (settings.getWindowMode()) {
+    // PHASE 9 — THE PRE-CONSENT WINDOW IS NO LONGER THE DEFAULT (wiring plan §9,
+    // MAPPING.md "Windowing inverts"). Item 8 opened this window IMMEDIATELY on every
+    // inbound request: a new window per thread, minted before anyone had looked at the
+    // request. The default is now the inversion — nothing is minted here, the native
+    // notification fires, and CLICKING it focuses the main app on the channel, where
+    // the Inbox's launch panel is the decision surface.
+    //
+    // ⚠ NOTHING BELOW CHANGED AND NOTHING WAS DELETED. When the operator opts back in
+    // the window opens exactly as it did — shows the request + Accept/Deny, runs NO
+    // agent work until Accept, `launchResponderSession` ADOPTS it — and all three
+    // surfaces still route through the SAME consent row (first-answer-wins).
+    //
+    // ⚠ TWO SWITCHES, AND THE OUTER ONE IS NOT THIS PHASE'S. `getWindowMode()` governs
+    // the operator's own SESSION windows and is still ON by default; a pre-consent
+    // window is a session window, so it can never outlive that master switch.
+    // `getPreConsentWindow()` is the one Phase 9 flipped, and it defaults OFF.
+    if (settings.getWindowMode() && settings.getPreConsentWindow()) {
       sessionEngine.openConsentWindow({
         channelId: entry.channel.id,
         taskId: futureTaskId,

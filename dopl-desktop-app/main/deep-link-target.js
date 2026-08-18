@@ -57,6 +57,18 @@ const WORKSPACE_HOME_PAGE = 'overview';
  * is a page no deep link can ever reach, silently. The test reads routes.tsx and
  * fails when the two disagree.
  *
+ * ⚠ `channels-v2` IS `true` SINCE 2026-08-18 (wiring plan Phase 9) because
+ * `routes.tsx` grew a `channels-v2/:channelId` row: the desktop's notification
+ * click navigates to that route, so a THIRD segment there is now a channel id
+ * rather than noise. `channels` stays `false` — the shipping v1 page has no
+ * detail child, and claiming one would hand the renderer a route that matches
+ * nothing. Phase 12 renames v2 to `channels` and this pair swaps in one edit.
+ *
+ * ⚠ THE THIRD SEGMENT IS NOT TRUSTED BECAUSE A ROUTE EXISTS FOR IT. It reaches
+ * `${first}/${page}/${detail}` only after `pathSegments` decoded and
+ * SLUG_RE-checked it like every other segment — flipping a page to `true`
+ * ENLARGES the surface that walk protects; it does not exempt anything from it.
+ *
  * RETIRED (2026-08-07): `canvas`, `canvas2`, `workflows` and `configuration`
  * left this table with their SPA routes (docs/RETIREMENT-UNWIRING-PLAN.md §3.1);
  * all four pages were then DELETED (2026-08-11). An old
@@ -72,7 +84,7 @@ const WORKSPACE_PAGES = {
   skills: true,
   chats: false,
   channels: false,
-  'channels-v2': false,
+  'channels-v2': true,
   members: false,
   settings: false,
 };
@@ -111,6 +123,21 @@ const WEB_ONLY_ROOTS = new Set([
  * bounded, because it ends up in a router path and in a log line.
  */
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+/**
+ * "May this string be interpolated into a router path as ONE segment?" — the
+ * rule above, asked as a question, so there is ONE answer to it in the tree.
+ *
+ * `pathSegments` is not the only caller any more: since Phase 9 the desktop
+ * builds `/{segment}/{page}/{channelId}` from a channel id that arrived on a
+ * SERVER DTO (`main/shell-mode.js › navigateToChannels`). That is not a deep
+ * link and it does not go through the grammar, but it is the same question,
+ * and a second regex over there would be a second answer to it — the failure
+ * mode INVARIANTS §11 names for the deny direction. Non-strings answer false.
+ */
+function isSafeSegment(value) {
+  return typeof value === 'string' && SLUG_RE.test(value);
+}
 
 /** Longer than any real app URL; anything past it is not a target. */
 const MAX_TARGET_CHARS = 512;
@@ -165,7 +192,7 @@ function pathSegments(target) {
       return null; // a lone `%` — malformed, not merely unknown
     }
     if (decoded === '.' || decoded === '..') return null;
-    if (!SLUG_RE.test(decoded)) return null;
+    if (!isSafeSegment(decoded)) return null;
     out.push(decoded);
   }
   return out;
@@ -265,6 +292,7 @@ module.exports = {
   ROOT_ROUTES,
   WEB_ONLY_ROOTS,
   MAX_TARGET_CHARS,
+  isSafeSegment, // the ONE character rule for a string entering a router path
   parseDeepLink,
   pathSegments,
   webPathToRoute,

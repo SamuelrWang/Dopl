@@ -17,16 +17,36 @@
 let handlers = {}; // window-control callbacks from index.js (openChannel)
 
 // Register window-control callbacks (from index.js) used when a notification is
-// clicked: openChannel(workspaceSegment) shows the window + navigates the webview.
+// clicked: openChannel(workspaceSegment, channelId) shows the window + navigates
+// the renderer.
 function setHandlers(h) {
   handlers = h || {};
 }
 
-// Open the app window and navigate the webview to the channel's page. Wired from
-// index.js; no-op until handlers are registered.
+// WIRING PLAN PHASE 9 — WINDOWING INVERTS, AND THIS IS THE SEAM IT INVERTS AT.
+// A clicked notification used to be the thing that opened a NEW per-thread
+// window; now it focuses the main app and lands on the channel the notification
+// was about. The mechanism (show window + navigate) already existed; the CHANNEL
+// is what this hop was throwing away — every caller's `entry` has carried
+// `entry.channel.id` the whole time.
+//
+// ONE DESTINATION FOR EVERY PRODUCER, deliberately. Three call sites reach here
+// — the inbound REQUEST notification (trigger.js), the silent FYI (trigger.js
+// › sendFyi) and the passive task-reply notice (task-notify.js) — and the
+// per-kind alternative would be the Inbox for requests only. MAPPING.md's ruling
+// names the channel first ("auto-navigates to the channel/DM where the request
+// was made"), the Inbox is WORKSPACE-WIDE by construction and would discard the
+// one fact the notification carried, and `entry` does not distinguish the kinds
+// anyway. The sidebar's Inbox badge is visible the moment the operator lands.
+//
+// Wired from index.js; no-op until handlers are registered.
 function openChannelForEntry(entry) {
   try {
-    if (handlers.openChannel && entry.workspaceSegment) handlers.openChannel(entry.workspaceSegment);
+    if (!handlers.openChannel || !entry || !entry.workspaceSegment) return;
+    // Never fabricated: an entry with no channel navigates to the page, which is
+    // what this did for every entry until Phase 9. The id's character check is
+    // the navigator's (shell-mode → deep-link-target.isSafeSegment), not ours.
+    handlers.openChannel(entry.workspaceSegment, (entry.channel && entry.channel.id) || null);
   } catch (_) { /* window may be gone */ }
 }
 
