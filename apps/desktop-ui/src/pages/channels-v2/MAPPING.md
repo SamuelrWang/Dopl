@@ -284,7 +284,8 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   Each opened thread view gets an **open as new window** button — a pop-out,
   movable window (to be designed) — so the per-thread window becomes opt-in
   instead of the default.
-- **Notification policy: mention-gated.** Today every agent post into a thread
+- **Notification policy: mention-gated.** ✅ **SHIPPED in Phase 7 (2026-08-18).**
+  Today every agent post into a thread
   raises a desktop notification. New rule: agent/thread activity notifies ONLY
   when the agent explicitly @-tags me. Tagging is a capability the agent must
   be TOLD it has (system prompt) and should use for the important things — a
@@ -292,6 +293,23 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   agents talking to each other and the operator does not need a popup per
   message. (Mentions land in the Tags inbox either way; the notification is
   the escalation, the inbox is the record.)
+  - **As built:** one predicate, `main/targeting.js › mentionsMe`, over the
+    server stamp Phase 6 introduced; `classify`'s `fyi` verdict means "tagged
+    me" now rather than "visible to me", and the passive thread-reply notice is
+    gated on the same predicate in `main/listener-messages.js`'s dispatch.
+    `trigger.js › sendFyi` NARROWED rather than died — same seam, new copy, and
+    its F-170 docblock is kept as history. **Current behaviour lives in
+    docs/INVARIANTS.md §11 and §5, never here.**
+  - ⚠ **ONE CARVE-OUT, and it is the ruling this phase had to make:** an
+    ADDRESSED request (`to_user_id` = me) still notifies without a tag. An
+    addressed request IS the escalation — the consent → launch flow depends on
+    the notification arriving, and gating it would hide requests behind whether
+    the sender happened to type a name. Tagging is for THREAD CHATTER, which is
+    what "agent/thread activity" above means.
+  - ⚠ **The agent-side half is NOT built here.** "Tagging is a capability the
+    agent must be TOLD it has" is MCP prose (wiring plan Phase 11); until that
+    lands, an agent that never @-tags simply never escalates, which is the safe
+    direction and a real reduction in what reaches the operator.
 
 ### Q&A rulings (Samuel, 2026-08-18, second round)
 
@@ -342,7 +360,12 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   delete, folders — folders exist in v1, `channel-folder-control.tsx`, and ride
   along).
 - **Mention gating applies to human DMs too**: a DM notifies when you are
-  tagged. Human-to-human mentions notify, yes.
+  tagged. Human-to-human mentions notify, yes. ✅ **SHIPPED in Phase 7
+  (2026-08-18)** — `classify` reads the same stamped set whatever the author
+  kind, and `sendFyi`'s copy is author-kind neutral for exactly this reason.
+  ⚠ **A DM that does NOT tag you is silent on the desktop**, which is the other
+  half of the same ruling and the bigger behaviour change: `intent:"chat"` in a
+  two-person DM used to banner every line.
 - **Pause/end is for YOUR OWN local agents only** — nobody pauses another
   member's agent. The peer's side renders a paused/ended counterpart agent as
   **inactive/offline** (presence-style), NOT as a "thread stalled" state.

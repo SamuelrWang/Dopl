@@ -251,8 +251,13 @@ const LEGACY = LEGACY_SRC.slice(
   LEGACY_SRC.indexOf("// ─── BEGIN LEGACY-THREADS"),
   LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
+// ⚠ classify's TWO free variables come along with it. `isChatIntent` (2026-08-06) and
+// `mentionsMe` (2026-08-18) are hoisted out of its body so listener-messages.js can ask the
+// same questions; omitting either builds a classify that throws a ReferenceError the moment a
+// fixture reaches that line, which is a red this file would only ever see by accident.
 const { classify } = new Function(
-  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
+  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "isChatIntent")}\n` +
+    `${extractFn(TARGETING, "mentionsMe")}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
 )();
 
 function harness(over = {}) {
@@ -284,7 +289,9 @@ function harness(over = {}) {
     const verdict = classify(m, entry, ME);
     if (verdict === "trigger") calls.trigger.push(m);
     else if (verdict === "fyi") calls.fyi.push(m);
-    else if (verdict === "task-reply") calls.taskNotify.push(m);
+    // The mention gate rides in the mirror too (2026-08-18, wiring plan Phase 7) — a mirror
+    // more permissive than prod is how a dispatcher divergence stays green here.
+    else if (verdict === "task-reply" && targeting.mentionsMe(m, ME)) calls.taskNotify.push(m);
     return `classify:${verdict}`;
   }
   return { dispatch, routes, calls, cfg };

@@ -13,10 +13,15 @@
 // against a stricter product than the one that was asked for, so route 1 is asserted
 // POSITIVELY here — if somebody later "fixes" chat by silencing route 1 too, this fails.
 //
-// AND THE FALL-THROUGH IS PART OF THE CONTRACT. Chat from a member classifies as 'fyi', which
-// drives `trigger.sendFyi` — the notification the human actually sees. The first draft of the
-// fix was `if (chatIntent(m)) return`, which would have silenced chat entirely: a worse bug
-// than the one being fixed, and invisible to any test that only checked the routes.
+// AND THE FALL-THROUGH IS PART OF THE CONTRACT. Chat from a member THAT @-TAGS ME classifies
+// as 'fyi', which drives `trigger.sendFyi` — the notification the human actually sees. The
+// first draft of the fix was `if (chatIntent(m)) return`, which would have silenced chat
+// entirely: a worse bug than the one being fixed, and invisible to any test that only checked
+// the routes.
+// ⚠ THE TAG QUALIFIER ARRIVED 2026-08-18 (wiring plan Phase 7) and it does NOT retire the
+// contract — it moves which fixture demonstrates it. Untagged chat classifies 'ignore' now, so
+// a test that only used untagged chat would go green against the very `return` this file
+// exists to forbid. The tagged line is the one that can still tell the difference.
 //
 // WHY STUB ROUTES: the three real routes need live session state to fire at all, which would
 // make this a test about `session-engine` rather than about dispatch ORDER. The stubs record
@@ -119,13 +124,26 @@ test("a live session consuming chat short-circuits, exactly as for a request", a
   assert.equal(seen.fyi.length, 0, "a message a live session took must not also notify");
 });
 
-test("chat still reaches classify, and still notifies the human", async () => {
-  const { dispatchMessage, seen } = harness();
-  await dispatchMessage(entry(), chat(), ME);
+test("chat still reaches classify, and a chat line that @-tags me still notifies the human", async () => {
   // THE REGRESSION THE OBVIOUS FIX WOULD HAVE CAUSED. An early `return` on chat would leave
   // this at 0 and silence chat completely.
-  assert.deepEqual(seen.fyi, [100], "chat from a member must still produce the fyi notification");
-  assert.deepEqual(seen.trigger, [], "chat must never trigger");
+  //
+  // ⚠ RE-AIMED 2026-08-18 (wiring plan Phase 7), NOT WEAKENED. The notification is now
+  // MENTION-GATED, so the fixture that proves chat still reaches the notifier has to be a chat
+  // line that TAGS me — which is also the case the policy names explicitly (human-to-human
+  // mentions notify, in a DM as in a channel). Untagged chat is asserted silent right below,
+  // and the two together are what "reaches classify" means now: an early return would kill the
+  // first, and a missing gate would break the second.
+  const taggedChat = chat({ metadata: { intent: "chat", mentionedUserIds: [ME] } });
+  const h = harness();
+  await h.dispatchMessage(entry(), taggedChat, ME);
+  assert.deepEqual(h.seen.fyi, [100], "a chat line tagging me must still produce the notification");
+  assert.deepEqual(h.seen.trigger, [], "chat must never trigger, tagged or not");
+
+  const quiet = harness();
+  await quiet.dispatchMessage(entry(), chat(), ME);
+  assert.deepEqual(quiet.seen.fyi, [], "untagged chat raises no banner — the retired per-message notice");
+  assert.deepEqual(quiet.seen.trigger, []);
 });
 
 test("THE CONTROL: an otherwise identical REQUEST does reach both starting routes", async () => {

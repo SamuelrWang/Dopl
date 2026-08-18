@@ -55,11 +55,13 @@ const LEGACY = LEGACY_SRC.slice(
 );
 assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
 
-// `isChatIntent` (2026-08-06) is a free variable inside classify — hoisted out of its body so
-// the dispatcher can ask the same question before classify runs. Self-contained, so the plain
-// brace-matcher above slices all of it.
+// `isChatIntent` (2026-08-06) and `mentionsMe` (2026-08-18) are free variables inside classify
+// — both hoisted out of its body so the dispatcher can ask the same question, the first BEFORE
+// classify runs and the second AFTER it, to gate the passive task-reply notice. Self-contained,
+// so the plain brace-matcher above slices all of each.
 const { classify } = new Function(
-  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("classify")}\nreturn { classify, metaStr };`
+  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("mentionsMe")}\n` +
+    `${extractFn("classify")}\nreturn { classify, metaStr, mentionsMe };`
 )();
 
 const ME = "me-uuid"; // the REQUESTER (I created the thread)

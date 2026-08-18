@@ -74,8 +74,17 @@ test("THE BUG: an auto-addressed courtesy no-op triggers the peer", () => {
 });
 
 test("…and with intent 'chat' it triggers nobody", () => {
+  // ⚠ 'ignore', not 'fyi', since 2026-08-18 (wiring plan Phase 7): the courtesy no-op tags
+  // nobody, so it raises no desktop notification either. That is the RIGHT answer for this
+  // message specifically — "I'm busy, please resend" is machine bookkeeping, and a banner per
+  // busy agent is exactly the per-message noise the mention gate retired. The suppression this
+  // file exists for is the trigger, and it is asserted on both sides below.
   const m = courtesy({ metadata: { to_user_id: ME, intent: "chat" } });
-  assert.equal(classify(m, dm(), ME), "fyi");
+  assert.equal(classify(m, dm(), ME), "ignore");
+  // Tagged, the same courtesy WOULD reach the operator — proof this is the mention gate
+  // answering and not the chat brake having quietly become a mute.
+  const taggedCourtesy = courtesy({ metadata: { to_user_id: ME, intent: "chat", mentionedUserIds: [ME] } });
+  assert.equal(classify(taggedCourtesy, dm(), ME), "fyi");
 });
 
 test("the suppression wins DESPITE the addressee, not because it is absent", () => {

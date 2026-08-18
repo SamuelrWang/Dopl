@@ -163,8 +163,42 @@ test("SEAM: route (6) runs AFTER classify, inside the 'trigger' branch, and guar
   // There was a fourth, 'agent-escalation', and it is gone with the named agents whose
   // `author_agent_id` stamp was its whole trigger (channels rollback §1).
   assert.match(LISTENER, /else if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m\);/);
-  assert.match(LISTENER, /else if \(verdict === 'task-reply'\) taskNotify\.notifyTaskReply\(entry, m\);/);
+  // ⚠ The task-reply arm carries the MENTION GATE since 2026-08-18 (wiring plan Phase 7) —
+  // the verdict still routes, the NOTICE is what the tag decides. 'fyi' needs no conjunct
+  // here: its own gate lives inside classify, where the verdict is produced.
+  assert.match(
+    LISTENER,
+    /else if \(verdict === 'task-reply' && targeting\.mentionsMe\(m, myUserId\)\) taskNotify\.notifyTaskReply\(entry, m\);/
+  );
   assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
+});
+
+// THE SAME GATE, ASSERTED BEHAVIOURALLY — because the two matches above are source regexes and
+// a regex pins a SHAPE, not an outcome. This harness runs the REAL `dispatchMessage` against
+// the REAL `classify`, so what it measures is whether the banner fires.
+test("SEAM: the passive task-reply notice is MENTION-GATED, and the verdict behind it is not", async () => {
+  // The requester-side shape classify answers 'task-reply' for: the peer's AGENT replying in
+  // an interactive thread I created, addressed back to me.
+  const reply = (metadata = {}) => ({
+    kind: "message", seq: 77, authorUserId: PEER, authorKind: "agent", body: "here is the answer",
+    metadata: {
+      taskId: UUID_THREAD, taskMode: "interactive", taskCreatedBy: ME, taskTarget: PEER,
+      to_user_id: ME, ...metadata,
+    },
+  });
+
+  const quiet = harness();
+  await quiet.dispatch(dm(), reply());
+  assert.deepEqual(quiet.calls.taskNotify, [], "untagged thread traffic raises no banner");
+  // ⚠ AND NOTHING ELSE CLAIMED IT INSTEAD. Without this, "no banner" would also be true of a
+  // dispatcher that had started spawning against its own reply — the failure the 'task-reply'
+  // verdict exists to prevent, wearing the same green.
+  assert.deepEqual([quiet.calls.trigger, quiet.calls.fyi, quiet.calls.launch], [[], [], []]);
+
+  const tagged = harness();
+  await tagged.dispatch(dm(), reply({ mentionedUserIds: [ME] }));
+  assert.deepEqual(tagged.calls.taskNotify, [77], "a reply that @-tags me still escalates");
+  assert.deepEqual([tagged.calls.trigger, tagged.calls.fyi], [[], []], "and still never triggers");
 });
 
 // THE EXACT SEAM — "the fresh consent runs ONLY when the reopen declined the message" —

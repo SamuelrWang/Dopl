@@ -97,7 +97,13 @@ test("the listener runs the three routes, in order, BEFORE classify", () => {
 });
 
 test("a 'task-reply' verdict reaches the passive notifier, with no consent or spawn", () => {
-  assert.match(LISTENER, /else if \(verdict === 'task-reply'\) taskNotify\.notifyTaskReply\(entry, m\);/);
+  // ⚠ AND ONLY WHEN IT @-TAGS ME (2026-08-18, wiring plan Phase 7). The conjunct is asserted
+  // IN this pin rather than beside it, because the wiring and its gate are one statement: a
+  // future edit that drops the gate would otherwise satisfy a pin written before it existed.
+  assert.match(
+    LISTENER,
+    /else if \(verdict === 'task-reply' && targeting\.mentionsMe\(m, myUserId\)\) taskNotify\.notifyTaskReply\(entry, m\);/
+  );
   // The passive path is exactly that: no consent row, no watcher record, no spawn. The
   // strongest available pin is the module's DEPENDENCY set — it cannot reach the consent,
   // spawner or engine machinery because it does not require any of it.
@@ -212,7 +218,11 @@ function harness(over = {}) {
     const verdict = classify(m, entry, ME);
     if (verdict === "trigger") calls.trigger.push(m);
     else if (verdict === "fyi") calls.fyi.push(m);
-    else if (verdict === "task-reply") calls.taskNotify.push(m);
+    // ⚠ THE MENTION GATE IS PART OF THE SHAPE TOO (2026-08-18, wiring plan Phase 7), for the
+    // same reason the chat guard above is: without it this mirror would be MORE PERMISSIVE
+    // than prod and every "the operator gets the banner" assertion below would stay green
+    // against a listener that had stopped sending it.
+    else if (verdict === "task-reply" && targeting.mentionsMe(m, ME)) calls.taskNotify.push(m);
     return `classify:${verdict}`;
   }
   return { dispatch, calls, cfg };
@@ -231,10 +241,26 @@ const createMsg = (runtime) => ({
 });
 
 // The peer's agent replying in that thread — the message that must not get lost.
+//
+// ⚠ IT CARRIES THE SERVER'S MENTION STAMP (2026-08-18, wiring plan Phase 7), because the
+// BANNER is what most of this file asserts and the banner is mention-gated now. The verdict is
+// not: `classify` still answers 'task-reply' either way, which is what stops the reply
+// spawning a counter-session, and `replyUntagged` below is the fixture that proves the two
+// halves came apart cleanly rather than the gate having eaten the routing.
 const replyMsg = () => ({
   kind: "message", seq: 42, authorUserId: PEER, authorKind: "agent", body: "here is the answer",
-  metadata: { taskId: TASK, taskMode: "interactive", taskCreatedBy: ME, taskTarget: PEER, to_user_id: ME },
+  metadata: {
+    taskId: TASK, taskMode: "interactive", taskCreatedBy: ME, taskTarget: PEER, to_user_id: ME,
+    mentionedUserIds: [ME],
+  },
 });
+
+const replyUntagged = () => {
+  const m = replyMsg();
+  const metadata = { ...m.metadata };
+  delete metadata.mentionedUserIds;
+  return { ...m, metadata };
+};
 
 test("EXTERNAL create: no requester window is launched, and nothing else fires either", async () => {
   const h = harness();
@@ -264,6 +290,18 @@ test("EXTERNAL reply: no window, no record -> the PASSIVE notification, not a sw
   assert.equal(h.calls.feed.length, 0, "no live session to feed");
   assert.equal(h.calls.gate.length, 1, "the engine was ASKED and found nothing to reopen");
   assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length], [0, 0], "no consent prompt either");
+});
+
+test("EXTERNAL reply that tags NOBODY: still routed as a task-reply, but silent", async () => {
+  // The Phase 7 half. The verdict — and therefore the SUPPRESSION that keeps this reply from
+  // looking like a fresh request — is unchanged; only the banner is gone. This is the case the
+  // policy is aimed at: an agent answering in a thread, turn after turn, with nothing in it
+  // the operator has to act on. The reply still reaches the EXTERNAL agent through its own
+  // armed await, and the Tags inbox still records the thread on the web.
+  const h = harness({ live: false, gateReturn: false });
+  assert.equal(await h.dispatch(entry, replyUntagged()), "classify:task-reply");
+  assert.equal(h.calls.taskNotify.length, 0, "no per-message banner for untagged thread traffic");
+  assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.launch.length], [0, 0, 0]);
 });
 
 test("EXTERNAL reply with window-mode OFF: the same passive notification", async () => {
