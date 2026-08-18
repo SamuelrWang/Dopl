@@ -68,8 +68,20 @@ function taskIdFor(rec) {
   return rec.taskId || `task-${rec.channelId}-${rec.seq}`;
 }
 
-// ── FYI (Feature C) — silent notify for a foreign non-trigger message ─────────
+// ── FYI (Feature C) — THE MENTION ESCALATION ─────────────────────────────────
 // Never spawns, never prompts: a silent OS banner and nothing else.
+//
+// 2026-08-18 (wiring plan Phase 7) — IT NARROWED RATHER THAN DIED. This used to fire for every
+// foreign non-trigger message the operator could see, which in a channel where two agents work
+// a thread is one banner per turn. It now fires ONLY for the 'fyi' verdict, and that verdict is
+// conjoined with `targeting.mentionsMe` — the server's own stamped mention set naming this
+// operator (INVARIANTS §5, §11). So the function survives and its REACH is what changed: the
+// tag is the escalation, the Tags inbox is the record.
+// ⚠ THE COPY MOVED WITH THE REACH. It used to read "<name>'s agent asked <target>: …", which
+// was a sentence about ADDRESSING; the notice is now about being TAGGED, and it must stay
+// author-kind neutral because human-to-human mentions notify on exactly these terms (MAPPING
+// ruling: a DM notifies when you are tagged). `to_user_id` is deliberately no longer read here
+// — it is not what made this banner happen.
 //
 // 2026-08-08 (F-170) — THE NOTIFY-SCOPE READ IS GONE FROM HERE TOO. This function held the
 // SECOND runtime read of `myNotifyScope` (the audit's C-18 found only `targeting.js`'s), and
@@ -84,22 +96,23 @@ function taskIdFor(rec) {
 // Do NOT reinstate any part of the feature — two of its three options did not do what their
 // labels said, which is why it was removed rather than fixed in place.
 function sendFyi(entry, m) {
-  const requester = io.displayNameFor(m.authorUserId);
-  const toUserId = targeting.metaStr(m, 'to_user_id');
-  const targetName = toUserId ? io.displayNameFor(toUserId) : null;
+  const author = io.displayNameFor(m.authorUserId);
   const detail = targeting.metaStr(m, 'summary') || targeting.truncate(m.body, 120);
+  // The thread's own title when the post carries one, so the banner says WHERE — same
+  // server-stamped key and same fallback order task-notify.js uses for the passive notice.
+  const where = targeting.metaStr(m, 'taskTitle') || entry.channel.name;
   try {
     if (Notification.isSupported()) {
       const n = new Notification({
-        title: entry.channel.name,
-        body: `${requester}'s agent asked ${targetName || 'the channel'}: ${detail}`,
+        title: where,
+        body: `${author} mentioned you: ${detail}`,
         silent: true,
       });
       n.on('click', () => targeting.openChannelForEntry(entry));
       n.show();
     }
   } catch (_) { /* best-effort */ }
-  diag('fyi sent', entry.channel.id.slice(0, 8), 'seq', m.seq, 'target', targetName ? 'named' : 'channel');
+  diag('mention notify', entry.channel.id.slice(0, 8), 'seq', m.seq, targeting.metaStr(m, 'taskTitle') ? 'titled' : 'channel');
 }
 
 // ── Trigger entry point (non-blocking) ───────────────────────────────────────

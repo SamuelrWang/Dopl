@@ -40,9 +40,12 @@ const LEGACY = LEGACY_SRC.slice(
   LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
 
+// `isChatIntent` and `mentionsMe` are free variables inside classify — both hoisted out of its
+// body so a SECOND reader (listener-messages.js) can ask the same question, and both written
+// self-contained so this brace-matcher gets all of each.
 const { classify } = new Function(
-  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("classify")}\n` +
-    `return { classify };`
+  `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("mentionsMe")}\n` +
+    `${extractFn("classify")}\nreturn { classify };`
 )();
 
 const ME = "me-uuid";
@@ -93,7 +96,9 @@ test("(rollback) no leftover entry field consults a team-agent count", () => {
   );
   // And the unaddressed half, stated where a reader will look for it: no field
   // on the entry can turn an unaddressed post back into a trigger either.
-  assert.equal(classify(plain, { ...base, teamAgents: 0, rosterKnown: true }, ME), "fyi");
+  // ⚠ 'ignore' rather than 'fyi' since 2026-08-18 (wiring plan Phase 7) — an unaddressed post
+  // that tags nobody now raises no notification either. The ABSENCE this pins is unchanged.
+  assert.equal(classify(plain, { ...base, teamAgents: 0, rosterKnown: true }, ME), "ignore");
 });
 
 test("(rollback) an agent-authored message to me is a TRIGGER, never 'agent-escalation'", () => {
@@ -115,13 +120,23 @@ test("(rollback) intent:'chat' still suppresses every trigger, at any size", () 
   // The one addressing rule the rollback KEEPS, and the one that replaces what engagement
   // and the team-agent gate were doing: a post that declared it addresses nobody starts
   // nobody, whoever wrote it and however many members are in the room.
+  // ⚠ THE VERDICT WORD MOVED, THE RULE DID NOT (2026-08-18, wiring plan Phase 7): chat that
+  // tags nobody is 'ignore' now rather than 'fyi', so the TAGGED variant is what carries the
+  // "chat wins over an address" half — the case where a verdict is still produced at all.
   for (const count of [2, 3]) {
     const entry = makeEntry({ memberCount: count, isMember: true });
-    assert.equal(classify({ ...plain, metadata: { intent: "chat" } }, entry, ME), "fyi");
+    const tag = { mentionedUserIds: [ME] };
+    assert.equal(classify({ ...plain, metadata: { intent: "chat" } }, entry, ME), "ignore");
+    assert.equal(classify({ ...plain, metadata: { intent: "chat", ...tag } }, entry, ME), "fyi");
     assert.equal(
-      classify({ ...plain, metadata: { intent: "chat", to_user_id: ME } }, entry, ME),
+      classify({ ...plain, metadata: { intent: "chat", to_user_id: ME, ...tag } }, entry, ME),
       "fyi",
       "chat wins over an address"
+    );
+    assert.equal(
+      classify({ ...plain, metadata: { intent: "chat", to_user_id: ME } }, entry, ME),
+      "ignore",
+      "chat wins over an address, and an untagged one raises nothing"
     );
   }
 });

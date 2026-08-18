@@ -66,12 +66,17 @@ assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinel
 // same answer BEFORE classify runs), so it is now a free variable inside the extracted
 // classify and has to be evaluated alongside it. It is self-contained by design — its
 // CHAT_INTENT const sits inside the function body — so the plain brace-matcher gets all of it.
+// `mentionsMe` (2026-08-18, wiring plan Phase 7) is the SECOND such free variable, written to
+// the same rule and for the same reason: the dispatcher gates the task-reply notice on the
+// answer classify uses for its 'fyi' verdict, so it lives outside the body and its
+// MENTIONS_KEY const lives inside itself.
 const build = () =>
   new Function(
-    `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("classify")}\n` +
-      `return { classify, metaStr, isChatIntent, noteMyLegacyThread, knownLegacyReply, legacyThreadId };`
+    `${extractFn("metaStr")}\n${LEGACY}\n${extractFn("isChatIntent")}\n${extractFn("mentionsMe")}\n` +
+      `${extractFn("classify")}\n` +
+      `return { classify, metaStr, isChatIntent, mentionsMe, noteMyLegacyThread, knownLegacyReply, legacyThreadId };`
   )();
-const { classify } = build();
+const { classify, mentionsMe } = build();
 
 const ME = "me-uuid";
 const U2 = "author-uuid"; // a foreign author
@@ -86,11 +91,19 @@ const U3 = "third-uuid"; // a distinct third party
 //     'system').
 //   addressed (to_user_id present) — USER *and* AGENT authors alike:
 //     - to === me            -> trigger (explicit address always prompts)
-//     - to === the author    -> ignore  (self-addressed noise)
-//     - else                 -> fyi (member) / ignore (public non-member)
+//     - to === the author    -> ignore  (self-addressed noise; a tag does NOT
+//                              rescue it — the branch is a loop brake)
+//     - else                 -> fyi (member AND tagged me) / ignore
 //   unaddressed, EITHER author kind:
-//     - fyi (member) / ignore (public non-member). NEVER a trigger, at any
-//       member count.
+//     - fyi (member AND tagged me) / ignore. NEVER a trigger, at any member
+//       count.
+//       ⚠ EVERY 'fyi' IS MENTION-GATED (2026-08-18, wiring plan Phase 7). The
+//       verdict used to mean "a message I can see"; it now means "a message
+//       that @-tagged me", read off the SERVER-STAMPED `metadata
+//       .mentionedUserIds` — the same unspoofable-key discipline `to_user_id`
+//       gets. A member post that names nobody is 'ignore': no desktop banner,
+//       and the Tags inbox is still the record. 'trigger' is deliberately NOT
+//       gated — an addressed request is a decision somebody waits on.
 //       ⚠ THE IMPLICIT 1:1 TRIGGER IS GONE (2026-08-18, wiring plan Phase 3):
 //       an unaddressed USER post in an exactly-2-member channel used to be
 //       'trigger', paired with the server's DM auto-address. Both retired
@@ -108,6 +121,19 @@ function oracle(m, entry, myId) {
 
   const ch = entry.channel;
   const isMember = !(ch && ch.isMember === false);
+  // The SECOND statement of the mention read, re-derived rather than shared: a
+  // non-array value is no mention, and the author's own tag never reaches here
+  // because the server drops it before stamping.
+  const tagged =
+    Array.isArray(m.metadata && m.metadata.mentionedUserIds) &&
+    m.metadata.mentionedUserIds.some((id) => typeof id === "string" && id.trim() === myId);
+  const notify = isMember && tagged ? "fyi" : "ignore";
+  // A post that declared it addresses nobody triggers nobody, whoever wrote it — and it takes
+  // the same mention gate as everything else, which is what makes a human DM notify when you
+  // are tagged and stay silent when you are not. ⚠ ABOVE the addressed rules, mirroring
+  // classify: `intent: "chat"` + an explicit `to` is a 400 server-side, but the desktop must
+  // not depend on that, so the ORDER is the thing pinned here.
+  if (m.metadata && m.metadata.intent === "chat") return notify;
   const to =
     m.metadata && typeof m.metadata.to_user_id === "string" && m.metadata.to_user_id.trim()
       ? m.metadata.to_user_id.trim()
@@ -115,10 +141,10 @@ function oracle(m, entry, myId) {
   if (to) {
     if (to === myId) return "trigger";
     if (to === m.authorUserId) return "ignore";
-    return isMember ? "fyi" : "ignore";
+    return notify;
   }
-  // Unaddressed, any author kind -> FYI/ignore. The member count is not read.
-  return isMember ? "fyi" : "ignore";
+  // Unaddressed, any author kind -> the mention gate. The member count is not read.
+  return notify;
 }
 
 // `to` targets: me / the author itself (self-addressed) / a third party / none.
@@ -129,7 +155,19 @@ function targetId(to, authorId) {
   return null;
 }
 
-function makeMsg({ to, author, authorKind, kind }) {
+// The SERVER-STAMPED mention set, in the four shapes a real row can carry:
+// nobody (the key is absent, which is every pre-Phase-6 row), somebody else,
+// me, and a MALFORMED value — the last because the key is read off the wire and
+// a non-array must degrade to "tags nobody" rather than throw or be trusted.
+function mentionSet(mentions) {
+  if (mentions === "me") return { mentionedUserIds: [ME] };
+  if (mentions === "other") return { mentionedUserIds: [U3] };
+  if (mentions === "both") return { mentionedUserIds: [U3, ME] };
+  if (mentions === "malformed") return { mentionedUserIds: ME };
+  return {};
+}
+
+function makeMsg({ to, author, authorKind, kind, mentions = "absent", intent = "absent" }) {
   const authorUserId = author === "me" ? ME : U2;
   const tid = targetId(to, authorUserId);
   return {
@@ -139,7 +177,11 @@ function makeMsg({ to, author, authorKind, kind }) {
     kind,
     authorKind,
     authorUserId,
-    metadata: tid ? { to_user_id: tid } : {},
+    metadata: {
+      ...(tid ? { to_user_id: tid } : {}),
+      ...(intent === "absent" ? {} : { intent }),
+      ...mentionSet(mentions),
+    },
   };
 }
 
@@ -155,6 +197,17 @@ const IS_MEMBERS = [true, false, "undefined"];
 const AUTHORS = ["me", "other"];
 const AUTHOR_KINDS = ["user", "agent", "system"];
 const KINDS = ["message", "task_started"];
+// The mention dimension, added 2026-08-18 with the notification gate. FOUR
+// values, not two: "other" is what proves the read is an identity match rather
+// than a presence check, and "malformed" is what proves a wire value the server
+// could never write degrades to silence instead of throwing inside the listener.
+const MENTIONS = ["absent", "me", "other", "malformed"];
+// The intent axis, added 2026-08-18 in the same pass — and found by MUTATION-VERIFYING the
+// mention gate rather than by reading. Mutating the gate off the CHAT branch moved 0 of the
+// 2304 cases the table then had, because the sweep had never built a chat post at all: the
+// brake had lived only in the hand-written tests since 2026-08-06. With this axis that same
+// mutation moves cases, which is the whole claim a truth table makes.
+const INTENTS = ["absent", "chat"];
 
 export {
   extractFn,
@@ -162,6 +215,7 @@ export {
   LEGACY,
   build,
   classify,
+  mentionsMe,
   ME,
   U2,
   U3,
@@ -169,10 +223,13 @@ export {
   targetId,
   makeMsg,
   makeEntry,
+  mentionSet,
   TO,
   MEMBER_COUNTS,
   IS_MEMBERS,
   AUTHORS,
   AUTHOR_KINDS,
   KINDS,
+  MENTIONS,
+  INTENTS,
 };

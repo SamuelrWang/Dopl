@@ -22,14 +22,25 @@ function metaStr(m, key) {
 }
 
 // ── Targeting classification (Feature A) ─────────────────────────────────────
-// classify() returns 'trigger' (consent prompt + maybe spawn), 'fyi' (silent notify), or
-// 'ignore'. FAIL CLOSED: unknown identity or my own message → ignore.
-//   1. metadata.to_user_id present → trigger only if it equals me; else FYI (multi-member) /
+// classify() returns 'trigger' (consent prompt + maybe spawn), 'fyi' (THE MENTION ESCALATION —
+// a silent notify), 'task-reply' (passive news) or 'ignore'.
+// FAIL CLOSED: unknown identity or my own message → ignore.
+//   1. metadata.to_user_id present → trigger only if it equals me; else FYI (tagged me) /
 //      ignore. USER *and* AGENT authors — an agent explicitly addressed to me is the core
 //      Channels use case and MUST trigger.
-//   2. absent → FYI / ignore. NEVER a trigger, at any member count, any author kind.
+//   2. absent → FYI (tagged me) / ignore. NEVER a trigger, at any member count, any author kind.
 //   3. `metadata.intent === 'chat'` triggers NOBODY, on the same terms.
 // authorKind must be 'user' or 'agent'; anything else ('system') → ignore.
+// ⚠ 'fyi' IS NO LONGER "A MESSAGE I CAN SEE" — IT IS "A MESSAGE THAT @-TAGGED ME"
+// (2026-08-18, wiring plan Phase 7). Every 'fyi' return is conjoined with `mentionsMe`, so a
+// post I can read but was not tagged in classifies 'ignore' and raises NO desktop notification.
+// Most thread traffic is agents talking to each other; the operator does not need a popup per
+// message. THE TAG IS THE ESCALATION, THE TAGS INBOX IS THE RECORD — an untagged post is still
+// listed, read and rendered on the web; only the OS banner is gone.
+// ⚠ EXPLICIT ADDRESSING IS STILL AN ESCALATION AND STILL NOTIFIES, through 'trigger' and the
+// consent notification behind it. An addressed request is a decision somebody is waiting on and
+// the consent → launch flow DEPENDS on that notification arriving; gating it on a tag would
+// hide requests behind whether the sender happened to type a name.
 // ⚠ ADDRESSING IS EXPLICIT NOW, AND RULE 2 IS THE WHOLE OF FAIL-CLOSED. The IMPLICIT
 // 1:1 trigger — a known-exact memberCount of 2 plus explicit membership — was REMOVED
 // 2026-08-18, together with the server-side DM auto-address it paired with. An ask that
@@ -49,12 +60,45 @@ function metaStr(m, key) {
 // server-validated enum. Restated from src/features/channels/schema.ts MessageIntentSchema.
 // Fails toward today's behaviour — only the exact string answers true, so an absent intent
 // (older server/desktop, MCP surface) is a request.
-// ⚠ CHAT_INTENT lives INSIDE the function on purpose: three harnesses slice this file with a
-// `function <name>` brace-matcher (test/_classify-harness.mjs, test/main-audit-targeting,
-// test/live/desktop.js) and a module-level const would be a free variable each must plumb in.
+// ⚠ CHAT_INTENT lives INSIDE the function on purpose: several harnesses slice this file with a
+// `function <name>` brace-matcher and a module-level const would be a free variable each must
+// plumb in. ⚠ THE SET IS A MEASUREMENT, NOT A NUMBER TO COPY — it has been wrong here before:
+// `grep -rln "extractFn(TARGETING\|extractFn(\"classify\"\|fnOf(targeting" test/` finds every
+// one, and any of them missing a hoisted free variable throws only when a fixture reaches
+// the line that reads it.
 function isChatIntent(m) {
   const CHAT_INTENT = 'chat';
   return (m && m.metadata ? m.metadata.intent : undefined) === CHAT_INTENT;
+}
+
+// TRUE iff the server's stamped mention set for this message names ME.
+// ⚠ TWO READERS, ONE PREDICATE — the same rule isChatIntent carries: classify gates its 'fyi'
+// verdict on this, and listener-messages.js gates the passive TASK-REPLY notice on it (that
+// verdict is a routing statement as well as a notice, so it cannot be gated inside classify
+// without losing the suppression it exists for). A second copy of this comparison is how two
+// readers come to disagree about whether one post was an escalation.
+// ⚠ READ IT THE WAY to_user_id IS READ — a RESERVED, SERVER-STAMPED key. The web strips any
+// caller copy unconditionally and re-stamps only its own parse of the BODY against this
+// channel's roster (src/features/channels/server/service-writes-metadata-mentions.ts
+// resolveBodyMentions, INVARIANTS §5), so it is unspoofable. That is the ONLY reason a
+// notification may hang off it: a caller-settable mention set is a notification-forgery
+// primitive. It is also why the desktop never re-parses the body — one parser, on the server.
+// ⚠ ABSENT MEANS TAGS NOBODY, which is the shape of every row written before Phase 6, so this
+// fails toward SILENCE and never toward noise. A missed banner is recoverable from the Tags
+// inbox; a banner nobody can stop is not.
+// ⚠ MENTIONS_KEY lives INSIDE the function, on isChatIntent's terms: the harnesses slice this
+// file with a `function <name>` brace-matcher and a module-level const would be a free variable
+// every one of them must plumb in. Restated from src/features/channels/lib/mentions.ts
+// MENTIONS_METADATA_KEY; a non-array value reads as no mention rather than being trusted.
+function mentionsMe(m, myId) {
+  const MENTIONS_KEY = 'mentionedUserIds';
+  if (!myId) return false;
+  const ids = m && m.metadata ? m.metadata[MENTIONS_KEY] : undefined;
+  if (!Array.isArray(ids)) return false;
+  for (let i = 0; i < ids.length; i++) {
+    if (typeof ids[i] === 'string' && ids[i].trim() === myId) return true;
+  }
+  return false;
 }
 
 function classify(m, entry, myId) {
@@ -122,12 +166,19 @@ function classify(m, entry, myId) {
   // an unaddressed post could otherwise do — the implicit 2-member rule it used to brake is
   // retired — but it still says which of FYI and ignore an unaddressed post takes, and it
   // still tells the receiving side the sender MEANT to reach nobody.
-  if (isChatIntent(m)) return isMember ? 'fyi' : 'ignore';
+  // ⚠ AND `mentionsMe` SINCE PHASE 7: chat that tags nobody here is exactly the traffic the
+  // mention gate exists to silence, and chat that tags ME is the human-to-human case the
+  // policy says DOES notify (a DM notifies when you are tagged, same as a group channel).
+  if (isChatIntent(m)) return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
   if (toUserId) {
     // Explicit address always prompts — USER *and* AGENT authors.
     if (toUserId === myId) return 'trigger';
-    if (toUserId === m.authorUserId) return 'ignore'; // self-addressed noise
-    return isMember ? 'fyi' : 'ignore';
+    // Self-addressed noise. ⚠ A TAG DOES NOT RESCUE IT, deliberately: a post whose declared
+    // addressee is its own author is malformed rather than an escalation, and this branch is a
+    // loop brake. Reordering the tag above it would be a NEW rule, not this phase's.
+    if (toUserId === m.authorUserId) return 'ignore';
+    // Addressed to a THIRD party. Tagging me inside somebody else's request is still a tag.
+    return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
   }
   // UNADDRESSED — FYI (member) / ignore. ONE branch now, for every author kind.
   // ⚠ THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM, and the reason it was
@@ -139,7 +190,10 @@ function classify(m, entry, myId) {
   // fallback was REMOVED 2026-08-18 in the same change as the implicit 1:1 trigger, so an
   // unaddressed DM post really does arrive here now — which is why the LOOP BRAKE that
   // used to be an agent-only special case is simply the rule.
-  return isMember ? 'fyi' : 'ignore';
+  // ⚠ AND SINCE PHASE 7 THE FYI HALF IS MENTION-GATED TOO, which is where the bulk of the
+  // retired per-message notifications lived: an agent posting into a thread it shares with
+  // another agent lands here every turn, and none of it is for the operator unless it says so.
+  return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
 }
 
 // First-class (UUID) task id off an inbound message, else ''. Legacy task-<uuid>-<seq> ids are
@@ -240,6 +294,7 @@ module.exports = {
   metaStr,
   classify,
   isChatIntent, // read by classify AND by listener-messages' dispatch guard
+  mentionsMe, // read by classify's fyi verdict AND by listener-messages' task-reply notice gate
   firstClassTaskId,
   LEGACY_THREAD_CAP,
   LEGACY_THREAD_TTL_MS, // registry's two bounds, asserted by the truth tables

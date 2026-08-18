@@ -58,9 +58,12 @@ async function dispatchMessage(entry, m, myUserId) {
   // ⚠ ROUTE 1 IS DELIBERATELY ABOVE THIS LINE and stays unguarded: it feeds a session that is
   // ALREADY RUNNING, which is "seen", not "started". Routes 2 and 3 bring a session INTO
   // existence, so they are the two this refuses.
-  // ⚠ IT DOES NOT RETURN. Falling through to classify is the point: chat from a member
-  // classifies 'fyi', which drives `trigger.sendFyi` — the notification the human actually
-  // sees. An early return silences chat entirely.
+  // ⚠ IT DOES NOT RETURN. Falling through to classify is the point: chat from a member that
+  // @-TAGS ME classifies 'fyi', which drives `trigger.sendFyi` — the notification the human
+  // actually sees. An early return silences chat entirely, tag or no tag. (Since 2026-08-18,
+  // wiring plan Phase 7, UNTAGGED chat classifies 'ignore' and raises nothing; that is the
+  // mention gate answering inside classify, not this guard, and the difference matters —
+  // this guard must keep letting chat REACH classify so a tagged line can still be heard.)
   const chat = targeting.isChatIntent(m);
   if (!chat) {
     if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
@@ -89,8 +92,16 @@ async function dispatchMessage(entry, m, myUserId) {
     if (!(await sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId))) return trigger.handleTrigger(entry, m);
   } else if (verdict === 'fyi') trigger.sendFyi(entry, m);
   // A reply in one of MY interactive tasks: passive notify only — no consent row, no watcher
-  // record, no spawn.
-  else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m);
+  // record, no spawn. ⚠ AND SINCE 2026-08-18 (wiring plan Phase 7) ONLY WHEN IT @-TAGS ME.
+  // The verdict itself is unchanged and must stay so: it is a ROUTING statement — "this reply
+  // is not a fresh request" — and folding the mention into classify would drop the suppression
+  // along with the banner, so the peer's reply would spawn a counter-session against itself.
+  // What the tag gates is the NOTICE. A thread reply is agent-into-thread activity, which is
+  // precisely what the policy silences, and unlike 'trigger' nothing is waiting on the
+  // operator here — there is no consent row and no launch, so no flow depends on the banner.
+  // ⚠ ONE PREDICATE, TWO READERS: `targeting.mentionsMe` is the same function classify's 'fyi'
+  // verdict is conjoined with, on the isChatIntent precedent above.
+  else if (verdict === 'task-reply' && targeting.mentionsMe(m, myUserId)) taskNotify.notifyTaskReply(entry, m);
 }
 
 // ─── BEGIN DISPATCH-DEFERRAL (pure; unit-tested via source extraction) ───────
