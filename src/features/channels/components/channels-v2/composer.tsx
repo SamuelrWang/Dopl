@@ -1,36 +1,73 @@
+"use client";
+
 /**
  * Channels v2 — the composer card, with the @-mention autocomplete floating
  * above its left edge and the NEW AGENT THREAD panel recessed inside it.
  *
- * The typed line and the open suggestion list are FIXTURE STATE, frozen mid
- * keystroke so the review can see both surfaces at once. Nothing types, nothing
- * sends.
+ * ⚠ WRITES ARE PHASE 3. Typing works, the panel opens, addressees can be
+ * dropped and the @-autocomplete resolves against the REAL roster — but Send is
+ * INERT. The write path (`channel_message_insert`, the request fan-out into one
+ * `channel_tasks` row per addressee, `client_msg_id` idempotency) is the next
+ * phase's whole subject, and a Send button that posted through the old
+ * single-target `openThread` write would build the shape the fan-out has to
+ * replace.
  *
- * The one live interaction is the `Bot` toggle: it opens an inset panel above
- * the text area, which stays the thread's opening message — there is no second
- * textarea. The card is bottom-anchored in the pane, so the extra height reads
- * as the composer growing UPWARD.
- *
- * What a send WOULD do (drawn, not wired — the whole page is inert): the title
- * becomes the thread title, the pills become its addressees, and the request
- * lands in the channel as a thread card (`message-pane.tsx ›
- * ThreadRequestCard`). MAPPING.md § New agent thread has the lifecycle.
+ * What a send WILL do: the title becomes the thread title, the pills become its
+ * addressees, and the request lands in the channel as a thread card
+ * (`transcript.tsx › ThreadCardMessage`). MAPPING.md § New agent thread has the
+ * lifecycle, and N pills = N addressees — "broadcast" stays a shape the product
+ * does not have (INVARIANTS §5).
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AtSign, Bot, Expand, Mic, Paperclip, Smile, X, Zap } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { FIELD_WELL } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 import { AgentTargetPill, IconButton } from "./bits";
-import { AGENT_TARGETS, MENTION_SUGGESTIONS } from "./mock-data";
+import { agentLabel } from "./fixtures";
+import { memberLabel } from "../../lib/channel-display";
+import { memberPerson } from "./view-model";
+import type { ChannelMember } from "../../types";
 
-export function ChannelsV2Composer() {
+/** The trailing `@token` of a draft, or null when the caret is not in one. */
+function mentionQuery(draft: string): string | null {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(draft);
+  return match ? match[1].toLowerCase() : null;
+}
+
+export function ChannelsV2Composer({
+  members,
+  currentUserId,
+}: {
+  members: ChannelMember[];
+  currentUserId: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const [title, setTitle] = useState("");
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [removedAgents, setRemovedAgents] = useState<ReadonlySet<string>>(
     () => new Set()
   );
+
+  // Every OTHER member's agent. Derived from the REAL roster, so the pills and
+  // the Info tab's members list cannot disagree — you do not address your own.
+  const targets = useMemo(
+    () =>
+      members
+        .filter((m) => m.userId !== currentUserId)
+        .map((m) => ({ id: m.userId, label: agentLabel(m.displayName ?? m.email) })),
+    [members, currentUserId]
+  );
+
+  const query = mentionQuery(draft);
+  const suggestions = useMemo(() => {
+    if (query === null) return [];
+    return members
+      .filter((m) => memberLabel(m).toLowerCase().includes(query))
+      .slice(0, 5);
+  }, [members, query]);
 
   // Re-opening resets the addressees to ALL. A request you dropped everyone
   // from is not a draft worth restoring — the next one starts whole.
@@ -42,17 +79,13 @@ export function ChannelsV2Composer() {
     });
   };
 
-  const removeAgent = (id: string) =>
-    setRemovedAgents((prev) => new Set(prev).add(id));
-
   return (
     <div className="relative shrink-0 px-4 pb-4 pt-1">
-      <MentionPopover />
+      {suggestions.length > 0 && <MentionPopover members={suggestions} />}
       {/*
         The card itself carries NO row gap — the panel's own spacing rides
         inside the collapsing region, so a closed panel leaves no phantom gap
-        above the text line. The two always-present rows keep their gap-2 in a
-        wrapper of their own.
+        above the text line.
       */}
       <div className="bento flex flex-col px-3 py-2.5">
         {/*
@@ -63,16 +96,19 @@ export function ChannelsV2Composer() {
         <div
           className={cn(
             "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-            agentPanelOpen
-              ? "grid-rows-[1fr] opacity-100"
-              : "grid-rows-[0fr] opacity-0"
+            agentPanelOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
           )}
         >
           <div className="overflow-hidden" inert={!agentPanelOpen}>
             <div className="pb-2">
               <AgentRequestPanel
+                targets={targets}
                 removed={removedAgents}
-                onRemove={removeAgent}
+                title={title}
+                onTitleChange={setTitle}
+                onRemove={(id) =>
+                  setRemovedAgents((prev) => new Set(prev).add(id))
+                }
                 onDismiss={() => setAgentPanelOpen(false)}
               />
             </div>
@@ -81,15 +117,15 @@ export function ChannelsV2Composer() {
 
         <div className="flex flex-col gap-2">
           <div className="flex items-start gap-2">
-            <p className="min-w-0 flex-1 py-1 text-lead text-text-primary">
-              <span aria-hidden>💪💪 </span>
-              <span className="font-medium text-link">@D</span>
-              {/* Caret stand-in: the reference shows the composer mid-keystroke. */}
-              <span
-                aria-hidden
-                className="ml-px inline-block h-[13px] w-px translate-y-0.5 bg-text-primary"
-              />
-            </p>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={1}
+              spellCheck={false}
+              aria-label="Message"
+              placeholder="Write a message"
+              className="min-w-0 flex-1 resize-none bg-transparent py-1 text-lead text-text-primary outline-none placeholder:text-text-muted"
+            />
             <IconButton icon={Expand} label="Expand composer" size={14} className="h-6 w-6" />
           </div>
 
@@ -110,13 +146,22 @@ export function ChannelsV2Composer() {
             <span className="flex-1" />
             <button
               type="button"
+              onClick={() => {
+                setDraft("");
+                setTitle("");
+              }}
               className="rounded-[8px] px-2.5 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
             >
               Discard
             </button>
+            {/* INERT — writes are Phase 3 (see the file header). Disabled
+                rather than silently swallowing a click, so the surface never
+                claims to have sent something it did not. */}
             <button
               type="button"
-              className="auth-btn-3d ml-1 rounded-[8px] px-3.5 py-1.5 text-caption font-semibold text-text-on-cta"
+              disabled
+              title="Sending is not wired yet"
+              className="auth-btn-3d ml-1 cursor-not-allowed rounded-[8px] px-3.5 py-1.5 text-caption font-semibold text-text-on-cta opacity-60"
             >
               Send
             </button>
@@ -134,15 +179,21 @@ export function ChannelsV2Composer() {
  * the concave `FIELD_WELL` — a second, deeper well inside the first.
  */
 function AgentRequestPanel({
+  targets,
   removed,
+  title,
+  onTitleChange,
   onRemove,
   onDismiss,
 }: {
+  targets: Array<{ id: string; label: string }>;
   removed: ReadonlySet<string>;
+  title: string;
+  onTitleChange: (next: string) => void;
   onRemove: (id: string) => void;
   onDismiss: () => void;
 }) {
-  const addressed = AGENT_TARGETS.filter((target) => !removed.has(target.id));
+  const addressed = targets.filter((target) => !removed.has(target.id));
 
   return (
     <div className={cn(SECTION_BOX_INSET, "flex flex-col gap-2 rounded-[10px] p-2.5")}>
@@ -180,7 +231,10 @@ function AgentRequestPanel({
 
       <input
         type="text"
+        value={title}
+        onChange={(e) => onTitleChange(e.target.value)}
         spellCheck={false}
+        aria-label="Thread title"
         placeholder="Title — what is this thread about?"
         className={cn(
           FIELD_WELL,
@@ -191,24 +245,29 @@ function AgentRequestPanel({
   );
 }
 
-function MentionPopover() {
+/** Roster-resolved @-mention candidates for the token being typed. */
+function MentionPopover({ members }: { members: ChannelMember[] }) {
   return (
     <div className="bento absolute bottom-[calc(100%-4px)] left-4 z-10 w-[220px] p-1.5">
       <p className="px-2 pb-1 pt-0.5 text-label font-semibold uppercase tracking-wide text-text-muted">
         Members
       </p>
-      {MENTION_SUGGESTIONS.map(({ person, name, selected }) => (
+      {members.map((member, i) => (
         <div
-          key={person.userId}
+          key={member.userId}
           className={cn(
             "flex h-8 items-center gap-2 rounded-[8px] px-2 text-small",
-            selected
+            i === 0
               ? "bg-surface-raised-3 font-medium text-text-primary"
               : "text-text-secondary"
           )}
         >
-          <Avatar person={person} size="xs" className="h-[20px] w-[20px] text-micro" />
-          <span className="truncate">{name}</span>
+          <Avatar
+            person={memberPerson(member)}
+            size="xs"
+            className="h-[20px] w-[20px] text-micro"
+          />
+          <span className="truncate">{memberLabel(member)}</span>
         </div>
       ))}
     </div>

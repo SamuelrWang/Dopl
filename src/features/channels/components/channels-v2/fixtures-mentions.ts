@@ -1,28 +1,39 @@
 /**
  * Channels v2 — MENTIONS-OF-ME fixtures for the Info tab's Tags inbox.
  *
- * Each row POINTS AT a real rendered message (`messageId` + where it lives), so
- * clicking one can navigate the center pane and scroll the transcript to the
- * exact row — the snippet is a preview, never a second copy of the record.
+ * ⚠ HARDCODED — no backing data yet (Samuel 2026-08-18). The Tags inbox is
+ * wired in Phase 6 of the wiring plan, and it needs two things that do not
+ * exist: mention/tag addressing of the OPERATOR (parsed, then server-stamped
+ * into reserved metadata) and a READ-STATE column, which
+ * `channel_messages` has none of (MAPPING.md § the Tags row). The fixture stays
+ * so the designed inbox remains visible, and its read-state stays page state —
+ * correct for a fixture, wrong for the product.
  *
- * Read/unread is PAGE STATE, not fixture state: `initiallyUnread` seeds it and
- * the page owns it from there (index.tsx). At port time read-state needs a home
- * the server does not have today — see MAPPING.md § the Tags row.
+ * ⚠ Each row carries a `messageId` because the inbox's whole interaction is
+ * mark-read → navigate → SCROLL, and the transcript's scroll plumbing is real
+ * (`data-message-id` + a nonced target). These ids belong to no real message,
+ * so the scroll lands nowhere until Phase 6 replaces this file; the mark-read,
+ * the badge and the disclosure are live.
  */
 
 import type { AvatarPerson } from "@/shared/ui/avatar";
-import { CHANNEL_TITLE, PEOPLE } from "./mock-data";
-import { THREADS } from "./mock-threads";
 
-export interface MockMention {
+function person(id: string, displayName: string): AvatarPerson {
+  return { userId: id, email: null, displayName, avatarUrl: null };
+}
+
+const DIANA = person("fixture-diana", "Diana Taylor");
+const DANIEL = person("fixture-daniel", "Daniel Anderson");
+
+export interface FixtureMention {
   id: string;
-  /** The `MockMessage.id` this mention lives in — the scroll target. */
+  /** The message row this mention lives in — the scroll target. */
   messageId: string;
   /** Thread id, or `null` for the channel transcript — the navigate target. */
   threadId: string | null;
   author: AvatarPerson;
   authorLabel: string;
-  /** Display claim only, same rule as the transcript's chip. */
+  /** Display claim only, same rule as the transcript's chip (INVARIANTS §5). */
   agent?: boolean;
   time: string;
   /** Preview text, clamped in the list; the transcript row is the record. */
@@ -31,12 +42,12 @@ export interface MockMention {
   initiallyUnread: boolean;
 }
 
-export const MENTIONS: MockMention[] = [
+export const FIXTURE_MENTIONS: FixtureMention[] = [
   {
     id: "men-qa",
-    messageId: "q2",
-    threadId: "qa-sweep",
-    author: PEOPLE.diana,
+    messageId: "fixture-q2",
+    threadId: null,
+    author: DIANA,
     authorLabel: "Diana T.",
     agent: true,
     time: "9m ago",
@@ -46,9 +57,9 @@ export const MENTIONS: MockMention[] = [
   },
   {
     id: "men-diana-channel",
-    messageId: "m7",
+    messageId: "fixture-m7",
     threadId: null,
-    author: PEOPLE.diana,
+    author: DIANA,
     authorLabel: "Diana T.",
     time: "8m ago",
     snippet:
@@ -57,9 +68,9 @@ export const MENTIONS: MockMention[] = [
   },
   {
     id: "men-uikit",
-    messageId: "t5",
-    threadId: "uikit",
-    author: PEOPLE.diana,
+    messageId: "fixture-t5",
+    threadId: null,
+    author: DIANA,
     authorLabel: "Diana T.",
     agent: true,
     time: "1h ago",
@@ -71,9 +82,9 @@ export const MENTIONS: MockMention[] = [
     // Already read — stays in the list, unmarked, so the inbox is a record and
     // not just a to-do pile.
     id: "men-daniel",
-    messageId: "m3",
+    messageId: "fixture-m3",
     threadId: null,
-    author: PEOPLE.daniel,
+    author: DANIEL,
     authorLabel: "Daniel A.",
     time: "3h ago",
     snippet:
@@ -84,11 +95,5 @@ export const MENTIONS: MockMention[] = [
 
 /** Read-state seed for the page: everything not initially unread. */
 export const INITIALLY_READ_MENTIONS: ReadonlySet<string> = new Set(
-  MENTIONS.filter((m) => !m.initiallyUnread).map((m) => m.id)
+  FIXTURE_MENTIONS.filter((m) => !m.initiallyUnread).map((m) => m.id)
 );
-
-/** "in UI-kit design" / "in # Website" — the item's location line. */
-export function mentionLocation(threadId: string | null): string {
-  if (threadId === null) return `# ${CHANNEL_TITLE}`;
-  return THREADS.find((t) => t.id === threadId)?.title ?? "Unknown thread";
-}

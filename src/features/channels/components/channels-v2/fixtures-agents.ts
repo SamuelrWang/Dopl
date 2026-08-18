@@ -1,17 +1,26 @@
 /**
  * Channels v2 — MY RUNNING AGENTS, the fixture behind the right panel's Agents
- * tab and the agent view it opens (MAPPING.md § Agents tab & the agent view).
+ * tab and the agent view it opens.
+ *
+ * ⚠ HARDCODED — no backing data yet (Samuel 2026-08-18). The Agents tab and the
+ * agent view are wired in Phase 5 of the wiring plan, over a WIDENED desktop
+ * session projection that does not exist: context occupancy and token spend are
+ * runtime metrics the server stores none of (MAPPING.md § Agents tab & the
+ * agent view; wiring plan, Risk 5). The fixture stays so the designed surface
+ * remains visible and reviewable rather than being replaced by an empty state
+ * for three phases.
  *
  * This is an OPERATOR fixture, not a roster: every row is one of the viewer's
- * own agents. Other members' agents are visible as message authors and as
- * addressee pills, never as rows here — their runtime is in their window.
+ * own agents. Other members' agents are visible as message authors, never as
+ * rows here — their runtime is in their window.
  *
- * Numbers are static strings and plain integers. There is no clock and no
- * runtime on this page; at port time the counters come from the desktop's own
- * session runtime, not from the server (MAPPING.md).
+ * ⚠ SELF-CONTAINED on purpose. In the mock these rows named `mock-threads.ts`
+ * ids and imported two message strings out of the thread transcripts so the two
+ * fixtures could not disagree. Threads are REAL now, and a fixture agent
+ * pointing at a real thread id would be a fabricated claim that a real exchange
+ * has an agent on it. Titles are literals here, and the agent view's header no
+ * longer navigates.
  */
-
-import { QA_SWEEP_PROGRESS_NOTE, UIKIT_KIT_PAGE_NOTE } from "./mock-threads";
 
 /** Liveness as the panel draws it. `running` = the loop is turning right now;
  *  `idle` = it is still mine and still holds its context, but nothing is in
@@ -24,7 +33,7 @@ export type AgentWorkKind = "scan" | "read" | "edit";
 
 interface AgentEntryBase {
   id: string;
-  /** Relative, pre-formatted — same convention as every other time on the page. */
+  /** Relative, pre-formatted — there is no clock behind this fixture. */
   time: string;
   text: string;
 }
@@ -39,11 +48,10 @@ export interface AgentWorkEntry extends AgentEntryBase {
   work: AgentWorkKind;
 }
 
-/** A message this agent actually POSTED into a thread — the same string the
- *  thread transcript carries, imported rather than re-typed. */
+/** A message this agent actually POSTED into a thread, captioned with where it
+ *  went. */
 export interface AgentSentEntry extends AgentEntryBase {
   kind: "sent";
-  /** Thread title, for the "→ sent to …" caption. */
   to: string;
 }
 
@@ -62,12 +70,12 @@ export type AgentActivityEntry =
   | AgentSentEntry
   | AgentDirectEntry;
 
-export interface MockAgent {
+export interface FixtureAgent {
   id: string;
   label: string;
-  /** The `mock-threads.ts › THREADS` row this agent works. TWO agents may name
-   *  the same thread — that is a shape the panel has to draw, not a bug. */
-  threadId: string;
+  /** Literal title, NOT a thread id — see the file header. TWO agents may name
+   *  the same title; that is a shape the panel has to draw, not a bug. */
+  threadTitle: string;
   state: AgentState;
   /** Bare relative phrase; the UI composes "Started 2h ago". */
   startedAt: string;
@@ -82,11 +90,17 @@ export interface MockAgent {
   activity: AgentActivityEntry[];
 }
 
-export const MY_AGENTS: MockAgent[] = [
+const UIKIT_KIT_PAGE_NOTE =
+  "Put the drafted states on the kit review page so they can be read side by side. I renamed btn/secondary to btn/light so the names match the code — flagging it so the library stays in sync.";
+
+const QA_SWEEP_PROGRESS_NOTE =
+  "Started on the front-end side while Diana's agent walks the design file. 9 of 21 screens read — 4 spacing values off the 4px rhythm and one grey that is not a token. Per-screen list to follow.";
+
+export const FIXTURE_AGENTS: FixtureAgent[] = [
   {
     id: "uikit-states",
     label: "UI-kit design worker",
-    threadId: "uikit",
+    threadTitle: "UI-kit design",
     state: "running",
     startedAt: "2h ago",
     lastActivityAt: "2m ago",
@@ -122,7 +136,7 @@ export const MY_AGENTS: MockAgent[] = [
     // Samuel ask for this surface — "why did you do X".
     id: "qa-sweep-frontend",
     label: "Design QA sweep worker",
-    threadId: "qa-sweep",
+    threadTitle: "Design QA sweep",
     state: "running",
     startedAt: "12m ago",
     lastActivityAt: "40s ago",
@@ -180,7 +194,7 @@ export const MY_AGENTS: MockAgent[] = [
     // findings. It is idle and nearly full — the meter says so in amber.
     id: "uikit-token-audit",
     label: "Token drift auditor",
-    threadId: "uikit",
+    threadTitle: "UI-kit design",
     state: "idle",
     startedAt: "yesterday",
     lastActivityAt: "3h ago",
@@ -214,14 +228,14 @@ export const MY_AGENTS: MockAgent[] = [
 ];
 
 /**
- * How many of MY agents are on each thread. Two on one thread is the case the
- * cards have to make obvious, and a count is the cheapest way to say it without
- * the reader having to compare two `↳` lines.
+ * How many of MY agents are on each thread title. Two on one thread is the case
+ * the cards have to make obvious, and a count is the cheapest way to say it
+ * without the reader having to compare two `↳` lines.
  */
-export const AGENTS_PER_THREAD: Record<string, number> = MY_AGENTS.reduce<
+export const AGENTS_PER_THREAD: Record<string, number> = FIXTURE_AGENTS.reduce<
   Record<string, number>
 >((acc, agent) => {
-  acc[agent.threadId] = (acc[agent.threadId] ?? 0) + 1;
+  acc[agent.threadTitle] = (acc[agent.threadTitle] ?? 0) + 1;
   return acc;
 }, {});
 
@@ -231,11 +245,11 @@ export const AGENTS_PER_THREAD: Record<string, number> = MY_AGENTS.reduce<
  * follows first appearance, and `sort` is stable, so within a thread the
  * fixture order survives.
  */
-const THREAD_ORDER = [...new Set(MY_AGENTS.map((agent) => agent.threadId))];
+const THREAD_ORDER = [...new Set(FIXTURE_AGENTS.map((a) => a.threadTitle))];
 
-export const GROUPED_AGENTS: MockAgent[] = [...MY_AGENTS].sort(
+export const GROUPED_FIXTURE_AGENTS: FixtureAgent[] = [...FIXTURE_AGENTS].sort(
   (a, b) =>
-    THREAD_ORDER.indexOf(a.threadId) - THREAD_ORDER.indexOf(b.threadId)
+    THREAD_ORDER.indexOf(a.threadTitle) - THREAD_ORDER.indexOf(b.threadTitle)
 );
 
 /** `84_000` → `"84k"`. Tokens are only ever glanced at here; the exact integer

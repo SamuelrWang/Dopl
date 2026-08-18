@@ -1,6 +1,13 @@
+"use client";
+
 /**
  * Channels v2 — THE AGENT VIEW: a fourth surface that slides in over the info
  * panel and shows ONE of my agents from the inside.
+ *
+ * ⚠ HARDCODED — no backing data yet (Samuel 2026-08-18). Wired in Phase 5 with
+ * the Agents tab; the runtime it reads (`fixtures-agents.ts`) is the desktop's
+ * own session state, which the server does not project today. The direct
+ * composer does not send.
  *
  * Why it is a panel and not a tab: the thread transcript is party-to-party
  * traffic, and almost everything an agent does — what it read, what it is
@@ -12,19 +19,19 @@
  *
  * 1. **Work** — the agent narrating itself. Muted, italic, glyphed. Not a
  *    message; nobody received it.
- * 2. **Sent** — what it actually posted into a thread, the same string the
- *    transcript carries, captioned with where it went.
+ * 2. **Sent** — what it actually posted into a thread, captioned with where it
+ *    went.
  * 3. **Direct** — the 1:1 lane between me and it. Sided like a transcript but
  *    one scale down, because it is a side conversation, not the record.
  *
  * The surface is the kit's `.bento` with its radius and three of its four
  * borders dropped: a full-height edge panel keeps the card's fill and its
- * elevation (which is what lifts it above the info panel) but cannot keep a
- * 14px radius against the page edge. Geometry is the consumer's, the face is
- * the kit's.
+ * elevation but cannot keep a 14px radius against the page edge.
  *
- * Static fixture, like every other control on this page: the direct composer
- * does not send.
+ * ⚠ The header's thread line is TEXT, not a link. In the mock it navigated by
+ * thread id; the fixture's titles name no real thread, and a control that walks
+ * you into somebody else's real exchange would be worse than an absent one.
+ * The navigation returns with Phase 5.
  */
 
 import { useState } from "react";
@@ -42,14 +49,13 @@ import { UsageMeter } from "@/shared/ui/usage-meter";
 import { FIELD_WELL } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 import { AgentLiveness, IconButton } from "./bits";
-import { threadTitle } from "./agents-tab";
 import {
+  FIXTURE_AGENTS,
   formatTokens,
-  MY_AGENTS,
   type AgentActivityEntry,
   type AgentWorkKind,
-  type MockAgent,
-} from "./mock-agents";
+  type FixtureAgent,
+} from "./fixtures-agents";
 
 /** Which glyph fronts a work entry. Three verbs, three shapes — the feed says
  *  what KIND of work is happening, never which tool ran. */
@@ -62,22 +68,18 @@ const WORK_ICON: Record<AgentWorkKind, LucideIcon> = {
 export function ChannelsV2AgentPanel({
   openAgent,
   onClose,
-  onOpenThread,
 }: {
   /** Agent id, or `null` for closed. */
   openAgent: string | null;
   onClose: () => void;
-  /** The header's thread name is a way INTO the thread; the panel stays open
-   *  over it, because watching the agent while its thread loads is the point. */
-  onOpenThread: (id: string) => void;
 }) {
-  const live = MY_AGENTS.find((agent) => agent.id === openAgent) ?? null;
+  const live = FIXTURE_AGENTS.find((agent) => agent.id === openAgent) ?? null;
   // The panel plays an exit, so it needs content for one more frame than the
   // state has. Keeping the last agent renders that frame with what was there
   // instead of sliding an empty box off the edge. State, not a ref: a ref may
   // not be written during render, and this is the sanctioned
   // derive-state-from-props adjustment (render restarts before committing).
-  const [lastShown, setLastShown] = useState<MockAgent | null>(null);
+  const [lastShown, setLastShown] = useState<FixtureAgent | null>(null);
   if (live && live !== lastShown) setLastShown(live);
   const agent = live ?? lastShown;
   const open = live !== null;
@@ -94,11 +96,7 @@ export function ChannelsV2AgentPanel({
     >
       {agent && (
         <>
-          <AgentPanelHeader
-            agent={agent}
-            onClose={onClose}
-            onOpenThread={onOpenThread}
-          />
+          <AgentPanelHeader agent={agent} onClose={onClose} />
           <AgentStats agent={agent} />
           <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3.5">
             <div className="flex flex-col gap-3.5">
@@ -107,7 +105,7 @@ export function ChannelsV2AgentPanel({
               ))}
             </div>
           </div>
-          <DirectComposer thread={threadTitle(agent.threadId)} />
+          <DirectComposer thread={agent.threadTitle} />
         </>
       )}
     </aside>
@@ -117,11 +115,9 @@ export function ChannelsV2AgentPanel({
 function AgentPanelHeader({
   agent,
   onClose,
-  onOpenThread,
 }: {
-  agent: MockAgent;
+  agent: FixtureAgent;
   onClose: () => void;
-  onOpenThread: (id: string) => void;
 }) {
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
@@ -130,14 +126,10 @@ function AgentPanelHeader({
         <span className="truncate text-body font-semibold text-text-primary">
           {agent.label}
         </span>
-        <button
-          type="button"
-          onClick={() => onOpenThread(agent.threadId)}
-          className="-mx-1 flex min-w-0 items-center gap-1 rounded-[6px] px-1 text-left text-caption text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-        >
+        <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
           <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
-          <span className="truncate">in {threadTitle(agent.threadId)}</span>
-        </button>
+          <span className="truncate">in {agent.threadTitle}</span>
+        </span>
       </span>
       <AgentLiveness running={agent.state === "running"} />
       <IconButton icon={X} label="Close agent view" size={15} onClick={onClose} />
@@ -147,11 +139,10 @@ function AgentPanelHeader({
 
 /**
  * The compact restatement of the card's numbers, on the kit's header-strip face
- * (`bg-card-surface-subtle`, the same strip the requested-thread view wears).
- * The card had room for the long form; in here the feed is the content and
- * these are the frame.
+ * (`bg-card-surface-subtle`). The card had room for the long form; in here the
+ * feed is the content and these are the frame.
  */
-function AgentStats({ agent }: { agent: MockAgent }) {
+function AgentStats({ agent }: { agent: FixtureAgent }) {
   return (
     <div className="shrink-0 border-b border-border-subtle bg-card-surface-subtle px-3.5 py-2.5">
       <UsageMeter
@@ -160,7 +151,6 @@ function AgentStats({ agent }: { agent: MockAgent }) {
         limit={agent.contextWindow}
         tone="ramp"
         formatValue={formatTokens}
-        className=""
       />
       <p className="mt-1.5 text-caption text-text-muted">
         Started {agent.startedAt} · {agent.tokensSpent} tokens spent · Last
@@ -206,9 +196,7 @@ function ActivityEntry({ entry }: { entry: AgentActivityEntry }) {
       <div
         className={cn(
           "max-w-[86%] rounded-[10px] px-2.5 py-1.5",
-          mine
-            ? "bg-surface-raised-3"
-            : "border border-border-default bg-bg-elevated"
+          mine ? "bg-surface-raised-3" : "border border-border-default bg-bg-elevated"
         )}
       >
         <p className="text-caption text-text-primary">{entry.text}</p>
@@ -233,6 +221,7 @@ function DirectComposer({ thread }: { thread: string }) {
         <input
           type="text"
           spellCheck={false}
+          aria-label="Message this agent directly"
           placeholder="Message this agent directly…"
           className={cn(
             FIELD_WELL,

@@ -13,17 +13,26 @@ import { channelThreadsPath } from "../client/query-keys";
 // sidebar read for its "N participants" line; breakout rooms are gone
 // (rollback §1) and so is the extra shape. Typed here so the endpoint's real
 // shape survives the client boundary instead of riding along untyped.
-// ⚠ THE ENVELOPE ALSO CARRIES `truncated`, AND THIS SELECTOR DROPS IT ON PURPOSE
-// — today's consumer is the transcript's status OVERLAY, which looks threads up
-// by id and asserts nothing about the set being complete, so a clip changes
-// nothing it renders. **Any surface that presents this as A LIST OF THE
-// CHANNEL'S THREADS must read `truncated` and say so** (INVARIANTS §9: a cap
-// that renders identically to an exhausted list is the bug). The server orders
-// by last activity and bounds the page at
-// `constants.ts › CHANNEL_THREAD_LIST_LIMIT`; the MCP listing already reports
-// the clip, and the v2 Threads tab is the next thing that must.
-const selectThreads = (body: { tasks: ChannelThread[] }) =>
-  body.tasks ?? [];
+// ⚠ THE ENVELOPE ALSO CARRIES `truncated`, AND IT IS NOW CARRIED THROUGH. The
+// selector used to drop it, on the grounds that the only consumer was the
+// transcript's status OVERLAY, which looks threads up by id and asserts nothing
+// about the set being complete. **Any surface that presents this as A LIST OF
+// THE CHANNEL'S THREADS must read `truncated` and say so** (INVARIANTS §9: a
+// cap that renders identically to an exhausted list is the bug), and the v2
+// Threads tab (`components/channels-v2/threads-tab.tsx`) is that surface. The
+// server orders by last activity and bounds the page at
+// `constants.ts › CHANNEL_THREAD_LIST_LIMIT`.
+//
+// ⚠ The SELECT shape changed, the RAW cache entry did not: the optimistic
+// thread patches operate on the response body (`{ tasks }`) and are untouched
+// (INVARIANTS §8 — patches operate on the raw body, `select` applies on read).
+const selectThreads = (body: { tasks: ChannelThread[]; truncated?: boolean }) => ({
+  threads: body.tasks ?? [],
+  truncated: body.truncated === true,
+});
+
+/** Stable identity for the not-yet-loaded case (a fresh [] would churn memos). */
+const NO_THREADS: ChannelThread[] = [];
 
 /**
  * The selected channel's threads — the authoritative status / title / mode
@@ -41,8 +50,8 @@ export function useChannelThreads(
   workspaceId: string
 ) {
   const query = useApiQuery<
-    { tasks: ChannelThread[] },
-    ChannelThread[]
+    { tasks: ChannelThread[]; truncated?: boolean },
+    { threads: ChannelThread[]; truncated: boolean }
   >(
     channelId ? channelThreadsPath(channelId) : null,
     {
@@ -60,7 +69,11 @@ export function useChannelThreads(
     }
   );
   return {
-    threads: query.data ?? [],
+    threads: query.data?.threads ?? NO_THREADS,
+    /** ⚠ The read came back AT its ceiling — which counts as clipped, because
+     *  at is indistinguishable from over. A caller that LISTS threads must say
+     *  so (INVARIANTS §9); one that looks a thread up by id may ignore it. */
+    truncated: query.data?.truncated ?? false,
     // `loading` gates the transcript's status-flicker suppression: an open
     // thread's authoritative overlay isn't known until this first load
     // resolves.

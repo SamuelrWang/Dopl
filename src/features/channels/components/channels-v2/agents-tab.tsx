@@ -1,12 +1,17 @@
+"use client";
+
 /**
  * Channels v2 — the right panel's AGENTS tab: MY agents running in this
  * channel, one card each, each with a way into the agent view.
  *
+ * ⚠ HARDCODED — no backing data yet (Samuel 2026-08-18). Wired in Phase 5 over
+ * a WIDENED desktop session projection; context occupancy and token spend are
+ * runtime metrics the server stores none of today (MAPPING.md § Agents tab;
+ * wiring plan Risk 5). The fixture stays so the designed surface remains
+ * reviewable rather than becoming an empty state for three phases.
+ *
  * It is an OPERATOR surface, not a roster — the Info tab's Members list is
- * where everyone's presence lives. Nothing here is another member's runtime:
- * their agents are visible as message authors and addressee pills, and their
- * context and spend are theirs to watch (MAPPING.md § Agents tab & the agent
- * view).
+ * where everyone's presence lives. Nothing here is another member's runtime.
  *
  * An operator can be running several agents at once, and more than one of them
  * on the SAME thread — the cards are grouped so that reads off the column
@@ -19,17 +24,10 @@ import { cn } from "@/shared/lib/utils";
 import { AgentLiveness, CARD_BUTTON, PANEL_CARD } from "./bits";
 import {
   AGENTS_PER_THREAD,
-  GROUPED_AGENTS,
+  GROUPED_FIXTURE_AGENTS,
   formatTokens,
-  type MockAgent,
-} from "./mock-agents";
-import { THREADS } from "./mock-threads";
-
-/** Thread title, read live off the thread fixture — an agent card that named a
- *  thread the tree no longer has would be a fixture that disagrees with itself. */
-export function threadTitle(threadId: string): string {
-  return THREADS.find((t) => t.id === threadId)?.title ?? "Unknown thread";
-}
+  type FixtureAgent,
+} from "./fixtures-agents";
 
 export function AgentsTab({
   openAgent,
@@ -45,7 +43,7 @@ export function AgentsTab({
         their own window.
       </p>
       <div className="flex flex-col gap-2">
-        {GROUPED_AGENTS.map((agent) => (
+        {GROUPED_FIXTURE_AGENTS.map((agent) => (
           <AgentCard
             key={agent.id}
             agent={agent}
@@ -64,21 +62,20 @@ export function AgentsTab({
  * shape would read as a second surface.
  *
  * The meter is the shared `UsageMeter` at `tone="ramp"`: a context window is
- * GLANCED at, not read, and the ramp is exactly the variant written for that
- * (docs/DESIGN-SYSTEM.md). `over` is not passed — it is an entitlement verdict
- * the caller owns, and a full context window is not an entitlement event.
+ * GLANCED at, not read. `over` is not passed — it is an entitlement verdict the
+ * caller owns, and a full context window is not an entitlement event.
  */
 function AgentCard({
   agent,
   viewing,
   onOpen,
 }: {
-  agent: MockAgent;
+  agent: FixtureAgent;
   viewing: boolean;
   onOpen: () => void;
 }) {
-  const { label, threadId, state, startedAt, lastActivityAt } = agent;
-  const siblings = (AGENTS_PER_THREAD[threadId] ?? 1) - 1;
+  const { label, threadTitle, state, startedAt, lastActivityAt } = agent;
+  const siblings = (AGENTS_PER_THREAD[threadTitle] ?? 1) - 1;
 
   return (
     <div className={cn(PANEL_CARD, viewing && "border-border-highlight")}>
@@ -92,7 +89,7 @@ function AgentCard({
 
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
         <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
-        <span className="min-w-0 truncate">{threadTitle(threadId)}</span>
+        <span className="min-w-0 truncate">{threadTitle}</span>
         {siblings > 0 && (
           // Says the shared-thread case out loud. The grouping already puts the
           // two cards together; this is what tells you the adjacency is the

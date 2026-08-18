@@ -574,6 +574,19 @@ The channels thread list had to stop ordering by `created_at` and start ordering
 
 The general form, and the reason this is here rather than only in the migration header: **when a decision can live in SQL or in the query builder and the cost is identical, put it where the test suite can observe the behaviour.** A stub that records calls pins a NAME; a stub that applies them pins the ANSWER, and it is the answer that the mutation-verify pass has to be able to break.
 
+#### FURNITURE MAY BE HARDCODED; A CLAIM ABOUT A PERSON MAY NOT (2026-08-18, channels-v2 Phase 2)
+
+Porting the channels-v2 design mock onto real reads meant deciding, surface by surface, what to do with UI the model has no data for. Samuel ruled that four pieces STAY as hardcoded UI rather than being deleted or emptied — the activity heatmap, Linked threads, Favorites, and the Assistant / Drafts / Saved-items nav rows — with the reasoning that an empty heatmap and an empty Favorites section are themselves claims ("no activity", "nothing starred") that no read established, and that dropping the design while it waits for its data loses the design.
+
+Applying that ruling required a line, because the mock had more unbacked pieces than the four it named: emoji reactions, a link attachment card, an "N of 3 agents approved" line, and a `requested` thread status with a chip, a sidebar glyph and a filter home. The line drawn — and the transferable half — is **who the fabrication is about**:
+
+- A hardcoded HEATMAP claims nothing about any person. It is scenery, and a reader who sees it under a `// HARDCODED — no backing data yet` marker loses nothing true.
+- A hardcoded REACTION says a named colleague reacted to a real message. A hardcoded APPROVAL says a named colleague consented to run their agent. A hardcoded MENTION says somebody tagged you. Each is a fabricated record of a real person's action, attached to real rows, on a surface whose entire job is reporting what people did.
+
+So the four named pieces kept their fixtures, and the person-claiming pieces were DROPPED from the port rather than faked or zeroed — including two components (`ReactionPill`, `PendingChip`) that were not carried over at all, with the absence stated in the file that would otherwise hold them. The Tags/mentions inbox is the exception that proves the shape: it is fixture-driven by the plan (its read-state column does not exist yet), so it kept fixture CONTENT while every CONTROL on it — the disclosure, the badge, mark-read, mark-all — was made real, and its fixture authors were given ids belonging to nobody.
+
+The general form: **when a designed surface outruns its data, ask what the placeholder ASSERTS. Scenery may wait; an attributed action may not.** The second kind is not a rendering decision, it is a false record, and the fact that a reviewer knows it is a mock does not travel with the screenshot.
+
 **Never send `no-transform`.** `Cache-Control: no-transform` (RFC 9111 §5.2.2.6) forbids intermediaries from applying a content coding — it is an instruction NOT to compress, and it is not a stronger `no-cache`. `src/shared/api/sse-keep-alive.ts` shipped it on `/api/mcp`, the transport for every MCP tool result. The anti-buffering guarantee that route actually needs is `X-Accel-Buffering: no`; compression does not buffer SSE (codings flush per write) and the decoded frames are byte-identical either way.
 
 ### Clusters vs. community boundary — ⛔ BOTH SIDES ARE GONE

@@ -1,10 +1,41 @@
 # Channels v2 — mapping the mock onto the real channels model
 
-Status: DESIGN-REVIEW. This folder is a hardcoded mock; nothing here reads the
-data layer. This file records how each mock surface will map onto the shipping
-channels model (docs/INVARIANTS.md §5) when the port happens, so the mock and
-the port are judged against the same intent. Update it as Samuel iterates on
-the mock.
+Status: PORTED (2026-08-18). ⚠ **The mock is gone.** Everything this file
+describes now lives at `src/features/channels/components/channels-v2/` and reads
+real data; `index.tsx` here is a thin seam over `› channels-v2-core.tsx`, exactly
+like `#/pages/channels`. The design-review fixtures
+(`mock-data.ts`, `mock-threads.ts`, `mock-agents.ts`, `mock-mentions.ts`) and the
+mock's own columns were deleted with the port.
+
+This file stays because it is the INTENT document the port is judged against —
+its rulings migrate into docs/INVARIANTS.md and docs/ENGINEERING.md when the
+`channels-v2` route is retired (wiring plan Phase 13), not before. Read the
+sections below as the DESIGN, and the table immediately following as what is
+actually wired. **Current behaviour lives in docs/INVARIANTS.md §5 §7 §9, never
+here** (repo CLAUDE.md precedence).
+
+## Wired vs hardcoded after Phase 2 (2026-08-18)
+
+| Surface | State |
+| --- | --- |
+| Sidebar channel + DM tree, selection, per-channel nesting | **WIRED** — `use-channels`, `use-channel-threads` |
+| Sidebar section collapse, header search filter | **WIRED** (interaction-completeness ruling) |
+| Sidebar Inbox badge | **WIRED** — pending count off `use-consent-inbox` |
+| Center transcript (channel + thread views), breadcrumb, sides, agent chip | **WIRED** — `use-channel-messages` |
+| Thread cards in the channel transcript | **WIRED** — a thread's opening message, parties from the thread row |
+| Info tab: creator / created / status / thread count / members + presence | **WIRED** — `use-channel-members`, 90s window client-side |
+| Threads tab: activity-ordered list, clipped note, Open | **WIRED** — no status filter (activity ordering replaced it) |
+| Realtime | **WIRED** — `useChannelsRealtime` + `usePresenceRealtime` through the refetch coordinator |
+| Composer typing, @-autocomplete, agent-request pills | **WIRED READ-SIDE**; **Send is INERT** — writes are Phase 3 |
+| Activity heatmap · Linked threads · Favorites · Assistant/Drafts/Saved-items | **HARDCODED** (Samuel 2026-08-18) — `fixtures.ts` |
+| Agents tab + agent view | **HARDCODED** until Phase 5 — `fixtures-agents.ts` |
+| Tags / mentions inbox CONTENT | **HARDCODED** until Phase 6 — `fixtures-mentions.ts`; its badge, disclosure and mark-read are live |
+
+**Dropped rather than faked** (no backing data, and NOT on the hardcoded-keep
+list): emoji reactions, the link attachment card, the "N of M agents approved"
+line and the `requested` thread status (chip, glyph, filter home). A fabricated
+reaction or approval is a claim about a real person's action, which is worse
+than absent furniture; the heatmap claims nothing about anybody.
 
 ## The center-pane state machine (the core interaction)
 
