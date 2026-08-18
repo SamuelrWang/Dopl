@@ -5,13 +5,13 @@
  * (mentions) disclosure, Linked threads, the activity heatmap and the roster.
  *
  * WIRED: Main info (creator / created / status / thread count) off the channel
- * row and its thread list, and MEMBERS off `use-channel-members` with presence
- * computed client-side over the 90s window.
+ * row and its thread list, MEMBERS off `use-channel-members` with presence
+ * computed client-side over the 90s window, and the TAGS inbox off
+ * `use-channel-mentions` (Phase 6).
  *
  * HARDCODED — no backing data yet (Samuel 2026-08-18): Linked threads and the
- * activity heatmap keep the mock's UI and are wired later as their own work;
- * the Tags inbox is fixture-driven until Phase 6. Each site carries the marker
- * where it renders.
+ * activity heatmap keep the mock's UI and are wired later as their own work.
+ * Each site carries the marker where it renders.
  */
 
 import { useState } from "react";
@@ -38,10 +38,9 @@ import {
   HARDCODED_LINKED_THREADS,
   HARDCODED_THREAD_ACTIVITY,
 } from "./fixtures";
-import { FIXTURE_MENTIONS, type FixtureMention } from "./fixtures-mentions";
-import { isPresent, memberPerson } from "./view-model";
+import { isPresent, memberPerson, type AuthorIndex } from "./view-model";
 import { memberLabel } from "../../lib/channel-display";
-import type { Channel, ChannelMember } from "../../types";
+import type { Channel, ChannelMember, ChannelMention } from "../../types";
 
 /** Heatmap shades, low → high. Opacity steps on the success token: the palette
  *  carries one green, so density is expressed as strength, not as hue. */
@@ -58,7 +57,10 @@ export function InfoTab({
   channelName,
   members,
   threadCount,
-  readMentions,
+  mentions,
+  mentionsTruncated,
+  mentionsLoading,
+  index,
   onOpenMention,
   onMarkAllMentionsRead,
 }: {
@@ -66,14 +68,21 @@ export function InfoTab({
   channelName: string;
   members: ChannelMember[];
   threadCount: number;
-  readMentions: ReadonlySet<string>;
-  onOpenMention: (mention: FixtureMention) => void;
+  /** MY mentions in this channel, server-ordered. */
+  mentions: ChannelMention[];
+  mentionsTruncated: boolean;
+  mentionsLoading: boolean;
+  index: AuthorIndex;
+  onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
 }) {
   // The Tags disclosure is the ONE expandable row in Main info; its open state
   // is nobody else's business, so it stays here.
   const [tagsOpen, setTagsOpen] = useState(false);
-  const unreadCount = FIXTURE_MENTIONS.filter((m) => !readMentions.has(m.id)).length;
+  // ⚠ LIVE UNREAD, computed HERE from the projection's own `read` flag — one
+  // derivation for the badge and the list, so they cannot disagree (wiring plan
+  // Phase 6, decision 3). Never a server-side count.
+  const unreadCount = mentions.filter((m) => !m.read).length;
 
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
   const online = members.filter((m) => isPresent(m));
@@ -115,10 +124,8 @@ export function InfoTab({
           )}
         </MetaRow>
         {/* The mentions inbox — label kept "Tags" from the reference design.
-            The count is LIVE UNREAD, not a total; the chevron flips open.
-            HARDCODED — no backing data yet (Samuel 2026-08-18): the LIST is
-            fixture-driven until Phase 6; the disclosure and the count are real
-            interaction over that fixture. */}
+            WIRED (Phase 6): the list is the real projection and the count is
+            LIVE UNREAD over it, not a total. The chevron flips open. */}
         <button
           type="button"
           onClick={() => setTagsOpen((open) => !open)}
@@ -144,8 +151,11 @@ export function InfoTab({
         </button>
         {tagsOpen && (
           <MentionsList
+            mentions={mentions}
+            truncated={mentionsTruncated}
+            loading={mentionsLoading}
             channelName={channelName}
-            readMentions={readMentions}
+            index={index}
             onOpenMention={onOpenMention}
             onMarkAllRead={onMarkAllMentionsRead}
           />

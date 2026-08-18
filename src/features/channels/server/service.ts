@@ -48,6 +48,12 @@ export {
 // Their one consumer is `service-await.ts`, which imports them from `./service-reads`
 // directly; a second name for a long-poll internal only invites a handler to call one.
 
+// THE MENTIONS INBOX (wiring plan Phase 6). Its own module because it is the
+// only channels read scoped to the CALLER rather than to the channel — the
+// projection can answer for `ctx.userId` and for nobody else — and because its
+// read-state store (`channel_mention_reads`) has no other reader.
+export { listMyChannelMentions, markMentionsRead } from "./service-mentions";
+
 export { awaitNewMessages } from "./service-await";
 export type { AwaitHoldCounters, AwaitHoldResult } from "./service-await";
 

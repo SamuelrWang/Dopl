@@ -26,6 +26,11 @@ import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { AddresseePill, CARD_BUTTON, MESSAGE_CARD, PendingChip } from "./bits";
 import { AgentChip } from "./bits";
+import {
+  MENTION_TOKEN_RE,
+  buildMentionIndex,
+  resolveMentionToken,
+} from "../../lib/mentions";
 import { shortName, type AuthorIndex, type MessageRow, type ThreadCardRow, type TranscriptRow } from "./view-model";
 
 export function Transcript({
@@ -169,7 +174,7 @@ function Message({
             key={i}
             className={cn("text-lead text-text-primary", mine && "text-right")}
           >
-            <Body text={paragraph} index={index} />
+            <Body text={paragraph} index={index} mentionsMe={row.mentionsMe} />
           </p>
         )
       )}
@@ -281,48 +286,54 @@ function ThreadCardMessage({
   );
 }
 
-/** A run of `@…` that could be a handle. Deliberately loose on the token and
- *  strict on the MATCH: only a token that resolves against the roster is
- *  tinted, so plain prose containing an `@` renders as prose. */
-const MENTION_TOKEN = /(@[^\s@]+)/g;
-
-/** Roster-derived handles a mention token may name. */
-function handlesFor(index: AuthorIndex): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const [userId, member] of index.byId) {
-    for (const raw of [member.displayName, member.email?.split("@")[0]]) {
-      if (!raw) continue;
-      map.set(raw.toLowerCase(), userId);
-      const first = raw.split(" ")[0];
-      if (first) map.set(first.toLowerCase(), userId);
-    }
-  }
-  return map;
-}
-
 /**
  * Message body with roster-resolved @-mentions tinted, and a mention OF THE
  * VIEWER additionally tinted — these are the rows the Tags inbox points at, and
  * they should be findable by eye once a scroll lands nearby.
  *
+ * ⚠ ONE PARSER, ONE SOURCE OF "AM I TAGGED" (reconciled in Phase 6; there used
+ * to be a private copy of the token rule and the handle map right here).
+ *   - WHERE a tint goes is `lib/mentions.ts`, the SAME module the server's
+ *     resolution runs, so the transcript cannot tint a name the stamp did not
+ *     resolve;
+ *   - WHETHER the viewer is tagged is `row.mentionsMe`, read off the
+ *     SERVER-STAMPED `metadata.mentionedUserIds` (`view-model.ts ›
+ *     toMessageRow`). That is the same fact the Tags inbox lists, so the
+ *     transcript and the inbox cannot disagree about whether a message tagged
+ *     you — which they could while the tint re-derived it from a roster that
+ *     may have changed since the message was written.
+ *
  * ⚠ PURE DISPLAY. Nothing here is the addressing rule: addressing is
  * `metadata.to_user_id`, stamped server-side and stripped from caller input
  * (INVARIANTS §5). A tinted name is not a claim that anybody was reached.
  */
-function Body({ text, index }: { text: string; index: AuthorIndex }) {
-  const handles = handlesFor(index);
+function Body({
+  text,
+  index,
+  mentionsMe,
+}: {
+  text: string;
+  index: AuthorIndex;
+  mentionsMe: boolean;
+}) {
+  const handles = buildMentionIndex([...index.byId.values()]);
   return (
     <>
-      {text.split(MENTION_TOKEN).map((part, i) => {
+      {text.split(MENTION_TOKEN_RE).map((part, i) => {
         if (!part.startsWith("@")) return <span key={i}>{part}</span>;
-        const userId = handles.get(part.slice(1).toLowerCase().replace(/[.,:;!?]+$/, ""));
+        const userId = resolveMentionToken(part, handles);
         if (!userId) return <span key={i}>{part}</span>;
         return (
           <span
             key={i}
             className={cn(
               "font-medium text-link",
-              userId === index.currentUserId && "rounded-[4px] bg-link/10 px-0.5"
+              // ⚠ BOTH halves required: the stamp says this message tags me,
+              // the token says THIS is where. The stamp alone cannot place a
+              // highlight and the token alone is a re-derivation.
+              mentionsMe &&
+                userId === index.currentUserId &&
+                "rounded-[4px] bg-link/10 px-0.5"
             )}
           >
             {part}

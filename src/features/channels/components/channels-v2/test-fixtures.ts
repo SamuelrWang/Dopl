@@ -10,6 +10,7 @@
 import type {
   Channel,
   ChannelMember,
+  ChannelMention,
   ChannelMessage,
   ChannelThread,
 } from "../../types";
@@ -79,6 +80,25 @@ export function message(over: Partial<ChannelMessage> = {}): ChannelMessage {
     createdAt: "2026-08-18T12:00:00.000Z",
     authorName: "Sam Wang",
     authorAvatarUrl: null,
+    ...over,
+  };
+}
+
+/** One row of the Tags inbox projection. ⚠ Defaults to UNREAD and to a
+ *  channel-level post — the two states the inbox's interaction is about. */
+export function mention(over: Partial<ChannelMention> = {}): ChannelMention {
+  return {
+    messageId: "m-1",
+    seq: 1,
+    channelId: CHANNEL_ID,
+    threadId: null,
+    authorUserId: PEER,
+    authorKind: "user",
+    authorName: "Diana Taylor",
+    authorAvatarUrl: null,
+    snippet: "can you take a look at this before the freeze?",
+    createdAt: "2026-08-18T12:00:00.000Z",
+    read: false,
     ...over,
   };
 }

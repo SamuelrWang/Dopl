@@ -33,7 +33,8 @@ here** (repo CLAUDE.md precedence).
 | **Composer SEND** | **WIRED** — panel open → the request fan-out (`POST /tasks` with `toUserIds`); panel closed → a plain chat message (`intent:"chat"`) |
 | Activity heatmap · Linked threads · Favorites · Assistant/Drafts/Saved-items | **HARDCODED** (Samuel 2026-08-18) — `fixtures.ts` |
 | Agents tab + agent view | **HARDCODED** until Phase 5 — `fixtures-agents.ts` |
-| Tags / mentions inbox CONTENT | **HARDCODED** until Phase 6 — `fixtures-mentions.ts`; its badge, disclosure and mark-read are live |
+| Tags / mentions inbox | **WIRED** (Phase 6) — `use-channel-mentions` over server-stamped `metadata.mentionedUserIds`; read-state is `channel_mention_reads`; badge is client arithmetic; `fixtures-mentions.ts` is DELETED |
+| Transcript self-mention tint | **WIRED** — driven by the same server stamp the inbox lists, not by a re-parse (one source, `lib/mentions.ts` places the highlight) |
 
 **Dropped rather than faked** (no backing data, and NOT on the hardcoded-keep
 list): emoji reactions and the link attachment card. A fabricated reaction is a
@@ -112,6 +113,12 @@ is the `channel_messages` carrying that thread's `taskId`.
   **Read-state has no backing column today** — port time needs one (or a local
   store); until then it is page state and resets on reload, which is correct
   for a mock and wrong for the product.
+  - ⚠ **ANSWERED IN PHASE 6 (2026-08-18), and the answer is not a column.** The
+    mention set is `metadata.mentionedUserIds`, resolved server-side at insert
+    and stripped from caller input; read-state is a ROW PER READ in
+    `channel_mention_reads`, because this very paragraph's "marks individual
+    mentions read" is a thing a cursor cannot express. Current behaviour and the
+    match rule live in **docs/INVARIANTS.md §5**, never here.
 
 ## Agents tab & the agent view
 

@@ -1,67 +1,92 @@
 // @vitest-environment jsdom
 /**
- * The Tags mentions inbox — the one interaction on the fixture-driven half of
- * this page with three moving parts (mark-read, navigate, scroll), so it keeps
- * the regression coverage it had as a mock.
+ * The Tags mentions inbox, NOW WIRED (Phase 6). Its interaction has three
+ * moving parts — mark-read, navigate, scroll — and this is where they are
+ * pinned.
  *
- * ⚠ MOVED, not rewritten from scratch: this is
- * `apps/desktop-ui/src/pages/channels-v2/mentions.test.tsx` following its
- * subject into the web tree when the mock page became a seam (2026-08-18). Two
- * assertions changed because the surface under them did:
+ * ⚠ WHAT CHANGED FROM THE FIXTURE ERA: the rows are the real
+ * `ChannelMention` projection and the read-state comes from each row's own
+ * `read` flag rather than from a page-level `Set`, so the badge is now
+ * arithmetic over the SAME list the panel renders. That is the assertion the
+ * first two cases exist for — a badge derived a second way is free to disagree
+ * with the list above it.
  *
- *  - the old test mounted the whole PAGE and read the breadcrumb to prove the
- *    navigation landed. The transcript is real now and the fixture's message
- *    ids belong to no real message (Phase 6 wires them), so what is pinned here
- *    is the SIGNAL the inbox emits — thread id plus a NONCED scroll target —
- *    rather than where a fabricated id lands;
- *  - the badge, the disclosure and mark-all are unchanged and still the point:
- *    Samuel's interaction-completeness ruling says a hardcoded surface may keep
- *    fixture CONTENT and may not keep inert CONTROLS.
+ * ⚠ The mark-read WRITE is not driven here. It is a mutation with an optimistic
+ * cache patch (`hooks/use-mention-writes.ts`), and what this file owns is the
+ * SIGNAL the inbox emits: the mention that was clicked, carrying the message id
+ * and the thread id the page turns into a navigate + a nonced scroll.
  */
 
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { InfoTab } from "./info-tab";
-import {
-  FIXTURE_MENTIONS,
-  INITIALLY_READ_MENTIONS,
-  type FixtureMention,
-} from "./fixtures-mentions";
-import { channel, member, ME } from "./test-fixtures";
+import { MENTIONS_CLIPPED_NOTE } from "./mentions-list";
+import { indexMembers } from "./view-model";
+import { channel, member, mention, ME, PEER } from "./test-fixtures";
+import type { ChannelMention } from "../../types";
 
 afterEach(cleanup);
 
-const UNREAD_AT_MOUNT = FIXTURE_MENTIONS.filter((m) => m.initiallyUnread).length;
+const ROWS: ChannelMention[] = [
+  mention({ messageId: "m-9", seq: 9, snippet: "first unread" }),
+  mention({ messageId: "m-8", seq: 8, snippet: "second unread", threadId: "t-1" }),
+  // Already read — stays in the list, unmarked, so the inbox is a record and
+  // not just a to-do pile.
+  mention({ messageId: "m-3", seq: 3, snippet: "already read", read: true }),
+];
+
+const UNREAD_AT_MOUNT = ROWS.filter((m) => !m.read).length;
+
+const MEMBERS = [
+  member({ userId: ME }),
+  member({ userId: PEER, displayName: "Diana Taylor", email: "diana@example.com" }),
+];
 
 /**
- * The read-state lives on the page in the product (`channels-v2-core.tsx`), so
- * the test owns it here — the same shape, so what is asserted is the tab's
- * behaviour and not a stub's.
+ * The read-state lives in the PROJECTION in the product, and the mark-read
+ * write patches it in the query cache. The harness stands in for that patch
+ * with the same shape — flip `read` on the clicked row — so what is asserted is
+ * the tab's behaviour over a projection and not a stub's.
  */
-function Harness({ onOpen }: { onOpen: (m: FixtureMention) => void }) {
-  const [readMentions, setReadMentions] =
-    useState<ReadonlySet<string>>(INITIALLY_READ_MENTIONS);
+function Harness({
+  onOpen,
+  truncated = false,
+  rows = ROWS,
+}: {
+  onOpen: (m: ChannelMention) => void;
+  truncated?: boolean;
+  rows?: ChannelMention[];
+}) {
+  const [mentions, setMentions] = useState(rows);
+  const markRead = (ids: string[]) =>
+    setMentions((prev) =>
+      prev.map((m) => (ids.includes(m.messageId) ? { ...m, read: true } : m))
+    );
   return (
     <InfoTab
       channel={channel()}
       channelName="Website"
-      members={[member({ userId: ME })]}
+      members={MEMBERS}
       threadCount={2}
-      readMentions={readMentions}
-      onOpenMention={(mention) => {
-        setReadMentions((prev) => new Set(prev).add(mention.id));
-        onOpen(mention);
+      mentions={mentions}
+      mentionsTruncated={truncated}
+      mentionsLoading={false}
+      index={indexMembers(MEMBERS, ME)}
+      onOpenMention={(m) => {
+        markRead([m.messageId]);
+        onOpen(m);
       }}
       onMarkAllMentionsRead={() =>
-        setReadMentions(new Set(FIXTURE_MENTIONS.map((m) => m.id)))
+        markRead(mentions.filter((m) => !m.read).map((m) => m.messageId))
       }
     />
   );
 }
 
-function open(onOpen = vi.fn()) {
-  render(<Harness onOpen={onOpen} />);
+function open(props: { truncated?: boolean; rows?: ChannelMention[] } = {}) {
+  const onOpen = vi.fn();
+  render(<Harness {...props} onOpen={onOpen} />);
   const tagsRow = screen.getByRole("button", { name: /^Tags/ });
   fireEvent.click(tagsRow);
   return { tagsRow, onOpen };
@@ -72,8 +97,8 @@ describe("channels-v2 mentions inbox", () => {
     const { tagsRow } = open();
     expect(tagsRow.getAttribute("aria-expanded")).toBe("true");
     expect(tagsRow.textContent).toContain(String(UNREAD_AT_MOUNT));
-    for (const mention of FIXTURE_MENTIONS) {
-      expect(screen.getByText(mention.snippet)).not.toBeNull();
+    for (const row of ROWS) {
+      expect(screen.getByText(row.snippet)).not.toBeNull();
     }
   });
 
@@ -81,28 +106,28 @@ describe("channels-v2 mentions inbox", () => {
     const { tagsRow } = open();
     fireEvent.click(tagsRow);
     expect(tagsRow.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByText(FIXTURE_MENTIONS[0].snippet)).toBeNull();
+    expect(screen.queryByText(ROWS[0].snippet)).toBeNull();
   });
 
   it("a click marks the item read, decrements the badge and emits the navigate + scroll signal", () => {
     const { tagsRow, onOpen } = open();
     const item = screen
-      .getByText(FIXTURE_MENTIONS[0].snippet)
+      .getByText(ROWS[1].snippet)
       .closest("button") as HTMLElement;
     expect(item.hasAttribute("data-unread")).toBe(true);
 
     fireEvent.click(item);
 
     expect(onOpen).toHaveBeenCalledTimes(1);
+    // The two fields the page turns into a navigate and a nonced scroll.
     expect(onOpen.mock.calls[0][0]).toMatchObject({
-      id: FIXTURE_MENTIONS[0].id,
-      messageId: FIXTURE_MENTIONS[0].messageId,
-      threadId: FIXTURE_MENTIONS[0].threadId,
+      messageId: ROWS[1].messageId,
+      threadId: ROWS[1].threadId,
     });
     // Read: item unmarked, badge decremented. The row STAYS listed — the inbox
     // is a record, not a to-do pile.
     expect(item.hasAttribute("data-unread")).toBe(false);
-    expect(item).not.toBeNull();
+    expect(screen.getByText(ROWS[1].snippet)).not.toBeNull();
     expect(tagsRow.textContent).toContain(String(UNREAD_AT_MOUNT - 1));
   });
 
@@ -111,6 +136,27 @@ describe("channels-v2 mentions inbox", () => {
     const panel = within(screen.getByRole("button", { name: /^Tags/ }).parentElement!);
     fireEvent.click(panel.getByRole("button", { name: "Mark all read" }));
     expect(tagsRow.textContent).toMatch(/^Tags0$/);
+    expect(screen.queryByRole("button", { name: "Mark all read" })).toBeNull();
+  });
+
+  /**
+   * INVARIANTS §9: the read is bounded and a page AT the ceiling counts as
+   * clipped, so the surface that LISTS it must say so. The note may not let a
+   * clip pass as an absence.
+   */
+  it("says so when the page clipped, and stays silent when it did not", () => {
+    open({ truncated: true });
+    expect(screen.getByText(MENTIONS_CLIPPED_NOTE)).not.toBeNull();
+    cleanup();
+    open();
+    expect(screen.queryByText(MENTIONS_CLIPPED_NOTE)).toBeNull();
+  });
+
+  it("an empty inbox says nothing tags you rather than rendering a clipped note", () => {
+    open({ rows: [] });
+    expect(
+      screen.getByText("No messages tag you in this channel yet.")
+    ).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Mark all read" })).toBeNull();
   });
 });
