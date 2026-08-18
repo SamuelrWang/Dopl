@@ -215,8 +215,20 @@ test("the channels exemption protects the listener MODULES, not the UI feed", ()
   // means realtime.js / realtime-agents.js stay untouched (asserted by the
   // desktop suite generally), so the once-excluded set is now empty.
   assert.deepEqual(LISTENER_OWNED_TABLES, []);
-  for (const t of ["channel_messages", "agent_presence"]) {
-    assert.ok(SYNC_TABLES.includes(t), `${t} must feed the UI (web parity)`);
+  // ALL FIVE named individually, with what each one's absence costs — F-199.
+  // The pinned-order test above already fails on any edit to SYNC_TABLES, but it
+  // fails saying "the list changed"; these say WHICH SURFACE WENT DARK, which is
+  // the difference between re-adding the name and re-deriving the decision. The
+  // renderer half (these tables taking the bridge branch rather than a no-op) is
+  // pinned in `src/shared/realtime/shared-channel-registry.test.ts`.
+  for (const [t, surface] of [
+    ["channel_messages", "the TRANSCRIPT — this exact exclusion froze it in the first dogfood"],
+    ["channels", "the channel list / sidebar tree"],
+    ["channel_members", "the roster, and the DELETE doorbell a channel's own hard delete cannot ring"],
+    ["channel_consent_requests", "the consent inbox and its always-mounted sidebar badge"],
+    ["agent_presence", "the online dots and the 'N online' strip"],
+  ]) {
+    assert.ok(SYNC_TABLES.includes(t), `${t} must feed the UI (web parity) — without it, ${surface} stops updating live`);
     assert.ok(PUB.added.has(t), `${t} is not published`);
   }
   // `channel_agents` LEFT the feed on 2026-08-06. Nothing has written that table since the

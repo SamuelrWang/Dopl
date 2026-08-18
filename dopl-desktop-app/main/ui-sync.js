@@ -1,9 +1,9 @@
 // ui-sync.js — THE BUNDLED SPA'S LIVE-UPDATE FEED (Phase 3).
 //
 // WHAT THIS IS. The SPA renderer has no network (CSP `connect-src 'none'`, no Supabase
-// config, no tokens — ui-bridge.js owns the HTTP seam), so
-// `src/shared/realtime/shared-channel-registry.ts` short-circuits to a no-op the moment
-// it sees the SPA bridge. This is the other half: MAIN watches postgres_changes for the
+// config, no tokens — ui-bridge.js owns the HTTP seam), so `shared-channel-registry.ts`
+// takes its BRIDGE branch on `onSyncEvent` + `syncWatch` — a no-op ONLY against an older
+// main lacking them (F-199). This is the other half: MAIN watches postgres_changes for the
 // CONTENT tables of the workspace the renderer is viewing and forwards coalesced
 // `{ workspaceId, table }` events over `dopl:sync-event`, which that registry turns into
 // the same refetch signals the web fires — one websocket per client instead of ~96

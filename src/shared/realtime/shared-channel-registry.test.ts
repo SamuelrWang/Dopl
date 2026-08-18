@@ -86,6 +86,14 @@ import {
   __sharedChannelCountForTests,
   subscribeSharedWorkspaceTables,
 } from "./shared-channel-registry";
+// ⚠ The REAL constants, never a copy: this file's job below is to prove the
+// channels page is live in the SPA, and a hardcoded list here would keep
+// passing while the tables the hooks actually pass drifted out from under it.
+import {
+  CHANNEL_TABLES,
+  CONSENT_TABLES,
+  PRESENCE_TABLES,
+} from "@/features/channels/constants";
 
 const TABLES = ["knowledge_bases", "knowledge_entries"] as const;
 
@@ -382,6 +390,62 @@ describe("subscribeSharedWorkspaceTables", () => {
       vi.advanceTimersByTime(1_001);
       expect(watches.at(-1)).toBeNull();
       expect(offSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (window as unknown as { dopl?: unknown }).dopl;
+    }
+  });
+
+  it("SPA bridge: the CHANNELS tables ride it — the SPA is not realtime-dark", () => {
+    // F-199: three comments claimed realtime was OFF in the SPA for fifteen
+    // days after it stopped being true. RENDERER HALF — the three channels
+    // subscriptions take the BRIDGE and each of their five tables reaches its
+    // listener. MAIN HALF — those five staying in `main/ui-sync.js ›
+    // SYNC_TABLES`, without which the bridge delivers nothing and the
+    // transcript freezes — is `dopl-desktop-app/test/ui-sync-tables.test.mjs`.
+    const events: Array<(e: { workspaceId: string; table: string }) => void> = [];
+    const watches: Array<string | null> = [];
+    (window as unknown as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "OK", hasBody: false }),
+      syncWatch: (ws: string | null) => {
+        watches.push(ws);
+        return Promise.resolve();
+      },
+      onSyncEvent: (cb: (e: { workspaceId: string; table: string }) => void) => {
+        events.push(cb);
+        return () => {};
+      },
+    };
+    try {
+      // Exactly what the channels page mounts, on the hooks' own table lists.
+      const listenerFor = new Map<string, ReturnType<typeof vi.fn>>();
+      for (const [tables, prefix] of [
+        [CHANNEL_TABLES, "channels-realtime"],
+        [CONSENT_TABLES, "channels-consent-realtime"],
+        [PRESENCE_TABLES, "channels-presence-realtime"],
+      ] as const) {
+        const listener = vi.fn();
+        subscribeSharedWorkspaceTables("ws1", tables, prefix, listener);
+        for (const table of tables) listenerFor.set(table, listener);
+      }
+      expect(channels).toHaveLength(0); // no supabase socket in SPA mode
+      expect(watches).toEqual(["ws1"]); // one watch, deduped across the three
+      // The list itself is load-bearing: a table dropped from the constants is
+      // a surface that silently stops updating, not a test that goes red.
+      expect([...listenerFor.keys()].sort()).toEqual([
+        "agent_presence",
+        "channel_consent_requests",
+        "channel_members",
+        "channel_messages",
+        "channels",
+      ]);
+      for (const [table, listener] of listenerFor) {
+        const before = listener.mock.calls.length;
+        events[0]({ workspaceId: "ws1", table });
+        expect(
+          listener.mock.calls.length,
+          `${table} must reach its listener over the bridge`
+        ).toBe(before + 1);
+      }
     } finally {
       delete (window as unknown as { dopl?: unknown }).dopl;
     }

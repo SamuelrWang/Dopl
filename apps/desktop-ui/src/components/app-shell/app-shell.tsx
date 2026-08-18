@@ -50,9 +50,16 @@ export function AppShellLayout() {
     useWorkspaceRoute();
 
   // Shares the channels page's exact cache key — zero extra requests when both
-  // are mounted; self-disables on a falsy id. POLLED because realtime is a
-  // no-op in the SPA and a badge whose job is pulling you TO channels cannot
-  // wait on the channels page's own observers.
+  // are mounted; self-disables on a falsy id.
+  // ⚠ The interval's stated reason — "realtime is a no-op in the SPA" — was
+  // FALSE from ~26 minutes after it was written (F-199): `useConsentInbox` runs
+  // `useConsentRealtime`, and `channel_consent_requests` rides the ui-sync
+  // bridge like every other table in `main/ui-sync.js › SYNC_TABLES`. So this
+  // badge is live WITHOUT the poll, and passing the interval here is exactly
+  // what `CONSENT_INBOX_POLL_MS`'s own docblock forbids (channels page only —
+  // an always-mounted interval is a workspace-wide background poll on every
+  // page). Left running rather than removed, because dropping it is a
+  // behaviour change and not this change's job — F-201.
   const { requests: consentRequests } = useConsentInbox(
     workspace?.id,
     undefined,
@@ -113,6 +120,7 @@ export function AppShellLayout() {
             workspaceSegment={segment}
             activeSection={activeSectionFromPath(location.pathname)}
             // The badge counts pending consent requests, which arrive over the
+            // consent realtime signal (bridge-fed here) and the poll above.
             consentCount={consentRequests.length}
             onOpenSettings={openSettings}
             Link={RouterLink}
