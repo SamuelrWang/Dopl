@@ -169,7 +169,7 @@ describe("ChannelPane pending requests placement", () => {
     expect(ask).toBeLessThan(composer);
   });
 
-  it("keeps the amber consent-card container (waiting on a human)", () => {
+  it("keeps the amber launch-panel container (waiting on a human)", () => {
     const markup = render([consent()]);
     expect(markup).toContain("border-warning/25");
     expect(markup).toContain("bg-warning/10");
@@ -186,13 +186,21 @@ describe("ChannelPane pending requests placement", () => {
     expect(tail).not.toContain("self-start");
   });
 
-  it("no longer surfaces the tool-scope sentence on the inbound card", () => {
+  it("no longer surfaces the tool-scope sentence on the inbound panel", () => {
     // Product decision (2026-07-31): the scope line was removed from the consent
-    // card; the desktop session window still shows the profile. The card must
+    // card; the desktop session window still shows the profile. The panel must
     // not render a stale scope regardless of the channel's profile row.
     const markup = render([consent()]);
     expect(markup).not.toContain("tool scope for this channel");
-    expect(markup).toContain("Allowing runs a Claude session on this machine.");
+    expect(markup).toContain("Launching runs a Claude session on this machine.");
+  });
+
+  it("renders the LAUNCH verb, not Allow (wiring plan Phase 8)", () => {
+    // The old page swapped `consent-card.tsx` for `launch-panel.tsx` — same
+    // consent decision underneath (INVARIANTS §6), new surface and new word.
+    const markup = render([consent()]);
+    expect(markup).toContain("Launch agent");
+    expect(markup).not.toContain(">Allow<");
   });
 
   it("renders nothing consent-shaped when the queue is empty", () => {

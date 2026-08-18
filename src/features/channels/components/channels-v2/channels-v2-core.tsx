@@ -15,6 +15,7 @@ import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsV2Sidebar } from "./sidebar";
 import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
+import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
 import { INITIALLY_READ_MENTIONS, FIXTURE_MENTIONS, type FixtureMention } from "./fixtures-mentions";
 import {
@@ -32,9 +33,14 @@ export interface ChannelsV2CoreProps {
 
 /**
  * Channels v2 root — the three-column shell (channel tree · transcript ·
- * channel info) over the REAL channels reads. READ-ONLY: no writes land from
- * this tree in Phase 2, and the shipping `channels-view-core.tsx` page is
- * untouched and still live.
+ * channel info) over the REAL channels reads, plus a FOURTH center-column
+ * destination — the Inbox (`inbox-pane.tsx`), behind the sidebar's Inbox nav
+ * row. The shipping `channels-view-core.tsx` page stays untouched and live
+ * until the cutover (wiring plan Phase 12).
+ *
+ * ⚠ TWO WRITES LAND FROM THIS TREE, both through the existing write layer: the
+ * composer's message / request fan-out (Phase 3) and the inbox's consent
+ * decision (Phase 8). Neither is a new endpoint.
  *
  * ⚠ NO NEW HOOK LAYER AND NO NEW FETCH PATHS. Every read below is the same hook
  * the shipping page composes — `use-channels`, `use-channel-messages`,
@@ -59,11 +65,11 @@ export interface ChannelsV2CoreProps {
  *
  * ⚠ The refetch rides `shared/realtime/refetch-coordinator.ts` through
  * `useRefetchGate`, which INVARIANTS §7 requires of every live surface — a
- * remote event mid-edit must not clobber an unsent local change. Nothing here
- * writes yet, so the gate is currently only ever idle; it is wired now because
- * Phase 3's composer hands its `settleWith` to the very same gate, and a
- * coordinator retrofitted after the first write is a coordinator that was
- * missing for exactly the window it was needed.
+ * remote event mid-edit must not clobber an unsent local change. Both writers
+ * hand their `settleWith` to this ONE gate — the composer (Phase 3) and the
+ * inbox's consent decision (Phase 8) — which is the whole point: a coordinator
+ * retrofitted after the first write is a coordinator that was missing for
+ * exactly the window it was needed.
  *
  * ⚠ AN EVENT IS A DOORBELL, NEVER CONTENT — the signal triggers a filtered
  * refetch and no payload is ever merged, so RLS and the service filters stay
@@ -73,6 +79,9 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [requestedThreadId, setRequestedThreadId] = useState<string | null>(null);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
+  // The Inbox nav row takes over the CENTER column — it is a nav destination,
+  // not an overlay, and Phase 9's notification click needs somewhere to land.
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [readMentions, setReadMentions] =
     useState<ReadonlySet<string>>(INITIALLY_READ_MENTIONS);
@@ -225,13 +234,26 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
         onSelectChannel={(id) => {
           setSelectedId(id);
           setRequestedThreadId(null);
+          setInboxOpen(false);
         }}
-        onOpenThread={setRequestedThreadId}
+        onOpenThread={(id) => {
+          setRequestedThreadId(id);
+          setInboxOpen(false);
+        }}
         requestedThreads={requested}
         consentCount={requests.length}
+        inboxOpen={inboxOpen}
+        onOpenInbox={() => setInboxOpen(true)}
       />
 
-      {channel ? (
+      {inboxOpen ? (
+        <ChannelsV2InboxPane
+          workspaceId={workspaceId}
+          currentUserId={currentUserId}
+          requests={requests}
+          gate={gate}
+        />
+      ) : channel ? (
         <>
           <ChannelsV2MessagePane
             channelId={channel.id}

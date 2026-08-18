@@ -24,7 +24,7 @@ import {
 import { useChannelAgents } from "../hooks/use-channel-agents";
 import { ChannelTranscript } from "./channel-transcript";
 import { MessageComposer, type SendOptions } from "./message-composer";
-import { ConsentCard } from "./consent-card";
+import { LaunchPanel } from "./launch-panel";
 import { ChannelActionsMenu } from "./channel-actions-menu";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
@@ -375,12 +375,12 @@ export function ChannelPane({
                   className="flex flex-col gap-2.5"
                 >
                   {consentRequests.map((request) => (
-                    <ConsentCard
+                    <LaunchPanel
                       key={request.id}
                       request={request}
                       busy={consentBusyIds.has(request.id)}
-                      onAllow={() => onDecideConsent(request.id, "allow")}
-                      onDeny={() => onDecideConsent(request.id, "deny")}
+                      onLaunch={() => onDecideConsent(request.id, "allow")}
+                      onDecline={() => onDecideConsent(request.id, "deny")}
                     />
                   ))}
                 </section>

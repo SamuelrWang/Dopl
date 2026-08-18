@@ -295,10 +295,15 @@ describe("channels page", () => {
   it("decides a pending consent request through the API", async () => {
     renderPage();
 
-    const allow = await screen.findByRole("button", { name: "Allow" });
+    // ⚠ "Launch agent", not "Allow" — the consent CARD was retired for the
+    // launch panel (wiring plan Phase 8). The write below is unchanged: the
+    // same `PATCH /consent/[id]` with the same `"allow"` decision. In a plain
+    // browser there are no desktop launch settings to expand, so the first
+    // click IS the decision.
+    const launch = await screen.findByRole("button", { name: "Launch agent" });
     expect(screen.getByText("Run the channels port")).toBeInTheDocument();
 
-    fireEvent.click(allow);
+    fireEvent.click(launch);
 
     await waitFor(() =>
       expect(requestsTo("/api/channels/consent/cr-1", "PATCH")).toHaveLength(1)
@@ -308,7 +313,9 @@ describe("channels page", () => {
     expect(patch.headers["x-workspace-id"]).toBe(workspaceId);
 
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Allow" })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("button", { name: "Launch agent" })
+      ).not.toBeInTheDocument()
     );
   });
 });
