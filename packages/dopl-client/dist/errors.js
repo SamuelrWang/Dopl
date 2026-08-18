@@ -28,9 +28,8 @@ function parseApiErrorBody(body) {
             };
         }
         // Flat entitlement-denial envelope, e.g. the ontology free-plan object
-        // cap: { error: "over_free_cap", message, upgrade_url }. Distinct shape
-        // by design — surface its human message + upgrade link instead of a raw
-        // "HTTP 403" body dump.
+        // cap: { error: "over_free_cap", message, upgrade_url }. Distinct shape by
+        // design — surface message + upgrade link, not a raw "HTTP 403" dump.
         if (typeof error === "string") {
             return {
                 code: error,
@@ -100,15 +99,13 @@ class DoplTimeoutError extends DoplNetworkError {
 }
 exports.DoplTimeoutError = DoplTimeoutError;
 /**
- * The CALLER went away (Q14) — an external `AbortSignal` handed to the
- * transport fired, so the request was cancelled from our side rather than
- * timing out on the server's.
+ * The CALLER went away (Q14) — an external `AbortSignal` on the transport
+ * fired; cancelled from our side, not timed out on the server's.
  *
- * Distinct from {@link DoplTimeoutError} on purpose: both arrive as an
- * `AbortError` from `fetch`, and reporting a client disconnect as "timed out
- * after 55000ms" sends whoever reads the log looking for a slow route that was
- * never slow. Still a `DoplNetworkError`, so every existing `catch` keeps
- * working unchanged.
+ * ⚠ Distinct from {@link DoplTimeoutError} on purpose: both arrive from `fetch`
+ * as an `AbortError`, and logging a client disconnect as "timed out after
+ * 55000ms" sends the next reader hunting a slow route that was never slow.
+ * Still a `DoplNetworkError`, so existing `catch`es keep working.
  */
 class DoplAbortError extends DoplNetworkError {
     constructor(method, path) {

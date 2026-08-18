@@ -1,17 +1,14 @@
 "use strict";
 /**
- * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph
- * as a ROUTING layer, fully agent-authorable (like dopl_kb for bases).
- * Read funnel: anchor → map → resolve → get. Write ops edit one thing
- * at a time (attribute / relationship / action upserts) so agents never
- * have to round-trip whole objects.
+ * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph as a
+ * ROUTING layer. Read funnel: anchor → map → resolve → get. Writes edit ONE
+ * thing at a time so agents never round-trip whole objects.
  *
- * This file is the thin registrar: it owns the two tool schemas + wires
- * them to the handlers in sibling modules —
- *   - `ontology-render.ts`     — shared ref resolvers + object renderer
- *   - `ontology-ops-read.ts`   — map/anchor/resolve/get
- *   - `ontology-ops-write.ts`  — the op dispatch switch + every mutating handler
- * The admin tool (the refused cascade deletes) stays inline here.
+ * Thin registrar: two tool schemas wired to
+ *   - `ontology-render.ts`    — shared ref resolvers + object renderer
+ *   - `ontology-ops-read.ts`  — map/anchor/resolve/get
+ *   - `ontology-ops-write.ts` — op dispatch + every mutating handler
+ * The admin tool (refused cascade deletes) stays inline here.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
@@ -124,12 +121,10 @@ caller = identity_1.UNKNOWN_CALLER) {
         object: zod_1.z.string().optional().describe("delete_object: id or exact name."),
         cluster: zod_1.z.string().optional().describe("delete_cluster: slug, id, or exact name."),
     }, async (args) => {
-        // THE SUMMARY PROJECTION, NOT THE GRAPH (P0-3). This handler resolves a
-        // ref by id/slug/name and counts a cascade over `columnIds`/`childIds` —
-        // containment only, no JSONB. (§2b means it is also unreachable: the
-        // refusal fires in server.ts's registration wrapper before any client
-        // call, so the saving here is theoretical and the point is that the
-        // resolvers stay honest about what they read.)
+        // ⚠ SUMMARY PROJECTION, NOT THE GRAPH: this resolves a ref and counts a
+        // cascade over `columnIds`/`childIds` — containment only, no JSONB.
+        // (Unreachable: the delete refusal fires before any client call, so the
+        // point is that the resolvers stay honest about what they read.)
         const snapshot = await client.getOntology({ view: "summary" });
         if (args.op === "delete_object") {
             const miss = (0, respond_1.missingParams)("delete_object", args, ["object"]);
@@ -148,9 +143,9 @@ caller = identity_1.UNKNOWN_CALLER) {
         if ("fail" in resolved)
             return resolved.fail;
         const count = countClusterObjects(snapshot, resolved.hit);
-        // A clipped read under-counts the cascade: the rows past the ceiling are
-        // still deleted, they were just never in hand to count. A number stated
-        // flat would be the one thing worse than no number.
+        // ⚠ A clipped read UNDER-counts the cascade — rows past the ceiling are
+        // still deleted, just never in hand to count. A flat number is worse than
+        // no number.
         const floor = snapshot.truncated
             ? ` The ontology read was CLIPPED by a server row ceiling, so that count is a floor, not the cascade.`
             : "";
@@ -159,13 +154,11 @@ caller = identity_1.UNKNOWN_CALLER) {
     });
 }
 /**
- * Size of a cluster's cascade set: its columns plus every nested descendant
- * (the objects delete_cluster would take with it). Visited-set guards
- * against cycles from objects shared across parents.
+ * Size of a cluster's cascade set: columns plus every nested descendant. ⚠
+ * Visited-set guards against cycles from objects shared across parents.
  *
- * Typed to the containment fields it actually walks, so it accepts either
- * projection: the full snapshot and the `view: "summary"` one both carry
- * `columnIds` and `childIds`, and nothing here reads anything else.
+ * ⚠ Typed to the containment fields it walks, so it accepts EITHER projection —
+ * full snapshot and `view: "summary"` both carry `columnIds` and `childIds`.
  */
 function countClusterObjects(snapshot, cluster) {
     const collected = new Set();

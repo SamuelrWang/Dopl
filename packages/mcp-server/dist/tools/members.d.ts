@@ -12,11 +12,9 @@ import { type CallerIdentity } from "./identity";
 import { type RegisterTool } from "./respond";
 export declare function registerMembersTool(register: RegisterTool, client: DoplClient, 
 /**
- * The session's ONE identity record (server.ts). `whoami` used to re-derive
- * the caller from `GET /api/workspaces/me`, whose `userId` is nullable — so
- * when that came back null the op printed a workspace, a role and no
- * identifier, while `dopl_channel` in the same connection was confidently
- * marking "you" off a different id. Defaults to unknown, which renders as
- * unknown.
+ * ⚠ The session's ONE identity record. Re-deriving the caller from
+ * `GET /api/workspaces/me` (nullable `userId`) prints a workspace and a role
+ * with no identifier, while `dopl_channel` on the same connection marks "you"
+ * off a different id. Defaults to unknown, which renders as unknown.
  */
 caller?: CallerIdentity): void;

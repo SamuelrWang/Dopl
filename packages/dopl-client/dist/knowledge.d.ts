@@ -1,12 +1,6 @@
 /**
- * Knowledge-base methods for `DoplClient` (Item 4). Each function takes
- * the shared `DoplTransport` as its first arg and hits the matching
- * Next.js API route. The `DoplClient` class wraps these into instance
- * methods for caller ergonomics.
- *
- * Path-based methods (`writeFileByPath`, `readFileByPath`,
- * `createFolderByPath`, `listDirByPath`, `moveByPath`, `deleteByPath`)
- * use the path-based REST endpoints added in Phase 4.C.
+ * Knowledge-base methods for `DoplClient`. Free functions over
+ * `DoplTransport`; the class-side method group is `client-knowledge.ts`.
  */
 import type { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";

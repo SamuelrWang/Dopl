@@ -1,18 +1,14 @@
 /**
- * Domain types for the user's knowledge bases (Item 4).
+ * Domain types for the user's knowledge bases.
  *
- * Mirrors `src/features/knowledge/types.ts` in the main app — kept in
- * sync by hand for now. If they ever drift, the API responses become
- * the source of truth.
- *
- * These describe the user-authored, editable knowledge bases.
+ * ⚠ Mirrors `src/features/knowledge/types.ts` — hand-synced. On drift, the API
+ * responses are the source of truth.
  */
 export type KnowledgeEntryType = "note" | "doc" | "transcript" | "imported";
 export type KnowledgeWriteSource = "user" | "agent";
 /**
- * Per-resource visibility (M-10). `'public'` rows are visible to every
- * workspace member at their role's default access; `'private'` rows
- * are owner-only.
+ * `public` = visible to every workspace member at their role's default access;
+ * `private` = owner-only.
  */
 export type KnowledgeVisibility = "public" | "private";
 export interface KnowledgeBase {
@@ -37,7 +33,7 @@ export interface KnowledgeFolder {
     knowledgeBaseId: string;
     parentId: string | null;
     name: string;
-    /** Agent-facing summary of the folder's contents (≤300 chars). */
+    /** Agent-facing summary of contents (≤300 chars). */
     description: string | null;
     position: number;
     createdBy: string | null;
@@ -68,7 +64,7 @@ export interface KnowledgeTreeSnapshot {
     entries: KnowledgeEntry[];
     /** Present only when entry paging was requested (`entryLimit`). */
     entryTotal?: number;
-    /** Opaque cursor for the next entry page; null = last page. */
+    /** Opaque cursor for next entry page; null = last page. */
     nextEntryCursor?: string | null;
 }
 export interface KnowledgeDirListing {
@@ -87,15 +83,15 @@ export interface KnowledgeBaseUpdateInput {
     description?: string | null;
     slug?: string;
     agentWriteEnabled?: boolean;
-    /** Sharing scope. Via the MCP this is used only to publish
-     *  (private→public); accessMode / team grants stay human-only. */
+    /** Via MCP, publish only (private→public); accessMode / team grants stay
+     *  human-only. */
     visibility?: KnowledgeVisibility;
 }
 export interface KnowledgeWriteFileInput {
     body?: string;
     title?: string;
-    /** Short agent-facing summary (≤300 chars) shown in get_tree /
-     *  list_dir. `null` clears it; omitting leaves the existing excerpt. */
+    /** Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null`
+     *  clears; omitting leaves the existing excerpt. */
     excerpt?: string | null;
 }
 export interface KnowledgeWriteFileResult {
@@ -111,7 +107,7 @@ export interface KnowledgeSearchHit {
     folderId: string | null;
     title: string;
     excerpt: string | null;
-    /** Snippet has `<b>` tags around matched terms — strip or render. */
+    /** ⚠ Carries `<b>` tags around matched terms — strip or render. */
     snippet: string;
     rank: number;
     updatedAt: string;

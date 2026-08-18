@@ -23,9 +23,7 @@ export interface OntologyAttribute {
 export interface OntologyMethod {
     name: string;
     description: string;
-    /** What the result of the action should be. */
     outcome: string;
-    /** Tools the agent should use to perform it. */
     tools: string;
 }
 export interface OntologyRelationship {
@@ -48,10 +46,9 @@ export interface OntologyObject {
     /** Column-only: default fields new children are born with. */
     template: OntologyTemplateField[];
     /**
-     * Optimistic-concurrency token — the row's `updated_at`. Read ops surface
-     * it so a write can pass it back as `expectedVersion` (X-Updated-At) and
-     * be rejected (412) if the object changed underneath. Optional: rows
-     * written before the field was serialized simply omit it.
+     * Optimistic-concurrency token — the row's `updated_at`. Reads surface it so
+     * a write passes it back as `expectedVersion` (X-Updated-At) and 412s if the
+     * object changed underneath. Optional: pre-serialization rows omit it.
      */
     updatedAt?: string;
 }
@@ -67,21 +64,17 @@ export interface OntologySnapshot {
     objects: Record<string, OntologyObject>;
 }
 /**
- * `GET /api/ontology?view=summary` — the same graph SHAPE with every JSONB
- * column left in the database: no `attributes`, no `methods`, no `template`, no
- * cluster `layout`, and no relationships read at all.
+ * `GET /api/ontology?view=summary` — same graph SHAPE, every JSONB column left
+ * in the database: no `attributes`, `methods`, `template`, cluster `layout`,
+ * and no relationships read at all. For map-shaped renders that print names and
+ * containment only (`dopl_map` runs before every agent's first substantive
+ * reply and was pulling the whole graph to render cluster and column names).
  *
- * It exists for map-shaped renders — the ones that print names and containment
- * and nothing else. `dopl_map` is the reason: the server instructions mandate
- * it before every agent's first substantive reply, and it was pulling the whole
- * graph, JSONB and all, to render cluster names and column names.
- *
- * A DISTINCT TYPE, not a snapshot with empty arrays. `attributes: []` asserts
- * that an object has no attributes; omitting the field says this view did not
- * ask. Anything that needs a JSONB column takes the detail path — `op="get"` /
- * `getOntologyAnchor` / the object PATCH response — which returns one object in
- * full. Every field here is also a field of `OntologySnapshot`, so a render
- * that only reads names accepts either.
+ * ⚠ A DISTINCT TYPE, not a snapshot with empty arrays: `attributes: []` asserts
+ * an object HAS none; omitting says this view did not ask. Anything needing a
+ * JSONB column takes the detail path (`op="get"` / `getOntologyAnchor` / the
+ * object PATCH response). Every field here is also a field of
+ * `OntologySnapshot`, so a names-only render accepts either.
  */
 export interface OntologyObjectSummary {
     id: string;
@@ -100,8 +93,8 @@ export interface OntologySummary {
     clusters: OntologyClusterSummary[];
     objects: Record<string, OntologyObjectSummary>;
     /**
-     * True when a server-side row ceiling clipped this view. Absent on older
-     * servers, so treat `undefined` as "not clipped" — never as "unknown".
+     * True when a server row ceiling clipped this view. Absent on older servers
+     * — treat `undefined` as "not clipped", never "unknown".
      */
     truncated?: boolean;
 }

@@ -1,13 +1,11 @@
 "use strict";
 /**
- * Channel method group — link 7 of the chain documented in `client-base.ts`.
- * Pure delegation to `channel.ts`; no HTTP here.
+ * Channel method group — link 7 of the chain in `client-base.ts`. Pure
+ * delegation to `channel.ts`; no HTTP here.
  *
- * Cross-user, agent-to-agent collaboration threads. Messages carry a
- * monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals past
- * a cursor so a listener can watch a channel without busy-looping. There was
- * a MULTIPLAYER half — channel agents + thread participants — and it is gone
- * with the surfaces it called (channels rollback §1).
+ * Cross-user, agent-to-agent collaboration threads. Messages carry a monotonic
+ * `seq` cursor; `awaitChannelMessages` long-polls past a cursor so a listener
+ * watches a channel without busy-looping.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -71,6 +69,9 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     awaitChannelMessages(channelId, opts) {
         return channel.awaitMessages(this.transport, channelId, opts);
     }
+    /** One page of a channel's threads, most recently active first, plus whether
+     *  the server's ceiling clipped it. ⚠ Never re-sort the page — see
+     *  `channel.ts › listChannelThreads`. */
     listChannelThreads(channelId) {
         return channel.listChannelThreads(this.transport, channelId);
     }
@@ -87,9 +88,9 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
         return channel.closeChannelThread(this.transport, channelId, threadId, input);
     }
     /**
-     * DECISION 2 (2026-08-04) — the agent lane's terminal act on a thread. See
-     * `channel.proposeChannelThreadClose`; `closeChannelThread` above is the human
-     * lane and the server refuses it for an agent token.
+     * The agent lane's terminal act on a thread — see
+     * `channel.proposeChannelThreadClose`. `closeChannelThread` above is the
+     * human lane; the server refuses it for an agent token.
      */
     proposeChannelThreadClose(channelId, threadId, input) {
         return channel.proposeChannelThreadClose(this.transport, channelId, threadId, input);

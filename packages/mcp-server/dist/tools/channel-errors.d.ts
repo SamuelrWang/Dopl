@@ -1,25 +1,16 @@
 /**
- * `dopl_channel` API-ERROR CLASSIFICATION — what a 4xx from the channels routes
- * actually means, read off the error CODE rather than guessed from the status.
+ * `dopl_channel` API-ERROR CLASSIFICATION — ⚠ what a 4xx MEANS is read off the
+ * error CODE, never guessed from the status. A bare `status === 400` branch
+ * blames whichever param happened to be set, so an over-length title comes back
+ * as "invite them first" and `op="invite"` then answers "already a member".
  *
- * Q9 — the write ops used to catch a bare `status === 400` and answer with a
- * fixed sentence blaming the addressee. `to` is required for `create_thread`,
- * so EVERY 400 got that sentence with no fall-through: a 240-character title
- * (rejected by the route's own zod schema, before `createTask` ever ran) came
- * back as "invite Bob first", and `op="invite"` then answered "Bob is already a
- * member" — two contradictory errors, no path forward, and nothing anywhere
- * naming the real cause.
+ * `DoplApiError` parses `{ error: { code, message } }` into `.code` /
+ * `.apiMessage` (packages/dopl-client/src/errors.ts) and every channels-route
+ * 400 carries one — `HttpError.toResponseBody()` makes that unconditional.
+ * Duck-typed here so nothing imports the error class across the @dopl/client
+ * boundary (same discipline as `respond.ts`'s isNotFound / isConflict).
  *
- * The code was there the whole time. `DoplApiError` parses `{ error: { code,
- * message } }` into `.code` / `.apiMessage` (packages/dopl-client/src/errors.ts)
- * and every channels-route 400 carries one — `HttpError.toResponseBody()` makes
- * that unconditional. The tools simply discarded it. This module reads it,
- * duck-typed on the shape so nothing has to import the error class across the
- * @dopl/client boundary (the same discipline as `respond.ts`'s isNotFound /
- * isConflict / isAlreadyExists).
- *
- * The `channel-` filename prefix is required by the parity split-scan
- * (parity.test.ts).
+ * ⚠ `channel-` filename prefix required by the parity split-scan (parity.test.ts).
  */
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 export declare function isBadRequest(e: unknown): boolean;
@@ -28,78 +19,54 @@ export declare function isForbidden(e: unknown): boolean;
 /**
  * What a 400 from a channels route MEANS, as far as the caller can act on it.
  *
- *   - `addressee_not_member` — the `to` member is not in the channel. The only
- *     cause the old fixed message was ever right about.
- *   - `thread_not_in_channel` — a first-class `thread` id that does not resolve
- *     to a thread of this channel.
- *   - `self_target`          — `create_thread` addressed to the CALLER. Only a
- *     thread's creator and its target may post into it, so a self-addressed
- *     thread has one party and can never be answered. `create_thread` only —
- *     `post to=self` is not guarded server-side and never raises this.
- *   - `invalid_request`      — the route's own zod schema (or JSON parse)
- *     rejected the body BEFORE any channel logic ran. Almost always a field
- *     over its cap. Emphatically NOT a membership problem.
- *   (`participant_not_member` / `agent_not_in_channel` / `too_many_agents` were
- *   three more, all of them about NAMED AGENTS and breakout-room participants,
- *   and all three went with those surfaces — channels rollback §1. The route no
- *   longer emits their codes; a caller that still sends one of the removed
- *   params gets `VALIDATION_FAILED`, i.e. `invalid_request` above, with the
- *   field named in the server's own message.)
- *   - `chat_addressed`       — a post that said `intent:"chat"` AND named an
- *     addressee. The two mean opposite things and the route refuses the pair
- *     rather than picking one (`ChannelChatAddressedError`). The tool refuses it
- *     BEFORE the call too, so this arm should be unreachable in practice — it is
- *     classified anyway, because "unreachable" is exactly the assumption the
- *     status-only branch this module replaced was built on.
- *   - `workspace`            — no usable workspace on the call.
- *   - `unknown`              — a 400 with no code we recognize (or no code at
- *     all, e.g. an edge/proxy error page). Say so; do not invent a cause.
+ *   - `addressee_not_member`  — the `to` member is not in the channel.
+ *   - `thread_not_in_channel` — a first-class `thread` id not of this channel.
+ *   - `self_target`           — `create_thread` addressed to the CALLER: only
+ *     creator and target may post, so it has one party and can never be
+ *     answered. ⚠ create_thread ONLY — `post to=self` is not guarded server-side.
+ *   - `invalid_request`       — the route's zod schema (or JSON parse) rejected
+ *     the body BEFORE any channel logic ran; almost always a field over its cap.
+ *     ⚠ Emphatically NOT a membership problem.
+ *   - `chat_addressed`        — `intent:"chat"` AND an addressee, which mean
+ *     opposite things (`ChannelChatAddressedError`). The tool refuses it before
+ *     the call, so this arm should be unreachable — ⚠ classified anyway,
+ *     because "unreachable" is the assumption the status-only branch was built on.
+ *   - `workspace`             — no usable workspace on the call.
+ *   - `unknown`               — a 400 with no recognized code (or none at all,
+ *     e.g. an edge/proxy error page). ⚠ Say so; never invent a cause.
  */
 export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "chat_addressed" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as
- * {@link classifyBadRequest} and the same reason: the write ops caught a bare
- * `status === 403` and answered with one fixed sentence, so the ONE cause that
- * sentence named got reported for every other cause too.
+ * {@link classifyBadRequest}: a bare `status === 403` reports one cause for all.
  *
- *   - `not_a_member`         — `CHANNEL_FORBIDDEN`: the caller is not a member
- *     of the channel at all.
- *   - `thread_authorization` — `TASK_FORBIDDEN`: the caller IS in the channel
- *     and is not authorized on THIS THREAD. Every raiser is now the same rule —
- *     a thread's two parties are its creator and its target, and only those two
- *     may post into it, propose its close, close it, set its mode or reopen it
- *     (`service-tasks.ts`, `service-tasks-propose.ts`,
- *     `service-writes-metadata.ts`) — so the arm still has to say WHICH write it
- *     was refusing. It emphatically does NOT mean the caller left the channel.
- *     The CURATION rule on join and the narrower eject rule on leave used to
- *     raise it too; breakout participants are gone (channels rollback §1) and
- *     `join_thread` / `leave_thread` are not ops of this tool any more.
- *   - `unknown`              — a 403 with no code we recognize. Say so.
- *
- * THERE IS NO `agent_owner` ARM. It classified `CHANNEL_AGENT_FORBIDDEN` — an
- * agent identity the caller did not own (`as_agent`, rename, park) — and went
- * with named agents; the server records that code among the six nothing raises
- * (`src/features/channels/server/http-mapping.ts`). A build that somehow saw one
- * would land on `unknown`, which says so rather than guessing.
+ *   - `not_a_member`         — `CHANNEL_FORBIDDEN`: not a member of the channel.
+ *   - `thread_authorization` — `TASK_FORBIDDEN`: IN the channel but not
+ *     authorized on THIS THREAD. A thread's two parties are its creator and its
+ *     target, and only those two may post, propose a close, close, set mode or
+ *     reopen (`service-tasks.ts`, `service-tasks-propose.ts`,
+ *     `service-writes-metadata.ts`). ⚠ The arm must say WHICH write it refused,
+ *     and must NOT read as "you left the channel".
+ *   - `lifecycle_kind`       — `CHANNEL_LIFECYCLE_KIND_FORBIDDEN`: a post
+ *     carrying `task_started`/`task_finished`/`task_failed`. The tool refuses
+ *     these pre-call, so this is the belt for a bypassed build. ⚠ Must not be
+ *     reported as a channel-membership problem.
+ *   - `close_is_human`       — `CHANNEL_CLOSE_IS_HUMAN_ONLY`: agent-token close.
+ *   - `unknown`              — an unrecognized 403. ⚠ Say so; never guess.
  */
 export type ForbiddenKind = "not_a_member" | "thread_authorization" | "lifecycle_kind" | "close_is_human" | "unknown";
 export declare function classifyForbidden(e: unknown): ForbiddenKind;
 /**
- * The server's own human message for an error, as a trailing clause — or "" when
- * there is nothing useful to add.
- *
- * NEUTRALIZED, for the same reason `describeFailure` is (FIX L5): "our own
- * server said it" is a claim about where the bytes came from, not about who
- * wrote them. A 400 routinely echoes a rejected field, and a not-found names a
- * counterparty-supplied ref. Spliced into an error line — which is unframed
- * narration by the tool — that text would be read as ours.
+ * The server's own message as a trailing clause, or "" when there is nothing to
+ * add. ⚠ NEUTRALIZED: "our own server said it" names where the bytes came from,
+ * not who wrote them — a 400 routinely echoes a rejected field and a not-found
+ * names a counterparty-supplied ref, and an error line is unframed narration.
  */
 export declare function serverDetail(e: unknown): string;
 /**
- * The caps the routes actually enforce, quoted in the invalid-request messages
- * so an agent that hit one has a number to act on. Mirrored (not re-derived)
- * from `src/features/channels/schema.ts`; the MCP zod schema in `channel.ts`
- * mirrors the same numbers so the common case never reaches the route at all.
+ * Route-enforced caps, quoted in invalid-request messages so an agent has a
+ * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
+ * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
 export declare const FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, a close summary <=2000, client_msg_id <=200.";

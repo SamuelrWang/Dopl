@@ -1,9 +1,7 @@
 /**
- * Chat-archive methods for `DoplClient`.
- *
- * The archive is agent-written: agents export conversation summaries
- * into Dopl (`exportChat`), extend them mid-session (`appendChatMessages`),
- * and read them back later as context (`listChats` / `getChat`).
+ * Chat-archive methods for `DoplClient`. Agent-written: export conversation
+ * summaries (`exportChat`), extend mid-session (`appendChatMessages`), read
+ * back later as context (`listChats` / `getChat`).
  */
 import type { DoplTransport } from "./transport.js";
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";

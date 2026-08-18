@@ -1,11 +1,8 @@
 "use strict";
 /**
- * Workspace-resolution methods for `DoplClient`, plus the MCP status ping
- * that rides the same `/api/user` surface. Free functions over
- * `DoplTransport`; the class-side method group is `client-workspaces.ts`.
- *
- * Bodies moved verbatim out of `client.ts` in the §2 per-domain split —
- * routes, tool names and the `pingMcpStatus` normalisation are unchanged.
+ * Workspace-resolution methods for `DoplClient`, plus the MCP status ping that
+ * rides the same `/api/user` surface. Free functions over `DoplTransport`; the
+ * class-side method group is `client-workspaces.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listWorkspaces = listWorkspaces;
@@ -24,12 +21,11 @@ async function getWorkspace(t, slug) {
     });
 }
 /**
- * Resolve the active workspace — the one currently set on the transport
- * via `setWorkspaceId(...)` or `X-Workspace-Id` — via `GET
- * /api/workspaces/me`. Header-less resolution now depends on the caller's
- * membership count (exactly one auto-targets; 0 or 2+ → 400
- * WORKSPACE_REQUIRED). The MCP server boots off `listWorkspaces()` instead,
- * so this is no longer on the boot path.
+ * Resolve the workspace set on the transport (`setWorkspaceId(...)` /
+ * `X-Workspace-Id`) via `GET /api/workspaces/me`. Header-less resolution
+ * depends on the caller's membership count: exactly one auto-targets, 0 or 2+ →
+ * 400 WORKSPACE_REQUIRED. Not on the boot path — the MCP server boots off
+ * `listWorkspaces()`.
  */
 async function getActiveWorkspace(t) {
     return t.request("/api/workspaces/me", {
@@ -37,10 +33,9 @@ async function getActiveWorkspace(t) {
     });
 }
 /**
- * Liveness + privilege probe. The envelope's `is_admin` / `user_id` are
- * OPTIONAL on the wire, so both are normalised here rather than at the call
- * site — a missing key means "not admin" / "unknown user", never `undefined`
- * leaking into a caller's boolean.
+ * Liveness + privilege probe. `is_admin` / `user_id` are OPTIONAL on the wire,
+ * normalised HERE not at the call site — a missing key means "not admin" /
+ * "unknown user", never `undefined` leaking into a caller's boolean.
  */
 async function pingMcpStatus(t) {
     const res = await t.request("/api/user/mcp-status", {

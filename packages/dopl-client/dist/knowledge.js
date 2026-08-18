@@ -1,13 +1,7 @@
 "use strict";
 /**
- * Knowledge-base methods for `DoplClient` (Item 4). Each function takes
- * the shared `DoplTransport` as its first arg and hits the matching
- * Next.js API route. The `DoplClient` class wraps these into instance
- * methods for caller ergonomics.
- *
- * Path-based methods (`writeFileByPath`, `readFileByPath`,
- * `createFolderByPath`, `listDirByPath`, `moveByPath`, `deleteByPath`)
- * use the path-based REST endpoints added in Phase 4.C.
+ * Knowledge-base methods for `DoplClient`. Free functions over
+ * `DoplTransport`; the class-side method group is `client-knowledge.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listKbBases = listKbBases;
@@ -61,15 +55,14 @@ async function readKbFileByPath(t, baseId, path) {
 }
 async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
     // Optimistic concurrency, tri-state on `expectedVersion`:
-    //   - string    → atomic compare-and-swap against it (412 on mismatch).
-    //   - undefined  → strict default: if the entry already exists, refuse
-    //                  (412) — the caller must read_file first and pass the
-    //                  Version it actually saw. The old read-at-write
-    //                  "auto-guard" only proved nothing changed in the
-    //                  microseconds before the PUT; it silently clobbered
-    //                  anything written after the caller's real read. A
-    //                  missing entry (404) means create — no precondition.
-    //   - null       → force: blind overwrite, no precondition.
+    //   - string    → atomic compare-and-swap (412 on mismatch).
+    //   - undefined → strict: existing entry refuses 412 — caller must read_file
+    //                 first and pass the Version it saw. ⚠ Do NOT re-add the old
+    //                 read-at-write auto-guard: it only proved nothing changed in
+    //                 the microseconds before the PUT, and silently clobbered
+    //                 writes landing after the caller's real read. 404 → create,
+    //                 no precondition.
+    //   - null      → force: blind overwrite, no precondition.
     let version;
     if (expectedVersion === null) {
         version = undefined;
@@ -111,9 +104,9 @@ async function listKbDirByPath(t, baseId, path = "") {
 async function createKbFolderByPath(t, baseId, path, description) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/folders-by-path`, {
         method: "POST",
-        // Omit `description` entirely when not provided so a plain mkdir -p
-        // never clears an existing folder's summary (the route treats
-        // `undefined` as "leave as-is", `null` as "clear").
+        // ⚠ Omit `description` entirely when not provided so a plain mkdir -p
+        // never clears an existing folder's summary (route: `undefined` =
+        // leave as-is, `null` = clear).
         body: description === undefined ? { path } : { path, description },
         toolName: "kb_create_folder",
     });
@@ -129,7 +122,7 @@ async function moveKbByPath(t, baseId, fromPath, toPath) {
         toolName: "kb_move_by_path",
     });
 }
-// ─── Search (Item 5.D) ──────────────────────────────────────────────
+// ─── Search ─────────────────────────────────────────────────────────
 async function searchKb(t, query, opts = {}) {
     const qs = new URLSearchParams({ q: query });
     if (opts.baseSlug)

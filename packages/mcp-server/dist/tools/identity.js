@@ -1,35 +1,18 @@
 "use strict";
 /**
- * IDENTITY + LOCUS — the ONE definition of "who am I and where am I", for
- * every tool that answers it.
+ * IDENTITY + LOCUS — ⚠ the ONE definition of "who am I and where am I", for
+ * every tool that answers it. One record, resolved once at boot, rendered by
+ * the functions below and NOWHERE else: independent sources fail independently,
+ * so two tools can otherwise disagree about the same session inside one
+ * connection.
  *
- * WHY THIS FILE EXISTS. Three separate surfaces used to answer the question
- * from three unreconciled sources and none of them answered all of it:
- *   - `dopl_members(op="whoami")` re-derived the caller from
- *     `GET /api/workspaces/me`, whose `userId` is typed `string | null`. When it
- *     came back null the op still printed `## You in <workspace>` and a role and
- *     simply omitted the id — a confident answer with the identifying half
- *     missing.
- *   - `dopl_channel` used a DIFFERENT id, the boot status ping's, to mark "you"
- *     on a roster. Two sources that fail independently, so the two tools could
- *     disagree about the same session inside one connection.
- *   - `dopl_ontology(op="anchor")` said "You are anchored to this object" over a
- *     member-typed object NAME, carried no caller id at all, and is what the
- *     server instructions tell every agent to call for "my/me" requests. It is
- *     the strongest identity claim in the product with the weakest backing: any
- *     agent can re-point it with `op="claim_anchor"`.
- * And the `_dopl_status` footer — the line that rides EVERY successful response
- * and that the instructions tell the agent to read — named the workspace and
- * said nothing about who was asking.
+ * ⚠ A display name is peer-settable and two members can share one; the user id
+ * is the half nobody else can hold. Every rendering here prints the id, and
+ * none prints a name without it.
  *
- * SO: one record, resolved once at boot, rendered by the functions below, and
- * nowhere else. A display name is peer-settable and two members can share one;
- * the user id is the half nobody else can hold. Every rendering here prints the
- * id, and none of them prints a name without it.
- *
- * WHAT THIS FILE REFUSES TO CLAIM is as load-bearing as what it states — see
- * `LOCUS_NOTE`. An agent confidently wrong about where it is running is worse
- * than one that knows it cannot tell.
+ * ⚠ What this file REFUSES to claim is as load-bearing as what it states — see
+ * `LOCUS_NOTE`. An agent confidently wrong about where it runs is worse than
+ * one that knows it cannot tell.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.DESKTOP_SESSION_RUNTIME = void 0;
@@ -38,10 +21,10 @@ exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
 const narration_1 = require("./narration");
 /**
- * The recognized `X-Dopl-Runtime` value (`src/shared/auth/runtime-header.ts`).
- * Restated rather than imported: `packages/*` cannot import from the app's
- * `src/`, and the app is the only sender. A drift here shows up as an
- * `unstamped` render, never as a wrong grant — nothing gates on this.
+ * Recognized `X-Dopl-Runtime` value. ⚠ HAND-COPIED from
+ * `src/shared/auth/runtime-header.ts` — `packages/*` cannot import the app's
+ * `src/`. Drift renders as `unstamped`, never as a wrong grant: nothing gates
+ * on this.
  */
 exports.DESKTOP_SESSION_RUNTIME = "desktop-session";
 /** No identity at all — the shape every test-constructed server gets by default. */
@@ -52,11 +35,9 @@ exports.UNKNOWN_CALLER = {
     credentialLabel: null,
 };
 /**
- * What the server SAW in the runtime header, as a word — never what it
- * concluded. `desktop-session` means the stamp was present; `unstamped` means
- * it was absent, which is USUALLY an external client but is also what a
- * desktop spawn on an older build looks like. The difference between reporting
- * an observation and reporting a conclusion is the whole point.
+ * ⚠ What the server SAW in the runtime header, never what it concluded.
+ * `unstamped` means the stamp was absent — usually an external client, but also
+ * how a desktop spawn on an older build looks.
  */
 function runtimeWord(identity) {
     return identity.runtime === exports.DESKTOP_SESSION_RUNTIME
@@ -64,28 +45,17 @@ function runtimeWord(identity) {
         : "unstamped";
 }
 /**
- * The `_dopl_status` caller line — terse on purpose, because this rides every
+ * The `_dopl_status` caller line — ⚠ terse on purpose: this rides EVERY
  * successful response.
  *
- * WHAT IT CARRIES AND WHY EXACTLY THIS: the user id (the only half that is the
- * caller's alone, and the half an agent needs to match an addressee uuid
- * against itself) and the runtime word (the one fact that distinguishes two
- * sessions of the SAME account, which is what "which of us is which" actually
- * turns on).
+ * Carries the user id (the caller's alone, and what an agent matches an
+ * addressee uuid against) and the runtime word (what distinguishes two sessions
+ * of the SAME account).
  *
- * WHAT IT DELIBERATELY OMITS: the display name, which would cost a roster
- * round-trip on every request (the MCP route boots per request) and is the
- * untrustworthy half anyway; and the credential label, which is a hostname —
- * it belongs in an answer the agent asked for, not stapled to every tool result
- * where it is both a per-response token cost and one careless paste away from a
- * channel message. Both live in `whoami`.
- *
- * IT CARRIED A THIRD FIELD, the MULTIPLAYER locus: the named agent THIS ONE
- * CALL spoke as (`dopl_channel` `as_agent`), which rode the RESULT rather than
- * the identity record because a session could speak for several agents. Named
- * agents are gone (channels rollback §1) and so is the whole `_callerAgent`
- * channel through `respond.ts` and `server.ts`. A session's own identity — the
- * `X-Dopl-Session-Id` stamp — is what names a running agent now.
+ * ⚠ Deliberately OMITS the display name — a roster round-trip per request (the
+ * MCP route boots per request) and the untrustworthy half anyway — and the
+ * credential label, a hostname that is one careless paste from a channel
+ * message. Both live in `whoami`.
  */
 function callerStatusLine(identity) {
     const id = identity.userId
@@ -98,10 +68,9 @@ function callerStatusLine(identity) {
  * Returns [] when nothing is known, so a caller can drop the section rather
  * than render an empty claim.
  *
- * The credential label goes through `inlineOr` like any other user-authored
- * string: a device label is free-form text off the mint request body (see
- * `src/shared/auth/mcp-credential.ts`), so a newline in it would open a line of
- * server narration the caller wrote.
+ * ⚠ Credential label goes through `inlineOr` — a device label is free-form text
+ * off the mint request body (`src/shared/auth/mcp-credential.ts`), so a newline
+ * opens a line of server narration the caller wrote.
  */
 function sessionLines(identity) {
     if (!identity.credentialKind && !identity.runtime)
@@ -118,15 +87,11 @@ function sessionLines(identity) {
 }
 /**
  * WHAT THE SERVER CANNOT TELL YOU. Rendered under any full identity answer.
- *
- * Every line is a refusal, and each one is a mistake that has actually been
- * made against this surface: matching on a name instead of an id; reading a
- * credential label as a location; reading an absent runtime stamp as proof of
- * an external client; and — the one that cost a whole round of real work —
- * trying to decide whether a counterparty was a different machine or a
- * different account on the same machine. Accounts are decidable here. Machines
- * are not, for anyone but yourself, and the honest answer is to say so rather
- * than let the agent pick a side.
+ * ⚠ Every line is a refusal covering a mistake actually made against this
+ * surface: matching on name instead of id; reading a credential label as a
+ * location; reading an absent runtime stamp as proof of an external client;
+ * deciding whether a counterparty is a different machine or a different account
+ * on the same machine. Accounts are decidable here; MACHINES ARE NOT.
  */
 exports.LOCUS_NOTE = `LOCUS — what this establishes, and what it does not:
 - Your user id is yours alone. A display name is typed by its owner and two members can hold the same one, so match on the id, never on the name.
@@ -134,12 +99,11 @@ exports.LOCUS_NOTE = `LOCUS — what this establishes, and what it does not:
 - \`desktop-session\` means the request carried the Dopl desktop's runtime header; \`unstamped\` means it did not, which is usually an external client but is also how a desktop spawn on an older build looks. It is a self-reported routing hint that grants nothing — never read it as proof.
 - About ANOTHER party: a different user id is a different ACCOUNT and the same user id is the same account — that much is decidable. Whether they are on the same MACHINE as you is not knowable from here, and this server will never tell you. Do not assert it either way.`;
 /**
- * The caller's identity as the first line of a full answer: name and email when
- * the roster supplied them, and the user id ALWAYS. `self` is the caller's own
- * roster row, pre-rendered by the calling tool (which owns its own member
- * formatting); when it is absent — an unreadable roster, or a boot that could
- * not resolve the caller — the id still stands on its own rather than the
- * answer silently dropping to a role with nobody attached to it.
+ * Caller identity as the first line of a full answer: name and email when the
+ * roster supplied them, and ⚠ the user id ALWAYS. `self` is the caller's own
+ * roster row, pre-rendered by the calling tool; absent (unreadable roster, or a
+ * boot that could not resolve the caller) the id still stands alone rather than
+ * the answer dropping to a role with nobody attached.
  */
 function identityLine(identity, self) {
     if (self)

@@ -1,29 +1,21 @@
 "use strict";
 /**
  * `dopl_channel` THREAD op handlers: create_thread / close_thread /
- * set_thread_mode. Split out of `channel-ops-write.ts` at the §2 500-line cap
- * when the Q1 neutralization swept the write side; that file already carried the
- * `─── Threads ───` divider these three sat under, so the seam was drawn where
- * the module had drawn it itself. The `channel-` filename prefix is required by
- * the parity split-scan (parity.test.ts).
+ * set_thread_mode. ⚠ `channel-` filename prefix required by the parity
+ * split-scan (parity.test.ts).
  *
- * BOUNDARY: the wire/storage name `task` == the domain name `thread`.
+ * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`.
  *
- * WHAT IS PEER-CONTROLLED HERE, since every string below is server NARRATION —
- * outside any untrusted-content framing, read by the model as the tool speaking:
- *
- *   - `ch.name` — typed by whoever created the channel, and `resolveChannelOr`
- *     resolves PUBLIC channels the caller was never invited to. `schema.ts`
- *     bounds it at 120 characters with NO charset rule, so it can carry
- *     newlines. Neutralized at every site.
- *   - `thread.title` — typed by whichever member OPENED the thread, up to 200
- *     characters with interior newlines allowed. In `opCloseThread` that member
- *     is frequently NOT the caller: closing is permitted to the thread's TARGET,
- *     so my agent closing a peer's thread renders the peer's title. This is
- *     Q1-B/C arriving on the write side, and it is why close_thread carries a
- *     header as well as a code span.
- *   - `member.label` — already render-safe when it gets here; `resolveMemberOr`
- *     neutralizes it at the source (see `memberLabel` in channel-shared.ts).
+ * ⚠ Every string below is server NARRATION, outside untrusted framing. What is
+ * peer-controlled:
+ *   - `ch.name` — creator-typed, and `resolveChannelOr` resolves PUBLIC channels
+ *     the caller was never invited to. 120 chars, NO charset rule, so newlines
+ *     are possible. Neutralized at every site.
+ *   - `thread.title` — typed by whoever OPENED the thread (200 chars, interior
+ *     newlines allowed), frequently NOT the caller since a close is permitted to
+ *     the thread's TARGET. Hence header AND code span on that path.
+ *   - `member.label` — already render-safe: `resolveMemberOr` neutralizes at the
+ *     source (`memberLabel` in channel-shared.ts). Do not re-wrap.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreateThread = opCreateThread;
@@ -33,8 +25,8 @@ exports.opSetThreadMode = opSetThreadMode;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
-// Whether a pending `await` can outlive the turn is a CLIENT property this
-// server cannot see. One module decides what may be claimed about it.
+// ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
+// server cannot see — one module decides what may be claimed about it.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 const channel_errors_1 = require("./channel-errors");
 /** Fallbacks for peer text that neutralized to nothing — never an empty span. */
@@ -42,14 +34,13 @@ const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
 const NO_ID = "(unreadable id)";
 async function opCreateThread(client, channelRef, title, body, to, mode, clientMsgId, 
-// The caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes
-// nothing this op does — only what the result claims about waiting.
+// Caller's OBSERVED runtime stamp. Changes nothing this op does — only what
+// the result claims about waiting.
 runtime = null, 
-// SPAWN-WITH-HANDOFF (rollback §3.5). When true, the create declares that the
-// driving session should open on the OPERATOR'S machine (a full requester
-// session) rather than being kept by this external session. It rides the
-// opening message's reserved `metadata.handoff` stamp; the desktop honors it
-// only for a thread the operator created as themselves.
+// SPAWN-WITH-HANDOFF: declares the driving session should open on the
+// OPERATOR'S machine rather than being kept by this external session. Rides
+// the opening message's reserved `metadata.handoff` stamp; ⚠ the desktop
+// honors it only for a thread the operator created as themselves.
 handoff) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
@@ -58,13 +49,7 @@ handoff) {
     const member = await (0, channel_shared_1.resolveMemberOr)(client, to);
     if ((0, channel_shared_1.isErr)(member))
         return member;
-    // The idempotency key goes out AS GIVEN. It used to be canonicalized here:
-    // a `thread-open-<channel>-<seq>` HANDSHAKE key had its channel half
-    // rewritten to the resolved uuid, because a slug-built key derived no
-    // participant set on the server and locked the co-addressed agent out of the
-    // thread it was told to join. Nothing addresses two agents any more (channels
-    // rollback §1), so the key carries no meaning beyond dedupe and there is
-    // nothing to canonicalize.
+    // Idempotency key goes out AS GIVEN — it carries no meaning beyond dedupe.
     let created;
     try {
         created = await client.createChannelThread(ch.id, {
@@ -77,21 +62,17 @@ handoff) {
         });
     }
     catch (e) {
-        // Q9 — `to` is REQUIRED for create_thread, so the old bare `isBadRequest`
-        // branch answered every 400 with the addressee message and had no
-        // fall-through at all: a 240-character title (rejected by the route's own
-        // zod schema, before `createTask` ran) came back as "invite them first",
-        // and op="invite" then answered "already a member". Read the code.
+        // ⚠ Read the CODE. `to` is required here, so a bare `isBadRequest` branch
+        // answers every 400 with the addressee message — an over-length title then
+        // reads as "invite them first" and op="invite" answers "already a member".
         if ((0, channel_errors_1.isBadRequest)(e)) {
             switch ((0, channel_errors_1.classifyBadRequest)(e)) {
                 case "addressee_not_member":
                     return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (op="invite"), then open the thread.`);
-                // A thread can only ever be posted into by its creator and its target,
-                // so addressing one to yourself leaves nobody who can answer it. The
-                // shape that produced this in the wild: a session holding TWO dopl
-                // connections resolved `to` back to its own operator, and the thread
-                // sat live and unanswerable until a human noticed. Naming the roster op
-                // matters — the failure mode is not knowing who else is in the channel.
+                // A thread is postable only by its creator and target, so a
+                // self-addressed thread has nobody who can answer it and sits live and
+                // unanswerable. ⚠ Name the roster op — the failure mode is not knowing
+                // who else is in the channel.
                 case "self_target":
                     return (0, respond_1.err)(`A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (op="members", channel="${ch.id}"), then open the thread addressed to one of them.`);
                 case "invalid_request":
@@ -106,46 +87,24 @@ handoff) {
         throw e;
     }
     const thread = created.thread;
-    // The title here is the caller's OWN — they typed it one argument ago, and the
-    // route stores it verbatim — so this echo tells them nothing they did not
-    // write. It is neutralized regardless, and NOT because the value is suspect:
-    // deciding per site whether a string is "really" reachable is exactly the
-    // reasoning that left close_thread raw through a whole audit. One rule.
+    // ⚠ Neutralized even though the caller typed this title one argument ago:
+    // deciding per site whether a string is "really" reachable is what left a
+    // peer-typed title raw through a whole audit. One rule.
     const named = (0, channel_shared_1.inlineOr)(thread.title, NO_TITLE);
-    // WAKE-V1 teaching: the requester's own session is what has to come back for
-    // the responder's answer. WHETHER a pending await does that — or whether the
-    // session is fed the reply as a turn instead — is decided in
-    // `channel-wake-guidance.ts` from the caller's observed runtime; it used to be
-    // promised here unconditionally, and falsely for an external session. The
-    // route hands back the opening message's seq, so the cursor is stated
-    // OUTRIGHT — the older text told the agent to go find it with `read limit=1`,
-    // which cost a round-trip and raced the peer (a reply landing in between
-    // becomes "the newest message", and the await then starts past it).
-    // SPAWN-WITH-HANDOFF (rollback §3.5) — a create that DECLARED handoff does NOT
-    // wait for the reply here: a full session opens on the operator's OWN machine
-    // and carries the exchange, so telling this external session to arm `await`
-    // would put two agents on one thread, each trying to consume the reply.
+    // ⚠ Cursor is STATED from the route's returned opening seq, never "find the
+    // newest message with read limit=1" — that costs a round-trip and races the
+    // peer, whose reply becomes "the newest message" and is then awaited past.
     //
-    // F-145 — IT IS A REQUEST, AND THE COPY SAID IT WAS AN OUTCOME. This branch
-    // shipped "A full session IS OPENING on your operator's Dopl app … You are
-    // done", said unconditionally, off nothing but the caller's own flag. The
-    // server has no evidence of any of it: the handoff is a metadata STAMP that a
-    // desktop LISTENER may later act on, and `session-dispatch
-    // .maybeOpenRequesterSession` answers false — silently — when window mode is
-    // off, when `requesterTaskOpen` refuses, when the window budget is spent, and
-    // (the common case) when the operator's desktop is not running at all. So the
-    // sentence could be false in four ways, and its consequence was the worst
-    // available: an agent told "you are done" leaves NOBODY awaiting the reply,
-    // which is the same abandoned exchange the wake guidance exists to prevent.
-    //
-    // WHY THE FIX IS COPY AND NOT A CHECK. The non-handoff branch decides from the
-    // OBSERVED runtime (`createThreadReplyLines`), and there is no equivalent
-    // observation here: the desktop's decision happens minutes later, on another
-    // machine, and never reports back. So this states the REQUEST as a request,
-    // keeps the do-not-race instruction as the default (a real handoff is the
-    // common case and two watchers on one thread is a genuine failure), and adds
-    // the fallback the old copy denied the caller — how to notice that nothing
-    // picked it up, and what to do then.
+    // ⚠ HANDOFF IS A REQUEST, NOT AN OUTCOME. It is a metadata STAMP a desktop
+    // listener may later act on; `session-dispatch.maybeOpenRequesterSession`
+    // silently answers false when window mode is off, when `requesterTaskOpen`
+    // refuses, when the window budget is spent, and (commonly) when the
+    // operator's desktop is not running. No observation is available here — the
+    // decision happens minutes later on another machine and never reports back.
+    // So: state the request as a request, keep do-not-race as the default (two
+    // watchers on one thread is a genuine failure), and give the fallback for
+    // noticing that nothing picked it up. Never say "you are done" — that leaves
+    // NOBODY awaiting the reply.
     if (handoff) {
         const since = created.openingSeq === null
             ? `<the seq of your opening message, from dopl_channel(op="read", channel="${ch.id}", limit=1)>`
@@ -166,19 +125,14 @@ handoff) {
     ].join("\n"));
 }
 /**
- * DECISION 2 (Samuel, 2026-08-04) — `close_thread` IS NOT AN AGENT'S OP.
+ * ⚠ `close_thread` IS NOT AN AGENT'S OP. A close settles the SHARED thread for
+ * BOTH members: "the work looks done" and "I am finished with this exchange"
+ * are DIFFERENT judgments, and only the human makes the second.
  *
- * THE INCIDENT'S OTHER HALF. Closing settles the SHARED thread for BOTH members,
- * and nothing linked the responder's "I am finished" to the requester's thread
- * anyway, so threads simply never closed (two are open forever in prod). The fix
- * is not to make the agent close harder: it is that "the work looks done" and "I
- * am finished with this exchange" are DIFFERENT judgments, and only the second
- * one closes anything. The human makes it.
- *
- * ANSWERED, NOT REMOVED. The op stays in the enum so this sentence is what an
- * agent trained on the old surface gets, instead of a zod "invalid enum value"
- * at the moment it most needs telling what to do instead. The gate is the
- * server's (`ThreadCloseIsHumanOnlyError`), not this.
+ * ⚠ ANSWERED, NOT REMOVED — the op stays in the enum so an agent trained on the
+ * old surface gets this sentence instead of a zod "invalid enum value" at the
+ * moment it most needs telling what to do instead. The real gate is the
+ * server's `ThreadCloseIsHumanOnlyError`, not this.
  */
 function closeThreadIsHumansToMake() {
     return (0, respond_1.err)(`Nothing was closed: closing a thread is your OPERATOR's decision, not yours. A close settles the exchange for BOTH members and takes it off the open list, and only the person you work for knows whether they are finished with it — the work being done is not the same judgment. PROPOSE it instead and they confirm: dopl_channel(op="propose_close", channel="<id>", thread="<id>", outcome="completed"|"failed", summary="<one line saying what came of it>"). That posts a marked note in the thread which surfaces to your operator as a confirmable prompt; the thread stays open and fully live until they act on it. Do not propose early. Propose once per STATE of the thread: an immediate repeat collapses into the prompt they already have, but if they keep it open and the work moves on, propose again when it is done again.`);
@@ -187,23 +141,19 @@ function closeThreadIsHumansToMake() {
  * PROPOSE a close — the agent's terminal act on a thread, and the only one it
  * has (see {@link closeThreadIsHumansToMake}).
  *
- * It inherits the Q1 narration discipline the close had, for the same reason:
- * proposing is allowed to the thread's CREATOR **or its TARGET**, so the common
- * shape is a peer's thread, a peer's 200-character newline-tolerant TITLE, and
- * this result rendering it as our own narration. So:
- *   1. the title is one inline code span (it can be a value, never structure);
- *   2. the result carries {@link UNTRUSTED_THREAD_HEADER}, FIRST — framing that
- *      trails the content it frames is read after the injected line.
+ * ⚠ Proposing is allowed to the thread's CREATOR **or its TARGET**, so the
+ * common shape is a peer's thread and a peer's 200-char newline-tolerant TITLE
+ * rendered as our own narration. So: title is one inline code span (a value,
+ * never structure), and {@link UNTRUSTED_THREAD_HEADER} comes FIRST.
  */
 async function opProposeClose(client, channelRef, threadId, outcome, summary) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
     const chName = (0, channel_shared_1.inlineOr)(ch.name, NO_NAME);
-    // `{ thread, markerSeq }` — a proposal WRITES a message (the marked, NON-
-    // terminal `task_progress` the operator's surfaces render as a prompt), so it
-    // moves the channel's cursor. `markerSeq` is where it landed, and it is
-    // `openingSeq`'s mirror at the other end of a thread.
+    // ⚠ A proposal WRITES a message (a marked, NON-terminal `task_progress` the
+    // operator's surfaces render as a prompt), so it MOVES the channel cursor.
+    // `markerSeq` is where it landed — `openingSeq`'s mirror at the other end.
     let proposed;
     try {
         proposed = await client.proposeChannelThreadClose(ch.id, threadId, {
@@ -212,11 +162,9 @@ async function opProposeClose(client, channelRef, threadId, outcome, summary) {
         });
     }
     catch (e) {
-        // `threadId` is the caller's own argument, but it round-trips: an agent
-        // copies a thread id out of a `read` legend, and a legend id is
-        // `metadata.taskId`, which a peer sets verbatim for any non-UUID value
-        // (Q1-E). Neutralized on the way back out for that reason — a hand-built
-        // code span is not a container, and one backtick in the value opens it.
+        // ⚠ `threadId` round-trips: an agent copies it from a `read` legend, and a
+        // legend id is `metadata.taskId`, peer-set verbatim for any non-UUID value.
+        // A hand-built code span is not a container — one backtick opens it.
         const safeId = (0, channel_shared_1.inlineOr)(threadId, NO_ID);
         if ((0, respond_1.isNotFound)(e)) {
             return (0, respond_1.err)(`No thread ${safeId} in **${chName}**.`);
@@ -226,18 +174,13 @@ async function opProposeClose(client, channelRef, threadId, outcome, summary) {
         }
         throw e;
     }
-    // The caller's OWN summary, from this very call, echoed back unchanged and
-    // deliberately: it is not peer text (nothing round-trips it — the stored
-    // `outcomeSummary` is rendered by the READ ops, where it is neutralized), it
-    // runs to 2000 characters, and it is legitimately prose the agent just wrote.
-    // Neutralizing it would clip and de-punctuate the operator-facing outcome for
-    // no threat — an agent cannot inject itself.
+    // Caller's OWN summary from this very call, echoed unchanged: not peer text
+    // (the stored `outcomeSummary` is neutralized by the READ ops), runs to 2000
+    // chars, and neutralizing would clip the operator-facing outcome for no threat.
     const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
-    // THE CURSOR, STATED — never derived. Live incident: a requester closed a
-    // thread, GUESSED the echo's seq (last known + 1), armed `await` one past it,
-    // and silently skipped the peer's main deliverable, which was already in the
-    // channel below that guess. Same discipline here: the seq is either the number
-    // the server actually returned, or it is not mentioned at all.
+    // ⚠ THE CURSOR IS STATED, NEVER DERIVED: a guessed echo seq (last known + 1)
+    // armed an await past the peer's main deliverable, which was already below
+    // it. Either the number the server returned, or no seq at all.
     const marker = proposed.markerSeq === null
         ? [
             `The proposal note did NOT post (your operator has no prompt to act on). The thread is untouched, so this is safe to retry once.`,
@@ -248,25 +191,19 @@ async function opProposeClose(client, channelRef, threadId, outcome, summary) {
     return (0, respond_1.ok)([
         channel_render_1.UNTRUSTED_THREAD_HEADER,
         ``,
-        // WHAT A PROPOSAL ACTUALLY DOES, in the words the product can back — the
-        // same discipline F6 imposed on the close copy, which had claimed a
-        // finality the server does not enforce. A proposal changes NOTHING about
-        // the thread: it is open, it routes, it accepts posts, and it stays that
-        // way whether or not anybody acts on the prompt. Saying so is what stops
-        // an agent treating its own proposal as the end of the exchange and going
-        // quiet on a thread that is still live.
+        // ⚠ A proposal changes NOTHING about the thread — it stays open, routes,
+        // and accepts posts whether or not anyone acts on the prompt. Claiming
+        // finality makes an agent go quiet on a thread that is still live.
         `Proposed closing thread **${(0, channel_shared_1.inlineOr)(proposed.thread.title, NO_TITLE)}** in **${chName}** as ${proposed.outcome}${summaryNote}. NOTHING IS CLOSED: your operator sees this as a prompt and decides, and until they do the thread is open and fully live — it routes, it accepts posts, and a reply may still arrive. Repeating this call with nothing new said collapses into the same prompt — do not retry it idly. If the exchange CONTINUES and later concludes again, a fresh proposal is legitimate and will raise a new prompt. In the meantime, keep working the thread and answer what comes in.`,
         ...marker,
     ].join("\n"));
 }
 /**
- * Set a thread's mode. The title renders here too, and it is neutralized on the
- * same rule as everywhere else — but this op gets NO untrusted header, on
- * purpose: the route allows `set_mode` to the thread's CREATOR only, so a
- * successful call means the caller typed the title itself. The span is kept
- * anyway (a tool must not depend on a remote authorization check for a LOCAL
- * rendering property), while the header would be framing a string against its
- * own author.
+ * Set a thread's mode. Title neutralized as everywhere else, but ⚠ NO untrusted
+ * header on purpose: the route allows `set_mode` to the thread's CREATOR only,
+ * so a success means the caller typed the title — the header would frame a
+ * string against its own author. The span stays anyway: a tool must not depend
+ * on a remote authorization check for a LOCAL rendering property.
  */
 async function opSetThreadMode(client, channelRef, threadId, mode) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);

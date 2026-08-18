@@ -1,23 +1,15 @@
 "use strict";
 /**
- * `dopl_kb` + `dopl_kb_admin` — the user's editable knowledge bases (Item 4).
+ * `dopl_kb` + `dopl_kb_admin` — the user's editable knowledge bases, addressed
+ * like a filesystem (bases by slug or id, folders/entries by `/`-separated
+ * path). `dopl_kb` = read + non-destructive writes; ⚠ `dopl_kb_admin` is the
+ * delete surface and REFUSES every op it publishes.
  *
- * Consolidates the old 18 `kb_*` tools into two `op`-dispatched tools (the
- * canonical consolidated pattern — see setups.ts). The agent talks to these
- * like a filesystem; bases are addressed by slug or id, folders/entries by
- * `/`-separated path. `dopl_kb` = read + non-destructive writes;
- * `dopl_kb_admin` = the delete surface, which since the §2b app-only-deletion
- * decision REFUSES every op it publishes.
- *
- * These expose the user's OWN editable bases (create / edit), addressed like a
- * filesystem.
- *
- * This file is the thin registrar: it owns the two tool schemas + op
- * routing and delegates each op to a handler in a sibling module —
+ * Thin registrar: two tool schemas + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
  *   - `knowledge-ops-write.ts` — create/update/move/write ops
- *   - `knowledge-ops-admin.ts` — the (now refused) delete ops
+ *   - `knowledge-ops-admin.ts` — the (refused) delete ops
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
@@ -49,10 +41,9 @@ const KB_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
     { op: "delete_file", effect: "would have deleted the entry at a path" },
 ], `Reach for instead: \`dopl_kb\` op=write_file to replace an entry's contents, op=move_file / op=move_folder to reorganize. If something genuinely has to go, say so and ask the user to delete it in the Dopl app.`);
 function registerKnowledgeTools(register, client, 
-// The session's ONE identity record. Read for exactly one thing here: whether
-// an entry BODY was written by somebody other than the caller, which decides
-// the untrusted-content framing (`UNTRUSTED_ENTRY_BODY_HEADER`). Nothing
-// about visibility is decided from it — the server already filtered.
+// ⚠ Read for exactly ONE thing: whether an entry BODY is somebody else's,
+// which decides `UNTRUSTED_ENTRY_BODY_HEADER`. Nothing about visibility is
+// decided from it — the server already filtered.
 caller = identity_1.UNKNOWN_CALLER) {
     // ── dopl_kb — read + non-destructive writes ──────────────────────
     register("dopl_kb", KB_DESCRIPTION, {
@@ -76,8 +67,8 @@ caller = identity_1.UNKNOWN_CALLER) {
         expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file. Required when overwriting an existing entry — omitting it fails with 412; only force=true skips the check. Creates need no version."),
         force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
         query: zod_1.z.string().optional().describe("search: required free-text query."),
-        // coerce: MCP clients sometimes send numbers as strings; strict
-        // z.number() rejects them with an opaque -32602.
+        // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
+        // z.number() rejects with an opaque -32602.
         limit: zod_1.z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20, 1-100)."),
         entry_limit: zod_1.z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400, 1-1000). Folders always ship in full."),
         entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
@@ -132,18 +123,16 @@ caller = identity_1.UNKNOWN_CALLER) {
                 const miss = (0, respond_1.missingParams)("write_file", args, ["base"]);
                 if (miss)
                     return miss;
-                // F-21: title-only creation. The op doc says a new entry's title
-                // becomes its addressable path, so derive the path from title when
-                // path is omitted. Existing path-based calls are unaffected.
+                // Title-only creation: the op doc says a new entry's title becomes
+                // its addressable path, so derive it when `path` is omitted.
                 const path = args.path !== undefined && args.path !== ""
                     ? args.path
                     : args.title;
                 if (path === undefined || path === "") {
                     return (0, respond_1.err)(`op="write_file" is missing required param: path (pass path, or a title to derive it).`);
                 }
-                // F-17: an empty-string body is a real value the caller can fix,
-                // not a "missing param" — distinguish it from a genuinely omitted
-                // body so the message is actionable.
+                // ⚠ An empty-string body is a real value the caller can fix, not a
+                // "missing param" — keep the two messages distinct.
                 if (args.body === undefined) {
                     return (0, respond_1.err)(`op="write_file" is missing required param: body.`);
                 }

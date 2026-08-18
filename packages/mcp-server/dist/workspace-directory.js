@@ -1,34 +1,25 @@
 "use strict";
 /**
  * workspace-directory.ts — the session's view of WHICH workspaces exist and
- * which one a call lands in.
+ * which one a call lands in: membership caching, slug→id resolution, and the
+ * "you must pass `workspace=`" refusal.
  *
- * Split out of `server.ts` (§2, the layer rule): membership caching,
- * slug→id resolution and the "you must pass `workspace=`" refusal are one
- * responsibility — resolving a target — distinct from registering tools
- * (`registrar.ts`), gating ops (`gating.ts`) or writing the briefing
- * (`instructions.ts`).
- *
- * FAIL-CLOSED IS THE POINT AND IT DID NOT MOVE. A blank `workspace=` is
- * rejected by the caller in `registrar.ts`; a caller with 0 or 2+ memberships
- * and no pin gets {@link WorkspaceDirectory.noWorkspaceError} rather than a
- * guessed workspace; and a boot directory load that FAILED does not seed the
- * cache, so the first resolution retries instead of serving a bogus empty list
- * for a full TTL.
+ * ⚠ FAIL-CLOSED throughout. A blank `workspace=` is rejected by the caller in
+ * `registrar.ts`; 0 or 2+ memberships with no pin gets
+ * {@link WorkspaceDirectory.noWorkspaceError}, never a guessed workspace; and a
+ * FAILED boot directory load does not seed the cache, so the first resolution
+ * retries instead of serving a bogus empty list for a full TTL.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
 const narration_js_1 = require("./tools/narration.js");
 const instructions_js_1 = require("./instructions.js");
-/**
- * Cache TTL for the user's workspace memberships (slug→id resolution).
- * Seeded from the boot `listWorkspaces()` call; refreshed on demand after it.
- */
+/** Membership cache TTL (slug→id). Seeded at boot, refreshed on demand. */
 const WORKSPACE_CACHE_TTL_MS = 60_000;
 function createWorkspaceDirectory(client, options = {}) {
-    // Seed from the boot directory — but NOT when the boot load failed, or we'd
-    // cache a bogus empty list for the full TTL and mask the failure. Leaving it
-    // null lets the first `workspace=` / no-default path retry the load.
+    // ⚠ Seed from the boot directory, but NOT when the boot load FAILED — that
+    // caches a bogus empty list for a full TTL and masks the failure. Null lets
+    // the first `workspace=` / no-default path retry.
     let workspaceListCache = options.directory && !options.directoryLoadFailed
         ? { workspaces: options.directory, loadedAt: Date.now() }
         : null;
@@ -45,33 +36,28 @@ function createWorkspaceDirectory(client, options = {}) {
         return result.workspaces;
     }
     async function resolveWorkspaceRef(ref) {
-        // Audit B11: a workspace slug shaped like a UUID (lowercase hex
-        // with hyphens) is theoretically possible. Matching on id alone
-        // would miss the slug, forcing a wasteful refresh on the second
-        // pass. Cheap to try both id and slug on the first pass.
+        // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
+        // first pass — id alone forces a wasteful refresh.
         let list = await getWorkspaceList();
         let match = list.find((w) => w.id === ref || w.slug === ref);
         if (match)
             return match;
-        // Force-refresh once — covers the case where the user was added to
-        // a new workspace mid-session and the cache hasn't ticked over.
+        // Force-refresh once — covers a mid-session membership add.
         workspaceListCache = null;
         list = await getWorkspaceList();
         match = list.find((w) => w.id === ref || w.slug === ref);
         return match ?? null;
     }
     /**
-     * The isError response for a no-`workspace=` call that has no session
-     * default (M-3). Lists the caller's workspaces so the agent can retry
-     * with an explicit `workspace=`; mirrors the backend WORKSPACE_REQUIRED
-     * envelope in intent. Reads the boot-seeded directory (cached — no extra
-     * loopback on the happy path).
+     * isError for a no-`workspace=` call with no session default. Lists the
+     * caller's workspaces so the agent can retry explicitly; mirrors the backend
+     * WORKSPACE_REQUIRED envelope. Reads the boot-seeded cache — no extra
+     * loopback on the happy path.
      */
     async function noWorkspaceError() {
         let list;
-        // Start from the boot-time load state; a fresh successful load below
-        // supersedes it (the cache is left unseeded when boot failed, so this
-        // actually retries rather than returning a stale empty list).
+        // Start from the boot-time load state; a fresh successful load supersedes
+        // it (an unseeded cache after a failed boot means this really retries).
         let loadFailed = options.directoryLoadFailed ?? false;
         try {
             list = await getWorkspaceList();

@@ -1,11 +1,10 @@
 "use strict";
 /**
- * Members / teams / access method group (READ-ONLY) — link 6 of the chain
- * documented in `client-base.ts`. Pure delegation to `members.ts`; no HTTP
- * here.
+ * Members / teams / access method group (READ-ONLY) — link 6 of the chain in
+ * `client-base.ts`. Pure delegation to `members.ts`; no HTTP here.
  *
- * Membership, team, and access changes are human decisions made in the web
- * UI — this client deliberately exposes no write path.
+ * ⚠ Membership, team, and access changes are human decisions made in the web
+ * UI — deliberately no write path here.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;

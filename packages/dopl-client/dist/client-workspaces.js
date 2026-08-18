@@ -47,14 +47,7 @@ class WorkspaceMethods extends client_base_js_1.DoplClientBase {
     async getWorkspace(slug) {
         return workspaces.getWorkspace(this.transport, slug);
     }
-    /**
-     * Resolve the active workspace — the one currently set on the transport
-     * via `setWorkspaceId(...)` or `X-Workspace-Id` — via `GET
-     * /api/workspaces/me`. Header-less resolution now depends on the caller's
-     * membership count (exactly one auto-targets; 0 or 2+ → 400
-     * WORKSPACE_REQUIRED). The MCP server boots off `listWorkspaces()` instead,
-     * so this is no longer on the boot path.
-     */
+    /** See `workspaces.getActiveWorkspace`. */
     async getActiveWorkspace() {
         return workspaces.getActiveWorkspace(this.transport);
     }

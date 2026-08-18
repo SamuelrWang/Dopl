@@ -1,12 +1,10 @@
 "use strict";
 /**
- * factory.ts — side-effect-free entry for constructing a Dopl MCP server.
- *
- * Importable by BOTH the stdio binary (`index.ts`) and the remote HTTP
- * route in the web app, WITHOUT triggering `main()`, `process.argv`
- * parsing, or a stdio transport. The stdio-specific bits (arg parsing,
- * config-file workspace resolution, orphan-skill cleanup) stay in
- * `index.ts`; everything transport-agnostic lives here.
+ * factory.ts — ⚠ side-effect-free entry for constructing a Dopl MCP server.
+ * Importable by BOTH the stdio binary (`index.ts`) and the web app's HTTP route
+ * WITHOUT triggering `main()`, `process.argv` parsing, or a stdio transport.
+ * Keep stdio-specific bits (arg parsing, config-file workspace resolution,
+ * orphan-skill cleanup) in `index.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = exports.createServer = void 0;
@@ -23,15 +21,13 @@ function errText(err) {
     return err instanceof Error ? err.message : String(err);
 }
 /**
- * Build a fully-registered MCP server for `client`: run the status-ping
- * handshake (admin flag + liveness), resolve the session default workspace
- * from the caller's membership directory, and register all tools.
- * Transport-agnostic — the caller attaches stdio or HTTP afterward.
+ * Build a fully-registered MCP server for `client`: status-ping handshake
+ * (admin flag + liveness), resolve the session default workspace, register all
+ * tools. Transport-agnostic — the caller attaches stdio or HTTP afterward.
  */
 async function bootServer(client, opts = {}) {
     const diag = opts.onDiag ?? (() => { });
-    // Status ping → admin flag + user id. Safe default on failure: non-admin.
-    // (No tools are admin-gated currently; the flag is retained for future use.)
+    // Status ping → admin flag + user id. ⚠ Safe default on failure: non-admin.
     let isAdmin = false;
     let userId = null;
     try {
@@ -42,11 +38,9 @@ async function bootServer(client, opts = {}) {
     catch (err) {
         diag(`[dopl-mcp] status ping failed (continuing as non-admin): ${errText(err)}`);
     }
-    // Workspace directory (M-1): the caller's ACTIVE memberships in one call.
-    // Replaces the old getActiveWorkspace handshake, so boot never hits the
-    // header-less `resolveActiveWorkspace` path. The result seeds the server's
-    // workspace cache (createServer), so no re-fetch is needed — HTTP boots
-    // once per request; do NOT add loopbacks, the net count must not increase.
+    // Caller's ACTIVE memberships in ONE call, so boot never hits the header-less
+    // `resolveActiveWorkspace` path. Seeds the server's workspace cache, so no
+    // re-fetch. ⚠ HTTP boots once per request — do NOT add loopbacks here.
     let directory = [];
     let directoryLoadFailed = false;
     try {
@@ -58,12 +52,9 @@ async function bootServer(client, opts = {}) {
         directory = [];
         directoryLoadFailed = true;
     }
-    // Resolve the session default from the directory:
-    //   - a request-level X-Workspace-Id pin (the client's constructor
-    //     workspaceId) that names a membership wins → treat like single;
-    //   - else exactly one membership auto-targets;
-    //   - else (0 or 2+ with no pin) NO transport default — the wrapper
-    //     demands `workspace=` per call, so no header-less loopback can fire.
+    // Session default: an X-Workspace-Id pin naming a membership wins; else
+    // exactly one membership auto-targets; else ⚠ NO transport default — the
+    // wrapper demands `workspace=` per call, so no header-less loopback fires.
     const pin = client.getWorkspaceId();
     let active = null;
     let source = null;
@@ -73,9 +64,8 @@ async function bootServer(client, opts = {}) {
             source = "header pin";
         }
         else {
-            // Keep the fallback (the stale pin is cleared below), but make the
-            // silent drop observable: a request X-Workspace-Id that names no
-            // active membership is otherwise invisible in logs.
+            // ⚠ Make the drop observable — an X-Workspace-Id naming no active
+            // membership is otherwise invisible in logs.
             diag(`[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${directoryLoadFailed ? " (directory load had failed)" : ""}; ignoring it and resolving from memberships`);
         }
     }
@@ -83,15 +73,13 @@ async function bootServer(client, opts = {}) {
         active = directory[0];
         source = "sole membership";
     }
-    // Clear a stale/garbage constructor pin that didn't resolve so loopback
-    // calls never carry a bogus X-Workspace-Id.
+    // ⚠ Clear an unresolved constructor pin so loopback calls never carry a bogus
+    // X-Workspace-Id.
     client.setWorkspaceId(active ? active.id : null);
-    // ONE identity for the whole session. The transport's user id wins over the
-    // ping's — same fact, but that one is read off the credential doing the work
-    // rather than off a second loopback that fails independently. Until this
-    // existed, `dopl_channel` used the ping's id and `dopl_members(op="whoami")`
-    // used a third (`GET /api/workspaces/me`), so two tools on ONE connection
-    // could disagree about who was calling.
+    // ⚠ ONE identity for the whole session, and the TRANSPORT's user id wins —
+    // it is read off the credential doing the work, not a second loopback that
+    // fails independently. Three sources let two tools on ONE connection disagree
+    // about who is calling.
     const caller = {
         ...identity_js_1.UNKNOWN_CALLER,
         ...opts.caller,
@@ -100,9 +88,8 @@ async function bootServer(client, opts = {}) {
     const server = (0, server_js_1.createServer)(client, {
         isAdmin,
         caller,
-        // The ping's user id is not just diagnostic: `dopl_channel` needs it to tell
-        // a reader that a message is addressed to IT rather than to some other
-        // member. It was already resolved here and thrown away.
+        // ⚠ Not just diagnostic — `dopl_channel` needs this id to tell a reader a
+        // message is addressed to IT rather than to some other member.
         userId: caller.userId,
         directory,
         directoryLoadFailed,

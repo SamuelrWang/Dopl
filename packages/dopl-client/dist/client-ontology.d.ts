@@ -1,20 +1,19 @@
 /**
- * Ontology method group — link 4 of the chain documented in `client-base.ts`.
- * Pure delegation to `ontology.ts`; no HTTP here.
+ * Ontology method group — link 4 of the chain in `client-base.ts`. Pure
+ * delegation to `ontology.ts`; no HTTP here.
  */
 import { KnowledgeMethods } from "./client-knowledge.js";
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot, OntologySummary } from "./ontology-types.js";
 export declare class OntologyMethods extends KnowledgeMethods {
     /**
-     * The workspace ontology. `{ view: "summary" }` asks for the cheap
-     * projection — names and containment, none of the JSONB — for renders that
-     * only route. Omit it (or pass `"full"`) for the whole graph.
+     * The workspace ontology. `{ view: "summary" }` = cheap projection (names and
+     * containment, no JSONB) for renders that only route; omit or `"full"` for
+     * the whole graph.
      *
-     * An OPTIONAL ARGUMENT on the existing method rather than a second method:
-     * the resource is the same and the wire call is the same, and every
-     * hand-stubbed client in the MCP server's suite stubs `getOntology` with a
-     * zero-arg fake — a rename would have broken all of them at runtime while
-     * type-checking cleanly, since they cast through `as unknown as DoplClient`.
+     * ⚠ An OPTIONAL ARGUMENT, not a second method: every hand-stubbed client in
+     * the MCP server's suite stubs `getOntology` with a zero-arg fake cast
+     * through `as unknown as DoplClient`, so a rename breaks them at runtime
+     * while type-checking cleanly.
      */
     getOntology(): Promise<OntologySnapshot>;
     getOntology(opts: {

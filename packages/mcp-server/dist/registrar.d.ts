@@ -1,18 +1,11 @@
 /**
- * registrar.ts — the two registration helpers every tool goes through.
+ * registrar.ts — the two registration helpers every tool goes through. Owns
+ * what happens to a tool between "a registrar declared it" and "the SDK
+ * publishes it"; `server.ts` boots the session.
  *
- * Split out of `server.ts` (§2, the layer rule, and the 2026-07-20 op-dispatch
- * precedent: the registrar is schemas + routing, the handlers are siblings).
- * `server.ts` now boots a session — resolve identity, build the gates, wire the
- * ten domain registrars — and this file owns what happens to a tool between
- * "a registrar declared it" and "the SDK publishes it".
- *
- * THE GATES ARE NOT DEFINED HERE, and that is deliberate. They live in
- * `gating.ts` and BOTH helpers below call them explicitly, because
- * `registerMetaTool` registers straight onto the SDK server: it does not go
- * through `registerTool`'s wrapper, so anything gated inside that wrapper would
- * not apply to it. Do not "simplify" this by folding the gate calls back into
- * one wrapper.
+ * ⚠ Gates live in `gating.ts` and BOTH helpers call them EXPLICITLY, because
+ * `registerMetaTool` registers straight onto the SDK server and never goes
+ * through `registerTool`'s wrapper. Do not fold the gate calls into one wrapper.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DoplClient } from "@dopl/client";

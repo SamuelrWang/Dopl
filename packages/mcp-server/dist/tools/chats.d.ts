@@ -1,10 +1,7 @@
 /**
- * MCP tools for the chat archive.
- *
- * Chats are agent-exported conversation records: per-message summaries
- * under an agent-filled session header (what was done, learnings).
- * Private to their owner by default; the owner can share one with the
- * workspace. Consolidated into two `op`-dispatched tools:
+ * MCP tools for the chat archive. Chats are agent-exported conversation
+ * records: per-message summaries under an agent-filled session header. Private
+ * to their owner by default; the owner can share one with the workspace.
  *   - `dopl_chats`       — reads + non-destructive writes.
  *   - `dopl_chats_admin` — DESTRUCTIVE delete, split out on purpose.
  */

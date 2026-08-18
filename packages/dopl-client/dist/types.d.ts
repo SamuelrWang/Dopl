@@ -71,9 +71,8 @@ export interface WorkspaceSummary {
     updatedAt: string;
 }
 /**
- * Workspace summary plus the caller's role on it. Returned by
- * `client.listWorkspaces()` so the agent can pick a workspace to switch
- * into without a second round trip to discover the role.
+ * Workspace + the caller's role. `client.listWorkspaces()` returns it so an
+ * agent picks a workspace without a second round trip for the role.
  */
 export interface WorkspaceListItem extends WorkspaceSummary {
     role: WorkspaceRole;
@@ -175,13 +174,11 @@ export interface PendingStatus {
     recent: PendingIngestItem[];
 }
 /**
- * The answer to one MCP credit spend (`POST /api/mcp/credits/consume`).
+ * One MCP credit spend (`POST /api/mcp/credits/consume`).
  *
- * `allowed` is the only field the registrar acts on; the counters are for the
- * refusal wording and for anything that later wants to warn before the wall.
- * `degraded: true` means the server FAILED OPEN — it could not read the
- * counter, allowed the call anyway, and the numbers are zeroed rather than
- * invented.
+ * `allowed` is the only field the registrar acts on; counters are for refusal
+ * wording. `degraded: true` = server FAILED OPEN — could not read the counter,
+ * allowed the call anyway, numbers zeroed rather than invented.
  */
 export interface CreditConsumeResponse {
     allowed: boolean;

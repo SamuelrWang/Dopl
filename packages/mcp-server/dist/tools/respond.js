@@ -22,58 +22,51 @@ function err(message) {
     return { content: [{ type: "text", text: message }], isError: true };
 }
 /**
- * True when a thrown error is an optimistic-concurrency conflict (HTTP
- * 412) from the Dopl API. Duck-typed on `.status` so it works across the
- * @dopl/client module boundary without importing the error class.
+ * True for an optimistic-concurrency conflict (HTTP 412). ⚠ Duck-typed on
+ * `.status` to work across the @dopl/client boundary without importing the
+ * error class.
  */
 function isConflict(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 412);
 }
-/**
- * True when a thrown error is a 404 from the Dopl API. Same duck-typing
- * as `isConflict` — lets a tool turn a "nothing matched" backend response
- * into a clean error instead of either an opaque throw or a false success.
- */
+/** True for a 404. Same duck-typing as `isConflict`. */
 function isNotFound(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 404);
 }
-/**
- * True when a thrown error is a 409 conflict from the Dopl API (a
- * name/title/slug already-exists collision). Lets a tool surface a clean
- * "already exists" message instead of an opaque throw.
- */
+/** True for a 409 (name/title/slug already-exists collision). */
 function isAlreadyExists(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 409);
 }
 /**
- * The workspace has spent its MCP credit allowance for the current billing
- * period. ONE wording, used by both surfaces: the registrar's up-front refusal
- * (which reads `allowed: false` off the consume response, not an error) and
- * `entitlementDenied` below, for the day a REST surface throws the code.
+ * MCP credit allowance spent for the billing period. ⚠ ONE wording for both
+ * surfaces: the registrar's up-front refusal (reading `allowed: false` off the
+ * consume response, not an error) and `entitlementDenied` below.
  */
 exports.CREDITS_EXHAUSTED_CODE = "credits_exhausted";
 const CREDITS_EXHAUSTED_MESSAGE = "This workspace is out of MCP credits for the current billing period. Nothing was deleted — credits reset at the start of the next period, and upgrading raises the monthly allowance.";
 /**
- * Plan-gate denial codes the API returns as a flat `{ error: <code>,
- * message, upgrade_url }` envelope: the free-plan object cap, the free-plan
- * chat retention window, and the monthly MCP credit allowance. All three mean
- * "the data is intact, upgrading lifts the gate".
+ * Plan-gate denial codes returned as a flat
+ * `{ error: <code>, message, upgrade_url }` envelope. All mean "the data is
+ * intact, upgrading lifts the gate". `kb_storage_full` reaches an agent through
+ * the ordinary write path — `kb_*` writes are loopback HTTP into the same route
+ * handlers a browser uses, so one server-side gate covers both surfaces.
  */
 const ENTITLEMENT_CODES = new Set([
     "over_free_cap",
     "chat_outside_retention",
+    "kb_storage_full",
     exports.CREDITS_EXHAUSTED_CODE,
 ]);
 /**
- * The credits refusal, rendered exactly like an entitlement denial (message +
- * upgrade link) so an agent reads one shape for every plan gate. The URL comes
- * from the server on the consume response — the MCP package cannot import
+ * Credits refusal rendered exactly like an entitlement denial (message +
+ * upgrade link) so an agent reads ONE shape for every plan gate. ⚠ URL comes
+ * from the server's consume response — this package cannot import
  * `billing/server/entitlements.ts › upgradeUrl`.
  */
 function creditsExhausted(upgradeUrl) {
@@ -82,15 +75,10 @@ function creditsExhausted(upgradeUrl) {
         : CREDITS_EXHAUSTED_MESSAGE);
 }
 /**
- * Turn a thrown Dopl API error into a friendly tool error when it's a
- * plan-gate denial (HTTP 403, flat entitlement envelope), else null so
- * the caller rethrows.
- *
- * Duck-typed on `.code` / `.apiMessage` / `.upgradeUrl` (populated by
- * `@dopl/client`'s DoplApiError) so it works across the module boundary
- * without importing the error class. Surfaces the server's human message
- * and upgrade link VERBATIM so the agent sees an actionable "upgrade to
- * add more" — not a generic "request failed".
+ * Plan-gate denial (403, flat entitlement envelope) → tool error, else null so
+ * the caller rethrows. ⚠ Duck-typed on `.code`/`.apiMessage`/`.upgradeUrl` to
+ * work across the module boundary. Surfaces the server's human message and
+ * upgrade link VERBATIM, not a generic "request failed".
  */
 function entitlementDenied(e) {
     if (typeof e !== "object" || e === null)
@@ -106,17 +94,16 @@ function entitlementDenied(e) {
             ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
             : code === exports.CREDITS_EXHAUSTED_CODE
                 ? CREDITS_EXHAUSTED_MESSAGE
-                : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
+                : code === "kb_storage_full"
+                    ? "This knowledge base has reached its storage limit. Nothing was deleted — it stays readable, and deleting files or writing a smaller one still works."
+                    : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
     const url = typeof rec.upgradeUrl === "string" ? rec.upgradeUrl : "";
     return err(url ? `${message}\n\nUpgrade to continue: ${url}` : message);
 }
 /**
- * Returns an error response when any of `required` params is absent for the
- * given op, or null when they're all present. Treats undefined / null /
- * empty-string as absent — the same "no value" semantics the old per-tool
- * Zod `.min(1)` requireds enforced. Lets a single flat schema back many ops
- * while still rejecting under-specified calls with a clear message instead
- * of a downstream throw.
+ * Error response when any `required` param is absent for this op, else null.
+ * ⚠ undefined / null / empty-string all count as absent. Lets one flat schema
+ * back many ops while still rejecting under-specified calls clearly.
  */
 function missingParams(op, args, required) {
     const missing = required.filter((k) => {

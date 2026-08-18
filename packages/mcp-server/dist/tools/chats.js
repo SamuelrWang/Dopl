@@ -1,11 +1,8 @@
 "use strict";
 /**
- * MCP tools for the chat archive.
- *
- * Chats are agent-exported conversation records: per-message summaries
- * under an agent-filled session header (what was done, learnings).
- * Private to their owner by default; the owner can share one with the
- * workspace. Consolidated into two `op`-dispatched tools:
+ * MCP tools for the chat archive. Chats are agent-exported conversation
+ * records: per-message summaries under an agent-filled session header. Private
+ * to their owner by default; the owner can share one with the workspace.
  *   - `dopl_chats`       — reads + non-destructive writes.
  *   - `dopl_chats_admin` — DESTRUCTIVE delete, split out on purpose.
  */
@@ -288,9 +285,8 @@ async function opList(client, scope, query) {
     }
     const lines = [];
     lines.push(`## Chat archive — ${chats.length} chat${chats.length === 1 ? "" : "s"}\n`);
-    // Framing only when the listing actually carries someone else's chat — a
-    // listing of nothing but the caller's own private exports needs no warning
-    // about other members, and a header that cries wolf gets skimmed.
+    // ⚠ Framing ONLY when the listing carries someone else's chat — a header that
+    // cries wolf gets skimmed.
     if ((0, chats_render_1.anyShared)(chats))
         lines.push(`${chats_render_1.UNTRUSTED_ARCHIVE_HEADER}\n`);
     for (const c of chats) {
@@ -299,11 +295,10 @@ async function opList(client, scope, query) {
     if (hiddenCount > 0) {
         lines.push(`\n${(0, chats_render_1.hiddenNote)(hiddenCount)}`);
     }
-    // The retention note above is already honest AND free (`hiddenCount` rides
-    // the same response), but it only fires when something was hidden by the
-    // PLAN. The `query` filter is a second, always-silent reduction: it matches
-    // title and overview only, so a term that appears solely in a transcript
-    // produces "No chats match that filter" from an archive that contains it.
+    // ⚠ The retention note fires only when the PLAN hid something. `query` is a
+    // second, always-silent reduction — it matches title and overview ONLY, so a
+    // term appearing solely in a transcript produces "No chats match that filter"
+    // from an archive that contains it.
     if (q) {
         lines.push(`\n_Filtered on TITLE and OVERVIEW only — transcripts are not searched, so a term that appears only inside one will not match here._`);
     }

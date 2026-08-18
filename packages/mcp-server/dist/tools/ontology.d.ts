@@ -1,16 +1,13 @@
 /**
- * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph
- * as a ROUTING layer, fully agent-authorable (like dopl_kb for bases).
- * Read funnel: anchor → map → resolve → get. Write ops edit one thing
- * at a time (attribute / relationship / action upserts) so agents never
- * have to round-trip whole objects.
+ * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph as a
+ * ROUTING layer. Read funnel: anchor → map → resolve → get. Writes edit ONE
+ * thing at a time so agents never round-trip whole objects.
  *
- * This file is the thin registrar: it owns the two tool schemas + wires
- * them to the handlers in sibling modules —
- *   - `ontology-render.ts`     — shared ref resolvers + object renderer
- *   - `ontology-ops-read.ts`   — map/anchor/resolve/get
- *   - `ontology-ops-write.ts`  — the op dispatch switch + every mutating handler
- * The admin tool (the refused cascade deletes) stays inline here.
+ * Thin registrar: two tool schemas wired to
+ *   - `ontology-render.ts`    — shared ref resolvers + object renderer
+ *   - `ontology-ops-read.ts`  — map/anchor/resolve/get
+ *   - `ontology-ops-write.ts` — op dispatch + every mutating handler
+ * The admin tool (refused cascade deletes) stays inline here.
  */
 import { type CallerIdentity } from "./identity";
 import type { DoplClient } from "@dopl/client";

@@ -1,11 +1,8 @@
 "use strict";
 /**
- * Domain types for the user's knowledge bases (Item 4).
+ * Domain types for the user's knowledge bases.
  *
- * Mirrors `src/features/knowledge/types.ts` in the main app — kept in
- * sync by hand for now. If they ever drift, the API responses become
- * the source of truth.
- *
- * These describe the user-authored, editable knowledge bases.
+ * ⚠ Mirrors `src/features/knowledge/types.ts` — hand-synced. On drift, the API
+ * responses are the source of truth.
  */
 Object.defineProperty(exports, "__esModule", { value: true });

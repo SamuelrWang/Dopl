@@ -12,34 +12,23 @@ exports.renderObject = renderObject;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 /**
- * THE ONTOLOGY IS THE ONE DOMAIN WHERE THE VALUE/BODY LINE HAD TO BE DRAWN
- * TWICE, so it is written down here.
+ * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
+ * in `features/ontology/schema.ts` carries a charset rule (object `name`
+ * max 300, `subtitle` max 1000, attribute `label` max 200, method `name`
+ * max 300), so newlines and `##` are legal in all of them.
  *
- * The graph is workspace-scoped: any member creates clusters, columns, objects,
- * attributes, relationships and actions, and every member reads them. Nothing
- * in `features/ontology/schema.ts` carries a charset rule — object `name` is
- * `max(300)`, `subtitle` `max(1000)`, an attribute `label` `max(200)`, a
- * method `name` `max(300)` — so newlines and `##` are legal in all of them.
- *
- *   - NAMES and LABELS are values. `# ${object.name}` and `### ${m.name}` were
- *     real markdown headings built from member-typed strings, and the "kind"
- *     in the headline is not a kind the server assigned — it is the CONTAINING
- *     OBJECT'S NAME, equally member-typed. All neutralized.
- *
- *   - PROSE the agent is meant to act on is NOT neutralized: a `text`
- *     attribute value (up to 4000 chars), and an action's description /
- *     outcome / tools. Those are the routing instructions the ontology exists
- *     to carry — clipping them to 160 characters would delete the feature.
- *     They are {@link indented} instead, which is the cheaper half of the
- *     channel body treatment: a newline inside them can no longer put an
- *     attacker's text at the START of a line, so it cannot open a heading, a
- *     list item, or a quote block.
+ *   - NAMES and LABELS are VALUES → neutralized. Note the "kind" in a headline
+ *     is not server-assigned: it is the CONTAINING OBJECT'S NAME.
+ *   - PROSE the agent must act on is NOT neutralized — a `text` attribute value
+ *     (4000 chars) and an action's description / outcome / tools are the
+ *     routing instructions the ontology exists to carry, and clipping them to
+ *     160 chars deletes the feature. {@link indented} instead: a newline can no
+ *     longer put attacker text at the START of a line.
  */
 const NO_NAME = "`(unnamed)`";
 /**
- * Multi-line prose rendered UNDER the line that introduces it, every
- * continuation line indented two spaces. Content survives verbatim; what it
- * loses is the ability to begin a line of the result.
+ * Multi-line prose under the line introducing it, continuations indented two
+ * spaces. ⚠ Content survives verbatim; it loses only the ability to BEGIN a line.
  */
 function indented(text) {
     return text
@@ -96,8 +85,8 @@ async function resolveResourceHandles(client, object) {
         if (wanted.has(s.id))
             handles.set(s.id, { name: s.name, slug: s.slug, kind: "skill" });
     }
-    // Leftover ids are entry-level knowledge refs — hunt them in the
-    // accessible bases' trees and hand back a read_file-addressable path.
+    // Leftover ids are entry-level knowledge refs — hunt them in the accessible
+    // bases' trees and return a read_file-addressable path.
     const unresolved = [...wanted].filter((id) => !handles.has(id));
     if (unresolved.length === 0)
         return handles;
@@ -125,9 +114,8 @@ async function resolveResourceHandles(client, object) {
 }
 function renderObject(object, snapshot, headline, handles = new Map()) {
     const nameOf = (id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, NO_NAME) : `\`${id}\``;
-    // What the object IS = the name of its container (its column, or the
-    // object it's nested in); top-level containers read as "column". That name
-    // is member-typed like any other — only the "column" fallback is ours.
+    // ⚠ What the object IS = its container's NAME (column, or the object it is
+    // nested in) — member-typed like any other. Only the "column" fallback is ours.
     const container = Object.values(snapshot.objects).find((o) => o.childIds.includes(object.id));
     const kindLabel = container?.name ? (0, narration_1.inlineOr)(container.name, NO_NAME) : "column";
     const lines = [];
@@ -151,9 +139,8 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
             lines.push(`- ${(0, narration_1.inlineOr)(rel.label, NO_NAME)}: ${rel.targetIds.map(nameOf).join(", ")}`);
         }
     }
-    // Inbound edges ("Referenced by"): other objects whose relationships point
-    // AT this one. `get` otherwise shows only outbound edges, hiding who
-    // depends on this object.
+    // Inbound edges ("Referenced by") — without them `get` shows only outbound
+    // edges and hides who depends on this object.
     const backlinks = [];
     for (const other of Object.values(snapshot.objects)) {
         if (other.id === object.id)
@@ -184,9 +171,9 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
     if (object.methods.length > 0) {
         lines.push("", "## Actions");
         for (const m of object.methods) {
-            // The action NAME was a `### ` heading; the three prose fields under it
-            // are what the agent is supposed to carry out, so they keep their text
-            // and lose only their ability to start a line.
+            // ⚠ Action NAME is a heading (neutralize); the three prose fields under
+            // it are what the agent must carry out, so they keep their text and lose
+            // only the ability to start a line.
             lines.push(`### ${(0, narration_1.inlineOr)(m.name, NO_NAME)}`);
             if (m.description)
                 lines.push(indented(m.description));
@@ -202,9 +189,9 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
 }
 function renderValue(value, nameOf, handles) {
     switch (value.kind) {
-        // A pill is a chip — a short label by construction (max 400), so it is a
-        // value. A text attribute runs to 4000 characters of the user's own prose:
-        // it stays whole, and the caller ({@link renderObject}) indents it.
+        // ⚠ A pill is a short label by construction (max 400) → value. A text
+        // attribute is 4000 chars of the user's prose → stays whole, and the caller
+        // ({@link renderObject}) indents it.
         case "pill":
             return (0, narration_1.inlineOr)(value.value, "—");
         case "text":

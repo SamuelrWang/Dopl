@@ -1,20 +1,13 @@
 "use strict";
 /**
- * Skill-authoring framework loaded into the MCP server prompt and
- * served by the `dopl_skill(op='authoring_guide')` tool.
+ * Skill-authoring framework loaded into the MCP server prompt and served by
+ * `dopl_skill(op='authoring_guide')`.
  *
- * Synthesized from:
- *   - Anthropic Agent Skills spec (https://agentskills.io/specification)
- *   - Anthropic Claude Code skills docs (code.claude.com/docs/en/skills)
- *   - anthropics/skills/skill-creator/SKILL.md
- *   - obra/superpowers/skills/writing-skills/SKILL.md
- *
- * Two competing schools of thought reconciled here: Anthropic's spec
- * says descriptions should include both *what* + *when*; obra's
- * empirical work shows that descriptions which summarize the workflow
- * cause Claude to skip the body. Pragmatic synthesis: lead with
- * concrete *what*, then heavy *when*-triggers; never summarize the
- * *workflow/steps* in the description.
+ * ⚠ Reconciles two conflicting sources: the Agent Skills spec wants
+ * descriptions carrying both *what* + *when*, while empirical work shows a
+ * description that SUMMARIZES the workflow makes Claude skip the body. So: lead
+ * with concrete *what*, then heavy *when*-triggers, and NEVER summarize the
+ * workflow/steps in the description.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SKILL_AUTHORING_GUIDE = void 0;

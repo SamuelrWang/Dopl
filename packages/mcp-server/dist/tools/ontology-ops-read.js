@@ -18,41 +18,31 @@ const ontology_render_1 = require("./ontology-render");
 /** Same rule as ontology-render.ts: a graph name is a value. */
 const NO_NAME = "`(unnamed)`";
 /**
- * WHAT op="map" WALKS, AND WHERE IT STOPS.
- *
- * The snapshot it renders from is genuinely the whole live graph: no status
- * filter, no visibility filter, no cap, every member sees the same rows. The
- * reduction is in this file — `opMap` walks clusters, then their columns, then
- * one level of `childIds`, and stops. Objects nested deeper, and objects with
- * no membership at all, are IN the snapshot and are not rendered. The old
- * `op="resolve"` miss message even told the agent `op="map" shows everything`,
- * which was the shape of this whole audit in one sentence.
+ * ⚠ WHAT op="map" WALKS AND WHERE IT STOPS. The snapshot is the whole live
+ * graph (no status filter, no visibility filter, no cap), but `opMap` walks
+ * clusters → columns → ONE level of `childIds` and stops. Objects nested deeper
+ * and objects with no membership are in the snapshot and are NOT rendered — so
+ * nothing may tell an agent `op="map" shows everything`.
  */
 const MAP_SCOPE_NOTE = `_Clusters and their columns, with each column's DIRECT members only. Objects nested deeper, and objects belonging to no column, are not shown here; trashed clusters and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
 /** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
 const RESOLVE_CAP = 20;
 /**
- * THE SUMMARY PROJECTION, NOT THE GRAPH (P0-3), for the two ops above that
- * render nothing but names.
+ * ⚠ SUMMARY PROJECTION, NOT THE GRAPH, for the two name-only ops. Between them
+ * `opMap` and `opResolve` read five fields, all carried by `view: "summary"`; a
+ * bare `getOntology()` fetches every `attributes`, `methods`, `template` and
+ * cluster `layout` in the workspace to supply them — on `op="map"`, the ROUTING
+ * call agents make first and speculatively.
  *
- * `opMap` walks clusters → `columnIds` → one level of `childIds` and prints
- * names; `opResolve` filters on `name`/`subtitle` and prints names and ids.
- * Between them they read five fields, all of which `view: "summary"` carries —
- * and the bare `getOntology()` they used to call fetched every `attributes`,
- * `methods`, `template` and cluster `layout` in the workspace to supply them.
- * `op="map"` is the ROUTING call the tool description tells agents to make
- * first, so it is the ontology read most likely to be made speculatively.
- *
- * `opGet` and `opAnchor` deliberately stay on the full graph: both render
- * through `renderObject`, which reads the JSONB off the target AND scans every
- * object's `relationships` for the inbound "Referenced by" list.
+ * ⚠ `opGet` and `opAnchor` stay on the FULL graph: both render through
+ * `renderObject`, which reads JSONB off the target AND scans every object's
+ * `relationships` for the inbound "Referenced by" list.
  */
 async function opMap(client) {
     const snapshot = await client.getOntology({ view: "summary" });
     if (snapshot.clusters.length === 0) {
-        // "The graph is empty" is an assertion, and a clipped read never
-        // established it — a workspace can come back at the object ceiling with no
-        // cluster rows in hand. Say what happened instead of what it looked like.
+        // ⚠ "The graph is empty" is an assertion a CLIPPED read never established —
+        // a workspace can hit the object ceiling with no cluster rows in hand.
         return (0, respond_1.ok)(snapshot.truncated
             ? `No ontology clusters came back on this read.\n\n${(0, ontology_clipped_1.clippedNote)("an empty result here is not evidence of an empty graph")}`
             : `No ontology clusters yet — the graph is empty. Start one with op="create_cluster".`);
@@ -73,10 +63,9 @@ async function opMap(client) {
         }
         lines.push("");
     }
-    // With the clusters, not in the footer: MAP_SCOPE_NOTE explains which levels
-    // this op CHOOSES not to render, which is a different fact from the read
-    // having stopped short of the workspace, and a reader must not be able to
-    // take the first as covering the second.
+    // ⚠ With the clusters, not the footer: MAP_SCOPE_NOTE is about levels this op
+    // CHOOSES not to render — a different fact from the read stopping short, and
+    // a reader must not take the first as covering the second.
     if (snapshot.truncated) {
         lines.push((0, ontology_clipped_1.clippedNote)("the clusters and columns above are a prefix and not the set"), "");
     }
@@ -85,18 +74,12 @@ async function opMap(client) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
- * THE STRONGEST IDENTITY CLAIM IN THE PRODUCT, PREVIOUSLY WITH THE WEAKEST
- * BACKING. The server instructions tell every agent to call this for any
- * "my/me" request, and it answered `You are anchored to this object.` over an
- * object whose NAME is member-typed text — no user id, no framing, nothing the
- * reader could check. An agent that read a name here and reported it as its own
- * identity was doing exactly what the surface invited.
- *
- * The anchor is CONTEXT, not identification: `op="claim_anchor"` lets any agent
- * on this connection re-point it, so it can only ever say "this is the object
- * the graph currently links to you". The caller's real identity — the immutable
- * id — is stated first, from the same session record `whoami` and the footer
- * use, so the two can never disagree.
+ * ⚠ THE STRONGEST IDENTITY CLAIM IN THE PRODUCT — the server instructions send
+ * every agent here for any "my/me" request. The anchor is CONTEXT, NOT
+ * identification: any agent on this connection can re-point it with
+ * `op="claim_anchor"`, and the object NAME is member-typed. So state the
+ * caller's immutable id FIRST, from the same session record `whoami` and the
+ * footer use, and never let a name stand as identity.
  */
 async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER) {
     const [anchor, snapshot] = await Promise.all([
@@ -113,25 +96,23 @@ async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER) {
 }
 async function opResolve(client, query) {
     const snapshot = await client.getOntology({ view: "summary" });
-    // A clip and the RESOLVE_CAP are two different truncations and are reported
-    // separately below: the cap hid matches we found, the clip hid objects we
-    // never scanned. Conflating them would tell an agent to "narrow the query"
-    // for rows no query on this connection returns.
+    // ⚠ A clip and the RESOLVE_CAP are DIFFERENT truncations: the cap hid matches
+    // we found, the clip hid objects we never scanned. Conflating them tells an
+    // agent to "narrow the query" for rows no query here returns.
     const clipped = snapshot.truncated
         ? `\n\n${(0, ontology_clipped_1.clippedNote)("this query ran over a prefix of the graph and a match outside it could not appear")}`
         : "";
     const needle = query.toLowerCase();
     const hits = Object.values(snapshot.objects).filter((o) => o.name.toLowerCase().includes(needle) || o.subtitle.toLowerCase().includes(needle));
     if (hits.length === 0) {
-        // Was `op="map" shows everything.` — it does not: op="map" renders two
-        // levels and skips objects in no column, which is exactly the set an agent
-        // that struck out on resolve is most likely to be hunting for.
-        // The miss is the reading a clip damages most: "no object contains X" over
-        // a prefix of the graph is a false negative that reads as a fact.
+        // ⚠ Never say `op="map" shows everything` — it renders two levels and skips
+        // objects in no column, exactly the set an agent that struck out on resolve
+        // is hunting for. A miss over a CLIPPED prefix is a false negative that
+        // reads as a fact.
         return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).${clipped}`);
     }
     const containerOf = (id) => {
-        // The "kind" is the containing OBJECT'S NAME, member-typed like any other.
+        // ⚠ The "kind" is the containing OBJECT'S NAME — member-typed.
         const name = Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
         return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "column";
     };
@@ -140,9 +121,8 @@ async function opResolve(client, query) {
         const subtitle = o.subtitle ? ` — ${(0, narration_1.inlineOr)(o.subtitle, "")}` : "";
         return `- ${(0, narration_1.inlineOr)(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`;
     });
-    // Both numbers are already in hand — the cap is applied here, over a snapshot
-    // already loaded — so the truncation costs nothing to state and used to cost
-    // the caller everything: 21 matches rendered exactly like 20.
+    // ⚠ Free to state (cap applied here, over a loaded snapshot) and expensive to
+    // omit: 21 matches otherwise renders exactly like 20.
     const truncated = hits.length > shown.length
         ? `\n\n_Showing ${shown.length} of ${hits.length} matches. Narrow the query for the rest._`
         : "";

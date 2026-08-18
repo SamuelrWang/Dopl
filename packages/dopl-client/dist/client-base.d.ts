@@ -1,17 +1,14 @@
 /**
- * THE FIRST LINK of `DoplClient`'s per-domain method-group chain — §2's
- * scheduled remedy for the facade's size, finally built.
+ * THE FIRST LINK of `DoplClient`'s per-domain method-group chain.
  *
- * The shape: this class owns construction and the transport-level accessors,
- * and NOTHING else. Each domain then contributes one `client-<domain>.ts`
- * method group that extends the previous link, and `client.ts` is the
- * terminal `DoplClient` that extends the last one. The chain is what keeps
- * every file under the 500-line cap while `DoplClient` stays a SINGLE class
- * with one flat, unchanged public surface — callers (`@dopl/mcp-server`, the
- * app) see exactly the methods they saw when they all lived in `client.ts`.
+ * This class owns construction and the transport-level accessors, NOTHING
+ * else. Each domain contributes one `client-<domain>.ts` method group
+ * extending the previous link; `client.ts` is the terminal `DoplClient`. The
+ * chain keeps every file under the 500-line cap while `DoplClient` stays a
+ * SINGLE class with one flat, unchanged public surface.
  *
- * THE CHAIN, in order — this is the only place the whole order is written
- * down, and each link names only its own predecessor:
+ * THE CHAIN, in order — ⚠ the only place the whole order is written down; each
+ * link names only its own predecessor:
  *
  *   DoplClientBase        (here)
  *     → WorkspaceMethods  client-workspaces.ts
@@ -24,27 +21,20 @@
  *     → BillingMethods    client-billing.ts
  *     → DoplClient        client.ts
  *
- * The order carries NO meaning — no link may depend on a sibling's methods,
- * only on `this.transport`. Inserting a domain means editing two files (the
- * new link and the one that used to extend its predecessor) and this comment.
+ * Order carries NO meaning — no link may depend on a sibling's methods, only
+ * on `this.transport`. Inserting a domain means editing two files (the new
+ * link and the one that used to extend its predecessor) and this comment.
  */
 import { DoplTransport } from "./transport.js";
 export declare class DoplClientBase {
     /**
-     * PROTECTED, not private, and it stays that way: it is the hook every
-     * per-domain method group in the chain above reads. There was one such link
-     * before — `ChannelAgentsClient`, holding the channel agents + thread
-     * participants group — and it went with those surfaces (channels rollback
-     * §1), which left the class extending nothing until this file.
+     * ⚠ PROTECTED, not private, and it stays that way: the hook every
+     * per-domain method group in the chain above reads.
      */
     protected transport: DoplTransport;
     constructor(baseUrl: string, apiKey: string, opts?: ConstructorParameters<typeof DoplTransport>[2]);
     getBaseUrl(): string;
-    /**
-     * Active canvas (workspace) for this client. When set, every request
-     * carries an `X-Workspace-Id` header so the server scopes data
-     * accordingly. Set null to clear.
-     */
+    /** Active canvas. Set → every request carries `X-Workspace-Id`. Null clears. */
     setWorkspaceId(workspaceId: string | null): void;
     getWorkspaceId(): string | null;
 }

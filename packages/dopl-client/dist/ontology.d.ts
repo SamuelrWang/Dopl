@@ -1,15 +1,14 @@
 /**
- * Ontology methods for `DoplClient` — reads plus the full authoring
- * surface, so an agent can build ontologies without the web UI.
+ * Ontology methods for `DoplClient` — reads plus the full authoring surface, so
+ * an agent can build ontologies without the web UI.
  */
 import type { DoplTransport } from "./transport.js";
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot, OntologySummary } from "./ontology-types.js";
 export declare function getOntology(t: DoplTransport): Promise<OntologySnapshot>;
 /**
- * The cheap projection of the same endpoint — names and containment, no JSONB.
- * See {@link OntologySummary} for what it drops and why. Distinct `toolName` so
- * the two reads are separable in the `mcp_tool_calls` telemetry that the
- * payload work is judged on.
+ * Cheap projection of the same endpoint — names and containment, no JSONB. See
+ * {@link OntologySummary}. Distinct `toolName` so the two reads stay separable
+ * in `mcp_tool_calls` telemetry.
  */
 export declare function getOntologySummary(t: DoplTransport): Promise<OntologySummary>;
 export declare function getOntologyAnchor(t: DoplTransport): Promise<OntologyObject | null>;

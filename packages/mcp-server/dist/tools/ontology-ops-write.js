@@ -16,15 +16,14 @@ const ontology_render_1 = require("./ontology-render");
 const ontology_ops_read_1 = require("./ontology-ops-read");
 const identity_1 = require("./identity");
 /**
- * Write confirmations read the STORED name back — the server canonicalises it,
- * and on `create_object` the fields listed are copied from the PARENT, which
- * another member authored. Same rule as the read side: a name is a value.
+ * ⚠ Write confirmations read the STORED name back (the server canonicalises it,
+ * and `create_object` copies fields from a PARENT another member authored), so
+ * the read-side rule applies: a name is a VALUE.
  */
 const NO_NAME = "`(unnamed)`";
-// Attribute-value size caps, mirrored from the server schema
-// (attributeValueSchema) so an oversized value fails with a clear,
-// field-named message at the tool boundary instead of an opaque
-// downstream VALIDATION_FAILED.
+// ⚠ HAND-MIRRORED from the server schema (attributeValueSchema) so an
+// oversized value fails with a field-named message at the tool boundary
+// instead of an opaque downstream VALIDATION_FAILED.
 const TEXT_VALUE_MAX = 4000;
 const PILL_VALUE_MAX = 400;
 const REQUIRED = {
@@ -209,9 +208,9 @@ async function withObject(client, ref, fn) {
         return await fn(resolved.hit, snapshot);
     }
     catch (e) {
-        // Optimistic-concurrency miss (412): the object changed between the
-        // caller's op="get" and this write. Turn it into re-get/reconcile/retry
-        // guidance (mirrors dopl_kb write_file), not an opaque throw.
+        // Optimistic-concurrency miss (412) — the object changed between the
+        // caller's op="get" and this write. Re-get/reconcile/retry guidance, not an
+        // opaque throw.
         if ((0, respond_1.isConflict)(e)) {
             return (0, respond_1.err)(`${(0, narration_1.inlineOr)(resolved.hit.name, NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`);
         }
@@ -270,18 +269,17 @@ async function opSetRelationship(client, args) {
             await client.updateOntologyObject(object.id, { relationships: kept }, args.expected_version);
             return (0, respond_1.ok)(`Removed relationship ${(0, narration_1.inlineOr)(label, NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
         }
-        // F-19: an empty targets array slips past the required-param check (which
-        // only rejects undefined/null/empty-string) but persists nothing — the
-        // server drops zero-target edges. Reject it with the same shape as
-        // set_attribute kind="ref".
+        // ⚠ An empty targets array slips past the required-param check (which
+        // rejects only undefined/null/empty-string) and persists NOTHING — the
+        // server drops zero-target edges.
         if (!args.targets?.length) {
             return (0, respond_1.err)(`set_relationship needs \`targets\` (at least one object). To clear ${(0, narration_1.inlineOr)(label, NO_NAME)}, use op="remove_relationship".`);
         }
         const resolved = resolveObjectValues(snapshot, args.targets);
         if ("fail" in resolved)
             return resolved.fail;
-        // F-20: a self-edge is silently dropped server-side, so it would report a
-        // false success. Reject explicitly rather than persist nothing.
+        // ⚠ A self-edge is silently dropped server-side, so it reports a false
+        // success — reject explicitly.
         if (resolved.ids.includes(object.id)) {
             return (0, respond_1.err)("Cannot relate an object to itself.");
         }
@@ -345,10 +343,9 @@ async function resolveResourceValues(client, kind, refs) {
     return { ids };
 }
 /**
- * Entry-level knowledge refs: `<base>/<entry path>` (base by id/slug/name)
- * or a bare entry uuid, hunted across the caller's accessible bases.
- * Returns `{ id: null }` when the ref simply doesn't match an entry, so
- * the caller can fall through to its "no such base" error.
+ * Entry-level knowledge refs: `<base>/<entry path>` (base by id/slug/name) or a
+ * bare entry uuid, hunted across the caller's accessible bases. Returns
+ * `{ id: null }` on a non-match so the caller falls through to "no such base".
  */
 async function resolveKbEntryRef(client, bases, ref) {
     const slash = ref.indexOf("/");

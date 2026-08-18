@@ -3,7 +3,7 @@ export interface ParsedApiError {
     apiMessage: string | null;
     details: unknown;
     /**
-     * Upgrade link carried by the flat entitlement-denial envelope
+     * From the flat entitlement-denial envelope
      * (`{ error: "over_free_cap", message, upgrade_url }`). Null for the
      * canonical `{ error: { code, message } }` shape.
      */
@@ -31,15 +31,13 @@ export declare class DoplTimeoutError extends DoplNetworkError {
     constructor(method: string, path: string, timeoutMs: number);
 }
 /**
- * The CALLER went away (Q14) — an external `AbortSignal` handed to the
- * transport fired, so the request was cancelled from our side rather than
- * timing out on the server's.
+ * The CALLER went away (Q14) — an external `AbortSignal` on the transport
+ * fired; cancelled from our side, not timed out on the server's.
  *
- * Distinct from {@link DoplTimeoutError} on purpose: both arrive as an
- * `AbortError` from `fetch`, and reporting a client disconnect as "timed out
- * after 55000ms" sends whoever reads the log looking for a slow route that was
- * never slow. Still a `DoplNetworkError`, so every existing `catch` keeps
- * working unchanged.
+ * ⚠ Distinct from {@link DoplTimeoutError} on purpose: both arrive from `fetch`
+ * as an `AbortError`, and logging a client disconnect as "timed out after
+ * 55000ms" sends the next reader hunting a slow route that was never slow.
+ * Still a `DoplNetworkError`, so existing `catch`es keep working.
  */
 export declare class DoplAbortError extends DoplNetworkError {
     constructor(method: string, path: string);

@@ -1,29 +1,21 @@
 /**
  * workspace-directory.ts — the session's view of WHICH workspaces exist and
- * which one a call lands in.
+ * which one a call lands in: membership caching, slug→id resolution, and the
+ * "you must pass `workspace=`" refusal.
  *
- * Split out of `server.ts` (§2, the layer rule): membership caching,
- * slug→id resolution and the "you must pass `workspace=`" refusal are one
- * responsibility — resolving a target — distinct from registering tools
- * (`registrar.ts`), gating ops (`gating.ts`) or writing the briefing
- * (`instructions.ts`).
- *
- * FAIL-CLOSED IS THE POINT AND IT DID NOT MOVE. A blank `workspace=` is
- * rejected by the caller in `registrar.ts`; a caller with 0 or 2+ memberships
- * and no pin gets {@link WorkspaceDirectory.noWorkspaceError} rather than a
- * guessed workspace; and a boot directory load that FAILED does not seed the
- * cache, so the first resolution retries instead of serving a bogus empty list
- * for a full TTL.
+ * ⚠ FAIL-CLOSED throughout. A blank `workspace=` is rejected by the caller in
+ * `registrar.ts`; 0 or 2+ memberships with no pin gets
+ * {@link WorkspaceDirectory.noWorkspaceError}, never a guessed workspace; and a
+ * FAILED boot directory load does not seed the cache, so the first resolution
+ * retries instead of serving a bogus empty list for a full TTL.
  */
 import type { DoplClient, WorkspaceListItem, WorkspaceRole } from "@dopl/client";
 import type { ToolResponse } from "./tools/respond.js";
 /**
- * Snapshot of the session's default workspace, resolved once at boot from
- * the caller's membership directory (a request X-Workspace-Id pin, else the
- * sole membership). Read by `appendDoplStatus`. Null when the caller has 0
- * or 2+ memberships and sent no pin — in that state a no-arg tool call is
- * refused (the wrapper demands `workspace=`), so nothing is silently
- * routed to a guessed workspace.
+ * Session default workspace, resolved once at boot (X-Workspace-Id pin, else
+ * the sole membership). Read by `appendDoplStatus`. ⚠ Null on 0 or 2+
+ * memberships with no pin — a no-arg tool call is then REFUSED, so nothing is
+ * silently routed to a guessed workspace.
  */
 export interface ActiveWorkspaceState {
     id: string;
@@ -32,8 +24,8 @@ export interface ActiveWorkspaceState {
     role: WorkspaceRole;
 }
 /**
- * How the workspace a call actually hit was chosen — surfaced verbatim in
- * the `_dopl_status` footer so the agent can positively confirm targeting.
+ * How the workspace a call hit was chosen — surfaced verbatim in the
+ * `_dopl_status` footer so the agent can confirm targeting.
  */
 export type WorkspaceSource = "per-call arg" | "sole membership" | "header pin";
 export interface EffectiveWorkspace extends ActiveWorkspaceState {
@@ -42,16 +34,14 @@ export interface EffectiveWorkspace extends ActiveWorkspaceState {
 /** The boot-resolved directory state this module is constructed from. */
 export interface WorkspaceDirectoryOptions {
     /**
-     * The caller's full active-membership directory, from the boot
-     * `listWorkspaces()` call. Seeds the cache so per-call `workspace=`
-     * resolution needs no extra loopback.
+     * Caller's full active-membership directory from the boot `listWorkspaces()`.
+     * Seeds the cache so per-call `workspace=` needs no extra loopback.
      */
     directory?: WorkspaceListItem[];
     /**
-     * True when the boot `listWorkspaces()` call FAILED (transient), as opposed
-     * to a genuine empty directory. Steers the refusal copy toward "couldn't
-     * load — retry" instead of "you have none", and suppresses seeding the cache
-     * with a bogus empty directory so a later `workspace=` resolution retries.
+     * ⚠ True when the boot `listWorkspaces()` FAILED, as opposed to a genuine
+     * empty directory: steers the copy to "couldn't load — retry", and suppresses
+     * seeding a bogus empty cache so a later resolution retries.
      */
     directoryLoadFailed?: boolean;
 }

@@ -2,13 +2,12 @@
 /**
  * Skills methods for `DoplClient`.
  *
- * Read paths (`listSkills`, `getSkill`) are surfaced to all callers.
- * Write paths (`createSkill`, `updateSkill`, `deleteSkill`, body write)
- * are gated server-side by the per-skill `agent_write_enabled` toggle
- * for API-key (agent) callers; session callers bypass that check.
+ * Reads are open to all callers. Writes are gated server-side by the per-skill
+ * `agent_write_enabled` toggle for API-key (agent) callers; session callers
+ * bypass that check.
  *
- * Skills are single-file: the one SKILL.md body is read/written via
- * `readSkillBody` / `writeSkillBody`.
+ * Skills are single-file: one SKILL.md body via `readSkillBody` /
+ * `writeSkillBody`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listSkills = listSkills;
@@ -57,14 +56,13 @@ async function readSkillBody(t, slug) {
 }
 async function writeSkillBody(t, slug, body, expectedVersion) {
     // Optimistic concurrency, tri-state on `expectedVersion`:
-    //   - string    → atomic CAS against it (412 on mismatch).
-    //   - undefined  → strict default: if the skill body already exists,
-    //                  refuse (412) — the caller must read first and pass
-    //                  the Version it actually saw. The old read-at-write
-    //                  "auto-guard" only proved nothing changed in the
-    //                  microseconds before the PUT; it silently clobbered
-    //                  anything written after the caller's real read.
-    //   - null       → force: blind overwrite, no precondition.
+    //   - string    → atomic CAS (412 on mismatch).
+    //   - undefined → strict: existing body refuses 412 — caller must read first
+    //                 and pass the Version it saw. ⚠ Do NOT re-add the old
+    //                 read-at-write auto-guard: it only proved nothing changed in
+    //                 the microseconds before the PUT, and silently clobbered
+    //                 writes landing after the caller's real read.
+    //   - null      → force: blind overwrite, no precondition.
     let version;
     if (expectedVersion === null) {
         version = undefined;

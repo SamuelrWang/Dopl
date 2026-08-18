@@ -1,22 +1,17 @@
 /**
- * Channel methods for `DoplClient` — cross-user, agent-to-agent
- * collaboration threads. Free functions over `DoplTransport`; wired into
- * the `DoplClient` class in client.ts.
+ * Channel methods for `DoplClient`. Free functions over `DoplTransport`.
  *
- * `awaitMessages` is a LONG-POLL: the server holds the request open (up to
- * ~50s) waiting for a message with seq > since. It therefore uses a longer
- * network timeout and disables the transport's GET auto-retry — a retry
- * would open a second poll and could double-count arrivals.
+ * `awaitMessages` is a LONG-POLL: server holds the request open (~50s) for a
+ * message with seq > since. ⚠ Longer network timeout, GET auto-retry DISABLED
+ * — a retry opens a second poll and can double-count arrivals.
  *
- * ONE call stays bounded at ~50s on purpose: the `/api/channels/[id]/await`
- * route's own maxDuration is 60s, so a longer single request would be killed
- * mid-flight. A multi-minute hold (the WAKE-V1 primitive) is assembled ABOVE
- * this layer, in the MCP `await` op, by re-issuing this call with the same
- * cursor — which keeps the retry ban meaningful: every re-issue is a
- * deliberate, cursor-preserving one, never a blind transport retry.
+ * ONE call stays bounded at ~50s on purpose: `/api/channels/[id]/await` has
+ * maxDuration 60s, so a longer single request is killed mid-flight. A
+ * multi-minute hold (WAKE-V1) is assembled ABOVE this layer, in the MCP `await`
+ * op, by re-issuing with the same cursor.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -27,54 +22,46 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 /**
- * Post a message. Resolves the STORED message plus the notices the write raised
- * — today just F6's `threadClosed`, which rides in the response ENVELOPE beside
- * the message (the shape `echoSeq` uses) rather than inside it.
- *
- * `threadClosed` is normalized to a boolean here, and that normalization is the
- * point: an older deployment sends no key, a post into an open thread sends no
- * key, and both must read as `false` rather than as `undefined` for the caller
- * to re-decide. Same additive-field discipline as `openingSeq` below.
+ * Post a message. `threadClosed` rides in the response ENVELOPE beside the
+ * message (like `echoSeq`), not inside it, and is normalized to a boolean HERE:
+ * an older deployment sends no key, a post into an open thread sends no key,
+ * and both must read `false`, not `undefined` for the caller to re-decide.
  */
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
 /**
- * A thread READ used to carry its PARTICIPANT SET — the breakout room's
- * membership — normalized through a `withParticipants` helper so an older
- * deployment's missing field and a set-less thread's `[]` both read as "no
- * participants". Breakout rooms are gone (channels rollback §1), and so is the
- * field, the helper and the `ChannelThreadDetail` type; a thread read is the
- * row. The additive-field discipline itself survives on `openingSeq` /
- * `echoSeq` / `threadClosed` below.
+ * A channel's threads, MOST RECENTLY ACTIVE FIRST — the server's order, which
+ * is the only order (`repository-tasks.ts › listTasksByChannel`). ⚠ Do not
+ * re-sort: the server's LIMIT clipped against that order, so a re-sorted list is
+ * the wrong rows in a plausible order.
+ *
+ * `truncated` rides through from the envelope; an older server that does not
+ * send it reads as `false`, which is the pre-existing behaviour (an unbounded
+ * read never clipped), not a claim.
  */
-export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThread[]>;
+export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThreadPage>;
 /**
- * READ-SESSION-STATE (rollback §3.5) — the caller's OWN live sessions, for
- * "what is flint doing?". `channelId` narrows to one channel; omitted, it is
- * every one of the caller's sessions in the active workspace. Own-scoped
- * server-side (a peer's sessions never come back). See `ChannelSessionState`.
+ * The caller's OWN live sessions. `channelId` narrows to one channel; omitted =
+ * all of the caller's in the active workspace. ⚠ Own-scoped server-side — a
+ * peer's sessions never come back.
  */
 export declare function listChannelSessions(t: DoplTransport, channelId?: string): Promise<ChannelSessionState[]>;
 export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
 /**
- * PROPOSE closing a thread (DECISION 2, 2026-08-04) — the agent lane's terminal
- * act, and the one {@link closeChannelThread} is no longer reachable from.
- *
- * Same route, same payload shape, different op: a proposal IS the close it asks
- * a human to confirm, so the confirm hands these two values straight back to
- * `op:"close"`. It writes nothing to the thread row — see
- * {@link ChannelThreadCloseProposed}.
+ * PROPOSE closing a thread — the agent lane's terminal act; agents cannot reach
+ * {@link closeChannelThread}. Same route and payload shape, different op: a
+ * proposal IS the close it asks a human to confirm, so the confirm hands these
+ * two values straight back to `op:"close"`. Writes nothing to the thread row.
  */
 export declare function proposeChannelThreadClose(t: DoplTransport, channelId: string, threadId: string, input: {
     outcome: ThreadOutcome;
     summary?: string;
 }): Promise<ChannelThreadCloseProposed>;
 /**
- * Close a thread. HUMAN LANE ONLY since 2026-08-04 — the server refuses an
- * agent-token caller (`ThreadCloseIsHumanOnlyError`), so no MCP op reaches this
- * any more and the agent's path is {@link proposeChannelThreadClose}. Kept
- * because the route op is real and this is its one binding; a human surface
- * built on this client closes through here.
+ * Close a thread. ⚠ HUMAN LANE ONLY — the server refuses an agent-token caller
+ * (`ThreadCloseIsHumanOnlyError`); the agent path is
+ * {@link proposeChannelThreadClose}. Kept as the one binding for a real route
+ * op — a human surface on this client closes through here.
  */
 export declare function closeChannelThread(t: DoplTransport, channelId: string, threadId: string, input: {
     outcome: ThreadOutcome;

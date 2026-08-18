@@ -1,32 +1,19 @@
 /**
- * THE GUARD ON THE §2 PER-DOMAIN SPLIT.
+ * THE GUARD ON THE PER-DOMAIN CLIENT SPLIT — `DoplClient` must look identical
+ * to a caller however its methods are distributed across the
+ * `client-<domain>.ts` chain (see `client-base.ts`). The package's other test
+ * files touch almost none of the surface, so a method lost in a move would go
+ * green without this.
  *
- * `client.ts` was one 720-line class; it is now a terminal link on a chain of
- * `client-<domain>.ts` method groups (see `client-base.ts`). That refactor is
- * only correct if NOTHING about `DoplClient` changed for a caller — and the
- * package's other three test files never touched most of the surface, so a
- * method silently lost in the move, or a route that drifted when its body left
- * the class, would have gone green.
+ *  1. THE SURFACE. `PUBLIC_SURFACE` is the frozen method list — the API
+ *     `@dopl/mcp-server` and the app compile against. Checked BOTH ways: every
+ *     frozen name resolves to a function on an instance, and the prototype
+ *     chain exposes nothing off the list. Adding a method to a link means
+ *     adding it here, deliberately.
  *
- * Two checks, for the two ways the split could lie:
- *
- *  1. THE SURFACE. `PUBLIC_SURFACE` is the frozen method list — the exact
- *     public API that `@dopl/mcp-server` and the app compile against. (Read
- *     off the declaration emit, minus the trash-teardown methods that left the
- *     class in a separate change; see the note on the constant itself, which
- *     is where the seven-method gap against HEAD is accounted for.) Checked in
- *     BOTH directions: every frozen name still resolves to a function on an
- *     instance, and the prototype chain exposes nothing that is not on the
- *     list. Adding a method to a link means adding it here, deliberately.
- *
- *  2. THE ROUTES THAT MOVED. Only the cluster / workflow / workspace bodies
- *     actually relocated (into `clusters.ts`, `workflows.ts`, `workspaces.ts`);
- *     every other domain already delegated to a module this refactor never
- *     touched. Those are the ones whose path, verb, and tool header are pinned
- *     here — including the `encodeURIComponent` on every interpolated segment,
- *     which is the detail a move is most likely to drop. TWO of the three are
- *     now gone: `clusters.ts` and `workflows.ts` were DELETED with their
- *     features on 2026-08-11, so what remains pinned is `workspaces.ts`. The
+ *  2. THE ROUTES THAT MOVED — path, verb, tool header, and the
+ *     `encodeURIComponent` on every interpolated segment (the detail a move is
+ *     most likely to drop). Only `workspaces.ts` remains pinned; the
  *     `encodeURIComponent` assertion survives on `getWorkspace`.
  */
 export {};

@@ -19,9 +19,9 @@ async function opList(client, folder) {
         active = active.filter((s) => (s.folder ?? "") === want);
     }
     if (active.length === 0) {
-        // "No active skills in this workspace yet" was the empty-case form of the
-        // same overclaim: a member whose colleague owns six private skills got told
-        // the workspace had none. Both branches now say whose view this is.
+        // ⚠ The EMPTY case is the same overclaim: a member whose colleague owns
+        // private skills must not be told the workspace has none. Both branches say
+        // whose view this is.
         return (0, respond_1.ok)(folder !== undefined
             ? `No active skills visible to you in folder ${(0, narration_1.inlineOr)(folder, "`(unnamed folder)`")}. ${skills_shared_1.SCOPE_NOTE}`
             : `No active skills visible to you in this workspace. Drafts and other members' private or team-scoped skills are not listed, so this is not proof the workspace has none — dopl_members(op="access_matrix") is the inventory. Create one with \`dopl_skill\` op="create" (requires the workspace to allow agent writes).`);
@@ -44,7 +44,6 @@ async function opList(client, folder) {
         lines.push(`### ${key === "" ? "Unfiled" : `📁 ${(0, narration_1.inlineOr)(key, "`(unnamed folder)`")}`}`);
         lines.push("");
         for (const s of byFolder.get(key)) {
-            // Show sharing scope — that's the access signal that matters.
             const visBadge = s.visibility === "private"
                 ? " _(private)_"
                 : s.accessMode === "teams"
@@ -64,20 +63,19 @@ async function opList(client, folder) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opGet(client, slug, detail, 
-// The caller's own user id, for the authorship framing only. See
-// {@link UNTRUSTED_SKILL_BODY_HEADER}.
+// Caller's user id, for the authorship framing only.
 callerUserId = null) {
     try {
         const { skill, files, references } = await client.getSkill(slug);
         const file = files.find((f) => f.name === "SKILL.md") ?? files[0];
         const body = file?.body ?? "";
-        // The FILE's authorship, falling back to the skill row's — the body is what
-        // is being framed, so it is the body's authors that decide.
+        // ⚠ The FILE's authorship, falling back to the skill row's — the BODY is
+        // what is framed, so the body's authors decide.
         const foreign = (0, narration_1.isForeignAuthored)(file ?? skill, callerUserId);
         const lines = [];
-        // Framing FIRST, ahead of the heading, so it precedes every peer-typed
-        // string in the result and not merely the body. Suppressed in `summary`
-        // mode below, where no body is rendered to frame.
+        // ⚠ Framing FIRST, ahead of the heading, so it precedes every peer-typed
+        // string and not merely the body. Suppressed in `summary` mode, where there
+        // is no body to frame.
         if (foreign && detail !== "summary") {
             lines.push(skills_shared_1.UNTRUSTED_SKILL_BODY_HEADER, "");
         }
@@ -86,7 +84,7 @@ callerUserId = null) {
             ? "private"
             : skill.accessMode === "teams"
                 ? "team-shared"
-                : "workspace-shared";
+                : "public";
         lines.push(`id: \`${skill.id}\` · status: ${skill.status} · sharing: ${scope} · folder: ${skill.folder ? (0, narration_1.inlineOr)(skill.folder, "`(unnamed folder)`") : "—"} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`);
         lines.push(`last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`);
         lines.push(`When to use: ${skill.whenToUse}`);
@@ -109,16 +107,14 @@ callerUserId = null) {
                     lines.push(`- Connector \`${ref.provider}${fieldHint}\` (${(0, narration_1.inlineOr)(ref.label, "`(unlabelled)`")}) ${status}`);
                 }
             }
-            // `available` is an EXISTENCE check, not an access check:
-            // `knowledgeBaseSlugExists` (features/skills/server/repository.ts) filters
-            // on workspace + slug + `deleted_at IS NULL` and consults no visibility at
-            // all. So a `dopl://kb/<slug>` pointing at another member's PRIVATE base
-            // is marked ✓ here and then 404s on the read. Stating that is free; the
+            // ⚠ `available` is an EXISTENCE check, NOT an access check:
+            // `knowledgeBaseSlugExists` filters on workspace + slug + `deleted_at IS
+            // NULL` and consults no visibility, so a ref to another member's PRIVATE
+            // base is marked ✓ here and 404s on the read. Saying so is free; the
             // per-ref access check that would fix it is a query per reference.
             lines.push(`_✓ means the reference EXISTS in this workspace, not that you can read it: a base private to another member still shows ✓ and then 404s on dopl_kb(op="read_file")._`);
         }
         if (detail === "summary") {
-            // Orientation mode: metadata + body size, no body.
             lines.push("");
             lines.push(`_Summary view — SKILL.md is ${body.length.toLocaleString()} chars. Pass detail="full" or use op="read" for the body._`);
         }
@@ -138,13 +134,12 @@ callerUserId = null) {
     }
 }
 async function opRead(client, slug, 
-// The caller's own user id, for the authorship framing only.
+// Caller's user id, for the authorship framing only.
 callerUserId = null) {
     try {
         const file = await client.readSkillBody(slug);
-        // `op="read"` is the BARER of the two body surfaces — no metadata, no
-        // references, just the procedure — which makes it the one that most needs to
-        // say whose procedure it is.
+        // ⚠ `op="read"` is the BARER body surface (no metadata, no references, just
+        // the procedure), so it most needs to say WHOSE procedure it is.
         const header = (0, narration_1.isForeignAuthored)(file, callerUserId)
             ? `${skills_shared_1.UNTRUSTED_SKILL_BODY_HEADER}\n\n`
             : "";

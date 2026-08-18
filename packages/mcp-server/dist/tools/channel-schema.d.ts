@@ -3,41 +3,22 @@
  * params, plus the `op` discriminator, with the per-op requirements enforced at
  * runtime by `missingParams` in the registrar.
  *
- * Split out of `channel.ts` at the §2 500-line cap alongside
- * `channel-description.ts`. The seam is the same one: this is the DECLARED
- * SURFACE an MCP client introspects (names, types, caps, and the prose that
- * teaches each param), while the registrar is routing. The parity suite reads
- * both — every declared param must be referenced by some handler in the
- * `channel-*` group, and no handler may read an arg that is not declared here.
+ * This is the DECLARED SURFACE an MCP client introspects (names, types, caps,
+ * per-param teaching); the registrar is routing. ⚠ The parity suite reads both:
+ * every declared param must be referenced by some handler in the `channel-*`
+ * group, and no handler may read an arg not declared here.
  *
- * The caps below MIRROR the routes' own zod schemas
- * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (the
- * tighter 200 applies to a post's summary), client_msg_id 200. Declared here
- * they are published in the tool's inputSchema (the model sees a maxLength) and
- * enforced before the call is made at all. `.trim()` where — and only where —
- * the route trims before measuring, so the two agree on what "200 characters"
- * counts.
+ * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
+ * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (a
+ * post's summary is 200), client_msg_id 200, `.min(1)` on body /
+ * client_msg_id / title. Declared here they publish as maxLength and are
+ * enforced before the call; omit one and the route rejects it as an opaque 400
+ * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
+ * before measuring, so the two agree on what "200 characters" counts.
  *
- * F5 (2026-08-01) — THE MINIMUMS MIRROR TOO. `body` / `client_msg_id` / `title`
- * carried a maximum and no minimum while the route required `.min(1)` on all
- * three, so an empty body, a blank idempotency key and a whitespace-only title
- * each passed the tool and died at the route as an opaque 400 that the write ops
- * then mis-narrated (see `channel-errors.ts`). A client-side refusal is a -32602
- * that names the field.
- *
- * THE NAMED-AGENT PARAMS ARE GONE (channels rollback §1, 2026-08-05):
- * `to_agent` / `to_agents` / `as_agent` / `participants` / `status`, and the
- * seven ops that read them. They are DROPPED FROM THE ENUM rather than kept for
- * a teaching refusal, unlike `close_thread` below — a removed op whose
- * capability is genuinely gone gets a plain "invalid enum value", which is the
- * honest answer, where `close_thread`'s capability moved and its refusal names
- * where it moved to.
- *
- * `summary` IS DELIBERATELY NOT SPLIT and its declared 2000 stays. One param
- * serves two routes with two caps (post 200, close_thread 2000) and this schema
- * declares the LOOSER one so a legitimate close summary is never refused
- * client-side; the tighter number is stated in its `.describe()`. See the note
- * above the field.
+ * ⚠ `summary` is deliberately NOT split: one param serves two routes with two
+ * caps, and this declares the LOOSER so a legitimate close summary is never
+ * refused client-side. The tighter number is stated in its `.describe()`.
  */
 import { z } from "zod";
 export declare const CHANNEL_INPUT_SHAPE: {

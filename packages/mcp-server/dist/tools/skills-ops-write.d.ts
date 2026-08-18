@@ -1,9 +1,7 @@
 /**
- * `dopl_skill` WRITE op handlers (write / create / update / set_visibility) plus
- * `dopl_skill_admin`'s delete. Every one of them can come back 403
- * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
- * `failureDetail` in `skills-shared.ts` rather than in either half. Routed from
- * the registrar in `skills.ts`.
+ * `dopl_skill` WRITE op handlers plus `dopl_skill_admin`'s delete. ⚠ Every one
+ * can come back 403 `SKILL_AGENT_WRITE_DISABLED`, which is why
+ * `agentWriteDenied` lives beside `failureDetail` in `skills-shared.ts`.
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";

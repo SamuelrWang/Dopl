@@ -11,25 +11,17 @@ export type Resolved<T> = {
     fail: ToolResponse;
 };
 /**
- * THE TWO RESOLVERS TAKE THE SUMMARY SHAPE AND HAND BACK WHAT THEY WERE GIVEN.
+ * ⚠ THE TWO RESOLVERS TAKE THE SUMMARY SHAPE AND HAND BACK WHAT THEY WERE
+ * GIVEN. They match on ids, slugs and names and walk `childIds` for a container
+ * name — all carried by the cheap `view: "summary"` projection, so requiring
+ * `OntologySnapshot` would force a names-only caller to fetch every JSONB
+ * column just to typecheck.
  *
- * Both match on ids, slugs and names, and the ambiguity message walks
- * `childIds` for a container name — every field of which the cheap
- * `view: "summary"` projection carries. Typing the parameter as
- * `OntologySnapshot` was therefore stricter than the code: it forced a caller
- * that only needs names to fetch every JSONB column so the ARGUMENT would
- * typecheck.
- *
- * They are GENERIC rather than simply widened to the summary types, and that is
- * the load-bearing half. `resolveObjectRef` feeds the DETAIL path —
- * `op="get"` renders `attributes` / `relationships` / `template` / `methods` off
- * the hit, and every write op passes it to `renderObject` — so a non-generic
- * widening would have handed those callers an object with the fields stripped
- * off its TYPE. Preserving `T` means a full snapshot in still yields a full
- * `OntologyObject` out, unchanged, and a summary in yields exactly what a
- * summary can back. {@link renderObject} keeps its `OntologySnapshot` parameter
- * for the same reason: it reads the heavy fields, so it must not accept a view
- * that does not have them.
+ * ⚠ GENERIC, not merely widened: `resolveObjectRef` feeds the DETAIL path
+ * (`op="get"` reads `attributes`/`relationships`/`template`/`methods` off the
+ * hit, and every write op passes it to `renderObject`), so a non-generic
+ * widening strips those fields off the TYPE. {@link renderObject} keeps its
+ * `OntologySnapshot` parameter for the same reason — it reads the heavy fields.
  */
 export interface ObjectRefFields {
     id: string;

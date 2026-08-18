@@ -1,8 +1,7 @@
 "use strict";
 /**
- * Billing method group — link 9 and LAST of the chain documented in
- * `client-base.ts`; `DoplClient` in `client.ts` extends this one. Pure
- * delegation to `billing.ts`; no HTTP here.
+ * Billing method group — link 9, LAST of the chain in `client-base.ts`;
+ * `DoplClient` extends this one. Pure delegation to `billing.ts`; no HTTP here.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -43,9 +42,8 @@ const client_skills_js_1 = require("./client-skills.js");
 const billing = __importStar(require("./billing.js"));
 class BillingMethods extends client_skills_js_1.SkillMethods {
     /**
-     * Spend one MCP credit for `workspaceId`. `allowed: false` means the
-     * workspace is out of credits for the current period — the caller renders
-     * the refusal; this method does not throw for it.
+     * Spend one MCP credit for `workspaceId`. `allowed: false` = out of credits
+     * this period; the caller renders the refusal, this does NOT throw.
      */
     async consumeCredits(workspaceId) {
         return billing.consumeCredits(this.transport, workspaceId);

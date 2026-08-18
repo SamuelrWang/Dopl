@@ -1,13 +1,12 @@
 /**
  * Skills methods for `DoplClient`.
  *
- * Read paths (`listSkills`, `getSkill`) are surfaced to all callers.
- * Write paths (`createSkill`, `updateSkill`, `deleteSkill`, body write)
- * are gated server-side by the per-skill `agent_write_enabled` toggle
- * for API-key (agent) callers; session callers bypass that check.
+ * Reads are open to all callers. Writes are gated server-side by the per-skill
+ * `agent_write_enabled` toggle for API-key (agent) callers; session callers
+ * bypass that check.
  *
- * Skills are single-file: the one SKILL.md body is read/written via
- * `readSkillBody` / `writeSkillBody`.
+ * Skills are single-file: one SKILL.md body via `readSkillBody` /
+ * `writeSkillBody`.
  */
 import type { DoplTransport } from "./transport.js";
 import type { ResolvedSkill, Skill, SkillFile, SkillStatus, SkillWriteFileResult } from "./skill-types.js";
@@ -21,7 +20,7 @@ export interface CreateSkillInput {
     slug?: string;
     status?: SkillStatus;
     agentWriteEnabled?: boolean;
-    /** Optional organizing folder label. Empty/omitted = unfiled. */
+    /** Organizing folder label. Empty/omitted = unfiled. */
     folder?: string | null;
     body?: string;
 }
@@ -39,8 +38,8 @@ export interface UpdateSkillPatch {
     agentWriteEnabled?: boolean;
     /** Organizing folder label. Empty → unfiled. */
     folder?: string | null;
-    /** Two-way sharing (owner or workspace admin only). Team-mode
-     *  scoping (accessMode 'teams' + teamIds) is web-UI-managed. */
+    /** Owner or workspace admin only. Team-mode scoping (accessMode 'teams' +
+     *  teamIds) is web-UI-managed. */
     visibility?: "public" | "private";
 }
 export declare function updateSkill(t: DoplTransport, slug: string, patch: UpdateSkillPatch): Promise<Skill>;
