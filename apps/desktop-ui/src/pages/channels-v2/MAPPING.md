@@ -14,7 +14,7 @@ sections below as the DESIGN, and the table immediately following as what is
 actually wired. **Current behaviour lives in docs/INVARIANTS.md §5 §7 §9, never
 here** (repo CLAUDE.md precedence).
 
-## Wired vs hardcoded after Phase 3 (2026-08-18)
+## Wired vs hardcoded after Phase 8 (2026-08-18)
 
 | Surface | State |
 | --- | --- |
@@ -23,6 +23,10 @@ here** (repo CLAUDE.md precedence).
 | Sidebar thread glyph: `Clock` vs `Bot` | **WIRED** — `› requestedThreadIds`, off the viewer's own consent inbox |
 | Sidebar section collapse, header search filter | **WIRED** (interaction-completeness ruling) |
 | Sidebar Inbox badge | **WIRED** — pending count off `use-consent-inbox` |
+| Sidebar Inbox row OPENS the inbox | **WIRED (Phase 8)** — `channels-v2/inbox-pane.tsx › ChannelsV2InboxPane` takes over the center column; the row wears `.raised-tab` like every other selected row |
+| **Launch panel** (replaces the consent card) | **WIRED (Phase 8)** — `components/launch-panel.tsx › LaunchPanel`. **Launch agent** expands into the launch settings, then decides; the write is the unchanged `PATCH /consent/[id]` |
+| Launch settings: tool use · message permissions · working folder | **WIRED (Phase 8)** — the REUSED `permission-preset-row.tsx › RequestPermissionRow` (two axes) + `request-folder-row.tsx › RequestFolderRow`. Desktop-only; a plain browser shows no disclosure at all |
+| Auto-launch / trust ("saved settings for this person") | **NOT BUILT — ON HOLD** by Samuel's ruling. The seam (`POST /trust`) is left empty on purpose |
 | Center transcript (channel + thread views), breadcrumb, sides, agent chip | **WIRED** — `use-channel-messages` |
 | Posted request card: title, preview, **one pill per real addressee**, Open thread | **WIRED** — N fan-out threads grouped by the server-stamped `metadata.fanoutGroup` |
 | Card `Requested` chip | **WIRED, ONE-DIRECTIONAL** — true for a thread the VIEWER owes an answer on; a request you SENT shows none (F-206) |
@@ -261,12 +265,16 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   relevance-gated (likely system-prompt guidance to the agent), never
   thread-scoped chatter spilling into the channel. Thread agents talk in their
   thread; the channel post is the exception.
-- **Launch flow replaces bare approval.** When an agent-thread request arrives,
-  the addressee's card/panel carries a **Launch agent** action (not "approve").
-  Clicking it EXPANDS the panel into launch settings — pills/dropdowns for
-  permission bypass, tool use, message-sending permissions — then a launch.
-  On launch the agent is ACTIVE: it appears in the Agents tab and in the
-  thread.
+- **Launch flow replaces bare approval.** ✅ **SHIPPED in Phase 8 (2026-08-18).**
+  When an agent-thread request arrives, the addressee's panel carries a **Launch
+  agent** action (not "approve"). Clicking it EXPANDS the panel into launch
+  settings, then a launch. ⚠ **The settings are the two EXISTING permission axes
+  plus the working folder, and nothing more** — "permission bypass" is not its
+  own control, it is the `bypass` VALUE on the tools axis. A third axis would be
+  a claim about containment that the desktop cannot consume; if the design wants
+  one, it is a desktop change first (`main/session-profiles.js`), a UI change
+  second. On launch the agent is ACTIVE: it appears in the Agents tab and in the
+  thread (the Agents tab is still Phase 5 fixtures).
 - **Agent view grows controls**: pause the agent, change its settings, plus the
   existing direct 1:1 lane.
 - **Windowing inverts.** Today: request → desktop notification → click → a NEW
@@ -289,12 +297,20 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
 
 - **The launch-settings panel fully replaces the consent card**, including its
   desktop-only rows (working folder, permission preset) — same decision point,
-  new surface.
+  new surface. ✅ **SHIPPED in Phase 8 (2026-08-18):** `consent-card.tsx` and its
+  test are deleted, `launch-panel.tsx` renders in BOTH surfaces (the shipping
+  channels page and the v2 Inbox). ⚠ **It was a UI statement, not an
+  authorization one** — INVARIANTS §6 now says so in as many words, because
+  "replaces the consent card" is one careless read away from "replaces consent".
 - **Trust / auto-allow → "auto-launch with saved settings for this person"** in
   principle, but **ON HOLD** — Samuel has not folded auto-allow into the
   product mentally and wants to revisit before wiring it. Do not build it into
   the launch flow yet; leave the seam.
-- **Consent inbox lives in the sidebar "Inbox" nav row.**
+- **Consent inbox lives in the sidebar "Inbox" nav row.** ✅ **SHIPPED in Phase 8
+  (2026-08-18)** — the row opens `inbox-pane.tsx` in the center column, listing
+  every request waiting on this viewer as a launch panel. ⚠ **Addressee side
+  only**, and that is the only side that can exist: a consent read is scoped to
+  `(operator, workspace)`, so a request you SENT never appears here (F-206).
 - **The "New agent thread" panel is the ONLY way to raise an agent request.**
   ✅ **SHIPPED in Phase 3.** The plain composer is human chat, full stop — the
   intent pill (chat/request) and `lib/composer-mode.ts` are deleted, on the old
@@ -365,13 +381,18 @@ TaskFanOutSchema`), the request fan-out into one thread per addressee, and
 optimistic writes / `client_msg_id` idempotency (a base key minted at submit,
 per-addressee keys derived server-side).
 
-Still port-time work, not design questions: the consent DECISION surfaces
-themselves (the mock renders each decision's outcome on the card, never the
-Allow/Deny control or the trust settings behind it — and see F-206 for why the
-requester cannot render the outcome at all). ⚠ **The close = propose-then-confirm
-flow was on this list and is OFF it: Phase 4 deleted it rather than porting it
-(2026-08-18).** Nothing in the mock renders a thread's settled state, which is
-why its absence cost this list a line rather than a redesign.
+⚠ **STRUCK 2026-08-18 (Phase 8), for the half that is now BUILT:** the consent
+DECISION surface. The mock rendered each decision's OUTCOME on the card and never
+the control behind it; the control now exists as `launch-panel.tsx`, in the
+channel scroller and in the new Inbox. **The outcome half is NOT built and cannot
+be** — see F-206: a requester cannot read their addressee's consent row in any
+state, so a green check on a posted card would be a claim about a real person's
+decision that no read supports.
+
+⚠ **The close = propose-then-confirm flow was also on this list and is OFF it:
+Phase 4 DELETED it rather than porting it (2026-08-18).** Nothing in the mock
+renders a thread's settled state, which is why its absence cost this list a line
+rather than a redesign.
 
 ⚠ **STRUCK 2026-08-18: "realtime (OFF in the SPA — polling/refetch only)" used to sit in
 that list and it was false.** The SPA rides the ui-sync doorbell and every channels table

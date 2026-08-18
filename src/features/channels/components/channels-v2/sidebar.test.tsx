@@ -49,6 +49,8 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsV2Sideb
     onOpenThread: vi.fn(),
     requestedThreads: new Set<string>(),
     consentCount: 0,
+    inboxOpen: false,
+    onOpenInbox: vi.fn(),
     ...over,
   };
   render(<ChannelsV2Sidebar {...props} />);
@@ -93,6 +95,20 @@ describe("channels-v2 sidebar", () => {
     cleanup();
     renderSidebar({ consentCount: 3 });
     expect(within(row("Inbox")).getByText("3")).not.toBeNull();
+  });
+
+  it("opens the inbox from the Inbox row, and the row wears the selection", () => {
+    // Phase 8: the badge finally has somewhere to go — the row is a nav
+    // destination for the center column, so it follows the selection rule.
+    const props = renderSidebar({ consentCount: 2 });
+    fireEvent.click(row("Inbox"));
+    expect(props.onOpenInbox).toHaveBeenCalledTimes(1);
+    expect(row("Inbox").hasAttribute("aria-current")).toBe(false);
+    cleanup();
+    renderSidebar({ inboxOpen: true });
+    expect(row("Inbox").getAttribute("aria-current")).toBe("true");
+    // …and nothing else is selected, because the pane is showing neither.
+    expect(row("Website").hasAttribute("aria-current")).toBe(false);
   });
 
   it("selection mirrors the center pane: an open thread outranks its channel", () => {

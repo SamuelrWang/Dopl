@@ -59,6 +59,9 @@ export interface ChannelsV2SidebarProps {
   onOpenThread: (id: string) => void;
   /** Pending consent requests — a REAL count, so the Inbox row gets a badge. */
   consentCount: number;
+  /** The center pane is showing the inbox, so the Inbox row is the selected one. */
+  inboxOpen: boolean;
+  onOpenInbox: () => void;
 }
 
 type SectionKey = "favorites" | "direct" | "rooms";
@@ -75,6 +78,8 @@ export function ChannelsV2Sidebar({
   onSelectChannel,
   onOpenThread,
   consentCount,
+  inboxOpen,
+  onOpenInbox,
 }: ChannelsV2SidebarProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<SectionKey>>(
     () => new Set()
@@ -100,7 +105,8 @@ export function ChannelsV2Sidebar({
   }, [query, members, currentUserId]);
 
   // A thread the tree cannot show leaves the channel row selected rather than
-  // selecting nothing at all.
+  // selecting nothing at all. ⚠ The INBOX outranks both: selection mirrors the
+  // center pane, and with the inbox open the pane is showing neither.
   const threadSelected =
     openThreadId !== null && threads.some((t) => t.id === openThreadId);
 
@@ -110,10 +116,10 @@ export function ChannelsV2Sidebar({
       channel={channel}
       label={name(channel)}
       person={channelDisplayPeerPerson(channel, members, currentUserId)}
-      selected={channel.id === selectedChannelId && !threadSelected}
+      selected={channel.id === selectedChannelId && !threadSelected && !inboxOpen}
       threads={channel.id === selectedChannelId ? threads : []}
       requestedThreads={requestedThreads}
-      openThreadId={openThreadId}
+      openThreadId={inboxOpen ? null : openThreadId}
       onSelectChannel={onSelectChannel}
       onOpenThread={onOpenThread}
     />
@@ -161,12 +167,15 @@ export function ChannelsV2Sidebar({
             />
           ))}
           {/* WIRED: the consent inbox lives in this row (MAPPING.md § Q&A,
-              second round) and its badge is the real pending count. The row
-              itself opens in Phase 8, with the launch-settings surface. */}
+              second round), its badge is the real pending count, and since
+              Phase 8 the row OPENS the inbox — the center column lists every
+              request waiting on this viewer as a launch panel. */}
           <NavRow
             label={INBOX_NAV_ROW.label}
             icon={INBOX_NAV_ROW.icon}
             badge={consentCount > 0 ? consentCount : undefined}
+            active={inboxOpen}
+            onClick={onOpenInbox}
           />
         </nav>
 

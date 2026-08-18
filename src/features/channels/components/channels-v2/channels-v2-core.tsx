@@ -17,6 +17,7 @@ import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsV2Sidebar } from "./sidebar";
 import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
+import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
 import type { ChannelMention } from "../../types";
 import {
@@ -34,13 +35,16 @@ export interface ChannelsV2CoreProps {
 
 /**
  * Channels v2 root — the three-column shell (channel tree · transcript ·
- * channel info) over the REAL channels reads. The shipping
- * `channels-view-core.tsx` page is untouched and still live.
+ * channel info) over the REAL channels reads, plus a FOURTH center-column
+ * destination — the Inbox (`inbox-pane.tsx`), behind the sidebar's Inbox nav
+ * row. The shipping `channels-view-core.tsx` page stays untouched and live
+ * until the cutover (wiring plan Phase 12).
  *
- * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). Two writes land from this
- * tree: the composer's send / request fan-out (Phase 3) and the Tags inbox's
- * mark-read (Phase 6). Both hold the same `useRefetchGate` gate the reads
- * register.
+ * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). THREE writers land from
+ * this tree, all through the existing write layer, none a new endpoint: the
+ * composer's send / request fan-out (Phase 3), the Tags inbox's mark-read
+ * (Phase 6), and the Inbox pane's consent decision (Phase 8). All hold the
+ * same `useRefetchGate` gate the reads register.
  *
  * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
  * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
@@ -66,9 +70,12 @@ export interface ChannelsV2CoreProps {
  *
  * ⚠ The refetch rides `shared/realtime/refetch-coordinator.ts` through
  * `useRefetchGate`, which INVARIANTS §7 requires of every live surface — a
- * remote event mid-edit must not clobber an unsent local change. Both write
- * paths — the composer's send/fan-out and the Tags inbox's mark-read — hand
- * their `settleWith` to that very gate.
+ * remote event mid-edit must not clobber an unsent local change. All three
+ * writers hand their `settleWith` to this ONE gate — the composer (Phase 3),
+ * the Tags inbox's mark-read (Phase 6) and the Inbox pane's consent decision
+ * (Phase 8) — which is the whole point: a coordinator retrofitted after the
+ * first write is a coordinator that was missing for exactly the window it was
+ * needed.
  *
  * ⚠ AN EVENT IS A DOORBELL, NEVER CONTENT — the signal triggers a filtered
  * refetch and no payload is ever merged, so RLS and the service filters stay
@@ -78,6 +85,9 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [requestedThreadId, setRequestedThreadId] = useState<string | null>(null);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
+  // The Inbox nav row takes over the CENTER column — it is a nav destination,
+  // not an overlay, and Phase 9's notification click needs somewhere to land.
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
 
@@ -264,13 +274,26 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
         onSelectChannel={(id) => {
           setSelectedId(id);
           setRequestedThreadId(null);
+          setInboxOpen(false);
         }}
-        onOpenThread={setRequestedThreadId}
+        onOpenThread={(id) => {
+          setRequestedThreadId(id);
+          setInboxOpen(false);
+        }}
         requestedThreads={requested}
         consentCount={requests.length}
+        inboxOpen={inboxOpen}
+        onOpenInbox={() => setInboxOpen(true)}
       />
 
-      {channel ? (
+      {inboxOpen ? (
+        <ChannelsV2InboxPane
+          workspaceId={workspaceId}
+          currentUserId={currentUserId}
+          requests={requests}
+          gate={gate}
+        />
+      ) : channel ? (
         <>
           <ChannelsV2MessagePane
             channelId={channel.id}

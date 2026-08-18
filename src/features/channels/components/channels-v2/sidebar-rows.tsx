@@ -161,6 +161,7 @@ export function NavRow({
   icon: Icon,
   badge,
   trailing,
+  active,
   onClick,
 }: {
   label: string;
@@ -168,10 +169,13 @@ export function NavRow({
   /** Rendered ONLY when a real count exists. */
   badge?: number;
   trailing?: React.ReactNode;
+  /** Whatever the center pane is showing wears `.raised-tab` — the same
+   *  selection rule the channel and thread rows follow (MAPPING, 2026-08-17). */
+  active?: boolean;
   onClick?: () => void;
 }) {
   return (
-    <SidebarRow label={label} onClick={onClick}>
+    <SidebarRow label={label} active={active} onClick={onClick}>
       <IconTile>
         <Icon size={14} />
       </IconTile>
