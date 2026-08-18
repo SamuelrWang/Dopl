@@ -232,8 +232,14 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     ),
   ];
 
-  it("finds all six child FKs", () => {
-    expect(refs.length).toBe(6);
+  // SEVEN since 2026-08-18: `channel_mention_reads` (migration
+  // `20260818140000`, the Tags inbox's read-state) is the newest child. ⚠ The
+  // NUMBER is not the point and re-blessing it is not the fix — the point is
+  // the assertion below, that every one of them CASCADES, which is what makes
+  // a non-DM channel delete atomic in one statement (INVARIANTS §5). A new
+  // child that does not cascade fails the next case, not this one.
+  it("finds all seven child FKs", () => {
+    expect(refs.length).toBe(7);
   });
 
   it("each one cascades — none is SET NULL or RESTRICT", () => {

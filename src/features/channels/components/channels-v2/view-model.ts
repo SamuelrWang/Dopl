@@ -16,6 +16,7 @@
  */
 
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
+import { mentionedUserIdsOf } from "../../lib/mentions";
 import type {
   Channel,
   ChannelMember,
@@ -92,6 +93,16 @@ export interface MessageRow {
   body: string;
   /** A run under the same author: no avatar gutter, no name line. */
   continuation: boolean;
+  /**
+   * This message's SERVER-STAMPED mention set names the viewer.
+   *
+   * ⚠ THE ONE SOURCE for "am I tagged here", shared with the Tags inbox — the
+   * transcript's self-tint reads THIS, never a fresh parse of the body against
+   * the current roster. A re-derivation would drift from the stamp the moment
+   * a display name changed, and the row would then be tinted in the transcript
+   * and absent from the inbox (or the reverse).
+   */
+  mentionsMe: boolean;
 }
 
 /** A `system` row (joins, topic changes) — no side, no avatar, no author. */
@@ -227,6 +238,14 @@ function toMessageRow(
     time: formatTime(message.createdAt),
     body: message.body,
     continuation: isContinuation(message, previous),
+    // RESERVED, SERVER-STAMPED metadata (`server/service-writes-metadata.ts ›
+    // resolvePostMetadata`, fold 9), stripped from caller input like every
+    // other reserved key — which is what makes it safe to render as "you were
+    // tagged". Absent on every row written before Phase 6, and absent means
+    // TAGS NOBODY, never unknown.
+    mentionsMe: mentionedUserIdsOf(message.metadata).includes(
+      index.currentUserId
+    ),
   };
 }
 

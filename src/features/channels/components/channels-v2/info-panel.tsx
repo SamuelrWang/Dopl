@@ -20,9 +20,13 @@ import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { InfoTab } from "./info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
-import type { FixtureMention } from "./fixtures-mentions";
 import type { AuthorIndex } from "./view-model";
-import type { Channel, ChannelMember, ChannelThread } from "../../types";
+import type {
+  Channel,
+  ChannelMember,
+  ChannelMention,
+  ChannelThread,
+} from "../../types";
 
 const TABS = [
   { key: "info", label: "Info" },
@@ -45,7 +49,9 @@ export function ChannelsV2InfoPanel({
   onOpenThread,
   openAgent,
   onOpenAgent,
-  readMentions,
+  mentions,
+  mentionsTruncated,
+  mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
 }: {
@@ -64,9 +70,13 @@ export function ChannelsV2InfoPanel({
    *  panel itself renders at page level, over this column. */
   openAgent: string | null;
   onOpenAgent: (id: string) => void;
-  /** The Tags inbox's read-state — lifted, the badge derives from it. */
-  readMentions: ReadonlySet<string>;
-  onOpenMention: (mention: FixtureMention) => void;
+  /** MY mentions in this channel — the Tags inbox's rows, each carrying its own
+   *  `read` flag. ⚠ The unread BADGE is arithmetic over this list inside
+   *  `InfoTab`, never a second count from anywhere. */
+  mentions: ChannelMention[];
+  mentionsTruncated: boolean;
+  mentionsLoading: boolean;
+  onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
@@ -86,7 +96,10 @@ export function ChannelsV2InfoPanel({
           channelName={channelName}
           members={members}
           threadCount={threads.length}
-          readMentions={readMentions}
+          mentions={mentions}
+          mentionsTruncated={mentionsTruncated}
+          mentionsLoading={mentionsLoading}
+          index={index}
           onOpenMention={onOpenMention}
           onMarkAllMentionsRead={onMarkAllMentionsRead}
         />

@@ -33,13 +33,16 @@ const INDEX = indexMembers(MEMBERS, ME);
 
 function renderRows(
   rows: ReturnType<typeof channelRows>,
-  requested: ReadonlySet<string> = new Set()
+  requested: ReadonlySet<string> = new Set(),
+  // ⚠ The SAME index the rows were derived from, or the body's mention lookup
+  // runs against a different roster than `channelRows` did.
+  index: typeof INDEX = INDEX
 ) {
   const onOpenThread = vi.fn();
   render(
     <Transcript
       rows={rows}
-      index={INDEX}
+      index={index}
       flashId={null}
       requested={requested}
       onOpenThread={onOpenThread}
@@ -225,6 +228,62 @@ describe("channels-v2 transcript — what it refuses to render", () => {
     );
     expect(screen.getByText("@Diana").className).toContain("text-link");
     expect(screen.getByText("@nobody").className).not.toContain("text-link");
+  });
+
+  /**
+   * THE SELF-TINT IS DRIVEN BY THE SERVER STAMP, NOT BY A RE-PARSE (Phase 6).
+   * `metadata.mentionedUserIds` is the same fact the Tags inbox lists, so the
+   * two surfaces cannot disagree about whether a message tagged you. A body
+   * that names you WITHOUT the stamp — a row written before the stamp existed,
+   * or a name that resolved to somebody else on the day it was posted — tints
+   * as an ordinary mention and stays out of the inbox, consistently.
+   */
+  it("tints a mention OF ME only when the server stamp names me", () => {
+    // A roster where "@Sam" is unambiguous, so the TOKEN resolves in both rows
+    // and the only difference left is the stamp. (The shared `MEMBERS` above
+    // give both people the fixture's default email, whose local part `sam`
+    // collides — and an ambiguous handle resolves to nobody, by design.)
+    const index = indexMembers(
+      [
+        member({ userId: ME, displayName: "Sam Wang", email: "sam@example.com" }),
+        member({
+          userId: PEER,
+          displayName: "Diana Taylor",
+          email: "diana@example.com",
+        }),
+      ],
+      ME
+    );
+    renderRows(
+      channelRows(
+        [
+          message({
+            id: "stamped",
+            body: "@Sam STAMPED",
+            authorUserId: PEER,
+            metadata: { mentionedUserIds: [ME] },
+          }),
+          message({
+            id: "bare",
+            seq: 2,
+            body: "@Sam BARE",
+            authorUserId: PEER,
+            metadata: {},
+          }),
+        ],
+        [],
+        index,
+        formatChannelTimestamp
+      ),
+      new Set(),
+      index
+    );
+    const [stamped, bare] = screen.getAllByText("@Sam");
+    expect(stamped.className).toContain("text-link");
+    expect(stamped.className).toContain("bg-link/10");
+    // Resolved, so tinted as a mention — but NOT as a mention of me.
+    expect(bare.className).toContain("text-link");
+    expect(bare.className).not.toContain("bg-link/10");
   });
 });
 

@@ -8,6 +8,8 @@ import { useChannels } from "../../hooks/use-channels";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
+import { useChannelMentions } from "../../hooks/use-channel-mentions";
+import { useMentionWrites } from "../../hooks/use-mention-writes";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelsRealtime, usePresenceRealtime } from "../../client/realtime";
 import { channelDisplayName } from "../../lib/channel-display";
@@ -16,7 +18,7 @@ import { ChannelsV2Sidebar } from "./sidebar";
 import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2AgentPanel } from "./agent-panel";
-import { INITIALLY_READ_MENTIONS, FIXTURE_MENTIONS, type FixtureMention } from "./fixtures-mentions";
+import type { ChannelMention } from "../../types";
 import {
   channelRows,
   indexMembers,
@@ -32,16 +34,21 @@ export interface ChannelsV2CoreProps {
 
 /**
  * Channels v2 root — the three-column shell (channel tree · transcript ·
- * channel info) over the REAL channels reads. READ-ONLY: no writes land from
- * this tree in Phase 2, and the shipping `channels-view-core.tsx` page is
- * untouched and still live.
+ * channel info) over the REAL channels reads. The shipping
+ * `channels-view-core.tsx` page is untouched and still live.
  *
- * ⚠ NO NEW HOOK LAYER AND NO NEW FETCH PATHS. Every read below is the same hook
- * the shipping page composes — `use-channels`, `use-channel-messages`,
- * `use-channel-members`, `use-channel-threads`, `use-consent-inbox`. Where a
- * hook's shape did not fit (the sidebar's 24h window, the transcript's sides,
- * the thread parties) the adaptation is `view-model.ts`, at the COMPONENT
- * boundary, never a fork of the hook.
+ * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). Two writes land from this
+ * tree: the composer's send / request fan-out (Phase 3) and the Tags inbox's
+ * mark-read (Phase 6). Both hold the same `useRefetchGate` gate the reads
+ * register.
+ *
+ * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
+ * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
+ * `use-channel-threads`, `use-consent-inbox`, and `use-channel-mentions`, the
+ * one Phase 6 added because the Tags inbox is a genuinely new projection with
+ * no existing read to adapt. Where a hook's shape did not fit (the sidebar's
+ * 24h window, the transcript's sides, the thread parties) the adaptation is
+ * `view-model.ts`, at the COMPONENT boundary, never a fork of the hook.
  *
  * ⚠ Next-free by construction so the desktop SPA can bundle it — the same
  * constraint `channels-view-core.tsx` documents. There is no `Link` prop
@@ -59,11 +66,9 @@ export interface ChannelsV2CoreProps {
  *
  * ⚠ The refetch rides `shared/realtime/refetch-coordinator.ts` through
  * `useRefetchGate`, which INVARIANTS §7 requires of every live surface — a
- * remote event mid-edit must not clobber an unsent local change. Nothing here
- * writes yet, so the gate is currently only ever idle; it is wired now because
- * Phase 3's composer hands its `settleWith` to the very same gate, and a
- * coordinator retrofitted after the first write is a coordinator that was
- * missing for exactly the window it was needed.
+ * remote event mid-edit must not clobber an unsent local change. Both write
+ * paths — the composer's send/fan-out and the Tags inbox's mark-read — hand
+ * their `settleWith` to that very gate.
  *
  * ⚠ AN EVENT IS A DOORBELL, NEVER CONTENT — the signal triggers a filtered
  * refetch and no payload is ever merged, so RLS and the service filters stay
@@ -74,8 +79,6 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   const [requestedThreadId, setRequestedThreadId] = useState<string | null>(null);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(true);
-  const [readMentions, setReadMentions] =
-    useState<ReadonlySet<string>>(INITIALLY_READ_MENTIONS);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
 
   const { channels, loading, refetch: refetchChannels } = useChannels(
@@ -106,6 +109,15 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
     loading: threadsLoading,
     refetch: refetchThreads,
   } = useChannelThreads(channel?.id ?? null, workspaceId);
+  // THE TAGS INBOX — my mentions in this channel, each row carrying my own
+  // read-state. ⚠ The unread BADGE is arithmetic over these rows inside
+  // `InfoTab`; nothing derives it a second time.
+  const {
+    mentions,
+    truncated: mentionsTruncated,
+    loading: mentionsLoading,
+    refetch: refetchMentions,
+  } = useChannelMentions(channel?.id ?? null, workspaceId);
   // ⚠ Poll BACKSTOP scoped to THIS page for a downed socket only — consent
   // INSERTs do arrive over realtime. Pauses while the tab is hidden.
   //
@@ -129,6 +141,11 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
       void refetchMessages();
       void refetchMembers();
       void refetchThreads();
+      // A new message can BE a new mention, and the doorbell that rings for it
+      // is `channel_messages` — `channel_mention_reads` is deliberately not in
+      // the publication (INVARIANTS §7; migration `20260818140000` states why),
+      // so this refetch is the whole delivery path for a mention arriving.
+      void refetchMentions();
     };
     membersRefetchRef.current = () => void refetchMembers();
   });
@@ -137,6 +154,10 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   // (INVARIANTS §7/§8): a remote event mid-send must not clobber the local
   // optimistic patch.
   const { signal, gate } = useRefetchGate(() => refetchRef.current());
+  // ⚠ THE SAME gate the reads register — the mark-read write holds the realtime
+  // doorbell open for its own life, or a coalesced refetch mid-flight reverts
+  // the optimistic `read` flag under the click that set it.
+  const { markRead } = useMentionWrites({ workspaceId, gate });
   useChannelsRealtime(workspaceId, signal);
   // Presence is high-churn (~30s per listener) and never clobbers a send, so it
   // bypasses the coordinator — but refetches the ROSTER only, on a trailing
@@ -194,15 +215,33 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   // The Tags inbox's click: mark read, land the center pane on the right
   // transcript, then signal the scroll. The scroll effect runs POST-render, so
   // the swapped transcript is in the DOM before it looks for the message row.
-  // ⚠ The FIXTURE's message ids resolve to nothing until Phase 6 wires real
-  // mentions; the plumbing is real and the target is not.
-  const openMention = (mention: FixtureMention) => {
-    setReadMentions((prev) => new Set(prev).add(mention.id));
+  //
+  // ⚠ The mark-read is OPTIMISTIC (`use-mention-writes.ts`), which is what makes
+  // the badge drop in the same frame as the navigation. The scroll target is
+  // NONCED, so clicking the same mention twice re-scrolls.
+  const openMention = (mention: ChannelMention) => {
+    if (!mention.read && channel) {
+      markRead.mutate({
+        channelId: channel.id,
+        messageIds: [mention.messageId],
+      });
+    }
     setRequestedThreadId(mention.threadId);
     setScrollTarget((prev) => ({
       messageId: mention.messageId,
       nonce: (prev?.nonce ?? 0) + 1,
     }));
+  };
+
+  // ⚠ MARK-ALL SENDS THE IDS IT IS DISPLAYING, never a flag. The list is
+  // bounded and says when it clipped, so "all" can only honestly mean the page
+  // — and naming the ids makes that true by construction rather than by comment
+  // (INVARIANTS §9). Already-read rows are filtered out so a no-op click sends
+  // no request at all.
+  const markAllMentionsRead = () => {
+    const unread = mentions.filter((m) => !m.read).map((m) => m.messageId);
+    if (unread.length === 0 || !channel) return;
+    markRead.mutate({ channelId: channel.id, messageIds: unread });
   };
 
   if (loading && channels.length === 0) return <ChannelsSkeleton />;
@@ -263,11 +302,11 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
               onOpenThread={setRequestedThreadId}
               openAgent={openAgent}
               onOpenAgent={setOpenAgent}
-              readMentions={readMentions}
+              mentions={mentions}
+              mentionsTruncated={mentionsTruncated}
+              mentionsLoading={mentionsLoading}
               onOpenMention={openMention}
-              onMarkAllMentionsRead={() =>
-                setReadMentions(new Set(FIXTURE_MENTIONS.map((m) => m.id)))
-              }
+              onMarkAllMentionsRead={markAllMentionsRead}
             />
           )}
         </>

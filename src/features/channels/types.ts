@@ -285,6 +285,40 @@ export type ChannelMessage = {
  */
 export type ChannelMessagePosted = ChannelMessage;
 
+/**
+ * ONE ROW OF THE TAGS (MENTIONS) INBOX — a message of this channel whose
+ * server-stamped `metadata.mentionedUserIds` names the viewer, plus whether the
+ * viewer has marked it read.
+ *
+ * ⚠ A PROJECTION, NOT A MESSAGE. It carries a clipped `snippet`, never the
+ * body: the transcript row is the record and the inbox is a pointer at it. That
+ * is also why `messageId` + `threadId` are the load-bearing fields — the whole
+ * interaction is mark-read → navigate → scroll.
+ *
+ * ⚠ `read` is per-viewer and comes from `channel_mention_reads`; the UNREAD
+ * COUNT is client-side arithmetic over this list and is never a second server
+ * derivation (wiring plan Phase 6, design decision 3).
+ */
+export type ChannelMention = {
+  /** The message row this mention lives in — the scroll target. */
+  messageId: string;
+  /** Per-channel monotonic identity; the list's order. */
+  seq: number;
+  channelId: string;
+  /** `metadata.taskId`, or null for a channel-level post — the navigate target. */
+  threadId: string | null;
+  authorUserId: string | null;
+  /** Display claim only, same rule as the transcript's chip (INVARIANTS §5). */
+  authorKind: MessageAuthorKind;
+  authorName: string | null;
+  authorAvatarUrl: string | null;
+  /** Preview text, CLIPPED server-side. The transcript row is the record. */
+  snippet: string;
+  createdAt: string;
+  /** True when this viewer has marked it read. */
+  read: boolean;
+};
+
 export type ChannelMember = {
   channelId: string;
   userId: string;

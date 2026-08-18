@@ -3,16 +3,20 @@
 /**
  * Channels v2 — the Tags row's disclosure: a MENTIONS INBOX.
  *
- * ⚠ HARDCODED — no backing data yet (Samuel 2026-08-18). Wired in Phase 6, which
- * builds the two things it needs: mention/tag addressing of the operator
- * (parsed, then stamped into server-owned reserved metadata) and a read-state
- * store, which `channel_messages` has no column for (MAPPING.md § the Tags
- * row). Content comes from `fixtures-mentions.ts`.
+ * WIRED (Phase 6). Rows are `GET /api/channels/[id]/mentions` — the messages of
+ * this channel whose SERVER-STAMPED `metadata.mentionedUserIds` names the
+ * viewer (`lib/mentions.ts` is the one parser behind that stamp and behind the
+ * transcript's tint). Read-state is `channel_mention_reads`, a row per read,
+ * because the inbox marks items read OUT OF ORDER and a cursor cannot say that.
  *
- * ⚠ THE INTERACTION IS LIVE even though the content is not: the disclosure
- * opens, the badge is the live unread count, a click marks read and mark-all
- * zeroes it. Those are the three moving parts Samuel's interaction-completeness
- * ruling names, and they are what `mentions-list.test.tsx` pins.
+ * ⚠ THE BADGE IS CLIENT-SIDE ARITHMETIC over these rows and lives in
+ * `info-tab.tsx` beside the label it decorates — never a second server
+ * derivation of the same set (wiring plan Phase 6, decision 3).
+ *
+ * ⚠ A CLICK IS THREE THINGS: mark read, land the center pane on the right
+ * transcript, scroll to the row. The scroll signal is NONCED
+ * (`message-pane.tsx › ScrollTarget`) so re-clicking the same mention
+ * re-scrolls.
  *
  * The label stays "Tags" (the reference design's word); the content is every
  * message that @-tags the viewer. An accordion inside the Info tab, not a
@@ -20,25 +24,57 @@
  * answers to.
  */
 
-import { Avatar } from "@/shared/ui/avatar";
+import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
+import { formatRelativeTime } from "@/shared/lib/format-time";
 import { AgentChip } from "./bits";
-import { FIXTURE_MENTIONS, type FixtureMention } from "./fixtures-mentions";
+import { shortName, type AuthorIndex } from "./view-model";
+import type { ChannelMention } from "../../types";
+
+/**
+ * THE mentions-inbox clip wording. FOURTH surface in the family after
+ * `ontology-clipped.ts › clippedNote`, `channel-render-threads.ts ›
+ * threadsClippedNote` and `threads-tab.tsx › THREADS_CLIPPED_NOTE`; its own
+ * because the REMEDY differs again — this pane has no page argument, and what
+ * it can honestly offer is "the most recent" plus the assurance that nothing
+ * was dismissed or removed, only pushed below the cut.
+ *
+ * ⚠ It may NOT let the clip pass as an absence: "nothing else tags you here" is
+ * an assertion this read never established.
+ */
+export const MENTIONS_CLIPPED_NOTE =
+  "Showing your most recent tags in this channel — there are more than one page. Nothing here was dismissed; older ones are simply below the cut.";
 
 export function MentionsList({
+  mentions,
+  truncated,
+  loading,
   channelName,
-  readMentions,
+  index,
   onOpenMention,
   onMarkAllRead,
 }: {
+  /** THE WHOLE bounded page, in the server's `seq DESC` order. ⚠ Never
+   *  re-sorted here — the LIMIT clipped against that order. */
+  mentions: ChannelMention[];
+  truncated: boolean;
+  loading: boolean;
   channelName: string;
-  readMentions: ReadonlySet<string>;
-  onOpenMention: (mention: FixtureMention) => void;
+  index: AuthorIndex;
+  onOpenMention: (mention: ChannelMention) => void;
   onMarkAllRead: () => void;
 }) {
-  const unread = FIXTURE_MENTIONS.filter((m) => !readMentions.has(m.id)).length;
+  const unread = mentions.filter((m) => !m.read).length;
 
-  if (FIXTURE_MENTIONS.length === 0) {
+  if (loading && mentions.length === 0) {
+    return (
+      <p role="status" aria-busy="true" className="sr-only">
+        Loading tags
+      </p>
+    );
+  }
+
+  if (mentions.length === 0) {
     return (
       <p className="px-2 pb-2 pt-1 text-caption text-text-muted">
         No messages tag you in this channel yet.
@@ -48,6 +84,11 @@ export function MentionsList({
 
   return (
     <div className="flex flex-col gap-1 pb-2 pl-7 pr-1 pt-0.5">
+      {truncated && (
+        <p className="rounded-[8px] border border-border-default bg-card-surface-subtle px-2 py-1.5 text-caption text-text-secondary">
+          {MENTIONS_CLIPPED_NOTE}
+        </p>
+      )}
       {unread > 0 && (
         <button
           type="button"
@@ -57,12 +98,12 @@ export function MentionsList({
           Mark all read
         </button>
       )}
-      {FIXTURE_MENTIONS.map((mention) => (
+      {mentions.map((mention) => (
         <MentionItem
-          key={mention.id}
+          key={mention.messageId}
           mention={mention}
           channelName={channelName}
-          unread={!readMentions.has(mention.id)}
+          index={index}
           onOpen={() => onOpenMention(mention)}
         />
       ))}
@@ -70,18 +111,34 @@ export function MentionsList({
   );
 }
 
+/** An `AvatarPerson` for a mention's author: the roster when it has them, the
+ *  projection's own hydrated fields when it does not (a departed member still
+ *  owns the message that tagged you). */
+function personFor(mention: ChannelMention, index: AuthorIndex): AvatarPerson {
+  const member = mention.authorUserId
+    ? index.byId.get(mention.authorUserId)
+    : undefined;
+  return {
+    userId: mention.authorUserId ?? `unknown-${mention.messageId}`,
+    email: member?.email ?? null,
+    displayName: member?.displayName ?? mention.authorName,
+    avatarUrl: member?.avatarUrl ?? mention.authorAvatarUrl,
+  };
+}
+
 function MentionItem({
   mention,
   channelName,
-  unread,
+  index,
   onOpen,
 }: {
-  mention: FixtureMention;
+  mention: ChannelMention;
   channelName: string;
-  unread: boolean;
+  index: AuthorIndex;
   onOpen: () => void;
 }) {
-  const { author, authorLabel, agent, time, snippet } = mention;
+  const unread = !mention.read;
+  const person = personFor(mention, index);
   return (
     <button
       type="button"
@@ -98,15 +155,22 @@ function MentionItem({
         {unread && (
           <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-link" />
         )}
-        <Avatar person={author} size="xs" className="h-[18px] w-[18px] text-micro" />
+        <Avatar person={person} size="xs" className="h-[18px] w-[18px] text-micro" />
         <span className="truncate text-small font-semibold text-text-primary">
-          {authorLabel}
+          {shortName(person, index.currentUserId)}
         </span>
-        {agent && <AgentChip />}
-        <span className="ml-auto shrink-0 text-micro text-text-muted">{time}</span>
+        {/* DISPLAY CLAIM ONLY (INVARIANTS §5) — `authorKind` is
+            caller-assertable and earns a chip, never a side and never a
+            claim about who was reached. */}
+        {mention.authorKind === "agent" && <AgentChip />}
+        <span className="ml-auto shrink-0 text-micro text-text-muted">
+          {formatRelativeTime(mention.createdAt)}
+        </span>
         <span className="sr-only">{unread ? "unread mention" : "read mention"}</span>
       </span>
-      <span className="line-clamp-2 text-caption text-text-secondary">{snippet}</span>
+      <span className="line-clamp-2 text-caption text-text-secondary">
+        {mention.snippet}
+      </span>
       <span className="text-micro text-text-muted">in # {channelName}</span>
     </button>
   );

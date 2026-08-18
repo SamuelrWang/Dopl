@@ -40,6 +40,12 @@ export function channelMembersPath(channelId: string): string {
   return channelPath(channelId, "/members");
 }
 
+/** The Tags inbox: MY mentions in this channel. Read AND the mark-read write
+ *  share this path, so the write patches the entry the read registered. */
+export function channelMentionsPath(channelId: string): string {
+  return channelPath(channelId, "/mentions");
+}
+
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
 export const CHANNEL_TRUST_PATH = "/api/channels/trust";
 
@@ -52,6 +58,8 @@ export const channelKeys = {
     apiResource(channelThreadsPath(channelId)),
   members: (channelId: string): ApiResourceKeys =>
     apiResource(channelMembersPath(channelId)),
+  mentions: (channelId: string): ApiResourceKeys =>
+    apiResource(channelMentionsPath(channelId)),
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
   trust: (): ApiResourceKeys => apiResource(CHANNEL_TRUST_PATH),
 };

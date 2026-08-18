@@ -1,7 +1,7 @@
 import "server-only";
 import { isUuid } from "@/shared/lib/id/uuid";
 import type { ChannelMessageCreateInput } from "../schema";
-import type { ChannelRow, ChannelTaskRow } from "./dto";
+import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
 import { ChannelTaskNotInChannelError, TaskForbiddenError } from "./errors";
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
@@ -10,6 +10,8 @@ import {
   isThreadParticipant,
 } from "./service-writes-metadata-thread";
 import { takeCalmFlags } from "./service-writes-metadata-markers";
+import { resolveBodyMentions } from "./service-writes-metadata-mentions";
+import { MENTIONS_METADATA_KEY } from "../lib/mentions";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -19,13 +21,14 @@ import type { ChannelContext } from "./service-shared";
  * server-validated values: `to_user_id`, `summary`, `runtime`, `appVersion`,
  * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
  * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
- * `handoff`, `fanoutGroup`, and the six calm-terminal flags. ⚠ The two
- * close-proposal keys and `threadReopened` LEFT this list with thread closing
- * (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the dead agent keys
- * below, no RENDERER either. `service-writes-metadata-markers.ts` records why.
- * `taskId` stays caller-settable, but every thread id — first-class or legacy —
- * must BELONG to the poster (see {@link resolvePostMetadata}). Marker keys live
- * in `service-writes-metadata-markers.ts`, the thread half in
+ * `handoff`, `fanoutGroup`, `mentionedUserIds`, and the six calm-terminal
+ * flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
+ * thread closing (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the
+ * dead agent keys below, no RENDERER either.
+ * `service-writes-metadata-markers.ts` records why. `taskId` stays
+ * caller-settable, but every thread id — first-class or legacy — must BELONG to
+ * the poster (see {@link resolvePostMetadata}). Marker keys live in
+ * `service-writes-metadata-markers.ts`, the thread half in
  * `service-writes-metadata-thread.ts`.
  *
  * ⚠ The three agent keys have no writer left but MUST stay in the strip list:
@@ -45,13 +48,19 @@ import type { ChannelContext } from "./service-shared";
  * addresses nobody, and nobody's agent is started by it. Do not reinstate the
  * fallback here; the "New agent thread" panel is the one surface that raises an
  * agent request, and it always names its addressees.
+ *
+ * ⚠ TAKES THE ROSTER AS A MEMOIZED LOADER rather than reading it. Mention
+ * resolution (fold 9) needs the same rows, and a post that needs both must pay
+ * for ONE `channel_members` read, not two — see the loader in
+ * {@link resolvePostMetadata}.
  */
 async function resolveDirectPeer(
   channel: ChannelRow,
-  authorUserId: string
+  authorUserId: string,
+  roster: () => Promise<ChannelMemberRow[]>
 ): Promise<string | undefined> {
   if (!channel.is_direct) return undefined;
-  const members = await repo.listMembers(channel.id);
+  const members = await roster();
   if (members.length !== 2) return undefined;
   const peers = members.filter((m) => m.user_id !== authorUserId);
   if (peers.length !== 1) return undefined;
@@ -198,6 +207,16 @@ export interface PostMetadataOptions {
  * ⚠ Folds 7b (the `threadReopened` marker) and 8 (the closed-thread notice read
  * off the resolved row's `status`) were DELETED with thread closing (wiring plan
  * Phase 4, 2026-08-18).
+ * 9. **Mentions.** `mentionedUserIds` stripped unconditionally and re-stamped
+ *    ONLY from the server's own parse of `input.body` against this channel's
+ *    roster (`service-writes-metadata-mentions.ts › resolveBodyMentions`, over
+ *    the one parser in `lib/mentions.ts`). ⚠ Reserved on `fanoutGroup`'s terms:
+ *    the set decides whose Tags inbox a message lands in and Phase 7 gates
+ *    NOTIFICATIONS on it, so a caller-settable value is a notification-forgery
+ *    primitive. ⚠ NOT an addressing key and NOT gated on a thread tag — a
+ *    mention in a plain channel post counts, and it still triggers nobody's
+ *    agent. Stamped only when the set is non-empty, so no existing row shape
+ *    moves.
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
@@ -206,6 +225,12 @@ export async function resolvePostMetadata(
   opts: PostMetadataOptions = {}
 ): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+  // ⚠ ONE roster read per post, AT MOST, and only if something asks. Two folds
+  // want `channel_members` — thread inheritance (3) and mention resolution (9)
+  // — and neither runs on the common post. Memoized on the PROMISE so two
+  // concurrent asks share one round trip.
+  let rosterPromise: Promise<ChannelMemberRow[]> | null = null;
+  const roster = () => (rosterPromise ??= repo.listMembers(channel.id));
   delete metadata.to_user_id;
   // Stripped, never re-stamped: consumer is gone, but a name the docs call
   // server-owned must not stay forgeable.
@@ -230,6 +255,11 @@ export async function resolvePostMetadata(
   // sharing this id into ONE request card, so a settable group id is a way to
   // render your own thread inside somebody else's request.
   delete metadata.fanoutGroup;
+  // ⚠ Same terms as `fanoutGroup`, one step sharper: this key decides whose
+  // Tags inbox the message lands in (and, from Phase 7, who gets notified), so
+  // a caller able to set it could put its words in anybody's inbox without
+  // naming them. Re-stamped from the server's own parse below.
+  delete metadata[MENTIONS_METADATA_KEY];
   const calmFlags = takeCalmFlags(metadata);
 
   // Only when supplied — absent stamps no key, and absence reads as `request`.
@@ -288,7 +318,7 @@ export async function resolvePostMetadata(
     // a peer AT ALL, which is what keeps a chat post out of an open thread.
     input.intent !== "chat"
   ) {
-    const peerUserId = await resolveDirectPeer(channel, ctx.userId);
+    const peerUserId = await resolveDirectPeer(channel, ctx.userId, roster);
     if (peerUserId && toUserId === peerUserId) {
       task = await resolveInheritableTask(channel, ctx.userId, peerUserId);
       if (task) metadata.taskId = task.id;
@@ -327,6 +357,13 @@ export async function resolvePostMetadata(
   if (opts.fanoutGroupId && typeof metadata.taskId === "string") {
     metadata.fanoutGroup = opts.fanoutGroupId;
   }
+
+  // MENTIONS — the server's own parse, never the caller's claim. ⚠ Deliberately
+  // NOT conditioned on a surviving thread tag, unlike `handoff` / `fanoutGroup`:
+  // those two are claims ABOUT a thread, and this is a claim about the BODY,
+  // which stands on its own in a plain channel post. Empty stamps no key.
+  const mentioned = await resolveBodyMentions(input.body, ctx.userId, roster);
+  if (mentioned.length > 0) metadata[MENTIONS_METADATA_KEY] = mentioned;
 
   return { metadata };
 }

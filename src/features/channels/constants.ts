@@ -136,6 +136,37 @@ export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
 export const CHANNEL_THREAD_LIST_LIMIT = 200;
 
 /**
+ * Ceiling on ONE channel's mentions-of-me page (`service-mentions.ts ›
+ * listMyChannelMentions`). Mentions never leave the inbox — it is a record, not
+ * a to-do pile — so the read needs a bound (INVARIANTS §9), and a read coming
+ * back AT the ceiling counts as CLIPPED.
+ *
+ * ⚠ Deliberately a QUARTER of {@link MAX_MESSAGE_LIMIT}: the transcript page is
+ * the surface a human scrolls, and this one is a 340px accordion nobody pages
+ * through. Raising it buys rows nothing renders well.
+ */
+export const CHANNEL_MENTION_LIST_LIMIT = 50;
+
+/**
+ * Character cap on a mention row's `snippet`. ⚠ Clipped SERVER-SIDE, not by a
+ * `line-clamp`: the inbox is a pointer at the transcript row, and shipping a
+ * 16k body per row to draw two lines of it is the read paying for the whole
+ * message N times (INVARIANTS §9 — heavy fields belong to the detail path,
+ * which here is the transcript itself).
+ */
+export const MENTION_SNIPPET_MAX_CHARS = 240;
+
+/**
+ * Hard cap on how many mentions ONE mark-read call may name.
+ *
+ * ⚠ It is the page ceiling, and that is the point: "Mark all read" sends the
+ * ids the client is DISPLAYING, so it can never name more than one page. A
+ * larger request is not a bigger mark-all, it is a caller that built the list
+ * some other way.
+ */
+export const CHANNEL_MENTION_MARK_MAX = CHANNEL_MENTION_LIST_LIMIT;
+
+/**
  * Hard cap on the addressees of ONE request fan-out
  * (`server/service-tasks-fanout.ts › createTaskFanOut`).
  *
