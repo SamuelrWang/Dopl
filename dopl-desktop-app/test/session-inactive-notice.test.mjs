@@ -17,11 +17,17 @@
 //
 // WHAT THAT MEANS MECHANICALLY, and why it is the existing machinery rather than a new path:
 // the note is `task_progress` + the reserved `session_ended` marker, which is the operator-End
-// precedent (P1-7). `group-thread.ts` treats `task_progress` as an ENTRY and NEVER as an
-// `endEvent`, so the marker can only ever reach `calmEndStatus` on the card that is pulsing —
-// it stops the card claiming work is in progress and it CANNOT become the shared thread's
-// outcome. A terminal kind here would paint the exchange as failed on the peer's card, which
-// is the exact bug P1-7 was raised to fix for the operator End.
+// precedent (P1-7). The kind is what makes it non-terminal BY CONSTRUCTION, so it can never
+// become the shared thread's outcome; a terminal kind here would paint the exchange as failed
+// on the peer's side, which is the exact bug P1-7 was raised to fix for the operator End.
+//
+// ⚠ THE READER CHANGED UNDER IT, AND THE NOTE DID NOT (wiring plan Phase 5, 2026-08-18). The
+// mechanics above used to be spelled in terms of `group-thread.ts` folding a `task_progress`
+// into a session CARD's `calmEndStatus`; that whole family is DELETED with the card, and the
+// v2 transcript renders the note as an ordinary milestone row instead. What survives is the
+// only part that ever mattered here: a `task_progress` cannot be an outcome, and it is the
+// ONE lifecycle post this desktop still makes — the three terminal kinds went in the same
+// change (session-window.js, pinned by session-window-echoid.test.mjs).
 //
 // Run: `node --test dopl-desktop-app/test/session-inactive-notice.test.mjs`
 
@@ -68,17 +74,19 @@ test("the copy is a status note and not a fault — nobody is blamed and nothing
   assert.ok(!/sign|credential|window|budget|abandon|evict/i.test(INACTIVE_NOTE), INACTIVE_NOTE);
 });
 
-test("the marker is one `group-thread` can only read as a status, and the server reserves it", () => {
-  // Found by CONTENT, not by path — same reason as the server lookup below, and for the
-  // same reason it has now been earned twice: `group-thread.ts` was split (2026-08-08) and
-  // the reserved markers DECLARE themselves in `group-thread-markers.ts`, re-exported from
-  // `group-thread.ts` so no importer changed. The assertion follows the constant.
-  const libDir = join(HERE, "..", "..", "src", "features", "channels", "lib");
-  const GROUP = readdirSync(libDir)
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-    .map((f) => readFileSync(join(libDir, f), "utf8"))
-    .find((src) => /export const SESSION_ENDED_KEY = "session_ended";/.test(src));
-  assert.ok(GROUP, "no channels/lib module declares SESSION_ENDED_KEY");
+test("the marker stays RESERVED server-side, even though no client reads it any more", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (INVARIANTS §14). This case used to also require a
+  // `channels/lib` module exporting `SESSION_ENDED_KEY` — the CLIENT read that turned the
+  // marker into a card's calm end note. That export lived in `group-thread-markers.ts` and
+  // was DELETED with the whole family (wiring plan Phase 5, 2026-08-18); there is no card
+  // left to soften, and the v2 transcript shows the note as the milestone row it is.
+  //
+  // The SERVER half is the half that was ever a security property, and it is untouched:
+  // the key stays in the reserved strip list with no client reader, because a caller able
+  // to set it could narrate somebody else's session as ended (INVARIANTS §5 — a key stays
+  // reserved with no reader only while something still RENDERS it, and the BODY of this
+  // note is rendered).
+  //
   // Found by CONTENT, not by path: the server file that owns CALM_FLAG_KEYS has already been
   // split once (`service-writes-metadata-markers.ts`), and a reserved-key assertion that dies
   // on a rename is an assertion that gets deleted rather than repointed.
@@ -89,6 +97,15 @@ test("the marker is one `group-thread` can only read as a status, and the server
     .find((src) => src.includes("CALM_FLAG_KEYS = ["));
   assert.ok(owner, "no server module declares CALM_FLAG_KEYS");
   assert.match(owner, /"session_ended",/, "reserved server-side, so a peer cannot forge it");
+  // …and the client-side READ really is gone, rather than moved somewhere unnoticed.
+  const libDir = join(HERE, "..", "..", "src", "features", "channels", "lib");
+  // ⚠ The DECLARATION, not any mention: `calm-terminal.ts` names the constant in its
+  // header precisely to record that it went, and a grep-for-the-string check would read
+  // that annotation as a regression.
+  const stillDeclared = readdirSync(libDir)
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+    .some((f) => /export const SESSION_ENDED_KEY\b/.test(readFileSync(join(libDir, f), "utf8")));
+  assert.equal(stillDeclared, false, "a client reader coming back means the strip rule is re-argued first");
 });
 
 test("the OTHER terminals are untouched — the caps stay terminal, on purpose", () => {
@@ -98,7 +115,11 @@ test("the OTHER terminals are untouched — the caps stay terminal, on purpose",
     assert.equal(endLifecycle(reason).kind, "task_failed", reason);
   }
   assert.equal(endLifecycle("operator").body, "Session ended", "the End keeps its own wording");
-  assert.equal(endLifecycle("close_task"), null, "close_task posts its own kind elsewhere");
+  // ⚠ `close_task` is history: thread closing was removed in Phase 4 (2026-08-18) and the
+  // reducer branch went with it. `endLifecycle` still answers null for an unknown reason,
+  // which is the property worth keeping — an unrecognised terminal posts NOTHING rather
+  // than falling back to a claim about the exchange.
+  assert.equal(endLifecycle("close_task"), null, "an unknown reason posts nothing");
   assert.equal(endLifecycle("idle_timeout"), null, "an idle PARK is not terminal and posts nothing");
 });
 
@@ -182,6 +203,9 @@ for (const banned of ["require(", "electron", "child_process"]) {
 const win = () => new Function(
   `${BLOCK}\n return { echoTargets, firstInactiveNote, MAX_REMEMBERED_ENDS };`
 )();
+// ⚠ `echoTargets` LOST ITS `kind` ARGUMENT in Phase 5: only ONE kind still reaches it (this
+// note), so the P2-9 terminal-collapse branch that needed the kind went with the terminal
+// echoes. Calls below pass the info object alone.
 
 const info = (over = {}) => ({
   channelId: "c1", taskId: "t1", key: "c1:t1", sessionId: "sess-A", sdkSessionId: null, ...over,
@@ -189,15 +213,15 @@ const info = (over = {}) => ({
 
 test("GUARD: the same (thread, cycle) says it once", () => {
   const w = win();
-  const seq = w.echoTargets(info(), "task_progress").m.seq;
+  const seq = w.echoTargets(info()).m.seq;
   assert.equal(w.firstInactiveNote("c1", seq), true, "the hold posts");
   assert.equal(w.firstInactiveNote("c1", seq), false, "the eviction that follows does not repeat it");
 });
 
 test("GUARD: a genuinely NEW cycle posts again — sign in, run, park, abandon", () => {
   const w = win();
-  const first = w.echoTargets(info(), "task_progress").m.seq;
-  const second = w.echoTargets(info({ sdkSessionId: "sdk-B" }), "task_progress").m.seq;
+  const first = w.echoTargets(info()).m.seq;
+  const second = w.echoTargets(info({ sdkSessionId: "sdk-B" })).m.seq;
   assert.notEqual(first, second, "a resumed query mints its own sdk session id");
   assert.equal(w.firstInactiveNote("c1", first), true);
   assert.equal(w.firstInactiveNote("c1", second), true);
@@ -209,8 +233,12 @@ test("GUARD: it is keyed on the echo id, so it agrees with the server's own dedu
   assert.match(M("channel-post.js"), /clientMsgId: \(opts && opts\.clientMsgId\) \|\| `\$\{kind\}-\$\{entry\.channel\.id\}-\$\{m\.seq\}`/);
   const onEnded = WINDOW_SRC.slice(WINDOW_SRC.indexOf("function onEnded("));
   assert.match(onEnded, /if \(meta\.session_ended === true && !firstInactiveNote\(entry\.channel\.id, m\.seq\)\)/);
-  assert.ok(onEnded.indexOf("echoTargets(info, k)") < onEnded.indexOf("firstInactiveNote"),
-    "the guard reads the RESOLVED echo id, not a guess at one");
+  // ⚠ The id is derived BEFORE the guard reads it — a `-1` from a renamed call would make
+  // this comparison pass vacuously, so the presence of the derivation is asserted first.
+  const derived = onEnded.indexOf("echoTargets(info)");
+  assert.notEqual(derived, -1, "onEnded must derive the echo id itself");
+  assert.ok(derived < onEnded.indexOf("firstInactiveNote"),
+    "the guard reads the DERIVED echo id, not a guess at one");
 });
 
 test("GUARD: the ledger is bounded — this tree has been bitten by a set that only grows", () => {

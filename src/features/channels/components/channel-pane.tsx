@@ -30,16 +30,12 @@ import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
 import { RoomsSidebar } from "./rooms-sidebar";
-import { SessionPillsBar } from "./session-pills-bar";
-import { ThreadsButton } from "./threads-button";
-
-/** How long a thread's grouped card keeps its navigation ring after a panel click. */
-const THREAD_HIGHLIGHT_MS = 2200;
 
 interface Props {
   channel: Channel;
   messages: ChannelMessage[];
-  /** The channel's threads — the transcript's status / title overlay. */
+  /** The channel's threads — the rooms column's list. ⚠ No longer a transcript
+   *  overlay: the session card that consumed it is deleted (Phase 5). */
   threads: ChannelThread[];
   /** ⚠ Suppresses status flicker — a UUID thread with no overlay yet holds at
    *  neutral "active". */
@@ -107,11 +103,9 @@ export function ChannelPane({
   onLeave,
 }: Props) {
   const [roomsOpen, setRoomsOpen] = useState(false);
-  const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManage = channel.role === "owner";
   // Historical agent roster, scoped to this channel. Its only remaining consumer
   // is ATTRIBUTION — an old message stamped `author_agent_id` still renders its
@@ -139,19 +133,6 @@ export function ChannelPane({
       new Map(members.map((m) => [m.userId, m.displayName || m.email || "teammate"])),
     [members]
   );
-  // Latest `task_progress` per thread, keyed by `metadata.taskId`. ⚠ A pure
-  // derivation over already-loaded messages — no extra fetch or write.
-  const latestMilestone = useMemo(() => {
-    const map = new Map<string, ChannelMessage>();
-    for (const m of messages) {
-      if (m.kind !== "task_progress") continue;
-      const taskId = m.metadata.taskId;
-      if (typeof taskId !== "string" || taskId.length === 0) continue;
-      const existing = map.get(taskId);
-      if (!existing || m.seq > existing.seq) map.set(taskId, m);
-    }
-    return map;
-  }, [messages]);
   const otherMembers = useMemo(
     () => members.filter((m) => m.userId !== currentUserId),
     [members, currentUserId]
@@ -180,27 +161,17 @@ export function ChannelPane({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, consentRequests.length, channel.id]);
 
-  // Clear the pending highlight timer on unmount / channel switch.
-  useEffect(
-    () => () => {
-      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    },
-    []
-  );
-
-  // Thread navigation: ring the thread's grouped card and scroll it into view.
-  // An open thread with no grouped card has no element, so the scroll no-ops
-  // while the highlight still arms.
+  // Thread navigation: scroll the thread's first transcript row into view.
+  // ⚠ THE TRANSIENT RING WENT WITH THE SESSION CARD (wiring plan Phase 5,
+  // 2026-08-18) — it was the card's own treatment, and there is no longer one
+  // element that IS the exchange. The `session:<threadId>` anchor survived and
+  // now rides that first row, so this navigation still lands; a thread with no
+  // row in the loaded page has no element and the scroll no-ops, exactly as
+  // before.
   function handleSelectThread(threadId: string) {
-    setHighlightedThreadId(threadId);
     document
       .getElementById(`session:${threadId}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(
-      () => setHighlightedThreadId(null),
-      THREAD_HIGHLIGHT_MS
-    );
   }
 
   return (
@@ -251,18 +222,6 @@ export function ChannelPane({
             />
           )}
         </span>
-
-        {channel.isMember && (
-          <ThreadsButton
-            threads={threads}
-            threadsLoading={threadsLoading}
-            members={members}
-            memberNames={memberNames}
-            latestMilestone={latestMilestone}
-            currentUserId={currentUserId}
-            onSelectThread={handleSelectThread}
-          />
-        )}
 
         {/* The rooms column is OPTIONAL — collapsed by default, because a
             channel running one or two threads reads fine without it. */}
@@ -323,13 +282,14 @@ export function ChannelPane({
         />
       </div>
 
-      {/* Where the AGENT CHIPS BAR was (one chip per summoned NAMED AGENT, its
-          state read off a server column that could not see the desktop). Rollback
-          plan §3.3's replacement: one pill per LIVE SESSION of the operator's in
-          this channel, projected by the desktop itself. Renders NOTHING outside
-          the desktop app — every fact in it is about the local machine. */}
-      {channel.isMember && <SessionPillsBar channelId={channel.id} />}
-
+      {/* ⚠ THE SESSION PILLS BAR AND THE THREADS BUTTON STOOD HERE and were
+          DELETED (wiring plan Phase 5, 2026-08-18). Both were session surfaces
+          on a page that is itself deleted at the v2 cutover (Phase 12); the
+          operator watches their own agents in the v2 right panel's AGENTS TAB
+          now, over the same desktop projection the pills read
+          (`channels-v2/agents-model.ts`), with pause / end on the agent. The
+          thread popover went with `thread-panel.tsx`, whose row actions were the
+          close/reopen controls Phase 4 removed. */}
       {/* Body row: the conversation column, plus the optional rooms column. */}
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
@@ -348,10 +308,7 @@ export function ChannelPane({
                 <ChannelTranscript
                   messages={messages}
                   memberNames={memberNames}
-                  threads={threads}
-                  threadsLoading={threadsLoading}
                   currentUserId={currentUserId}
-                  highlightedThreadId={highlightedThreadId}
                   agents={agents}
                 />
               )}

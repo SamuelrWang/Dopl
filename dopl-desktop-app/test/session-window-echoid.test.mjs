@@ -7,6 +7,19 @@
 // (channel-post.postTaskEvent). This pins the seq contract: a NEW resume cycle posts a NEW
 // row, a retry WITHIN one cycle collapses to one, and a taskless session keys off the STABLE
 // sessionKey (never the per-launch ephemeral sessionId) so a P2 recreate can't double-post.
+//
+// ⚠ REWRITTEN, NOT SHRUNK BY DELETION (wiring plan Phase 5, 2026-08-18 — INVARIANTS §14, a
+// mixed test file whose feature is deleted is rewritten). ONE KIND reaches this derivation
+// now: the calm `task_progress` session-ended note. `task_started` / `task_finished` /
+// `task_failed` are no longer posted by this desktop at all, so the P2-9 cases — the terminal
+// collapse across cycles and machines, the legacy-id carve-out, the started-keeps-its-cycle
+// rule — were coverage of behaviour that no longer exists and went with `echoSeq`'s `kind`
+// argument. Everything below is FIX #2, which the surviving note still depends on: a new run
+// that ends is a new note, and a retry within one run is not.
+//
+// The second half of this file asserts the REMOVAL BEHAVIOURALLY rather than by grepping the
+// source (INVARIANTS §14): the module is EXECUTED against a fake `electron` / `channel-post`,
+// and what is checked is which posts really cross that seam.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -32,8 +45,9 @@ for (const banned of ["require(", "electron", "process.", "child_process", "@ant
 
 const { echoSeq, echoTargets } = new Function(`${BLOCK}\n return { echoSeq, echoTargets };`)();
 
-// clientMsgId exactly as channel-post.postTaskEvent builds it.
-const cid = (kind, info) => `${kind}-${info.channelId}-${echoTargets(info).m.seq}`;
+// clientMsgId exactly as channel-post.postTaskEvent builds it. The kind is `task_progress`
+// for every case here, because that is the only kind this module posts any more.
+const cid = (info) => `task_progress-${info.channelId}-${echoTargets(info).m.seq}`;
 
 // A tasked session cycle. `cycle` is the sdk id (or null for a pre-init crash).
 const tasked = (cycle, sessionId = "sess-A") => ({
@@ -53,121 +67,114 @@ test("a taskless session keys off the STABLE sessionKey, never the ephemeral ses
   assert.ok(!seq.includes("sess-A"), "the per-launch sessionId is NOT the base");
 });
 
+test("a FIRST-CLASS (UUID) thread id is treated exactly like any other base", () => {
+  // ⚠ THE P2-9 CARVE-OUT IS GONE. A UUID thread id used to collapse the TERMINAL echoes
+  // across cycles; there are no terminal echoes, so the id shape decides nothing and the
+  // note keeps its per-cycle discriminator like everything else.
+  const THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+  const info = { channelId: "c1", taskId: THREAD, key: `c1:${THREAD}`, sessionId: "s", sdkSessionId: "sdk-1" };
+  assert.equal(echoTargets(info).m.seq, `${THREAD}#sdk-1`);
+});
+
 // ── (1) a retry WITHIN one cycle dedupes ────────────────────────────────────────────
 
 test("(1) same-cycle retry -> IDENTICAL clientMsgId (server dedupes to one row)", () => {
   const info = tasked("sdk-A");
-  assert.equal(cid("task_failed", info), cid("task_failed", info));
-  // The DELIBERATE crash-vs-reload dedupe is preserved: a runtime crash echo (live sdk id)
-  // and the reload interrupted echo (persisted SAME sdk id) collapse to one row.
+  assert.equal(cid(info), cid(info));
+  // The DELIBERATE same-cycle dedupe survives: two paths reaching the note inside one run
+  // (a crash teardown and the reload that follows it) share that cycle's sdk id.
   const crash = tasked("sdk-A", "sess-A");
   const reload = tasked("sdk-A", "sess-A");
-  assert.equal(cid("task_failed", crash), cid("task_failed", reload));
+  assert.equal(cid(crash), cid(reload));
 });
 
 test("(1b) a P2 recreate (fresh sessionId, SAME key+cycle) does not double-post", () => {
   const original = { channelId: "c1", taskId: "", key: "c1:", sessionId: "sess-A", sdkSessionId: "sdk-A" };
   const recreate = { channelId: "c1", taskId: "", key: "c1:", sessionId: "sess-B", sdkSessionId: "sdk-A" };
-  assert.equal(cid("task_started", original), cid("task_started", recreate), "sessionId drift is irrelevant to dedupe");
+  assert.equal(cid(original), cid(recreate), "sessionId drift is irrelevant to dedupe");
 });
 
-// ── (2) cap-end -> resume -> a NEW cycle posts a NEW row ─────────────────────────────
+// ── (2) a NEW run that ends is a NEW note ────────────────────────────────────────────
 
-test("(2) cap-end (cycle A) then resume -> the new cycle's task_started gets a DIFFERENT id", () => {
-  const startedA = cid("task_started", tasked("sdk-A"));
-  const startedB = cid("task_started", tasked("sdk-B")); // resumed query minted sdk-B at its init
-  assert.notEqual(startedA, startedB, "a new resume cycle is a NEW server row (P4 calmEndStatus clears)");
+test("(2) end (cycle A) then resume and end again -> a DIFFERENT id", () => {
+  assert.notEqual(cid(tasked("sdk-A")), cid(tasked("sdk-B")));
 });
 
-// ── (3) capped-then-crash -> two DISTINCT task_failed ids ───────────────────────────
-
-test("(3) capped (cycle A) then a resumed-cycle crash -> two DISTINCT task_failed ids", () => {
-  const capped = cid("task_failed", tasked("sdk-A")); // post-init cap, cycle A
-  // Resumed cycle B crashes post-init (sdk-B): distinct.
-  assert.notEqual(capped, cid("task_failed", tasked("sdk-B")));
-  // Resumed IN PLACE then crashes PRE-init: resumeParked cleared sdkSessionId, so the id
-  // falls back to the (per-object) sessionId — still distinct from cycle A's sdk id.
+test("(3) a pre-init crash falls back to the per-object sessionId, keeping cycles distinct", () => {
   const crashPreInit = tasked(null, "sess-A");
-  assert.notEqual(capped, cid("task_failed", crashPreInit), "a post-cap crash is never swallowed");
-  assert.equal(echoTargets(crashPreInit).m.seq, "t1#sess-A", "pre-init falls back to sessionId");
+  assert.equal(echoTargets(crashPreInit).m.seq, "t1#sess-A");
+  // Two distinct P2-recreate cycles that both die pre-init stay distinct.
+  assert.notEqual(cid(tasked(null, "sess-B")), cid(tasked(null, "sess-C")));
 });
 
-test("(3b) two distinct P2-recreate cycles that both die pre-init get distinct ids", () => {
-  // Each recreate is a fresh session object (fresh sessionId); pre-init both have sdkSessionId
-  // null, so the sessionId fallback keeps them distinct.
-  const cycleB = tasked(null, "sess-B");
-  const cycleC = tasked(null, "sess-C");
-  assert.notEqual(cid("task_failed", cycleB), cid("task_failed", cycleC));
+test("an explicit `seq` still wins over everything (the live-trigger path)", () => {
+  assert.equal(echoTargets({ ...tasked("sdk-1"), seq: 7 }).m.seq, 7);
 });
 
-// ── P2-9 (2026-08-04): ONE TERMINAL ROW PER THREAD, ACROSS CYCLES AND MACHINES ────
+// ── THE THREE RUNTIME KINDS ARE NOT POSTED (wiring plan Phase 5, 2026-08-18) ─────────
 //
-// THE DEFECT. FIX #2 above folds the SDK resume cycle into every echo id, which
-// answers "is this a distinct RUN" — a fact about THIS MACHINE. The thread card
-// renders a different question: "how did this exchange END". So a session that
-// parked and resumed five times posted FIVE terminal rows for ONE logical failure,
-// and nothing deduped across machines either, because an sdk session id is local.
+// Executed, not grepped. `session-window.js` requires `electron` (BrowserWindow, for the
+// factory), `./channel-post` and `./diag`; every one is faked here, and `postTaskEvent` is
+// the seam the assertion watches. What it pins is the ASYMMETRY the phase depends on:
+// this desktop stops CLAIMING a runtime in a shared transcript, while the calm milestone —
+// the one thing a waiting peer needs — still goes out.
 //
-// THE FIX is scoped twice over, and both scopes are load-bearing:
-//   - TERMINAL kinds only. `task_started` KEEPS its cycle: a resume really is a new
-//     start, and `groupThread`'s restart detection reads those seqs — collapsing
-//     them would make a resumed session look like it never restarted.
-//   - FIRST-CLASS (UUID) thread ids only. A legacy `task-<channel>-<seq>` id is
-//     minted per MESSAGE, so keying on it dedupes nothing the cycle key did not
-//     already dedupe, and that path stays byte for byte.
+// ⚠ THE SERVER'S ACCEPTANCE OF THE THREE KINDS IS NOT TIGHTENED AND MUST NOT BE. Every
+// installed build still posts them (INVARIANTS §13, desktop floor); the reader dropped them
+// (`channels-v2/view-model.ts › isLifecycleEcho`), which is the half that can ship alone.
 
-const THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
-const firstClass = (cycle, sessionId = "sess-A") => ({
-  channelId: "c1", taskId: THREAD, key: `c1:${THREAD}`, sessionId, sdkSessionId: cycle,
+function loadSessionWindow() {
+  const posts = [];
+  const stub = (id) => {
+    if (id === "electron") return { BrowserWindow: function () {} };
+    if (id === "./channel-post") {
+      return { postTaskEvent: (...args) => { posts.push(args); return Promise.resolve(); } };
+    }
+    if (id === "./diag") return { diag: () => {} };
+    if (id === "path") return { join: (...p) => p.join("/") };
+    throw new Error(`session-window.js must not require ${JSON.stringify(id)}`);
+  };
+  const mod = { exports: {} };
+  new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
+  return { api: mod.exports, posts };
+}
+
+const INFO = { channelId: "c1", taskId: "t1", key: "c1:t1", sessionId: "s", workspaceId: "w" };
+
+test("onLaunched posts NOTHING — a launch is a runtime fact, and the Agents tab reports it", () => {
+  const { api, posts } = loadSessionWindow();
+  api.lifecycleHandlers.onLaunched(INFO);
+  assert.deepEqual(posts, [], "task_started is no longer a transcript row");
 });
 
-test("P2-9: a terminal echo collapses across resume cycles for a first-class thread", () => {
-  // The incident shape: same thread, five cycles, one failure.
-  const cycles = ["sdk-1", "sdk-2", "sdk-3", null, "sdk-5"];
-  for (const kind of ["task_finished", "task_failed"]) {
-    const ids = new Set(cycles.map((c) => echoTargets(firstClass(c), kind).m.seq));
-    assert.equal(ids.size, 1, `${kind}: five cycles must collapse to one row`);
-    assert.equal([...ids][0], THREAD, `${kind}: keyed on the thread itself`);
-  }
+test("onEnded refuses task_finished and task_failed — a session ending is not a thread outcome", () => {
+  const { api, posts } = loadSessionWindow();
+  api.lifecycleHandlers.onEnded(INFO, "task_finished", {});
+  api.lifecycleHandlers.onEnded(INFO, "task_failed", { capped: true }, "Limit reached");
+  api.lifecycleHandlers.onEnded(INFO, "task_failed", { interrupted: true });
+  // ⚠ And it does NOT coerce them into something else. The old code turned an unknown kind
+  // into `task_finished`; dropping the post is the whole point, so a coercion here would
+  // reinstate the row under a different name.
+  api.lifecycleHandlers.onEnded(INFO, "nonsense", {});
+  assert.deepEqual(posts, [], "no terminal echo may leave this process");
 });
 
-test("P2-9: it collapses across MACHINES too — no local id is in the key", () => {
-  // The half a local `announced` set could never buy: two desktops answering the
-  // same thread share no sdk id and no sessionId, and must still post one row.
-  const a = echoTargets({ channelId: "c1", taskId: THREAD, sessionId: "mac-A", sdkSessionId: "sdk-A" }, "task_failed");
-  const b = echoTargets({ channelId: "c1", taskId: THREAD, sessionId: "mac-B", sdkSessionId: "sdk-B" }, "task_failed");
-  assert.equal(a.m.seq, b.m.seq);
+test("onEnded STILL posts the calm session-ended milestone — the waiting peer is told", () => {
+  const { api, posts } = loadSessionWindow();
+  api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
+  assert.equal(posts.length, 1, "the quit guard's 'went inactive' note depends on this");
+  const [entry, m, kind, taskId, meta, body] = posts[0];
+  assert.equal(kind, "task_progress", "the MILESTONE lane, never a terminal kind");
+  assert.equal(entry.channel.id, "c1");
+  assert.equal(taskId, "t1");
+  assert.equal(m.seq, "t1#s");
+  assert.equal(meta.session_ended, true);
+  assert.equal(body, "Session ended");
 });
 
-test("P2-9: task_started KEEPS the cycle — a resume IS a new start", () => {
-  const one = echoTargets(firstClass("sdk-1"), "task_started").m.seq;
-  const two = echoTargets(firstClass("sdk-2"), "task_started").m.seq;
-  assert.notEqual(one, two, "collapsing starts would hide every restart");
-  assert.equal(one, `${THREAD}#sdk-1`);
-});
-
-test("P2-9: task_finished and task_failed do NOT collide with each other", () => {
-  // They share a seq, and that is correct: the clientMsgId the server dedupes on
-  // is `${kind}-${channelId}-${seq}`, so the KIND is already in the key.
-  const info = firstClass("sdk-1");
-  assert.equal(echoTargets(info, "task_finished").m.seq, echoTargets(info, "task_failed").m.seq);
-  assert.notEqual(cid("task_finished", info), cid("task_failed", info));
-});
-
-test("P2-9: a LEGACY thread id keeps the cycle discriminator, byte for byte", () => {
-  // `task-<channel>-<seq>` is minted per message, so there is nothing to gain and
-  // an existing behaviour to lose.
-  const legacy = { channelId: "c1", taskId: "task-c1-42", key: "c1:task-c1-42", sessionId: "s", sdkSessionId: "sdk-1" };
-  assert.equal(echoTargets(legacy, "task_failed").m.seq, "task-c1-42#sdk-1");
-  const other = { ...legacy, sdkSessionId: "sdk-2" };
-  assert.notEqual(echoTargets(legacy, "task_failed").m.seq, echoTargets(other, "task_failed").m.seq);
-});
-
-test("P2-9: a session with NO thread id keeps the cycle too", () => {
-  const taskless = { channelId: "c1", key: "c1:none", sessionId: "s", sdkSessionId: "sdk-1" };
-  assert.equal(echoTargets(taskless, "task_failed").m.seq, "c1:none#sdk-1");
-});
-
-test("P2-9: an explicit `seq` still wins over everything (the live-trigger path)", () => {
-  assert.equal(echoTargets({ ...firstClass("sdk-1"), seq: 7 }, "task_failed").m.seq, 7);
+test("C-5 survives: the calm note is said ONCE per (thread, cycle)", () => {
+  const { api, posts } = loadSessionWindow();
+  api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
+  api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
+  assert.equal(posts.length, 1, "an eviction reaching a held session must not say it twice");
 });

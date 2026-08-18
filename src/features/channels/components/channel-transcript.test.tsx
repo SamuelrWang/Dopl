@@ -54,17 +54,19 @@ function render(messages: ChannelMessage[]): string {
     <ChannelTranscript
       messages={messages}
       memberNames={MEMBER_NAMES}
-      threads={[]}
-      threadsLoading={false}
       currentUserId={ME}
     />
   );
 }
 
-/** Every chat bubble's class list, in render order (session cards carry an
- *  `id` before their class, so this matches plain bubbles only). */
+/** Every chat bubble's class list, in render order. ⚠ The optional `id` (the
+ *  surviving `session:<threadId>` anchor, on the FIRST row of a thread) sits
+ *  BEFORE the class attribute, so the match has to tolerate it — an `<article
+ *  class="` anchor would silently skip exactly the rows a thread starts with. */
 function bubbleClasses(markup: string): string[] {
-  return [...markup.matchAll(/<article class="([^"]*)"/g)].map((m) => m[1]);
+  return [...markup.matchAll(/<article (?:id="[^"]*" )?class="([^"]*)"/g)].map(
+    (m) => m[1]
+  );
 }
 
 /** The class list of the first element inside the bubble — its meta (author +
@@ -141,7 +143,13 @@ describe("ChannelTranscript chat-style alignment", () => {
 });
 
 describe("ChannelTranscript full-width rows (not chat bubbles)", () => {
-  it("keeps a session card full width", () => {
+  it("renders a thread's lifecycle row full width and its reply as a bubble", () => {
+    // ⚠ REWRITTEN, NOT REMOVED (INVARIANTS §14). This case used to assert that a
+    // whole thread COLLAPSED INTO ONE full-width session card; wiring plan
+    // Phase 5 (2026-08-18) deleted the card and the `group-thread*` family
+    // behind it, so a thread's rows now stand on their own. The surviving rule
+    // is the one this file is about: a lifecycle/system row is shared state and
+    // stays full width, while a reply is somebody's turn and is SIDED.
     const markup = render([
       message({
         id: "s1",
@@ -164,9 +172,17 @@ describe("ChannelTranscript full-width rows (not chat bubbles)", () => {
       }),
     ]);
     expect(markup).toContain("Here is the answer.");
-    expect(markup).not.toContain("max-w-[66%]");
+    // The `task_started` row: a flat centered activity line, no bubble.
+    expect(markup).toContain("Started working");
+    expect(markup).toContain("justify-center");
+    // The agent's reply hangs on its operator's side — a peer's agent, so left.
+    expect(markup).toContain("self-start");
     expect(markup).not.toContain("self-end");
-    expect(markup).not.toContain("self-start");
+    // ⚠ THE `session:<threadId>` ANCHOR SURVIVED THE CARD and rides the FIRST
+    // row of the thread — `rooms-sidebar.tsx` scrolls to it, and it is the only
+    // thread navigation this page has left.
+    expect(markup).toContain(`id="session:${TASK_ID}"`);
+    expect(markup.match(/id="session:/g)).toHaveLength(1);
   });
 
   it("keeps an activity / lifecycle event row full width", () => {
@@ -201,7 +217,7 @@ function bubbleTag(markup: string): string {
  * rendered identically to a sent one it is a small lie — the user cannot tell a
  * message in flight from one the server has stored, and a failed send simply
  * vanishes. The pending id `buildPendingMessage` mints is the marker; the
- * `pending.ts` recipe is the treatment. `SessionCard` has had this since the
+ * `pending.ts` recipe is the treatment. The now-deleted `SessionCard` had this since the
  * optimistic layer landed and the plain bubble did not.
  */
 describe("ChannelTranscript pending bubble", () => {
@@ -251,8 +267,6 @@ function renderWithAgents(
     <ChannelTranscript
       messages={messages}
       memberNames={MEMBER_NAMES}
-      threads={[]}
-      threadsLoading={false}
       currentUserId={ME}
       agents={agents}
     />

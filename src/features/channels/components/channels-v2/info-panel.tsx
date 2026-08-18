@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
@@ -47,6 +48,7 @@ export function ChannelsV2InfoPanel({
   index,
   openThreadId,
   onOpenThread,
+  agentSessions,
   openAgent,
   onOpenAgent,
   mentions,
@@ -66,10 +68,15 @@ export function ChannelsV2InfoPanel({
   index: AuthorIndex;
   openThreadId: string | null;
   onOpenThread: (id: string) => void;
-  /** The agent whose view is open — read only to mark its card "Viewing". The
-   *  panel itself renders at page level, over this column. */
+  /** THIS MACHINE'S live session feed, or `null` for "could not ask" (a plain
+   *  browser, or a main without it). ⚠ Passed through, never collapsed to `[]`:
+   *  the Agents tab words the two cases differently. */
+  agentSessions: readonly DesktopSessionSummary[] | null;
+  /** `agentsModel › agentKey` of the agent whose view is open — read only to
+   *  mark its card "Viewing". The panel itself renders at page level, over this
+   *  column. */
   openAgent: string | null;
-  onOpenAgent: (id: string) => void;
+  onOpenAgent: (key: string) => void;
   /** MY mentions in this channel — the Tags inbox's rows, each carrying its own
    *  `read` flag. ⚠ The unread BADGE is arithmetic over this list inside
    *  `InfoTab`, never a second count from anywhere. */
@@ -113,7 +120,12 @@ export function ChannelsV2InfoPanel({
           onOpenThread={onOpenThread}
         />
       ) : tab === "agents" ? (
-        <AgentsTab openAgent={openAgent} onOpenAgent={onOpenAgent} />
+        <AgentsTab
+          sessions={agentSessions}
+          channelId={channel.id}
+          openAgent={openAgent}
+          onOpenAgent={onOpenAgent}
+        />
       ) : (
         <p className="px-4 py-8 text-center text-caption text-text-muted">
           No links in this channel yet.

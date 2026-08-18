@@ -56,6 +56,8 @@
 //   clearFolder          silently resets where a channel's agent runs
 //   getFolderLabel       discloses a fragment of the operator's LOCAL path
 //   sessions:reopen      opens/recreates session windows for arbitrary threads
+//   sessions:pause       (Phase 5) interrupts the turn my agent is running on a thread
+//   sessions:end         (Phase 5) ends my agent on a thread — terminal, and never the thread
 //
 // Two checks, because one is not enough: the sender must be the main window's
 // webContents, AND it must be that window's TOP frame. A cross-origin iframe
@@ -199,6 +201,38 @@ function register(opts = {}) {
       taskId: String(p.taskId || ''),
     });
   }));
+
+  // PAUSE / END MY OWN AGENT, from the Agents tab in the main window (wiring plan Phase 5,
+  // 2026-08-18). Same guards as `sessions:reopen` — sender-bound, UUID-gated channel id, opaque
+  // task id — and the SAME resolution (`store.sessionKey`), so the two ops cannot disagree about
+  // which session a card names.
+  //
+  // ⚠ THESE ARE STOP VERBS AND THEY WIDEN NOTHING. `reopen` opens a window; these two reach the
+  // reducer events the session's OWN window has always had on its buttons (`session:interrupt`
+  // is the send button's pause morph, `session:end` is "End session"). Nothing here can START a
+  // query, wake a parked shell, grant a tool or post on the operator's behalf — the failure
+  // direction of a forged call is an agent that stops, which is the safe one.
+  // ⚠ There is no cross-machine control here and there must not be: the registry holds only
+  // this operator's own sessions, so an unresolvable key answers { ok: false } rather than
+  // reaching for anything else. Pause/end is own-agents-only (MAPPING.md, Samuel's ruling).
+  // ⚠ THE BODY IS SHARED, THE WRAPPING IS NOT. `mainOnly(...)` appears literally at each
+  // `ipcMain.handle` call below, because test/channel-ipc-sender.test.mjs's structural belt
+  // reads exactly that shape — every registered handler must be visibly sender-bound at its
+  // registration site. Hiding the wrap inside a factory would pass review and silently
+  // disarm the guard that stops the NEXT op being added unbound.
+  const control = (action) => (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const engine = require('./session-engine');
+    if (typeof engine.controlByTask !== 'function') return { ok: false };
+    return engine.controlByTask({
+      channelId: p.channelId,
+      taskId: String(p.taskId || ''),
+      action: action,
+    });
+  };
+  ipcMain.handle('sessions:pause', mainOnly('sessions:pause', { ok: false }, control('pause')));
+  ipcMain.handle('sessions:end', mainOnly('sessions:end', { ok: false }, control('end')));
 }
 
 module.exports = { register };

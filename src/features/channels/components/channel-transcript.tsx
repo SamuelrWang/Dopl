@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { isUuid } from "@/shared/lib/id/uuid";
 import { pendingRow } from "@/shared/ui/pending";
-import type { ChannelAgent, ChannelMessage, ChannelThread } from "../types";
-import { groupThread, type ThreadOverlay } from "../lib/group-thread";
+import type { ChannelAgent, ChannelMessage } from "../types";
 import { agentAttributionFor } from "../lib/agent-display";
 import { isPendingId } from "../lib/optimistic-cache";
 import {
@@ -17,48 +15,44 @@ import {
   type ReceiptStatus,
 } from "../lib/message-receipt";
 import { ActivityEventRow } from "./activity-event-row";
-import { SessionCard } from "./session-card";
 
 /**
- * Turn a {@link ChannelThread} row into the authoritative render overlay: open →
- * `active`, closed → `done` / `failed`. ⚠ Status the lifecycle-only heuristic
- * cannot derive on its own.
- */
-function threadOverlayFrom(thread: ChannelThread): ThreadOverlay {
-  const status =
-    thread.status === "open"
-      ? "active"
-      : thread.outcome === "failed"
-        ? "failed"
-        : "done";
-  return {
-    status,
-    title: thread.title,
-    mode: thread.mode,
-    outcomeSummary: thread.outcomeSummary,
-  };
-}
-
-/**
- * The channel transcript. One THREAD (messages/events sharing a
- * `metadata.taskId`) collapses into a single {@link SessionCard}, status + title
- * overlaid from the authoritative `channel_tasks` rows. Standalone human
- * messages and plain agent chat render as bordered bubbles (agent = elevated
- * surface, human = subtle card surface); `system` rows are flat centered
- * activity lines. Addressing metadata shows who a message was directed at + why.
+ * The channel transcript. Human messages and agent chat render as bordered
+ * bubbles (agent = elevated surface, human = subtle card surface); `task_*` and
+ * `system` rows are flat centered activity lines. Addressing metadata shows who
+ * a message was directed at + why.
+ *
+ * ⚠ THE SESSION CARD IS GONE — wiring plan Phase 5 (2026-08-18). Every row that
+ * used to collapse into one now renders on its own, because the machinery that
+ * grouped them (`lib/group-thread*`, `session-card.tsx`, `session-card-status`,
+ * the `channel_tasks` status/title OVERLAY and its loading-flicker suppression)
+ * was deleted with the surface it fed. An agent's run state lives in the AGENTS
+ * TAB (`channels-v2/agents-tab.tsx`), read from the operator's own machine —
+ * not in a shared transcript.
+ *
+ * ⚠ THIS PAGE IS ON ITS WAY OUT AND THIS IS THE SMALLEST EDIT THAT KEEPS IT
+ * HONEST, not a redesign. `channels-view-core.tsx` and everything under it are
+ * deleted at the v2 cutover (wiring plan Phase 12); the v2 transcript
+ * (`channels-v2/transcript.tsx`) is where the replacement already lives, and it
+ * drops the three runtime kinds outright (`view-model.ts › isLifecycleEcho`).
+ * Here they still render as activity lines, which is what they were before the
+ * card existed. Do not invest in this component.
  *
  * ⚠ Only plain chat bubbles are SIDED (viewer's own right, everyone else's left,
- * capped at ~2/3 of the column). Session cards, activity lines and the
- * pending-request cards stay FULL WIDTH — they are shared state, not someone's
- * turn in the conversation.
+ * capped at ~2/3 of the column). Activity lines stay FULL WIDTH — they are
+ * shared state, not someone's turn in the conversation.
+ *
+ * ⚠ THE `session:<threadId>` ANCHOR SURVIVED THE CARD, deliberately. It was the
+ * card's element id and `rooms-sidebar.tsx` scrolls to it; it now rides the
+ * FIRST row of each thread instead, so the one navigation this page still has
+ * keeps working. What did NOT survive is the transient ring — that was a
+ * property of the card, and ringing an arbitrary bubble would point at a message
+ * rather than at the exchange.
  */
 export function ChannelTranscript({
   messages,
   memberNames,
-  threads,
-  threadsLoading,
   currentUserId,
-  highlightedThreadId,
   agents,
 }: {
   messages: ChannelMessage[];
@@ -67,58 +61,23 @@ export function ChannelTranscript({
   /** Attribution for agent-authored messages. Omitted / unresolvable falls back
    *  to the plain "agent" pill. */
   agents?: ChannelAgent[];
-  /** The channel's first-class threads — the status / title / mode overlay. */
-  threads: ChannelThread[];
-  /** True while the thread overlay is still loading (see the flicker note below). */
-  threadsLoading: boolean;
   /** Gates the outgoing-message receipt line to the viewer's own bubbles. */
   currentUserId: string;
-  /** Thread the panel navigated to — its {@link SessionCard} shows a transient
-   *  ring. Null / undefined highlights nothing. */
-  highlightedThreadId?: string | null;
 }) {
-  const items = useMemo(() => {
-    const overlays = new Map(threads.map((t) => [t.id, threadOverlayFrom(t)]));
-    const grouped = groupThread(messages, overlays);
-    // Flicker suppression: a thread whose id is UUID-shaped has an
-    // authoritative overlay, but before that overlay loads `groupThread`
-    // falls back to the message-derived status — a delivered reply reads "done"
-    // ("Thread complete"), then snaps to its real status once threads arrive. While
-    // the overlay is loading, hold any UUID-id group with no overlay yet at the
-    // neutral "active" state; legacy (non-UUID) ids never get an overlay, so
-    // they keep their derived status as today. The overlay is authoritative the
-    // moment it loads.
-    if (threadsLoading) {
-      for (const item of grouped) {
-        if (
-          item.type === "session" &&
-          isUuid(item.session.taskId) &&
-          !overlays.has(item.session.taskId)
-        ) {
-          item.session.status = "active";
-        }
-      }
-    }
-    return grouped;
-  }, [messages, threads, threadsLoading]);
+  const anchored = new Set<string>();
   return (
     <div className="flex flex-col gap-2.5">
-      {items.map((item) => {
-        if (item.type === "session") {
-          return (
-            <SessionCard
-              key={item.key}
-              session={item.session}
-              highlighted={highlightedThreadId === item.session.taskId}
-              thread={threads.find((t) => t.id === item.session.taskId)}
-              currentUserId={currentUserId}
-            />
-          );
+      {messages.map((message) => {
+        const taskId = readString(message.metadata.taskId);
+        let anchorId: string | undefined;
+        if (taskId !== null && !anchored.has(taskId)) {
+          anchored.add(taskId);
+          anchorId = `session:${taskId}`;
         }
-        const { message } = item;
         return message.kind === "message" ? (
           <MessageBubble
-            key={item.key}
+            key={message.id}
+            anchorId={anchorId}
             message={message}
             messages={messages}
             memberNames={memberNames}
@@ -126,7 +85,7 @@ export function ChannelTranscript({
             agents={agents}
           />
         ) : (
-          <ActivityEventRow key={item.key} message={message} />
+          <ActivityEventRow key={message.id} anchorId={anchorId} message={message} />
         );
       })}
     </div>
@@ -138,12 +97,16 @@ function readString(value: unknown): string | null {
 }
 
 function MessageBubble({
+  anchorId,
   message,
   messages,
   memberNames,
   currentUserId,
   agents,
 }: {
+  /** `session:<threadId>` on the FIRST row of a thread — the anchor
+   *  `rooms-sidebar.tsx` scrolls to. Undefined on every other row. */
+  anchorId?: string;
   message: ChannelMessage;
   /** The full transcript, for deriving this message's outgoing receipt. */
   messages: ChannelMessage[];
@@ -151,8 +114,7 @@ function MessageBubble({
   currentUserId: string;
   agents?: ChannelAgent[];
 }) {
-  // PROVISIONAL, and it says so — the same treatment `SessionCard` already
-  // gives an optimistically-opened request. The send patches the transcript one
+  // PROVISIONAL, and it says so. The send patches the transcript one
   // frame after the click with a row carrying a `pending:` id (built by
   // `buildPendingMessage`, resolved to the saved row by `reconcileMessage`), so
   // that id IS the pending marker and no second flag rides the row. Until the
@@ -181,8 +143,8 @@ function MessageBubble({
   );
 
   // A summary promotes to the prominent line; the full body collapses behind a
-  // chevron (default collapsed), mirroring the SessionCard per-entry pattern. A
-  // message with no summary keeps its body shown inline exactly as before.
+  // chevron (default collapsed). A message with no summary keeps its body shown
+  // inline exactly as before.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() =>
     summary ? new Set([message.id]) : new Set()
   );
@@ -197,6 +159,7 @@ function MessageBubble({
 
   return (
     <article
+      id={anchorId}
       {...pendingRow(
         provisional,
         cn(
@@ -300,7 +263,7 @@ function MessageBubble({
  * The delivery receipt under MY own outgoing standalone message — a quiet
  * text-micro line with a tiny leading dot. A real `failed` is danger-inked;
  * every other outcome, including the calm operator-chosen terminals, stays
- * muted (mirrors the SessionCard StatusChip). There is deliberately no
+ * muted. There is deliberately no
  * "Received"/"Read": the desktop does not ack, so the transcript is the only
  * source of truth.
  *

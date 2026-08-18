@@ -1,5 +1,5 @@
 import "server-only";
-import { parseLegacyTaskSeq } from "../lib/group-thread";
+import { parseLegacyTaskSeq } from "../lib/legacy-task-id";
 import type { ChannelTaskRow } from "./dto";
 import * as repoMessages from "./repository-messages";
 

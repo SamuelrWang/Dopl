@@ -157,16 +157,28 @@ contextBridge.exposeInMainWorld('dopl', {
   // `sessions.reopen`) and renders NOTHING when absent, so dropping it silently removes the
   // button rather than failing. Pinned by test/preload-parity.test.mjs.
   //
-  // `summaries` / `onSummaries` — the SESSION PILLS' feed: sessions running on THIS machine,
-  // each with a name, a coarse state (working|idle|ended) and its channel + thread, projected
-  // by main/session-summary.js. Read once on mount, then listen — a push-only surface leaves a
+  // `summaries` / `onSummaries` — the AGENTS TAB's feed: sessions running on THIS machine, each
+  // with a name, a coarse state (working|idle|ended), its channel + thread, and (Phase 5,
+  // 2026-08-18) the runtime numbers the agent view draws — context occupancy against that
+  // model's window, lifetime token spend, started and last-activity stamps. All projected by
+  // main/session-summary.js. Read once on mount, then listen — a push-only surface leaves a
   // freshly opened channel blank until the next state change, which on a quiet machine is
   // never.
   // ⚠ SPA-ONLY, deliberately: absent from renderer/preload.js, which belongs to the window
   // hosting the RETIRED website and does not grow new capabilities. The parity invariant runs
   // remote ⊆ SPA, so this widens nothing; test/preload-parity records the divergence.
   // ⚠ NOTHING PRIVILEGED CROSSES: derived from in-memory state — no path, no token, no window
-  // handle, no absolute anything.
+  // handle, no absolute anything. The metrics are counts, and they stop at this renderer:
+  // session-state-push.js picks the server row's columns by name and takes none of them.
+  //
+  // `pause` / `end` — the Agents tab's two controls on MY OWN agent (Phase 5). They reach the
+  // SAME reducer events the session window's own buttons have always dispatched: pause is the
+  // send button's pause morph (interrupt), end is "End session". Nothing here can START a
+  // query, wake a parked shell or post anything, so the failure direction of a forged call is
+  // an agent that stops.
+  // ⚠ OWN AGENTS ONLY, structurally: main resolves (channelId, taskId) against its own session
+  // registry, which contains nothing but this operator's sessions on this machine.
+  // ⚠ NEVER keyed on `sessionId` — that id is ephemeral across a park+recreate.
   sessions: {
     reopen: (channelId, taskId) =>
       ipcRenderer.invoke('sessions:reopen', {
@@ -183,6 +195,16 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.on(SESSIONS_EVENT, listener);
       return () => ipcRenderer.removeListener(SESSIONS_EVENT, listener);
     },
+    pause: (channelId, taskId) =>
+      ipcRenderer.invoke('sessions:pause', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+      }),
+    end: (channelId, taskId) =>
+      ipcRenderer.invoke('sessions:end', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+      }),
   },
 
   // Live updates: main watches postgres_changes for the viewed workspace's content tables and

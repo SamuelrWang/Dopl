@@ -119,6 +119,32 @@ function promptTokens(usage) {
   return n(u.input_tokens) + n(u.cache_read_input_tokens) + n(u.cache_creation_input_tokens);
 }
 
+// HOW MUCH THIS QUERY HAS SPENT IN TOTAL — every token billed, output included. This is the
+// OTHER number, and it is deliberately a different function from `promptTokens` above: spend is
+// what the run COST (so output counts, and it only ever climbs), occupancy is what the model
+// last READ (so output does not count, and it falls after a compaction). Reading one off the
+// other is the bug session-model's header spends a paragraph on.
+//
+// ⚠ ITS INPUT IS THE `result` EVENT'S `usage`, which the bundled CLI builds by summing its
+// running per-model totals — i.e. the SESSION TOTAL FOR THIS QUERY, not this turn's. It
+// therefore behaves exactly like `total_cost_usd` beside it: cumulative within a query, and
+// RESTARTING FROM ZERO on a resumed one. The accumulation across resume cycles is
+// session-io.js's, beside the identical cost arithmetic; this function only reads the block.
+// Every field is coerced: a missing or junk usage block reads as 0, never as NaN.
+function sessionTokens(usage) {
+  const u = usage || {};
+  const n = (v) => {
+    const x = Number(v);
+    return Number.isFinite(x) && x > 0 ? x : 0;
+  };
+  return (
+    n(u.input_tokens) +
+    n(u.output_tokens) +
+    n(u.cache_read_input_tokens) +
+    n(u.cache_creation_input_tokens)
+  );
+}
+
 // The reducer event a finished turn produces, or null when there is nothing measured to say.
 // Built here (rather than inline in the observer) so the shape is testable without a session.
 function contextEvent(tokens, model) {
@@ -174,6 +200,7 @@ module.exports = {
   CONTEXT_WINDOWS,
   contextWindowFor,
   promptTokens,
+  sessionTokens,
   contextEvent,
   observe,
 };

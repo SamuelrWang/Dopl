@@ -6,9 +6,10 @@
  * ⚠ THE SEAM IS THE CREDENTIAL, not who the message says wrote it. Too wide and
  * the desktop runtime's own echoes stop (`main/session-window.js` posts on
  * Electron's Supabase cookies, so `source:"user"`); too narrow and an agent's
- * answer posted as `task_finished` renders nowhere (`lib/group-thread.ts` folds
- * terminal markers into `draft.endEvent`, never `draft.entries`). Asserted in
- * both directions.
+ * answer posted as `task_finished` renders nowhere — since wiring plan Phase 5
+ * (2026-08-18) because `components/channels-v2/view-model.ts › isLifecycleEcho`
+ * drops the three kinds outright; before that because a session card folded the
+ * marker into its `endEvent`. Asserted in both directions.
  *
  * ⚠ REWRITTEN DOWN 2026-08-18 (wiring plan Phase 4). It also held the
  * propose-then-confirm contract — `closeTask` refusing an agent token,
@@ -200,7 +201,9 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
 
 describe("postMessage — the lanes the guard must NOT touch", () => {
   it("task_progress stays agent-writable: it is the milestone lane", async () => {
-    // Only `task_*` kind whose body IS rendered (`splitSessionEntries`) and the
+    // Only `task_*` kind whose body IS rendered (it is the milestone lane; the
+    // `splitSessionEntries` reader that used to say so was deleted with the
+    // session card, wiring plan Phase 5) and the
     // only one claiming nothing about lifecycle.
     const msg = await postMessage(agentCtx, "general", {
       body: "schema half landed",

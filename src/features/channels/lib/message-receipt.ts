@@ -4,18 +4,20 @@
  * "Received"/"Read": the desktop does not ack a delivery, so claiming one is a
  * lie. Reports only what the transcript proves.
  *
- * A message with an explicit `metadata.taskId` groups into a {@link SessionCard}
- * and never renders standalone, so in practice this shows only for an ADDRESSED
- * no-task message; the task-linked shape is handled so it can be unit-tested.
+ * ⚠ EVERY MESSAGE RENDERS STANDALONE NOW. This used to note that a message with
+ * an explicit `metadata.taskId` grouped into a session card and so never reached
+ * this line; the card and its grouper are DELETED (wiring plan Phase 5,
+ * 2026-08-18), so the task-linked shape is live rather than merely unit-tested.
  *
- * Pure + deterministic. Mirrors `group-thread.computeStatus`'s terminal-wins
- * precedence and reuses {@link calmTerminalStatus} for the strict `=== true`
- * checks. ⚠ Linkage by the DERIVABLE legacy `task-{channelId}-{seq}` id is
+ * Pure + deterministic. Its terminal-wins precedence used to MIRROR the grouper's
+ * `computeStatus`; with that gone this is the only statement of it left, and
+ * {@link calmTerminalStatus} (`lib/calm-terminal.ts`, rehomed in the same change)
+ * is what makes the flag reads strictly `=== true`. ⚠ Linkage by the DERIVABLE legacy `task-{channelId}-{seq}` id is
  * party-scoped (step 3) so only the two people in the exchange move my receipt.
  */
 
 import type { ChannelMessage } from "../types";
-import { calmTerminalStatus } from "./group-thread";
+import { calmTerminalStatus } from "./calm-terminal";
 
 export type ReceiptStatus =
   | "sent"

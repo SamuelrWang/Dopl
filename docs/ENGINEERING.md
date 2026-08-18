@@ -2708,8 +2708,94 @@ return scope === 'none' ? 'ignore' : 'trigger';
 
 **⚠ THE RULE THAT CAME OUT OF IT.** The passes are chosen by WHETHER the shell has a task id, never tried in preference order, because "the task pass found nothing" is the NORMAL state of a legacy task. A session that HAS a task id gets a task WINDOW: rows stamped with this task, plus the UNSTAMPED two-party messages inside the task's own `seq` span. **A task with no anchor in the fetched window paints NOTHING and says where to read it** — it must not fall back. The pair-scoped pass survives ONLY for a shell with no task id at all: there is no window to compute, and the pair IS the scope.
 
-**THE SPAN IS COMPUTED OFF ROWS ALREADY FETCHED.** No second request and no server filter — a `?taskId=` read was REJECTED. It mirrors the web thread grouper: START is the legacy `task-<channelId>-<seq>` id's own carried seq when that opener row is in the window, else the oldest row stamped with this task whatever its kind; END is this task's LAST terminal (a settled task can be REOPENED and continued, and reading the FIRST terminal re-hides every round after the first interruption), else the next OTHER `task_started` (`src/features/channels/lib/group-thread.ts › groupThread`), else open-ended. A `task_started` with no id of its own is malformed, not a successor, so it never truncates real history.
+**THE SPAN IS COMPUTED OFF ROWS ALREADY FETCHED.** No second request and no server filter — a `?taskId=` read was REJECTED. It mirrors the web thread grouper: START is the legacy `task-<channelId>-<seq>` id's own carried seq when that opener row is in the window, else the oldest row stamped with this task whatever its kind; END is this task's LAST terminal (a settled task can be REOPENED and continued, and reading the FIRST terminal re-hides every round after the first interruption), else the next OTHER `task_started` (mirroring the web thread grouper, which was DELETED with the session card in wiring plan Phase 5, 2026-08-18 — the desktop's copy of the rule is now the only one), else open-ended. A `task_started` with no id of its own is malformed, not a successor, so it never truncates real history.
 
 **RELATED BOUND.** `channel_messages.seq` is GENERATED ALWAYS AS IDENTITY on the TABLE, not a per-channel offset and not a fetch cursor. That is why `fetchRows` omits `since` entirely: a `(cursor - 200)` window holds an arbitrary number of THIS channel's rows (often far fewer than the 50 rendered, sometimes zero), and a cursor of 0 asks for the OLDEST 200 rows of the whole thread.
 
 *Relocated from* `dopl-desktop-app/main/session-history.js`
+
+---
+
+## 2026-08-18 — Session cards die; the Agents tab arrives (wiring plan Phase 5)
+
+Current state is docs/INVARIANTS.md §5 and §11. This is the archaeology: three
+decisions that are cheap to re-argue wrongly.
+
+### The desktop could stop POSTING the three runtime kinds without the server refusing them
+
+`main/session-window.js`'s lifecycle echoes (`task_started` / `task_finished` /
+`task_failed`) were deleted while `service-writes-lifecycle.ts` kept accepting
+them, and that asymmetry is the whole reason the phase could ship at all. Every
+installed desktop keeps posting all three until the version floor rises (§13), so
+tightening the server first would have made older builds' echoes fail loudly for
+no gain. **What shipped instead is the READER** — `channels-v2/view-model.ts ›
+isLifecycleEcho` drops the three kinds on sight, so an old build's rows render as
+nothing rather than as debris. **Deleting the writer and deleting the acceptance
+are two different changes with two different ship orders; do not fold them.**
+
+**ONE echo survived and it is not one of the three:** the calm `task_progress`
+`session_ended` note. Its kind is the MILESTONE lane, it is what tells a WAITING
+PEER that the other side stopped, and §11's quit guard is specified in terms of
+it. The C-5 once-per-(thread, cycle) guard and the FIX #2 echo-id derivation
+survived with it. **P2-9's terminal collapse did NOT** — it keyed the terminal
+echoes on the thread so five park/resume cycles posted one row, which was a rule
+about a card that no longer exists, for kinds that are no longer posted. The
+`kind` argument to `echoSeq` went with it.
+
+### `calmTerminalStatus` outlived the family it lived in, and that was the point
+
+Phase 4's notes flagged the calm reads as the one thing NOT deleted with thread
+closing, and Phase 5 tested that: the whole `lib/group-thread*` family went, and
+this one function was **rehomed to `lib/calm-terminal.ts` rather than deleted**.
+The reason is that its writers are not the session window. `main/trigger-outcomes.js`
+posts `task_failed{declined:true}` on a consent DENY and `{interrupted:true}` on a
+mid-spawn death, and those feed the Declined receipt (`lib/message-receipt.ts`)
+and the muted activity dot. **The generalisable shape: when a family is deleted,
+the question for each exported read is who WRITES what it reads, not who called
+it.** `parseLegacyTaskSeq` left the same way, to `lib/legacy-task-id.ts`, because
+its surviving caller is server-side validation rather than a renderer.
+
+### Two token derivations, one usage block, and they must never be collapsed
+
+The Agents tab wants both **occupancy** (how full is the context window) and
+**spend** (what has this run cost). They come from the same SDK `usage` shapes and
+they are different functions on purpose — `main/session-model.js › promptTokens`
+vs `› sessionTokens`:
+
+- **Occupancy excludes output tokens and comes from the LAST ASSISTANT MESSAGE.**
+  It is the prompt the model just saw, and it FALLS after an auto-compaction.
+- **Spend includes output and comes from the `result` event**, which the bundled
+  CLI builds by summing its running per-model totals — i.e. the session total for
+  *that query*, monotonic within a run and **restarting from zero on a resumed
+  one**. `session-io.js` therefore accumulates DELTAS, exactly like
+  `total_cost_usd` one line above it, and `session-park.js` resets both baselines
+  together.
+
+That file's own header already warned that feeding the gauge from `result.usage`
+makes it climb forever and sail past 100%. The trap this phase added is the
+mirror image: taking the raw per-query total as lifetime spend makes the figure
+COLLAPSE after every park.
+
+### `Number(null)` is 0, which is how a metric becomes a lie
+
+`session-summary.js › metricOrNull` checks `typeof` before it checks finiteness.
+A coercion-only guard turned "this build has no window row for that model" into
+`contextWindow: 0`, and the meter would have painted 0% of a window that may be
+nearly full. The whole widened projection is `null`-or-a-number for the same
+reason, and the Agents tab renders the absence — no denominator, no meter; no
+stamp, no clause. **UNKNOWN is not EMPTY (§11), and a coercion is the quiet way to
+break that.**
+
+### Pause and end are the session window's own buttons, reached from another window
+
+No new runtime control was invented. `sessions.pause` → `{type:'interrupt'}` (the
+send button's pause morph, named as such in `renderer/session/session.html`) and
+`sessions.end` → `{type:'end'}` ("End session"), both through
+`main/session-reopen.js › controlByTask` onto the engine's existing dispatch.
+**Own-agents-only fell out of the resolution rather than being enforced by a
+check**: main looks the pair up in its own in-memory registry, which holds nothing
+but this operator's sessions on this machine. The security review that the parity
+pin's fail-on-ADD forced is recorded in `test/preload-parity.test.mjs` beside the
+two new entries — and the reason it was worth forcing is that **a stop verb and a
+start verb look identical in a preload diff.** F-212's direct 1:1 lane is the
+start verb, and it is not built.

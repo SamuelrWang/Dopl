@@ -5,7 +5,10 @@ describes now lives at `src/features/channels/components/channels-v2/` and reads
 real data; `index.tsx` here is a thin seam over `› channels-v2-core.tsx`, exactly
 like `#/pages/channels`. The design-review fixtures
 (`mock-data.ts`, `mock-threads.ts`, `mock-agents.ts`, `mock-mentions.ts`) and the
-mock's own columns were deleted with the port.
+mock's own columns were deleted with the port. ⚠ **The last two PRODUCT fixtures
+went with Phases 6 and 5** — `fixtures-mentions.ts` (2026-08-18) and
+`fixtures-agents.ts` (2026-08-18). What is still hardcoded is only the design
+furniture Samuel ruled kept: `fixtures.ts`.
 
 This file stays because it is the INTENT document the port is judged against —
 its rulings migrate into docs/INVARIANTS.md and docs/ENGINEERING.md when the
@@ -14,7 +17,7 @@ sections below as the DESIGN, and the table immediately following as what is
 actually wired. **Current behaviour lives in docs/INVARIANTS.md §5 §7 §9, never
 here** (repo CLAUDE.md precedence).
 
-## Wired vs hardcoded after Phase 8 (2026-08-18)
+## Wired vs hardcoded after Phase 5 (2026-08-18)
 
 | Surface | State |
 | --- | --- |
@@ -37,7 +40,13 @@ here** (repo CLAUDE.md precedence).
 | Composer typing, @-autocomplete, agent-request pills | **WIRED** — pills are the real roster |
 | **Composer SEND** | **WIRED** — panel open → the request fan-out (`POST /tasks` with `toUserIds`); panel closed → a plain chat message (`intent:"chat"`) |
 | Activity heatmap · Linked threads · Favorites · Assistant/Drafts/Saved-items | **HARDCODED** (Samuel 2026-08-18) — `fixtures.ts` |
-| Agents tab + agent view | **HARDCODED** until Phase 5 — `fixtures-agents.ts` |
+| Agents tab | **WIRED (Phase 5)** — one card per LIVE SESSION of mine in this channel, off `agents-model.ts › useDesktopSessions` over the widened `spa-bridge.ts › DesktopSessionSummary`. `fixtures-agents.ts` is DELETED |
+| Agent card: liveness · thread · started / last activity · context meter · token spend | **WIRED (Phase 5)** — the desktop measures all of them (`main/session-summary.js › metrics`); the server stores none. ⚠ An UNMEASURED metric renders as an ABSENCE, never a 0 |
+| **Pause / End the agent** | **WIRED (Phase 5)** — new `sessions.pause` / `sessions.end` preload ops onto the reducer events the session window's own buttons already dispatch. **OWN AGENTS ONLY**, structurally: main resolves against its own registry |
+| Agents tab in a PLAIN BROWSER | **STATES THE DESKTOP-ONLY REALITY** — "could not ask" and "nothing is running" are different facts and are worded differently, never collapsed into an empty list |
+| Agent view: identity, stats, **Sent** lane | **WIRED (Phase 5)** — the Sent lane is the real transcript, matched on `metadata.taskId` + an agent-authored row under my own account |
+| Agent view: **work narration** lane | **NOT BUILT — F-212.** Tool use is on the session window's own IPC stream, which the SPA is not on. Dropped rather than faked: a fabricated line is a claim about what a real machine did |
+| Agent view: **direct 1:1 lane** + its composer | **NOT BUILT — F-212.** No transport exists (a channel post is not out-of-band; the desktop's steer is bound to the session window's sender). The input is NOT RENDERED rather than rendered inert |
 | Tags / mentions inbox | **WIRED** (Phase 6) — `use-channel-mentions` over server-stamped `metadata.mentionedUserIds`; read-state is `channel_mention_reads`; badge is client arithmetic; `fixtures-mentions.ts` is DELETED |
 | Transcript self-mention tint | **WIRED** — driven by the same server stamp the inbox lists, not by a re-parse (one source, `lib/mentions.ts` places the highlight) |
 
@@ -135,6 +144,15 @@ is the `channel_messages` carrying that thread's `taskId`.
   `agent_presence` for liveness. Context and token numbers are runtime metrics
   the server never stores today; the port-time source is the local session
   runtime, not a table.
+  - ⚠ **WIRED IN PHASE 5 (2026-08-18), and the source is exactly as predicted:**
+    `agents-model.ts › useDesktopSessions` over `sessions.summaries` /
+    `onSummaries`, widened with five measured fields. `agent_presence` turned out
+    NOT to be needed for liveness here — the projection carries the session's own
+    state, and presence is a claim about a PEER's machine. **One shape the design
+    drew cannot occur today**: two of my agents on one thread, because the
+    desktop's registry is keyed on `(channel, thread)`. The grouping is kept
+    (correct if that ever widens) and the "N of yours here" line is unreachable
+    for now.
 - **Open → the agent view** (`agent-panel.tsx`), a fourth surface sliding over
   the info panel: the agent→operator lane. Three entry types in one feed —
   work narration (nobody received it), messages it actually posted (same
@@ -142,6 +160,15 @@ is the `channel_messages` carrying that thread's `taskId`.
   the direct 1:1 lane between me and it. The direct lane NEVER posts to the
   thread — operator↔agent, out-of-band, which is why it lives here and not in
   the channel composer (the input says so under itself).
+  - ⚠ **PORTED IN PHASE 5 WITH ONE OF THE THREE LANES, AND THE OTHER TWO NAMED
+    RATHER THAN FAKED (2026-08-18).** Only **Sent** has a backing today; work
+    narration lives on the session window's own IPC stream and the direct lane
+    has no transport at all — both are **F-212**. The panel states both absences
+    in place and does NOT render the direct composer, because an inert input at
+    the foot of a panel looks exactly like every input that does post.
+  - **What it gained instead:** the real numbers, and **pause / end / open
+    window** — the controls the "Agent view grows controls" note below asked
+    for, minus "change its settings".
 - **FUTURE ruling (recorded 2026-08-18, NOT implemented)**: thread transcripts
   will eventually carry only party-to-party traffic; the agent's commentary to
   its own operator moves out of transcripts and into this view. Applies to the
@@ -274,9 +301,12 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   a claim about containment that the desktop cannot consume; if the design wants
   one, it is a desktop change first (`main/session-profiles.js`), a UI change
   second. On launch the agent is ACTIVE: it appears in the Agents tab and in the
-  thread (the Agents tab is still Phase 5 fixtures).
+  thread — ✅ and since Phase 5 (2026-08-18) that Agents tab is REAL.
 - **Agent view grows controls**: pause the agent, change its settings, plus the
-  existing direct 1:1 lane.
+  existing direct 1:1 lane. ✅ **PAUSE AND END SHIPPED in Phase 5 (2026-08-18)**,
+  plus "open window". **"Change its settings" did NOT** — a live posture change
+  from the main window is a different security shape from a stop verb, and the
+  direct lane has no transport (F-212).
 - **Windowing inverts.** Today: request → desktop notification → click → a NEW
   WINDOW per thread (the session window with its open-session settings). New
   default: notification click FOCUSES the main desktop app and auto-navigates
@@ -322,8 +352,15 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   through the same explicit panel. ⚠ SHIP-ORDERED (INVARIANTS §13): web deploys
   before a desktop build.
 - **Session pills / session cards are replaced** by the Agents tab + agent
-  view. The pop-out thread window is the session window REDESIGNED — but it is
-  a THREAD view (the thread, not the session, is what it shows).
+  view. ✅ **LANDED 2026-08-18 — wiring plan Phase 5.** `session-card.tsx`,
+  `session-card-status.tsx`, `session-pills-bar.tsx`, `thread-panel.tsx`,
+  `threads-button.tsx`, `thread-party.tsx` and the whole `lib/group-thread*`
+  family are deleted; the desktop stopped posting `task_started` /
+  `task_finished` / `task_failed` (the server still ACCEPTS them — installed
+  builds keep posting until the floor rises, and the v2 transcript renders those
+  kinds as nothing). The pop-out thread window is the session window REDESIGNED —
+  but it is a THREAD view (the thread, not the session, is what it shows), and
+  that half is still unbuilt.
 - **THREAD CLOSING IS REMOVED.** ✅ **LANDED 2026-08-18 — wiring plan Phase 4.**
   The close machinery existed to make agents stop; with pause/end living on the
   AGENT (agent view), an open/closed thread status buys nothing. No close, no
@@ -346,6 +383,13 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
 - **Pause/end is for YOUR OWN local agents only** — nobody pauses another
   member's agent. The peer's side renders a paused/ended counterpart agent as
   **inactive/offline** (presence-style), NOT as a "thread stalled" state.
+  ✅ **HONOURED IN PHASE 5 (2026-08-18), and it needed no filter to honour.** The
+  ops resolve `(channel, thread)` against MAIN'S OWN session registry, which
+  holds only this operator's sessions on this machine, so there is no
+  cross-member runtime to reach. The peer's side is unchanged: their view of my
+  agent is presence (INVARIANTS §7's 90 s window, which already fails safe to
+  offline) plus whatever it posted — no new state, and nothing that says
+  "stalled".
 
 Third round (same day):
 

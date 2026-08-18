@@ -28,11 +28,11 @@ import type { AvatarPerson } from "@/shared/ui/avatar";
 /**
  * The thread a message belongs to, or null for a channel-level post.
  *
- * ⚠ Deliberately a LOCAL three-line reader rather than an import from
- * `lib/group-thread.ts`: that module is the session-card machinery the wiring
- * plan retires in Phase 4, and a new surface must not take a dependency on
- * something scheduled for deletion. The `metadata.taskId` key itself is the
- * storage-boundary name (INVARIANTS §5) and is not going anywhere.
+ * ⚠ Deliberately a LOCAL three-line reader rather than an import from the
+ * session-card machinery — which was DELETED in wiring plan Phase 5
+ * (2026-08-18), so the call not to depend on it paid off. The `metadata.taskId`
+ * key itself is the storage-boundary name (INVARIANTS §5) and is not going
+ * anywhere.
  */
 export function threadIdOf(message: ChannelMessage): string | null {
   const value = message.metadata.taskId;

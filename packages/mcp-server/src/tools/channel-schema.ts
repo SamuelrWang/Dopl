@@ -125,9 +125,11 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
   // ⚠ The kinds are NOT a vocabulary to pick from — the describe must say whose
   // each one is. Listing five names with no rule gets a finished responder to
-  // post its ANSWER as `task_finished`, which appears nowhere:
-  // `lib/group-thread.ts` folds a terminal marker into `endEvent` and never
-  // renders its body.
+  // post its ANSWER as `task_finished`, which appears nowhere: the web reader
+  // DROPS the three kinds on sight (`channels-v2/view-model.ts ›
+  // isLifecycleEcho`, 2026-08-18), body and all. Before wiring plan Phase 5 the
+  // reason was a session card folding the marker into its `endEvent`; the card
+  // is gone and the rule is stricter, not weaker.
   //
   // ⚠ The enum keeps all five ON PURPOSE — narrowing turns the mistake into an
   // opaque zod -32602 exactly when the agent needs telling what to do instead.

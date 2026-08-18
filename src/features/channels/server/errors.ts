@@ -152,11 +152,14 @@ export class ChannelChatAddressedError extends ChannelError {
  * An AGENT-token caller tried to post a LIFECYCLE kind. 403.
  *
  * ⚠ The three lifecycle kinds state a fact about a RUNTIME, which an agent is
- * not in a position to make. The runtimes that own those facts are the desktop
- * session engine (`dopl-desktop-app/main/session-window.js`) and the close
- * route's own echo. An answer posted as `task_finished` renders NOWHERE:
- * `lib/group-thread.ts` folds a terminal marker into `draft.endEvent` and never
- * pushes it to `draft.entries`.
+ * not in a position to make. The runtime that owned those facts was the desktop
+ * session engine — and since wiring plan Phase 5 (2026-08-18) it no longer posts
+ * them either (`main/session-window.js`), though the server deliberately still
+ * ACCEPTS them because installed builds do (INVARIANTS §13). Either way an
+ * answer posted as `task_finished` renders NOWHERE: the reader drops the three
+ * kinds on sight (`components/channels-v2/view-model.ts › isLifecycleEcho`),
+ * body and all. The old reason — a session card folding the marker into its
+ * `endEvent` — went with the card.
  *
  * ⚠ The lane is closed by IDENTITY, not kind alone. `ctx.source === "agent"`
  * means a bearer AGENT TOKEN — every MCP `op="post"` and nothing else. Desktop

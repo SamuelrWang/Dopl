@@ -4,54 +4,104 @@
  * Channels v2 — the right panel's AGENTS tab: MY agents running in this
  * channel, one card each, each with a way into the agent view.
  *
- * ⚠ HARDCODED — no backing data yet (Samuel 2026-08-18). Wired in Phase 5 over
- * a WIDENED desktop session projection; context occupancy and token spend are
- * runtime metrics the server stores none of today (MAPPING.md § Agents tab;
- * wiring plan Risk 5). The fixture stays so the designed surface remains
- * reviewable rather than becoming an empty state for three phases.
+ * ⚠ WIRED (wiring plan Phase 5, 2026-08-18). `fixtures-agents.ts` is DELETED.
+ * Every card is one live entry from this machine's own session projection —
+ * `agents-model.ts`, over `spa-bridge.ts › DesktopSessionSummary` — including
+ * the context and token numbers, which the desktop measures and the server
+ * stores none of (MAPPING.md § Agents tab).
  *
- * It is an OPERATOR surface, not a roster — the Info tab's Members list is
- * where everyone's presence lives. Nothing here is another member's runtime.
+ * It is an OPERATOR surface, not a roster, and that is structural: the feed IS
+ * one machine's own registry, so another member's agent cannot appear here.
+ * The Info tab's Members list is where everyone's presence lives.
+ *
+ * ⚠ DESKTOP-ONLY, AND IT SAYS SO RATHER THAN SHOWING NOTHING. In a plain
+ * browser (or on a desktop older than the feed) there is no local runtime to
+ * read, so the tab states that reality — "could not ask" and "asked, nothing is
+ * running" are different facts and are worded differently. An empty list under
+ * a browser would read as "you have no agents", which is a claim this surface
+ * cannot make.
  *
  * An operator can be running several agents at once, and more than one of them
  * on the SAME thread — the cards are grouped so that reads off the column
  * instead of having to be inferred.
+ *
+ * ⚠ COPY RULE (INVARIANTS §5): inside one member's window there is exactly ONE
+ * session, so it never needs a qualifier. Nothing here writes "agent session"
+ * or "channel session" — the noun on this surface is the AGENT.
  */
 
 import { Bot, CornerDownRight } from "lucide-react";
 import { UsageMeter } from "@/shared/ui/usage-meter";
+import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { AgentLiveness, CARD_BUTTON, PANEL_CARD } from "./bits";
 import {
-  AGENTS_PER_THREAD,
-  GROUPED_FIXTURE_AGENTS,
+  agentKey,
+  agentsForChannel,
+  agentsPerThread,
   formatTokens,
-  type FixtureAgent,
-} from "./fixtures-agents";
+  metric,
+} from "./agents-model";
+
+/** Absolute epoch ms → the relative phrase the cards use. `formatRelativeTime`
+ *  takes an ISO string and answers "" for an absent one, which is the right
+ *  degradation: the caller drops the whole clause rather than printing a stub. */
+function relative(at: number | null): string {
+  return at === null ? "" : formatRelativeTime(new Date(at).toISOString());
+}
 
 export function AgentsTab({
+  sessions,
+  channelId,
   openAgent,
   onOpenAgent,
 }: {
+  /** The whole machine's feed, or `null` for "could not ask" — no bridge, or a
+   *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
+  sessions: readonly DesktopSessionSummary[] | null;
+  channelId: string;
+  /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
-  onOpenAgent: (id: string) => void;
+  onOpenAgent: (key: string) => void;
 }) {
+  if (sessions === null) {
+    return (
+      <div className="px-4 py-8 text-center">
+        <p className="text-caption text-text-muted">
+          Your agents run on your own machine, so this list needs the Dopl
+          desktop app. Nothing about them is stored on the server.
+        </p>
+      </div>
+    );
+  }
+
+  const mine = agentsForChannel(sessions, channelId);
+  const perThread = agentsPerThread(mine);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
       <p className="pb-3 text-caption text-text-muted">
         Your agents working in this channel. Other members&apos; agents run in
         their own window.
       </p>
-      <div className="flex flex-col gap-2">
-        {GROUPED_FIXTURE_AGENTS.map((agent) => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            viewing={agent.id === openAgent}
-            onOpen={() => onOpenAgent(agent.id)}
-          />
-        ))}
-      </div>
+      {mine.length === 0 ? (
+        <p className="py-6 text-center text-caption text-text-muted">
+          Nothing of yours is running in this channel.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {mine.map((agent) => (
+            <AgentCard
+              key={agentKey(agent)}
+              agent={agent}
+              siblings={(perThread.get(agent.taskId) ?? 1) - 1}
+              viewing={agentKey(agent) === openAgent}
+              onOpen={() => onOpenAgent(agentKey(agent))}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -64,27 +114,43 @@ export function AgentsTab({
  * The meter is the shared `UsageMeter` at `tone="ramp"`: a context window is
  * GLANCED at, not read. `over` is not passed — it is an entitlement verdict the
  * caller owns, and a full context window is not an entitlement event.
+ *
+ * ⚠ EVERY NUMBER IS OPTIONAL AND EVERY ABSENCE IS RENDERED AS ONE. No meter
+ * without a denominator, no "Started" without a stamp, no `0` standing in for
+ * "not measured yet" (INVARIANTS §11).
  */
 function AgentCard({
   agent,
+  siblings,
   viewing,
   onOpen,
 }: {
-  agent: FixtureAgent;
+  agent: DesktopSessionSummary;
+  siblings: number;
   viewing: boolean;
   onOpen: () => void;
 }) {
-  const { label, threadTitle, state, startedAt, lastActivityAt } = agent;
-  const siblings = (AGENTS_PER_THREAD[threadTitle] ?? 1) - 1;
+  // A session with no first-class thread is a real session; it just has no title
+  // to show, and saying so beats an empty line.
+  const threadTitle = agent.threadTitle ?? "No thread title";
+  const contextUsed = metric(agent.contextUsed);
+  const contextWindow = metric(agent.contextWindow);
+  const tokensSpent = metric(agent.tokensSpent);
+  const started = relative(metric(agent.startedAt));
+  const lastActivity = relative(metric(agent.lastActivityAt));
+  const timing = [
+    started && `Started ${started}`,
+    lastActivity && `Last activity ${lastActivity}`,
+  ].filter(Boolean);
 
   return (
     <div className={cn(PANEL_CARD, viewing && "border-border-highlight")}>
       <div className="flex items-center gap-2">
         <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-          {label}
+          {agent.name}
         </span>
-        <AgentLiveness running={state === "running"} />
+        <AgentLiveness running={agent.state === "working"} />
       </div>
 
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
@@ -100,22 +166,26 @@ function AgentCard({
         )}
       </div>
 
-      <span className="text-caption text-text-muted">
-        Started {startedAt} · Last activity {lastActivityAt}
-      </span>
+      {timing.length > 0 && (
+        <span className="text-caption text-text-muted">{timing.join(" · ")}</span>
+      )}
 
-      <UsageMeter
-        label="Context tokens"
-        used={agent.contextUsed}
-        limit={agent.contextWindow}
-        tone="ramp"
-        formatValue={formatTokens}
-        className="mt-0.5"
-      />
+      {contextUsed !== null && contextWindow !== null && (
+        <UsageMeter
+          label="Context tokens"
+          used={contextUsed}
+          limit={contextWindow}
+          tone="ramp"
+          formatValue={formatTokens}
+          className="mt-0.5"
+        />
+      )}
 
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-caption text-text-muted">
-          Tokens spent: {agent.tokensSpent}
+          {tokensSpent === null
+            ? "Tokens spent: not measured yet"
+            : `Tokens spent: ${formatTokens(tokensSpent)}`}
         </span>
         <button
           type="button"

@@ -40,8 +40,12 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
 test("REPORT: `list()` narrows the two report-only fields back off — the wire is unchanged", () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  // ⚠ The five measurement fields joined the wire in Phase 5 (2026-08-18) and they are
+  // NOT report-only: the Agents tab is their whole audience. What stays report-only is
+  // still exactly two, and the point of this case is that the narrowing did not widen.
   assert.deepEqual(Object.keys(m.list()[0]).sort(), [
-    "channelId", "channelName", "name", "sessionId", "state", "taskId", "threadTitle",
+    "channelId", "channelName", "contextUsed", "contextWindow", "lastActivityAt",
+    "name", "sessionId", "startedAt", "state", "taskId", "threadTitle", "tokensSpent",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
   assert.equal("key" in m.list()[0], false);

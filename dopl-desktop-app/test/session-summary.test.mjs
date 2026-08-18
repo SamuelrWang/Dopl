@@ -226,7 +226,12 @@ test("NAMES: a window's own handle is the SAME one its pill shows, either way ro
 
 // ── 3. THE SUMMARY SHAPE ─────────────────────────────────────────────────────────────
 
-test("SHAPE: a live summary carries exactly what a pill and its dropdown need", () => {
+test("SHAPE: a live summary carries exactly what the Agents tab and the agent view need", () => {
+  // ⚠ WIDENED 2026-08-18 (wiring plan Phase 5): the five MEASUREMENT fields joined the
+  // identity + state ones when session cards died and the Agents tab replaced them. They
+  // are read from where they already lived on the session object — nothing here starts a
+  // counter — and none of them reaches the server (`session-state-push.js › rowFor` picks
+  // its columns by name).
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   assert.deepEqual(m.list(), [
@@ -238,8 +243,56 @@ test("SHAPE: a live summary carries exactly what a pill and its dropdown need", 
       state: "working",
       channelName: "general",
       threadTitle: "Ship the thing",
+      contextUsed: 84000,
+      contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
+      tokensSpent: 1200000,
+      startedAt: 1700000000000,
+      lastActivityAt: 1700000600000,
     },
   ]);
+});
+
+test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
+  // ⚠ THE FAILURE THIS CASE EXISTS FOR: `Number(null)` is 0, so a coercion-only guard
+  // reports an empty context window on a session that has simply not reported usage yet,
+  // and the meter paints 0% of a window that may be nearly full. Three absences land
+  // here — a session before its first turn, an engine that predates the stamps, and a
+  // MODEL THIS BUILD HAS NO WINDOW FOR (which must show raw tokens, never a made-up
+  // percentage: session-model.js says so in as many words).
+  const m = load();
+  const s = session({
+    promptTokens: undefined,
+    liveModel: "some-model-from-the-future",
+    tokensSpent: undefined,
+    startedAt: undefined,
+    lastActivityAt: undefined,
+  });
+  m.bind({ sessions: new Map([[s.key, s]]) });
+  const row = m.list()[0];
+  assert.equal(row.contextUsed, null);
+  assert.equal(row.contextWindow, null, "an unknown model gets NO denominator, not 0");
+  assert.equal(row.tokensSpent, null);
+  assert.equal(row.startedAt, null);
+  assert.equal(row.lastActivityAt, null);
+  // …and the identity half is untouched by any of it.
+  assert.equal(row.name, "quartz");
+  assert.equal(row.state, "working");
+});
+
+test("SHAPE: a RETAINED ENDED pill keeps the measurement it settled with", () => {
+  // The session object is gone by then, so a live read would blank every number at
+  // exactly the moment the operator wants to read what the run cost. `noteEnded` freezes
+  // them with the identity.
+  const m = load();
+  const s = session();
+  m.bind({ sessions: new Map() });
+  assert.equal(m.noteEnded(s, true), true);
+  const [row] = m.list();
+  assert.equal(row.state, "ended");
+  assert.equal(row.contextUsed, 84000);
+  assert.equal(row.contextWindow, 200000);
+  assert.equal(row.tokensSpent, 1200000);
+  assert.equal(row.startedAt, 1700000000000);
 });
 
 test("SHAPE: counterparty-influenced text is bounded and single-line", () => {

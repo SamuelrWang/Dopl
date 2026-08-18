@@ -86,7 +86,7 @@ const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 // turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);
-  s.state = state; sessionSummary.touch(); // §3.3: this is where a pill's state can move
+  s.state = state; sessionSummary.noteActivity(s); // §3.3: a pill's state moves here, and so does its activity stamp
   let resolvedLive = false;
   for (const eff of effects) resolvedLive = runEffect(s, eff) === true || resolvedLive;
   return resolvedLive;
@@ -496,5 +496,5 @@ module.exports = {
   getConsentBySender: sessionConsent.getBySender,
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
   reopenWindow: sessionReopen.reopenWindow,
-  reopenByTask: sessionReopen.reopenByTask, // item 2 — MAIN-window bridge (channel-dir-ipc)
+  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, // item 2 + Phase 5 pause/end — the MAIN-window bridge (channel-dir-ipc)
 };

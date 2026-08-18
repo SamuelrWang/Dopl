@@ -66,10 +66,12 @@ const RED = loadReducer();
 
 function harness() {
   const emitted = [];
-  // §3.3: `dispatch` now also pokes the session-pill projection, which is where a pill's
-  // state can move. It is a fire-and-forget notification with no return value and no say in
-  // the decision, so the fake records the pokes and nothing else — but it has to EXIST, or
-  // the sliced dispatch throws a ReferenceError into an already-finished test.
+  // §3.3: `dispatch` also pokes the session-pill projection, which is where a pill's state
+  // can move — via `noteActivity(s)` since the Agents tab's activity stamp joined it (wiring
+  // plan Phase 5, 2026-08-18; the stamp lives with the projection that reads it). It is a
+  // fire-and-forget notification with no return value and no say in the decision, so the fake
+  // records the pokes and nothing else — but it has to EXIST, or the sliced dispatch throws a
+  // TypeError into an already-finished test, which is how this stub earned its comment twice.
   const touched = { count: 0 };
   const api = new Function(
     "sessionReducer",
@@ -89,7 +91,10 @@ function harness() {
        return undefined;
      }
      return { dispatch, resolvePerm };`
-  )(RED.sessionReducer, (eff) => emitted.push(eff), { touch: () => { touched.count += 1; } });
+  )(RED.sessionReducer, (eff) => emitted.push(eff), {
+    noteActivity: () => { touched.count += 1; },
+    touch: () => { touched.count += 1; },
+  });
   return { ...api, emitted, touched };
 }
 

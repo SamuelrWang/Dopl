@@ -20,7 +20,9 @@ import "server-only";
 
 /**
  * Calm-terminal flags a `task_failed` may carry (`declined`, `dropped`,
- * `interrupted`, `capped`, `ended` — see `lib/group-thread.ts`). They decide
+ * `interrupted`, `capped`, `ended` — read by `lib/calm-terminal.ts ›
+ * calmTerminalStatus`, which is where they moved when the `group-thread*` family
+ * was deleted, wiring plan Phase 5, 2026-08-18). They decide
  * whether the other side's card reads calm or red, and the message receipt shows
  * Declined / Interrupted off the same bits. ⚠ Reserved: a member able to set
  * them on someone else's thread could fabricate that thread's outcome.

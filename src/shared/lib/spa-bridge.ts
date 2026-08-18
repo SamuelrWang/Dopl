@@ -30,6 +30,29 @@ export interface DesktopSessionSummary {
   state: "working" | "idle" | "ended";
   channelName: string | null;
   threadTitle: string | null;
+  // ── THE AGENT-VIEW NUMBERS (wiring plan Phase 5, 2026-08-18) ───────────────
+  // Runtime metrics the SERVER STORES NONE OF: `session-state-push.js › rowFor`
+  // picks its columns by name, so widening this wire shape did not widen
+  // `channel_sessions`. They exist only while the desktop that measured them is
+  // running, which is exactly the scope of the Agents tab.
+  //
+  // ⚠ `null` IS A REAL ANSWER EVERYWHERE BELOW and never means zero — an older
+  // main omits the field entirely, a model this build has no window for has no
+  // denominator, and nothing is measured before the first turn reports usage.
+  // Render the absence; do not default it to 0 (INVARIANTS §11 — UNKNOWN is not
+  // EMPTY).
+  /** Tokens occupying the context window: the prompt the model LAST saw. Falls
+   *  after a compaction — this is occupancy, not spend. */
+  contextUsed?: number | null;
+  /** That model's window size, or null when this build has no row for it. */
+  contextWindow?: number | null;
+  /** LIFETIME tokens billed, output included — a different question from
+   *  `contextUsed`, and monotonic across park/resume. */
+  tokensSpent?: number | null;
+  /** Epoch ms. When the desktop created this session object. */
+  startedAt?: number | null;
+  /** Epoch ms of the last engine state change. */
+  lastActivityAt?: number | null;
 }
 
 export interface SpaBridgeSurface {
@@ -52,16 +75,29 @@ export interface SpaBridgeSurface {
   appOrigin?: string;
   syncWatch?(workspaceId: string | null): Promise<unknown>;
   onSyncEvent?(cb: (e: { workspaceId: string; table: string }) => void): () => void;
-  /** SESSION PILLS. `reopen` is SHARED by both preloads (one reopen path in
-   *  main); `summaries` + `onSummaries` are SPA-ONLY. ⚠ All three
-   *  feature-detected at the call site — an older main has none and
-   *  `session-pills-bar` renders NOTHING, same as a plain browser.
+  /** THE OPERATOR'S OWN AGENTS. `reopen` is SHARED by both preloads (one reopen
+   *  path in main); `summaries` / `onSummaries` / `pause` / `end` are SPA-ONLY.
+   *  ⚠ ALL feature-detected at the call site — an older main has none and the
+   *  Agents tab says the surface is desktop-only, same as a plain browser.
    *  ⚠ THREE PLACES MUST STAY IN SYNC: this type, the runtime contract
-   *  `renderer/app-preload.js`, and `apps/desktop-ui/src/lib/dopl-bridge.ts`. */
+   *  `renderer/app-preload.js`, and `apps/desktop-ui/src/lib/dopl-bridge.ts` —
+   *  plus `test/preload-parity.test.mjs`, which fails on ADD (INVARIANTS §11).
+   *
+   *  ⚠ `pause` / `end` ARE OWN-AGENTS-ONLY, and that is structural rather than
+   *  checked: main resolves the (channel, thread) pair against ITS OWN session
+   *  registry, which holds nothing but this operator's sessions on this machine.
+   *  Nobody pauses another member's agent, and a peer's paused agent reads as
+   *  inactive PRESENCE on their side, never as a stalled thread. */
   sessions?: {
     reopen(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
     summaries?(): Promise<{ sessions: DesktopSessionSummary[] }>;
     onSummaries?(cb: (e: { sessions: DesktopSessionSummary[] }) => void): () => void;
+    /** Interrupt the turn in flight — the session window's send-button pause
+     *  morph, reached from the Agents tab. The session stays live and named. */
+    pause?(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
+    /** End the AGENT — the session window's "End session". Terminal for the
+     *  session, and it touches NO thread: a thread has no finished state. */
+    end?(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
   };
 }
 

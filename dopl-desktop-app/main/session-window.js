@@ -1,14 +1,27 @@
-// Session window factory + lifecycle echoes (v1.9 Session Window, Track T3).
+// Session window factory + the ONE surviving lifecycle echo (v1.9 Session Window, Track T3).
 //
 // The session engine (T1) owns the SDK run and the IPC event stream but NEVER
 // imports electron.BrowserWindow — index.js injects a window factory via
 // sessionEngine.setWindowFactory (§B.5 seam). This module IS that factory plus the
-// two lifecycle-echo handlers the engine calls (onLaunched/onEnded), which post the
-// task_started / task_finished / task_failed channel events through the EXISTING
-// channel-post.postTaskEvent so the web session-card story stays byte-for-byte
-// coherent with today (§A.3). It is split out of index.js only to respect the §2
-// 500-line cap; index.js still owns the wiring (setWindowFactory + setLifecycle
-// handlers + init, before listener.start).
+// lifecycle-echo handlers the engine calls (onLaunched/onEnded). It is split out of
+// index.js only to respect the §2 500-line cap; index.js still owns the wiring
+// (setWindowFactory + setLifecycle handlers + init, before listener.start).
+//
+// ⚠ THE THREE RUNTIME KINDS ARE NO LONGER POSTED — wiring plan Phase 5 (2026-08-18).
+// `task_started`, `task_finished` and `task_failed` state a fact about a RUNTIME, and an
+// agent's run state now lives in the AGENTS TAB and the agent view, read from the local
+// session projection (main/session-summary.js), not from rows in a shared transcript. So
+// `onLaunched` posts nothing at all and `onEnded` posts only the calm note below.
+//   • THIS IS ONE-SIDED FOR A LONG TIME. Every installed desktop keeps posting all three,
+//     and the SERVER STILL ACCEPTS THEM — tightening `service-writes-lifecycle.ts` needs a
+//     desktop-floor raise (INVARIANTS §13) and is deliberately NOT part of this change. The
+//     readers are what went: `channels-v2/view-model.ts › isLifecycleEcho` drops the three
+//     kinds on sight, so an old build's echoes render as NOTHING rather than as debris.
+//   • WHAT SURVIVES, AND WHY IT IS NOT ONE OF THEM: the calm `task_progress` note
+//     (`session_ended` / the quit guard's "went inactive"). Its kind is the MILESTONE lane,
+//     which is agent-writable and rendered as prose; it is what tells a WAITING PEER that
+//     this side stopped, which INVARIANTS §11 requires of the quit path. It says nothing
+//     about the thread — a thread has no finished state (§5, Phase 4).
 
 const path = require('path');
 const { BrowserWindow } = require('electron');
@@ -59,7 +72,7 @@ function createSessionWindow(sessionId) {
   return win;
 }
 
-// ── Lifecycle echoes (engine → channel) ──────────────────────────────────────
+// ── The lifecycle echo (engine → channel) ────────────────────────────────────
 // The engine's runLifecycle hands a flat info object { channelId, taskId, workspaceId,
 // side, sessionId, key, sdkSessionId }. postTaskEvent needs only channel.id, workspaceId,
 // and a `seq` for the idempotent clientMsgId `${kind}-${channelId}-${seq}` (it does NOT
@@ -76,48 +89,27 @@ function createSessionWindow(sessionId) {
 //   cycle = the SDK session id (a resumed query mints a fresh one at its own system/init),
 //           falling back to the per-object sessionId for a PRE-INIT crash so two distinct
 //           cycles that both die before init still get distinct rows.
-// The DELIBERATE same-cycle dedupe (I-LOW(b)) is preserved: a crash echo and the reload
-// interrupted-echo share one cycle's sdk id, so they still collapse to ONE server row.
+// The DELIBERATE same-cycle dedupe (I-LOW(b)) is preserved: two attempts within one cycle
+// share that cycle's sdk id, so they still collapse to ONE server row.
 //
-// P2-9 (2026-08-04) — THE CYCLE DISCRIMINATOR IS DROPPED FOR A FIRST-CLASS THREAD, and the
-// TERMINAL echo only. FIX #2 asked "is this a distinct RUN", which is a fact about this
-// machine; the thread card asks "how did this exchange END", which is a fact about the
-// exchange. Folding the SDK resume cycle into the key answered the first question on a row
-// that renders the second, so a session that parked and resumed five times posted FIVE
-// terminal rows for ONE logical failure — and nothing deduped across machines either, since
-// an sdk id is local. Keyed on (kind, taskId) they collapse, on the server, for every
-// machine and every cycle.
-//
-//   - TERMINAL only. `task_started` KEEPS the cycle: a resume genuinely IS a new start and
-//     the card's restart detection reads those seqs (`groupThread`'s `restarted`). Collapsing
-//     them would make a resumed session look like it never restarted.
-//   - FIRST-CLASS only. A legacy `task-<channel>-<seq>` id is minted per MESSAGE, so keying
-//     on it dedupes nothing a cycle key did not already dedupe, and the legacy path keeps its
-//     shape byte for byte.
-//
-// Precedent for the local half of this is `queued-notice.js`'s `announced` set; here the
-// server's own `client_msg_id` uniqueness is enough, and it is the only one that works
-// across machines.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isTerminalKind(kind) {
-  return kind === 'task_finished' || kind === 'task_failed';
-}
-function echoSeq(info, kind) {
+// ⚠ P2-9's TERMINAL COLLAPSE LIVED HERE AND WENT WITH THE TERMINAL ECHOES (Phase 5,
+// 2026-08-18). It keyed `task_finished` / `task_failed` on the THREAD rather than the cycle,
+// so five park+resume cycles posted one row for one logical failure — a rule about a card
+// this phase deleted, for kinds this module no longer posts. The `kind` argument went with
+// it: ONE kind reaches this derivation now, and it is the non-terminal note, which wants the
+// per-cycle discriminator FIX #2 gives it (a genuinely new run that ends is a new note).
+function echoSeq(info) {
   const i = info || {};
   if (i.seq != null) return i.seq;
   const base = i.taskId || i.key || i.sessionId || 'session';
-  // P2-9: one terminal row per (kind, thread), across cycles and across machines.
-  if (isTerminalKind(kind) && UUID_RE.test(String(i.taskId || ''))) return base;
   const cycle = i.sdkSessionId || i.sessionId || 'init';
   return base + '#' + cycle;
 }
-// `kind` rides in because the echo id now depends on it (P2-9): a terminal row is keyed on
-// the THREAD so cycles collapse, while task_started keeps its per-cycle discriminator.
-function echoTargets(info, kind) {
+function echoTargets(info) {
   const i = info || {};
   return {
     entry: { channel: { id: i.channelId }, workspaceId: i.workspaceId },
-    m: { seq: echoSeq(i, kind) },
+    m: { seq: echoSeq(i) },
     taskId: i.taskId || undefined,
   };
 }
@@ -149,48 +141,46 @@ function firstInactiveNote(channelId, seq) {
 }
 // ─── END SESSION-WINDOW-PURE ──────────────────────────────────────────────────────────
 
-// task_started the instant the session's SDK system/init lands (§A.3 launched).
-function onLaunched(info) {
-  const { entry, m, taskId } = echoTargets(info, 'task_started');
-  if (!entry.channel.id) return;
-  Promise.resolve(postTaskEvent(entry, m, 'task_started', taskId))
-    .catch((err) => diag('session onLaunched echo error', err && err.message));
-}
+/**
+ * ⚠ POSTS NOTHING, AND THAT IS THE FEATURE (Phase 5, 2026-08-18). This used to echo
+ * `task_started` the instant the session's SDK system/init landed (§A.3 launched). A launch is
+ * a fact about a RUNTIME; the surface that reports it is the Agents tab, off the LOCAL session
+ * projection, and a transcript row claiming it was the thing this phase removed.
+ *
+ * The handler is KEPT rather than unwired so the engine's lifecycle seam
+ * (`setLifecycleHandlers` / `runLifecycle`) stays intact for the calm note below — and so this
+ * comment sits where the next person looks for the echo.
+ */
+function onLaunched(_info) {}
 
-// task_finished / task_failed when the session ends (End / cap / crash).
+// THE CALM STATUS NOTE, and nothing else, when the session ends (End / cap / crash / quit).
 // The engine is authoritative: it passes the resolved `kind`, the `extra` metadata (e.g.
 // { interrupted:true }), and — for P3 (v1.7.4) — an explicit calm `bodyOverride`. IDLE
-// no longer calls this at all (it parks). The turn/cost caps ride { capped:true } and
-// the operator End rides { ended:true }, so the web renders a calm terminal state
-// (P4) exactly like the interrupted/declined echoes; the thread row is never touched — a
-// session ending is not, and since Phase 4 (2026-08-18) cannot be, an outcome for it.
-// `bodyOverride` wins; else we derive a generic body from the metadata flags.
+// no longer calls this at all (it parks).
+//
+// ⚠ ONLY `task_progress` IS POSTED. The terminal kinds are gone with the session card that read
+// them (file header): a `task_failed{capped}` / `task_finished` row said "this exchange ended"
+// on a surface that had no other way to say "this machine stopped", and the thread never had
+// an outcome to report (INVARIANTS §5). What is left is the `session_ended` MILESTONE — the
+// one thing the peer genuinely needs, because they are waiting on a reply that is not coming.
+// The metadata rides unchanged: `CALM_FLAG_KEYS` stay reserved server-side (§5) whether or not
+// this build still writes them, and installed builds still do.
 function onEnded(info, kind, extra, bodyOverride) {
   const meta = extra || {};
-  // P1-7 (2026-08-04): `task_progress` joins the accepted kinds, because a LOCAL
-  // session end is no longer a terminal claim about the SHARED thread — see
-  // `session-effects.endLifecycle`. Without it the coercion below would have
-  // silently turned the non-terminal marker back into a `task_finished`, which is
-  // the same bug wearing the opposite label.
-  const k =
-    kind === 'task_failed' || kind === 'task_finished' || kind === 'task_progress'
-      ? kind
-      : 'task_finished';
-  // The RESOLVED kind decides the echo id (P2-9), so the targets are built after it.
-  const { entry, m, taskId } = echoTargets(info, k);
+  // P1-7 (2026-08-04): `task_progress` is the non-terminal marker for a LOCAL session end —
+  // see `session-effects.endLifecycle`. Everything else USED to be coerced to `task_finished`;
+  // it is now dropped, because the coercion's only remaining job would be to manufacture a
+  // terminal row this module no longer posts.
+  if (kind !== 'task_progress') return;
+  const { entry, m, taskId } = echoTargets(info);
   if (!entry.channel.id) return;
   // C-5: the calm status note is said once per (thread, cycle); see firstInactiveNote.
   if (meta.session_ended === true && !firstInactiveNote(entry.channel.id, m.seq)) {
     diag('session onEnded: session_ended already posted for this cycle — not repeating it');
     return;
   }
-  const body = bodyOverride
-    || (meta.interrupted ? 'Request interrupted'
-      : meta.declined ? 'Request declined'
-        : meta.capped ? 'Limit reached'
-          : (meta.ended || meta.session_ended) ? 'Session ended'
-            : undefined);
-  Promise.resolve(postTaskEvent(entry, m, k, taskId, meta, body))
+  const body = bodyOverride || (meta.session_ended ? 'Session ended' : undefined);
+  Promise.resolve(postTaskEvent(entry, m, 'task_progress', taskId, meta, body))
     .catch((err) => diag('session onEnded echo error', err && err.message));
 }
 

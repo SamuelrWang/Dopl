@@ -76,6 +76,11 @@ function resumeParked(s) {
   // delta baseline preserves the running cap total in state.costUsd (the cap keeps enforcing
   // across park AND crash/resume). Revisit if the SDK ever continues the cumulative total.
   s.lastTotalCost = 0;
+  // ⚠ THE SAME ASSUMPTION, THE SAME RESET, ONE LINE APART ON PURPOSE. `result.usage` restarts
+  // from zero on the resumed query exactly like `total_cost_usd`, so its delta baseline drops
+  // here too; `s.tokensSpent` (the accumulated figure the Agents tab shows) is deliberately NOT
+  // touched — it is the lifetime spend and a park is not a new agent.
+  s.lastTotalTokens = 0;
   startResumedConsumer(s);
 }
 

@@ -292,7 +292,8 @@ half-closable.
   in this phase and file the migration as tracked debt if it does not fit.
 - Client: `hooks/use-thread-writes.ts › threadOpConfig` and the `ThreadOpDraft` type;
   `components/session-card-close.tsx`, `session-card-close-proposal.test.tsx`;
-  `lib/group-thread-markers.ts › calmTerminalStatus` / `isThreadReopenedMarker`;
+  `lib/group-thread-markers.ts`'s `isThreadReopenedMarker` (⚠ `calmTerminalStatus` SURVIVED and
+  was REHOMED to `lib/calm-terminal.ts` when the whole `group-thread*` family went in Phase 5);
   the close/reopen paths through `channel-pane.tsx` and `channels-view-core.tsx ›
   handleCloseThread` / `› handleReopenThread`.
 - MCP: `channel-description.ts › CHANNEL_DESCRIPTION` loses `"propose_close"`,

@@ -7,11 +7,13 @@
 // `_classify-harness.mjs` / `_reducer-block.mjs`: the extraction machinery is shared, the
 // cases are split by what they are about.
 //
-// THE IDIOM. `main/session-summary.js`'s two requires (`./agent-names`, `./diag`) sit ABOVE
-// its BEGIN sentinel, so everything from there to `module.exports` is import-free and can be
-// evaluated verbatim with fakes — no window layer, no file log, no Electron of any kind (the
-// session-reopen idiom). The REAL `pickAgentName` is injected from the REAL module: the
-// naming cases are about this module's ledger, not about re-testing the pool.
+// THE IDIOM. `main/session-summary.js`'s three requires (`./agent-names`, `./session-model`,
+// `./diag`) sit ABOVE its BEGIN sentinel, so everything from there to `module.exports` is
+// import-free and can be evaluated verbatim with fakes — no window layer, no file log, no
+// Electron of any kind (the session-reopen idiom). The REAL `pickAgentName` and the REAL
+// `contextWindowFor` are injected from their REAL modules: the naming cases are about this
+// module's ledger and the context cases about ITS projection, not about re-testing the pool or
+// re-testing the frozen model/window table.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -22,7 +24,9 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const MAIN = join(HERE, "..", "main");
 export const SRC = readFileSync(join(MAIN, "session-summary.js"), "utf8");
-const { pickAgentName } = createRequire(import.meta.url)(join(MAIN, "agent-names.js"));
+const req = createRequire(import.meta.url);
+const { pickAgentName } = req(join(MAIN, "agent-names.js"));
+const { contextWindowFor } = req(join(MAIN, "session-model.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
 const from = SRC.indexOf(BEGIN);
@@ -41,7 +45,7 @@ for (const banned of ["require(", "electron", "child_process", "@anthropic", "fe
 const EXPORTED = [
   "PILL_STATES", "ACTIVITY_PILL", "pillState", "displayText", "liveSummary", "endedSummary",
   "nameFor", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS", "MAX_ENDED",
-  "bind", "start", "list", "nameForSession", "noteEnded", "keptWindow", "touch", "sweepEnded",
+  "bind", "start", "list", "nameForSession", "noteEnded", "keptWindow", "noteActivity", "touch", "sweepEnded",
   // F-147: the report view and the change subscription the server writer rides.
   "reportEntry", "wireSummary", "reportList", "subscribe",
 ];
@@ -53,9 +57,10 @@ export function load() {
   const logged = [];
   const api = new Function(
     "pickAgentName",
+    "contextWindowFor",
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-  )(pickAgentName, (...parts) => logged.push(parts.join(" ")));
+  )(pickAgentName, contextWindowFor, (...parts) => logged.push(parts.join(" ")));
   const spaWindow = {
     destroyed: false,
     isDestroyed() { return this.destroyed; },
@@ -94,6 +99,19 @@ export function session(over = {}) {
     win: fakeWindow(),
     state: { phase: "running", activity: "working", parked: false },
     context: { channelName: "general", taskTitle: "Ship the thing" },
+    // ── THE AGENT-VIEW MEASUREMENTS (wiring plan Phase 5, 2026-08-18) ──────────────
+    // Real fields on a real live session object, exactly where session-summary reads
+    // them: `promptTokens` from session-model's observer, `liveModel` from the SDK's
+    // system/init (the frozen window table turns it into a denominator), `tokensSpent`
+    // accumulated in session-io beside the cost, and the two stamps from the engine.
+    // ⚠ Defaulted to MEASURED values so the shape cases see the widened row; the
+    // absence cases override them to undefined, which is what an unmeasured session
+    // and an older engine both look like.
+    promptTokens: 84000,
+    liveModel: "claude-haiku-4-5", // 200k in the frozen table — a real denominator
+    tokensSpent: 1200000,
+    startedAt: 1700000000000,
+    lastActivityAt: 1700000600000,
     ...over,
   };
 }

@@ -107,16 +107,22 @@ export interface DoplBridge {
       preset: { tools: string; messages: string }
     ): Promise<{ ok: boolean }>;
   };
-  /** `reopen`: reveal (or recreate parked) this thread's session window —
-   *  session-card "Open thread", session pill "Open". Opens a window only,
-   *  starts no query. Web tree feature-detects via `@/shared/lib/desktop ›
-   *  getDesktopSessions`, so an absent one silently hides the button.
+  /** `reopen`: reveal (or recreate parked) this thread's session window — the
+   *  agent view's way back into the window. Opens a window only, starts no
+   *  query. Web tree feature-detects it, so an absent one silently hides the
+   *  control.
    *
-   *  ⚠ `summaries` / `onSummaries` are SPA-ONLY — deliberately absent from the
-   *  remote preload, whose window hosts the retired website. They carry the
-   *  session-pills feed; read once on mount, then listen. Both optional: an
-   *  older main has none and the pills bar renders NOTHING, not an empty row.
-   *  Same declaration in `@/shared/lib/spa-bridge` for shared modules. */
+   *  ⚠ `summaries` / `onSummaries` / `pause` / `end` are SPA-ONLY —
+   *  deliberately absent from the remote preload, whose window hosts the
+   *  retired website. They carry the AGENTS TAB: the feed (read once on mount,
+   *  then listen) and the two controls. All optional: an older main has none
+   *  and the tab says the surface is desktop-only rather than showing an empty
+   *  list. Same declaration in `@/shared/lib/spa-bridge` for shared modules.
+   *
+   *  ⚠ `pause` / `end` are OWN-AGENTS-ONLY. Main resolves the pair against its
+   *  own session registry, which holds only this operator's sessions on this
+   *  machine — there is no op here that reaches another member's runtime, and
+   *  a peer's paused agent is read from PRESENCE on their side instead. */
   sessions?: {
     reopen(
       channelId: string,
@@ -126,6 +132,16 @@ export interface DoplBridge {
     onSummaries?(
       callback: (event: { sessions: DesktopSessionSummary[] }) => void
     ): () => void;
+    /** Interrupt the turn in flight (the session window's pause morph). */
+    pause?(
+      channelId: string,
+      taskId: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+    /** End the AGENT (the session window's "End session"). Never a thread. */
+    end?(
+      channelId: string,
+      taskId: string
+    ): Promise<{ ok: boolean; reason?: string }>;
   };
 }
 

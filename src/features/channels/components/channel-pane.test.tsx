@@ -264,7 +264,21 @@ describe("ChannelPane multiplayer surfaces", () => {
     expect(markup).not.toContain("No rooms yet.");
   });
 
-  it("keeps the thread popover trigger (the sidebar is additive)", () => {
-    expect(render([])).toContain('aria-label="Threads"');
+  it("has NO thread popover and NO session pills — both are deleted", () => {
+    // ⚠ REWRITTEN, NOT REMOVED (INVARIANTS §14). This case used to assert the
+    // Threads popover trigger survived beside the rooms column; wiring plan
+    // Phase 5 (2026-08-18) deleted `threads-button.tsx` + `thread-panel.tsx`
+    // (whose row actions were the close/reopen controls Phase 4 already
+    // removed) and `session-pills-bar.tsx`. What replaced the pills is the v2
+    // right panel's AGENTS TAB, over the same desktop projection.
+    //
+    // The absence is asserted rather than dropped because a header control
+    // quietly reappearing here is exactly the regrowth this page cannot afford
+    // while it waits to be deleted (Phase 12).
+    const markup = render([]);
+    expect(markup).not.toContain('aria-label="Threads"');
+    expect(markup).not.toContain('aria-label="Agent sessions"');
+    // The rooms column, which is NOT a session surface, is untouched.
+    expect(markup).toContain('aria-label="Rooms"');
   });
 });

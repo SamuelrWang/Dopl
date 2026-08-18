@@ -19,6 +19,10 @@ const { isOutboundPost } = outboundTag;
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
 const seed = require('./session-seed');
+// The two token derivations live with the frozen model/window tables that give them meaning
+// (session-model.js). Required, never re-implemented: a second copy of "which usage fields
+// count" is how the context meter and the spend line come to disagree about the same block.
+const sessionModel = require('./session-model');
 
 // I-LOW(a): a bounded FIFO queue of pending inbound counterparty replies lives on the session
 // object (`s.pendingInbound`, an array). In INTERACTIVE mode the operator releases them one at a
@@ -436,6 +440,14 @@ function handleSdkMessage(s, msg, dispatch, store) {
     const total = Number(msg.total_cost_usd) || 0;
     const turnCost = Math.max(0, total - (s.lastTotalCost || 0));
     s.lastTotalCost = total;
+    // LIFETIME TOKEN SPEND, accumulated by the SAME arithmetic as the cost right above it and
+    // for the same reason: `msg.usage` is this QUERY's running total, so a resumed query
+    // restarts it from zero (session-park resets both baselines together). Summing DELTAS is
+    // what makes the figure survive a park+resume; taking the raw total would make it collapse.
+    // ⚠ NOT the context meter's number — see session-model.js `sessionTokens` vs `promptTokens`.
+    const tokenTotal = sessionModel.sessionTokens(msg.usage);
+    s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
+    s.lastTotalTokens = tokenTotal;
     const model = msg.model || (msg.modelUsage && Object.keys(msg.modelUsage)[0]) || null;
     dispatch(s, { type: 'result', turnCostUsd: turnCost, model });
   }

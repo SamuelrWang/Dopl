@@ -59,14 +59,15 @@
 // channel transcript already carries the record. Needs no TTL, ring or persistence — the
 // retained set is bounded by MAX_SESSION_WINDOWS and swept on the next projection.
 
-// ⚠ The module's only two dependencies, both ABOVE the sentinel: everything from there to
+// ⚠ The module's only three dependencies, all ABOVE the sentinel: everything from there to
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
-// verbatim with these two injected.
+// verbatim with these injected.
 const { pickAgentName } = require('./agent-names');
+const { contextWindowFor } = require('./session-model');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
-// `pickAgentName` and `diag` are free vars from here down.
+// `pickAgentName`, `contextWindowFor` and `diag` are free vars from here down.
 
 const PILL_WORKING = 'working';
 const PILL_IDLE = 'idle';
@@ -126,6 +127,48 @@ function nameFor(ledger, key, channelId) {
   return name;
 }
 
+/**
+ * A NUMBER OR NOTHING. `null` is the honest answer for "this build cannot say" and for "nothing
+ * has been measured yet" alike, and the renderer draws neither as a zero — a context meter at
+ * 0/0 and a meter with no denominator are different claims, and only one of them is true before
+ * the first turn reports usage. ⚠ Never coerce a missing metric to 0 here: an amber meter that
+ * says the window is empty is a lie the operator acts on.
+ */
+function metricOrNull(value) {
+  // ⚠ `typeof` FIRST, never a bare Number(): `Number(null)` is 0 and `Number('')`
+  // is 0, so a coercion-only guard turns every one of the absences above into a
+  // confident zero — which is the exact lie this function exists to prevent.
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return value;
+}
+
+/**
+ * THE AGENT-VIEW NUMBERS, from wherever they already are on the live session object. Split out
+ * so `liveSummary` reads as identity + state and this reads as measurement.
+ *
+ * ⚠ EVERY ONE OF THESE ALREADY EXISTED — nothing here starts a counter:
+ *   contextUsed    `s.promptTokens`, written by session-model's observer from the LAST assistant
+ *                  message's own usage (occupancy, output excluded — see that file's header).
+ *   contextWindow  `contextWindowFor(s.liveModel)`, the frozen model->window table. `null` for a
+ *                  model this build has never heard of, which is what makes the meter show raw
+ *                  tokens instead of a made-up percentage.
+ *   tokensSpent    `s.tokensSpent`, the lifetime accumulation session-io.js keeps beside the
+ *                  identical cost arithmetic. A DIFFERENT question from occupancy.
+ *   startedAt      `s.startedAt`, stamped when the engine created this session object.
+ *   lastActivityAt `s.lastActivityAt`, stamped at the engine's one dispatch funnel.
+ * ⚠ NONE of them reaches the server: `session-state-push.js › rowFor` picks its columns by name,
+ * so a widened wire shape does not widen `channel_sessions`. Runtime metrics stay local.
+ */
+function metrics(s) {
+  return {
+    contextUsed: metricOrNull(s && s.promptTokens),
+    contextWindow: metricOrNull(contextWindowFor(s && s.liveModel)),
+    tokensSpent: metricOrNull(s && s.tokensSpent),
+    startedAt: metricOrNull(s && s.startedAt),
+    lastActivityAt: metricOrNull(s && s.lastActivityAt),
+  };
+}
+
 /** One LIVE session object -> its summary. `name` is handed in (the ledger is the caller's). */
 function liveSummary(s, name) {
   const ctx = (s && s.context) || {};
@@ -139,11 +182,15 @@ function liveSummary(s, name) {
     state: pillState(s && s.state),
     channelName: displayText(ctx.channelName),
     threadTitle: displayText(ctx.taskTitle),
+    ...metrics(s),
   };
 }
 
 /** One RETAINED ENDED entry -> its summary. Nothing re-derived: state is `ended` by
- *  construction and the identity was frozen when the session settled. */
+ *  construction and the identity — and now the final measurement — were frozen when the session
+ *  settled. ⚠ FROZEN, not recomputed: the session object is gone, so a live read here would
+ *  answer null and the agent view would blank its numbers at exactly the moment the operator
+ *  wants to read what the run cost. */
 function endedSummary(e, name) {
   return {
     sessionId: String((e && e.sessionId) || ''),
@@ -153,6 +200,11 @@ function endedSummary(e, name) {
     state: PILL_ENDED,
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
+    contextUsed: metricOrNull(e && e.contextUsed),
+    contextWindow: metricOrNull(e && e.contextWindow),
+    tokensSpent: metricOrNull(e && e.tokensSpent),
+    startedAt: metricOrNull(e && e.startedAt),
+    lastActivityAt: metricOrNull(e && e.lastActivityAt),
   };
 }
 
@@ -304,6 +356,9 @@ function noteEnded(s, keepWindow) {
       taskId: String(s.taskId || ''),
       channelName: ctx.channelName || null,
       threadTitle: ctx.taskTitle || null,
+      // The final measurement, frozen with the identity and for the same reason — see
+      // `endedSummary`. The session object is about to leave the registry.
+      ...metrics(s),
       win: s.win,
     });
   }
@@ -379,6 +434,21 @@ function flush() {
   if (sendToWindow({ sessions: entries.map(wireSummary) })) lastDigest = digest;
 }
 
+/**
+ * A session's state just moved: STAMP its activity, then touch.
+ *
+ * ⚠ THE STAMP LIVES HERE, WITH THE PROJECTION THAT READS IT, and is taken at the engine's ONE
+ * dispatch funnel — the only caller. `lastActivityAt` feeds the Agents tab's "Last activity"
+ * line and nothing else; keeping it beside `metrics()` is what stops a second writer appearing
+ * somewhere that fires on a different clock.
+ * ⚠ IT COSTS NO EXTRA PUSH. `dispatch` already calls `touch()`, so the stamp moves exactly as
+ * often as the digest is already recomputed — it is NOT a timer and NOT per SDK event.
+ */
+function noteActivity(s) {
+  if (s) s.lastActivityAt = Date.now();
+  touch();
+}
+
 /** Something about a session may have changed. Cheap and coalesced; call it freely. */
 function touch() {
   if (pushTimer) return;
@@ -406,5 +476,6 @@ module.exports = {
   nameForSession,
   noteEnded,
   keptWindow,
+  noteActivity,
   touch,
 };

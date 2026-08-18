@@ -151,9 +151,17 @@ const OPS = [
   ["channels:getPermissionPreset", CH, null],
   ["channels:setPermissionPreset", { channelId: CH, preset: PRESET }, { ok: false }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ TWO JOINED HERE 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the
+  // operator's OWN agent. They are STOP verbs — `interrupt` (the session window's pause
+  // morph) and `end` ("End session") — dispatched through main's own reducer, so neither can
+  // start a query, wake a parked shell, grant a tool or post anything. They sit under the
+  // same `mainOnly` binding and the same UUID gate as every op above, which is the whole
+  // reason this list is asserted by COUNT as well as by name.
+  ["sessions:pause", { channelId: CH, taskId: "t1" }, { ok: false }],
+  ["sessions:end", { channelId: CH, taskId: "t1" }, { ok: false }],
 ];
 
-test("all six privileged ops are registered", () => {
+test("every privileged op in the file is registered", () => {
   const { handlers } = bootIpc();
   for (const [name] of OPS) assert.equal(typeof handlers[name], "function", name);
 });

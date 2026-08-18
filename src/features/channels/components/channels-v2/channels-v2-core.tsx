@@ -19,6 +19,7 @@ import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
+import { useDesktopSessions } from "./agents-model";
 import type { ChannelMention } from "../../types";
 import {
   channelRows,
@@ -136,6 +137,13 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   // against this channel's transcript below to derive the REQUESTED state. One
   // read, two consumers — a channel-scoped copy would make the badge lie.
   const { requests } = useConsentInbox(workspaceId, undefined, CONSENT_INBOX_POLL_MS);
+  // MY OWN AGENTS — the ONE read on this page that is not a server projection.
+  // It is this machine's live session state over the Electron bridge
+  // (`agents-model.ts`), so it is workspace-wide by nature and each consumer
+  // slices it; `null` means "could not ask" (plain browser, or an older main)
+  // and is deliberately carried as null all the way to the tab, which words the
+  // two absences differently.
+  const agentSessions = useDesktopSessions();
 
   // Realtime → coalesced refetch, deferred while a local write is in flight.
   //
@@ -323,6 +331,7 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
               index={index}
               openThreadId={openThread?.id ?? null}
               onOpenThread={setRequestedThreadId}
+              agentSessions={agentSessions}
               openAgent={openAgent}
               onOpenAgent={setOpenAgent}
               mentions={mentions}
@@ -339,8 +348,14 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
         </div>
       )}
 
+      {/* ⚠ The Sent lane reads the OPEN CHANNEL's transcript, so the panel takes
+          `messages` rather than fetching: one read, and the panel cannot show a
+          message the transcript beside it does not have. */}
       <ChannelsV2AgentPanel
         openAgent={openAgent}
+        sessions={agentSessions}
+        messages={messages}
+        currentUserId={currentUserId}
         onClose={() => setOpenAgent(null)}
       />
     </div>

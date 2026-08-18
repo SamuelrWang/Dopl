@@ -2,7 +2,7 @@
 
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { calmTerminalStatus } from "../lib/group-thread";
+import { calmTerminalStatus } from "../lib/calm-terminal";
 import type { ChannelMessage, ChannelMessageKind } from "../types";
 
 /** Dot color by activity kind: finished = success, running = warning,
@@ -31,7 +31,16 @@ function statusOf(metadata: Record<string, unknown>): string | null {
  * it gets a neutral dot (not the danger red) so it reads calm even when it lands
  * ungrouped (no `taskId`, so it never folded into a session card).
  */
-export function ActivityEventRow({ message }: { message: ChannelMessage }) {
+export function ActivityEventRow({
+  message,
+  anchorId,
+}: {
+  message: ChannelMessage;
+  /** `session:<threadId>` on the FIRST row of a thread — the anchor
+   *  `rooms-sidebar.tsx` scrolls to, inherited from the deleted session card
+   *  (wiring plan Phase 5). Undefined on every other row. */
+  anchorId?: string;
+}) {
   const kind = message.kind as Exclude<ChannelMessageKind, "message">;
   const status = statusOf(message.metadata);
   const calmTerminal = calmTerminalStatus(message) !== null;
@@ -39,7 +48,7 @@ export function ActivityEventRow({ message }: { message: ChannelMessage }) {
     ? "bg-text-disabled"
     : DOT[kind] ?? "bg-surface-raised-4";
   return (
-    <div className="flex items-center justify-center gap-2 py-1.5">
+    <div id={anchorId} className="flex items-center justify-center gap-2 py-1.5">
       <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dot)} />
       <span className="min-w-0 truncate text-caption text-text-secondary">
         {message.body}

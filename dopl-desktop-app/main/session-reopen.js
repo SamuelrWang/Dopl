@@ -129,6 +129,51 @@ function reopenByTask(a) {
   return { ok: false };
 }
 
+// ── THE AGENTS TAB'S TWO CONTROLS: PAUSE and END, on MY OWN agent ────────────────
+//
+// Wiring plan Phase 5 (2026-08-18). The Agents tab and the agent view let the operator pause or
+// end an agent from the MAIN window, where before those two verbs existed only inside that
+// session's own window (`session:interrupt` / `session:end`, session-ipc.js, resolved from
+// event.sender). This is the SAME PAIR reached by the SAME dispatch — nothing about running a
+// session is re-implemented here, and deliberately so: a second stop path is a second set of
+// teardown bugs.
+//
+//   pause  -> { type: 'interrupt' }  the session window's send-button PAUSE MORPH, verbatim
+//             (renderer/session/session.html: "pausing the agent is the send button's pause
+//             morph"). Stops the turn in flight; the session stays live, resumable and named.
+//   end    -> { type: 'end' }        the window's "End session" button, verbatim. Terminal.
+//             It ends the AGENT and touches no thread — a thread has no finished state
+//             (INVARIANTS §5, wiring plan Phase 4).
+//
+// ⚠ OWN AGENTS ONLY, AND THAT IS FREE HERE RATHER THAN ENFORCED. The registry holds only
+// sessions THIS machine is running for THIS operator, so a key that resolves is by construction
+// the caller's own. There is no cross-machine control op and this is not the seam to add one:
+// a peer's paused agent is rendered from PRESENCE on the reading side (MAPPING.md), never
+// driven from here.
+// ⚠ RESOLVED BY (channel, thread) like `reopenByTask`, never by `sessionId` — that id is
+// ephemeral across a park+recreate and is a React key on the wire, not an address.
+// ⚠ SETTLED AND RETAINED-ENDED SESSIONS ANSWER `{ ok: false }`: an ended session's pill outlives
+// its registry entry (the retention rule), so "the card is on screen" does not mean "there is
+// something left to stop". Fail closed rather than dispatching into a settled object.
+const CONTROL_EVENTS = { pause: 'interrupt', end: 'end' };
+
+function controlByTask(a) {
+  const channelId = String((a && a.channelId) || '');
+  const taskId = String((a && a.taskId) || '');
+  const type = Object.prototype.hasOwnProperty.call(CONTROL_EVENTS, a && a.action)
+    ? CONTROL_EVENTS[a.action]
+    : null;
+  if (!type || !deps.sessions || !deps.dispatch) return { ok: false };
+  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  try {
+    deps.dispatch(s, { type: type });
+  } catch (_) {
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
 // ── C-8: THE SESSIONS A QUIT WOULD ORPHAN, AND HOW THEY ARE ENDED ────────────────
 //
 // THE DEFECT (audit C-8). `before-quit` stopped the listener and nothing else — it never
@@ -187,4 +232,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask, listOrphanRisk, endLiveSessions };
+module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask, controlByTask, listOrphanRisk, endLiveSessions };

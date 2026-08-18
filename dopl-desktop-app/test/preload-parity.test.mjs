@@ -110,7 +110,24 @@ const APP_OPS = [
   "openExternal",
   "passwordSignIn",
   "sendMagicLink",
+  // ⚠ TWO OPS JOINED HERE ON 2026-08-18 (wiring plan Phase 5): `sessions.pause` and
+  // `sessions.end`, the Agents tab's controls on the operator's OWN agent. The pin failed on
+  // the ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked before this list was edited —
+  //     `main/channel-dir-ipc.js` registers `sessions:pause` / `sessions:end`, both wrapped in
+  //     the same `mainOnly()` sender binding as `sessions:reopen` and the folder ops, both
+  //     UUID-gating `channelId`. A pinned op with no handler is a promise the bridge cannot
+  //     keep; that is the check this rule exists to force.
+  //   • THEY WIDEN NOTHING. Each resolves (channel, thread) against main's OWN session
+  //     registry and dispatches a reducer event the session window's buttons already
+  //     dispatched — `interrupt` (the send button's pause morph) and `end` ("End session").
+  //     No query starts, no shell wakes, no tool is granted, nothing is posted. The failure
+  //     direction of a forged call is an agent that STOPS.
+  //   • Own agents only, structurally: the registry holds nothing but this operator's sessions
+  //     on this machine, so there is no cross-member control surface to abuse.
+  "sessions.end",
   "sessions.onSummaries",
+  "sessions.pause",
   "sessions.reopen",
   "sessions.summaries",
   "signOut",
