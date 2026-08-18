@@ -202,10 +202,11 @@ export type ChannelMessageKind =
 
 /**
  * Whether a post may REACH AN AGENT.
- *  - `request` — DEFAULT: a DM post with no `to` is auto-addressed to the peer
- *    server-side, which is what makes a reply deliverable and wakes the
- *    receiving listener.
- *  - `chat` — human talk; auto-address skipped entirely.
+ *  - `request` — DEFAULT: an explicit `toUserId` addresses, and that is the only
+ *    thing that does. ⚠ The DM auto-address that used to fill it in was retired
+ *    2026-08-18 (wiring plan Phase 3).
+ *  - `chat` — human talk; DECLARES that the post is work for nobody, and never
+ *    inherits an open DM thread.
  *
  * Absence means `request` and stamps NO metadata key, so existing callers' wire
  * is unchanged. `chat` + explicit address → 400 `CHANNEL_CHAT_ADDRESSED`.
