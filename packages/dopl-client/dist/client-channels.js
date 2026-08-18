@@ -84,17 +84,9 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     createChannelThread(channelId, input) {
         return channel.createChannelThread(this.transport, channelId, input);
     }
-    closeChannelThread(channelId, threadId, input) {
-        return channel.closeChannelThread(this.transport, channelId, threadId, input);
-    }
-    /**
-     * The agent lane's terminal act on a thread — see
-     * `channel.proposeChannelThreadClose`. `closeChannelThread` above is the
-     * human lane; the server refuses it for an agent token.
-     */
-    proposeChannelThreadClose(channelId, threadId, input) {
-        return channel.proposeChannelThreadClose(this.transport, channelId, threadId, input);
-    }
+    // ⚠ `closeChannelThread` (human lane) and `proposeChannelThreadClose` (agent
+    // lane) were methods here until thread closing was removed (wiring plan
+    // Phase 4, 2026-08-18). `client-surface.test.ts` records the arithmetic.
     setChannelThreadMode(channelId, threadId, input) {
         return channel.setChannelThreadMode(this.transport, channelId, threadId, input);
     }

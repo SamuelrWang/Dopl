@@ -11,24 +11,17 @@
  */
 import type { ChannelMessage, DoplClient } from "@dopl/client";
 /**
- * THE POST LANDED IN A CLOSED THREAD. Spends `threadClosed` off the post response.
+ * ⚠ `closedThreadNote()` USED TO LIVE HERE — the line a post spent
+ * `threadClosed` on. It went with thread closing (wiring plan Phase 4,
+ * 2026-08-18) and so did the server field behind it.
  *
- * ⚠ WARNING, NOT A FAILURE — wording must carry that or the agent retries a post
- * that already landed (it IS stored, attributed, and on the thread's card).
- *
- * ⚠ Copy is scoped to the PASSIVE lane only, because that is all any layer
- * enforces: an updated desktop skips the passive thread-lane wake off a status
- * cache lagging up to ~5 min, an older build still wakes, an ADDRESSED post
- * delivers either way, and the server accepts the post regardless of status.
- * Never claim a silence nothing guarantees.
- *
- * ⚠ Reopen is named as a HUMAN action: the route exists
- * (`PATCH /tasks/[id] {op:"reopen"}`) and the web drives it, but this tool has
- * no `reopen` op — "reopen it" sends the agent hunting for an op that does not
- * exist. ⚠ Address a PERSON only; naming an agent-addressing param here teaches
- * an argument the schema refuses with -32602.
+ * Two rules it carried are worth not relearning. **WARNING, NOT A FAILURE**: the
+ * post LANDED, and wording that reads as an error gets an agent to retry a
+ * write that already succeeded. **Never claim a silence nothing enforces**: its
+ * copy was scoped to the passive lane alone, because an updated desktop skipped
+ * the passive wake off a status cache up to ~5 min stale while an older build
+ * still woke, and an ADDRESSED post delivered either way.
  */
-export declare function closedThreadNote(channelId: string): string;
 /**
  * ⚠ Answer is read back off the STORED message, not off the request:
  * `metadata.taskId` is what the receiving desktop routes on, so this reports
@@ -43,10 +36,10 @@ export declare function closedThreadNote(channelId: string): string;
  *
  * Three shapes, descending urgency:
  *   1. asked for a thread and got none — the tag-drop signature;
- *   2. no thread but caller has open ones — reads as a NEW request;
+ *   2. no thread but the caller has some — reads as a NEW request;
  *   3. threaded — name it so the sender can check.
- * No open threads + unthreaded post says nothing; open threads belonging only to
- * OTHER pairs says so without offering them.
+ * No threads + unthreaded post says nothing; threads belonging only to OTHER
+ * pairs says so without offering them.
  */
 export declare function threadLinkageNote(client: DoplClient, channelId: string, 
 /** ALREADY neutralized by the caller — splice it, do not re-wrap it. */

@@ -44,18 +44,21 @@ export declare function classifyBadRequest(e: unknown): BadRequestKind;
  *   - `not_a_member`         — `CHANNEL_FORBIDDEN`: not a member of the channel.
  *   - `thread_authorization` — `TASK_FORBIDDEN`: IN the channel but not
  *     authorized on THIS THREAD. A thread's two parties are its creator and its
- *     target, and only those two may post, propose a close, close, set mode or
- *     reopen (`service-tasks.ts`, `service-tasks-propose.ts`,
- *     `service-writes-metadata.ts`). ⚠ The arm must say WHICH write it refused,
- *     and must NOT read as "you left the channel".
+ *     target, and only those two may post into it or set its mode
+ *     (`service-tasks.ts`, `service-writes-metadata.ts`). ⚠ The arm must say
+ *     WHICH write it refused, and must NOT read as "you left the channel".
  *   - `lifecycle_kind`       — `CHANNEL_LIFECYCLE_KIND_FORBIDDEN`: a post
  *     carrying `task_started`/`task_finished`/`task_failed`. The tool refuses
  *     these pre-call, so this is the belt for a bypassed build. ⚠ Must not be
  *     reported as a channel-membership problem.
- *   - `close_is_human`       — `CHANNEL_CLOSE_IS_HUMAN_ONLY`: agent-token close.
  *   - `unknown`              — an unrecognized 403. ⚠ Say so; never guess.
+ *
+ * ⚠ A FIFTH KIND ENDED HERE (wiring plan Phase 4, 2026-08-18):
+ * `CHANNEL_CLOSE_IS_HUMAN_ONLY` refused an agent-token caller from settling a
+ * shared thread. The server error is deleted, so nothing can raise it and an
+ * arm for it would be an unreachable branch claiming a live rule.
  */
-export type ForbiddenKind = "not_a_member" | "thread_authorization" | "lifecycle_kind" | "close_is_human" | "unknown";
+export type ForbiddenKind = "not_a_member" | "thread_authorization" | "lifecycle_kind" | "unknown";
 export declare function classifyForbidden(e: unknown): ForbiddenKind;
 /**
  * The server's own message as a trailing clause, or "" when there is nothing to
@@ -69,4 +72,4 @@ export declare function serverDetail(e: unknown): string;
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
-export declare const FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, a close summary <=2000, client_msg_id <=200.";
+export declare const FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";

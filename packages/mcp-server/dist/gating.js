@@ -93,14 +93,15 @@ exports.WRITE_OPS = {
         "open",
         "invite",
         "post",
-        // `milestone` and `propose_close` both write a message.
-        // ⚠ `close_thread` STAYS here even though the registrar answers it with a
-        // refusal: a read-only token must be refused for the SCOPE reason first, or
-        // the shape of the two errors tells a read-only caller which threads exist.
+        // `milestone` writes a message.
+        // ⚠ `propose_close` and `close_thread` were here until thread closing was
+        // removed (wiring plan Phase 4, 2026-08-18). `close_thread` was listed even
+        // though the registrar answered it with a refusal, and the reason still
+        // applies to any future teaching-refusal op: a read-only token must be
+        // refused for the SCOPE reason FIRST, or the shape of the two errors tells a
+        // read-only caller which threads exist.
         "milestone",
         "create_thread",
-        "propose_close",
-        "close_thread",
         "set_thread_mode",
     ]),
 };

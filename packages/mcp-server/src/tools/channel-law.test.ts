@@ -137,6 +137,27 @@ describe("THE LAW is stated, in full, in the tool description", () => {
     expect(DESCRIPTION).toContain("Work traffic stays in its thread");
   });
 
+  it("grants the main-room post as a SPARSE capability, in the same bullet", () => {
+    // ⚠ It rides on "reply where you were asked" because that bullet is what an
+    // agent otherwise reads as a BAN (wiring plan Phase 11): "work traffic stays
+    // in its thread" with no qualifier says the room is never yours to post to,
+    // which stopped being true. Capability first, then the limit — the reverse
+    // order reads as a warning and the capability goes unused.
+    expect(DESCRIPTION).toContain("You MAY also post to the main room unprompted, SPARSELY");
+    expect(DESCRIPTION).toContain("that is a capability, not a habit");
+  });
+
+  it("names the @-tag as how a HUMAN is reached, and denies that it addresses", () => {
+    // ⚠ Two halves, both load-bearing and neither safe alone. Without the first,
+    // an agent that is blocked posts into a thread nobody is watching; without
+    // the second, a tag reads as a second way to ASK FOR A MACHINE, which no
+    // part of the product honours (`metadata.mentionedUserIds` is not
+    // `to_user_id` — INVARIANTS §5).
+    expect(DESCRIPTION).toContain("@-TAG THEM IN THE BODY");
+    expect(DESCRIPTION).toContain("Tags inbox");
+    expect(DESCRIPTION).toContain("Tagging is not addressing and starts no agent");
+  });
+
   /** Law block sliced between its two anchors; both length assertions read it. */
   const LAW = DESCRIPTION.slice(
     DESCRIPTION.indexOf("THE LAW OF THIS ROOM"),

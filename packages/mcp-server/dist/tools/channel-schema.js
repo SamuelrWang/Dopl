@@ -17,9 +17,12 @@
  * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
  * before measuring, so the two agree on what "200 characters" counts.
  *
- * ⚠ `summary` is deliberately NOT split: one param serves two routes with two
- * caps, and this declares the LOOSER so a legitimate close summary is never
- * refused client-side. The tighter number is stated in its `.describe()`.
+ * ⚠ `summary` used to serve two routes with two caps (post 200, close 2000) and
+ * declared the LOOSER so a legitimate close summary was never refused
+ * client-side. The close is gone (wiring plan Phase 4, 2026-08-18) and the
+ * declared max stays at 2000 anyway: the route enforces 200 and is the
+ * authority, and tightening it here would turn a route 400 that names the field
+ * into an opaque client-side -32602. The tighter number is in its `.describe()`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHANNEL_INPUT_SHAPE = void 0;
@@ -44,11 +47,11 @@ exports.CHANNEL_INPUT_SHAPE = {
         // thread. Read-only and own-scoped; `channel` narrows to one channel.
         "read_sessions",
         "create_thread",
-        // ⚠ An agent PROPOSES a close and a human confirms. `close_thread` stays
-        // in the enum so an older agent gets a teaching refusal naming its
-        // replacement rather than an opaque "unknown op".
-        "propose_close",
-        "close_thread",
+        // ⚠ TWO OPS LEFT THIS ENUM with thread closing (wiring plan Phase 4,
+        // 2026-08-18): "propose_close" (the agent's terminal act) and
+        // "close_thread" (kept as a teaching refusal naming its replacement).
+        // Neither may come back as a WORD either — `channel-law.test.ts ›
+        // REMOVED_VOCABULARY` scans every string literal in this file.
         "set_thread_mode",
     ])
         .describe("Operation to perform."),
@@ -79,7 +82,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     intent: zod_1.z
         .enum(["chat", "request"])
         .optional()
-        .describe('op="post" (optional, default "request"): what this message IS. "request" is the working message: it may address a PERSON with `to`, and in a DIRECT (1:1) channel the server addresses it to the other member for you, which is what puts it in front of their side. "chat" is PEOPLE TALKING: it addresses nobody, starts nobody, and the direct-channel auto-address is skipped entirely, so two people can talk in a DM without each line poking the other side\'s machine. "chat" together with `to` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".'),
+        .describe('op="post" (optional, default "request"): what this message IS. "request" is the working message: it may address a PERSON with `to`, and `to` is the ONLY thing that puts a post in front of somebody\'s side — nothing is addressed for you, a DIRECT (1:1) channel included. "chat" is PEOPLE TALKING: it addresses nobody and starts nobody, and it SAYS SO on the wire, so the receiving side can tell a deliberate aside from a request that forgot to name anyone. "chat" together with `to` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".'),
     body: zod_1.z
         .string()
         // ⚠ `.min(1)` mirrors the route on BOTH the post and create_thread schemas.
@@ -91,15 +94,15 @@ exports.CHANNEL_INPUT_SHAPE = {
         .string()
         .optional()
         .describe('op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post it makes the message a REQUEST that triggers that member\'s listener and can start their agent, so name someone only when you are asking for their machine. Omit it for talk nobody must act on — and say so outright with `intent`="chat", which addresses nobody even in a direct channel. A channel reaches PEOPLE: there is no way to address an agent by name. For create_thread, it is the member the thread is for.'),
-    // ⚠ One param, two routes, two caps (post 200, close 2000). Declares the
-    // LOOSER so a legitimate close summary is never refused client-side; an
-    // over-length POST summary stays the route's to reject.
+    // ⚠ One param, one route now. The declared 2000 is deliberately LOOSER than
+    // the post route's 200 so an over-length summary is the route's to reject,
+    // with the field named, rather than an opaque client-side -32602.
     summary: zod_1.z
         .string()
         .trim()
         .max(2000)
         .optional()
-        .describe('op="post": a short one-line intent (<=200 chars — the post route enforces 200, not 2000). ALWAYS set it — it becomes the notification the receiving member sees. op="propose_close" (optional): the one-line reason you think the thread is done (<=2000 chars). It is the BODY of the proposal your operator reads before deciding, and it is carried into the close summary if they confirm — so write the outcome, not "done".'),
+        .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees.'),
     // ⚠ The kinds are NOT a vocabulary to pick from — the describe must say whose
     // each one is. Listing five names with no rule gets a finished responder to
     // post its ANSWER as `task_finished`, which appears nowhere:
@@ -117,11 +120,11 @@ exports.CHANNEL_INPUT_SHAPE = {
         "task_failed",
     ])
         .optional()
-        .describe('op="post": LEAVE THIS UNSET. The default, "message", is what every substantive thing you send is — including your FINAL ANSWER. The other four keep the older `task_` storage names and are NOT interchangeable with it: "task_started" / "task_finished" / "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session and by a thread close, and this tool REFUSES them from you (a body written into one is not rendered on the other member\'s thread card at all, so an answer sent as one is delivered nowhere). "task_progress" is the milestone lane and is yours, but you do not need this field for it either: op="milestone" posts one with no kind to pick.'),
+        .describe('op="post": LEAVE THIS UNSET. The default, "message", is what every substantive thing you send is — including your FINAL ANSWER. The other four keep the older `task_` storage names and are NOT interchangeable with it: "task_started" / "task_finished" / "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session, and this tool REFUSES them from you (a body written into one is not rendered on the other member\'s thread card at all, so an answer sent as one is delivered nowhere). "task_progress" is the milestone lane and is yours, but you do not need this field for it either: op="milestone" posts one with no kind to pick.'),
     metadata: zod_1.z
         .record(zod_1.z.string(), zod_1.z.unknown())
         .optional()
-        .describe('op="post": optional JSON object of structured fields for task_* events (e.g. {taskId, status, durationMs, refs}).'),
+        .describe('op="post": optional JSON object of structured fields for task_* events (e.g. {taskId, durationMs, refs}).'),
     client_msg_id: zod_1.z
         .string()
         // ⚠ `.min(1)` mirrors the route — a blank idempotency key is not a key, and
@@ -150,11 +153,10 @@ exports.CHANNEL_INPUT_SHAPE = {
     thread: zod_1.z
         .string()
         .optional()
-        .describe('op="get_thread" / op="propose_close" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is always channel-wide).'),
-    outcome: zod_1.z
-        .enum(["completed", "failed"])
-        .optional()
-        .describe('op="propose_close" (required): the outcome you are PROPOSING — "completed" or "failed". Your operator sees it prefilled on the confirm and can change it; nothing is closed until they do.'),
+        .describe('op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is always channel-wide).'),
+    // ⚠ `outcome` ("completed" | "failed") was a param here, required by
+    // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
+    // 2026-08-18); nothing in this surface has an outcome any more.
     // ⚠ coerce: MCP clients sometimes send numbers as strings, and strict
     // z.number() rejects those with an opaque -32602.
     since: zod_1.z.coerce

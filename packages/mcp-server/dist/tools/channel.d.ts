@@ -16,8 +16,7 @@
  *   - `channel-ops-open.ts`   — open / invite
  *   - `channel-ops-write.ts`  — post (+ `channel-post-notes.ts` /
  *                               `channel-post-linkage.ts` for its result lines)
- *   - `channel-ops-threads.ts`— create_thread / propose_close / close_thread /
- *                               set_thread_mode
+ *   - `channel-ops-threads.ts`— create_thread / set_thread_mode
  *   - `channel-render.ts`     — read renderers + untrusted-content headers,
  *                               shared with the write side
  *

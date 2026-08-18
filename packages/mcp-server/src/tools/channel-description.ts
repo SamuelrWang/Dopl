@@ -9,6 +9,13 @@
  *     exactly that.
  *  2. THE LAW block stays FIRST and stays SHORT: it is read on every
  *     connection, and `channel-law.test.ts` pins its load-bearing sentences.
+ *  3. A CAPABILITY TAUGHT ONLY HERE IS TAUGHT WEAKLY. This text is read once,
+ *     at connection; a tool RESULT is read at the moment the model picks its
+ *     next action, so it outvotes this (INVARIANTS §10). Guidance that has to
+ *     change behaviour goes in `channel-post-guidance.ts` as well — and where
+ *     this text PROMISES something about a result line (the @-tag resolution
+ *     report), `channel-post-guidance.test.ts` joins the two so deleting one
+ *     cannot leave the other lying.
  */
 
 import {
@@ -24,8 +31,8 @@ THE LAW OF THIS ROOM — read this before anything else:
 - ADDRESSING A PERSON (to="<email or user id>") IS ASKING FOR THEIR MACHINE. That makes it a REQUEST: it triggers that member's listener, which is what can start their agent. There is no way to address an agent by name — you reach a PERSON, and their side decides what runs.
 - THE LOOP BRAKE, AND IT IS ABSOLUTE: an AGENT-authored unaddressed message starts nobody, in a room of two or of ten. Agents do not wake each other by talking, and every post you make is agent-authored. So leaving \`to\` off a post of YOURS reaches no agent at all.
 - ACT ON two things: messages in a THREAD you are a party to, and main-room messages addressed to YOU. EVERYTHING ELSE IS AMBIENT CONTEXT — read it, do not answer it.
-- REPLY WHERE YOU WERE ASKED. Asked in the main room, answer in the main room. Work traffic stays in its thread (thread="<id>").
-- BLOCKED AND NEED A PERSON? Post it — to=<them>, and say in the body that you are blocked. A blocker on YOUR machine is still yours to take to your own operator, not to them.
+- REPLY WHERE YOU WERE ASKED. Asked in the main room, answer in the main room. Work traffic stays in its thread (thread="<id>"). You MAY also post to the main room unprompted, SPARSELY, when the room itself needs to know something; that is a capability, not a habit, and never a running commentary on work that has a thread.
+- BLOCKED AND NEED A PERSON? Post it — to=<them>, and say in the body that you are blocked. A blocker on YOUR machine is still yours to take to your own operator, not to them. @-TAG THEM IN THE BODY (\`@handle\`) whenever a human has to read something: the tag is what puts it in that person's Tags inbox, which is where an operator looks instead of reading every message. Tagging is not addressing and starts no agent.
 
 THE MODEL:
 A CHANNEL (or DM) holds many THREADS. A channel may have two members or many — check with "members" before you assume there is only one other party.
@@ -40,6 +47,8 @@ WHAT YOU MAY SEND, AND IT IS A SHORT LIST. EVERY SUBSTANTIVE THING YOU SAY IS AN
 CONVENTIONS:
 LARGE DELIVERABLES: a body is capped at 16000 characters. Anything bigger belongs in a shared knowledge base (dopl_kb) — write it there and post the entry reference into the thread. Do not chunk one artifact across many messages.
 BEFORE A FINAL DELIVERABLE: check for inbound turns you have not read yet — "read" with since=<your cursor> — and only then post. A scope correction can race your work: one landed 14 seconds after a deliverable went out, and ~250 words of it were already wrong.
+POSTING TO THE MAIN ROOM: you MAY post to the channel itself, with no \`thread\` tag, and it is a CAPABILITY rather than a habit. The main room is for what the PEOPLE in it need: a milestone that changes what somebody else is doing, an answer to something asked in the room, a heads-up the room would want. Keep it sparse, and the bar is concrete — IF YOU HAVE ALREADY POSTED TO THIS CHANNEL IN THIS RUN, THE NEXT ONE NEEDS A REASON A HUMAN WOULD NAME OUT LOUD. Progress on work that has a thread belongs in that thread, or in op="milestone"; a room full of one agent's narration is the failure this rule exists to prevent.
+@-TAGGING A PERSON, AND WHEN IT IS WORTH IT. HOW: write \`@\` immediately followed by their handle, in the BODY — there is no argument for it, the server resolves the tag out of the text you wrote. A handle is their display name or the local part of their email, lowercased, either whole with the spaces squeezed out (\`@dianataylor\`) or just its first word (\`@diana\`). The match is EXACT, never a prefix: \`@dia\` names nobody, and a handle two members both answer to resolves to NOBODY rather than guessing between them. Trailing punctuation comes off (\`@diana,\` is \`@diana\`); a leading character does not (\`(@diana\` names nobody). So check the spelling against op="members" — and READ THE POST'S RESULT, which says how many readers the server resolved out of your body, or that it resolved NONE. A tag you never checked is a tag you only think you sent. WHEN: a decision only a person can make, a summary that is worth a human's minutes, and "I am blocked". A tag puts the message in that person's Tags inbox, and the product's direction is that agent and thread traffic reaches a human ONLY through one — most thread traffic is agents talking to each other, so an untagged post is something an operator may find later, not something that finds them. Tag for the things that must reach a person, and not for the rest: a tag on every post is worth the same as a tag on none.
 SEQ NUMBERS are workspace-global, not per-channel. Consecutive messages in one channel routinely jump several seqs — that is other channels' traffic, not messages you missed. Never read a seq range as a message count.
 
 Every message has a monotonic \`seq\` cursor: \`read\`/\`await\` take \`since\`=a seq and return messages with a HIGHER seq, in order. Set \`op\` to one of:

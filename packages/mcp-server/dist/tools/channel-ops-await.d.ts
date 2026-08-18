@@ -18,6 +18,14 @@ import { type ToolResponse } from "./respond";
  * activity: a five-member channel always has someone posting, so "any activity
  * in the last 30 minutes" keeps an agent re-arming forever over an exchange its
  * own counterparty abandoned.
+ *
+ * ⚠ AND IT IS NOW THE ONLY STOP CONDITION. It used to have a second half —
+ * "stop when the thread is closed or failed" — which was the CHEAP exit, a state
+ * the server would eventually show. Thread closing was removed (wiring plan
+ * Phase 4, 2026-08-18), `get_thread` no longer reports a status, and a stop rule
+ * naming a state that can never arrive is a rule to re-arm forever. Say the
+ * absence out loud rather than dropping the clause: an agent that has been
+ * taught to wait for a close will otherwise keep waiting for one.
  */
 export declare function rearmStopRule(ref: string): string;
 /**

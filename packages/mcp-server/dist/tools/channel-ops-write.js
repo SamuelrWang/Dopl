@@ -25,6 +25,9 @@ const respond_1 = require("./respond");
 const channel_post_linkage_1 = require("./channel-post-linkage");
 // "What did the ADDRESSING do?" — conflict note + addressed/chat/unaddressed line.
 const channel_post_notes_1 = require("./channel-post-notes");
+// "What may I do NEXT?" — the sparse main-room post and the @-tag, taught in the
+// RESULT because that is where the decision is made (INVARIANTS §10).
+const channel_post_guidance_1 = require("./channel-post-guidance");
 const channel_shared_1 = require("./channel-shared");
 // ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
@@ -52,7 +55,7 @@ const LIFECYCLE_KINDS = new Set([
  * the sentence that changes behaviour, not "that kind is reserved".
  */
 function lifecycleKindRefusal(kind) {
-    return (0, respond_1.err)(`Nothing was sent: \`kind="${kind}"\` is a LIFECYCLE MARKER, not a way to say something, and it is not yours to post. Those three kinds ("task_started" / "task_finished" / "task_failed") are written by the runtime that starts and stops a session and by a thread close, and the other member's thread card renders a terminal marker as a STATUS CHIP — its body is not shown at all, so an answer sent this way is delivered nowhere. Re-send it as an ordinary message: drop \`kind\` entirely and post the same text. Everything substantive you send, your FINAL ANSWER included, is a plain message. To mark that a step LANDED, that is dopl_channel(op="milestone", thread="<id>", body="<one line>") — a marker, not a delivery.`);
+    return (0, respond_1.err)(`Nothing was sent: \`kind="${kind}"\` is a LIFECYCLE MARKER, not a way to say something, and it is not yours to post. Those three kinds ("task_started" / "task_finished" / "task_failed") are written by the runtime that starts and stops a session, and the other member's thread card renders a terminal marker as a STATUS CHIP — its body is not shown at all, so an answer sent this way is delivered nowhere. Re-send it as an ordinary message: drop \`kind\` entirely and post the same text. Everything substantive you send, your FINAL ANSWER included, is a plain message. To mark that a step LANDED, that is dopl_channel(op="milestone", thread="<id>", body="<one line>") — a marker, not a delivery.`);
 }
 async function opPost(client, channelRef, body, opts = {}) {
     // ⚠ Both refusals stay BEFORE any round-trip: a post this tool will not make
@@ -177,16 +180,25 @@ async function opPost(client, channelRef, body, opts = {}) {
         `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
         ...addressLines,
         ...(linkage ? [linkage] : []),
-        // ⚠ Read off the SERVER's answer, never guessed. A closed thread still
-        // ACCEPTS the post — warn, never refuse: a 403 breaks the legitimate
-        // final-word-after-the-close-echo pattern.
-        ...(message.threadClosed ? [(0, channel_post_linkage_1.closedThreadNote)(ch.id)] : []),
+        // ⚠ WHERE IT LANDED decides which capability is worth teaching here, and
+        // the answer comes off the STORED message like every other line above —
+        // a post that asked for a thread and did not get one is a MAIN-ROOM post,
+        // whatever the caller intended.
+        ...(0, channel_post_guidance_1.postGuidanceLines)({
+            channelId: ch.id,
+            landedThread: (0, channel_shared_1.metaString)(message, "taskId"),
+            body,
+            message,
+        }),
+        // ⚠ A `closedThreadNote(ch.id)` line rode here whenever the server
+        // answered `threadClosed`. Both went with thread closing (wiring plan
+        // Phase 4, 2026-08-18): nothing settles a thread, so nothing can raise it.
         // ⚠ Whether the await outlives this turn is `channel-wake-guidance.ts`'s
         // to assert, off the caller's observed runtime — never promise it here.
         //
         // Stop rule rides with it: "re-arm on timeout" with no exit loops forever
         // over an abandoned exchange, but a plain timeout COUNTER abandons a peer
         // legitimately heads-down for 20+ minutes. The exit is the THREAD's state.
-        ...(0, channel_wake_guidance_1.postReplyLines)(ch.id, message.seq, opts.runtime ?? null, `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first (op="read" for new activity — a working agent posts task_progress as it goes; op="get_thread" for status). Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when the thread is closed or failed, or when nothing has come from that member for ~30+ minutes.`),
+        ...(0, channel_wake_guidance_1.postReplyLines)(ch.id, message.seq, opts.runtime ?? null, `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first with op="read" for new activity — a working agent posts task_progress as it goes. Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`),
     ].join("\n"));
 }

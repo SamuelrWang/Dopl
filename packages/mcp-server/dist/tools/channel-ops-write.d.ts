@@ -32,8 +32,10 @@ interface PostOptions {
     thread?: string;
     /**
      * CHAT vs REQUEST — whether this post may reach the addressee's machine.
-     * Absent = `request`: `to` addresses and a DIRECT channel's auto-address
-     * fires. `chat` skips the auto-address server-side.
+     * Absent = `request`: `to` addresses, and `to` is the ONLY thing that does.
+     * ⚠ A DIRECT channel's auto-address is retired (2026-08-18), so `chat` no
+     * longer has an addressing fallback to skip; what it still does is STATE that
+     * the post is not work for anybody, which the receiving side reads.
      *
      * ⚠ `chat` beside a `to` is a CONTRADICTION, refused here before the call
      * (see {@link CHAT_ADDRESSED_REFUSAL}) and by the route as

@@ -11,7 +11,7 @@
  * op, by re-issuing with the same cursor.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCloseProposed, ChannelThreadClosed, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -22,10 +22,13 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 /**
- * Post a message. `threadClosed` rides in the response ENVELOPE beside the
- * message (like `echoSeq`), not inside it, and is normalized to a boolean HERE:
- * an older deployment sends no key, a post into an open thread sends no key,
- * and both must read `false`, not `undefined` for the caller to re-decide.
+ * Post a message.
+ *
+ * ⚠ The response envelope carried a second key, `threadClosed`, until thread
+ * closing was removed (wiring plan Phase 4, 2026-08-18) — normalized to a
+ * boolean HERE, because an older deployment sent no key and the caller must not
+ * have to tell "false" from "unknown". The shape of that rule still applies to
+ * every additive envelope field this client reads.
  */
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
 /**
@@ -48,25 +51,12 @@ export declare function listChannelSessions(t: DoplTransport, channelId?: string
 export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
 /**
- * PROPOSE closing a thread — the agent lane's terminal act; agents cannot reach
- * {@link closeChannelThread}. Same route and payload shape, different op: a
- * proposal IS the close it asks a human to confirm, so the confirm hands these
- * two values straight back to `op:"close"`. Writes nothing to the thread row.
+ * ⚠ TWO BINDINGS ENDED HERE with thread closing (wiring plan Phase 4,
+ * 2026-08-18): `proposeChannelThreadClose` (`PATCH … {op:"propose_close"}`, the
+ * agent lane's terminal act) and `closeChannelThread` (`{op:"close"}`, human
+ * lane only). The route arms behind both are deleted, so a resurrected binding
+ * would 400 on the discriminator rather than fail quietly.
  */
-export declare function proposeChannelThreadClose(t: DoplTransport, channelId: string, threadId: string, input: {
-    outcome: ThreadOutcome;
-    summary?: string;
-}): Promise<ChannelThreadCloseProposed>;
-/**
- * Close a thread. ⚠ HUMAN LANE ONLY — the server refuses an agent-token caller
- * (`ThreadCloseIsHumanOnlyError`); the agent path is
- * {@link proposeChannelThreadClose}. Kept as the one binding for a real route
- * op — a human surface on this client closes through here.
- */
-export declare function closeChannelThread(t: DoplTransport, channelId: string, threadId: string, input: {
-    outcome: ThreadOutcome;
-    summary?: string;
-}): Promise<ChannelThreadClosed>;
 export declare function setChannelThreadMode(t: DoplTransport, channelId: string, threadId: string, input: {
     mode: ThreadMode;
 }): Promise<ChannelThread>;
