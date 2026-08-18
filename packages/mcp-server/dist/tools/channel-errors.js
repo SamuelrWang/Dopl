@@ -65,8 +65,6 @@ function classifyForbidden(e) {
             return "thread_authorization";
         case "CHANNEL_LIFECYCLE_KIND_FORBIDDEN":
             return "lifecycle_kind";
-        case "CHANNEL_CLOSE_IS_HUMAN_ONLY":
-            return "close_is_human";
         default:
             return "unknown";
     }
@@ -91,4 +89,4 @@ function serverDetail(e) {
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
-exports.FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, a close summary <=2000, client_msg_id <=200.";
+exports.FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";

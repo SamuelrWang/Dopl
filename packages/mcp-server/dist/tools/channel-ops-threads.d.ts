@@ -1,7 +1,7 @@
 /**
- * `dopl_channel` THREAD op handlers: create_thread / close_thread /
- * set_thread_mode. ⚠ `channel-` filename prefix required by the parity
- * split-scan (parity.test.ts).
+ * `dopl_channel` THREAD op handlers: create_thread / set_thread_mode.
+ * ⚠ `channel-` filename prefix required by the parity split-scan
+ * (parity.test.ts).
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`.
  *
@@ -11,35 +11,32 @@
  *     the caller was never invited to. 120 chars, NO charset rule, so newlines
  *     are possible. Neutralized at every site.
  *   - `thread.title` — typed by whoever OPENED the thread (200 chars, interior
- *     newlines allowed), frequently NOT the caller since a close is permitted to
- *     the thread's TARGET. Hence header AND code span on that path.
+ *     newlines allowed), and NOT necessarily the caller on every path. Hence
+ *     header AND code span wherever it is rendered.
  *   - `member.label` — already render-safe: `resolveMemberOr` neutralizes at the
  *     source (`memberLabel` in channel-shared.ts). Do not re-wrap.
  */
-import type { DoplClient, ThreadMode, ThreadOutcome } from "@dopl/client";
+import type { DoplClient, ThreadMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null, handoff?: boolean): Promise<ToolResponse>;
 /**
- * ⚠ `close_thread` IS NOT AN AGENT'S OP. A close settles the SHARED thread for
- * BOTH members: "the work looks done" and "I am finished with this exchange"
- * are DIFFERENT judgments, and only the human makes the second.
+ * ⚠ TWO OPS ENDED HERE with thread closing (wiring plan Phase 4, 2026-08-18):
  *
- * ⚠ ANSWERED, NOT REMOVED — the op stays in the enum so an agent trained on the
- * old surface gets this sentence instead of a zod "invalid enum value" at the
- * moment it most needs telling what to do instead. The real gate is the
- * server's `ThreadCloseIsHumanOnlyError`, not this.
- */
-export declare function closeThreadIsHumansToMake(): ToolResponse;
-/**
- * PROPOSE a close — the agent's terminal act on a thread, and the only one it
- * has (see {@link closeThreadIsHumansToMake}).
+ *  - `closeThreadIsHumansToMake()` — the teaching refusal for `close_thread`.
+ *    It was ANSWERED rather than removed from the enum, so an agent trained on
+ *    the old surface got a sentence telling it what to do instead of a zod
+ *    "invalid enum value". That trade only pays while there IS something to do
+ *    instead; there is not, and the words themselves now teach a feature that
+ *    does not exist, so the op left the enum too.
+ *  - `opProposeClose()` — the agent's terminal act, a marked non-terminal
+ *    `task_progress` its operator confirmed. Nothing to confirm.
  *
- * ⚠ Proposing is allowed to the thread's CREATOR **or its TARGET**, so the
- * common shape is a peer's thread and a peer's 200-char newline-tolerant TITLE
- * rendered as our own narration. So: title is one inline code span (a value,
- * never structure), and {@link UNTRUSTED_THREAD_HEADER} comes FIRST.
+ * The rendering rules they demonstrated are still the file's: a peer-typed TITLE
+ * goes in one inline code span with `channel-render.ts`'s
+ * `UNTRUSTED_THREAD_HEADER` FIRST, and a returned cursor is STATED from the
+ * server's own seq, never guessed. ⚠ Nothing left here renders a title the
+ * caller did not just type, so the header has no site in this file today.
  */
-export declare function opProposeClose(client: DoplClient, channelRef: string, threadId: string, outcome: ThreadOutcome, summary?: string): Promise<ToolResponse>;
 /**
  * Set a thread's mode. Title neutralized as everywhere else, but ⚠ NO untrusted
  * header on purpose: the route allows `set_mode` to the thread's CREATOR only,

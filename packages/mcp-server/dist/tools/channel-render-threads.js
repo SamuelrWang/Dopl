@@ -34,10 +34,10 @@ exports.UNREADABLE_ID = "(unreadable id)";
  *
  * `list_threads` is bounded server-side (`features/channels/constants.ts ›
  * CHANNEL_THREAD_LIST_LIMIT`) and a page coming back AT the ceiling counts as
- * clipped, because at is indistinguishable from over (INVARIANTS §9). Threads
- * are never closed and never leave the list, so this ceiling is reachable by
- * ordinary use rather than by abuse — and a bounded page that renders exactly
- * like an exhausted one is how an agent concludes an exchange does not exist.
+ * clipped, because at is indistinguishable from over (INVARIANTS §9). Nothing
+ * ever leaves the list, so this ceiling is reachable by ordinary use rather than
+ * by abuse — and a bounded page that renders exactly like an exhausted one is
+ * how an agent concludes an exchange does not exist.
  *
  * ⚠ IT MAY NOT OFFER ANOTHER READ AS THE REMEDY. There is no paging argument on
  * this op and `get_thread` needs the id this page did not show, so no read on
@@ -60,8 +60,8 @@ const THREAD_LEGEND_MAX = 6;
  * thread. ⚠ Must stay the same test the rest of the product gates on:
  * `resolvePostMetadata` validates and 403-gates ONLY inside `isUuid`, and the
  * desktop's `targeting.firstClassTaskId` lets nothing else select the thread
- * lane. Anything failing it has no row: no title, no status, no parties, and
- * nothing to close, reopen or join.
+ * lane. Anything failing it has no row: no title, no recorded parties, and
+ * nothing to join.
  */
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 /**
@@ -131,8 +131,8 @@ function threadTagOf(m, anyTagged) {
  * distinct exchanges, not messages. Null when nothing is tagged.
  *
  * ⚠ TWO LINES, NOT ONE — they promise different things. The threads line says
- * "continue one with thread=<id>", meaning a shared, titled, closable exchange.
- * The ad-hoc line cannot: a `task-…` id names no row.
+ * "continue one with thread=<id>", meaning a shared, titled exchange both
+ * members see. The ad-hoc line cannot: a `task-…` id names no row.
  *
  * ⚠ But it must NOT tell the reader not to pass one. The receiving desktop's
  * prompt (`main/prompt-framing.js` THREAD_TAG) tells a session to keep its
@@ -185,5 +185,5 @@ function legendThreads(entries, ref) {
 }
 function legendAdHoc(entries, ref) {
     const shown = entries.slice(0, THREAD_LEGEND_MAX).map(legendEntry);
-    return `Ad-hoc exchanges above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. These are NOT threads: a \`task-<channel>-<seq>\` id is the label a RECEIVING machine mints for an untagged request so the reply groups with it on that machine's card. There is no thread row behind one: no title, no status, no recorded parties, and nothing to close, reopen or join. Passing one as thread="<the full id>" keeps a reply grouped with its request, which is worth doing on every post in that exchange; it does not open a shared exchange, and an id that is not yours is dropped and the post lands untagged. If this work needs a real thread, open one with dopl_channel(op="create_thread", channel="${ref}", title="...", body="...", to="...").`;
+    return `Ad-hoc exchanges above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. These are NOT threads: a \`task-<channel>-<seq>\` id is the label a RECEIVING machine mints for an untagged request so the reply groups with it on that machine's card. There is no thread row behind one: no title and no recorded parties, so nothing to join. Passing one as thread="<the full id>" keeps a reply grouped with its request, which is worth doing on every post in that exchange; it does not open a shared exchange, and an id that is not yours is dropped and the post lands untagged. If this work needs a real thread, open one with dopl_channel(op="create_thread", channel="${ref}", title="...", body="...", to="...").`;
 }

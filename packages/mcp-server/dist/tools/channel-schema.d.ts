@@ -16,9 +16,12 @@
  * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
  * before measuring, so the two agree on what "200 characters" counts.
  *
- * ⚠ `summary` is deliberately NOT split: one param serves two routes with two
- * caps, and this declares the LOOSER so a legitimate close summary is never
- * refused client-side. The tighter number is stated in its `.describe()`.
+ * ⚠ `summary` used to serve two routes with two caps (post 200, close 2000) and
+ * declared the LOOSER so a legitimate close summary was never refused
+ * client-side. The close is gone (wiring plan Phase 4, 2026-08-18) and the
+ * declared max stays at 2000 anyway: the route enforces 200 and is the
+ * authority, and tightening it here would turn a route 400 that names the field
+ * into an opaque client-side -32602. The tighter number is in its `.describe()`.
  */
 import { z } from "zod";
 export declare const CHANNEL_INPUT_SHAPE: {
@@ -35,8 +38,6 @@ export declare const CHANNEL_INPUT_SHAPE: {
         get_thread: "get_thread";
         read_sessions: "read_sessions";
         create_thread: "create_thread";
-        propose_close: "propose_close";
-        close_thread: "close_thread";
         set_thread_mode: "set_thread_mode";
     }>;
     channel: z.ZodOptional<z.ZodString>;
@@ -71,10 +72,6 @@ export declare const CHANNEL_INPUT_SHAPE: {
     }>>;
     handoff: z.ZodOptional<z.ZodBoolean>;
     thread: z.ZodOptional<z.ZodString>;
-    outcome: z.ZodOptional<z.ZodEnum<{
-        completed: "completed";
-        failed: "failed";
-    }>>;
     since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     timeout_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;

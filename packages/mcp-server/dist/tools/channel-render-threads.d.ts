@@ -24,10 +24,10 @@ export declare const UNREADABLE_ID = "(unreadable id)";
  *
  * `list_threads` is bounded server-side (`features/channels/constants.ts ›
  * CHANNEL_THREAD_LIST_LIMIT`) and a page coming back AT the ceiling counts as
- * clipped, because at is indistinguishable from over (INVARIANTS §9). Threads
- * are never closed and never leave the list, so this ceiling is reachable by
- * ordinary use rather than by abuse — and a bounded page that renders exactly
- * like an exhausted one is how an agent concludes an exchange does not exist.
+ * clipped, because at is indistinguishable from over (INVARIANTS §9). Nothing
+ * ever leaves the list, so this ceiling is reachable by ordinary use rather than
+ * by abuse — and a bounded page that renders exactly like an exhausted one is
+ * how an agent concludes an exchange does not exist.
  *
  * ⚠ IT MAY NOT OFFER ANOTHER READ AS THE REMEDY. There is no paging argument on
  * this op and `get_thread` needs the id this page did not show, so no read on
@@ -82,8 +82,8 @@ export declare function threadTagOf(m: ChannelMessage, anyTagged: boolean): stri
  * distinct exchanges, not messages. Null when nothing is tagged.
  *
  * ⚠ TWO LINES, NOT ONE — they promise different things. The threads line says
- * "continue one with thread=<id>", meaning a shared, titled, closable exchange.
- * The ad-hoc line cannot: a `task-…` id names no row.
+ * "continue one with thread=<id>", meaning a shared, titled exchange both
+ * members see. The ad-hoc line cannot: a `task-…` id names no row.
  *
  * ⚠ But it must NOT tell the reader not to pass one. The receiving desktop's
  * prompt (`main/prompt-framing.js` THREAD_TAG) tells a session to keep its

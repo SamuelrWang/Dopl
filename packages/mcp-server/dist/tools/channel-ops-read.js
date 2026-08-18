@@ -284,12 +284,11 @@ async function opMembers(client, ref, selfUserId = null, callerIsAdmin = false) 
         // source of that id here.
         lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id at startup.`);
     }
-    // ⚠ TWO rules, not one. AUTO-ADDRESSING keys on `is_direct`
-    // (`resolveDirectPeer` stamps nothing without it), which this op cannot see.
-    // The IMPLICIT TRIGGER on the receiving machine keys on MEMBER COUNT
-    // (`classify` in targeting.js), which this op just counted. Collapsing them
-    // tells a two-member channel its unaddressed messages reach nobody — they
-    // reach the only other member.
+    // ⚠ THERE USED TO BE TWO RULES HERE AND NOW THERE ARE NONE. Auto-addressing
+    // keyed on `is_direct` (`resolveDirectPeer`) and the implicit trigger keyed on
+    // MEMBER COUNT (`classify` in targeting.js); both retired 2026-08-18 (wiring
+    // plan Phase 3). The count is still passed because the COPY names it — the
+    // rule it states no longer branches on it. See `channel-addressing.ts`.
     lines.push((0, channel_addressing_1.rosterAddressingRule)(ref, members.length));
     return (0, respond_1.ok)(lines.join("\n"));
 }
